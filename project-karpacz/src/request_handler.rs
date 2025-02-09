@@ -7,9 +7,6 @@ use crate::project_karpacz_res::server_software::SERVER_SOFTWARE;
 use crate::project_karpacz_util::combine_config::combine_config;
 use crate::project_karpacz_util::error_pages::generate_default_error_page;
 use crate::project_karpacz_util::url_sanitizer::sanitize_url;
-use project_karpacz_common::{
-  ErrorLogger, LogMessage, RequestData, ServerModuleHandlers, SocketData,
-};
 
 use chrono::prelude::*;
 use futures_util::TryStreamExt;
@@ -18,6 +15,9 @@ use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use hyper::body::{Body, Bytes, Frame, Incoming};
 use hyper::header::{self, HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
+use project_karpacz_common::{
+  ErrorLogger, LogMessage, RequestData, ServerModuleHandlers, SocketData,
+};
 use tokio::fs;
 use tokio::io::BufReader;
 use tokio::sync::mpsc::Sender;
