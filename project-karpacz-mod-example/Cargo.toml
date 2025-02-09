@@ -1,0 +1,18 @@
+[package]
+name = "project-karpacz-mod-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+mimalloc.workspace = true
+project-karpacz-common = { workspace = true }
+tokio.workspace = true
+
+[dev-dependencies]
+rusty-hook = { workspace = true }
+
+[lib]
+crate-type = ["dylib"]

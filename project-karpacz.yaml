@@ -1,0 +1,9 @@
+# Global server configuration
+global:
+  port: 8080
+  logFilePath: access.log
+  errorLogFilePath: error.log
+  loadModules:
+   - example
+  wwwroot: /var/www/html # Replace "/var/www/html" with desired webroot
+  enableDirectoryListing: true

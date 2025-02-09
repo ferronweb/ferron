@@ -1,0 +1,15 @@
+[package]
+name = "project-karpacz-common"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hyper = { workspace = true }
+tokio = { workspace = true }
+http-body-util = { workspace = true }
+yaml-rust2 = { workspace = true }
+async-trait = { workspace = true }
+pin-project-lite = "0.2.16"
+
+[dev-dependencies]
+rusty-hook = { workspace = true }
