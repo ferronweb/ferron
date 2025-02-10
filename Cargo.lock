@@ -1833,6 +1833,7 @@ name = "project-karpacz-passwd"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "mimalloc",
  "password-auth",
  "rpassword",
  "rusty-hook",
