@@ -3,7 +3,6 @@ use std::error::Error;
 use async_trait::async_trait;
 use http_body_util::{BodyExt, Full};
 use hyper::Response;
-use mimalloc::MiMalloc;
 use project_karpacz_common::{
   ErrorLogger, RequestData, ResponseData, ServerConfig, ServerModule, ServerModuleHandlers,
   SocketData,
@@ -11,7 +10,11 @@ use project_karpacz_common::{
 use project_karpacz_common::{HyperResponse, WithRuntime};
 use tokio::runtime::Handle;
 
-// It's very important to not remove these two lines below, otherwise a HTTP request will trigger a segmentation fault!
+#[cfg(not(target_os = "freebsd"))]
+use mimalloc::MiMalloc;
+
+// It's very important to not remove these three lines below, otherwise a HTTP request will trigger a segmentation fault!
+#[cfg(not(target_os = "freebsd"))]
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 

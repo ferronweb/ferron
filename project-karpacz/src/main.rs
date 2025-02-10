@@ -53,12 +53,16 @@ use std::sync::Arc;
 // External crate imports
 use clap::Parser;
 use libloading::{library_filename, Library, Symbol};
-use mimalloc::MiMalloc;
 use project_karpacz_common::{ServerConfig, ServerModule};
 use project_karpacz_server::start_server;
 use yaml_rust2::YamlLoader;
 
+// KNOWN ISSUE: Using mimalloc will cause modules to fail to load on FreeBSD
+#[cfg(not(target_os = "freebsd"))]
+use mimalloc::MiMalloc;
+
 // Set the global allocator to use mimalloc for performance optimization
+#[cfg(not(target_os = "freebsd"))]
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
