@@ -203,6 +203,8 @@ pub async fn request_handler(
     },
     None => None,
   };
+  let log_enabled = (&config)["global"]["logFileName"].as_str().is_some();
+  let error_log_enabled = (&config)["global"]["errorLogFileName"].as_str().is_some();
 
   // Construct SocketData
   let mut socket_data = SocketData::new(remote_address, local_address, encrypted);
@@ -216,13 +218,15 @@ pub async fn request_handler(
           let host_header_value = match HeaderValue::from_str(&host_header_lower_case) {
             Ok(host_header_value) => host_header_value,
             Err(err) => {
-              logger
-                .send(LogMessage::new(
-                  format!("Host header sanitation error: {}", err),
-                  true,
-                ))
-                .await
-                .unwrap_or_default();
+              if error_log_enabled {
+                logger
+                  .send(LogMessage::new(
+                    format!("Host header sanitation error: {}", err),
+                    true,
+                  ))
+                  .await
+                  .unwrap_or_default();
+              }
               let response = Response::builder()
                 .status(StatusCode::BAD_REQUEST)
                 .header(header::SERVER, SERVER_SOFTWARE)
@@ -236,28 +240,30 @@ pub async fn request_handler(
                 )
                 .unwrap_or_default();
 
-              log_combined(
-                &logger,
-                socket_data.remote_addr.ip(),
-                None,
-                log_method,
-                log_request_path,
-                log_protocol,
-                response.status().as_u16(),
-                match response.headers().get(header::CONTENT_LENGTH) {
-                  Some(header_value) => match header_value.to_str() {
-                    Ok(header_value) => match header_value.parse::<u64>() {
-                      Ok(content_length) => Some(content_length),
+              if log_enabled {
+                log_combined(
+                  &logger,
+                  socket_data.remote_addr.ip(),
+                  None,
+                  log_method,
+                  log_request_path,
+                  log_protocol,
+                  response.status().as_u16(),
+                  match response.headers().get(header::CONTENT_LENGTH) {
+                    Some(header_value) => match header_value.to_str() {
+                      Ok(header_value) => match header_value.parse::<u64>() {
+                        Ok(content_length) => Some(content_length),
+                        Err(_) => response.body().size_hint().exact(),
+                      },
                       Err(_) => response.body().size_hint().exact(),
                     },
-                    Err(_) => response.body().size_hint().exact(),
+                    None => response.body().size_hint().exact(),
                   },
-                  None => response.body().size_hint().exact(),
-                },
-                log_referrer,
-                log_user_agent,
-              )
-              .await;
+                  log_referrer,
+                  log_user_agent,
+                )
+                .await;
+              }
               let (mut response_parts, response_body) = response.into_parts();
               if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
                 response_parts.headers.insert(header::SERVER, server_string);
@@ -272,13 +278,15 @@ pub async fn request_handler(
         }
       }
       Err(err) => {
-        logger
-          .send(LogMessage::new(
-            format!("Host header sanitation error: {}", err),
-            true,
-          ))
-          .await
-          .unwrap_or_default();
+        if error_log_enabled {
+          logger
+            .send(LogMessage::new(
+              format!("Host header sanitation error: {}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+        }
         let response = Response::builder()
           .status(StatusCode::BAD_REQUEST)
           .header(header::SERVER, SERVER_SOFTWARE)
@@ -291,28 +299,30 @@ pub async fn request_handler(
             .boxed(),
           )
           .unwrap_or_default();
-        log_combined(
-          &logger,
-          socket_data.remote_addr.ip(),
-          None,
-          log_method,
-          log_request_path,
-          log_protocol,
-          response.status().as_u16(),
-          match response.headers().get(header::CONTENT_LENGTH) {
-            Some(header_value) => match header_value.to_str() {
-              Ok(header_value) => match header_value.parse::<u64>() {
-                Ok(content_length) => Some(content_length),
+        if log_enabled {
+          log_combined(
+            &logger,
+            socket_data.remote_addr.ip(),
+            None,
+            log_method,
+            log_request_path,
+            log_protocol,
+            response.status().as_u16(),
+            match response.headers().get(header::CONTENT_LENGTH) {
+              Some(header_value) => match header_value.to_str() {
+                Ok(header_value) => match header_value.parse::<u64>() {
+                  Ok(content_length) => Some(content_length),
+                  Err(_) => response.body().size_hint().exact(),
+                },
                 Err(_) => response.body().size_hint().exact(),
               },
-              Err(_) => response.body().size_hint().exact(),
+              None => response.body().size_hint().exact(),
             },
-            None => response.body().size_hint().exact(),
-          },
-          log_referrer,
-          log_user_agent,
-        )
-        .await;
+            log_referrer,
+            log_user_agent,
+          )
+          .await;
+        }
         let (mut response_parts, response_body) = response.into_parts();
         if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
           response_parts.headers.insert(header::SERVER, server_string);
@@ -336,13 +346,15 @@ pub async fn request_handler(
   ) {
     Some(config) => config,
     None => {
-      logger
-        .send(LogMessage::new(
-          String::from("Cannot determine server configuration"),
-          true,
-        ))
-        .await
-        .unwrap_or_default();
+      if error_log_enabled {
+        logger
+          .send(LogMessage::new(
+            String::from("Cannot determine server configuration"),
+            true,
+          ))
+          .await
+          .unwrap_or_default();
+      }
       let response = Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .body(
@@ -354,28 +366,30 @@ pub async fn request_handler(
           .boxed(),
         )
         .unwrap_or_default();
-      log_combined(
-        &logger,
-        socket_data.remote_addr.ip(),
-        None,
-        log_method,
-        log_request_path,
-        log_protocol,
-        response.status().as_u16(),
-        match response.headers().get(header::CONTENT_LENGTH) {
-          Some(header_value) => match header_value.to_str() {
-            Ok(header_value) => match header_value.parse::<u64>() {
-              Ok(content_length) => Some(content_length),
+      if log_enabled {
+        log_combined(
+          &logger,
+          socket_data.remote_addr.ip(),
+          None,
+          log_method,
+          log_request_path,
+          log_protocol,
+          response.status().as_u16(),
+          match response.headers().get(header::CONTENT_LENGTH) {
+            Some(header_value) => match header_value.to_str() {
+              Ok(header_value) => match header_value.parse::<u64>() {
+                Ok(content_length) => Some(content_length),
+                Err(_) => response.body().size_hint().exact(),
+              },
               Err(_) => response.body().size_hint().exact(),
             },
-            Err(_) => response.body().size_hint().exact(),
+            None => response.body().size_hint().exact(),
           },
-          None => response.body().size_hint().exact(),
-        },
-        log_referrer,
-        log_user_agent,
-      )
-      .await;
+          log_referrer,
+          log_user_agent,
+        )
+        .await;
+      }
       let (mut response_parts, response_body) = response.into_parts();
       if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
         response_parts.headers.insert(header::SERVER, server_string);
@@ -393,37 +407,41 @@ pub async fn request_handler(
   ) {
     Ok(sanitized_url) => sanitized_url,
     Err(err) => {
-      logger
-        .send(LogMessage::new(
-          format!("URL sanitation error: {}", err),
-          true,
-        ))
-        .await
-        .unwrap_or_default();
+      if error_log_enabled {
+        logger
+          .send(LogMessage::new(
+            format!("URL sanitation error: {}", err),
+            true,
+          ))
+          .await
+          .unwrap_or_default();
+      }
       let response =
         generate_error_response(StatusCode::BAD_REQUEST, &combined_config, &None).await;
-      log_combined(
-        &logger,
-        socket_data.remote_addr.ip(),
-        None,
-        log_method,
-        log_request_path,
-        log_protocol,
-        response.status().as_u16(),
-        match response.headers().get(header::CONTENT_LENGTH) {
-          Some(header_value) => match header_value.to_str() {
-            Ok(header_value) => match header_value.parse::<u64>() {
-              Ok(content_length) => Some(content_length),
+      if log_enabled {
+        log_combined(
+          &logger,
+          socket_data.remote_addr.ip(),
+          None,
+          log_method,
+          log_request_path,
+          log_protocol,
+          response.status().as_u16(),
+          match response.headers().get(header::CONTENT_LENGTH) {
+            Some(header_value) => match header_value.to_str() {
+              Ok(header_value) => match header_value.parse::<u64>() {
+                Ok(content_length) => Some(content_length),
+                Err(_) => response.body().size_hint().exact(),
+              },
               Err(_) => response.body().size_hint().exact(),
             },
-            Err(_) => response.body().size_hint().exact(),
+            None => response.body().size_hint().exact(),
           },
-          None => response.body().size_hint().exact(),
-        },
-        log_referrer,
-        log_user_agent,
-      )
-      .await;
+          log_referrer,
+          log_user_agent,
+        )
+        .await;
+      }
       let (mut response_parts, response_body) = response.into_parts();
       if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
         let custom_headers_hash_iter = custom_headers_hash.iter();
@@ -469,37 +487,41 @@ pub async fn request_handler(
       {
         Ok(path_and_query) => path_and_query,
         Err(err) => {
-          logger
-            .send(LogMessage::new(
-              format!("URL sanitation error: {}", err),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
+          if error_log_enabled {
+            logger
+              .send(LogMessage::new(
+                format!("URL sanitation error: {}", err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
           let response =
             generate_error_response(StatusCode::BAD_REQUEST, &combined_config, &None).await;
-          log_combined(
-            &logger,
-            socket_data.remote_addr.ip(),
-            None,
-            log_method,
-            log_request_path,
-            log_protocol,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
+          if log_enabled {
+            log_combined(
+              &logger,
+              socket_data.remote_addr.ip(),
+              None,
+              log_method,
+              log_request_path,
+              log_protocol,
+              response.status().as_u16(),
+              match response.headers().get(header::CONTENT_LENGTH) {
+                Some(header_value) => match header_value.to_str() {
+                  Ok(header_value) => match header_value.parse::<u64>() {
+                    Ok(content_length) => Some(content_length),
+                    Err(_) => response.body().size_hint().exact(),
+                  },
                   Err(_) => response.body().size_hint().exact(),
                 },
-                Err(_) => response.body().size_hint().exact(),
+                None => response.body().size_hint().exact(),
               },
-              None => response.body().size_hint().exact(),
-            },
-            log_referrer,
-            log_user_agent,
-          )
-          .await;
+              log_referrer,
+              log_user_agent,
+            )
+            .await;
+          }
           let (mut response_parts, response_body) = response.into_parts();
           if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
             let custom_headers_hash_iter = custom_headers_hash.iter();
@@ -527,37 +549,41 @@ pub async fn request_handler(
     parts.uri = match hyper::Uri::from_parts(url_parts) {
       Ok(uri) => uri,
       Err(err) => {
-        logger
-          .send(LogMessage::new(
-            format!("URL sanitation error: {}", err),
-            true,
-          ))
-          .await
-          .unwrap_or_default();
+        if error_log_enabled {
+          logger
+            .send(LogMessage::new(
+              format!("URL sanitation error: {}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+        }
         let response =
           generate_error_response(StatusCode::BAD_REQUEST, &combined_config, &None).await;
-        log_combined(
-          &logger,
-          socket_data.remote_addr.ip(),
-          None,
-          log_method,
-          log_request_path,
-          log_protocol,
-          response.status().as_u16(),
-          match response.headers().get(header::CONTENT_LENGTH) {
-            Some(header_value) => match header_value.to_str() {
-              Ok(header_value) => match header_value.parse::<u64>() {
-                Ok(content_length) => Some(content_length),
+        if log_enabled {
+          log_combined(
+            &logger,
+            socket_data.remote_addr.ip(),
+            None,
+            log_method,
+            log_request_path,
+            log_protocol,
+            response.status().as_u16(),
+            match response.headers().get(header::CONTENT_LENGTH) {
+              Some(header_value) => match header_value.to_str() {
+                Ok(header_value) => match header_value.parse::<u64>() {
+                  Ok(content_length) => Some(content_length),
+                  Err(_) => response.body().size_hint().exact(),
+                },
                 Err(_) => response.body().size_hint().exact(),
               },
-              Err(_) => response.body().size_hint().exact(),
+              None => response.body().size_hint().exact(),
             },
-            None => response.body().size_hint().exact(),
-          },
-          log_referrer,
-          log_user_agent,
-        )
-        .await;
+            log_referrer,
+            log_user_agent,
+          )
+          .await;
+        }
         let (mut response_parts, response_body) = response.into_parts();
         if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
           let custom_headers_hash_iter = custom_headers_hash.iter();
@@ -599,28 +625,30 @@ pub async fn request_handler(
         generate_error_response(StatusCode::BAD_REQUEST, &combined_config, &Some(header_map)).await
       }
     };
-    log_combined(
-      &logger,
-      socket_data.remote_addr.ip(),
-      None,
-      log_method,
-      log_request_path,
-      log_protocol,
-      response.status().as_u16(),
-      match response.headers().get(header::CONTENT_LENGTH) {
-        Some(header_value) => match header_value.to_str() {
-          Ok(header_value) => match header_value.parse::<u64>() {
-            Ok(content_length) => Some(content_length),
+    if log_enabled {
+      log_combined(
+        &logger,
+        socket_data.remote_addr.ip(),
+        None,
+        log_method,
+        log_request_path,
+        log_protocol,
+        response.status().as_u16(),
+        match response.headers().get(header::CONTENT_LENGTH) {
+          Some(header_value) => match header_value.to_str() {
+            Ok(header_value) => match header_value.parse::<u64>() {
+              Ok(content_length) => Some(content_length),
+              Err(_) => response.body().size_hint().exact(),
+            },
             Err(_) => response.body().size_hint().exact(),
           },
-          Err(_) => response.body().size_hint().exact(),
+          None => response.body().size_hint().exact(),
         },
-        None => response.body().size_hint().exact(),
-      },
-      log_referrer,
-      log_user_agent,
-    )
-    .await;
+        log_referrer,
+        log_user_agent,
+      )
+      .await;
+    }
     let (mut response_parts, response_body) = response.into_parts();
     if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
       let custom_headers_hash_iter = custom_headers_hash.iter();
@@ -645,7 +673,10 @@ pub async fn request_handler(
   }
 
   let mut request_data = RequestData::new(request, None);
-  let error_logger = ErrorLogger::new(&logger);
+  let error_logger = match error_log_enabled {
+    true => ErrorLogger::new(&logger),
+    false => ErrorLogger::without_logger(),
+  };
 
   let mut executed_handlers = Vec::new();
   let mut latest_auth_data = None;
@@ -687,13 +718,15 @@ pub async fn request_handler(
               response = match response_status {
                 Ok(response) => response,
                 Err(err) => {
-                  logger
-                    .send(LogMessage::new(
-                      format!("Unexpected error while serving a request: {}", err),
-                      true,
-                    ))
-                    .await
-                    .unwrap_or_default();
+                  if error_log_enabled {
+                    logger
+                      .send(LogMessage::new(
+                        format!("Unexpected error while serving a request: {}", err),
+                        true,
+                      ))
+                      .await
+                      .unwrap_or_default();
+                  }
 
                   let response = generate_error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -701,28 +734,30 @@ pub async fn request_handler(
                     &headers,
                   )
                   .await;
-                  log_combined(
-                    &logger,
-                    socket_data.remote_addr.ip(),
-                    auth_data,
-                    log_method,
-                    log_request_path,
-                    log_protocol,
-                    response.status().as_u16(),
-                    match response.headers().get(header::CONTENT_LENGTH) {
-                      Some(header_value) => match header_value.to_str() {
-                        Ok(header_value) => match header_value.parse::<u64>() {
-                          Ok(content_length) => Some(content_length),
+                  if log_enabled {
+                    log_combined(
+                      &logger,
+                      socket_data.remote_addr.ip(),
+                      auth_data,
+                      log_method,
+                      log_request_path,
+                      log_protocol,
+                      response.status().as_u16(),
+                      match response.headers().get(header::CONTENT_LENGTH) {
+                        Some(header_value) => match header_value.to_str() {
+                          Ok(header_value) => match header_value.parse::<u64>() {
+                            Ok(content_length) => Some(content_length),
+                            Err(_) => response.body().size_hint().exact(),
+                          },
                           Err(_) => response.body().size_hint().exact(),
                         },
-                        Err(_) => response.body().size_hint().exact(),
+                        None => response.body().size_hint().exact(),
                       },
-                      None => response.body().size_hint().exact(),
-                    },
-                    log_referrer,
-                    log_user_agent,
-                  )
-                  .await;
+                      log_referrer,
+                      log_user_agent,
+                    )
+                    .await;
+                  }
                   let (mut response_parts, response_body) = response.into_parts();
                   if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
                     let custom_headers_hash_iter = custom_headers_hash.iter();
@@ -748,28 +783,30 @@ pub async fn request_handler(
               };
             }
 
-            log_combined(
-              &logger,
-              socket_data.remote_addr.ip(),
-              auth_data,
-              log_method,
-              log_request_path,
-              log_protocol,
-              response.status().as_u16(),
-              match response.headers().get(header::CONTENT_LENGTH) {
-                Some(header_value) => match header_value.to_str() {
-                  Ok(header_value) => match header_value.parse::<u64>() {
-                    Ok(content_length) => Some(content_length),
+            if log_enabled {
+              log_combined(
+                &logger,
+                socket_data.remote_addr.ip(),
+                auth_data,
+                log_method,
+                log_request_path,
+                log_protocol,
+                response.status().as_u16(),
+                match response.headers().get(header::CONTENT_LENGTH) {
+                  Some(header_value) => match header_value.to_str() {
+                    Ok(header_value) => match header_value.parse::<u64>() {
+                      Ok(content_length) => Some(content_length),
+                      Err(_) => response.body().size_hint().exact(),
+                    },
                     Err(_) => response.body().size_hint().exact(),
                   },
-                  Err(_) => response.body().size_hint().exact(),
+                  None => response.body().size_hint().exact(),
                 },
-                None => response.body().size_hint().exact(),
-              },
-              log_referrer,
-              log_user_agent,
-            )
-            .await;
+                log_referrer,
+                log_user_agent,
+              )
+              .await;
+            }
 
             let (mut response_parts, response_body) = response.into_parts();
             if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
@@ -809,13 +846,15 @@ pub async fn request_handler(
                 response = match response_status {
                   Ok(response) => response,
                   Err(err) => {
-                    logger
-                      .send(LogMessage::new(
-                        format!("Unexpected error while serving a request: {}", err),
-                        true,
-                      ))
-                      .await
-                      .unwrap_or_default();
+                    if error_log_enabled {
+                      logger
+                        .send(LogMessage::new(
+                          format!("Unexpected error while serving a request: {}", err),
+                          true,
+                        ))
+                        .await
+                        .unwrap_or_default();
+                    }
 
                     let response = generate_error_response(
                       StatusCode::INTERNAL_SERVER_ERROR,
@@ -823,28 +862,30 @@ pub async fn request_handler(
                       &headers,
                     )
                     .await;
-                    log_combined(
-                      &logger,
-                      socket_data.remote_addr.ip(),
-                      auth_data,
-                      log_method,
-                      log_request_path,
-                      log_protocol,
-                      response.status().as_u16(),
-                      match response.headers().get(header::CONTENT_LENGTH) {
-                        Some(header_value) => match header_value.to_str() {
-                          Ok(header_value) => match header_value.parse::<u64>() {
-                            Ok(content_length) => Some(content_length),
+                    if log_enabled {
+                      log_combined(
+                        &logger,
+                        socket_data.remote_addr.ip(),
+                        auth_data,
+                        log_method,
+                        log_request_path,
+                        log_protocol,
+                        response.status().as_u16(),
+                        match response.headers().get(header::CONTENT_LENGTH) {
+                          Some(header_value) => match header_value.to_str() {
+                            Ok(header_value) => match header_value.parse::<u64>() {
+                              Ok(content_length) => Some(content_length),
+                              Err(_) => response.body().size_hint().exact(),
+                            },
                             Err(_) => response.body().size_hint().exact(),
                           },
-                          Err(_) => response.body().size_hint().exact(),
+                          None => response.body().size_hint().exact(),
                         },
-                        None => response.body().size_hint().exact(),
-                      },
-                      log_referrer,
-                      log_user_agent,
-                    )
-                    .await;
+                        log_referrer,
+                        log_user_agent,
+                      )
+                      .await;
+                    }
                     let (mut response_parts, response_body) = response.into_parts();
                     if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash()
                     {
@@ -871,28 +912,30 @@ pub async fn request_handler(
                 };
               }
 
-              log_combined(
-                &logger,
-                socket_data.remote_addr.ip(),
-                auth_data,
-                log_method,
-                log_request_path,
-                log_protocol,
-                response.status().as_u16(),
-                match response.headers().get(header::CONTENT_LENGTH) {
-                  Some(header_value) => match header_value.to_str() {
-                    Ok(header_value) => match header_value.parse::<u64>() {
-                      Ok(content_length) => Some(content_length),
+              if log_enabled {
+                log_combined(
+                  &logger,
+                  socket_data.remote_addr.ip(),
+                  auth_data,
+                  log_method,
+                  log_request_path,
+                  log_protocol,
+                  response.status().as_u16(),
+                  match response.headers().get(header::CONTENT_LENGTH) {
+                    Some(header_value) => match header_value.to_str() {
+                      Ok(header_value) => match header_value.parse::<u64>() {
+                        Ok(content_length) => Some(content_length),
+                        Err(_) => response.body().size_hint().exact(),
+                      },
                       Err(_) => response.body().size_hint().exact(),
                     },
-                    Err(_) => response.body().size_hint().exact(),
+                    None => response.body().size_hint().exact(),
                   },
-                  None => response.body().size_hint().exact(),
-                },
-                log_referrer,
-                log_user_agent,
-              )
-              .await;
+                  log_referrer,
+                  log_user_agent,
+                )
+                .await;
+              }
               let (mut response_parts, response_body) = response.into_parts();
               if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
                 let custom_headers_hash_iter = custom_headers_hash.iter();
@@ -938,39 +981,43 @@ pub async fn request_handler(
           response = match response_status {
             Ok(response) => response,
             Err(err) => {
-              logger
-                .send(LogMessage::new(
-                  format!("Unexpected error while serving a request: {}", err),
-                  true,
-                ))
-                .await
-                .unwrap_or_default();
+              if error_log_enabled {
+                logger
+                  .send(LogMessage::new(
+                    format!("Unexpected error while serving a request: {}", err),
+                    true,
+                  ))
+                  .await
+                  .unwrap_or_default();
+              }
 
               let response =
                 generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &combined_config, &None)
                   .await;
-              log_combined(
-                &logger,
-                socket_data.remote_addr.ip(),
-                latest_auth_data,
-                log_method,
-                log_request_path,
-                log_protocol,
-                response.status().as_u16(),
-                match response.headers().get(header::CONTENT_LENGTH) {
-                  Some(header_value) => match header_value.to_str() {
-                    Ok(header_value) => match header_value.parse::<u64>() {
-                      Ok(content_length) => Some(content_length),
+              if log_enabled {
+                log_combined(
+                  &logger,
+                  socket_data.remote_addr.ip(),
+                  latest_auth_data,
+                  log_method,
+                  log_request_path,
+                  log_protocol,
+                  response.status().as_u16(),
+                  match response.headers().get(header::CONTENT_LENGTH) {
+                    Some(header_value) => match header_value.to_str() {
+                      Ok(header_value) => match header_value.parse::<u64>() {
+                        Ok(content_length) => Some(content_length),
+                        Err(_) => response.body().size_hint().exact(),
+                      },
                       Err(_) => response.body().size_hint().exact(),
                     },
-                    Err(_) => response.body().size_hint().exact(),
+                    None => response.body().size_hint().exact(),
                   },
-                  None => response.body().size_hint().exact(),
-                },
-                log_referrer,
-                log_user_agent,
-              )
-              .await;
+                  log_referrer,
+                  log_user_agent,
+                )
+                .await;
+              }
               let (mut response_parts, response_body) = response.into_parts();
               if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
                 let custom_headers_hash_iter = custom_headers_hash.iter();
@@ -996,36 +1043,40 @@ pub async fn request_handler(
           };
         }
 
-        logger
-          .send(LogMessage::new(
-            format!("Unexpected error while serving a request: {}", err),
-            true,
-          ))
-          .await
-          .unwrap_or_default();
+        if error_log_enabled {
+          logger
+            .send(LogMessage::new(
+              format!("Unexpected error while serving a request: {}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+        }
 
-        log_combined(
-          &logger,
-          socket_data.remote_addr.ip(),
-          latest_auth_data,
-          log_method,
-          log_request_path,
-          log_protocol,
-          response.status().as_u16(),
-          match response.headers().get(header::CONTENT_LENGTH) {
-            Some(header_value) => match header_value.to_str() {
-              Ok(header_value) => match header_value.parse::<u64>() {
-                Ok(content_length) => Some(content_length),
+        if log_enabled {
+          log_combined(
+            &logger,
+            socket_data.remote_addr.ip(),
+            latest_auth_data,
+            log_method,
+            log_request_path,
+            log_protocol,
+            response.status().as_u16(),
+            match response.headers().get(header::CONTENT_LENGTH) {
+              Some(header_value) => match header_value.to_str() {
+                Ok(header_value) => match header_value.parse::<u64>() {
+                  Ok(content_length) => Some(content_length),
+                  Err(_) => response.body().size_hint().exact(),
+                },
                 Err(_) => response.body().size_hint().exact(),
               },
-              Err(_) => response.body().size_hint().exact(),
+              None => response.body().size_hint().exact(),
             },
-            None => response.body().size_hint().exact(),
-          },
-          log_referrer,
-          log_user_agent,
-        )
-        .await;
+            log_referrer,
+            log_user_agent,
+          )
+          .await;
+        }
         let (mut response_parts, response_body) = response.into_parts();
         if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
           let custom_headers_hash_iter = custom_headers_hash.iter();
@@ -1065,38 +1116,42 @@ pub async fn request_handler(
     response = match response_status {
       Ok(response) => response,
       Err(err) => {
-        logger
-          .send(LogMessage::new(
-            format!("Unexpected error while serving a request: {}", err),
-            true,
-          ))
-          .await
-          .unwrap_or_default();
+        if error_log_enabled {
+          logger
+            .send(LogMessage::new(
+              format!("Unexpected error while serving a request: {}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+        }
 
         let response =
           generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &combined_config, &None).await;
-        log_combined(
-          &logger,
-          socket_data.remote_addr.ip(),
-          latest_auth_data,
-          log_method,
-          log_request_path,
-          log_protocol,
-          response.status().as_u16(),
-          match response.headers().get(header::CONTENT_LENGTH) {
-            Some(header_value) => match header_value.to_str() {
-              Ok(header_value) => match header_value.parse::<u64>() {
-                Ok(content_length) => Some(content_length),
+        if log_enabled {
+          log_combined(
+            &logger,
+            socket_data.remote_addr.ip(),
+            latest_auth_data,
+            log_method,
+            log_request_path,
+            log_protocol,
+            response.status().as_u16(),
+            match response.headers().get(header::CONTENT_LENGTH) {
+              Some(header_value) => match header_value.to_str() {
+                Ok(header_value) => match header_value.parse::<u64>() {
+                  Ok(content_length) => Some(content_length),
+                  Err(_) => response.body().size_hint().exact(),
+                },
                 Err(_) => response.body().size_hint().exact(),
               },
-              Err(_) => response.body().size_hint().exact(),
+              None => response.body().size_hint().exact(),
             },
-            None => response.body().size_hint().exact(),
-          },
-          log_referrer,
-          log_user_agent,
-        )
-        .await;
+            log_referrer,
+            log_user_agent,
+          )
+          .await;
+        }
         let (mut response_parts, response_body) = response.into_parts();
         if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
           let custom_headers_hash_iter = custom_headers_hash.iter();
@@ -1122,28 +1177,30 @@ pub async fn request_handler(
     };
   }
 
-  log_combined(
-    &logger,
-    socket_data.remote_addr.ip(),
-    latest_auth_data,
-    log_method,
-    log_request_path,
-    log_protocol,
-    response.status().as_u16(),
-    match response.headers().get(header::CONTENT_LENGTH) {
-      Some(header_value) => match header_value.to_str() {
-        Ok(header_value) => match header_value.parse::<u64>() {
-          Ok(content_length) => Some(content_length),
+  if log_enabled {
+    log_combined(
+      &logger,
+      socket_data.remote_addr.ip(),
+      latest_auth_data,
+      log_method,
+      log_request_path,
+      log_protocol,
+      response.status().as_u16(),
+      match response.headers().get(header::CONTENT_LENGTH) {
+        Some(header_value) => match header_value.to_str() {
+          Ok(header_value) => match header_value.parse::<u64>() {
+            Ok(content_length) => Some(content_length),
+            Err(_) => response.body().size_hint().exact(),
+          },
           Err(_) => response.body().size_hint().exact(),
         },
-        Err(_) => response.body().size_hint().exact(),
+        None => response.body().size_hint().exact(),
       },
-      None => response.body().size_hint().exact(),
-    },
-    log_referrer,
-    log_user_agent,
-  )
-  .await;
+      log_referrer,
+      log_user_agent,
+    )
+    .await;
+  }
   let (mut response_parts, response_body) = response.into_parts();
   if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
     let custom_headers_hash_iter = custom_headers_hash.iter();

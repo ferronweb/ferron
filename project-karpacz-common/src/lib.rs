@@ -136,7 +136,7 @@ impl RequestData {
 
 /// Facilitates logging of error messages through a provided logger sender.
 pub struct ErrorLogger<'a> {
-  logger: &'a Sender<LogMessage>,
+  logger: Option<&'a Sender<LogMessage>>,
 }
 
 impl<'a> ErrorLogger<'a> {
@@ -150,7 +150,18 @@ impl<'a> ErrorLogger<'a> {
   ///
   /// A new `ErrorLogger` instance associated with the provided logger.
   pub fn new(logger: &'a Sender<LogMessage>) -> Self {
-    ErrorLogger { logger }
+    ErrorLogger {
+      logger: Some(logger),
+    }
+  }
+
+  /// Creates a new `ErrorLogger` instance without any underlying logger.
+  ///
+  /// # Returns
+  ///
+  /// A new `ErrorLogger` instance not associated with any logger.
+  pub fn without_logger() -> Self {
+    ErrorLogger { logger: None }
   }
 
   /// Logs an error message asynchronously.
@@ -172,11 +183,12 @@ impl<'a> ErrorLogger<'a> {
   /// # }
   /// ```
   pub async fn log(&self, message: &str) {
-    self
-      .logger
-      .send(LogMessage::new(String::from(message), true))
-      .await
-      .unwrap_or_default();
+    if let Some(logger) = self.logger {
+      logger
+        .send(LogMessage::new(String::from(message), true))
+        .await
+        .unwrap_or_default();
+    }
   }
 }
 
