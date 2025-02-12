@@ -203,8 +203,8 @@ pub async fn request_handler(
     },
     None => None,
   };
-  let log_enabled = (&config)["global"]["logFileName"].as_str().is_some();
-  let error_log_enabled = (&config)["global"]["errorLogFileName"].as_str().is_some();
+  let log_enabled = (&config)["global"]["logFilePath"].as_str().is_some();
+  let error_log_enabled = (&config)["global"]["errorLogFilePath"].as_str().is_some();
 
   // Construct SocketData
   let mut socket_data = SocketData::new(remote_address, local_address, encrypted);
