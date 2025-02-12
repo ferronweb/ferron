@@ -760,7 +760,6 @@ async fn server_event_loop(
   let modules_leaked = Box::leak(Box::new(modules));
 
   // Main loop to accept incoming connections
-
   loop {
     let handlers_vec = modules_leaked
       .iter()
