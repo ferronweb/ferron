@@ -770,50 +770,104 @@ async fn server_event_loop(
         Some(listener_tls) => {
           tokio::select! {
               status = listener.accept() => {
-                  let (stream, remote_address) = match status {
-                      Ok(data) => data,
-                      Err(err) => {
-                          logger.send(LogMessage::new(format!("Cannot accept a connection: {}", err), true)).await.unwrap_or_default();
-                          Err(anyhow::anyhow!(format!("Cannot accept a connection: {}", err)))?
-                      }
-                  };
-                  accept_connection(stream, remote_address, None, yaml_config.clone(), logger.clone(), handlers_vec).await;
+                match status {
+                  Ok((stream, remote_address)) => {
+                    accept_connection(
+                      stream,
+                      remote_address,
+                      None,
+                      yaml_config.clone(),
+                      logger.clone(),
+                      handlers_vec,
+                    )
+                    .await;
+                  }
+                  Err(err) => {
+                    logger
+                      .send(LogMessage::new(
+                        format!("Cannot accept a connection: {}", err),
+                        true,
+                      ))
+                      .await
+                      .unwrap_or_default();
+                  }
+                }
               },
               status = listener_tls.accept() => {
-                  let (stream, remote_address) = status?;
-                  let tls_acceptor = tls_acceptor.clone();
-                  accept_connection(stream, remote_address, Some(tls_acceptor), yaml_config.clone(), logger.clone(), handlers_vec).await;
+                match status {
+                  Ok((stream, remote_address)) => {
+                    let tls_acceptor = tls_acceptor.clone();
+                    accept_connection(
+                      stream,
+                      remote_address,
+                      Some(tls_acceptor),
+                      yaml_config.clone(),
+                      logger.clone(),
+                      handlers_vec,
+                    )
+                    .await;
+                  }
+                  Err(err) => {
+                    logger
+                      .send(LogMessage::new(
+                        format!("Cannot accept a connection: {}", err),
+                        true,
+                      ))
+                      .await
+                      .unwrap_or_default();
+                  }
+                }
               }
           };
         }
-        None => {
-          let (stream, remote_address) = listener.accept().await?;
-          accept_connection(
-            stream,
-            remote_address,
-            None,
-            yaml_config.clone(),
-            logger.clone(),
-            handlers_vec,
-          )
-          .await;
-        }
-      },
-      None => {
-        match &listener_tls {
-          Some(listener_tls) => {
-            let (stream, remote_address) = listener_tls.accept().await?;
-            let tls_acceptor = tls_acceptor.clone();
+        None => match listener.accept().await {
+          Ok((stream, remote_address)) => {
             accept_connection(
               stream,
               remote_address,
-              Some(tls_acceptor),
+              None,
               yaml_config.clone(),
               logger.clone(),
               handlers_vec,
             )
             .await;
           }
+          Err(err) => {
+            logger
+              .send(LogMessage::new(
+                format!("Cannot accept a connection: {}", err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
+        },
+      },
+      None => {
+        match &listener_tls {
+          Some(listener_tls) => match listener_tls.accept().await {
+            Ok((stream, remote_address)) => {
+              let tls_acceptor = tls_acceptor.clone();
+              accept_connection(
+                stream,
+                remote_address,
+                Some(tls_acceptor),
+                yaml_config.clone(),
+                logger.clone(),
+                handlers_vec,
+              )
+              .await;
+            }
+            Err(err) => {
+              logger
+                .send(LogMessage::new(
+                  format!("Cannot accept a connection: {}", err),
+                  true,
+                ))
+                .await
+                .unwrap_or_default();
+            }
+          },
           None => {
             // No server is listening...
             logger
