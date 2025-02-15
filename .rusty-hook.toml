@@ -1,5 +1,5 @@
 [hooks]
-pre-commit = "cargo clippy --fix --all-targets --allow-staged && cargo fmt"
+pre-commit = "cargo clippy --fix --all-targets --allow-staged && cargo fmt && git add -A"
 
 [logging]
 verbose = true

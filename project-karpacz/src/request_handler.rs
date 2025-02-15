@@ -958,17 +958,15 @@ pub async fn request_handler(
               };
               return Ok(Response::from_parts(response_parts, response_body));
             }
-            None => {
-              match request_option {
-                Some(request) => {
-              request_data = RequestData::new(request, auth_data);
-              continue;
-                },
-                None => {
-                  break;
-                }
+            None => match request_option {
+              Some(request) => {
+                request_data = RequestData::new(request, auth_data);
+                continue;
               }
-            }
+              None => {
+                break;
+              }
+            },
           },
         }
       }

@@ -215,7 +215,7 @@ impl ResponseData {
   /// A `ResponseDataBuilder` initialized with the provided request data.
   pub fn builder(request: RequestData) -> ResponseDataBuilder {
     let (request, auth_user) = request.into_parts();
-        
+
     ResponseDataBuilder {
       request: Some(request),
       auth_user,
