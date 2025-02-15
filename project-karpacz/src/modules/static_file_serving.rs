@@ -19,7 +19,7 @@ use hyper::{header, HeaderMap, Method};
 use lru::LruCache;
 use project_karpacz_common::WithRuntime;
 use project_karpacz_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
+  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfigRoot, ServerModule,
   ServerModuleHandlers, SocketData,
 };
 use sha2::{Digest, Sha256};
@@ -104,12 +104,12 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfig,
+    config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
-      if let Some(wwwroot) = config["wwwroot"].as_str() {
+      if let Some(wwwroot) = config.get("wwwroot").as_str() {
         let hyper_request = request.get_hyper_request();
         let request_path = hyper_request.uri().path();
         //let request_query = hyper_request.uri().query();
@@ -124,11 +124,11 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
 
         let cache_key = format!(
           "{}{}{}",
-          match config["ip"].as_str() {
+          match config.get("ip").as_str() {
             Some(ip) => format!("{}-", ip),
             None => String::from(""),
           },
-          match config["domain"].as_str() {
+          match config.get("domain").as_str() {
             Some(domain) => format!("{}-", domain),
             None => String::from(""),
           },
@@ -204,7 +204,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
             if metadata.is_file() {
               // Handle ETags
               let mut etag_option = None;
-              if config["enableETag"].as_bool() != Some(false) {
+              if config.get("enableETag").as_bool() != Some(false) {
                 let etag_cache_key = format!(
                   "{}-{}-{}",
                   joined_pathbuf.to_string_lossy(),
@@ -418,7 +418,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                 let mut use_brotli = false;
                 let mut use_zstd = false;
 
-                if config["enableCompression"].as_bool() != Some(false) {
+                if config.get("enableCompression").as_bool() != Some(false) {
                   // A hard-coded list of non-compressible file extension
                   let non_compressible_file_extensions = vec![
                     "7z",
@@ -683,7 +683,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                 return Ok(ResponseData::builder(request).response(response).build());
               }
             } else if metadata.is_dir() {
-              if config["enableDirectoryListing"].as_bool() == Some(true) {
+              if config.get("enableDirectoryListing").as_bool() == Some(true) {
                 let joined_maindesc_pathbuf = joined_pathbuf.join(".maindesc");
                 let directory = match fs::read_dir(joined_pathbuf).await {
                   Ok(directory) => directory,
@@ -774,7 +774,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfig,
+    _config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {

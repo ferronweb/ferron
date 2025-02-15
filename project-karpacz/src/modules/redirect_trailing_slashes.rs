@@ -8,7 +8,7 @@ use http_body_util::{BodyExt, Empty};
 use hyper::{header, Response, StatusCode};
 use project_karpacz_common::WithRuntime;
 use project_karpacz_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
+  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfigRoot, ServerModule,
   ServerModuleHandlers, SocketData,
 };
 use tokio::fs;
@@ -52,13 +52,13 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfig,
+    config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
-      if config["disableTrailingSlashRedirects"].as_bool() != Some(true) {
-        if let Some(wwwroot) = config["wwwroot"].as_str() {
+      if config.get("disableTrailingSlashRedirects").as_bool() != Some(true) {
+        if let Some(wwwroot) = config.get("wwwroot").as_str() {
           let hyper_request = request.get_hyper_request();
 
           let request_path = hyper_request.uri().path();
@@ -79,11 +79,11 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
             _ => {
               let cache_key = format!(
                 "{}{}{}",
-                match config["ip"].as_str() {
+                match config.get("ip").as_str() {
                   Some(ip) => format!("{}-", ip),
                   None => String::from(""),
                 },
-                match config["domain"].as_str() {
+                match config.get("domain").as_str() {
                   Some(domain) => format!("{}-", domain),
                   None => String::from(""),
                 },
@@ -181,7 +181,7 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfig,
+    _config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {

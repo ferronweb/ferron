@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use hyper::StatusCode;
 use project_karpacz_common::WithRuntime;
 use project_karpacz_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
+  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfigRoot, ServerModule,
   ServerModuleHandlers, SocketData,
 };
 use tokio::runtime::Handle;
@@ -37,12 +37,12 @@ impl ServerModuleHandlers for XForwardedForModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfig,
+    config: &ServerConfigRoot,
     socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
-      if config["enableIPSpoofing"].as_bool() == Some(true) {
+      if config.get("enableIPSpoofing").as_bool() == Some(true) {
         let hyper_request = request.get_hyper_request();
 
         if let Some(x_forwarded_for_value) = hyper_request.headers().get("x-forwarded-for") {
@@ -90,7 +90,7 @@ impl ServerModuleHandlers for XForwardedForModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfig,
+    _config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {

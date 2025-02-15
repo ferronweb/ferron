@@ -17,7 +17,7 @@ use hyper::body::{Body, Bytes, Frame, Incoming};
 use hyper::header::{self, HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
 use project_karpacz_common::{
-  ErrorLogger, LogMessage, RequestData, ServerModuleHandlers, SocketData,
+  ErrorLogger, LogMessage, RequestData, ServerConfigRoot, ServerModuleHandlers, SocketData,
 };
 use tokio::fs;
 use tokio::io::BufReader;
@@ -680,17 +680,28 @@ pub async fn request_handler(
 
   let mut executed_handlers = Vec::new();
   let mut latest_auth_data = None;
+  let combined_config_hash = ServerConfigRoot::new(&combined_config);
 
   for mut handlers in handlers_vec {
     let response_result = match is_proxy_request {
       true => {
         handlers
-          .proxy_request_handler(request_data, &combined_config, &socket_data, &error_logger)
+          .proxy_request_handler(
+            request_data,
+            &combined_config_hash,
+            &socket_data,
+            &error_logger,
+          )
           .await
       }
       false => {
         handlers
-          .request_handler(request_data, &combined_config, &socket_data, &error_logger)
+          .request_handler(
+            request_data,
+            &combined_config_hash,
+            &socket_data,
+            &error_logger,
+          )
           .await
       }
     };

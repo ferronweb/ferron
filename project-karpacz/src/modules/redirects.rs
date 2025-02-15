@@ -5,7 +5,7 @@ use http_body_util::{BodyExt, Empty};
 use hyper::{header, Response, StatusCode, Uri};
 use project_karpacz_common::WithRuntime;
 use project_karpacz_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
+  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfigRoot, ServerModule,
   ServerModuleHandlers, SocketData,
 };
 use tokio::runtime::Handle;
@@ -37,17 +37,17 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfig,
+    config: &ServerConfigRoot,
     socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       let hyper_request = request.get_hyper_request();
 
-      if config["secure"].as_bool() == Some(true)
+      if config.get("secure").as_bool() == Some(true)
         && !socket_data.encrypted
-        && config["disableNonEncryptedServer"].as_bool() != Some(true)
-        && config["disableToHTTPSRedirect"].as_bool() != Some(true)
+        && config.get("disableNonEncryptedServer").as_bool() != Some(true)
+        && config.get("disableToHTTPSRedirect").as_bool() != Some(true)
       {
         let host_header_option = hyper_request.headers().get(header::HOST);
         let host_header = match host_header_option {
@@ -83,7 +83,7 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
 
         let new_uri = Uri::builder()
           .scheme("https")
-          .authority(match config["sport"].as_i64() {
+          .authority(match config.get("sport").as_i64() {
             None | Some(443) => host_name,
             Some(port) => format!("{}:{}", host_name, port),
           })
@@ -102,10 +102,11 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
         );
       }
 
-      let domain = config["domain"].as_str();
+      let domain_yaml = config.get("domain");
+      let domain = domain_yaml.as_str();
 
       if let Some(domain) = domain {
-        if config["wwwredirect"].as_bool() == Some(true) {
+        if config.get("wwwredirect").as_bool() == Some(true) {
           // Even more code rewritten from SVR.JS...
           if let Some(host_header_value) = hyper_request.headers().get(header::HOST) {
             let host_header = host_header_value.to_str()?;
@@ -169,14 +170,14 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfig,
+    config: &ServerConfigRoot,
     socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-    if config["secure"].as_bool() == Some(true)
+    if config.get("secure").as_bool() == Some(true)
       && !socket_data.encrypted
-      && config["disableNonEncryptedServer"].as_bool() != Some(true)
-      && config["disableToHTTPSRedirect"].as_bool() != Some(true)
+      && config.get("disableNonEncryptedServer").as_bool() != Some(true)
+      && config.get("disableToHTTPSRedirect").as_bool() != Some(true)
     {
       return Ok(
         ResponseData::builder(request)

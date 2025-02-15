@@ -6,7 +6,7 @@ use hyper::header::HeaderValue;
 use hyper::{header, HeaderMap, Method, Response, StatusCode};
 use project_karpacz_common::WithRuntime;
 use project_karpacz_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
+  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfigRoot, ServerModule,
   ServerModuleHandlers, SocketData,
 };
 use tokio::runtime::Handle;
@@ -38,7 +38,7 @@ impl ServerModuleHandlers for DefaultHandlerChecksModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfig,
+    _config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -76,7 +76,7 @@ impl ServerModuleHandlers for DefaultHandlerChecksModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfig,
+    _config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {

@@ -5,8 +5,8 @@ use async_trait::async_trait;
 use hyper::StatusCode;
 use project_karpacz_common::WithRuntime;
 use project_karpacz_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
-  ServerModuleHandlers, SocketData,
+  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerConfigRoot,
+  ServerModule, ServerModuleHandlers, SocketData,
 };
 use tokio::runtime::Handle;
 
@@ -61,7 +61,7 @@ impl ServerModuleHandlers for BlockListModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfig,
+    _config: &ServerConfigRoot,
     socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -81,7 +81,7 @@ impl ServerModuleHandlers for BlockListModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfig,
+    _config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {

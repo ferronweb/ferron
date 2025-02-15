@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use http_body_util::{BodyExt, Full};
 use hyper::Response;
 use project_karpacz_common::{
-  ErrorLogger, RequestData, ResponseData, ServerConfig, ServerModule, ServerModuleHandlers,
-  SocketData,
+  ErrorLogger, RequestData, ResponseData, ServerConfig, ServerConfigRoot, ServerModule,
+  ServerModuleHandlers, SocketData,
 };
 use project_karpacz_common::{HyperResponse, WithRuntime};
 use tokio::runtime::Handle;
@@ -59,11 +59,14 @@ impl ServerModuleHandlers for ExampleModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfig,
+    config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
+      //println!("{:?}", socket_data.local_addr.ip());
+      println!("{:?}", config.get("a")["b"]);
+
       if request.get_hyper_request().uri().path() == "/hello" {
         Ok(
           ResponseData::builder(request)
@@ -87,7 +90,7 @@ impl ServerModuleHandlers for ExampleModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfig,
+    _config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {

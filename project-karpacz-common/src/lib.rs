@@ -1,4 +1,4 @@
-use std::{error::Error, net::SocketAddr};
+use std::{collections::HashMap, error::Error, net::SocketAddr};
 
 use async_channel::Sender;
 use async_trait::async_trait;
@@ -48,7 +48,7 @@ impl SocketData {
 /// Represents a log message. This is a type alias for `crate::log::LogMessage`.
 pub type LogMessage = crate::log::LogMessage;
 
-/// Represents the server configuration. This is a type alias for `Yaml` from the `yaml_rust2` crate.
+/// Represents the server configuration object. This is a type alias for `Yaml` from the `yaml_rust2` crate.
 pub type ServerConfig = Yaml;
 
 /// Represents the HTTP request from Hyper.
@@ -359,6 +359,77 @@ impl ResponseDataBuilder {
   }
 }
 
+/// Represents the root configuration for the server.
+///
+/// This struct encapsulates a mapping between configuration property names and their corresponding
+/// YAML values, allowing for organized access to server settings.
+pub struct ServerConfigRoot {
+  hashmap: HashMap<String, Yaml>,
+}
+
+impl ServerConfigRoot {
+  /// Constructs a new `ServerConfigRoot` instance from a given YAML hash.
+  ///
+  /// This function takes a YAML object, expects it to be a hash (mapping), and converts it into
+  /// a `HashMap` where each key is a `String` and each value is a `Yaml` object. This allows for
+  /// easy retrieval of configuration properties by their names.
+  ///
+  /// # Parameters
+  ///
+  /// - `hashmap_yaml`: A reference to `ServerConfig` object expected to be a hash containing configuration properties.
+  ///
+  /// # Returns
+  ///
+  /// A `ServerConfigRoot` instance containing the parsed configuration properties.
+  pub fn new(hashmap_yaml: &ServerConfig) -> Self {
+    let mut hashmap = HashMap::new();
+
+    if let Some(hashmap_yaml) = hashmap_yaml.as_hash() {
+      for (key, value) in hashmap_yaml.iter() {
+        if let Some(key_str) = key.as_str() {
+          hashmap.insert(key_str.to_string(), value.clone());
+        }
+      }
+    }
+
+    ServerConfigRoot { hashmap }
+  }
+
+  /// Constructs a new `ServerConfigRoot` instance from an existing `HashMap<String, ServerConfig>`.
+  ///
+  /// # Parameters
+  ///
+  /// - `hashmap`: A `HashMap<String, ServerConfig>` hashmap.
+  ///
+  /// # Returns
+  ///
+  /// A `ServerConfigRoot` instance containing the parsed configuration properties.
+  pub fn from_hash(hashmap: HashMap<String, ServerConfig>) -> Self {
+    ServerConfigRoot { hashmap }
+  }
+
+  /// Retrieves a configuration property by its name.
+  ///
+  /// This function looks up the provided property name in the internal hashmap and returns
+  /// a clone of the corresponding `Yaml` value if found. If the property is not found, it
+  /// returns `Yaml::BadValue`.
+  ///
+  /// # Parameters
+  ///
+  /// - `property`: A string slice representing the name of the configuration property to retrieve.
+  ///
+  /// # Returns
+  ///
+  /// A `Yaml` object corresponding to the requested property, or `Yaml::BadValue` if the property
+  /// does not exist in the configuration.
+  pub fn get(&self, property: &str) -> Yaml {
+    match self.hashmap.get(property) {
+      Some(yaml) => yaml.clone(),
+      None => Yaml::BadValue,
+    }
+  }
+}
+
 /// Defines the interface for server module handlers, specifying how requests should be processed.
 #[async_trait]
 pub trait ServerModuleHandlers {
@@ -377,7 +448,7 @@ pub trait ServerModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfig,
+    config: &ServerConfigRoot,
     socket_data: &SocketData,
     error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>>;
@@ -397,7 +468,7 @@ pub trait ServerModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfig,
+    config: &ServerConfigRoot,
     socket_data: &SocketData,
     error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>>;

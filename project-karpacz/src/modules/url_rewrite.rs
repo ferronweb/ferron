@@ -11,8 +11,8 @@ use fancy_regex::RegexBuilder;
 use hyper::{header, Request, StatusCode};
 use project_karpacz_common::WithRuntime;
 use project_karpacz_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
-  ServerModuleHandlers, SocketData,
+  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerConfigRoot,
+  ServerModule, ServerModuleHandlers, SocketData,
 };
 use tokio::fs;
 use tokio::runtime::Handle;
@@ -129,7 +129,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfig,
+    config: &ServerConfigRoot,
     socket_data: &SocketData,
     error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -185,7 +185,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
       for url_rewrite_map_entry in combined_url_rewrite_map {
         // Check if it's a file or a directory according to the rewrite map configuration
         if url_rewrite_map_entry.is_not_directory || url_rewrite_map_entry.is_not_file {
-          if let Some(wwwroot) = config["wwwroot"].as_str() {
+          if let Some(wwwroot) = config.get("wwwroot").as_str() {
             let path = Path::new(wwwroot);
             let mut relative_path = &rewritten_url[1..];
             while relative_path.as_bytes().first().copied() == Some(b'/') {
@@ -236,7 +236,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
       if rewritten_url == original_url {
         Ok(ResponseData::builder(request).build())
       } else {
-        if config["enableRewriteLogging"].as_bool() == Some(true) {
+        if config.get("enableRewriteLogging").as_bool() == Some(true) {
           error_logger
             .log(&format!(
               "URL rewritten from \"{}\" to \"{}\"",
@@ -260,7 +260,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfig,
+    _config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger<'_>,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
