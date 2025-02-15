@@ -53,7 +53,7 @@ use std::sync::Arc;
 // External crate imports
 use clap::Parser;
 use libloading::{library_filename, Library, Symbol};
-use project_karpacz_common::{ServerConfig, ServerModule};
+use project_karpacz_common::{ServerConfig, ServerConfigRoot, ServerModule};
 use project_karpacz_server::start_server;
 use yaml_rust2::YamlLoader;
 
@@ -170,7 +170,7 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
 
     // Retrieve the module configuration validation function
     let module_validate_config: Symbol<
-      fn(&ServerConfig, bool) -> Result<(), Box<dyn Error + Send + Sync>>,
+      fn(&ServerConfigRoot, bool) -> Result<(), Box<dyn Error + Send + Sync>>,
     > = match unsafe { lib.get(b"server_module_validate_config") } {
       Ok(module) => module,
       Err(err) => {

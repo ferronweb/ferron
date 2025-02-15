@@ -1,4 +1,5 @@
 use hyper::header::{HeaderName, HeaderValue};
+use project_karpacz_common::ServerConfigRoot;
 use std::error::Error;
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -13,16 +14,19 @@ fn validate_ip(ip: &str) -> bool {
 }
 
 // Internal configuration file validators
-pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Error + Send + Sync>> {
-  let domain_badvalue = config["domain"].is_badvalue();
-  let ip_badvalue = config["ip"].is_badvalue();
+pub fn validate_config(
+  config: &ServerConfigRoot,
+  is_global: bool,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+  let domain_badvalue = config.get("domain").is_badvalue();
+  let ip_badvalue = config.get("ip").is_badvalue();
 
-  if !domain_badvalue && config["domain"].as_str().is_none() {
+  if !domain_badvalue && config.get("domain").as_str().is_none() {
     Err(anyhow::anyhow!("Invalid domain name"))?
   }
 
   if !ip_badvalue {
-    match config["ip"].as_str() {
+    match config.get("ip").as_str() {
       Some(ip) => {
         if !validate_ip(ip) {
           Err(anyhow::anyhow!("Invalid IP address"))?;
@@ -40,13 +44,13 @@ pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Err
     ))?;
   }
 
-  if !config["loadModules"].is_badvalue() {
+  if !config.get("loadModules").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "Module configuration is not allowed in host configuration"
       ))?
     }
-    if let Some(modules) = config["loadModules"].as_vec() {
+    if let Some(modules) = config.get("loadModules").as_vec() {
       let modules_iter = modules.iter();
       for module_name_yaml in modules_iter {
         if module_name_yaml.as_str().is_none() {
@@ -58,109 +62,109 @@ pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Err
     }
   }
 
-  if !config["port"].is_badvalue() {
+  if !config.get("port").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "HTTP port configuration is not allowed in host configuration"
       ))?
     }
-    if let Some(port) = config["port"].as_i64() {
+    if let Some(port) = config.get("port").as_i64() {
       if !(0..=65535).contains(&port) {
         Err(anyhow::anyhow!("Invalid HTTP port"))?
       }
-    } else if config["port"].as_str().is_none() {
+    } else if config.get("port").as_str().is_none() {
       Err(anyhow::anyhow!("Invalid HTTP port"))?
     }
   }
 
-  if !config["sport"].is_badvalue() {
+  if !config.get("sport").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "HTTPS port configuration is not allowed in host configuration"
       ))?
     }
-    if let Some(port) = config["sport"].as_i64() {
+    if let Some(port) = config.get("sport").as_i64() {
       if !(0..=65535).contains(&port) {
         Err(anyhow::anyhow!("Invalid HTTPS port"))?
       }
-    } else if config["sport"].as_str().is_none() {
+    } else if config.get("sport").as_str().is_none() {
       Err(anyhow::anyhow!("Invalid HTTPS port"))?
     }
   }
 
-  if !config["secure"].is_badvalue() {
+  if !config.get("secure").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "HTTPS enabling configuration is not allowed in host configuration"
       ))?
     }
-    if config["secure"].as_bool().is_none() {
+    if config.get("secure").as_bool().is_none() {
       Err(anyhow::anyhow!("Invalid HTTPS enabling option value"))?
     }
   }
 
-  if !config["enableHTTP2"].is_badvalue() {
+  if !config.get("enableHTTP2").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "HTTP/2 enabling configuration is not allowed in host configuration"
       ))?
     }
-    if config["enableHTTP2"].as_bool().is_none() {
+    if config.get("enableHTTP2").as_bool().is_none() {
       Err(anyhow::anyhow!("Invalid HTTP/2 enabling option value"))?
     }
   }
 
-  if !config["logFilePath"].is_badvalue() {
+  if !config.get("logFilePath").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "Log file configuration is not allowed in host configuration"
       ))?
     }
-    if config["logFilePath"].as_str().is_none() {
+    if config.get("logFilePath").as_str().is_none() {
       Err(anyhow::anyhow!("Invalid log file path"))?
     }
   }
 
-  if !config["errorLogFilePath"].is_badvalue() {
+  if !config.get("errorLogFilePath").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "Error log file configuration is not allowed in host configuration"
       ))?
     }
-    if config["errorLogFilePath"].as_str().is_none() {
+    if config.get("errorLogFilePath").as_str().is_none() {
       Err(anyhow::anyhow!("Invalid error log file path"))?
     }
   }
 
-  if !config["cert"].is_badvalue() {
+  if !config.get("cert").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "TLS certificate configuration is not allowed in host configuration"
       ))?
     }
-    if config["cert"].as_str().is_none() {
+    if config.get("cert").as_str().is_none() {
       Err(anyhow::anyhow!("Invalid TLS certificate path"))?
     }
   }
 
-  if !config["key"].is_badvalue() {
+  if !config.get("key").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "Private key configuration is not allowed in host configuration"
       ))?
     }
-    if config["key"].as_str().is_none() {
+    if config.get("key").as_str().is_none() {
       Err(anyhow::anyhow!("Invalid private key path"))?
     }
   }
 
-  if !config["sni"].is_badvalue() {
+  if !config.get("sni").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "SNI configuration is not allowed in host configuration"
       ))?
     }
-    if let Some(sni) = config["sni"].as_hash() {
+    if let Some(sni) = config.get("sni").as_hash() {
       let sni_hostnames = sni.keys();
       for sni_hostname_unknown in sni_hostnames {
         if let Some(sni_hostname) = sni_hostname_unknown.as_str() {
@@ -185,40 +189,41 @@ pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Err
     }
   }
 
-  if !config["http2Options"].is_badvalue() {
+  if !config.get("http2Options").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "HTTP/2 configuration is not allowed in host configuration"
       ))?
     }
-    if config["http2Options"].as_hash().is_some() {
-      if let Some(initial_window_size) = config["http2Options"]["initialWindowSize"].as_i64() {
+    if config.get("http2Options").as_hash().is_some() {
+      if let Some(initial_window_size) = config.get("http2Options")["initialWindowSize"].as_i64() {
         if !(0..=2_147_483_647).contains(&initial_window_size) {
           Err(anyhow::anyhow!("Invalid HTTP/2 initial window size"))?
         }
       }
 
-      if let Some(max_frame_size) = config["http2Options"]["maxFrameSize"].as_i64() {
+      if let Some(max_frame_size) = config.get("http2Options")["maxFrameSize"].as_i64() {
         if !(16_384..=16_777_215).contains(&max_frame_size) {
           Err(anyhow::anyhow!("Invalid HTTP/2 max frame size"))?
         }
       }
 
-      if let Some(max_concurrent_streams) = config["http2Options"]["maxConcurrentStreams"].as_i64()
+      if let Some(max_concurrent_streams) =
+        config.get("http2Options")["maxConcurrentStreams"].as_i64()
       {
         if max_concurrent_streams < 0 {
           Err(anyhow::anyhow!("Invalid HTTP/2 max concurrent streams"))?
         }
       }
 
-      if let Some(max_header_list_size) = config["http2Options"]["maxHeaderListSize"].as_i64() {
+      if let Some(max_header_list_size) = config.get("http2Options")["maxHeaderListSize"].as_i64() {
         if max_header_list_size < 0 {
           Err(anyhow::anyhow!("Invalid HTTP/2 max header list size"))?
         }
       }
 
-      if !config["http2Options"]["enableConnectProtocol"].is_badvalue()
-        && config["http2Options"]["enableConnectProtocol"]
+      if !config.get("http2Options")["enableConnectProtocol"].is_badvalue()
+        && config.get("http2Options")["enableConnectProtocol"]
           .as_bool()
           .is_none()
       {
@@ -231,26 +236,26 @@ pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Err
     }
   }
 
-  if !config["useClientCertificate"].is_badvalue() {
+  if !config.get("useClientCertificate").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "Client certificate verfication enabling option is not allowed in host configuration"
       ))?
     }
-    if config["useClientCertificate"].as_bool().is_none() {
+    if config.get("useClientCertificate").as_bool().is_none() {
       Err(anyhow::anyhow!(
         "Invalid client certificate verification enabling option value"
       ))?
     }
   }
 
-  if !config["cipherSuite"].is_badvalue() {
+  if !config.get("cipherSuite").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "Cipher suite configuration is not allowed in host configuration"
       ))?
     }
-    if let Some(cipher_suites) = config["cipherSuite"].as_vec() {
+    if let Some(cipher_suites) = config.get("cipherSuite").as_vec() {
       let cipher_suites_iter = cipher_suites.iter();
       for cipher_suite_name_yaml in cipher_suites_iter {
         if cipher_suite_name_yaml.as_str().is_none() {
@@ -262,13 +267,13 @@ pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Err
     }
   }
 
-  if !config["ecdhCurve"].is_badvalue() {
+  if !config.get("ecdhCurve").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "ECDH curve configuration is not allowed in host configuration"
       ))?
     }
-    if let Some(ecdh_curves) = config["ecdhCurve"].as_vec() {
+    if let Some(ecdh_curves) = config.get("ecdhCurve").as_vec() {
       let ecdh_curves_iter = ecdh_curves.iter();
       for ecdh_curve_name_yaml in ecdh_curves_iter {
         if ecdh_curve_name_yaml.as_str().is_none() {
@@ -280,75 +285,77 @@ pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Err
     }
   }
 
-  if !config["tlsMinVersion"].is_badvalue() {
+  if !config.get("tlsMinVersion").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "Minimum TLS version is not allowed in host configuration"
       ))?
     }
-    if config["tlsMinVersion"].as_str().is_none() {
+    if config.get("tlsMinVersion").as_str().is_none() {
       Err(anyhow::anyhow!("Invalid minimum TLS version"))?
     }
   }
 
-  if !config["tlsMaxVersion"].is_badvalue() {
+  if !config.get("tlsMaxVersion").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "Maximum TLS version is not allowed in host configuration"
       ))?
     }
-    if config["tlsMaxVersion"].as_str().is_none() {
+    if config.get("tlsMaxVersion").as_str().is_none() {
       Err(anyhow::anyhow!("Invalid maximum TLS version"))?
     }
   }
 
-  if !config["enableOCSPStapling"].is_badvalue() {
+  if !config.get("enableOCSPStapling").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "OCSP stapling enabling option is not allowed in host configuration"
       ))?
     }
-    if config["enableOCSPStapling"].as_bool().is_none() {
+    if config.get("enableOCSPStapling").as_bool().is_none() {
       Err(anyhow::anyhow!(
         "Invalid OCSP stapling enabling option value"
       ))?
     }
   }
 
-  if !config["serverAdministratorEmail"].is_badvalue()
-    && config["serverAdministratorEmail"].as_str().is_none()
+  if !config.get("serverAdministratorEmail").is_badvalue()
+    && config.get("serverAdministratorEmail").as_str().is_none()
   {
     Err(anyhow::anyhow!(
       "Invalid server administrator email address"
     ))?
   }
 
-  if !config["enableIPSpoofing"].is_badvalue() && config["enableIPSpoofing"].as_bool().is_none() {
+  if !config.get("enableIPSpoofing").is_badvalue()
+    && config.get("enableIPSpoofing").as_bool().is_none()
+  {
     Err(anyhow::anyhow!(
       "Invalid X-Forwarded-For enabling option value"
     ))?
   }
 
-  if !config["disableNonEncryptedServer"].is_badvalue() {
+  if !config.get("disableNonEncryptedServer").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "Non-encrypted server disabling option is not allowed in host configuration"
       ))?
     }
-    if config["disableNonEncryptedServer"].as_bool().is_none() {
+    if config.get("disableNonEncryptedServer").as_bool().is_none() {
       Err(anyhow::anyhow!(
         "Invalid non-encrypted server disabling option value"
       ))?
     }
   }
 
-  if !config["blocklist"].is_badvalue() {
+  if !config.get("blocklist").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "Block list configuration is not allowed in host configuration"
       ))?
     }
-    if let Some(blocklist) = config["blocklist"].as_vec() {
+    if let Some(blocklist) = config.get("blocklist").as_vec() {
       let blocklist_iter = blocklist.iter();
       for blocklist_entry_yaml in blocklist_iter {
         match blocklist_entry_yaml.as_str() {
@@ -365,13 +372,13 @@ pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Err
     }
   }
 
-  if !config["environmentVariables"].is_badvalue() {
+  if !config.get("environmentVariables").is_badvalue() {
     if !is_global {
       Err(anyhow::anyhow!(
         "Environment variable configuration is not allowed in host configuration"
       ))?
     }
-    if let Some(environment_variables_hash) = config["environmentVariables"].as_hash() {
+    if let Some(environment_variables_hash) = config.get("environmentVariables").as_hash() {
       let environment_variables_hash_iter = environment_variables_hash.iter();
       for (var_name, var_value) in environment_variables_hash_iter {
         if var_name.as_str().is_none() || var_value.as_str().is_none() {
@@ -383,22 +390,22 @@ pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Err
     }
   }
 
-  if !config["disableToHTTPSRedirect"].is_badvalue()
-    && config["disableToHTTPSRedirect"].as_bool().is_none()
+  if !config.get("disableToHTTPSRedirect").is_badvalue()
+    && config.get("disableToHTTPSRedirect").as_bool().is_none()
   {
     Err(anyhow::anyhow!(
       "Invalid HTTP to HTTPS redirect disabling option value"
     ))?
   }
 
-  if !config["wwwredirect"].is_badvalue() && config["wwwredirect"].as_bool().is_none() {
+  if !config.get("wwwredirect").is_badvalue() && config.get("wwwredirect").as_bool().is_none() {
     Err(anyhow::anyhow!(
       "Invalid to \"www.\" URL redirect disabling option value"
     ))?
   }
 
-  if !config["customHeaders"].is_badvalue() {
-    if let Some(custom_headers_hash) = config["customHeaders"].as_hash() {
+  if !config.get("customHeaders").is_badvalue() {
+    if let Some(custom_headers_hash) = config.get("customHeaders").as_hash() {
       let custom_headers_hash_iter = custom_headers_hash.iter();
       for (header_name, header_value) in custom_headers_hash_iter {
         if let Some(header_name) = header_name.as_str() {
@@ -420,8 +427,8 @@ pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Err
     }
   }
 
-  if !config["rewriteMap"].is_badvalue() {
-    if let Some(rewrite_map) = config["rewriteMap"].as_vec() {
+  if !config.get("rewriteMap").is_badvalue() {
+    if let Some(rewrite_map) = config.get("rewriteMap").as_vec() {
       let rewrite_map_iter = rewrite_map.iter();
       for rewrite_map_entry_yaml in rewrite_map_iter {
         if !rewrite_map_entry_yaml.is_hash() {
@@ -461,24 +468,27 @@ pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Err
     }
   }
 
-  if !config["enableRewriteLogging"].is_badvalue()
-    && config["enableRewriteLogging"].as_bool().is_none()
+  if !config.get("enableRewriteLogging").is_badvalue()
+    && config.get("enableRewriteLogging").as_bool().is_none()
   {
     Err(anyhow::anyhow!(
       "Invalid URL rewrite logging enabling option value"
     ))?
   }
 
-  if !config["disableTrailingSlashRedirects"].is_badvalue()
-    && config["disableTrailingSlashRedirects"].as_bool().is_none()
+  if !config.get("disableTrailingSlashRedirects").is_badvalue()
+    && config
+      .get("disableTrailingSlashRedirects")
+      .as_bool()
+      .is_none()
   {
     Err(anyhow::anyhow!(
       "Invalid trailing slash redirect disabling option value"
     ))?
   }
 
-  if !config["users"].is_badvalue() {
-    if let Some(users) = config["users"].as_vec() {
+  if !config.get("users").is_badvalue() {
+    if let Some(users) = config.get("users").as_vec() {
       let users_iter = users.iter();
       for user_yaml in users_iter {
         if !user_yaml.is_hash() {
@@ -496,8 +506,8 @@ pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Err
     }
   }
 
-  if !config["nonStandardCodes"].is_badvalue() {
-    if let Some(non_standard_codes) = config["nonStandardCodes"].as_vec() {
+  if !config.get("nonStandardCodes").is_badvalue() {
+    if let Some(non_standard_codes) = config.get("nonStandardCodes").as_vec() {
       let non_standard_codes_iter = non_standard_codes.iter();
       for non_standard_code_yaml in non_standard_codes_iter {
         if !non_standard_code_yaml.is_hash() {
@@ -594,8 +604,8 @@ pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Err
     }
   }
 
-  if !config["errorPages"].is_badvalue() {
-    if let Some(error_pages) = config["errorPages"].as_vec() {
+  if !config.get("errorPages").is_badvalue() {
+    if let Some(error_pages) = config.get("errorPages").as_vec() {
       let error_pages_iter = error_pages.iter();
       for error_page_yaml in error_pages_iter {
         if !error_page_yaml.is_hash() {
@@ -613,20 +623,22 @@ pub fn validate_config(config: &Yaml, is_global: bool) -> Result<(), Box<dyn Err
     }
   }
 
-  if !config["wwwroot"].is_badvalue() && config["wwwroot"].as_str().is_none() {
+  if !config.get("wwwroot").is_badvalue() && config.get("wwwroot").as_str().is_none() {
     Err(anyhow::anyhow!("Invalid webroot"))?
   }
 
-  if !config["enableETag"].is_badvalue() && config["enableETag"].as_bool().is_none() {
+  if !config.get("enableETag").is_badvalue() && config.get("enableETag").as_bool().is_none() {
     Err(anyhow::anyhow!("Invalid ETag enabling option"))?
   }
 
-  if !config["enableCompression"].is_badvalue() && config["enableCompression"].as_bool().is_none() {
+  if !config.get("enableCompression").is_badvalue()
+    && config.get("enableCompression").as_bool().is_none()
+  {
     Err(anyhow::anyhow!("Invalid HTTP compression enabling option"))?
   }
 
-  if !config["enableDirectoryListing"].is_badvalue()
-    && config["enableDirectoryListing"].as_bool().is_none()
+  if !config.get("enableDirectoryListing").is_badvalue()
+    && config.get("enableDirectoryListing").as_bool().is_none()
   {
     Err(anyhow::anyhow!("Invalid directory listing enabling option"))?
   }

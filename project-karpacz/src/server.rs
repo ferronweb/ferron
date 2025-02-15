@@ -240,7 +240,7 @@ async fn server_event_loop(
   logger: Sender<LogMessage>,
   modules: Vec<Box<dyn ServerModule + Send + Sync>>,
   module_config_validation_functions: Vec<
-    Symbol<'_, fn(&yaml_rust2::Yaml, bool) -> Result<(), Box<dyn Error + Send + Sync>>>,
+    Symbol<'_, fn(&ServerConfigRoot, bool) -> Result<(), Box<dyn Error + Send + Sync>>>,
   >,
   module_error: Option<anyhow::Error>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -270,7 +270,8 @@ async fn server_event_loop(
   };
 
   for (config_to_validate, is_global) in prepared_config {
-    match validate_config(&config_to_validate, is_global) {
+    let config_root_to_validate = ServerConfigRoot::new(&config_to_validate);
+    match validate_config(&config_root_to_validate, is_global) {
       Ok(_) => (),
       Err(err) => {
         logger
@@ -288,7 +289,7 @@ async fn server_event_loop(
     };
     let module_config_validation_functions_iter = module_config_validation_functions.iter();
     for module_config_validation_function in module_config_validation_functions_iter {
-      match module_config_validation_function(&config_to_validate, is_global) {
+      match module_config_validation_function(&config_root_to_validate, is_global) {
         Ok(_) => (),
         Err(err) => {
           logger
@@ -891,7 +892,7 @@ pub fn start_server(
   yaml_config: Arc<Yaml>,
   modules: Vec<Box<dyn ServerModule + Send + Sync>>,
   module_config_validation_functions: Vec<
-    Symbol<'_, fn(&yaml_rust2::Yaml, bool) -> Result<(), Box<dyn Error + Send + Sync>>>,
+    Symbol<'_, fn(&ServerConfigRoot, bool) -> Result<(), Box<dyn Error + Send + Sync>>>,
   >,
   module_error: Option<anyhow::Error>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {

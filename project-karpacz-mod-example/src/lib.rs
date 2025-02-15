@@ -17,7 +17,7 @@ struct ExampleModule;
 /// Since this module has no configurable properties, it always returns Ok(()).
 #[no_mangle]
 pub fn server_module_validate_config(
-  _config: &ServerConfig, // This is YAML configuration parsed as-is
+  _config: &ServerConfigRoot, // This is a configuration root created from YAML configuration
   _is_global: bool,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   Ok(())
@@ -26,7 +26,7 @@ pub fn server_module_validate_config(
 /// Initializes the server module and returns an instance of `ExampleModule`.
 #[no_mangle]
 pub fn server_module_init(
-  _config: &ServerConfig, // This is YAML configuration parsed as-is
+  _config: &ServerConfig, // This is YAML configuration parsed as-is. If used, you would have to clone it, otherwise every configuration property would be a BadValue.
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
   Ok(Box::new(ExampleModule::new()))
 }
