@@ -26,11 +26,11 @@ use yaml_rust2::Yaml;
 
 async fn generate_error_response(
   status_code: StatusCode,
-  config: &Yaml,
+  config: &ServerConfigRoot,
   headers: &Option<HeaderMap>,
 ) -> Response<BoxBody<Bytes, std::io::Error>> {
   let bare_body =
-    generate_default_error_page(status_code, config["serverAdministratorEmail"].as_str());
+    generate_default_error_page(status_code, config.get("serverAdministratorEmail").as_str());
   let mut content_length: Option<u64> = match bare_body.len().try_into() {
     Ok(content_length) => Some(content_length),
     Err(_) => None,
@@ -39,7 +39,7 @@ async fn generate_error_response(
     .map_err(|e| match e {})
     .boxed();
 
-  if let Some(error_pages) = config["errorPages"].as_vec() {
+  if let Some(error_pages) = config.get("errorPages").as_vec() {
     for error_page_yaml in error_pages {
       if let Some(page_status_code) = error_page_yaml["scode"].as_i64() {
         let page_status_code = match StatusCode::from_u16(match page_status_code.try_into() {
@@ -157,7 +157,8 @@ pub async fn request_handler(
   remote_address: SocketAddr,
   local_address: SocketAddr,
   encrypted: bool,
-  config: Arc<Yaml>,
+  global_config_root: Arc<ServerConfigRoot>,
+  host_config: Arc<Yaml>,
   logger: Sender<LogMessage>,
   handlers_vec: impl Iterator<Item = Box<dyn ServerModuleHandlers + Send>>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
@@ -203,8 +204,11 @@ pub async fn request_handler(
     },
     None => None,
   };
-  let log_enabled = (&config)["global"]["logFilePath"].as_str().is_some();
-  let error_log_enabled = (&config)["global"]["errorLogFilePath"].as_str().is_some();
+  let log_enabled = global_config_root.get("logFilePath").as_str().is_some();
+  let error_log_enabled = global_config_root
+    .get("errorLogFilePath")
+    .as_str()
+    .is_some();
 
   // Construct SocketData
   let mut socket_data = SocketData::new(remote_address, local_address, encrypted);
@@ -334,7 +338,8 @@ pub async fn request_handler(
 
   // Combine the server configuration
   let combined_config = match combine_config(
-    config,
+    global_config_root,
+    host_config,
     match request.headers().get(header::HOST) {
       Some(value) => match value.to_str() {
         Ok(value) => Some(value),
@@ -401,7 +406,8 @@ pub async fn request_handler(
   let url_pathname = request.uri().path();
   let sanitized_url_pathname = match sanitize_url(
     url_pathname,
-    (&combined_config)["allowDoubleSlashes"]
+    combined_config
+      .get("allowDoubleSlashes")
       .as_bool()
       .unwrap_or_default(),
   ) {
@@ -443,7 +449,7 @@ pub async fn request_handler(
         .await;
       }
       let (mut response_parts, response_body) = response.into_parts();
-      if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
+      if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
         let custom_headers_hash_iter = custom_headers_hash.iter();
         for (header_name, header_value) in custom_headers_hash_iter {
           if let Some(header_name) = header_name.as_str() {
@@ -523,7 +529,7 @@ pub async fn request_handler(
             .await;
           }
           let (mut response_parts, response_body) = response.into_parts();
-          if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
+          if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
             let custom_headers_hash_iter = custom_headers_hash.iter();
             for (header_name, header_value) in custom_headers_hash_iter {
               if let Some(header_name) = header_name.as_str() {
@@ -585,7 +591,7 @@ pub async fn request_handler(
           .await;
         }
         let (mut response_parts, response_body) = response.into_parts();
-        if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
+        if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
           let custom_headers_hash_iter = custom_headers_hash.iter();
           for (header_name, header_value) in custom_headers_hash_iter {
             if let Some(header_name) = header_name.as_str() {
@@ -650,7 +656,7 @@ pub async fn request_handler(
       .await;
     }
     let (mut response_parts, response_body) = response.into_parts();
-    if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
+    if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
       let custom_headers_hash_iter = custom_headers_hash.iter();
       for (header_name, header_value) in custom_headers_hash_iter {
         if let Some(header_name) = header_name.as_str() {
@@ -680,28 +686,17 @@ pub async fn request_handler(
 
   let mut executed_handlers = Vec::new();
   let mut latest_auth_data = None;
-  let combined_config_hash = ServerConfigRoot::new(&combined_config);
 
   for mut handlers in handlers_vec {
     let response_result = match is_proxy_request {
       true => {
         handlers
-          .proxy_request_handler(
-            request_data,
-            &combined_config_hash,
-            &socket_data,
-            &error_logger,
-          )
+          .proxy_request_handler(request_data, &combined_config, &socket_data, &error_logger)
           .await
       }
       false => {
         handlers
-          .request_handler(
-            request_data,
-            &combined_config_hash,
-            &socket_data,
-            &error_logger,
-          )
+          .request_handler(request_data, &combined_config, &socket_data, &error_logger)
           .await
       }
     };
@@ -770,7 +765,8 @@ pub async fn request_handler(
                     .await;
                   }
                   let (mut response_parts, response_body) = response.into_parts();
-                  if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
+                  if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash()
+                  {
                     let custom_headers_hash_iter = custom_headers_hash.iter();
                     for (header_name, header_value) in custom_headers_hash_iter {
                       if let Some(header_name) = header_name.as_str() {
@@ -820,7 +816,7 @@ pub async fn request_handler(
             }
 
             let (mut response_parts, response_body) = response.into_parts();
-            if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
+            if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
               let custom_headers_hash_iter = custom_headers_hash.iter();
               for (header_name, header_value) in custom_headers_hash_iter {
                 if let Some(header_name) = header_name.as_str() {
@@ -898,7 +894,8 @@ pub async fn request_handler(
                       .await;
                     }
                     let (mut response_parts, response_body) = response.into_parts();
-                    if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash()
+                    if let Some(custom_headers_hash) =
+                      combined_config.get("customHeaders").as_hash()
                     {
                       let custom_headers_hash_iter = custom_headers_hash.iter();
                       for (header_name, header_value) in custom_headers_hash_iter {
@@ -948,7 +945,7 @@ pub async fn request_handler(
                 .await;
               }
               let (mut response_parts, response_body) = response.into_parts();
-              if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
+              if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
                 let custom_headers_hash_iter = custom_headers_hash.iter();
                 for (header_name, header_value) in custom_headers_hash_iter {
                   if let Some(header_name) = header_name.as_str() {
@@ -1035,7 +1032,7 @@ pub async fn request_handler(
                 .await;
               }
               let (mut response_parts, response_body) = response.into_parts();
-              if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
+              if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
                 let custom_headers_hash_iter = custom_headers_hash.iter();
                 for (header_name, header_value) in custom_headers_hash_iter {
                   if let Some(header_name) = header_name.as_str() {
@@ -1094,7 +1091,7 @@ pub async fn request_handler(
           .await;
         }
         let (mut response_parts, response_body) = response.into_parts();
-        if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
+        if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
           let custom_headers_hash_iter = custom_headers_hash.iter();
           for (header_name, header_value) in custom_headers_hash_iter {
             if let Some(header_name) = header_name.as_str() {
@@ -1169,7 +1166,7 @@ pub async fn request_handler(
           .await;
         }
         let (mut response_parts, response_body) = response.into_parts();
-        if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
+        if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
           let custom_headers_hash_iter = custom_headers_hash.iter();
           for (header_name, header_value) in custom_headers_hash_iter {
             if let Some(header_name) = header_name.as_str() {
@@ -1218,7 +1215,7 @@ pub async fn request_handler(
     .await;
   }
   let (mut response_parts, response_body) = response.into_parts();
-  if let Some(custom_headers_hash) = (&combined_config)["customHeaders"].as_hash() {
+  if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
     let custom_headers_hash_iter = custom_headers_hash.iter();
     for (header_name, header_value) in custom_headers_hash_iter {
       if let Some(header_name) = header_name.as_str() {

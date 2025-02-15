@@ -364,7 +364,7 @@ impl ResponseDataBuilder {
 /// This struct encapsulates a mapping between configuration property names and their corresponding
 /// YAML values, allowing for organized access to server settings.
 pub struct ServerConfigRoot {
-  hashmap: HashMap<String, Yaml>,
+  hashmap: HashMap<String, ServerConfig>,
 }
 
 impl ServerConfigRoot {
@@ -420,13 +420,22 @@ impl ServerConfigRoot {
   ///
   /// # Returns
   ///
-  /// A `Yaml` object corresponding to the requested property, or `Yaml::BadValue` if the property
+  /// A `ServerConfig` object corresponding to the requested property, or `ServerConfig::BadValue` if the property
   /// does not exist in the configuration.
-  pub fn get(&self, property: &str) -> Yaml {
+  pub fn get(&self, property: &str) -> ServerConfig {
     match self.hashmap.get(property) {
       Some(yaml) => yaml.clone(),
-      None => Yaml::BadValue,
+      None => ServerConfig::BadValue,
     }
+  }
+
+  /// Provides a reference to an underlying hashmap.
+  ///
+  /// # Returns
+  ///
+  /// A reference to `HashMap<String, ServerConfig>` hashmap.
+  pub fn as_hash(&self) -> &HashMap<String, ServerConfig> {
+    &self.hashmap
   }
 }
 

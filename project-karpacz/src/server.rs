@@ -18,7 +18,7 @@ use hyper::Request;
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use libloading::Symbol;
 use ocsp_stapler::Stapler;
-use project_karpacz_common::{LogMessage, ServerModule, ServerModuleHandlers};
+use project_karpacz_common::{LogMessage, ServerConfigRoot, ServerModule, ServerModuleHandlers};
 use rustls::crypto::aws_lc_rs::cipher_suite::*;
 use rustls::crypto::aws_lc_rs::default_provider;
 use rustls::crypto::aws_lc_rs::kx_group::*;
@@ -41,7 +41,8 @@ async fn accept_connection(
   stream: TcpStream,
   remote_address: SocketAddr,
   tls_acceptor_option: Option<TlsAcceptor>,
-  config: Arc<Yaml>,
+  global_config_root: Arc<ServerConfigRoot>,
+  host_config: Arc<Yaml>,
   logger: Sender<LogMessage>,
   handlers_vec: impl Iterator<Item = Box<dyn ServerModuleHandlers + Send>> + Send + Clone + 'static,
 ) {
@@ -57,7 +58,9 @@ async fn accept_connection(
     return;
   };
 
-  let config = config.clone();
+  let global_config_root = global_config_root.clone();
+  let host_config = host_config.clone();
+
   let local_address = match stream.local_addr() {
     Ok(local_address) => local_address,
     Err(err) => {
@@ -93,7 +96,7 @@ async fn accept_connection(
       let io = TokioIo::new(tls_stream);
       let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 
-      if let Some(enable_http2) = config["global"]["enableHTTP2"].as_bool() {
+      if let Some(enable_http2) = global_config_root.get("enableHTTP2").as_bool() {
         if !enable_http2 {
           builder = builder.http1_only();
         }
@@ -105,27 +108,20 @@ async fn accept_connection(
       http1_builder = http1_builder.timer(TokioTimer::new());
       let mut http2_builder = &mut http1_builder.http2();
       http2_builder = http2_builder.timer(TokioTimer::new());
-      if let Some(initial_window_size) =
-        config["global"]["http2Settings"]["initialWindowSize"].as_i64()
-      {
+      let http2_settings = global_config_root.get("http2Settings");
+      if let Some(initial_window_size) = http2_settings["initialWindowSize"].as_i64() {
         http2_builder = http2_builder.initial_stream_window_size(initial_window_size as u32);
       }
-      if let Some(max_frame_size) = config["global"]["http2Settings"]["maxFrameSize"].as_i64() {
+      if let Some(max_frame_size) = http2_settings["maxFrameSize"].as_i64() {
         http2_builder = http2_builder.max_frame_size(max_frame_size as u32);
       }
-      if let Some(max_concurrent_streams) =
-        config["global"]["http2Settings"]["maxConcurrentStreams"].as_i64()
-      {
+      if let Some(max_concurrent_streams) = http2_settings["maxConcurrentStreams"].as_i64() {
         http2_builder = http2_builder.max_concurrent_streams(max_concurrent_streams as u32);
       }
-      if let Some(max_header_list_size) =
-        config["global"]["http2Settings"]["maxHeaderListSize"].as_i64()
-      {
+      if let Some(max_header_list_size) = http2_settings["maxHeaderListSize"].as_i64() {
         http2_builder = http2_builder.max_header_list_size(max_header_list_size as u32);
       }
-      if let Some(enable_connect_protocol) =
-        config["global"]["http2Settings"]["enableConnectProtocol"].as_bool()
-      {
+      if let Some(enable_connect_protocol) = http2_settings["enableConnectProtocol"].as_bool() {
         if enable_connect_protocol {
           http2_builder = http2_builder.enable_connect_protocol();
         }
@@ -135,7 +131,8 @@ async fn accept_connection(
         .serve_connection(
           io,
           service_fn(move |request: Request<Incoming>| {
-            let config = config.clone();
+            let global_config_root = global_config_root.clone();
+            let host_config = host_config.clone();
             let logger = logger_clone.clone();
             let handlers_vec_clone = handlers_vec.clone();
             async move {
@@ -144,7 +141,8 @@ async fn accept_connection(
                 remote_address,
                 local_address,
                 true,
-                config,
+                global_config_root,
+                host_config,
                 logger,
                 handlers_vec_clone,
               )
@@ -167,7 +165,7 @@ async fn accept_connection(
     let io = TokioIo::new(stream);
     tokio::task::spawn(async move {
       let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-      if let Some(enable_http2) = config["global"]["enableHTTP2"].as_bool() {
+      if let Some(enable_http2) = global_config_root.get("enableHTTP2").as_bool() {
         if !enable_http2 {
           builder = builder.http1_only();
         }
@@ -179,27 +177,20 @@ async fn accept_connection(
       http1_builder = http1_builder.timer(TokioTimer::new());
       let mut http2_builder = &mut http1_builder.http2();
       http2_builder = http2_builder.timer(TokioTimer::new());
-      if let Some(initial_window_size) =
-        config["global"]["http2Settings"]["initialWindowSize"].as_i64()
-      {
+      let http2_settings = global_config_root.get("http2Settings");
+      if let Some(initial_window_size) = http2_settings["initialWindowSize"].as_i64() {
         http2_builder = http2_builder.initial_stream_window_size(initial_window_size as u32);
       }
-      if let Some(max_frame_size) = config["global"]["http2Settings"]["maxFrameSize"].as_i64() {
+      if let Some(max_frame_size) = http2_settings["maxFrameSize"].as_i64() {
         http2_builder = http2_builder.max_frame_size(max_frame_size as u32);
       }
-      if let Some(max_concurrent_streams) =
-        config["global"]["http2Settings"]["maxConcurrentStreams"].as_i64()
-      {
+      if let Some(max_concurrent_streams) = http2_settings["maxConcurrentStreams"].as_i64() {
         http2_builder = http2_builder.max_concurrent_streams(max_concurrent_streams as u32);
       }
-      if let Some(max_header_list_size) =
-        config["global"]["http2Settings"]["maxHeaderListSize"].as_i64()
-      {
+      if let Some(max_header_list_size) = http2_settings["maxHeaderListSize"].as_i64() {
         http2_builder = http2_builder.max_header_list_size(max_header_list_size as u32);
       }
-      if let Some(enable_connect_protocol) =
-        config["global"]["http2Settings"]["enableConnectProtocol"].as_bool()
-      {
+      if let Some(enable_connect_protocol) = http2_settings["enableConnectProtocol"].as_bool() {
         if enable_connect_protocol {
           http2_builder = http2_builder.enable_connect_protocol();
         }
@@ -209,7 +200,8 @@ async fn accept_connection(
         .serve_connection(
           io,
           service_fn(move |request: Request<Incoming>| {
-            let config = config.clone();
+            let global_config_root = global_config_root.clone();
+            let host_config = host_config.clone();
             let logger = logger_clone.clone();
             let handlers_vec_clone = handlers_vec.clone();
             async move {
@@ -218,7 +210,8 @@ async fn accept_connection(
                 remote_address,
                 local_address,
                 false,
-                config,
+                global_config_root,
+                host_config,
                 logger,
                 handlers_vec_clone,
               )
@@ -759,6 +752,10 @@ async fn server_event_loop(
   // Leak the modules vector to work around the lifetime issues in Rust
   let modules_leaked = Box::leak(Box::new(modules));
 
+  // Create a global configuration root
+  let global_config_root = Arc::new(ServerConfigRoot::new(&yaml_config["global"]));
+  let host_config = Arc::new(yaml_config["hosts"].clone());
+
   // Main loop to accept incoming connections
   loop {
     let handlers_vec = modules_leaked
@@ -775,7 +772,8 @@ async fn server_event_loop(
                       stream,
                       remote_address,
                       None,
-                      yaml_config.clone(),
+                      global_config_root.clone(),
+                      host_config.clone(),
                       logger.clone(),
                       handlers_vec,
                     )
@@ -800,7 +798,8 @@ async fn server_event_loop(
                       stream,
                       remote_address,
                       Some(tls_acceptor),
-                      yaml_config.clone(),
+                      global_config_root.clone(),
+                      host_config.clone(),
                       logger.clone(),
                       handlers_vec,
                     )
@@ -825,7 +824,8 @@ async fn server_event_loop(
               stream,
               remote_address,
               None,
-              yaml_config.clone(),
+              global_config_root.clone(),
+              host_config.clone(),
               logger.clone(),
               handlers_vec,
             )
@@ -851,7 +851,8 @@ async fn server_event_loop(
                 stream,
                 remote_address,
                 Some(tls_acceptor),
-                yaml_config.clone(),
+                global_config_root.clone(),
+                host_config.clone(),
                 logger.clone(),
                 handlers_vec,
               )
