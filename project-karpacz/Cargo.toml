@@ -19,7 +19,6 @@ rustls-pki-types = "1.11.0"
 rustls-pemfile = "2.2.0"
 yaml-rust2 = { workspace = true }
 anyhow = "1.0.95"
-mimalloc =  { workspace = true }
 futures-util = "0.3.31"
 chrono = "0.4.39"
 async-trait = { workspace = true }

@@ -10,14 +10,6 @@ use project_karpacz_common::{
 use project_karpacz_common::{HyperResponse, WithRuntime};
 use tokio::runtime::Handle;
 
-#[cfg(not(target_os = "freebsd"))]
-use mimalloc::MiMalloc;
-
-// It's very important to not remove these three lines below, otherwise a HTTP request will trigger a segmentation fault!
-#[cfg(not(target_os = "freebsd"))]
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
-
 // Define a struct for the module implementation
 struct ExampleModule;
 

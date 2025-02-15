@@ -7,7 +7,6 @@ edition = "2021"
 async-trait.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
-mimalloc.workspace = true
 project-karpacz-common = { workspace = true }
 tokio.workspace = true
 

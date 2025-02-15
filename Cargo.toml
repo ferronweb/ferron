@@ -12,7 +12,6 @@ project-karpacz-common = { path = "./project-karpacz-common" }
 http-body-util = "0.1"
 yaml-rust2 = "0.10.0"
 async-trait = "0.1.86"
-mimalloc = "0.1.43"
 password-auth = { version = "1.0.0", features = ["argon2", "pbkdf2", "scrypt"] }
 rusty-hook = "0.11.2"
 

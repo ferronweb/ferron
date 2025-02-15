@@ -3,13 +3,6 @@ use password_auth::generate_hash;
 use rpassword::prompt_password;
 use yaml_rust2::{yaml, Yaml, YamlEmitter};
 
-#[cfg(not(target_os = "freebsd"))]
-use mimalloc::MiMalloc;
-
-#[cfg(not(target_os = "freebsd"))]
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
-
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {

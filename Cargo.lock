@@ -1414,16 +1414,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libmimalloc-sys"
-version = "0.1.39"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23aa6811d3bd4deb8a84dde645f943476d13b248d818edcf8ce0b2f37f036b44"
-dependencies = [
- "cc",
- "libc",
-]
-
-[[package]]
 name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1465,15 +1455,6 @@ name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
-
-[[package]]
-name = "mimalloc"
-version = "0.1.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68914350ae34959d83f732418d51e2427a794055d0b9529f48259ac07af65633"
-dependencies = [
- "libmimalloc-sys",
-]
 
 [[package]]
 name = "mime"
@@ -1767,7 +1748,6 @@ dependencies = [
  "hyper-util",
  "libloading",
  "lru",
- "mimalloc",
  "new_mime_guess",
  "ocsp-stapler",
  "password-auth",
@@ -1807,7 +1787,6 @@ dependencies = [
  "async-trait",
  "http-body-util",
  "hyper",
- "mimalloc",
  "project-karpacz-common",
  "rusty-hook",
  "tokio",
@@ -1818,7 +1797,6 @@ name = "project-karpacz-passwd"
 version = "0.1.0"
 dependencies = [
  "clap",
- "mimalloc",
  "password-auth",
  "rpassword",
  "rusty-hook",
