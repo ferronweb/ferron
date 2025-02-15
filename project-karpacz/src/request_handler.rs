@@ -698,7 +698,7 @@ pub async fn request_handler(
     executed_handlers.push(handlers);
     match response_result {
       Ok(response) => {
-        let (request, auth_data, response, status, headers, new_remote_address) =
+        let (request_option, auth_data, response, status, headers, new_remote_address) =
           response.into_parts();
         latest_auth_data = auth_data.clone();
         if let Some(new_remote_address) = new_remote_address {
@@ -959,8 +959,15 @@ pub async fn request_handler(
               return Ok(Response::from_parts(response_parts, response_body));
             }
             None => {
+              match request_option {
+                Some(request) => {
               request_data = RequestData::new(request, auth_data);
               continue;
+                },
+                None => {
+                  break;
+                }
+              }
             }
           },
         }

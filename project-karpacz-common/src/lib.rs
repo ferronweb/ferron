@@ -195,7 +195,7 @@ impl<'a> ErrorLogger<'a> {
 /// Holds data related to an HTTP response, including the original request,
 /// optional authentication user information, and the response details.
 pub struct ResponseData {
-  request: Request<Incoming>,
+  request: Option<Request<Incoming>>,
   auth_user: Option<String>,
   response: Option<Response<BoxBody<Bytes, std::io::Error>>>,
   response_status: Option<StatusCode>,
@@ -215,9 +215,26 @@ impl ResponseData {
   /// A `ResponseDataBuilder` initialized with the provided request data.
   pub fn builder(request: RequestData) -> ResponseDataBuilder {
     let (request, auth_user) = request.into_parts();
+        
     ResponseDataBuilder {
-      request,
+      request: Some(request),
       auth_user,
+      response: None,
+      response_status: None,
+      response_headers: None,
+      new_remote_address: None,
+    }
+  }
+
+  /// Initiates the building process for a `ResponseData` instance without a `RequestData` object.
+  ///
+  /// # Returns
+  ///
+  /// A `ResponseDataBuilder` initialized without any request data.
+  pub fn builder_without_request() -> ResponseDataBuilder {
+    ResponseDataBuilder {
+      request: None,
+      auth_user: None,
       response: None,
       response_status: None,
       response_headers: None,
@@ -230,7 +247,7 @@ impl ResponseData {
   /// # Returns
   ///
   /// A tuple containing:
-  /// - The original Hyper `Request<Incoming>` object.
+  /// - The optional original Hyper `Request<Incoming>` object.
   /// - An optional authenticated user string.
   /// - An optional `Response` object encapsulated in a `BoxBody` with `Bytes` and `std::io::Error`.
   /// - An optional HTTP `StatusCode`.
@@ -240,7 +257,7 @@ impl ResponseData {
   pub fn into_parts(
     self,
   ) -> (
-    Request<Incoming>,
+    Option<Request<Incoming>>,
     Option<String>,
     Option<Response<BoxBody<Bytes, std::io::Error>>>,
     Option<StatusCode>,
@@ -259,7 +276,7 @@ impl ResponseData {
 }
 
 pub struct ResponseDataBuilder {
-  request: Request<Incoming>,
+  request: Option<Request<Incoming>>,
   auth_user: Option<String>,
   response: Option<Response<BoxBody<Bytes, std::io::Error>>>,
   response_status: Option<StatusCode>,
