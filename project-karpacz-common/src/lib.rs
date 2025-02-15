@@ -1,12 +1,13 @@
 use std::{error::Error, net::SocketAddr};
 
+use async_channel::Sender;
 use async_trait::async_trait;
 use http_body_util::combinators::BoxBody;
 use hyper::{
   body::{Bytes, Incoming},
   HeaderMap, Request, Response, StatusCode,
 };
-use tokio::{runtime::Handle, sync::mpsc::Sender};
+use tokio::runtime::Handle;
 use yaml_rust2::Yaml;
 
 mod log;

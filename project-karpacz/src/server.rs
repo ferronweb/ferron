@@ -10,6 +10,7 @@ use crate::project_karpacz_util::validate_config::{
   prepare_config_for_validation, validate_config,
 };
 
+use async_channel::Sender;
 use chrono::prelude::*;
 use hyper::body::Incoming;
 use hyper::service::service_fn;
@@ -30,7 +31,6 @@ use tokio::fs;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Handle;
-use tokio::sync::mpsc::{self, Sender};
 use tokio::sync::Mutex;
 use tokio::time;
 use tokio_rustls::TlsAcceptor;
@@ -934,7 +934,7 @@ pub fn start_server(
     .enable_time()
     .build()?;
 
-  let (logger, mut receive_log) = mpsc::channel::<LogMessage>(15000);
+  let (logger, receive_log) = async_channel::bounded::<LogMessage>(10000);
 
   let log_filename = yaml_config["global"]["logFilePath"]
     .as_str()
@@ -1004,7 +1004,7 @@ pub fn start_server(
     });
 
     // Logging loop
-    while let Some(message) = receive_log.recv().await {
+    while let Ok(message) = receive_log.recv().await {
       let (mut message, is_error) = message.get_message();
       let log_file_wrapped_cloned = if !is_error {
         log_file_wrapped.clone()

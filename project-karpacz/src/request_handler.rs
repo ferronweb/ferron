@@ -8,6 +8,7 @@ use crate::project_karpacz_util::combine_config::combine_config;
 use crate::project_karpacz_util::error_pages::generate_default_error_page;
 use crate::project_karpacz_util::url_sanitizer::sanitize_url;
 
+use async_channel::Sender;
 use chrono::prelude::*;
 use futures_util::TryStreamExt;
 use http_body_util::combinators::BoxBody;
@@ -20,7 +21,6 @@ use project_karpacz_common::{
 };
 use tokio::fs;
 use tokio::io::BufReader;
-use tokio::sync::mpsc::Sender;
 use tokio_util::io::ReaderStream;
 use yaml_rust2::Yaml;
 
