@@ -176,10 +176,10 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
 - **enableDirectoryListing** (*bool*)
    - Option to enable directory listings. When set to `true`, the server will generate and display a list of files and directories when a directory is requested. Default: `false`
 
-- **proxyTo** (*String*; *rproxy* module)
+- **proxyTo** (*String*; *rproxy* module; Project Karpacz 0.2.0 and newer)
    - Base URL, which reverse proxy will send requests to. HTTP and HTTPS URLs are supported. Default: None
 
-- **secureProxyTo** (*String*; *rproxy* module)
+- **secureProxyTo** (*String*; *rproxy* module; Project Karpacz 0.2.0 and newer)
    - Base URL, which reverse proxy will send requests to, if the client is connected via HTTPS. HTTP and HTTPS URLs are supported. Default: None
 
 ## Example configuration
@@ -237,7 +237,6 @@ host:
   - domain: "api.example.com"
     serverAdministratorEmail: "api-admin@example.com"
     disableToHTTPSRedirect: false
-    enableRewriteLogging: true
     allowDoubleSlashes: false
     enableETag: true
     users:
