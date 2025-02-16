@@ -1,0 +1,24 @@
+[package]
+name = "project-karpacz-mod-rproxy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.95"
+async-trait.workspace = true
+futures-util = "0.3.31"
+http-body-util.workspace = true
+httparse = "1.10.0"
+hyper = { workspace = true, features = ["client"]}
+hyper-util = { version = "0.1.10", features = ["tokio"] }
+project-karpacz-common = { workspace = true }
+rustls = "0.23.23"
+rustls-native-certs = "0.8.1"
+tokio.workspace = true
+tokio-rustls = "0.26.1"
+
+[dev-dependencies]
+rusty-hook = { workspace = true }
+
+[lib]
+crate-type = ["dylib"]

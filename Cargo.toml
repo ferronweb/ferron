@@ -1,6 +1,10 @@
 [workspace]
 members = [
-    "project-karpacz", "project-karpacz-common", "project-karpacz-mod-example", "project-karpacz-passwd",
+    "project-karpacz",
+    "project-karpacz-common",
+    "project-karpacz-mod-example",
+    "project-karpacz-passwd",
+    "project-karpacz-mod-rproxy",
 ]
 resolver = "2"
 
