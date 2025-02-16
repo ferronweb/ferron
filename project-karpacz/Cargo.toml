@@ -12,7 +12,6 @@ tokio = { workspace = true, features = ["full"] }
 http-body-util = { workspace = true }
 hyper-util = { version = "0.1", features = ["full"] }
 tokio-util = { version = "0.7.13", features = ["io"] }
-hyper-rustls = "0.27.5"
 rustls = "0.23.22"
 tokio-rustls = "0.26.1"
 rustls-pki-types = "1.11.0"
