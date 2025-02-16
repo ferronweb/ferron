@@ -17,6 +17,7 @@ Project Karpacz consists of multiple components:
 - **`project-karpacz-common`**: A shared component used by `project-karpacz` and its modules.
 - **`project-karpacz-passwd`**: A tool for generating user entries with hashed passwords, which can be copied into the web server's configuration file.
 - **`project-karpacz-mod-example`**: A dynamically linked module that can be loaded by `project-karpacz` and responds with "Hello World!" for requests to the `/hello` URL.
+- **`project-karpacz-mod-rproxy`**: A dynamically linked module that can be loaded by `project-karpacz` and acts as a reverse proxy.
 
 ## Installation
 
