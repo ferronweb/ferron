@@ -152,6 +152,7 @@ async fn log_combined(
     .unwrap_or_default();
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn request_handler(
   mut request: Request<Incoming>,
   remote_address: SocketAddr,
