@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, net::SocketAddr};
+use std::{collections::HashMap, error::Error, future::Future, net::SocketAddr, pin::Pin};
 
 use async_channel::Sender;
 use async_trait::async_trait;
@@ -202,6 +202,7 @@ pub struct ResponseData {
   response_status: Option<StatusCode>,
   response_headers: Option<HeaderMap>,
   new_remote_address: Option<SocketAddr>,
+  parallel_fn: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
 }
 
 impl ResponseData {
@@ -224,6 +225,7 @@ impl ResponseData {
       response_status: None,
       response_headers: None,
       new_remote_address: None,
+      parallel_fn: None,
     }
   }
 
@@ -240,6 +242,7 @@ impl ResponseData {
       response_status: None,
       response_headers: None,
       new_remote_address: None,
+      parallel_fn: None,
     }
   }
 
@@ -254,6 +257,7 @@ impl ResponseData {
   /// - An optional HTTP `StatusCode`.
   /// - An optional `HeaderMap` containing the HTTP headers.
   /// - An optional `SocketAddr` containing the client's new IP address and port.
+  /// - An optional `Future` with `()` output that would be executed in parallel.
   #[allow(clippy::type_complexity)]
   pub fn into_parts(
     self,
@@ -264,6 +268,7 @@ impl ResponseData {
     Option<StatusCode>,
     Option<HeaderMap>,
     Option<SocketAddr>,
+    Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
   ) {
     (
       self.request,
@@ -272,6 +277,7 @@ impl ResponseData {
       self.response_status,
       self.response_headers,
       self.new_remote_address,
+      self.parallel_fn,
     )
   }
 }
@@ -283,6 +289,7 @@ pub struct ResponseDataBuilder {
   response_status: Option<StatusCode>,
   response_headers: Option<HeaderMap>,
   new_remote_address: Option<SocketAddr>,
+  parallel_fn: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
 }
 
 impl ResponseDataBuilder {
@@ -342,6 +349,20 @@ impl ResponseDataBuilder {
     self
   }
 
+  /// Sets the function to be executed in parallel.
+  ///
+  /// # Parameters
+  ///
+  /// - `parallel_fn`: A pinned `Future` with `()` output.
+  ///
+  /// # Returns
+  ///
+  /// The updated `ResponseDataBuilder` instance with the specified function to be executed in parallel.
+  pub fn parallel_fn(mut self, parallel_fn: Pin<Box<dyn Future<Output = ()> + Send>>) -> Self {
+    self.parallel_fn = Some(parallel_fn);
+    self
+  }
+
   /// Builds the `ResponseData` instance.
   ///
   /// # Returns
@@ -355,6 +376,7 @@ impl ResponseDataBuilder {
       response_status: self.response_status,
       response_headers: self.response_headers,
       new_remote_address: self.new_remote_address,
+      parallel_fn: self.parallel_fn,
     }
   }
 }

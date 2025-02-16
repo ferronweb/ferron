@@ -704,12 +704,19 @@ pub async fn request_handler(
     executed_handlers.push(handlers);
     match response_result {
       Ok(response) => {
-        let (request_option, auth_data, response, status, headers, new_remote_address) =
+        let (request_option, auth_data, response, status, headers, new_remote_address, parallel_fn) =
           response.into_parts();
         latest_auth_data = auth_data.clone();
         if let Some(new_remote_address) = new_remote_address {
           socket_data.remote_addr = new_remote_address;
         };
+        if let Some(parallel_fn) = parallel_fn {
+          // Spawn the function in the web server's Tokio runtime.
+          // We have implemented parallel_fn parameter in the ResponseData
+          // because tokio::spawn doesn't work on dynamic libraries,
+          // see https://github.com/tokio-rs/tokio/issues/6927
+          tokio::spawn(parallel_fn);
+        }
         match response {
           Some(mut response) => {
             while let Some(mut executed_handler) = executed_handlers.pop() {
