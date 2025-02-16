@@ -360,9 +360,9 @@ async fn http_proxy(
                     b.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
                       .boxed()
                   }))
-                  .parallel_fn(Box::pin(async move {
+                  .parallel_fn(async move {
                     pinned_conn.await.unwrap_or_default();
-                  }))
+                  })
                   .build();
 
         break;

@@ -353,13 +353,13 @@ impl ResponseDataBuilder {
   ///
   /// # Parameters
   ///
-  /// - `parallel_fn`: A pinned `Future` with `()` output.
+  /// - `parallel_fn`: A `Future` with `()` output.
   ///
   /// # Returns
   ///
   /// The updated `ResponseDataBuilder` instance with the specified function to be executed in parallel.
-  pub fn parallel_fn(mut self, parallel_fn: Pin<Box<dyn Future<Output = ()> + Send>>) -> Self {
-    self.parallel_fn = Some(parallel_fn);
+  pub fn parallel_fn(mut self, parallel_fn: impl Future<Output = ()> + Send + 'static) -> Self {
+    self.parallel_fn = Some(Box::pin(parallel_fn));
     self
   }
 
