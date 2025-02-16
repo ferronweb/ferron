@@ -80,7 +80,7 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
 - **environmentVariables** (*Object*)
    - Environment variables. This object contains environment variables that the server will use during operation. Default: None
 
-### Global & host configuration properties
+## Global & host configuration properties
 
 - **domain** (*String*)
    - The domain name of a host. This setting specifies the domain name associated with the host. Default: None
@@ -175,3 +175,9 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
 
 - **enableDirectoryListing** (*bool*)
    - Option to enable directory listings. When set to `true`, the server will generate and display a list of files and directories when a directory is requested. Default: `false`
+
+- **proxyTo** (*String*; *rproxy* module)
+   - Base URL, which reverse proxy will send requests to. HTTP and HTTPS URLs are supported. Default: None
+
+- **secureProxyTo** (*String*; *rproxy* module)
+   - Base URL, which reverse proxy will send requests to, if the client is connected via HTTPS. HTTP and HTTPS URLs are supported. Default: None
