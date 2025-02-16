@@ -5,10 +5,10 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
 ## Global-only configuration properties
 
 - **port** (*u16*)
-   - HTTP port or address-port combination for the server to listen. This is the primary port on which the server will accept incoming HTTP connections. Default: None (must be specified)
+   - HTTP port or address-port combination for the server to listen. This is the primary port on which the server will accept incoming HTTP connections. Default: `80`
 
 - **sport** (*u16*)
-   - HTTPS port or address-port combination for the server to listen. This is the primary port on which the server will accept incoming HTTPS connections. Default: None (must be specified)
+   - HTTPS port or address-port combination for the server to listen. This is the primary port on which the server will accept incoming HTTPS connections. Default: `443`
 
 - **secure** (*bool*)
    - Option to enable HTTPS. When set to `true`, the server will use HTTPS for secure communication. Default: `false`
@@ -51,7 +51,7 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
        - Path to the SNI private key. This setting specifies the file path to the private key associated with the SNI certificate. Default: None
 
 - **loadModules** (*Array&lt;String&gt;*)
-   - Modules to load. This setting specifies an array of modules that the server should load at startup. Default: None
+   - Modules to load. This setting specifies an array of modules that the server should load at startup. First module in the array is loaded first. Default: None
 
 - **useClientCertificate** (*bool*)
    - Option to require client to provide its certificate. When set to `true`, the server will require clients to present a valid certificate for authentication. Default: `false`
@@ -181,3 +181,69 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
 
 - **secureProxyTo** (*String*; *rproxy* module)
    - Base URL, which reverse proxy will send requests to, if the client is connected via HTTPS. HTTP and HTTPS URLs are supported. Default: None
+
+## Example configuration
+
+Below is the example Project Karpacz web server configuration:
+```yaml
+global:
+  port: 8080
+  sport: 8443
+  secure: true
+  enableHTTP2: true
+  http2Settings:
+    initialWindowSize: 65536
+    maxFrameSize: 16384
+    maxConcurrentStreams: 100
+    maxHeaderListSize: 8192
+    enableConnectProtocol: true
+  logFilePath: "/var/log/project-karpacz/access.log"
+  errorLogFilePath: "/var/log/project-karpacz/error.log"
+  cert: "/etc/ssl/certs/server-cert.pem"
+  key: "/etc/ssl/private/server-key.pem"
+  tlsMinVersion: "TLSv1.2"
+  tlsMaxVersion: "TLSv1.3"
+  disableNonEncryptedServer: false
+  enableOCSPStapling: true
+  blocklist:
+    - "192.168.1.100"
+    - "10.0.0.5"
+  enableCompression: true
+  enableDirectoryListing: false
+  environmentVariables:
+    APP_MODE: "production"
+    MAX_THREADS: "16"
+
+host:
+  - domain: "example.com"
+    serverAdministratorEmail: "admin@example.com"
+    wwwredirect: true
+    customHeaders:
+      X-Frame-Options: "DENY"
+      X-Content-Type-Options: "nosniff"
+    rewriteMap:
+      - regex: "^/old-path/(.*)"
+        replacement: "/new-path/$1"
+        isNotFile: true
+        isNotDirectory: true
+        last: true
+    wwwroot: "/var/www/example"
+    proxyTo: "http://backend-service:5000"
+    errorPages:
+      - scode: 404
+        path: "/var/www/example/errors/404.html"
+      - scode: 500
+        path: "/var/www/example/errors/500.html"
+  - domain: "api.example.com"
+    serverAdministratorEmail: "api-admin@example.com"
+    disableToHTTPSRedirect: false
+    enableRewriteLogging: true
+    allowDoubleSlashes: false
+    enableETag: true
+    users:
+      - user: "admin"
+        pass: "$2b$10$hashedpassword12345"
+    nonStandardCodes:
+      - scode: 401
+        url: "/restricted.html"
+```
