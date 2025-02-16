@@ -11,6 +11,7 @@ clap = { version = "4.5.28", features = ["derive"] }
 password-auth.workspace = true
 rpassword = "7.3.1"
 yaml-rust2.workspace = true
+mimalloc = { workspace = true }
 
 [dev-dependencies]
 rusty-hook = { workspace = true }

@@ -1,7 +1,11 @@
 use clap::Parser;
+use mimalloc::MiMalloc;
 use password_auth::generate_hash;
 use rpassword::prompt_password;
 use yaml_rust2::{yaml, Yaml, YamlEmitter};
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

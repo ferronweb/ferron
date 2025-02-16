@@ -3,12 +3,17 @@ use std::error::Error;
 use async_trait::async_trait;
 use http_body_util::{BodyExt, Full};
 use hyper::Response;
+use mimalloc::MiMalloc;
 use project_karpacz_common::{
   ErrorLogger, RequestData, ResponseData, ServerConfig, ServerConfigRoot, ServerModule,
   ServerModuleHandlers, SocketData,
 };
 use project_karpacz_common::{HyperResponse, WithRuntime};
 use tokio::runtime::Handle;
+
+// It's very important to not remove these two lines below, otherwise a HTTP request will trigger a segmentation fault!
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 // Define a struct for the module implementation
 struct ExampleModule;

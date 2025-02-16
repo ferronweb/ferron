@@ -53,9 +53,14 @@ use std::sync::Arc;
 // External crate imports
 use clap::Parser;
 use libloading::{library_filename, Library, Symbol};
+use mimalloc::MiMalloc;
 use project_karpacz_common::{ServerConfig, ServerConfigRoot, ServerModule};
 use project_karpacz_server::start_server;
 use yaml_rust2::YamlLoader;
+
+// Set the global allocator to use mimalloc for performance optimization
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 // Struct for command-line arguments
 #[derive(Parser, Debug)]

@@ -9,6 +9,7 @@ http-body-util.workspace = true
 hyper.workspace = true
 project-karpacz-common = { workspace = true }
 tokio.workspace = true
+mimalloc = { workspace = true }
 
 [dev-dependencies]
 rusty-hook = { workspace = true }
