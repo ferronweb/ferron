@@ -213,6 +213,8 @@ global:
   environmentVariables:
     APP_MODE: "production"
     MAX_THREADS: "16"
+  loadModules:
+    - "rproxy"
 
 host:
   - domain: "example.com"
