@@ -112,7 +112,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
     request: RequestData,
     config: &ServerConfigRoot,
     socket_data: &SocketData,
-    error_logger: &ErrorLogger<'_>,
+    error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       let mut proxy_to = None;
@@ -296,7 +296,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
     request: RequestData,
     _config: &ServerConfigRoot,
     _socket_data: &SocketData,
-    _error_logger: &ErrorLogger<'_>,
+    _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     Ok(ResponseData::builder(request).build())
   }
@@ -319,7 +319,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
 async fn http_proxy(
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   proxy_request: Request<BoxBody<Bytes, hyper::Error>>,
-  error_logger: &ErrorLogger<'_>,
+  error_logger: &ErrorLogger,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let io = TokioIo::new(stream);
 

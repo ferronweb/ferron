@@ -63,7 +63,7 @@ impl ServerModuleHandlers for BlockListModuleHandlers {
     request: RequestData,
     _config: &ServerConfigRoot,
     socket_data: &SocketData,
-    _error_logger: &ErrorLogger<'_>,
+    _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       if self.blocklist.is_blocked(socket_data.remote_addr.ip()) {
@@ -83,7 +83,7 @@ impl ServerModuleHandlers for BlockListModuleHandlers {
     request: RequestData,
     _config: &ServerConfigRoot,
     _socket_data: &SocketData,
-    _error_logger: &ErrorLogger<'_>,
+    _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     Ok(ResponseData::builder(request).build())
   }

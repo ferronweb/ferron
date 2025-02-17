@@ -66,7 +66,7 @@ impl ServerModuleHandlers for ExampleModuleHandlers {
     request: RequestData,
     _config: &ServerConfigRoot,
     _socket_data: &SocketData,
-    _error_logger: &ErrorLogger<'_>,
+    _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       if request.get_hyper_request().uri().path() == "/hello" {
@@ -94,7 +94,7 @@ impl ServerModuleHandlers for ExampleModuleHandlers {
     request: RequestData,
     _config: &ServerConfigRoot,
     _socket_data: &SocketData,
-    _error_logger: &ErrorLogger<'_>,
+    _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     // No proxy request handling needed.
     Ok(ResponseData::builder(request).build())

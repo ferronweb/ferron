@@ -136,21 +136,21 @@ impl RequestData {
 }
 
 /// Facilitates logging of error messages through a provided logger sender.
-pub struct ErrorLogger<'a> {
-  logger: Option<&'a Sender<LogMessage>>,
+pub struct ErrorLogger {
+  logger: Option<Sender<LogMessage>>,
 }
 
-impl<'a> ErrorLogger<'a> {
+impl ErrorLogger {
   /// Creates a new `ErrorLogger` instance.
   ///
   /// # Parameters
   ///
-  /// - `logger`: A reference to a `Sender<LogMessage>` used for sending log messages.
+  /// - `logger`: A `Sender<LogMessage>` used for sending log messages.
   ///
   /// # Returns
   ///
   /// A new `ErrorLogger` instance associated with the provided logger.
-  pub fn new(logger: &'a Sender<LogMessage>) -> Self {
+  pub fn new(logger: Sender<LogMessage>) -> Self {
     ErrorLogger {
       logger: Some(logger),
     }
@@ -179,16 +179,29 @@ impl<'a> ErrorLogger<'a> {
   /// # #[tokio::main]
   /// # async fn main() {
   /// let (tx, mut rx) = channel(100);
-  /// let logger = ErrorLogger::new(&tx);
+  /// let logger = ErrorLogger::new(tx);
   /// logger.log("An error occurred").await;
   /// # }
   /// ```
   pub async fn log(&self, message: &str) {
-    if let Some(logger) = self.logger {
+    if let Some(logger) = &self.logger {
       logger
         .send(LogMessage::new(String::from(message), true))
         .await
         .unwrap_or_default();
+    }
+  }
+}
+
+impl Clone for ErrorLogger {
+  /// Clone a `ErrorLogger`.
+  ///
+  /// # Returns
+  ///
+  /// A cloned `ErrorLogger` instance
+  fn clone(&self) -> Self {
+    ErrorLogger {
+      logger: self.logger.clone(),
     }
   }
 }
@@ -481,7 +494,7 @@ pub trait ServerModuleHandlers {
     request: RequestData,
     config: &ServerConfigRoot,
     socket_data: &SocketData,
-    error_logger: &ErrorLogger<'_>,
+    error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>>;
 
   /// Handles an incoming forward proxy request.
@@ -501,7 +514,7 @@ pub trait ServerModuleHandlers {
     request: RequestData,
     config: &ServerConfigRoot,
     socket_data: &SocketData,
-    error_logger: &ErrorLogger<'_>,
+    error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>>;
 
   /// Modifies an outgoing response before it is sent to the client.

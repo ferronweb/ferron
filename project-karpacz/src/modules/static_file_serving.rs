@@ -106,7 +106,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
     request: RequestData,
     config: &ServerConfigRoot,
     _socket_data: &SocketData,
-    _error_logger: &ErrorLogger<'_>,
+    _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       if let Some(wwwroot) = config.get("wwwroot").as_str() {
@@ -776,7 +776,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
     request: RequestData,
     _config: &ServerConfigRoot,
     _socket_data: &SocketData,
-    _error_logger: &ErrorLogger<'_>,
+    _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     Ok(ResponseData::builder(request).build())
   }

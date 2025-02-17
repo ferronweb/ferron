@@ -680,8 +680,9 @@ pub async fn request_handler(
   }
 
   let mut request_data = RequestData::new(request, None);
+  let cloned_logger = logger.clone();
   let error_logger = match error_log_enabled {
-    true => ErrorLogger::new(&logger),
+    true => ErrorLogger::new(cloned_logger),
     false => ErrorLogger::without_logger(),
   };
 

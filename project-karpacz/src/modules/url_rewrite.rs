@@ -131,7 +131,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
     request: RequestData,
     config: &ServerConfigRoot,
     socket_data: &SocketData,
-    error_logger: &ErrorLogger<'_>,
+    error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       let hyper_request = request.get_hyper_request();
@@ -262,7 +262,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
     request: RequestData,
     _config: &ServerConfigRoot,
     _socket_data: &SocketData,
-    _error_logger: &ErrorLogger<'_>,
+    _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     Ok(ResponseData::builder(request).build())
   }

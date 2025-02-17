@@ -54,7 +54,7 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
     request: RequestData,
     config: &ServerConfigRoot,
     _socket_data: &SocketData,
-    _error_logger: &ErrorLogger<'_>,
+    _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       if config.get("disableTrailingSlashRedirects").as_bool() != Some(true) {
@@ -183,7 +183,7 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
     request: RequestData,
     _config: &ServerConfigRoot,
     _socket_data: &SocketData,
-    _error_logger: &ErrorLogger<'_>,
+    _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     Ok(ResponseData::builder(request).build())
   }
