@@ -161,7 +161,7 @@ pub async fn request_handler(
   global_config_root: Arc<ServerConfigRoot>,
   host_config: Arc<Yaml>,
   logger: Sender<LogMessage>,
-  handlers_vec: impl Iterator<Item = Box<dyn ServerModuleHandlers + Send>>,
+  handlers_vec: impl Iterator<Item = Box<dyn ServerModuleHandlers + Send>> + Send + 'static,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
   let is_proxy_request = match request.version() {
     hyper::Version::HTTP_2 | hyper::Version::HTTP_3 => {
@@ -169,6 +169,7 @@ pub async fn request_handler(
     }
     _ => request.uri().host().is_some(),
   };
+  let is_connect_proxy_request = request.method() == hyper::Method::CONNECT;
 
   // Collect request data for logging
   let log_method = String::from(request.method().as_str());
@@ -679,177 +680,201 @@ pub async fn request_handler(
     return Ok(Response::from_parts(response_parts, response_body));
   }
 
-  let mut request_data = RequestData::new(request, None);
   let cloned_logger = logger.clone();
   let error_logger = match error_log_enabled {
     true => ErrorLogger::new(cloned_logger),
     false => ErrorLogger::without_logger(),
   };
 
-  let mut executed_handlers = Vec::new();
-  let mut latest_auth_data = None;
+  if is_connect_proxy_request {
+    if let Some(connect_address) = request.uri().authority().map(|auth| auth.to_string()) {
+      // Variables moved to before "tokio::spawn" to avoid issues with moved values
+      let client_ip = socket_data.remote_addr.ip();
+      let custom_headers_yaml = combined_config.get("customHeaders");
 
-  for mut handlers in handlers_vec {
-    let response_result = match is_proxy_request {
-      true => {
-        handlers
-          .proxy_request_handler(request_data, &combined_config, &socket_data, &error_logger)
-          .await
-      }
-      false => {
-        handlers
-          .request_handler(request_data, &combined_config, &socket_data, &error_logger)
-          .await
-      }
-    };
-
-    executed_handlers.push(handlers);
-    match response_result {
-      Ok(response) => {
-        let (request_option, auth_data, response, status, headers, new_remote_address, parallel_fn) =
-          response.into_parts();
-        latest_auth_data = auth_data.clone();
-        if let Some(new_remote_address) = new_remote_address {
-          socket_data.remote_addr = new_remote_address;
-        };
-        if let Some(parallel_fn) = parallel_fn {
-          // Spawn the function in the web server's Tokio runtime.
-          // We have implemented parallel_fn parameter in the ResponseData
-          // because tokio::spawn doesn't work on dynamic libraries,
-          // see https://github.com/tokio-rs/tokio/issues/6927
-          tokio::spawn(parallel_fn);
-        }
-        match response {
-          Some(mut response) => {
-            while let Some(mut executed_handler) = executed_handlers.pop() {
-              let response_status = match is_proxy_request {
-                true => {
-                  executed_handler
-                    .proxy_response_modifying_handler(response)
-                    .await
-                }
-                false => executed_handler.response_modifying_handler(response).await,
-              };
-              response = match response_status {
-                Ok(response) => response,
+      tokio::spawn(async move {
+        match hyper::upgrade::on(request).await {
+          Ok(mut upgraded_request) => {
+            for mut handlers in handlers_vec {
+              let result = handlers
+                .connect_proxy_request_handler(
+                  upgraded_request,
+                  &connect_address,
+                  &combined_config,
+                  &socket_data,
+                  &error_logger,
+                )
+                .await;
+              match result {
+                Ok(None) => break,
+                Ok(Some(passed_upgraded_request)) => upgraded_request = passed_upgraded_request,
                 Err(err) => {
-                  if error_log_enabled {
-                    logger
-                      .send(LogMessage::new(
-                        format!("Unexpected error while serving a request: {}", err),
-                        true,
-                      ))
-                      .await
-                      .unwrap_or_default();
-                  }
-
-                  let response = generate_error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    &combined_config,
-                    &headers,
-                  )
-                  .await;
-                  if log_enabled {
-                    log_combined(
-                      &logger,
-                      socket_data.remote_addr.ip(),
-                      auth_data,
-                      log_method,
-                      log_request_path,
-                      log_protocol,
-                      response.status().as_u16(),
-                      match response.headers().get(header::CONTENT_LENGTH) {
-                        Some(header_value) => match header_value.to_str() {
-                          Ok(header_value) => match header_value.parse::<u64>() {
-                            Ok(content_length) => Some(content_length),
-                            Err(_) => response.body().size_hint().exact(),
-                          },
-                          Err(_) => response.body().size_hint().exact(),
-                        },
-                        None => response.body().size_hint().exact(),
-                      },
-                      log_referrer,
-                      log_user_agent,
-                    )
+                  error_logger
+                    .log(&format!("Unexpected error for CONNECT request: {}", err))
                     .await;
-                  }
-                  let (mut response_parts, response_body) = response.into_parts();
-                  if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash()
-                  {
-                    let custom_headers_hash_iter = custom_headers_hash.iter();
-                    for (header_name, header_value) in custom_headers_hash_iter {
-                      if let Some(header_name) = header_name.as_str() {
-                        if let Some(header_value) = header_value.as_str() {
-                          if !response_parts.headers.contains_key(header_name) {
-                            if let Ok(header_value) = HeaderValue::from_str(header_value) {
-                              if let Ok(header_name) = HeaderName::from_str(header_name) {
-                                response_parts.headers.insert(header_name, header_value);
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                  if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-                    response_parts.headers.insert(header::SERVER, server_string);
-                  };
-                  return Ok(Response::from_parts(response_parts, response_body));
+                  break;
                 }
-              };
+              }
             }
+          }
+          Err(err) => {
+            error_logger
+              .log(&format!(
+                "Error while upgrading HTTP CONNECT request: {}",
+                err
+              ))
+              .await
+          }
+        }
+      });
 
-            if log_enabled {
-              log_combined(
-                &logger,
-                socket_data.remote_addr.ip(),
-                auth_data,
-                log_method,
-                log_request_path,
-                log_protocol,
-                response.status().as_u16(),
-                match response.headers().get(header::CONTENT_LENGTH) {
-                  Some(header_value) => match header_value.to_str() {
-                    Ok(header_value) => match header_value.parse::<u64>() {
-                      Ok(content_length) => Some(content_length),
-                      Err(_) => response.body().size_hint().exact(),
-                    },
-                    Err(_) => response.body().size_hint().exact(),
-                  },
-                  None => response.body().size_hint().exact(),
-                },
-                log_referrer,
-                log_user_agent,
-              )
-              .await;
-            }
+      let response = Response::builder()
+        .body(Empty::new().map_err(|e| match e {}).boxed())
+        .unwrap_or_default();
 
-            let (mut response_parts, response_body) = response.into_parts();
-            if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
-              let custom_headers_hash_iter = custom_headers_hash.iter();
-              for (header_name, header_value) in custom_headers_hash_iter {
-                if let Some(header_name) = header_name.as_str() {
-                  if let Some(header_value) = header_value.as_str() {
-                    if !response_parts.headers.contains_key(header_name) {
-                      if let Ok(header_value) = HeaderValue::from_str(header_value) {
-                        if let Ok(header_name) = HeaderName::from_str(header_name) {
-                          response_parts.headers.insert(header_name, header_value);
-                        }
-                      }
-                    }
+      if log_enabled {
+        log_combined(
+          &logger,
+          client_ip,
+          None,
+          log_method,
+          log_request_path,
+          log_protocol,
+          response.status().as_u16(),
+          match response.headers().get(header::CONTENT_LENGTH) {
+            Some(header_value) => match header_value.to_str() {
+              Ok(header_value) => match header_value.parse::<u64>() {
+                Ok(content_length) => Some(content_length),
+                Err(_) => response.body().size_hint().exact(),
+              },
+              Err(_) => response.body().size_hint().exact(),
+            },
+            None => response.body().size_hint().exact(),
+          },
+          log_referrer,
+          log_user_agent,
+        )
+        .await;
+      }
+
+      let (mut response_parts, response_body) = response.into_parts();
+      if let Some(custom_headers_hash) = custom_headers_yaml.as_hash() {
+        let custom_headers_hash_iter = custom_headers_hash.iter();
+        for (header_name, header_value) in custom_headers_hash_iter {
+          if let Some(header_name) = header_name.as_str() {
+            if let Some(header_value) = header_value.as_str() {
+              if !response_parts.headers.contains_key(header_name) {
+                if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                  if let Ok(header_name) = HeaderName::from_str(header_name) {
+                    response_parts.headers.insert(header_name, header_value);
                   }
                 }
               }
             }
-            if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-              response_parts.headers.insert(header::SERVER, server_string);
-            };
-            return Ok(Response::from_parts(response_parts, response_body));
           }
-          None => match status {
-            Some(status) => {
-              let mut response = generate_error_response(status, &combined_config, &headers).await;
+        }
+      }
+      if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+        response_parts.headers.insert(header::SERVER, server_string);
+      };
+      Ok(Response::from_parts(response_parts, response_body))
+    } else {
+      logger
+        .send(LogMessage::new(String::from("Invalid CONNECT host"), true))
+        .await
+        .unwrap_or_default();
 
+      let response =
+        generate_error_response(StatusCode::BAD_REQUEST, &combined_config, &None).await;
+      if log_enabled {
+        log_combined(
+          &logger,
+          socket_data.remote_addr.ip(),
+          None,
+          log_method,
+          log_request_path,
+          log_protocol,
+          response.status().as_u16(),
+          match response.headers().get(header::CONTENT_LENGTH) {
+            Some(header_value) => match header_value.to_str() {
+              Ok(header_value) => match header_value.parse::<u64>() {
+                Ok(content_length) => Some(content_length),
+                Err(_) => response.body().size_hint().exact(),
+              },
+              Err(_) => response.body().size_hint().exact(),
+            },
+            None => response.body().size_hint().exact(),
+          },
+          log_referrer,
+          log_user_agent,
+        )
+        .await;
+      }
+      let (mut response_parts, response_body) = response.into_parts();
+      if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+        let custom_headers_hash_iter = custom_headers_hash.iter();
+        for (header_name, header_value) in custom_headers_hash_iter {
+          if let Some(header_name) = header_name.as_str() {
+            if let Some(header_value) = header_value.as_str() {
+              if !response_parts.headers.contains_key(header_name) {
+                if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                  if let Ok(header_name) = HeaderName::from_str(header_name) {
+                    response_parts.headers.insert(header_name, header_value);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+        response_parts.headers.insert(header::SERVER, server_string);
+      };
+      Ok(Response::from_parts(response_parts, response_body))
+    }
+  } else {
+    let mut request_data = RequestData::new(request, None);
+    let mut latest_auth_data = None;
+    let mut executed_handlers = Vec::new();
+    for mut handlers in handlers_vec {
+      let response_result = match is_proxy_request {
+        true => {
+          handlers
+            .proxy_request_handler(request_data, &combined_config, &socket_data, &error_logger)
+            .await
+        }
+        false => {
+          handlers
+            .request_handler(request_data, &combined_config, &socket_data, &error_logger)
+            .await
+        }
+      };
+
+      executed_handlers.push(handlers);
+      match response_result {
+        Ok(response) => {
+          let (
+            request_option,
+            auth_data,
+            response,
+            status,
+            headers,
+            new_remote_address,
+            parallel_fn,
+          ) = response.into_parts();
+          latest_auth_data = auth_data.clone();
+          if let Some(new_remote_address) = new_remote_address {
+            socket_data.remote_addr = new_remote_address;
+          };
+          if let Some(parallel_fn) = parallel_fn {
+            // Spawn the function in the web server's Tokio runtime.
+            // We have implemented parallel_fn parameter in the ResponseData
+            // because tokio::spawn doesn't work on dynamic libraries,
+            // see https://github.com/tokio-rs/tokio/issues/6927
+            tokio::spawn(parallel_fn);
+          }
+          match response {
+            Some(mut response) => {
               while let Some(mut executed_handler) = executed_handlers.pop() {
                 let response_status = match is_proxy_request {
                   true => {
@@ -953,6 +978,7 @@ pub async fn request_handler(
                 )
                 .await;
               }
+
               let (mut response_parts, response_body) = response.into_parts();
               if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
                 let custom_headers_hash_iter = custom_headers_hash.iter();
@@ -975,273 +1001,410 @@ pub async fn request_handler(
               };
               return Ok(Response::from_parts(response_parts, response_body));
             }
-            None => match request_option {
-              Some(request) => {
-                request_data = RequestData::new(request, auth_data);
-                continue;
-              }
-              None => {
-                break;
-              }
-            },
-          },
-        }
-      }
-      Err(err) => {
-        let mut response =
-          generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &combined_config, &None).await;
+            None => match status {
+              Some(status) => {
+                let mut response =
+                  generate_error_response(status, &combined_config, &headers).await;
 
-        while let Some(mut executed_handler) = executed_handlers.pop() {
-          let response_status = match is_proxy_request {
-            true => {
-              executed_handler
-                .proxy_response_modifying_handler(response)
-                .await
-            }
-            false => executed_handler.response_modifying_handler(response).await,
-          };
-          response = match response_status {
-            Ok(response) => response,
-            Err(err) => {
-              if error_log_enabled {
-                logger
-                  .send(LogMessage::new(
-                    format!("Unexpected error while serving a request: {}", err),
-                    true,
-                  ))
-                  .await
-                  .unwrap_or_default();
-              }
+                while let Some(mut executed_handler) = executed_handlers.pop() {
+                  let response_status = match is_proxy_request {
+                    true => {
+                      executed_handler
+                        .proxy_response_modifying_handler(response)
+                        .await
+                    }
+                    false => executed_handler.response_modifying_handler(response).await,
+                  };
+                  response = match response_status {
+                    Ok(response) => response,
+                    Err(err) => {
+                      if error_log_enabled {
+                        logger
+                          .send(LogMessage::new(
+                            format!("Unexpected error while serving a request: {}", err),
+                            true,
+                          ))
+                          .await
+                          .unwrap_or_default();
+                      }
 
-              let response =
-                generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &combined_config, &None)
-                  .await;
-              if log_enabled {
-                log_combined(
-                  &logger,
-                  socket_data.remote_addr.ip(),
-                  latest_auth_data,
-                  log_method,
-                  log_request_path,
-                  log_protocol,
-                  response.status().as_u16(),
-                  match response.headers().get(header::CONTENT_LENGTH) {
-                    Some(header_value) => match header_value.to_str() {
-                      Ok(header_value) => match header_value.parse::<u64>() {
-                        Ok(content_length) => Some(content_length),
+                      let response = generate_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        &combined_config,
+                        &headers,
+                      )
+                      .await;
+                      if log_enabled {
+                        log_combined(
+                          &logger,
+                          socket_data.remote_addr.ip(),
+                          auth_data,
+                          log_method,
+                          log_request_path,
+                          log_protocol,
+                          response.status().as_u16(),
+                          match response.headers().get(header::CONTENT_LENGTH) {
+                            Some(header_value) => match header_value.to_str() {
+                              Ok(header_value) => match header_value.parse::<u64>() {
+                                Ok(content_length) => Some(content_length),
+                                Err(_) => response.body().size_hint().exact(),
+                              },
+                              Err(_) => response.body().size_hint().exact(),
+                            },
+                            None => response.body().size_hint().exact(),
+                          },
+                          log_referrer,
+                          log_user_agent,
+                        )
+                        .await;
+                      }
+                      let (mut response_parts, response_body) = response.into_parts();
+                      if let Some(custom_headers_hash) =
+                        combined_config.get("customHeaders").as_hash()
+                      {
+                        let custom_headers_hash_iter = custom_headers_hash.iter();
+                        for (header_name, header_value) in custom_headers_hash_iter {
+                          if let Some(header_name) = header_name.as_str() {
+                            if let Some(header_value) = header_value.as_str() {
+                              if !response_parts.headers.contains_key(header_name) {
+                                if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                                  if let Ok(header_name) = HeaderName::from_str(header_name) {
+                                    response_parts.headers.insert(header_name, header_value);
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+                        response_parts.headers.insert(header::SERVER, server_string);
+                      };
+                      return Ok(Response::from_parts(response_parts, response_body));
+                    }
+                  };
+                }
+
+                if log_enabled {
+                  log_combined(
+                    &logger,
+                    socket_data.remote_addr.ip(),
+                    auth_data,
+                    log_method,
+                    log_request_path,
+                    log_protocol,
+                    response.status().as_u16(),
+                    match response.headers().get(header::CONTENT_LENGTH) {
+                      Some(header_value) => match header_value.to_str() {
+                        Ok(header_value) => match header_value.parse::<u64>() {
+                          Ok(content_length) => Some(content_length),
+                          Err(_) => response.body().size_hint().exact(),
+                        },
                         Err(_) => response.body().size_hint().exact(),
                       },
-                      Err(_) => response.body().size_hint().exact(),
+                      None => response.body().size_hint().exact(),
                     },
-                    None => response.body().size_hint().exact(),
-                  },
-                  log_referrer,
-                  log_user_agent,
-                )
-                .await;
-              }
-              let (mut response_parts, response_body) = response.into_parts();
-              if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
-                let custom_headers_hash_iter = custom_headers_hash.iter();
-                for (header_name, header_value) in custom_headers_hash_iter {
-                  if let Some(header_name) = header_name.as_str() {
-                    if let Some(header_value) = header_value.as_str() {
-                      if !response_parts.headers.contains_key(header_name) {
-                        if let Ok(header_value) = HeaderValue::from_str(header_value) {
-                          if let Ok(header_name) = HeaderName::from_str(header_name) {
-                            response_parts.headers.insert(header_name, header_value);
+                    log_referrer,
+                    log_user_agent,
+                  )
+                  .await;
+                }
+                let (mut response_parts, response_body) = response.into_parts();
+                if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+                  let custom_headers_hash_iter = custom_headers_hash.iter();
+                  for (header_name, header_value) in custom_headers_hash_iter {
+                    if let Some(header_name) = header_name.as_str() {
+                      if let Some(header_value) = header_value.as_str() {
+                        if !response_parts.headers.contains_key(header_name) {
+                          if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                            if let Ok(header_name) = HeaderName::from_str(header_name) {
+                              response_parts.headers.insert(header_name, header_value);
+                            }
                           }
                         }
                       }
                     }
                   }
                 }
+                if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+                  response_parts.headers.insert(header::SERVER, server_string);
+                };
+                return Ok(Response::from_parts(response_parts, response_body));
               }
-              if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-                response_parts.headers.insert(header::SERVER, server_string);
-              };
-              return Ok(Response::from_parts(response_parts, response_body));
-            }
-          };
+              None => match request_option {
+                Some(request) => {
+                  request_data = RequestData::new(request, auth_data);
+                  continue;
+                }
+                None => {
+                  break;
+                }
+              },
+            },
+          }
         }
+        Err(err) => {
+          let mut response =
+            generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &combined_config, &None)
+              .await;
 
-        if error_log_enabled {
-          logger
-            .send(LogMessage::new(
-              format!("Unexpected error while serving a request: {}", err),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
-        }
+          while let Some(mut executed_handler) = executed_handlers.pop() {
+            let response_status = match is_proxy_request {
+              true => {
+                executed_handler
+                  .proxy_response_modifying_handler(response)
+                  .await
+              }
+              false => executed_handler.response_modifying_handler(response).await,
+            };
+            response = match response_status {
+              Ok(response) => response,
+              Err(err) => {
+                if error_log_enabled {
+                  logger
+                    .send(LogMessage::new(
+                      format!("Unexpected error while serving a request: {}", err),
+                      true,
+                    ))
+                    .await
+                    .unwrap_or_default();
+                }
 
-        if log_enabled {
-          log_combined(
-            &logger,
-            socket_data.remote_addr.ip(),
-            latest_auth_data,
-            log_method,
-            log_request_path,
-            log_protocol,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
+                let response = generate_error_response(
+                  StatusCode::INTERNAL_SERVER_ERROR,
+                  &combined_config,
+                  &None,
+                )
+                .await;
+                if log_enabled {
+                  log_combined(
+                    &logger,
+                    socket_data.remote_addr.ip(),
+                    latest_auth_data,
+                    log_method,
+                    log_request_path,
+                    log_protocol,
+                    response.status().as_u16(),
+                    match response.headers().get(header::CONTENT_LENGTH) {
+                      Some(header_value) => match header_value.to_str() {
+                        Ok(header_value) => match header_value.parse::<u64>() {
+                          Ok(content_length) => Some(content_length),
+                          Err(_) => response.body().size_hint().exact(),
+                        },
+                        Err(_) => response.body().size_hint().exact(),
+                      },
+                      None => response.body().size_hint().exact(),
+                    },
+                    log_referrer,
+                    log_user_agent,
+                  )
+                  .await;
+                }
+                let (mut response_parts, response_body) = response.into_parts();
+                if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+                  let custom_headers_hash_iter = custom_headers_hash.iter();
+                  for (header_name, header_value) in custom_headers_hash_iter {
+                    if let Some(header_name) = header_name.as_str() {
+                      if let Some(header_value) = header_value.as_str() {
+                        if !response_parts.headers.contains_key(header_name) {
+                          if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                            if let Ok(header_name) = HeaderName::from_str(header_name) {
+                              response_parts.headers.insert(header_name, header_value);
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+                  response_parts.headers.insert(header::SERVER, server_string);
+                };
+                return Ok(Response::from_parts(response_parts, response_body));
+              }
+            };
+          }
+
+          if error_log_enabled {
+            logger
+              .send(LogMessage::new(
+                format!("Unexpected error while serving a request: {}", err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
+
+          if log_enabled {
+            log_combined(
+              &logger,
+              socket_data.remote_addr.ip(),
+              latest_auth_data,
+              log_method,
+              log_request_path,
+              log_protocol,
+              response.status().as_u16(),
+              match response.headers().get(header::CONTENT_LENGTH) {
+                Some(header_value) => match header_value.to_str() {
+                  Ok(header_value) => match header_value.parse::<u64>() {
+                    Ok(content_length) => Some(content_length),
+                    Err(_) => response.body().size_hint().exact(),
+                  },
                   Err(_) => response.body().size_hint().exact(),
                 },
-                Err(_) => response.body().size_hint().exact(),
+                None => response.body().size_hint().exact(),
               },
-              None => response.body().size_hint().exact(),
-            },
-            log_referrer,
-            log_user_agent,
-          )
-          .await;
-        }
-        let (mut response_parts, response_body) = response.into_parts();
-        if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
-          let custom_headers_hash_iter = custom_headers_hash.iter();
-          for (header_name, header_value) in custom_headers_hash_iter {
-            if let Some(header_name) = header_name.as_str() {
-              if let Some(header_value) = header_value.as_str() {
-                if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
-                    if let Ok(header_name) = HeaderName::from_str(header_name) {
-                      response_parts.headers.insert(header_name, header_value);
+              log_referrer,
+              log_user_agent,
+            )
+            .await;
+          }
+          let (mut response_parts, response_body) = response.into_parts();
+          if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+            let custom_headers_hash_iter = custom_headers_hash.iter();
+            for (header_name, header_value) in custom_headers_hash_iter {
+              if let Some(header_name) = header_name.as_str() {
+                if let Some(header_value) = header_value.as_str() {
+                  if !response_parts.headers.contains_key(header_name) {
+                    if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                      if let Ok(header_name) = HeaderName::from_str(header_name) {
+                        response_parts.headers.insert(header_name, header_value);
+                      }
                     }
                   }
                 }
               }
             }
           }
+          if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+            response_parts.headers.insert(header::SERVER, server_string);
+          };
+          return Ok(Response::from_parts(response_parts, response_body));
         }
-        if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-          response_parts.headers.insert(header::SERVER, server_string);
-        };
-        return Ok(Response::from_parts(response_parts, response_body));
       }
     }
-  }
 
-  let mut response = generate_error_response(StatusCode::NOT_FOUND, &combined_config, &None).await;
+    let mut response =
+      generate_error_response(StatusCode::NOT_FOUND, &combined_config, &None).await;
 
-  while let Some(mut executed_handler) = executed_handlers.pop() {
-    let response_status = match is_proxy_request {
-      true => {
-        executed_handler
-          .proxy_response_modifying_handler(response)
-          .await
-      }
-      false => executed_handler.response_modifying_handler(response).await,
-    };
-    response = match response_status {
-      Ok(response) => response,
-      Err(err) => {
-        if error_log_enabled {
-          logger
-            .send(LogMessage::new(
-              format!("Unexpected error while serving a request: {}", err),
-              true,
-            ))
+    while let Some(mut executed_handler) = executed_handlers.pop() {
+      let response_status = match is_proxy_request {
+        true => {
+          executed_handler
+            .proxy_response_modifying_handler(response)
             .await
-            .unwrap_or_default();
         }
+        false => executed_handler.response_modifying_handler(response).await,
+      };
+      response = match response_status {
+        Ok(response) => response,
+        Err(err) => {
+          if error_log_enabled {
+            logger
+              .send(LogMessage::new(
+                format!("Unexpected error while serving a request: {}", err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
 
-        let response =
-          generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &combined_config, &None).await;
-        if log_enabled {
-          log_combined(
-            &logger,
-            socket_data.remote_addr.ip(),
-            latest_auth_data,
-            log_method,
-            log_request_path,
-            log_protocol,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
+          let response =
+            generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &combined_config, &None)
+              .await;
+          if log_enabled {
+            log_combined(
+              &logger,
+              socket_data.remote_addr.ip(),
+              latest_auth_data,
+              log_method,
+              log_request_path,
+              log_protocol,
+              response.status().as_u16(),
+              match response.headers().get(header::CONTENT_LENGTH) {
+                Some(header_value) => match header_value.to_str() {
+                  Ok(header_value) => match header_value.parse::<u64>() {
+                    Ok(content_length) => Some(content_length),
+                    Err(_) => response.body().size_hint().exact(),
+                  },
                   Err(_) => response.body().size_hint().exact(),
                 },
-                Err(_) => response.body().size_hint().exact(),
+                None => response.body().size_hint().exact(),
               },
-              None => response.body().size_hint().exact(),
-            },
-            log_referrer,
-            log_user_agent,
-          )
-          .await;
-        }
-        let (mut response_parts, response_body) = response.into_parts();
-        if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
-          let custom_headers_hash_iter = custom_headers_hash.iter();
-          for (header_name, header_value) in custom_headers_hash_iter {
-            if let Some(header_name) = header_name.as_str() {
-              if let Some(header_value) = header_value.as_str() {
-                if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
-                    if let Ok(header_name) = HeaderName::from_str(header_name) {
-                      response_parts.headers.insert(header_name, header_value);
+              log_referrer,
+              log_user_agent,
+            )
+            .await;
+          }
+          let (mut response_parts, response_body) = response.into_parts();
+          if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+            let custom_headers_hash_iter = custom_headers_hash.iter();
+            for (header_name, header_value) in custom_headers_hash_iter {
+              if let Some(header_name) = header_name.as_str() {
+                if let Some(header_value) = header_value.as_str() {
+                  if !response_parts.headers.contains_key(header_name) {
+                    if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                      if let Ok(header_name) = HeaderName::from_str(header_name) {
+                        response_parts.headers.insert(header_name, header_value);
+                      }
                     }
                   }
                 }
               }
             }
           }
+          if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+            response_parts.headers.insert(header::SERVER, server_string);
+          };
+          return Ok(Response::from_parts(response_parts, response_body));
         }
-        if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-          response_parts.headers.insert(header::SERVER, server_string);
-        };
-        return Ok(Response::from_parts(response_parts, response_body));
-      }
-    };
-  }
+      };
+    }
 
-  if log_enabled {
-    log_combined(
-      &logger,
-      socket_data.remote_addr.ip(),
-      latest_auth_data,
-      log_method,
-      log_request_path,
-      log_protocol,
-      response.status().as_u16(),
-      match response.headers().get(header::CONTENT_LENGTH) {
-        Some(header_value) => match header_value.to_str() {
-          Ok(header_value) => match header_value.parse::<u64>() {
-            Ok(content_length) => Some(content_length),
+    if log_enabled {
+      log_combined(
+        &logger,
+        socket_data.remote_addr.ip(),
+        latest_auth_data,
+        log_method,
+        log_request_path,
+        log_protocol,
+        response.status().as_u16(),
+        match response.headers().get(header::CONTENT_LENGTH) {
+          Some(header_value) => match header_value.to_str() {
+            Ok(header_value) => match header_value.parse::<u64>() {
+              Ok(content_length) => Some(content_length),
+              Err(_) => response.body().size_hint().exact(),
+            },
             Err(_) => response.body().size_hint().exact(),
           },
-          Err(_) => response.body().size_hint().exact(),
+          None => response.body().size_hint().exact(),
         },
-        None => response.body().size_hint().exact(),
-      },
-      log_referrer,
-      log_user_agent,
-    )
-    .await;
-  }
-  let (mut response_parts, response_body) = response.into_parts();
-  if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
-    let custom_headers_hash_iter = custom_headers_hash.iter();
-    for (header_name, header_value) in custom_headers_hash_iter {
-      if let Some(header_name) = header_name.as_str() {
-        if let Some(header_value) = header_value.as_str() {
-          if !response_parts.headers.contains_key(header_name) {
-            if let Ok(header_value) = HeaderValue::from_str(header_value) {
-              if let Ok(header_name) = HeaderName::from_str(header_name) {
-                response_parts.headers.insert(header_name, header_value);
+        log_referrer,
+        log_user_agent,
+      )
+      .await;
+    }
+    let (mut response_parts, response_body) = response.into_parts();
+    if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+      let custom_headers_hash_iter = custom_headers_hash.iter();
+      for (header_name, header_value) in custom_headers_hash_iter {
+        if let Some(header_name) = header_name.as_str() {
+          if let Some(header_value) = header_value.as_str() {
+            if !response_parts.headers.contains_key(header_name) {
+              if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                if let Ok(header_name) = HeaderName::from_str(header_name) {
+                  response_parts.headers.insert(header_name, header_value);
+                }
               }
             }
           }
         }
       }
     }
+    if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+      response_parts.headers.insert(header::SERVER, server_string);
+    };
+    Ok(Response::from_parts(response_parts, response_body))
   }
-  if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-    response_parts.headers.insert(header::SERVER, server_string);
-  };
-  Ok(Response::from_parts(response_parts, response_body))
 }

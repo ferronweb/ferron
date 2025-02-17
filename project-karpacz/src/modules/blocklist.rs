@@ -3,11 +3,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use hyper::StatusCode;
-use project_karpacz_common::WithRuntime;
 use project_karpacz_common::{
   ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerConfigRoot,
   ServerModule, ServerModuleHandlers, SocketData,
 };
+use project_karpacz_common::{HyperUpgraded, WithRuntime};
 use tokio::runtime::Handle;
 
 use crate::project_karpacz_util::ip_blocklist::IpBlockList;
@@ -100,5 +100,16 @@ impl ServerModuleHandlers for BlockListModuleHandlers {
     response: HyperResponse,
   ) -> Result<HyperResponse, Box<dyn Error + Send + Sync>> {
     Ok(response)
+  }
+
+  async fn connect_proxy_request_handler(
+    &mut self,
+    upgraded_request: HyperUpgraded,
+    _connect_address: &str,
+    _config: &ServerConfigRoot,
+    _socket_data: &SocketData,
+    _error_logger: &ErrorLogger,
+  ) -> Result<Option<HyperUpgraded>, Box<dyn Error + Send + Sync>> {
+    Ok(Some(upgraded_request))
   }
 }

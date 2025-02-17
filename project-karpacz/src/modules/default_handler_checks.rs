@@ -4,11 +4,11 @@ use async_trait::async_trait;
 use http_body_util::{BodyExt, Empty};
 use hyper::header::HeaderValue;
 use hyper::{header, HeaderMap, Method, Response, StatusCode};
-use project_karpacz_common::WithRuntime;
 use project_karpacz_common::{
   ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfigRoot, ServerModule,
   ServerModuleHandlers, SocketData,
 };
+use project_karpacz_common::{HyperUpgraded, WithRuntime};
 use tokio::runtime::Handle;
 
 struct DefaultHandlerChecksModule;
@@ -99,5 +99,16 @@ impl ServerModuleHandlers for DefaultHandlerChecksModuleHandlers {
     response: HyperResponse,
   ) -> Result<HyperResponse, Box<dyn Error + Send + Sync>> {
     Ok(response)
+  }
+
+  async fn connect_proxy_request_handler(
+    &mut self,
+    _upgraded_request: HyperUpgraded,
+    _connect_address: &str,
+    _config: &ServerConfigRoot,
+    _socket_data: &SocketData,
+    _error_logger: &ErrorLogger,
+  ) -> Result<Option<HyperUpgraded>, Box<dyn Error + Send + Sync>> {
+    Ok(None)
   }
 }

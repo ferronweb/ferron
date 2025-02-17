@@ -5,8 +5,8 @@ use http_body_util::{BodyExt, Full};
 use hyper::Response;
 use mimalloc::MiMalloc;
 use project_karpacz_common::{
-  ErrorLogger, RequestData, ResponseData, ServerConfig, ServerConfigRoot, ServerModule,
-  ServerModuleHandlers, SocketData,
+  ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerConfigRoot,
+  ServerModule, ServerModuleHandlers, SocketData,
 };
 use project_karpacz_common::{HyperResponse, WithRuntime};
 use tokio::runtime::Handle;
@@ -88,7 +88,7 @@ impl ServerModuleHandlers for ExampleModuleHandlers {
     .await
   }
 
-  /// Handles proxy requests (not used in this module).
+  /// Handles non-CONNECT proxy requests (not used in this module).
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
@@ -116,5 +116,18 @@ impl ServerModuleHandlers for ExampleModuleHandlers {
   ) -> Result<HyperResponse, Box<dyn Error + Send + Sync>> {
     // No proxy response modification needed.
     Ok(response)
+  }
+
+  /// Handles CONNECT proxy requests (not used in this module).
+  async fn connect_proxy_request_handler(
+    &mut self,
+    upgraded_request: HyperUpgraded,
+    _connect_address: &str,
+    _config: &ServerConfigRoot,
+    _socket_data: &SocketData,
+    _error_logger: &ErrorLogger,
+  ) -> Result<Option<HyperUpgraded>, Box<dyn Error + Send + Sync>> {
+    // No proxy request handling needed.
+    Ok(Some(upgraded_request))
   }
 }
