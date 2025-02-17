@@ -1,0 +1,22 @@
+[package]
+name = "project-karpacz-mod-fproxy"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.95"
+async-trait.workspace = true
+futures-util = "0.3.31"
+http-body-util.workspace = true
+httparse = "1.10.0"
+hyper = { workspace = true, features = ["client"]}
+hyper-util = { version = "0.1.10", features = ["tokio"] }
+project-karpacz-common = { workspace = true }
+tokio.workspace = true
+mimalloc = { workspace = true }
+
+[dev-dependencies]
+rusty-hook = { workspace = true }
+
+[lib]
+crate-type = ["dylib"]

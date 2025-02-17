@@ -1861,6 +1861,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "project-karpacz-mod-fproxy"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures-util",
+ "http-body-util",
+ "httparse",
+ "hyper",
+ "hyper-util",
+ "mimalloc",
+ "project-karpacz-common",
+ "rusty-hook",
+ "tokio",
+]
+
+[[package]]
 name = "project-karpacz-mod-rproxy"
 version = "0.2.0"
 dependencies = [
