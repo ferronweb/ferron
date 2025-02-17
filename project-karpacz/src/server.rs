@@ -128,7 +128,7 @@ async fn accept_connection(
       }
 
       if let Err(err) = http2_builder
-        .serve_connection(
+        .serve_connection_with_upgrades(
           io,
           service_fn(move |request: Request<Incoming>| {
             let global_config_root = global_config_root.clone();
@@ -197,7 +197,7 @@ async fn accept_connection(
       }
 
       if let Err(err) = http2_builder
-        .serve_connection(
+        .serve_connection_with_upgrades(
           io,
           service_fn(move |request: Request<Incoming>| {
             let global_config_root = global_config_root.clone();
