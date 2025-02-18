@@ -1,5 +1,18 @@
 # Project Karpacz change log
 
+## Project Karpacz 0.3.0
+**Released in February 18, 2025**
+
+- Added a forward proxy module (*fproxy*)
+- Added CONNECT forward proxy request handler support
+- Added HTTP keep-alive support for reverse proxy module
+- Added support for HTTP upgrades
+- Added support for optional built-in modules
+- Fixed server hang-ups with reverse proxy with high concurrency
+- Modified `parallel_fn` function to accept async closures without needing to use `Box::pin` in the module itself
+- The error logger struct is now clonable
+- The reverse proxy module (*rproxy*) is now an optional reverse proxy module
+
 ## Project Karpacz 0.2.0
 **Released in February 16, 2025**
 
