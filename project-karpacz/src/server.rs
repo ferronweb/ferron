@@ -243,6 +243,7 @@ async fn server_event_loop(
     Symbol<'_, fn(&ServerConfigRoot, bool) -> Result<(), Box<dyn Error + Send + Sync>>>,
   >,
   module_error: Option<anyhow::Error>,
+  modules_optional_builtin: Vec<String>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   if let Some(module_error) = module_error {
     logger
@@ -271,7 +272,11 @@ async fn server_event_loop(
 
   for (config_to_validate, is_global) in prepared_config {
     let config_root_to_validate = ServerConfigRoot::new(&config_to_validate);
-    match validate_config(&config_root_to_validate, is_global) {
+    match validate_config(
+      &config_root_to_validate,
+      is_global,
+      &modules_optional_builtin,
+    ) {
       Ok(_) => (),
       Err(err) => {
         logger
@@ -895,6 +900,7 @@ pub fn start_server(
     Symbol<'_, fn(&ServerConfigRoot, bool) -> Result<(), Box<dyn Error + Send + Sync>>>,
   >,
   module_error: Option<anyhow::Error>,
+  modules_optional_builtin: Vec<String>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   if let Some(environment_variables_hash) = yaml_config["global"]["environmentVariables"].as_hash()
   {
@@ -1039,6 +1045,7 @@ pub fn start_server(
       modules,
       module_config_validation_functions,
       module_error,
+      modules_optional_builtin,
     )
     .await;
 

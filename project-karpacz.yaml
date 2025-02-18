@@ -4,6 +4,7 @@ global:
   logFilePath: access.log
   errorLogFilePath: error.log
   loadModules:
-   - example
+   - rproxy
   wwwroot: /var/www/html # Replace "/var/www/html" with desired webroot
   enableDirectoryListing: true
+  proxyTo: http://127.0.0.1:3000

@@ -45,6 +45,12 @@ mod project_karpacz_modules {
   pub mod x_forwarded_for;
 }
 
+// Import optional project modules from "modules" directory
+#[path = "optional_modules"]
+mod project_karpacz_optional_modules {
+  pub mod rproxy;
+}
+
 // Standard library imports
 use std::error::Error;
 use std::fs;
@@ -114,26 +120,33 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
 
   let mut module_error = None;
   let mut module_libs = Vec::new();
+
   // Load external modules defined in the configuration file
   if let Some(modules) = yaml_config["global"]["loadModules"].as_vec() {
     for module_name_yaml in modules.iter() {
       if let Some(module_name) = module_name_yaml.as_str() {
-        let lib = match unsafe {
-          Library::new(library_filename(format!(
-            "project_karpacz_mod_{}",
-            module_name.replace("/", "_")
-          )))
-        } {
-          Ok(lib) => lib,
-          Err(err) => {
-            module_error = Some(anyhow::anyhow!(
-              "Cannot load module \"{}\": {}",
-              module_name,
-              err
-            ));
-            break;
-          }
+        let lib = match module_name {
+          "rproxy" => None,
+          _ => Some(
+            match unsafe {
+              Library::new(library_filename(format!(
+                "project_karpacz_mod_{}",
+                module_name.replace("/", "_")
+              )))
+            } {
+              Ok(lib) => lib,
+              Err(err) => {
+                module_error = Some(anyhow::anyhow!(
+                  "Cannot load module \"{}\": {}",
+                  module_name,
+                  err
+                ));
+                break;
+              }
+            },
+          ),
         };
+
         module_libs.push((lib, String::from(module_name)));
       }
     }
@@ -141,53 +154,84 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
 
   let mut external_modules = Vec::new();
   let mut module_config_validation_functions = Vec::new();
+  let mut modules_optional_builtin = Vec::new();
   // Iterate over loaded module libraries and initialize them
   for (lib, module_name) in module_libs.iter() {
-    // Retrieve the module initialization function
-    let module_init: Symbol<
-      fn(
-        &ServerConfig,
-      ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>>,
-    > = match unsafe { lib.get(b"server_module_init") } {
-      Ok(module) => module,
-      Err(err) => {
-        module_error = Some(anyhow::anyhow!(
-          "Cannot load module \"{}\": {}",
-          module_name,
-          err
-        ));
-        break;
-      }
-    };
+    if let Some(lib) = lib {
+      // Retrieve the module initialization function
+      let module_init: Symbol<
+        fn(
+          &ServerConfig,
+        ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>>,
+      > = match unsafe { lib.get(b"server_module_init") } {
+        Ok(module) => module,
+        Err(err) => {
+          module_error = Some(anyhow::anyhow!(
+            "Cannot load module \"{}\": {}",
+            module_name,
+            err
+          ));
+          break;
+        }
+      };
 
-    // Initialize the module
-    external_modules.push(match module_init(&yaml_config) {
-      Ok(module) => module,
-      Err(err) => {
-        module_error = Some(anyhow::anyhow!(
-          "Cannot initialize module \"{}\": {}",
-          module_name,
-          err
-        ));
-        break;
-      }
-    });
+      // Initialize the module
+      external_modules.push(match module_init(&yaml_config) {
+        Ok(module) => module,
+        Err(err) => {
+          module_error = Some(anyhow::anyhow!(
+            "Cannot initialize module \"{}\": {}",
+            module_name,
+            err
+          ));
+          break;
+        }
+      });
 
-    // Retrieve the module configuration validation function
-    let module_validate_config: Symbol<
-      fn(&ServerConfigRoot, bool) -> Result<(), Box<dyn Error + Send + Sync>>,
-    > = match unsafe { lib.get(b"server_module_validate_config") } {
-      Ok(module) => module,
-      Err(err) => {
-        module_error = Some(anyhow::anyhow!(
-          "Cannot load module \"{}\": {}",
-          module_name,
-          err
-        ));
-        break;
+      // Retrieve the module configuration validation function
+      let module_validate_config: Symbol<
+        fn(&ServerConfigRoot, bool) -> Result<(), Box<dyn Error + Send + Sync>>,
+      > = match unsafe { lib.get(b"server_module_validate_config") } {
+        Ok(module) => module,
+        Err(err) => {
+          module_error = Some(anyhow::anyhow!(
+            "Cannot load module \"{}\": {}",
+            module_name,
+            err
+          ));
+          break;
+        }
+      };
+      module_config_validation_functions.push(module_validate_config);
+    } else {
+      match module_name as &str {
+        "rproxy" => {
+          // Initialize the module
+          external_modules.push(
+            match project_karpacz_optional_modules::rproxy::server_module_init(&yaml_config) {
+              Ok(module) => module,
+              Err(err) => {
+                module_error = Some(anyhow::anyhow!(
+                  "Cannot initialize optional built-in module \"{}\": {}",
+                  module_name,
+                  err
+                ));
+                break;
+              }
+            },
+          );
+
+          modules_optional_builtin.push(module_name.clone());
+        }
+        _ => {
+          module_error = Some(anyhow::anyhow!(
+            "The optional built-in module \"{}\" doesn't exist",
+            module_name
+          ));
+          break;
+        }
       }
-    };
-    module_config_validation_functions.push(module_validate_config);
+    }
   }
 
   // Add modules (both built-in and loaded)
@@ -264,6 +308,7 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
     modules,
     module_config_validation_functions,
     module_error,
+    modules_optional_builtin,
   )?;
 
   Ok(())

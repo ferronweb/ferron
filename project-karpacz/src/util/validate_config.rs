@@ -17,6 +17,7 @@ fn validate_ip(ip: &str) -> bool {
 pub fn validate_config(
   config: &ServerConfigRoot,
   is_global: bool,
+  modules_optional_builtin: &Vec<String>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   let domain_badvalue = config.get("domain").is_badvalue();
   let ip_badvalue = config.get("ip").is_badvalue();
@@ -641,6 +642,22 @@ pub fn validate_config(
     && config.get("enableDirectoryListing").as_bool().is_none()
   {
     Err(anyhow::anyhow!("Invalid directory listing enabling option"))?
+  }
+
+  for module_optional_builtin in modules_optional_builtin.iter() {
+    if module_optional_builtin as &str == "rproxy" {
+      if !config.get("proxyTo").is_badvalue() && config.get("proxyTo").as_str().is_none() {
+        Err(anyhow::anyhow!("Invalid reverse proxy target URL value"))?
+      }
+
+      if !config.get("secureProxyTo").is_badvalue()
+        && config.get("secureProxyTo").as_str().is_none()
+      {
+        Err(anyhow::anyhow!(
+          "Invalid secure reverse proxy target URL value"
+        ))?
+      }
+    }
   }
 
   Ok(())

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -6,53 +7,27 @@ use async_trait::async_trait;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Bytes;
+use hyper::client::conn::http1::SendRequest;
 use hyper::{header, Request, StatusCode, Uri};
 use hyper_util::rt::TokioIo;
-use mimalloc::MiMalloc;
 use project_karpacz_common::{
   ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerConfigRoot,
   ServerModule, ServerModuleHandlers, SocketData,
 };
 use project_karpacz_common::{HyperResponse, WithRuntime};
-use rustls::crypto::aws_lc_rs::default_provider;
 use rustls::pki_types::ServerName;
-use rustls::{ClientConfig, RootCertStore};
+use rustls::RootCertStore;
 use rustls_native_certs::load_native_certs;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio::runtime::Handle;
+use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
 
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
-
-#[no_mangle]
-pub fn server_module_validate_config(
-  config: &ServerConfigRoot,
-  _is_global: bool,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
-  if !config.get("proxyTo").is_badvalue() && config.get("proxyTo").as_str().is_none() {
-    Err(anyhow::anyhow!("Invalid reverse proxy target URL value"))?
-  }
-
-  if !config.get("secureProxyTo").is_badvalue() && config.get("secureProxyTo").as_str().is_none() {
-    Err(anyhow::anyhow!(
-      "Invalid secure reverse proxy target URL value"
-    ))?
-  }
-
-  Ok(())
-}
-
-#[no_mangle]
 pub fn server_module_init(
   _config: &ServerConfig,
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
-  if default_provider().install_default().is_err() {
-    Err(anyhow::anyhow!("Cannot install crypto provider"))?
-  }
-
-  let mut roots = RootCertStore::empty();
+  let mut roots: RootCertStore = RootCertStore::empty();
   let certs_result = load_native_certs();
   if !certs_result.errors.is_empty() {
     Err(anyhow::anyhow!(format!(
@@ -72,29 +47,31 @@ pub fn server_module_init(
     }
   }
 
-  let tls_client_config = rustls::ClientConfig::builder()
-    .with_root_certificates(roots)
-    .with_no_client_auth();
-
-  Ok(Box::new(ReverseProxyModule::new(Arc::new(
-    tls_client_config,
-  ))))
+  Ok(Box::new(ReverseProxyModule::new(
+    Arc::new(roots),
+    Arc::new(RwLock::new(HashMap::new())),
+  )))
 }
 
 struct ReverseProxyModule {
-  tls_client_config: Arc<ClientConfig>,
+  roots: Arc<RootCertStore>,
+  connections: Arc<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>,
 }
 
 impl ReverseProxyModule {
-  fn new(tls_client_config: Arc<ClientConfig>) -> Self {
-    ReverseProxyModule { tls_client_config }
+  fn new(
+    roots: Arc<RootCertStore>,
+    connections: Arc<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>,
+  ) -> Self {
+    ReverseProxyModule { roots, connections }
   }
 }
 
 impl ServerModule for ReverseProxyModule {
   fn get_handlers(&self, handle: Handle) -> Box<dyn ServerModuleHandlers + Send> {
     Box::new(ReverseProxyModuleHandlers {
-      tls_client_config: self.tls_client_config.clone(),
+      roots: self.roots.clone(),
+      connections: self.connections.clone(),
       handle,
     })
   }
@@ -102,7 +79,8 @@ impl ServerModule for ReverseProxyModule {
 
 struct ReverseProxyModuleHandlers {
   handle: Handle,
-  tls_client_config: Arc<ClientConfig>,
+  roots: Arc<RootCertStore>,
+  connections: Arc<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>,
 }
 
 #[async_trait]
@@ -162,7 +140,89 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
         });
 
         let addr = format!("{}:{}", host, port);
-        let stream = match TcpStream::connect(addr).await {
+
+        let authority = proxy_request_url.authority().cloned();
+
+        let hyper_request_path = hyper_request_parts.uri.path();
+
+        let path = match hyper_request_path.as_bytes().first() {
+          Some(b'/') => {
+            let mut proxy_request_path = proxy_request_url.path();
+            while proxy_request_path.as_bytes().last().copied() == Some(b'/') {
+              proxy_request_path = &proxy_request_path[..(proxy_request_path.len() - 1)];
+            }
+            format!("{}{}", proxy_request_path, hyper_request_path)
+          }
+          _ => hyper_request_path.to_string(),
+        };
+
+        hyper_request_parts.uri = Uri::from_str(&format!(
+          "{}{}",
+          path,
+          match hyper_request_parts.uri.query() {
+            Some(query) => format!("?{}", query),
+            None => "".to_string(),
+          }
+        ))?;
+
+        // Host header for host identification
+        match authority {
+          Some(authority) => {
+            hyper_request_parts
+              .headers
+              .insert(header::HOST, authority.to_string().parse()?);
+          }
+          None => {
+            hyper_request_parts.headers.remove(header::HOST);
+          }
+        }
+
+        // Connection header to enable HTTP/1.1 keep-alive
+        hyper_request_parts
+          .headers
+          .insert(header::CONNECTION, "keep-alive".parse()?);
+
+        // X-Forwarded-For header to send the client's IP to a server that's behind the reverse proxy
+        hyper_request_parts.headers.insert(
+          "x-forwarded-for",
+          socket_data
+            .remote_addr
+            .ip()
+            .to_canonical()
+            .to_string()
+            .parse()?,
+        );
+
+        let proxy_request = Request::from_parts(hyper_request_parts, request_body.boxed());
+
+        let rwlock_read = self.connections.read().await;
+        let sender_read_option = rwlock_read.get(&addr);
+
+        if let Some(sender_read) = sender_read_option {
+          if !sender_read.is_closed() {
+            drop(rwlock_read);
+            let mut rwlock_write = self.connections.write().await;
+            let sender_option = rwlock_write.get_mut(&addr);
+
+            if let Some(sender) = sender_option {
+              if !sender.is_closed() {
+                let result = http_proxy_kept_alive(sender, proxy_request, error_logger).await;
+                drop(rwlock_write);
+                return result;
+              } else {
+                drop(rwlock_write);
+              }
+            } else {
+              drop(rwlock_write);
+            }
+          } else {
+            drop(rwlock_read);
+          }
+        } else {
+          drop(rwlock_read);
+        }
+
+        let stream = match TcpStream::connect(&addr).await {
           Ok(stream) => stream,
           Err(err) => {
             match err.kind() {
@@ -210,64 +270,13 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           }
         };
 
-        let authority = proxy_request_url.authority().cloned();
-
-        let hyper_request_path = hyper_request_parts.uri.path();
-
-        let path = match hyper_request_path.as_bytes().first() {
-          Some(b'/') => {
-            let mut proxy_request_path = proxy_request_url.path();
-            while proxy_request_path.as_bytes().last().copied() == Some(b'/') {
-              proxy_request_path = &proxy_request_path[..(proxy_request_path.len() - 1)];
-            }
-            format!("{}{}", proxy_request_path, hyper_request_path)
-          }
-          _ => hyper_request_path.to_string(),
-        };
-
-        hyper_request_parts.uri = Uri::from_str(&format!(
-          "{}{}",
-          path,
-          match hyper_request_parts.uri.query() {
-            Some(query) => format!("?{}", query),
-            None => "".to_string(),
-          }
-        ))?;
-
-        // Host header for host identification
-        match authority {
-          Some(authority) => {
-            hyper_request_parts
-              .headers
-              .insert(header::HOST, authority.to_string().parse()?);
-          }
-          None => {
-            hyper_request_parts.headers.remove(header::HOST);
-          }
-        }
-
-        // Connection header to disable HTTP/1.1 keep-alive
-        hyper_request_parts
-          .headers
-          .insert(header::CONNECTION, "close".parse()?);
-
-        // X-Forwarded-For header to send the client's IP to a server that's behind the reverse proxy
-        hyper_request_parts.headers.insert(
-          "x-forwarded-for",
-          socket_data
-            .remote_addr
-            .ip()
-            .to_canonical()
-            .to_string()
-            .parse()?,
-        );
-
-        let proxy_request = Request::from_parts(hyper_request_parts, request_body.boxed());
-
         if !encrypted {
-          http_proxy(stream, proxy_request, error_logger).await
+          http_proxy(self, addr, stream, proxy_request, error_logger).await
         } else {
-          let connector = TlsConnector::from(self.tls_client_config.clone());
+          let tls_client_config = rustls::ClientConfig::builder()
+            .with_root_certificates(self.roots.clone())
+            .with_no_client_auth();
+          let connector = TlsConnector::from(Arc::new(tls_client_config));
           let domain = ServerName::try_from(host)?.to_owned();
 
           let tls_stream = match connector.connect(domain, stream).await {
@@ -282,7 +291,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
             }
           };
 
-          http_proxy(tls_stream, proxy_request, error_logger).await
+          http_proxy(self, addr, tls_stream, proxy_request, error_logger).await
         }
       } else {
         Ok(ResponseData::builder(request).build())
@@ -332,6 +341,8 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
 }
 
 async fn http_proxy(
+  handlers_object: &mut ReverseProxyModuleHandlers,
+  connect_addr: String,
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   proxy_request: Request<BoxBody<Bytes, hyper::Error>>,
   error_logger: &ErrorLogger,
@@ -390,6 +401,39 @@ async fn http_proxy(
       },
     };
   }
+
+  if !sender.is_closed() {
+    let mut rwlock_write = handlers_object.connections.write().await;
+    rwlock_write.insert(connect_addr, sender);
+    drop(rwlock_write);
+  }
+
+  Ok(response)
+}
+
+async fn http_proxy_kept_alive(
+  sender: &mut SendRequest<BoxBody<Bytes, hyper::Error>>,
+  proxy_request: Request<BoxBody<Bytes, hyper::Error>>,
+  error_logger: &ErrorLogger,
+) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
+  let proxy_response = match sender.send_request(proxy_request).await {
+    Ok(response) => response,
+    Err(err) => {
+      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      return Ok(
+        ResponseData::builder_without_request()
+          .status(StatusCode::BAD_GATEWAY)
+          .build(),
+      );
+    }
+  };
+
+  let response = ResponseData::builder_without_request()
+    .response(proxy_response.map(|b| {
+      b.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+        .boxed()
+    }))
+    .build();
 
   Ok(response)
 }

@@ -1878,26 +1878,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "project-karpacz-mod-rproxy"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "futures-util",
- "http-body-util",
- "httparse",
- "hyper",
- "hyper-util",
- "mimalloc",
- "project-karpacz-common",
- "rustls",
- "rustls-native-certs",
- "rusty-hook",
- "tokio",
- "tokio-rustls",
-]
-
-[[package]]
 name = "project-karpacz-passwd"
 version = "0.2.0"
 dependencies = [
