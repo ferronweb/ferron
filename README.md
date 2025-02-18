@@ -60,11 +60,11 @@ Contributions are welcome! If you're interested in helping out, feel free to for
 - [x] Middleware support
 - [x] Logging and error handling improvements
 - [x] HTTPS support
-- [ ] Support for CGI, FastCGI, and SCGI for dynamic content (via a module)
-- [x] Support for forward and reverse proxying (via a module)
-- [ ] Support for caching (via a module)
-- [ ] Support for ModSecurity WAF (via a module that uses the "modsecurity" crate; source only)
-- [ ] Load balancing support (via a module)
+- [ ] Support for CGI, FastCGI, and SCGI for dynamic content (via an optional built-in module)
+- [x] Support for forward and reverse proxying (via an optional built-in module)
+- [ ] Support for caching (via an optional built-in module)
+- [ ] Support for ModSecurity WAF (via a dynamically linked module that uses the "modsecurity" crate; source only)
+- [ ] Load balancing support (via an optional built-in module)
 
 ## License
 
