@@ -4,7 +4,6 @@ members = [
     "project-karpacz-common",
     "project-karpacz-mod-example",
     "project-karpacz-passwd",
-    "project-karpacz-mod-fproxy",
 ]
 resolver = "2"
 

@@ -7,7 +7,6 @@ use http_body_util::BodyExt;
 use hyper::body::Bytes;
 use hyper::{header, Request, StatusCode, Uri};
 use hyper_util::rt::TokioIo;
-use mimalloc::MiMalloc;
 use project_karpacz_common::{
   ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerConfigRoot,
   ServerModule, ServerModuleHandlers, SocketData,
@@ -17,18 +16,6 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio::runtime::Handle;
 
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
-
-#[no_mangle]
-pub fn server_module_validate_config(
-  _config: &ServerConfigRoot,
-  _is_global: bool,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
-  Ok(())
-}
-
-#[no_mangle]
 pub fn server_module_init(
   _config: &ServerConfig,
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
