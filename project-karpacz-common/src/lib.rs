@@ -571,7 +571,7 @@ pub trait ServerModuleHandlers {
   ///
   /// # Returns
   ///
-  /// A `Result` containing a optional `HyperUpgraded` (if it's `None`, then it's the last handler) upon success, or a boxed `dyn Error` if an error occurs.
+  /// A `Result` containing an empty value upon success, or a boxed `dyn Error` if an error occurs.
   async fn connect_proxy_request_handler(
     &mut self,
     upgraded_request: HyperUpgraded,
@@ -579,7 +579,14 @@ pub trait ServerModuleHandlers {
     config: &ServerConfigRoot,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
-  ) -> Result<Option<HyperUpgraded>, Box<dyn Error + Send + Sync>>;
+  ) -> Result<(), Box<dyn Error + Send + Sync>>;
+
+  /// Checks if the module is a forward proxy module utilizing CONNECT method.
+  ///
+  /// # Returns
+  ///
+  /// `true` if the module isn't a forward proxy module utlilzing CONNECT method, or `false` otherwise.
+  fn does_connect_proxy_requests(&mut self) -> bool;
 }
 
 /// Represents a server module that can provide handlers for processing requests.

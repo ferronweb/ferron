@@ -121,13 +121,19 @@ impl ServerModuleHandlers for ExampleModuleHandlers {
   /// Handles CONNECT proxy requests (not used in this module).
   async fn connect_proxy_request_handler(
     &mut self,
-    upgraded_request: HyperUpgraded,
+    _upgraded_request: HyperUpgraded,
     _connect_address: &str,
     _config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
-  ) -> Result<Option<HyperUpgraded>, Box<dyn Error + Send + Sync>> {
+  ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // No proxy request handling needed.
-    Ok(Some(upgraded_request))
+    Ok(())
+  }
+
+  /// Checks if the module is a forward proxy module utilizing CONNECT method.
+  fn does_connect_proxy_requests(&mut self) -> bool {
+    // This is not a forward proxy module utilizing CONNECT method
+    false
   }
 }

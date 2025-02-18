@@ -108,7 +108,11 @@ impl ServerModuleHandlers for DefaultHandlerChecksModuleHandlers {
     _config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
-  ) -> Result<Option<HyperUpgraded>, Box<dyn Error + Send + Sync>> {
-    Ok(None)
+  ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    Ok(())
+  }
+
+  fn does_connect_proxy_requests(&mut self) -> bool {
+    false
   }
 }

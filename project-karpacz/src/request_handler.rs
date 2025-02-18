@@ -687,16 +687,24 @@ pub async fn request_handler(
   };
 
   if is_connect_proxy_request {
-    if let Some(connect_address) = request.uri().authority().map(|auth| auth.to_string()) {
-      // Variables moved to before "tokio::spawn" to avoid issues with moved values
-      let client_ip = socket_data.remote_addr.ip();
-      let custom_headers_yaml = combined_config.get("customHeaders");
+    let mut connect_proxy_handlers = None;
+    for mut handlers in handlers_vec {
+      if handlers.does_connect_proxy_requests() {
+        connect_proxy_handlers = Some(handlers);
+        break;
+      }
+    }
 
-      tokio::spawn(async move {
-        match hyper::upgrade::on(request).await {
-          Ok(mut upgraded_request) => {
-            for mut handlers in handlers_vec {
-              let result = handlers
+    if let Some(mut connect_proxy_handlers) = connect_proxy_handlers {
+      if let Some(connect_address) = request.uri().authority().map(|auth| auth.to_string()) {
+        // Variables moved to before "tokio::spawn" to avoid issues with moved values
+        let client_ip = socket_data.remote_addr.ip();
+        let custom_headers_yaml = combined_config.get("customHeaders");
+
+        tokio::spawn(async move {
+          match hyper::upgrade::on(request).await {
+            Ok(upgraded_request) => {
+              let result = connect_proxy_handlers
                 .connect_proxy_request_handler(
                   upgraded_request,
                   &connect_address,
@@ -706,86 +714,133 @@ pub async fn request_handler(
                 )
                 .await;
               match result {
-                Ok(None) => break,
-                Ok(Some(passed_upgraded_request)) => upgraded_request = passed_upgraded_request,
+                Ok(_) => (),
                 Err(err) => {
                   error_logger
                     .log(&format!("Unexpected error for CONNECT request: {}", err))
                     .await;
-                  break;
                 }
               }
             }
+            Err(err) => {
+              error_logger
+                .log(&format!(
+                  "Error while upgrading HTTP CONNECT request: {}",
+                  err
+                ))
+                .await
+            }
           }
-          Err(err) => {
-            error_logger
-              .log(&format!(
-                "Error while upgrading HTTP CONNECT request: {}",
-                err
-              ))
-              .await
-          }
-        }
-      });
+        });
 
-      let response = Response::builder()
-        .body(Empty::new().map_err(|e| match e {}).boxed())
-        .unwrap_or_default();
+        let response = Response::builder()
+          .body(Empty::new().map_err(|e| match e {}).boxed())
+          .unwrap_or_default();
 
-      if log_enabled {
-        log_combined(
-          &logger,
-          client_ip,
-          None,
-          log_method,
-          log_request_path,
-          log_protocol,
-          response.status().as_u16(),
-          match response.headers().get(header::CONTENT_LENGTH) {
-            Some(header_value) => match header_value.to_str() {
-              Ok(header_value) => match header_value.parse::<u64>() {
-                Ok(content_length) => Some(content_length),
+        if log_enabled {
+          log_combined(
+            &logger,
+            client_ip,
+            None,
+            log_method,
+            log_request_path,
+            log_protocol,
+            response.status().as_u16(),
+            match response.headers().get(header::CONTENT_LENGTH) {
+              Some(header_value) => match header_value.to_str() {
+                Ok(header_value) => match header_value.parse::<u64>() {
+                  Ok(content_length) => Some(content_length),
+                  Err(_) => response.body().size_hint().exact(),
+                },
                 Err(_) => response.body().size_hint().exact(),
               },
-              Err(_) => response.body().size_hint().exact(),
+              None => response.body().size_hint().exact(),
             },
-            None => response.body().size_hint().exact(),
-          },
-          log_referrer,
-          log_user_agent,
-        )
-        .await;
-      }
+            log_referrer,
+            log_user_agent,
+          )
+          .await;
+        }
 
-      let (mut response_parts, response_body) = response.into_parts();
-      if let Some(custom_headers_hash) = custom_headers_yaml.as_hash() {
-        let custom_headers_hash_iter = custom_headers_hash.iter();
-        for (header_name, header_value) in custom_headers_hash_iter {
-          if let Some(header_name) = header_name.as_str() {
-            if let Some(header_value) = header_value.as_str() {
-              if !response_parts.headers.contains_key(header_name) {
-                if let Ok(header_value) = HeaderValue::from_str(header_value) {
-                  if let Ok(header_name) = HeaderName::from_str(header_name) {
-                    response_parts.headers.insert(header_name, header_value);
+        let (mut response_parts, response_body) = response.into_parts();
+        if let Some(custom_headers_hash) = custom_headers_yaml.as_hash() {
+          let custom_headers_hash_iter = custom_headers_hash.iter();
+          for (header_name, header_value) in custom_headers_hash_iter {
+            if let Some(header_name) = header_name.as_str() {
+              if let Some(header_value) = header_value.as_str() {
+                if !response_parts.headers.contains_key(header_name) {
+                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                    if let Ok(header_name) = HeaderName::from_str(header_name) {
+                      response_parts.headers.insert(header_name, header_value);
+                    }
                   }
                 }
               }
             }
           }
         }
+        if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+          response_parts.headers.insert(header::SERVER, server_string);
+        };
+        Ok(Response::from_parts(response_parts, response_body))
+      } else {
+        let response = Response::builder()
+          .status(StatusCode::BAD_REQUEST)
+          .body(Empty::new().map_err(|e| match e {}).boxed())
+          .unwrap_or_default();
+
+        if log_enabled {
+          log_combined(
+            &logger,
+            socket_data.remote_addr.ip(),
+            None,
+            log_method,
+            log_request_path,
+            log_protocol,
+            response.status().as_u16(),
+            match response.headers().get(header::CONTENT_LENGTH) {
+              Some(header_value) => match header_value.to_str() {
+                Ok(header_value) => match header_value.parse::<u64>() {
+                  Ok(content_length) => Some(content_length),
+                  Err(_) => response.body().size_hint().exact(),
+                },
+                Err(_) => response.body().size_hint().exact(),
+              },
+              None => response.body().size_hint().exact(),
+            },
+            log_referrer,
+            log_user_agent,
+          )
+          .await;
+        }
+        let (mut response_parts, response_body) = response.into_parts();
+        if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+          let custom_headers_hash_iter = custom_headers_hash.iter();
+          for (header_name, header_value) in custom_headers_hash_iter {
+            if let Some(header_name) = header_name.as_str() {
+              if let Some(header_value) = header_value.as_str() {
+                if !response_parts.headers.contains_key(header_name) {
+                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                    if let Ok(header_name) = HeaderName::from_str(header_name) {
+                      response_parts.headers.insert(header_name, header_value);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+          response_parts.headers.insert(header::SERVER, server_string);
+        };
+        Ok(Response::from_parts(response_parts, response_body))
       }
-      if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-        response_parts.headers.insert(header::SERVER, server_string);
-      };
-      Ok(Response::from_parts(response_parts, response_body))
     } else {
-      logger
-        .send(LogMessage::new(String::from("Invalid CONNECT host"), true))
-        .await
+      let response = Response::builder()
+        .status(StatusCode::NOT_IMPLEMENTED)
+        .body(Empty::new().map_err(|e| match e {}).boxed())
         .unwrap_or_default();
 
-      let response =
-        generate_error_response(StatusCode::BAD_REQUEST, &combined_config, &None).await;
       if log_enabled {
         log_combined(
           &logger,

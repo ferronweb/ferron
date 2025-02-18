@@ -194,7 +194,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
     _config: &ServerConfigRoot,
     _socket_data: &SocketData,
     error_logger: &ErrorLogger,
-  ) -> Result<Option<HyperUpgraded>, Box<dyn Error + Send + Sync>> {
+  ) -> Result<(), Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       let mut stream = match TcpStream::connect(connect_address).await {
         Ok(stream) => stream,
@@ -202,7 +202,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
           error_logger
             .log(&format!("Cannot connect to the remote server: {}", err))
             .await;
-          return Ok(None);
+          return Ok(());
         }
       };
       match stream.set_nodelay(true) {
@@ -214,7 +214,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
               err
             ))
             .await;
-          return Ok(None);
+          return Ok(());
         }
       };
 
@@ -224,9 +224,13 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
         .await
         .unwrap_or_default();
 
-      Ok(None)
+      Ok(())
     })
     .await
+  }
+
+  fn does_connect_proxy_requests(&mut self) -> bool {
+    true
   }
 }
 

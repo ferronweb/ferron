@@ -797,12 +797,16 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
 
   async fn connect_proxy_request_handler(
     &mut self,
-    upgraded_request: HyperUpgraded,
+    _upgraded_request: HyperUpgraded,
     _connect_address: &str,
     _config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
-  ) -> Result<Option<HyperUpgraded>, Box<dyn Error + Send + Sync>> {
-    Ok(Some(upgraded_request))
+  ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    Ok(())
+  }
+
+  fn does_connect_proxy_requests(&mut self) -> bool {
+    false
   }
 }
