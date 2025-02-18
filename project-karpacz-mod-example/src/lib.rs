@@ -1,3 +1,7 @@
+// Current limitation of external modules (as dynamic libraries)
+// - TcpStream (as a client connection) will hang the server for high concurrency
+// - tokio::spawn will hang the server
+
 use std::error::Error;
 
 use async_trait::async_trait;
