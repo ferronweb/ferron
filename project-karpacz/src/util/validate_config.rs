@@ -17,7 +17,7 @@ fn validate_ip(ip: &str) -> bool {
 pub fn validate_config(
   config: &ServerConfigRoot,
   is_global: bool,
-  modules_optional_builtin: &Vec<String>,
+  modules_optional_builtin: &[String],
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   let domain_badvalue = config.get("domain").is_badvalue();
   let ip_badvalue = config.get("ip").is_badvalue();

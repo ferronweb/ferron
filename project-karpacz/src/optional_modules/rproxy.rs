@@ -53,12 +53,14 @@ pub fn server_module_init(
   )))
 }
 
+#[allow(clippy::type_complexity)]
 struct ReverseProxyModule {
   roots: Arc<RootCertStore>,
   connections: Arc<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>,
 }
 
 impl ReverseProxyModule {
+  #[allow(clippy::type_complexity)]
   fn new(
     roots: Arc<RootCertStore>,
     connections: Arc<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>,
