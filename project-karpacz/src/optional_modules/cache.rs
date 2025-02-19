@@ -19,7 +19,8 @@ use project_karpacz_common::{HyperResponse, WithRuntime};
 use tokio::runtime::Handle;
 use tokio::sync::RwLock;
 
-static CACHE_HEADER_NAME: &str = "X-Project-Karpacz-Cache";
+const CACHE_HEADER_NAME: &str = "X-Project-Karpacz-Cache";
+const DEFAULT_MAX_AGE: u64 = 300;
 
 pub fn server_module_init(
   _config: &ServerConfig,
@@ -246,7 +247,7 @@ impl ServerModuleHandlers for CacheModuleHandlers {
 
             let mut cached = true;
 
-            if timestamp.elapsed() > max_age.unwrap_or(Duration::from_secs(300)) {
+            if timestamp.elapsed() > max_age.unwrap_or(Duration::from_secs(DEFAULT_MAX_AGE)) {
               cached = false;
             }
 
@@ -410,6 +411,17 @@ impl ServerModuleHandlers for CacheModuleHandlers {
               }
 
               let mut rwlock_write = self.cache.write().await;
+              rwlock_write.retain(|_, (_, _, _, timestamp, response_cache_control)| {
+                let max_age = match response_cache_control {
+                  Some(response_cache_control) => match response_cache_control.s_max_age {
+                    Some(s_max_age) => Some(s_max_age),
+                    None => response_cache_control.max_age,
+                  },
+                  None => None,
+                };
+
+                timestamp.elapsed() <= max_age.unwrap_or(Duration::from_secs(DEFAULT_MAX_AGE))
+              });
               rwlock_write.insert(
                 cache_key_with_vary,
                 (
