@@ -147,7 +147,7 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
    -  A list of request headers that can vary in a cache. Supplements the “Vary” response header. Default: None
 - **cacheIgnoreHeaders** (*Array&lt;String&gt;*; *cache* module)
    -  A list of response headers that will not be stored in a cache. Default: None
-- **maximumCacheResponseSize** (*Number* or `null`; *cache* module)
+- **maximumCacheResponseSize** (*u64* or `null`; *cache* module)
    -  A maximum response size to be cached in bytes. If `null`, the maximum response size is unlimited theoretically. Default: `null`
 
 ## Example configuration
