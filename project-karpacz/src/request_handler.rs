@@ -929,7 +929,29 @@ pub async fn request_handler(
             tokio::spawn(parallel_fn);
           }
           match response {
-            Some(mut response) => {
+            Some(response) => {
+              let (mut response_parts, response_body) = response.into_parts();
+              if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+                let custom_headers_hash_iter = custom_headers_hash.iter();
+                for (header_name, header_value) in custom_headers_hash_iter {
+                  if let Some(header_name) = header_name.as_str() {
+                    if let Some(header_value) = header_value.as_str() {
+                      if !response_parts.headers.contains_key(header_name) {
+                        if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                          if let Ok(header_name) = HeaderName::from_str(header_name) {
+                            response_parts.headers.insert(header_name, header_value);
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+                response_parts.headers.insert(header::SERVER, server_string);
+              };
+              let mut response = Response::from_parts(response_parts, response_body);
+
               while let Some(mut executed_handler) = executed_handlers.pop() {
                 let response_status = match is_proxy_request {
                   true => {
@@ -1034,32 +1056,32 @@ pub async fn request_handler(
                 .await;
               }
 
-              let (mut response_parts, response_body) = response.into_parts();
-              if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
-                let custom_headers_hash_iter = custom_headers_hash.iter();
-                for (header_name, header_value) in custom_headers_hash_iter {
-                  if let Some(header_name) = header_name.as_str() {
-                    if let Some(header_value) = header_value.as_str() {
-                      if !response_parts.headers.contains_key(header_name) {
-                        if let Ok(header_value) = HeaderValue::from_str(header_value) {
-                          if let Ok(header_name) = HeaderName::from_str(header_name) {
-                            response_parts.headers.insert(header_name, header_value);
+              return Ok(response);
+            }
+            None => match status {
+              Some(status) => {
+                let response = generate_error_response(status, &combined_config, &headers).await;
+                let (mut response_parts, response_body) = response.into_parts();
+                if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+                  let custom_headers_hash_iter = custom_headers_hash.iter();
+                  for (header_name, header_value) in custom_headers_hash_iter {
+                    if let Some(header_name) = header_name.as_str() {
+                      if let Some(header_value) = header_value.as_str() {
+                        if !response_parts.headers.contains_key(header_name) {
+                          if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                            if let Ok(header_name) = HeaderName::from_str(header_name) {
+                              response_parts.headers.insert(header_name, header_value);
+                            }
                           }
                         }
                       }
                     }
                   }
                 }
-              }
-              if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-                response_parts.headers.insert(header::SERVER, server_string);
-              };
-              return Ok(Response::from_parts(response_parts, response_body));
-            }
-            None => match status {
-              Some(status) => {
-                let mut response =
-                  generate_error_response(status, &combined_config, &headers).await;
+                if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+                  response_parts.headers.insert(header::SERVER, server_string);
+                };
+                let mut response = Response::from_parts(response_parts, response_body);
 
                 while let Some(mut executed_handler) = executed_handlers.pop() {
                   let response_status = match is_proxy_request {
@@ -1164,27 +1186,7 @@ pub async fn request_handler(
                   )
                   .await;
                 }
-                let (mut response_parts, response_body) = response.into_parts();
-                if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
-                  let custom_headers_hash_iter = custom_headers_hash.iter();
-                  for (header_name, header_value) in custom_headers_hash_iter {
-                    if let Some(header_name) = header_name.as_str() {
-                      if let Some(header_value) = header_value.as_str() {
-                        if !response_parts.headers.contains_key(header_name) {
-                          if let Ok(header_value) = HeaderValue::from_str(header_value) {
-                            if let Ok(header_name) = HeaderName::from_str(header_name) {
-                              response_parts.headers.insert(header_name, header_value);
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-                if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-                  response_parts.headers.insert(header::SERVER, server_string);
-                };
-                return Ok(Response::from_parts(response_parts, response_body));
+                return Ok(response);
               }
               None => match request_option {
                 Some(request) => {
@@ -1199,9 +1201,32 @@ pub async fn request_handler(
           }
         }
         Err(err) => {
-          let mut response =
+          let response =
             generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &combined_config, &None)
               .await;
+
+          let (mut response_parts, response_body) = response.into_parts();
+          if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+            let custom_headers_hash_iter = custom_headers_hash.iter();
+            for (header_name, header_value) in custom_headers_hash_iter {
+              if let Some(header_name) = header_name.as_str() {
+                if let Some(header_value) = header_value.as_str() {
+                  if !response_parts.headers.contains_key(header_name) {
+                    if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                      if let Ok(header_name) = HeaderName::from_str(header_name) {
+                        response_parts.headers.insert(header_name, header_value);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+            response_parts.headers.insert(header::SERVER, server_string);
+          };
+
+          let mut response = Response::from_parts(response_parts, response_body);
 
           while let Some(mut executed_handler) = executed_handlers.pop() {
             let response_status = match is_proxy_request {
@@ -1314,33 +1339,34 @@ pub async fn request_handler(
             )
             .await;
           }
-          let (mut response_parts, response_body) = response.into_parts();
-          if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
-            let custom_headers_hash_iter = custom_headers_hash.iter();
-            for (header_name, header_value) in custom_headers_hash_iter {
-              if let Some(header_name) = header_name.as_str() {
-                if let Some(header_value) = header_value.as_str() {
-                  if !response_parts.headers.contains_key(header_name) {
-                    if let Ok(header_value) = HeaderValue::from_str(header_value) {
-                      if let Ok(header_name) = HeaderName::from_str(header_name) {
-                        response_parts.headers.insert(header_name, header_value);
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-          if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-            response_parts.headers.insert(header::SERVER, server_string);
-          };
-          return Ok(Response::from_parts(response_parts, response_body));
+          return Ok(response);
         }
       }
     }
 
-    let mut response =
-      generate_error_response(StatusCode::NOT_FOUND, &combined_config, &None).await;
+    let response = generate_error_response(StatusCode::NOT_FOUND, &combined_config, &None).await;
+
+    let (mut response_parts, response_body) = response.into_parts();
+    if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+      let custom_headers_hash_iter = custom_headers_hash.iter();
+      for (header_name, header_value) in custom_headers_hash_iter {
+        if let Some(header_name) = header_name.as_str() {
+          if let Some(header_value) = header_value.as_str() {
+            if !response_parts.headers.contains_key(header_name) {
+              if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                if let Ok(header_name) = HeaderName::from_str(header_name) {
+                  response_parts.headers.insert(header_name, header_value);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+      response_parts.headers.insert(header::SERVER, server_string);
+    };
+    let mut response = Response::from_parts(response_parts, response_body);
 
     while let Some(mut executed_handler) = executed_handlers.pop() {
       let response_status = match is_proxy_request {
@@ -1440,26 +1466,6 @@ pub async fn request_handler(
       )
       .await;
     }
-    let (mut response_parts, response_body) = response.into_parts();
-    if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
-      let custom_headers_hash_iter = custom_headers_hash.iter();
-      for (header_name, header_value) in custom_headers_hash_iter {
-        if let Some(header_name) = header_name.as_str() {
-          if let Some(header_value) = header_value.as_str() {
-            if !response_parts.headers.contains_key(header_name) {
-              if let Ok(header_value) = HeaderValue::from_str(header_value) {
-                if let Ok(header_name) = HeaderName::from_str(header_name) {
-                  response_parts.headers.insert(header_name, header_value);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-      response_parts.headers.insert(header::SERVER, server_string);
-    };
-    Ok(Response::from_parts(response_parts, response_body))
+    Ok(response)
   }
 }
