@@ -645,18 +645,59 @@ pub fn validate_config(
   }
 
   for module_optional_builtin in modules_optional_builtin.iter() {
-    if module_optional_builtin as &str == "rproxy" {
-      if !config.get("proxyTo").is_badvalue() && config.get("proxyTo").as_str().is_none() {
-        Err(anyhow::anyhow!("Invalid reverse proxy target URL value"))?
-      }
+    match module_optional_builtin as &str {
+      "rproxy" => {
+        if !config.get("proxyTo").is_badvalue() && config.get("proxyTo").as_str().is_none() {
+          Err(anyhow::anyhow!("Invalid reverse proxy target URL value"))?
+        }
 
-      if !config.get("secureProxyTo").is_badvalue()
-        && config.get("secureProxyTo").as_str().is_none()
-      {
-        Err(anyhow::anyhow!(
-          "Invalid secure reverse proxy target URL value"
-        ))?
+        if !config.get("secureProxyTo").is_badvalue()
+          && config.get("secureProxyTo").as_str().is_none()
+        {
+          Err(anyhow::anyhow!(
+            "Invalid secure reverse proxy target URL value"
+          ))?
+        }
       }
+      "cache" => {
+        if !config.get("cacheVaryHeaders").is_badvalue() {
+          if let Some(modules) = config.get("cacheVaryHeaders").as_vec() {
+            let modules_iter = modules.iter();
+            for module_name_yaml in modules_iter {
+              if module_name_yaml.as_str().is_none() {
+                Err(anyhow::anyhow!("Invalid varying cache header"))?
+              }
+            }
+          } else {
+            Err(anyhow::anyhow!(
+              "Invalid varying cache headers configuration"
+            ))?
+          }
+        }
+
+        if !config.get("cacheIgnoreHeaders").is_badvalue() {
+          if let Some(modules) = config.get("cacheIgnoreHeaders").as_vec() {
+            let modules_iter = modules.iter();
+            for module_name_yaml in modules_iter {
+              if module_name_yaml.as_str().is_none() {
+                Err(anyhow::anyhow!("Invalid ignored cache header"))?
+              }
+            }
+          } else {
+            Err(anyhow::anyhow!(
+              "Invalid ignored cache headers configuration"
+            ))?
+          }
+        }
+
+        if !config.get("maximumCacheResponseSize").is_badvalue()
+          && !config.get("maximumCacheResponseSize").is_null()
+          && config.get("maximumCacheResponseSize").as_bool().is_none()
+        {
+          Err(anyhow::anyhow!("Invalid maximum cache response size"))?
+        }
+      }
+      _ => (),
     }
   }
 

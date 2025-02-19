@@ -48,6 +48,7 @@ mod project_karpacz_modules {
 // Import optional project modules from "modules" directory
 #[path = "optional_modules"]
 mod project_karpacz_optional_modules {
+  pub mod cache;
   pub mod fproxy;
   pub mod rproxy;
 }
@@ -127,7 +128,7 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
     for module_name_yaml in modules.iter() {
       if let Some(module_name) = module_name_yaml.as_str() {
         let lib = match module_name {
-          "rproxy" | "fproxy" => None,
+          "rproxy" | "fproxy" | "cache" => None,
           _ => Some(
             match unsafe {
               Library::new(library_filename(format!(
@@ -226,6 +227,23 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
         "fproxy" => {
           external_modules.push(
             match project_karpacz_optional_modules::fproxy::server_module_init(&yaml_config) {
+              Ok(module) => module,
+              Err(err) => {
+                module_error = Some(anyhow::anyhow!(
+                  "Cannot initialize optional built-in module \"{}\": {}",
+                  module_name,
+                  err
+                ));
+                break;
+              }
+            },
+          );
+
+          modules_optional_builtin.push(module_name.clone());
+        }
+        "cache" => {
+          external_modules.push(
+            match project_karpacz_optional_modules::cache::server_module_init(&yaml_config) {
               Ok(module) => module,
               Err(err) => {
                 module_error = Some(anyhow::anyhow!(

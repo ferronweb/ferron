@@ -182,6 +182,15 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
 - **secureProxyTo** (*String*; *rproxy* module; Project Karpacz 0.2.0 and newer)
    - Base URL, which reverse proxy will send requests to, if the client is connected via HTTPS. HTTP and HTTPS URLs are supported. Default: None
 
+-  **cacheVaryHeaders** (*Array&lt;String&gt;*; *cache* module)
+   -  A list of request headers that can vary in a cache. Supplements the “Vary” response header. Default: None
+
+-  **cacheIgnoreHeaders** (*Array&lt;String&gt;*; *cache* module)
+   -  A list of response headers that will not be stored in a cache. Default: None
+
+-  **maximumCacheResponseSize** (*Number* or `null`; *cache* module)
+   -  A maximum response size to be cached in bytes. If `null`, the maximum response size is unlimited theoretically. Default: `null`
+
 ## Example configuration
 
 Below is the example Project Karpacz web server configuration:
