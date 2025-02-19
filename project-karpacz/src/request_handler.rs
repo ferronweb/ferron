@@ -342,12 +342,15 @@ pub async fn request_handler(
   let combined_config = match combine_config(
     global_config_root,
     host_config,
-    match request.headers().get(header::HOST) {
-      Some(value) => match value.to_str() {
-        Ok(value) => Some(value),
-        Err(_) => None,
+    match is_proxy_request || is_connect_proxy_request {
+      false => match request.headers().get(header::HOST) {
+        Some(value) => match value.to_str() {
+          Ok(value) => Some(value),
+          Err(_) => None,
+        },
+        None => None,
       },
-      None => None,
+      true => None,
     },
     local_address.ip(),
   ) {
