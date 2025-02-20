@@ -85,6 +85,7 @@ impl ServerModule for ReverseProxyModule {
   }
 }
 
+#[allow(clippy::type_complexity)]
 struct ReverseProxyModuleHandlers {
   handle: Handle,
   roots: Arc<RootCertStore>,
