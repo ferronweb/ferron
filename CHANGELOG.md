@@ -1,7 +1,7 @@
 # Project Karpacz change log
 
-## Project Karpacz UNRELEASED
-**Not released yet**
+## Project Karpacz 0.4.0
+**Released in February 20, 2025**
 
 - Added a caching module (*cache*)
 - Added concurrency for the keep-alive connection pool in the *rproxy* module.
