@@ -1,5 +1,14 @@
 # Project Karpacz change log
 
+## Project Karpacz UNRELEASED
+**Not released yet**
+
+- Added a caching module (*cache*)
+- Added concurrency for the keep-alive connection pool in the *rproxy* module.
+- Added support for randomly-distributed load balancing in the *rproxy* module.
+- The web server no longer applies host configuration for forward proxy requests.
+- The web server now adds custom headers before executing response modifying handlers.
+
 ## Project Karpacz 0.3.0
 **Released in February 18, 2025**
 
