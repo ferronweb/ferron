@@ -24,6 +24,8 @@ use tokio::runtime::Handle;
 use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
 
+const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
+
 pub fn server_module_init(
   _config: &ServerConfig,
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
@@ -47,23 +49,27 @@ pub fn server_module_init(
     }
   }
 
+  let mut connections_vec = Vec::new();
+  for _ in 0..DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST {
+    connections_vec.push(RwLock::new(HashMap::new()));
+  }
   Ok(Box::new(ReverseProxyModule::new(
     Arc::new(roots),
-    Arc::new(RwLock::new(HashMap::new())),
+    Arc::new(connections_vec),
   )))
 }
 
 #[allow(clippy::type_complexity)]
 struct ReverseProxyModule {
   roots: Arc<RootCertStore>,
-  connections: Arc<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>,
+  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
 }
 
 impl ReverseProxyModule {
   #[allow(clippy::type_complexity)]
   fn new(
     roots: Arc<RootCertStore>,
-    connections: Arc<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>,
+    connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
   ) -> Self {
     ReverseProxyModule { roots, connections }
   }
@@ -82,7 +88,7 @@ impl ServerModule for ReverseProxyModule {
 struct ReverseProxyModuleHandlers {
   handle: Handle,
   roots: Arc<RootCertStore>,
-  connections: Arc<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>,
+  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
 }
 
 #[async_trait]
@@ -142,7 +148,6 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
         });
 
         let addr = format!("{}:{}", host, port);
-
         let authority = proxy_request_url.authority().cloned();
 
         let hyper_request_path = hyper_request_parts.uri.path();
@@ -197,13 +202,15 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
 
         let proxy_request = Request::from_parts(hyper_request_parts, request_body.boxed());
 
-        let rwlock_read = self.connections.read().await;
+        let connections = &self.connections[rand::random_range(..self.connections.len())];
+
+        let rwlock_read = connections.read().await;
         let sender_read_option = rwlock_read.get(&addr);
 
         if let Some(sender_read) = sender_read_option {
           if !sender_read.is_closed() {
             drop(rwlock_read);
-            let mut rwlock_write = self.connections.write().await;
+            let mut rwlock_write = connections.write().await;
             let sender_option = rwlock_write.get_mut(&addr);
 
             if let Some(sender) = sender_option {
@@ -273,7 +280,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
         };
 
         if !encrypted {
-          http_proxy(self, addr, stream, proxy_request, error_logger).await
+          http_proxy(connections, addr, stream, proxy_request, error_logger).await
         } else {
           let tls_client_config = rustls::ClientConfig::builder()
             .with_root_certificates(self.roots.clone())
@@ -293,7 +300,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
             }
           };
 
-          http_proxy(self, addr, tls_stream, proxy_request, error_logger).await
+          http_proxy(connections, addr, tls_stream, proxy_request, error_logger).await
         }
       } else {
         Ok(ResponseData::builder(request).build())
@@ -343,7 +350,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
 }
 
 async fn http_proxy(
-  handlers_object: &mut ReverseProxyModuleHandlers,
+  connections: &RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>,
   connect_addr: String,
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   proxy_request: Request<BoxBody<Bytes, hyper::Error>>,
@@ -405,7 +412,7 @@ async fn http_proxy(
   }
 
   if !sender.is_closed() {
-    let mut rwlock_write = handlers_object.connections.write().await;
+    let mut rwlock_write = connections.write().await;
     rwlock_write.insert(connect_addr, sender);
     drop(rwlock_write);
   }
