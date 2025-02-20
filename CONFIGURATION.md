@@ -55,7 +55,7 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
 - **disableNonEncryptedServer** (*bool*)
    - Option to disable the HTTP server if the HTTPS server is running. When set to `true`, the server will only accept HTTPS connections and will disable the HTTP server. Default: `false`
 - **blocklist** (*Array&lt;String&gt;*)
-   - IP block list. This setting specifies an array of IP addresses that the server will block from accessing its services. Default: None
+   - IP block list. This setting specifies an array of IP addresses that the server will block from accessing its services. The block list will only work with non-forward proxy requests. Default: None
 - **enableOCSPStapling** (*bool*)
    - Option to enable OCSP stapling. When set to `true`, the server will use OCSP stapling to provide certificate revocation status to clients. Default: `false`
 - **environmentVariables** (*Object*)
