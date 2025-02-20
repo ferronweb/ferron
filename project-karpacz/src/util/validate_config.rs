@@ -710,9 +710,15 @@ pub fn validate_config(
 
         if !config.get("maximumCacheResponseSize").is_badvalue()
           && !config.get("maximumCacheResponseSize").is_null()
-          && config.get("maximumCacheResponseSize").as_bool().is_none()
         {
-          Err(anyhow::anyhow!("Invalid maximum cache response size"))?
+          if let Some(maximum_cache_response_size) = config.get("maximumCacheResponseSize").as_i64()
+          {
+            if maximum_cache_response_size < 0 {
+              Err(anyhow::anyhow!("Invalid maximum cache response size"))?
+            }
+          } else {
+            Err(anyhow::anyhow!("Invalid maximum cache response size"))?
+          }
         }
       }
       _ => (),
