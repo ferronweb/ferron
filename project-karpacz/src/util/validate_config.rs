@@ -647,16 +647,34 @@ pub fn validate_config(
   for module_optional_builtin in modules_optional_builtin.iter() {
     match module_optional_builtin as &str {
       "rproxy" => {
-        if !config.get("proxyTo").is_badvalue() && config.get("proxyTo").as_str().is_none() {
-          Err(anyhow::anyhow!("Invalid reverse proxy target URL value"))?
+        if !config.get("proxyTo").is_badvalue() {
+          if let Some(proxy_urls) = config.get("proxyTo").as_vec() {
+            let proxy_urls_iter = proxy_urls.iter();
+            for proxy_url_yaml in proxy_urls_iter {
+              if proxy_url_yaml.as_str().is_none() {
+                Err(anyhow::anyhow!("Invalid reverse proxy target URL value"))?
+              }
+            }
+          } else if config.get("proxyTo").as_str().is_none() {
+            Err(anyhow::anyhow!("Invalid reverse proxy target URL value"))?
+          }
         }
 
-        if !config.get("secureProxyTo").is_badvalue()
-          && config.get("secureProxyTo").as_str().is_none()
-        {
-          Err(anyhow::anyhow!(
-            "Invalid secure reverse proxy target URL value"
-          ))?
+        if !config.get("secureProxyTo").is_badvalue() {
+          if let Some(proxy_urls) = config.get("secureProxyTo").as_vec() {
+            let proxy_urls_iter = proxy_urls.iter();
+            for proxy_url_yaml in proxy_urls_iter {
+              if proxy_url_yaml.as_str().is_none() {
+                Err(anyhow::anyhow!(
+                  "Invalid secure reverse proxy target URL value"
+                ))?
+              }
+            }
+          } else if config.get("secureProxyTo").as_str().is_none() {
+            Err(anyhow::anyhow!(
+              "Invalid secure reverse proxy target URL value"
+            ))?
+          }
         }
       }
       "cache" => {

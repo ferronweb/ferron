@@ -103,15 +103,37 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
     WithRuntime::new(self.handle.clone(), async move {
       let mut proxy_to = None;
 
+      // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
+      // The "proxyTo" and "secureProxyTo" are validated though.
+
       if socket_data.encrypted {
-        if let Some(secure_proxy_to) = config.get("secureProxyTo").as_str() {
+        let secure_proxy_to_yaml = config.get("secureProxyTo");
+        if let Some(secure_proxy_to_vector) = secure_proxy_to_yaml.as_vec() {
+          if !secure_proxy_to_vector.is_empty() {
+            if let Some(secure_proxy_to) =
+              secure_proxy_to_vector[rand::random_range(..secure_proxy_to_vector.len())].as_str()
+            {
+              proxy_to = Some(secure_proxy_to.to_string());
+            }
+          }
+        } else if let Some(secure_proxy_to) = secure_proxy_to_yaml.as_str() {
           proxy_to = Some(secure_proxy_to.to_string());
         }
       }
 
       if proxy_to.is_none() {
         let proxy_to_yaml = config.get("proxyTo");
-        proxy_to = proxy_to_yaml.as_str().map(|s| s.to_string());
+        if let Some(proxy_to_vector) = proxy_to_yaml.as_vec() {
+          if !proxy_to_vector.is_empty() {
+            if let Some(proxy_to_str) =
+              proxy_to_vector[rand::random_range(..proxy_to_vector.len())].as_str()
+            {
+              proxy_to = Some(proxy_to_str.to_string());
+            }
+          }
+        } else if let Some(proxy_to_str) = proxy_to_yaml.as_str() {
+          proxy_to = Some(proxy_to_str.to_string());
+        }
       }
 
       if let Some(proxy_to) = proxy_to {
