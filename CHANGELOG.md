@@ -1,5 +1,10 @@
 # Project Karpacz change log
 
+## Project Karpacz UNRELEASED
+**Not released yet**
+
+- Decreased the cache TTL for static file serving and trailing slash redirects from 1s to 100ms
+
 ## Project Karpacz 0.4.0
 **Released in February 20, 2025**
 

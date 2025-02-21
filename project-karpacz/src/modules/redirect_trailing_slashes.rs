@@ -19,7 +19,7 @@ use crate::project_karpacz_util::ttl_cache::TtlCache;
 
 pub fn server_module_init(
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
-  let cache = Arc::new(RwLock::new(TtlCache::new(Duration::new(1, 0))));
+  let cache = Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(100))));
   Ok(Box::new(RedirectTrailingSlashesModule::new(cache)))
 }
 
