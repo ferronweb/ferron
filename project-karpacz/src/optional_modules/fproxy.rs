@@ -153,7 +153,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
         .headers
         .insert(header::CONNECTION, "close".parse()?);
 
-      let proxy_request = Request::from_parts(hyper_request_parts, request_body.boxed());
+      let proxy_request = Request::from_parts(hyper_request_parts, request_body);
 
       http_proxy(stream, proxy_request, error_logger).await
     })

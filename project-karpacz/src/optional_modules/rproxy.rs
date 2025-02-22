@@ -223,7 +223,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
             .parse()?,
         );
 
-        let proxy_request = Request::from_parts(hyper_request_parts, request_body.boxed());
+        let proxy_request = Request::from_parts(hyper_request_parts, request_body);
 
         let connections = &self.connections[rand::random_range(..self.connections.len())];
 

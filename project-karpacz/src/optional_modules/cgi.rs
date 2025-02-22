@@ -580,7 +580,7 @@ async fn execute_cgi(
 
   let mut child = command.spawn()?;
 
-  let cgi_stdin_reader = CgiStdinReader::new(body.boxed());
+  let cgi_stdin_reader = CgiStdinReader::new(body);
 
   let stdin = match child.stdin.take() {
     Some(stdin) => stdin,

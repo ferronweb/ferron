@@ -3,11 +3,7 @@ use std::{collections::HashMap, error::Error, future::Future, net::SocketAddr, p
 use async_channel::Sender;
 use async_trait::async_trait;
 use http_body_util::combinators::BoxBody;
-use hyper::{
-  body::{Bytes, Incoming},
-  upgrade::Upgraded,
-  HeaderMap, Request, Response, StatusCode,
-};
+use hyper::{body::Bytes, upgrade::Upgraded, HeaderMap, Request, Response, StatusCode};
 use tokio::runtime::Handle;
 use yaml_rust2::Yaml;
 
@@ -53,7 +49,7 @@ pub type LogMessage = crate::log::LogMessage;
 pub type ServerConfig = Yaml;
 
 /// Represents the HTTP request from Hyper.
-pub type HyperRequest = Request<Incoming>;
+pub type HyperRequest = Request<BoxBody<Bytes, hyper::Error>>;
 
 /// Represents the HTTP response from Hyper.
 pub type HyperResponse = Response<BoxBody<Bytes, std::io::Error>>;
@@ -68,7 +64,7 @@ pub type WithRuntime<F> = crate::with_runtime::WithRuntime<F>;
 /// Contains data related to an HTTP request, including the original Hyper request
 /// and optional authentication user information.
 pub struct RequestData {
-  hyper_request: Request<Incoming>,
+  hyper_request: HyperRequest,
   auth_user: Option<String>,
 }
 
@@ -83,7 +79,7 @@ impl RequestData {
   /// # Returns
   ///
   /// A new `RequestData` instance with the provided parameters.
-  pub fn new(hyper_request: Request<Incoming>, auth_user: Option<String>) -> Self {
+  pub fn new(hyper_request: HyperRequest, auth_user: Option<String>) -> Self {
     RequestData {
       hyper_request,
       auth_user,
@@ -115,8 +111,8 @@ impl RequestData {
   ///
   /// # Returns
   ///
-  /// A reference to the Hyper `Request<Incoming>` object.
-  pub fn get_hyper_request(&self) -> &Request<Incoming> {
+  /// A reference to the `HyperRequest` object.
+  pub fn get_hyper_request(&self) -> &HyperRequest {
     &self.hyper_request
   }
 
@@ -124,8 +120,8 @@ impl RequestData {
   ///
   /// # Returns
   ///
-  /// A mutable reference to the Hyper `Request<Incoming>` object.
-  pub fn get_mut_hyper_request(&mut self) -> &mut Request<Incoming> {
+  /// A mutable reference to the `HyperRequest` object.
+  pub fn get_mut_hyper_request(&mut self) -> &mut HyperRequest {
     &mut self.hyper_request
   }
 
@@ -133,8 +129,8 @@ impl RequestData {
   ///
   /// # Returns
   ///
-  /// A tuple containing the Hyper `Request<Incoming>` object and an optional authenticated user string.
-  pub fn into_parts(self) -> (Request<Incoming>, Option<String>) {
+  /// A tuple containing the `HyperRequest` object and an optional authenticated user string.
+  pub fn into_parts(self) -> (HyperRequest, Option<String>) {
     (self.hyper_request, self.auth_user)
   }
 }
@@ -213,7 +209,7 @@ impl Clone for ErrorLogger {
 /// Holds data related to an HTTP response, including the original request,
 /// optional authentication user information, and the response details.
 pub struct ResponseData {
-  request: Option<Request<Incoming>>,
+  request: Option<HyperRequest>,
   auth_user: Option<String>,
   response: Option<Response<BoxBody<Bytes, std::io::Error>>>,
   response_status: Option<StatusCode>,
@@ -268,7 +264,7 @@ impl ResponseData {
   /// # Returns
   ///
   /// A tuple containing:
-  /// - The optional original Hyper `Request<Incoming>` object.
+  /// - The optional original `HyperRequest` object.
   /// - An optional authenticated user string.
   /// - An optional `Response` object encapsulated in a `BoxBody` with `Bytes` and `std::io::Error`.
   /// - An optional HTTP `StatusCode`.
@@ -279,7 +275,7 @@ impl ResponseData {
   pub fn into_parts(
     self,
   ) -> (
-    Option<Request<Incoming>>,
+    Option<HyperRequest>,
     Option<String>,
     Option<Response<BoxBody<Bytes, std::io::Error>>>,
     Option<StatusCode>,
@@ -300,7 +296,7 @@ impl ResponseData {
 }
 
 pub struct ResponseDataBuilder {
-  request: Option<Request<Incoming>>,
+  request: Option<HyperRequest>,
   auth_user: Option<String>,
   response: Option<Response<BoxBody<Bytes, std::io::Error>>>,
   response_status: Option<StatusCode>,

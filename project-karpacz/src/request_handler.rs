@@ -13,7 +13,7 @@ use chrono::prelude::*;
 use futures_util::TryStreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
-use hyper::body::{Body, Bytes, Frame, Incoming};
+use hyper::body::{Body, Bytes, Frame};
 use hyper::header::{self, HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
 use project_karpacz_common::{
@@ -154,7 +154,7 @@ async fn log_combined(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn request_handler(
-  mut request: Request<Incoming>,
+  mut request: Request<BoxBody<Bytes, hyper::Error>>,
   remote_address: SocketAddr,
   local_address: SocketAddr,
   encrypted: bool,

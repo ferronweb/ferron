@@ -12,6 +12,7 @@ use crate::project_karpacz_util::validate_config::{
 
 use async_channel::Sender;
 use chrono::prelude::*;
+use http_body_util::BodyExt;
 use hyper::body::Incoming;
 use hyper::service::service_fn;
 use hyper::Request;
@@ -135,6 +136,8 @@ async fn accept_connection(
             let host_config = host_config.clone();
             let logger = logger_clone.clone();
             let handlers_vec_clone = handlers_vec.clone();
+            let (request_parts, request_body) = request.into_parts();
+            let request = Request::from_parts(request_parts, request_body.boxed());
             async move {
               request_handler(
                 request,
@@ -204,6 +207,8 @@ async fn accept_connection(
             let host_config = host_config.clone();
             let logger = logger_clone.clone();
             let handlers_vec_clone = handlers_vec.clone();
+            let (request_parts, request_body) = request.into_parts();
+            let request = Request::from_parts(request_parts, request_body.boxed());
             async move {
               request_handler(
                 request,
