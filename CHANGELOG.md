@@ -1,7 +1,7 @@
 # Project Karpacz change log
 
-## Project Karpacz UNRELEASED
-**Not released yet**
+## Project Karpacz 0.5.0
+**Released in February 22, 2025**
 
 - Added a CGI module (*cgi*)
 - Decreased the cache TTL for static file serving and trailing slash redirects from 1s to 100ms
