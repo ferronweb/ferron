@@ -1,4 +1,19 @@
 // Sizify function taken from SVR.JS and rewritten from JavaScript to Rust
+// SVR.JS is licensed under MIT, so below is the copyright notice:
+//
+// Copyright (c) 2024-2025 SVR.JS
+// Portions of this file are derived from SVR.JS (https://git.svrjs.org/svrjs/svrjs).
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
 pub fn sizify(bytes: u64, add_i: bool) -> String {
   if bytes == 0 {
     return "0".to_string();
