@@ -5,6 +5,7 @@
 
 - Added a CGI module (*cgi*)
 - Decreased the cache TTL for static file serving and trailing slash redirects from 1s to 100ms
+- Rewritten HTTP status code descriptions
 - The request handler now uses a `Request<BoxBody<Bytes, hyper::Error>>` object instead of `Request<Incoming>` object.
 
 ## Project Karpacz 0.4.0
