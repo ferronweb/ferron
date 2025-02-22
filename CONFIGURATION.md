@@ -149,6 +149,10 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
    - A list of response headers that will not be stored in a cache. Default: None
 - **maximumCacheResponseSize** (*u64* or `null`; *cache* module; Project Karpacz 0.4.0 and newer)
    - A maximum response size to be cached in bytes. If `null`, the maximum response size is unlimited theoretically. Default: `null`
+- **cgiScriptExtensions** (*Array&lt;String&gt;*; *cgi* module; Project Karpacz UNRELEASED and newer)
+   - CGI script extensions, which will be handled via CGI handler outside the `cgi-bin` directory. Default: None
+- **cgiScriptInterpreters** (*Object*; *cgi* module; Project Karpacz UNRELEASED and newer)
+   - CGI script interpreters used by the CGI handler. The object keys represent the extension, for which a specific interpreter is used, while object values can be either an *Array&lt;String&gt;* representing first arguments of the CGI script (the first argument is the path to the interpreter), or `null` for removing the default interpreter. Default: None, the default interpreterss are set for *.pl*, *.py*, *.sh*, *.ksh*, *.csh*, *.rb* and *.php* extensions, and addtionally *.exe*, *.bat* and *.vbs* extensions for Windows.
 
 ## Example configuration
 

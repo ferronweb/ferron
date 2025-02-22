@@ -1522,6 +1522,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
+name = "memmem"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a64a92489e2744ce060c349162be1c5f33c6969234104dbd99ddb5feb08b8c15"
+
+[[package]]
 name = "mimalloc"
 version = "0.1.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1825,11 +1831,13 @@ dependencies = [
  "fancy-regex",
  "futures-util",
  "http-body-util",
+ "httparse",
  "hyper",
  "hyper-util",
  "itertools 0.14.0",
  "libloading",
  "lru",
+ "memmem",
  "mimalloc",
  "new_mime_guess",
  "ocsp-stapler",

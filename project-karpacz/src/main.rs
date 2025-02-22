@@ -16,7 +16,10 @@ mod project_karpacz_res {
 #[path = "util"]
 mod project_karpacz_util {
   pub mod anti_xss;
+  pub mod cgi_response;
+  pub mod cgi_stdin_reader;
   pub mod combine_config;
+  pub mod copy_move;
   pub mod error_pages;
   pub mod generate_directory_listing;
   pub mod ip_blocklist;
@@ -49,6 +52,7 @@ mod project_karpacz_modules {
 #[path = "optional_modules"]
 mod project_karpacz_optional_modules {
   pub mod cache;
+  pub mod cgi;
   pub mod fproxy;
   pub mod rproxy;
 }
@@ -128,7 +132,7 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
     for module_name_yaml in modules.iter() {
       if let Some(module_name) = module_name_yaml.as_str() {
         let lib = match module_name {
-          "rproxy" | "fproxy" | "cache" => None,
+          "rproxy" | "fproxy" | "cache" | "cgi" => None,
           _ => Some(
             match unsafe {
               Library::new(library_filename(format!(
@@ -244,6 +248,23 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
         "cache" => {
           external_modules.push(
             match project_karpacz_optional_modules::cache::server_module_init(&yaml_config) {
+              Ok(module) => module,
+              Err(err) => {
+                module_error = Some(anyhow::anyhow!(
+                  "Cannot initialize optional built-in module \"{}\": {}",
+                  module_name,
+                  err
+                ));
+                break;
+              }
+            },
+          );
+
+          modules_optional_builtin.push(module_name.clone());
+        }
+        "cgi" => {
+          external_modules.push(
+            match project_karpacz_optional_modules::cgi::server_module_init(&yaml_config) {
               Ok(module) => module,
               Err(err) => {
                 module_error = Some(anyhow::anyhow!(

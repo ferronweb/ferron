@@ -721,6 +721,53 @@ pub fn validate_config(
           }
         }
       }
+      "cgi" => {
+        if !config.get("cgiScriptExtensions").is_badvalue() {
+          if let Some(cgi_script_extensions) = config.get("cgiScriptExtensions").as_vec() {
+            let cgi_script_extensions_iter = cgi_script_extensions.iter();
+            for cgi_script_extension_yaml in cgi_script_extensions_iter {
+              if cgi_script_extension_yaml.as_str().is_none() {
+                Err(anyhow::anyhow!("Invalid CGI script extension"))?
+              }
+            }
+          } else {
+            Err(anyhow::anyhow!(
+              "Invalid CGI script extension configuration"
+            ))?
+          }
+        }
+
+        if !config.get("cgiScriptInterpreters").is_badvalue() {
+          if let Some(cgi_script_interpreters) = config.get("cgiScriptInterpreters").as_hash() {
+            for (cgi_script_interpreter_extension_unknown, cgi_script_interpreter_params_unknown) in
+              cgi_script_interpreters.iter()
+            {
+              if cgi_script_interpreter_extension_unknown.as_str().is_some() {
+                if !cgi_script_interpreter_params_unknown.is_null() {
+                  if let Some(cgi_script_interpreter_params) =
+                    cgi_script_interpreter_params_unknown.as_vec()
+                  {
+                    let cgi_script_interpreter_params_iter = cgi_script_interpreter_params.iter();
+                    for cgi_script_interpreter_param_yaml in cgi_script_interpreter_params_iter {
+                      if cgi_script_interpreter_param_yaml.as_str().is_none() {
+                        Err(anyhow::anyhow!("Invalid CGI script interpreter parameter"))?
+                      }
+                    }
+                  } else {
+                    Err(anyhow::anyhow!("Invalid CGI script interpreter parameters"))?
+                  }
+                }
+              } else {
+                Err(anyhow::anyhow!("Invalid CGI script interpreter extension"))?
+              }
+            }
+          } else {
+            Err(anyhow::anyhow!(
+              "Invalid CGI script interpreter configuration"
+            ))?
+          }
+        }
+      }
       _ => (),
     }
   }

@@ -4,6 +4,8 @@ global:
   logFilePath: access.log
   errorLogFilePath: error.log
   loadModules:
-   - example
+   - cgi
   wwwroot: /var/www/html # Replace "/var/www/html" with desired webroot
   enableDirectoryListing: true
+  cgiScriptExtensions:
+   - .php # Necessary to be able to execute PHP scripts via PHP-CGI
