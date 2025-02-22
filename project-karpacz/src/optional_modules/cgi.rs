@@ -614,23 +614,31 @@ async fn execute_cgi(
 
   // Needed to wrap this in another scope to prevent errors with multiple mutable borrows.
   {
+    let mut head_obtained = false;
     let stdout_parse_future = cgi_response.get_head();
     tokio::pin!(stdout_parse_future);
 
-    loop {
-      tokio::select! {
-        biased;
+    // Cannot use a loop with tokio::select, since stdin_copy_future_pinned being constantly ready will make the web server stop responding to HTTP requests
+    tokio::select! {
+      biased;
 
-        obtained_head = &mut stdout_parse_future => {
-          let obtained_head = obtained_head?;
-          if !obtained_head.is_empty() {
-            httparse::parse_headers(obtained_head, &mut headers)?;
-          }
-          break;
-        },
-        result = &mut stdin_copy_future_pinned => {
-          result?;
+      obtained_head = &mut stdout_parse_future => {
+        let obtained_head = obtained_head?;
+        if !obtained_head.is_empty() {
+          httparse::parse_headers(obtained_head, &mut headers)?;
         }
+        head_obtained = true;
+      },
+      result = &mut stdin_copy_future_pinned => {
+        result?;
+      }
+    }
+
+    if !head_obtained {
+      // Kept it same as in the tokio::select macro
+      let obtained_head = stdout_parse_future.await?;
+      if !obtained_head.is_empty() {
+        httparse::parse_headers(obtained_head, &mut headers)?;
       }
     }
   }
