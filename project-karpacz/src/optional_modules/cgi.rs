@@ -1,3 +1,4 @@
+// CGI handler code inspired by SVR.JS's RedBrick mod, translated from JavaScript to Rust.
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
