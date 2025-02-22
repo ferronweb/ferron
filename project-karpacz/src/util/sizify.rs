@@ -1,7 +1,7 @@
 // Sizify function taken from SVR.JS and rewritten from JavaScript to Rust
 // SVR.JS is licensed under MIT, so below is the copyright notice:
 //
-// Copyright (c) 2024-2025 SVR.JS
+// Copyright (c) 2018-2025 SVR.JS
 // Portions of this file are derived from SVR.JS (https://git.svrjs.org/svrjs/svrjs).
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
