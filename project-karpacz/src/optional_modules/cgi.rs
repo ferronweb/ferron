@@ -146,7 +146,15 @@ impl ServerModuleHandlers for CgiModuleHandlers {
           request_path
         );
 
-        let wwwroot: &Path = Path::new(wwwroot);
+        let wwwroot_unknown = PathBuf::from(wwwroot);
+        let wwwroot_pathbuf = match wwwroot_unknown.as_path().is_absolute() {
+          true => wwwroot_unknown,
+          false => match fs::canonicalize(&wwwroot_unknown).await {
+            Ok(pathbuf) => pathbuf,
+            Err(_) => wwwroot_unknown,
+          },
+        };
+        let wwwroot = wwwroot_pathbuf.as_path();
 
         let read_rwlock = self.path_cache.read().await;
         let (execute_pathbuf, execute_path_info) = match read_rwlock.get(&cache_key) {
