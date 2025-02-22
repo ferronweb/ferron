@@ -783,6 +783,7 @@ async fn get_executable(
 
       let mut command_begin: Vec<String> = (&shebang_line[2..])
         .replace("\r", "")
+        .replace("\n", "")
         .split(" ")
         .map(|s| s.to_owned())
         .collect();
