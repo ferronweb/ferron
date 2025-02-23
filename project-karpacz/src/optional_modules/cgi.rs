@@ -693,9 +693,10 @@ async fn execute_cgi(
           .read_to_string(&mut stderr_string)
           .await
           .unwrap_or_default();
-        if !stderr_string.is_empty() {
+        let stderr_string_trimmed = stderr_string.trim();
+        if !stderr_string_trimmed.is_empty() {
           error_logger
-            .log(&format!("There were CGI errors: {}", stderr_string))
+            .log(&format!("There were CGI errors: {}", stderr_string_trimmed))
             .await;
         }
       }
@@ -721,9 +722,10 @@ async fn execute_cgi(
             .read_to_string(&mut stderr_string)
             .await
             .unwrap_or_default();
-          if !stderr_string.is_empty() {
+          let stderr_string_trimmed = stderr_string.trim();
+          if !stderr_string_trimmed.is_empty() {
             error_logger
-              .log(&format!("There were CGI errors: {}", stderr_string))
+              .log(&format!("There were CGI errors: {}", stderr_string_trimmed))
               .await;
           }
         }

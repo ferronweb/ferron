@@ -4,6 +4,7 @@
 **Not released yet**
 
 - Added support for `Must-Staple` marked TLS certificates
+- The CGI handler now trims CGI error messages
 
 ## Project Karpacz 0.5.0
 **Released in February 22, 2025**
