@@ -33,11 +33,9 @@ pub fn server_module_init(
   Ok(Box::new(ScgiModule::new()))
 }
 
-#[allow(clippy::type_complexity)]
 struct ScgiModule;
 
 impl ScgiModule {
-  #[allow(clippy::type_complexity)]
   fn new() -> Self {
     ScgiModule
   }
@@ -48,8 +46,6 @@ impl ServerModule for ScgiModule {
     Box::new(ScgiModuleHandlers { handle })
   }
 }
-
-#[allow(clippy::type_complexity)]
 struct ScgiModuleHandlers {
   handle: Handle,
 }
