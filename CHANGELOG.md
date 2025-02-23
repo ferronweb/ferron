@@ -1,5 +1,10 @@
 # Project Karpacz change log
 
+## Project Karpacz UNRELEASED
+**Not released yet**
+
+- Added support for `Must-Staple` marked TLS certificates
+
 ## Project Karpacz 0.5.0
 **Released in February 22, 2025**
 

@@ -448,6 +448,8 @@ async fn server_event_loop(
     }
   }
 
+  let mut certified_keys = Vec::new();
+
   if let Some(sni) = yaml_config["global"]["sni"].as_hash() {
     let sni_hostnames = sni.keys();
     for sni_hostname_unknown in sni_hostnames {
@@ -502,8 +504,9 @@ async fn server_event_loop(
                 )))?
               }
             };
-            let certified_key = CertifiedKey::new(certs, signing_key);
-            sni_resolver.load_host_cert_key(sni_hostname, Arc::new(certified_key));
+            let certified_key_arc = Arc::new(CertifiedKey::new(certs, signing_key));
+            sni_resolver.load_host_cert_key(sni_hostname, certified_key_arc.clone());
+            certified_keys.push(certified_key_arc);
           }
         }
       }
@@ -631,8 +634,11 @@ async fn server_event_loop(
 
   let mut tls_config = match yaml_config["global"]["enableOCSPStapling"].as_bool() {
     Some(true) => {
-      let ocsp_stapler = Stapler::new(Arc::new(sni_resolver));
-      tls_config_builder_wants_server_cert.with_cert_resolver(Arc::new(ocsp_stapler))
+      let ocsp_stapler_arc = Arc::new(Stapler::new(Arc::new(sni_resolver)));
+      for certified_key in certified_keys.iter() {
+        ocsp_stapler_arc.preload(certified_key.clone());
+      }
+      tls_config_builder_wants_server_cert.with_cert_resolver(ocsp_stapler_arc.clone())
     }
     _ => tls_config_builder_wants_server_cert.with_cert_resolver(Arc::new(sni_resolver)),
   };
