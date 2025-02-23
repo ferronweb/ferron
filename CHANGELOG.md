@@ -3,6 +3,7 @@
 ## Project Karpacz UNRELEASED
 **Not released yet**
 
+- Added a FastCGI module (*fcgi*)
 - Added a SCGI module (*scgi*)
 - Added support for `Must-Staple` marked TLS certificates
 - The CGI handler now trims CGI error messages

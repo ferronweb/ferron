@@ -21,14 +21,20 @@ mod project_karpacz_util {
   pub mod combine_config;
   pub mod copy_move;
   pub mod error_pages;
+  pub mod fcgi_decoder;
+  pub mod fcgi_encoder;
+  pub mod fcgi_name_value_pair;
+  pub mod fcgi_record;
   pub mod generate_directory_listing;
   pub mod ip_blocklist;
   pub mod ip_match;
   pub mod load_tls;
   pub mod match_hostname;
   pub mod non_standard_code_structs;
+  pub mod read_to_end_move;
   pub mod sizify;
   pub mod sni;
+  pub mod split_stream_by_map;
   pub mod ttl_cache;
   pub mod url_rewrite_structs;
   pub mod url_sanitizer;
@@ -53,6 +59,7 @@ mod project_karpacz_modules {
 mod project_karpacz_optional_modules {
   pub mod cache;
   pub mod cgi;
+  pub mod fcgi;
   pub mod fproxy;
   pub mod rproxy;
   pub mod scgi;
@@ -133,7 +140,7 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
     for module_name_yaml in modules.iter() {
       if let Some(module_name) = module_name_yaml.as_str() {
         let lib = match module_name {
-          "rproxy" | "fproxy" | "cache" | "cgi" | "scgi" => None,
+          "rproxy" | "fproxy" | "cache" | "cgi" | "scgi" | "fcgi" => None,
           _ => Some(
             match unsafe {
               Library::new(library_filename(format!(
@@ -283,6 +290,23 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
         "scgi" => {
           external_modules.push(
             match project_karpacz_optional_modules::scgi::server_module_init(&yaml_config) {
+              Ok(module) => module,
+              Err(err) => {
+                module_error = Some(anyhow::anyhow!(
+                  "Cannot initialize optional built-in module \"{}\": {}",
+                  module_name,
+                  err
+                ));
+                break;
+              }
+            },
+          );
+
+          modules_optional_builtin.push(module_name.clone());
+        }
+        "fcgi" => {
+          external_modules.push(
+            match project_karpacz_optional_modules::fcgi::server_module_init(&yaml_config) {
               Ok(module) => module,
               Err(err) => {
                 module_error = Some(anyhow::anyhow!(

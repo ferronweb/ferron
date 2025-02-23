@@ -777,6 +777,30 @@ pub fn validate_config(
           Err(anyhow::anyhow!("Invalid SCGI path"))?
         }
       }
+      "fcgi" => {
+        if !config.get("fcgiScriptExtensions").is_badvalue() {
+          if let Some(fastcgi_script_extensions) = config.get("fcgiScriptExtensions").as_vec() {
+            let fastcgi_script_extensions_iter = fastcgi_script_extensions.iter();
+            for fastcgi_script_extension_yaml in fastcgi_script_extensions_iter {
+              if fastcgi_script_extension_yaml.as_str().is_none() {
+                Err(anyhow::anyhow!("Invalid CGI script extension"))?
+              }
+            }
+          } else {
+            Err(anyhow::anyhow!(
+              "Invalid CGI script extension configuration"
+            ))?
+          }
+        }
+
+        if !config.get("fcgiTo").is_badvalue() && config.get("fcgiTo").as_str().is_none() {
+          Err(anyhow::anyhow!("Invalid FastCGI target URL value"))?
+        }
+
+        if !config.get("fcgiPath").is_badvalue() && config.get("fcgiPath").as_str().is_none() {
+          Err(anyhow::anyhow!("Invalid FastCGI path"))?
+        }
+      }
       _ => (),
     }
   }

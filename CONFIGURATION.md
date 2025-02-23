@@ -157,6 +157,12 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
    - Base URL, which SCGI client will send requests to. TCP (for example `"tcp://localhost:4000/"`) and Unix socket URLs (only on Unix systems; for example `"unix:///run/scgi.sock"`) are supported. Default: `"tcp://localhost:4000/"`
 - **scgiPath** (*String* or *Array&lt;String&gt;*; *scgi* module; Project Karpacz UNRELEASED and newer)
    - Base URL, which SCGI client will handle the request if the request URL begins with it. If not specified, the SCGI client will be inactive. Default: None
+- **cgiScriptExtensions** (*Array&lt;String&gt;*; *fcgi* module; Project Karpacz UNRELEASED and newer)
+   - FastCGI script extensions, which will be handled via FastCGI handler outside the specified FastCGI path. Default: None
+- **fcgiTo** (*String* or *Array&lt;String&gt;*; *fcgi* module; Project Karpacz UNRELEASED and newer)
+   - Base URL, which FastCGI client will send requests to. TCP (for example `"tcp://localhost:4000/"`) and Unix socket URLs (only on Unix systems; for example `"unix:///run/fcgi.sock"`) are supported. Default: `"tcp://localhost:4000/"`
+- **fcgiPath** (*String* or *Array&lt;String&gt;*; *fcgi* module; Project Karpacz UNRELEASED and newer)
+   - Base URL, which FastCGI client will handle the request if the request URL begins with it. If not specified, the SCGI client will be inactive. Default: None
 
 
 ## Example configuration

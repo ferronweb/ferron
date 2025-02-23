@@ -8,6 +8,7 @@ pub struct Copy<R, W> {
   reader: R,
   writer: W,
   buffer: Vec<u8>,
+  zero_packet: bool,
 }
 
 impl<R, W> Copy<R, W>
@@ -20,6 +21,16 @@ where
       reader,
       writer,
       buffer: vec![0; 1024], // You can adjust the buffer size as needed
+      zero_packet: false,
+    }
+  }
+
+  pub fn with_zero_packet_writing(reader: R, writer: W) -> Self {
+    Self {
+      reader,
+      writer,
+      buffer: vec![0; 1024], // You can adjust the buffer size as needed
+      zero_packet: true,
     }
   }
 }
@@ -43,7 +54,7 @@ where
     // Set the length of the ReadBuf
     let bytes_read = read_buf.filled().len();
 
-    if bytes_read == 0 {
+    if !this.zero_packet && bytes_read == 0 {
       // EOF reached
       return Poll::Ready(Ok(0));
     }

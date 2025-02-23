@@ -1842,6 +1842,7 @@ dependencies = [
  "new_mime_guess",
  "ocsp-stapler",
  "password-auth",
+ "pin-project-lite",
  "project-karpacz-common",
  "rand 0.9.0",
  "rustls",
