@@ -174,11 +174,10 @@ impl ErrorLogger {
   /// # Examples
   ///
   /// ```
-  /// # use tokio::sync::mpsc::channel;
   /// # use project_karpacz_common::ErrorLogger;
   /// # #[tokio::main]
   /// # async fn main() {
-  /// let (tx, mut rx) = channel(100);
+  /// let (tx, mut rx) = async_channel::bounded(100);
   /// let logger = ErrorLogger::new(tx);
   /// logger.log("An error occurred").await;
   /// # }
