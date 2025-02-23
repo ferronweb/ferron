@@ -5,6 +5,7 @@
 
 - Added support for `Must-Staple` marked TLS certificates
 - The CGI handler now trims CGI error messages
+- The CGI handler now sanitizes double slashes for checking if the request path is in the "cgi-bin" directory
 
 ## Project Karpacz 0.5.0
 **Released in February 22, 2025**

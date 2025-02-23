@@ -188,10 +188,13 @@ impl ServerModuleHandlers for CgiModuleHandlers {
             match fs::metadata(&joined_pathbuf).await {
               Ok(metadata) => {
                 if metadata.is_file() {
-                  let request_path_normalized = match cfg!(windows) {
+                  let mut request_path_normalized = match cfg!(windows) {
                     true => request_path.to_lowercase(),
                     false => request_path.to_string(),
                   };
+                  while request_path_normalized.contains("//") {
+                    request_path_normalized = request_path_normalized.replace("//", "/");
+                  }
                   if request_path_normalized == "/cgi-bin"
                     || request_path_normalized.starts_with("/cgi-bin/")
                   {
@@ -266,10 +269,13 @@ impl ServerModuleHandlers for CgiModuleHandlers {
                             }
                             Err(_) => None,
                           };
-                          let request_path_normalized = match cfg!(windows) {
+                          let mut request_path_normalized = match cfg!(windows) {
                             true => request_path.to_lowercase(),
                             false => request_path.to_string(),
                           };
+                          while request_path_normalized.contains("//") {
+                            request_path_normalized = request_path_normalized.replace("//", "/");
+                          }
                           if request_path_normalized == "/cgi-bin"
                             || request_path_normalized.starts_with("/cgi-bin/")
                           {
