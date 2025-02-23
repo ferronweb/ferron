@@ -1,12 +1,12 @@
 // SCGI handler code inspired by SVR.JS's OrangeCircle mod, translated from JavaScript to Rust.
 // Based on the "cgi" module
-use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
+use hashlink::LinkedHashMap;
 use http_body_util::{BodyExt, StreamBody};
 use httparse::EMPTY_HEADER;
 use hyper::body::Frame;
@@ -200,7 +200,7 @@ async fn execute_scgi_with_environment_variables(
   server_administrator_email: Option<&str>,
   scgi_to: &str,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  let mut environment_variables: HashMap<String, String> = HashMap::new();
+  let mut environment_variables: LinkedHashMap<String, String> = LinkedHashMap::new();
 
   let hyper_request = request.get_hyper_request();
   if let Some(auth_user) = request.get_auth_user() {
@@ -364,7 +364,7 @@ async fn execute_scgi(
   hyper_request: HyperRequest,
   error_logger: &ErrorLogger,
   scgi_to: &str,
-  mut environment_variables: HashMap<String, String>,
+  mut environment_variables: LinkedHashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (_, body) = hyper_request.into_parts();
 

@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::fmt::Write;
 use std::io::SeekFrom;
-use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -12,11 +11,11 @@ use async_trait::async_trait;
 use chrono::offset::Local;
 use chrono::DateTime;
 use futures_util::TryStreamExt;
+use hashlink::LruCache;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use hyper::body::Bytes;
 use hyper::{body::Frame, Response, StatusCode};
 use hyper::{header, HeaderMap, Method};
-use lru::LruCache;
 use project_karpacz_common::{
   ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfigRoot, ServerModule,
   ServerModuleHandlers, SocketData,
@@ -35,10 +34,7 @@ use crate::project_karpacz_util::ttl_cache::TtlCache;
 pub fn server_module_init(
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
   let pathbuf_cache = Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(100))));
-  let etag_cache = Arc::new(RwLock::new(LruCache::new(match NonZeroUsize::new(1000) {
-    Some(size) => size,
-    None => Err(anyhow::anyhow!("Invalid E-Tag LRU cache size"))?,
-  })));
+  let etag_cache = Arc::new(RwLock::new(LruCache::new(1000)));
   Ok(Box::new(StaticFileServingModule::new(
     pathbuf_cache,
     etag_cache,
@@ -239,7 +235,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                     .await?;
 
                     let mut rwlock_write = self.etag_cache.write().await;
-                    rwlock_write.put(etag_cache_key, etag.clone());
+                    rwlock_write.insert(etag_cache_key, etag.clone());
                     drop(rwlock_write);
 
                     etag

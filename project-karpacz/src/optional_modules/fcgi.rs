@@ -1,6 +1,5 @@
 // FastCGI handler code inspired by SVR.JS's GreenRhombus mod, translated from JavaScript to Rust.
 // Based on the "cgi" and "scgi" module
-use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -10,6 +9,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use futures_util::future::Either;
 use futures_util::TryStreamExt;
+use hashlink::LinkedHashMap;
 use http_body_util::{BodyExt, StreamBody};
 use httparse::EMPTY_HEADER;
 use hyper::body::{Bytes, Frame};
@@ -411,7 +411,7 @@ async fn execute_fastcgi_with_environment_variables(
   server_administrator_email: Option<&str>,
   fastcgi_to: &str,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  let mut environment_variables: HashMap<String, String> = HashMap::new();
+  let mut environment_variables: LinkedHashMap<String, String> = LinkedHashMap::new();
 
   let hyper_request = request.get_hyper_request();
   if let Some(auth_user) = request.get_auth_user() {
@@ -580,7 +580,7 @@ async fn execute_fastcgi(
   hyper_request: HyperRequest,
   error_logger: &ErrorLogger,
   fastcgi_to: &str,
-  mut environment_variables: HashMap<String, String>,
+  mut environment_variables: LinkedHashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (_, body) = hyper_request.into_parts();
 

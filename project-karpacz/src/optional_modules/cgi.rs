@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use futures_util::TryStreamExt;
+use hashlink::LinkedHashMap;
 use http_body_util::{BodyExt, StreamBody};
 use httparse::EMPTY_HEADER;
 use hyper::body::Frame;
@@ -388,7 +389,7 @@ async fn execute_cgi_with_environment_variables(
   server_administrator_email: Option<&str>,
   cgi_interpreters: HashMap<String, Vec<String>>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  let mut environment_variables: HashMap<String, String> = HashMap::new();
+  let mut environment_variables: LinkedHashMap<String, String> = LinkedHashMap::new();
 
   let hyper_request = request.get_hyper_request();
   if let Some(auth_user) = request.get_auth_user() {
@@ -551,7 +552,7 @@ async fn execute_cgi(
   error_logger: &ErrorLogger,
   execute_pathbuf: PathBuf,
   cgi_interpreters: HashMap<String, Vec<String>>,
-  environment_variables: HashMap<String, String>,
+  environment_variables: LinkedHashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (_, body) = hyper_request.into_parts();
 
