@@ -768,6 +768,15 @@ pub fn validate_config(
           }
         }
       }
+      "scgi" => {
+        if !config.get("scgiTo").is_badvalue() && config.get("scgiTo").as_str().is_none() {
+          Err(anyhow::anyhow!("Invalid SCGI target URL value"))?
+        }
+
+        if !config.get("scgiPath").is_badvalue() && config.get("scgiPath").as_str().is_none() {
+          Err(anyhow::anyhow!("Invalid SCGI path"))?
+        }
+      }
       _ => (),
     }
   }

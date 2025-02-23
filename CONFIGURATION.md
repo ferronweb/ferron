@@ -153,6 +153,11 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
    - CGI script extensions, which will be handled via CGI handler outside the `cgi-bin` directory. Default: None
 - **cgiScriptInterpreters** (*Object*; *cgi* module; Project Karpacz 0.5.0 and newer)
    - CGI script interpreters used by the CGI handler. The object keys represent the extension, for which a specific interpreter is used, while object values can be either an *Array&lt;String&gt;* representing first arguments of the CGI script (the first argument is the path to the interpreter), or `null` for removing the default interpreter. Default: None, the default interpreterss are set for *.pl*, *.py*, *.sh*, *.ksh*, *.csh*, *.rb* and *.php* extensions, and addtionally *.exe*, *.bat* and *.vbs* extensions for Windows.
+- **scgiTo** (*String* or *Array&lt;String&gt;*; *scgi* module; Project Karpacz UNRELEASED and newer)
+   - Base URL, which SCGI client will send requests to. TCP (for example `"tcp://localhost:4000/"`) and Unix socket URLs (only on Unix systems; for example `"unix:///run/scgi.sock"`) are supported. Default: `"tcp://localhost:4000/"`
+- **scgiPath** (*String* or *Array&lt;String&gt;*; *scgi* module; Project Karpacz UNRELEASED and newer)
+   - Base URL, which SCGI client will handle the request if the request URL begins with it. If not specified, the SCGI client will be inactive. Default: None
+
 
 ## Example configuration
 
