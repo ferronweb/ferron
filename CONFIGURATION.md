@@ -153,15 +153,15 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
    - CGI script extensions, which will be handled via CGI handler outside the `cgi-bin` directory. Default: None
 - **cgiScriptInterpreters** (*Object*; *cgi* module; Project Karpacz 0.5.0 and newer)
    - CGI script interpreters used by the CGI handler. The object keys represent the extension, for which a specific interpreter is used, while object values can be either an *Array&lt;String&gt;* representing first arguments of the CGI script (the first argument is the path to the interpreter), or `null` for removing the default interpreter. Default: None, the default interpreterss are set for *.pl*, *.py*, *.sh*, *.ksh*, *.csh*, *.rb* and *.php* extensions, and addtionally *.exe*, *.bat* and *.vbs* extensions for Windows.
-- **scgiTo** (*String* or *Array&lt;String&gt;*; *scgi* module; Project Karpacz UNRELEASED and newer)
+- **scgiTo** (*String* or *Array&lt;String&gt;*; *scgi* module; Project Karpacz 0.6.0 and newer)
    - Base URL, which SCGI client will send requests to. TCP (for example `"tcp://localhost:4000/"`) and Unix socket URLs (only on Unix systems; for example `"unix:///run/scgi.sock"`) are supported. Default: `"tcp://localhost:4000/"`
-- **scgiPath** (*String* or *Array&lt;String&gt;*; *scgi* module; Project Karpacz UNRELEASED and newer)
+- **scgiPath** (*String* or *Array&lt;String&gt;*; *scgi* module; Project Karpacz 0.6.0 and newer)
    - Base URL, which SCGI client will handle the request if the request URL begins with it. If not specified, the SCGI client will be inactive. Default: None
-- **cgiScriptExtensions** (*Array&lt;String&gt;*; *fcgi* module; Project Karpacz UNRELEASED and newer)
+- **fcgiScriptExtensions** (*Array&lt;String&gt;*; *fcgi* module; Project Karpacz 0.6.0 and newer)
    - FastCGI script extensions, which will be handled via FastCGI handler outside the specified FastCGI path. Default: None
-- **fcgiTo** (*String* or *Array&lt;String&gt;*; *fcgi* module; Project Karpacz UNRELEASED and newer)
+- **fcgiTo** (*String* or *Array&lt;String&gt;*; *fcgi* module; Project Karpacz 0.6.0 and newer)
    - Base URL, which FastCGI client will send requests to. TCP (for example `"tcp://localhost:4000/"`) and Unix socket URLs (only on Unix systems; for example `"unix:///run/fcgi.sock"`) are supported. Default: `"tcp://localhost:4000/"`
-- **fcgiPath** (*String* or *Array&lt;String&gt;*; *fcgi* module; Project Karpacz UNRELEASED and newer)
+- **fcgiPath** (*String* or *Array&lt;String&gt;*; *fcgi* module; Project Karpacz 0.6.0 and newer)
    - Base URL, which FastCGI client will handle the request if the request URL begins with it. If not specified, the SCGI client will be inactive. Default: None
 
 
@@ -199,7 +199,7 @@ global:
   loadModules:
     - "rproxy"
 
-host:
+hosts:
   - domain: "example.com"
     serverAdministratorEmail: "admin@example.com"
     wwwredirect: true

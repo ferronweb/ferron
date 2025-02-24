@@ -1801,7 +1801,7 @@ dependencies = [
 
 [[package]]
 name = "project-karpacz"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1845,7 +1845,7 @@ dependencies = [
 
 [[package]]
 name = "project-karpacz-common"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-channel",
  "async-trait",
@@ -1859,7 +1859,7 @@ dependencies = [
 
 [[package]]
 name = "project-karpacz-mod-example"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "http-body-util",
@@ -1872,7 +1872,7 @@ dependencies = [
 
 [[package]]
 name = "project-karpacz-passwd"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "clap",
  "mimalloc",

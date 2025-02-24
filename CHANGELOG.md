@@ -1,7 +1,7 @@
 # Project Karpacz change log
 
-## Project Karpacz UNRELEASED
-**Not released yet**
+## Project Karpacz 0.6.0
+**Released in February 24, 2025**
 
 - Added a FastCGI module (*fcgi*)
 - Added a SCGI module (*scgi*)
