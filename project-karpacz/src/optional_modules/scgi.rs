@@ -603,7 +603,7 @@ async fn connect_unix(
 #[allow(dead_code)]
 #[cfg(not(unix))]
 async fn connect_unix(
-  path: &str,
+  _path: &str,
 ) -> Result<
   (
     Box<dyn AsyncRead + Send + Sync + Unpin>,
