@@ -43,7 +43,7 @@ pub fn server_module_init(
     match roots.add(cert) {
       Ok(_) => (),
       Err(err) => Err(anyhow::anyhow!(format!(
-        "Couldn't load add a certificate to the certificate store: {}",
+        "Couldn't add a certificate to the certificate store: {}",
         err
       )))?,
     }

@@ -737,7 +737,7 @@ async fn server_event_loop(
               logger
                 .send(LogMessage::new(
                   format!(
-                    "Couldn't load add a certificate to the certificate store: {}",
+                    "Couldn't add a certificate to the certificate store: {}",
                     err
                   ),
                   true,
@@ -745,7 +745,7 @@ async fn server_event_loop(
                 .await
                 .unwrap_or_default();
               Err(anyhow::anyhow!(format!(
-                "Couldn't load add a certificate to the certificate store: {}",
+                "Couldn't add a certificate to the certificate store: {}",
                 err
               )))?
             }
