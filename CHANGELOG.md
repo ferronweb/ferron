@@ -1,5 +1,10 @@
 # Project Karpacz change log
 
+## Project Karpacz UNRELEASED
+**Not released yet**
+
+- Changed the cryptography provider for Rustls from AWS-LC to *ring*
+
 ## Project Karpacz 0.6.0
 **Released in February 24, 2025**
 
