@@ -20,9 +20,9 @@ use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use libloading::Symbol;
 use ocsp_stapler::Stapler;
 use project_karpacz_common::{LogMessage, ServerConfigRoot, ServerModule, ServerModuleHandlers};
-use rustls::crypto::aws_lc_rs::cipher_suite::*;
-use rustls::crypto::aws_lc_rs::default_provider;
-use rustls::crypto::aws_lc_rs::kx_group::*;
+use rustls::crypto::ring::cipher_suite::*;
+use rustls::crypto::ring::default_provider;
+use rustls::crypto::ring::kx_group::*;
 use rustls::server::WebPkiClientVerifier;
 use rustls::sign::CertifiedKey;
 use rustls::version::{TLS12, TLS13};
@@ -365,11 +365,9 @@ async fn server_event_loop(
     for ecdh_curve_yaml in ecdh_curves_iter {
       if let Some(ecdh_curve) = ecdh_curve_yaml.as_str() {
         let kx_group_to_add = match ecdh_curve {
-          "mlkem768" => MLKEM768,
           "secp256r1" => SECP256R1,
           "secp384r1" => SECP384R1,
           "x25519" => X25519,
-          "x25519mlkem768" => X25519MLKEM768,
           _ => {
             logger
               .send(LogMessage::new(

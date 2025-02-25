@@ -12,8 +12,8 @@ tokio = { workspace = true, features = ["full"] }
 http-body-util = { workspace = true }
 hyper-util = { version = "0.1", features = ["full"] }
 tokio-util = { version = "0.7.13", features = ["io"] }
-rustls = "0.23.22"
-tokio-rustls = "0.26.1"
+rustls = { version = "0.23.22", default-features = false, features = ["tls12", "std", "ring"] }
+tokio-rustls = { version = "0.26.1", default-features = false, features = ["tls12", "ring"] }
 rustls-pki-types = "1.11.0"
 rustls-pemfile = "2.2.0"
 yaml-rust2 = { workspace = true }
