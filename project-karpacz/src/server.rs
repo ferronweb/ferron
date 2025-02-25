@@ -697,7 +697,7 @@ async fn server_event_loop(
         }
       },
     ));
-  } else if let Some(read_port) = yaml_config["global"]["port"].as_str() {
+  } else if let Some(read_port) = yaml_config["global"]["sport"].as_str() {
     addr_tls = match read_port.parse() {
       Ok(addr) => addr,
       Err(_) => {

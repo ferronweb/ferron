@@ -4,6 +4,7 @@
 **Not released yet**
 
 - Changed the cryptography provider for Rustls from AWS-LC to *ring*
+- Fixed HTTPS server using address-port combinations intended for non-encrypted HTTP server
 
 ## Project Karpacz 0.6.0
 **Released in February 24, 2025**
