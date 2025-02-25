@@ -12,6 +12,7 @@ use crate::project_karpacz_util::validate_config::{
 
 use async_channel::Sender;
 use chrono::prelude::*;
+use futures_util::StreamExt;
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
 use hyper::service::service_fn;
@@ -35,13 +36,17 @@ use tokio::runtime::Handle;
 use tokio::sync::Mutex;
 use tokio::time;
 use tokio_rustls::TlsAcceptor;
+use tokio_rustls_acme::caches::DirCache;
+use tokio_rustls_acme::{AcmeAcceptor, AcmeConfig};
 use yaml_rust2::Yaml;
 
 // Function to accept and handle incoming connections
+#[allow(clippy::too_many_arguments)]
 async fn accept_connection(
   stream: TcpStream,
   remote_address: SocketAddr,
   tls_acceptor_option: Option<TlsAcceptor>,
+  acme_acceptor_config_option: Option<(AcmeAcceptor, Arc<ServerConfig>)>,
   global_config_root: Arc<ServerConfigRoot>,
   host_config: Arc<Yaml>,
   logger: Sender<LogMessage>,
@@ -78,7 +83,108 @@ async fn accept_connection(
 
   let logger_clone = logger.clone();
 
-  if let Some(tls_acceptor) = tls_acceptor_option {
+  if let Some((acme_acceptor, tls_config)) = acme_acceptor_config_option {
+    tokio::task::spawn(async move {
+      let start_handshake = match acme_acceptor.accept(stream).await {
+        Ok(Some(start_handshake)) => start_handshake,
+        Ok(None) => return,
+        Err(err) => {
+          logger
+            .send(LogMessage::new(
+              format!("Error during TLS handshake: {:?}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+          return;
+        }
+      };
+
+      let tls_stream = match start_handshake.into_stream(tls_config).await {
+        Ok(tls_stream) => tls_stream,
+        Err(err) => {
+          logger
+            .send(LogMessage::new(
+              format!("Error during TLS handshake: {:?}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+          return;
+        }
+      };
+
+      let io = TokioIo::new(tls_stream);
+      let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+
+      if let Some(enable_http2) = global_config_root.get("enableHTTP2").as_bool() {
+        if !enable_http2 {
+          builder = builder.http1_only();
+        }
+      } else {
+        builder = builder.http1_only();
+      }
+
+      let mut http1_builder = &mut builder.http1();
+      http1_builder = http1_builder.timer(TokioTimer::new());
+      let mut http2_builder = &mut http1_builder.http2();
+      http2_builder = http2_builder.timer(TokioTimer::new());
+      let http2_settings = global_config_root.get("http2Settings");
+      if let Some(initial_window_size) = http2_settings["initialWindowSize"].as_i64() {
+        http2_builder = http2_builder.initial_stream_window_size(initial_window_size as u32);
+      }
+      if let Some(max_frame_size) = http2_settings["maxFrameSize"].as_i64() {
+        http2_builder = http2_builder.max_frame_size(max_frame_size as u32);
+      }
+      if let Some(max_concurrent_streams) = http2_settings["maxConcurrentStreams"].as_i64() {
+        http2_builder = http2_builder.max_concurrent_streams(max_concurrent_streams as u32);
+      }
+      if let Some(max_header_list_size) = http2_settings["maxHeaderListSize"].as_i64() {
+        http2_builder = http2_builder.max_header_list_size(max_header_list_size as u32);
+      }
+      if let Some(enable_connect_protocol) = http2_settings["enableConnectProtocol"].as_bool() {
+        if enable_connect_protocol {
+          http2_builder = http2_builder.enable_connect_protocol();
+        }
+      }
+
+      if let Err(err) = http2_builder
+        .serve_connection_with_upgrades(
+          io,
+          service_fn(move |request: Request<Incoming>| {
+            let global_config_root = global_config_root.clone();
+            let host_config = host_config.clone();
+            let logger = logger_clone.clone();
+            let handlers_vec_clone = handlers_vec.clone();
+            let (request_parts, request_body) = request.into_parts();
+            let request = Request::from_parts(request_parts, request_body.boxed());
+            async move {
+              request_handler(
+                request,
+                remote_address,
+                local_address,
+                true,
+                global_config_root,
+                host_config,
+                logger,
+                handlers_vec_clone,
+              )
+              .await
+            }
+          }),
+        )
+        .await
+      {
+        logger
+          .send(LogMessage::new(
+            format!("Error serving HTTPS connection: {:?}", err),
+            true,
+          ))
+          .await
+          .unwrap_or_default();
+      }
+    });
+  } else if let Some(tls_acceptor) = tls_acceptor_option {
     tokio::task::spawn(async move {
       let tls_stream = match tls_acceptor.accept(stream).await {
         Ok(tls_stream) => tls_stream,
@@ -389,122 +495,143 @@ async fn server_event_loop(
   }
 
   let mut sni_resolver = CustomSniResolver::new();
-
-  // Load public certificate and private key
-  if let Some(cert_path) = yaml_config["global"]["cert"].as_str() {
-    if let Some(key_path) = yaml_config["global"]["key"].as_str() {
-      let certs = match load_certs(cert_path) {
-        Ok(certs) => certs,
-        Err(err) => {
-          logger
-            .send(LogMessage::new(
-              format!("Cannot load the \"{}\" TLS certificate: {}", cert_path, err),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
-          Err(anyhow::anyhow!(format!(
-            "Cannot load the \"{}\" TLS certificate: {}",
-            cert_path, err
-          )))?
-        }
-      };
-      let key = match load_private_key(key_path) {
-        Ok(key) => key,
-        Err(err) => {
-          logger
-            .send(LogMessage::new(
-              format!("Cannot load the \"{}\" private key: {}", cert_path, err),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
-          Err(anyhow::anyhow!(format!(
-            "Cannot load the \"{}\" private key: {}",
-            cert_path, err
-          )))?
-        }
-      };
-      let signing_key = match crypto_provider.key_provider.load_private_key(key) {
-        Ok(key) => key,
-        Err(err) => {
-          logger
-            .send(LogMessage::new(
-              format!("Cannot load the \"{}\" private key: {}", cert_path, err),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
-          Err(anyhow::anyhow!(format!(
-            "Cannot load the \"{}\" private key: {}",
-            cert_path, err
-          )))?
-        }
-      };
-      let certified_key = CertifiedKey::new(certs, signing_key);
-      sni_resolver.load_fallback_cert_key(Arc::new(certified_key));
-    }
-  }
-
   let mut certified_keys = Vec::new();
 
-  if let Some(sni) = yaml_config["global"]["sni"].as_hash() {
-    let sni_hostnames = sni.keys();
-    for sni_hostname_unknown in sni_hostnames {
-      if let Some(sni_hostname) = sni_hostname_unknown.as_str() {
-        if let Some(cert_path) = sni[sni_hostname_unknown]["cert"].as_str() {
-          if let Some(key_path) = sni[sni_hostname_unknown]["key"].as_str() {
-            let certs = match load_certs(cert_path) {
-              Ok(certs) => certs,
-              Err(err) => {
-                logger
-                  .send(LogMessage::new(
-                    format!("Cannot load the \"{}\" TLS certificate: {}", cert_path, err),
-                    true,
-                  ))
-                  .await
-                  .unwrap_or_default();
-                Err(anyhow::anyhow!(format!(
-                  "Cannot load the \"{}\" TLS certificate: {}",
-                  cert_path, err
-                )))?
-              }
-            };
-            let key = match load_private_key(key_path) {
-              Ok(key) => key,
-              Err(err) => {
-                logger
-                  .send(LogMessage::new(
-                    format!("Cannot load the \"{}\" private key: {}", cert_path, err),
-                    true,
-                  ))
-                  .await
-                  .unwrap_or_default();
-                Err(anyhow::anyhow!(format!(
-                  "Cannot load the \"{}\" private key: {}",
-                  cert_path, err
-                )))?
-              }
-            };
-            let signing_key = match crypto_provider.key_provider.load_private_key(key) {
-              Ok(key) => key,
-              Err(err) => {
-                logger
-                  .send(LogMessage::new(
-                    format!("Cannot load the \"{}\" private key: {}", cert_path, err),
-                    true,
-                  ))
-                  .await
-                  .unwrap_or_default();
-                Err(anyhow::anyhow!(format!(
-                  "Cannot load the \"{}\" private key: {}",
-                  cert_path, err
-                )))?
-              }
-            };
-            let certified_key_arc = Arc::new(CertifiedKey::new(certs, signing_key));
-            sni_resolver.load_host_cert_key(sni_hostname, certified_key_arc.clone());
-            certified_keys.push(certified_key_arc);
+  let mut automatic_tls_enabled = false;
+  let mut acme_letsencrypt_production = true;
+
+  // Read automatic TLS configuration
+  if let Some(read_automatic_tls_enabled) = yaml_config["global"]["enableAutomaticTLS"].as_bool() {
+    automatic_tls_enabled = read_automatic_tls_enabled;
+  }
+
+  let acme_contact = yaml_config["global"]["automaticTLSContactEmail"].as_str();
+  let acme_cache = yaml_config["global"]["automaticTLSContactCacheDirectory"]
+    .as_str()
+    .map(|s| s.to_string())
+    .map(DirCache::new);
+
+  if let Some(read_acme_letsencrypt_production) =
+    yaml_config["global"]["automaticTLSLetsEncryptProduction"].as_bool()
+  {
+    acme_letsencrypt_production = read_acme_letsencrypt_production;
+  }
+
+  if !automatic_tls_enabled {
+    // Load public certificate and private key
+    if let Some(cert_path) = yaml_config["global"]["cert"].as_str() {
+      if let Some(key_path) = yaml_config["global"]["key"].as_str() {
+        let certs = match load_certs(cert_path) {
+          Ok(certs) => certs,
+          Err(err) => {
+            logger
+              .send(LogMessage::new(
+                format!("Cannot load the \"{}\" TLS certificate: {}", cert_path, err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+            Err(anyhow::anyhow!(format!(
+              "Cannot load the \"{}\" TLS certificate: {}",
+              cert_path, err
+            )))?
+          }
+        };
+        let key = match load_private_key(key_path) {
+          Ok(key) => key,
+          Err(err) => {
+            logger
+              .send(LogMessage::new(
+                format!("Cannot load the \"{}\" private key: {}", cert_path, err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+            Err(anyhow::anyhow!(format!(
+              "Cannot load the \"{}\" private key: {}",
+              cert_path, err
+            )))?
+          }
+        };
+        let signing_key = match crypto_provider.key_provider.load_private_key(key) {
+          Ok(key) => key,
+          Err(err) => {
+            logger
+              .send(LogMessage::new(
+                format!("Cannot load the \"{}\" private key: {}", cert_path, err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+            Err(anyhow::anyhow!(format!(
+              "Cannot load the \"{}\" private key: {}",
+              cert_path, err
+            )))?
+          }
+        };
+        let certified_key = CertifiedKey::new(certs, signing_key);
+        sni_resolver.load_fallback_cert_key(Arc::new(certified_key));
+      }
+    }
+
+    if let Some(sni) = yaml_config["global"]["sni"].as_hash() {
+      let sni_hostnames = sni.keys();
+      for sni_hostname_unknown in sni_hostnames {
+        if let Some(sni_hostname) = sni_hostname_unknown.as_str() {
+          if let Some(cert_path) = sni[sni_hostname_unknown]["cert"].as_str() {
+            if let Some(key_path) = sni[sni_hostname_unknown]["key"].as_str() {
+              let certs = match load_certs(cert_path) {
+                Ok(certs) => certs,
+                Err(err) => {
+                  logger
+                    .send(LogMessage::new(
+                      format!("Cannot load the \"{}\" TLS certificate: {}", cert_path, err),
+                      true,
+                    ))
+                    .await
+                    .unwrap_or_default();
+                  Err(anyhow::anyhow!(format!(
+                    "Cannot load the \"{}\" TLS certificate: {}",
+                    cert_path, err
+                  )))?
+                }
+              };
+              let key = match load_private_key(key_path) {
+                Ok(key) => key,
+                Err(err) => {
+                  logger
+                    .send(LogMessage::new(
+                      format!("Cannot load the \"{}\" private key: {}", cert_path, err),
+                      true,
+                    ))
+                    .await
+                    .unwrap_or_default();
+                  Err(anyhow::anyhow!(format!(
+                    "Cannot load the \"{}\" private key: {}",
+                    cert_path, err
+                  )))?
+                }
+              };
+              let signing_key = match crypto_provider.key_provider.load_private_key(key) {
+                Ok(key) => key,
+                Err(err) => {
+                  logger
+                    .send(LogMessage::new(
+                      format!("Cannot load the \"{}\" private key: {}", cert_path, err),
+                      true,
+                    ))
+                    .await
+                    .unwrap_or_default();
+                  Err(anyhow::anyhow!(format!(
+                    "Cannot load the \"{}\" private key: {}",
+                    cert_path, err
+                  )))?
+                }
+              };
+              let certified_key_arc = Arc::new(CertifiedKey::new(certs, signing_key));
+              sni_resolver.load_host_cert_key(sni_hostname, certified_key_arc.clone());
+              certified_keys.push(certified_key_arc);
+            }
           }
         }
       }
@@ -630,16 +757,7 @@ async fn server_event_loop(
       _ => tls_config_builder_wants_verifier.with_no_client_auth(),
     };
 
-  let mut tls_config = match yaml_config["global"]["enableOCSPStapling"].as_bool() {
-    Some(true) => {
-      let ocsp_stapler_arc = Arc::new(Stapler::new(Arc::new(sni_resolver)));
-      for certified_key in certified_keys.iter() {
-        ocsp_stapler_arc.preload(certified_key.clone());
-      }
-      tls_config_builder_wants_server_cert.with_cert_resolver(ocsp_stapler_arc.clone())
-    }
-    _ => tls_config_builder_wants_server_cert.with_cert_resolver(Arc::new(sni_resolver)),
-  };
+  let mut tls_config;
 
   let mut addr = SocketAddr::from((IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)), 80));
   let mut addr_tls = SocketAddr::from((IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)), 443));
@@ -710,6 +828,76 @@ async fn server_event_loop(
     };
   }
 
+  // Get domains for ACME configuration
+  let mut acme_domains = Vec::new();
+  if let Some(hosts_config) = yaml_config["hosts"].as_vec() {
+    for host_yaml in hosts_config.iter() {
+      if let Some(host) = host_yaml.as_hash() {
+        if let Some(domain_yaml) = host.get(&Yaml::from_str("domain")) {
+          if let Some(domain) = domain_yaml.as_str() {
+            if !domain.contains("*") {
+              acme_domains.push(domain);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Create ACME configuration
+  let mut acme_config = AcmeConfig::new(acme_domains);
+  if let Some(acme_contact_unwrapped) = acme_contact {
+    acme_config = acme_config.contact_push(format!("mailto:{}", acme_contact_unwrapped));
+  }
+  let mut acme_config_with_cache = acme_config.cache_option(acme_cache);
+  acme_config_with_cache =
+    acme_config_with_cache.directory_lets_encrypt(acme_letsencrypt_production);
+
+  let acme_tls_acceptor = if tls_enabled && automatic_tls_enabled {
+    let mut acme_state = acme_config_with_cache.state();
+    let acceptor = acme_state.acceptor();
+
+    // Create TLS configuration
+    tls_config = match yaml_config["global"]["enableOCSPStapling"].as_bool() {
+      Some(true) => tls_config_builder_wants_server_cert
+        .with_cert_resolver(Arc::new(Stapler::new(acme_state.resolver()))),
+      _ => tls_config_builder_wants_server_cert.with_cert_resolver(acme_state.resolver()),
+    };
+
+    let acme_logger = logger.clone();
+    tokio::spawn(async move {
+      while let Some(acme_result) = acme_state.next().await {
+        if let Err(acme_error) = acme_result {
+          acme_logger
+            .send(LogMessage::new(
+              format!("Error while obtaining a TLS certificate: {}", acme_error),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+        }
+      }
+    });
+
+    Some(acceptor)
+  } else {
+    // Create TLS configuration
+    tls_config = match yaml_config["global"]["enableOCSPStapling"].as_bool() {
+      Some(true) => {
+        let ocsp_stapler_arc = Arc::new(Stapler::new(Arc::new(sni_resolver)));
+        for certified_key in certified_keys.iter() {
+          ocsp_stapler_arc.preload(certified_key.clone());
+        }
+        tls_config_builder_wants_server_cert.with_cert_resolver(ocsp_stapler_arc.clone())
+      }
+      _ => tls_config_builder_wants_server_cert.with_cert_resolver(Arc::new(sni_resolver)),
+    };
+
+    // Drop the ACME configuration
+    drop(acme_config_with_cache);
+    None
+  };
+
   // Configure ALPN protocols
   let mut alpn_protocols = vec![b"http/1.1".to_vec(), b"http/1.0".to_vec()];
   if let Some(enable_http2) = yaml_config["global"]["enableHTTP2"].as_bool() {
@@ -718,7 +906,13 @@ async fn server_event_loop(
     }
   }
   tls_config.alpn_protocols = alpn_protocols;
-  let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
+  let tls_config_arc = Arc::new(tls_config);
+
+  let acme_tls_acceptor_and_config =
+    acme_tls_acceptor.map(|acceptor| (acceptor, tls_config_arc.clone()));
+
+  // Create TLS acceptor
+  let tls_acceptor = TlsAcceptor::from(tls_config_arc.clone());
 
   let mut listener = None;
   let mut listener_tls = None;
@@ -787,6 +981,7 @@ async fn server_event_loop(
                       stream,
                       remote_address,
                       None,
+                      None,
                       global_config_root.clone(),
                       host_config.clone(),
                       logger.clone(),
@@ -813,6 +1008,7 @@ async fn server_event_loop(
                       stream,
                       remote_address,
                       Some(tls_acceptor),
+                      acme_tls_acceptor_and_config.clone(),
                       global_config_root.clone(),
                       host_config.clone(),
                       logger.clone(),
@@ -838,6 +1034,7 @@ async fn server_event_loop(
             accept_connection(
               stream,
               remote_address,
+              None,
               None,
               global_config_root.clone(),
               host_config.clone(),
@@ -866,6 +1063,7 @@ async fn server_event_loop(
                 stream,
                 remote_address,
                 Some(tls_acceptor),
+                acme_tls_acceptor_and_config.clone(),
                 global_config_root.clone(),
                 host_config.clone(),
                 logger.clone(),

@@ -3,6 +3,7 @@
 ## Project Karpacz UNRELEASED
 **Not released yet**
 
+- Added automatic TLS through TLS-ALPN-01 ACME challenge
 - Changed the cryptography provider for Rustls from AWS-LC to *ring*
 - Fixed HTTPS server using address-port combinations intended for non-encrypted HTTP server
 

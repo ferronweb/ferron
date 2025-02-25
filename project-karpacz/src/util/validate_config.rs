@@ -644,6 +644,72 @@ pub fn validate_config(
     Err(anyhow::anyhow!("Invalid directory listing enabling option"))?
   }
 
+  if !config.get("enableAutomaticTLS").is_badvalue() {
+    if !is_global {
+      Err(anyhow::anyhow!(
+        "Automatic TLS enabling configuration is not allowed in host configuration"
+      ))?
+    }
+    if config.get("enableAutomaticTLS").as_bool().is_none() {
+      Err(anyhow::anyhow!(
+        "Invalid automatic TLS enabling option value"
+      ))?
+    }
+  }
+
+  if !config.get("automaticTLSContactEmail").is_badvalue() {
+    if !is_global {
+      Err(anyhow::anyhow!(
+        "Automatic TLS contact email address configuration is not allowed in host configuration"
+      ))?
+    }
+    if config.get("automaticTLSContactEmail").as_str().is_none() {
+      Err(anyhow::anyhow!(
+        "Invalid automatic TLS contact email address"
+      ))?
+    }
+  }
+
+  if !config
+    .get("automaticTLSContactCacheDirectory")
+    .is_badvalue()
+  {
+    if !is_global {
+      Err(anyhow::anyhow!(
+        "Automatic TLS cache directory configuration is not allowed in host configuration"
+      ))?
+    }
+    if config
+      .get("automaticTLSContactCacheDirectory")
+      .as_str()
+      .is_none()
+    {
+      Err(anyhow::anyhow!(
+        "Invalid automatic TLS cache directory path"
+      ))?
+    }
+  }
+
+  if !config
+    .get("automaticTLSLetsEncryptProduction")
+    .is_badvalue()
+  {
+    if !is_global {
+      Err(anyhow::anyhow!(
+        "Let's Encrypt production endpoint for automatic TLS enabling configuration is not allowed in host configuration"
+      ))?
+    }
+    if config
+      .get("automaticTLSLetsEncryptProduction")
+      .as_bool()
+      .is_none()
+    {
+      Err(anyhow::anyhow!(
+        "Invalid Let's Encrypt production endpoint for automatic TLS enabling option value"
+      ))?
+    }
+  }
+
   for module_optional_builtin in modules_optional_builtin.iter() {
     match module_optional_builtin as &str {
       "rproxy" => {
