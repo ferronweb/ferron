@@ -60,13 +60,13 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
    - Option to enable OCSP stapling. When set to `true`, the server will use OCSP stapling to provide certificate revocation status to clients. Certificates with `Must-Staple` extension will not work with automatic TLS enabled. Default: `false`
 - **environmentVariables** (*Object*)
    - Environment variables. This object contains environment variables that the server will use during operation. Default: None
-- **enableAutomaticTLS** (*bool*; Project Karpacz UNRELEASED and newer)
+- **enableAutomaticTLS** (*bool*; Project Karpacz 0.7.0 and newer)
    - Option to enable automatic TLS through Let's Encrypt. The automatic TLS will use an TLS-ALPN-01 ACME challenge. The domain names for the certificate will be extracted from the host configuration (wildcard domains are ignored, since TLS-ALPN-01 ACME challenge doesn't support them). The automatic TLS will work when the HTTPS port is set to `443`. Default: `false`
-- **automaticTLSContactEmail** (*String*; Project Karpacz UNRELEASED and newer)
+- **automaticTLSContactEmail** (*String*; Project Karpacz 0.7.0 and newer)
    - The email address used by automatic TLS for an account in Let's Encrypt. This email address can be used to send notifications by Let's Encrypt. Default: None
-- **automaticTLSContactCacheDirectory** (*String*; Project Karpacz UNRELEASED and newer)
+- **automaticTLSContactCacheDirectory** (*String*; Project Karpacz 0.7.0 and newer)
    - The path to the directory used by automatic TLS to store cache data, such as cached certificates. Default: None
-- **automaticTLSLetsEncryptProduction** (*bool*; Project Karpacz UNRELEASED and newer)
+- **automaticTLSLetsEncryptProduction** (*bool*; Project Karpacz 0.7.0 and newer)
    - Option to enable production Let's Encrypt ACME endpoint. If set to `false`, the staging Let's Encrypt ACME endpoint will be used. Default: `true`
 
 ## Global & host configuration properties

@@ -1,7 +1,7 @@
 # Project Karpacz change log
 
-## Project Karpacz UNRELEASED
-**Not released yet**
+## Project Karpacz 0.7.0
+**Released in February 26, 2025**
 
 - Added automatic TLS through TLS-ALPN-01 ACME challenge
 - Changed the cryptography provider for Rustls from AWS-LC to *ring*
