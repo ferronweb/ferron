@@ -61,7 +61,7 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
 - **environmentVariables** (*Object*)
    - Environment variables. This object contains environment variables that the server will use during operation. Default: None
 - **enableAutomaticTLS** (*bool*; Project Karpacz UNRELEASED and newer)
-   - Option to enable automatic TLS through Let's Encrypt. The automatic TLS will use an TLS-ALPN-01 ACME challenge. The domain names for the certificate will be extracted from the host configuration (wildcard domains are ignored, since TLS-ALPN-01 ACME challenge doesn't support them). Default: `false`
+   - Option to enable automatic TLS through Let's Encrypt. The automatic TLS will use an TLS-ALPN-01 ACME challenge. The domain names for the certificate will be extracted from the host configuration (wildcard domains are ignored, since TLS-ALPN-01 ACME challenge doesn't support them). The automatic TLS will work when the HTTPS port is set to `443`. Default: `false`
 - **automaticTLSContactEmail** (*String*; Project Karpacz UNRELEASED and newer)
    - The email address used by automatic TLS for an account in Let's Encrypt. This email address can be used to send notifications by Let's Encrypt. Default: None
 - **automaticTLSContactCacheDirectory** (*String*; Project Karpacz UNRELEASED and newer)
