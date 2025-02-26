@@ -377,7 +377,14 @@ async fn execute_scgi(
       .or_insert(value_string);
   }
 
-  let scgi_to_url = scgi_to.parse::<hyper::Uri>()?;
+  let scgi_to_fixed = if let Some(stripped) = scgi_to.strip_prefix("unix:///") {
+    // hyper::Uri fails to parse a string if there is an empty authority, so add an "ignore" authority to Unix socket URLs
+    &format!("unix://ignore/{}", stripped)
+  } else {
+    scgi_to
+  };
+
+  let scgi_to_url = scgi_to_fixed.parse::<hyper::Uri>()?;
   let scheme_str = scgi_to_url.scheme_str();
 
   let (socket_reader, mut socket_writer) = match scheme_str {

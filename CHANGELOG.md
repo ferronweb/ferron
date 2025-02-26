@@ -6,6 +6,7 @@
 - Added automatic TLS through TLS-ALPN-01 ACME challenge
 - Changed the cryptography provider for Rustls from AWS-LC to *ring*
 - Fixed HTTPS server using address-port combinations intended for non-encrypted HTTP server
+- Fixed Unix socket URL parsing failures for *scgi* and *fcgi* modules
 
 ## Project Karpacz 0.6.0
 **Released in February 24, 2025**

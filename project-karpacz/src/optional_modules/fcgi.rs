@@ -593,7 +593,14 @@ async fn execute_fastcgi(
       .or_insert(value_string);
   }
 
-  let fastcgi_to_url = fastcgi_to.parse::<hyper::Uri>()?;
+  let fastcgi_to_fixed = if let Some(stripped) = fastcgi_to.strip_prefix("unix:///") {
+    // hyper::Uri fails to parse a string if there is an empty authority, so add an "ignore" authority to Unix socket URLs
+    &format!("unix://ignore/{}", stripped)
+  } else {
+    fastcgi_to
+  };
+
+  let fastcgi_to_url = fastcgi_to_fixed.parse::<hyper::Uri>()?;
   let scheme_str = fastcgi_to_url.scheme_str();
 
   let (socket_reader, mut socket_writer) = match scheme_str {
