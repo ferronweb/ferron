@@ -63,7 +63,6 @@ Contributions are welcome! If you're interested in helping out, feel free to for
 - [x] Support for CGI, FastCGI, and SCGI for dynamic content (via an optional built-in module)
 - [x] Support for forward and reverse proxying (via an optional built-in module)
 - [x] Support for caching (via an optional built-in module)
-- [ ] Support for ModSecurity WAF (via a dynamically linked module that uses the "modsecurity" crate; source only)
 - [x] Load balancing support (via an optional built-in module)
 
 ## License
