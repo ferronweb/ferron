@@ -27,7 +27,7 @@ Since Project Karpacz is still a work in progress, installation instructions wil
 For now, you can clone the repository and explore the existing code:
 
 ```sh
-git clone https://github.com/yourusername/project-karpacz.git
+git clone https://github.com/DorianNiemiecSVRJS/project-karpacz.git
 cd project-karpacz
 ```
 
