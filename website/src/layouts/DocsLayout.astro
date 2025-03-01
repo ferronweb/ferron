@@ -1,0 +1,43 @@
+---
+import Header from "../components/Header.astro";
+import docLinks from "../docLinks";
+import Root from "./Root.astro";
+
+const pathname = Astro.url.pathname;
+---
+
+<Root
+  title={Astro.props.title}
+  description="The Ferron documentation provides comprehensive information and instructions on how to install, use and configure the Ferron web server."
+>
+  <Header docLinks={docLinks} />
+  <div class="grow flex-1 overflow-x-hidden w-full max-w-screen-xl mx-auto">
+    <aside
+      class="hidden md:block md:fixed w-72 px-3 bottom-0 top-12 overflow-y-auto"
+    >
+      <ul class={`flex flex-col my-3 list-none`}>
+        {
+          docLinks.map((link) => (
+            <li class="block my-1">
+              <a
+                href={link.href}
+                target={link.target || "_self"}
+                class={`${link.sub ? "ml-4" : ""} block align-middle ${pathname == link.href ? "bg-accent" : ""} text-inherit px-2 py-1 mx-1 rounded-sm hover:bg-accent/60 transition-colors`}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </aside>
+    <main class="flex-1 box-content md:ml-72 px-2 py-6">
+      <h1 class="text-3xl md:text-5xl pb-1 md:pb-2 mb-2 font-bold">
+        {Astro.props.title}
+      </h1>
+      <div class="prose max-w-full md:prose-lg">
+        <slot />
+      </div>
+    </main>
+  </div>
+</Root>

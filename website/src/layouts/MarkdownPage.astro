@@ -1,0 +1,16 @@
+---
+import MainLayout from "./MainLayout.astro";
+
+const { frontmatter } = Astro.props;
+---
+
+<MainLayout title={frontmatter.title} description={frontmatter.description}>
+  <main class="max-w-screen-xl mx-auto px-4 py-6 md:py-24 gap-2 flex flex-col">
+    <h1 class="text-3xl md:text-5xl pb-1 md:pb-2 mb-2 font-bold">
+      {frontmatter.title}
+    </h1>
+    <div class="prose max-w-full md:prose-lg">
+      <slot />
+    </div>
+  </main>
+</MainLayout>

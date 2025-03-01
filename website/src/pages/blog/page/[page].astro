@@ -1,0 +1,153 @@
+---
+import { getCollection } from "astro:content";
+import MainLayout from "../../../layouts/MainLayout.astro";
+import type { GetStaticPaths } from "astro";
+import { format } from "date-fns";
+import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-astro";
+
+export const getStaticPaths = async function ({ paginate }) {
+  const posts = await getCollection("blog");
+  return paginate(
+    posts.sort((a, b) => {
+      if (a.data.date === undefined || b.data.date === undefined) {
+        return 0;
+      }
+      if (a.data.date < b.data.date) {
+        return 1;
+      } else if (a.data.date > b.data.date) {
+        return -1;
+      } else {
+        return 0;
+      }
+    }),
+    { pageSize: 6 }
+  );
+} satisfies GetStaticPaths;
+
+const { currentPage, data, lastPage } = Astro.props.page;
+
+let begPage = currentPage - 2;
+let endPage = currentPage + 2;
+if (endPage > lastPage) {
+  begPage -= endPage - lastPage;
+  endPage = lastPage;
+}
+if (begPage < 1) {
+  endPage += 1 - begPage;
+  begPage = 1;
+}
+---
+
+<MainLayout
+  title="Ferron Blog"
+  description="Welcome to the Ferron Blog! Stay tuned for the latest Ferron updates."
+>
+  <main
+    id="blog"
+    class="max-w-screen-xl mx-auto px-4 py-6 md:py-28 flex items-center justify-center flex-col"
+  >
+    <h1 class="text-3xl md:text-5xl pb-1 md:pb-2 font-bold">Ferron Blog</h1>
+    <p class="text-muted-foreground flex items-center justify-center my-2">
+      Stay tuned for the latest Ferron updates.
+    </p>
+    <section
+      class="w-full flex flex-col md:flex-row md:flex-wrap max-w-6xl mx-auto"
+    >
+      {
+        data.map((post) => {
+          const formattedDate =
+            post.data.date === undefined
+              ? "Unknown date"
+              : format(new Date(post.data.date), "MMMM d, yyyy");
+
+          const truncatedDescription =
+            post.data.description === undefined
+              ? ""
+              : post.data.description.length > 130
+                ? post.data.description.substring(0, 130) + "..."
+                : post.data.description;
+
+          return (
+            <div class="overflow-hidden sm:w-1/2 lg:w-1/3 p-4">
+              <div class="group text-card-foreground bg-card rounded-lg border-border border h-full flex flex-col">
+                <a href={`/blog/${post.id}`} class="flex flex-col grow">
+                  <div class="relative overflow-hidden rounded-t-lg">
+                    <img
+                      src={
+                        post.data.cover ? post.data.cover : "/blog-missing.png"
+                      }
+                      alt={post.data.title}
+                      width={500}
+                      height={300}
+                      class="w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                    />
+                  </div>
+                  <div class="grow flex flex-col p-4">
+                    <div class="flex flex-row items-center justify-between mb-2 py-2">
+                      <h2 class="text-2xl font-semibold leading-tight">
+                        {post.data.title}
+                      </h2>
+                      <div class="text-sm text-muted-foreground opacity-0 group-hover:opacity-100 duration-300">
+                        <ExternalLink />
+                      </div>
+                    </div>
+                    <p class="text-sm text-muted-foreground grow">
+                      {truncatedDescription}
+                    </p>
+                    <p class="text-xs text-muted-foreground mt-2">
+                      Published on: {formattedDate}
+                    </p>
+                  </div>
+                </a>
+              </div>
+            </div>
+          );
+        })
+      }
+    </section>
+    {
+      (
+        <div class="flex-center mt-12">
+          {lastPage > 1 && (
+            <nav class="mx-auto flex w-full justify-center">
+              <ul class="flex flex-row items-center gap-1">
+                {currentPage > 1 && (
+                  <li>
+                    <a
+                      class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-10 w-10"
+                      href={`/blog/page/${currentPage - 1}`}
+                    >
+                      <ChevronLeft />
+                    </a>
+                  </li>
+                )}
+                {Array.from({ length: lastPage > 5 ? 5 : lastPage }).map(
+                  (_, i) => (
+                    <li>
+                      <a
+                        class={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${currentPage === begPage + i ? "bg-accent/75 text-accent-foreground" : ""} hover:bg-accent hover:text-accent-foreground h-10 w-10`}
+                        href={`/blog/page/${begPage + i}`}
+                      >
+                        {begPage + i}
+                      </a>
+                    </li>
+                  )
+                )}
+                {currentPage < lastPage && (
+                  <li>
+                    <a
+                      class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-10 w-10"
+                      href={`/blog/page/${currentPage + 1}`}
+                    >
+                      <ChevronRight />
+                    </a>
+                  </li>
+                )}
+              </ul>
+            </nav>
+          )}
+        </div>
+      )
+    }
+  </main>
+</MainLayout>

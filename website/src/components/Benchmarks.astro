@@ -1,0 +1,119 @@
+<section class="mx-auto px-3 py-16 max-w-screen-xl">
+  <h2 class="text-center font-bold text-4xl md:text-5xl hyphens-auto">
+    Ferron is a fast web server
+  </h2>
+  <p class="text-center text-lg md:text-xl text-muted-foreground my-5">
+    The static web server performance is measured by running a "wrk -c 100 -d 60
+    -t 6 https://localhost/index.nginx-debian.html" command on a server with a
+    AMD Ryzen 5 8600G CPU. The web servers serve a default page that comes with
+    NGINX web server. All web server also enable logging the requests into a log
+    file.
+  </p>
+  <div data-benchmarks-chart class="max-w-4xl mx-auto w-full"></div>
+</section>
+
+<script>
+  import ApexCharts from "apexcharts";
+
+  const options = {
+    series: [
+      {
+        name: "Requests per second",
+        data: [139552.16, 125868.49, 104221.6, 14877.04]
+      }
+    ],
+    chart: {
+      type: "bar",
+      fontFamily: "Inter, sans-serif"
+    },
+    plotOptions: {
+      bar: {
+        borderRadius: 4,
+        borderRadiusApplication: "end",
+        horizontal: true
+      }
+    },
+    theme: {
+      mode: "dark",
+      monochrome: {
+        enabled: true,
+        color: "#ff4400"
+      }
+    },
+    dataLabels: {
+      enabled: false
+    },
+    xaxis: {
+      categories: [
+        "Project Karpacz 0.3.0",
+        "Caddy 2.6.2",
+        "Apache httpd 2.4.62 (mpm_event)",
+        "SVR.JS 4.5.0 (Bun 1.2.2)"
+      ],
+      labels: {
+        style: {
+          fontSize: "1em"
+        }
+      },
+      title: {
+        text: "Requests per second",
+        offsetY: 30,
+        style: {
+          fontSize: "1em"
+        }
+      }
+    },
+    yaxis: {
+      labels: {
+        maxWidth: 300,
+        style: {
+          fontSize: "1em"
+        }
+      }
+    },
+    responsive: [
+      {
+        breakpoint: 768,
+        options: {
+          plotOptions: {
+            bar: {
+              horizontal: false
+            }
+          },
+          xaxis: {
+            labels: {
+              style: {
+                fontSize: "0.75em"
+              }
+            },
+            title: {
+              text: null,
+              style: {
+                fontSize: "0.75em"
+              }
+            }
+          },
+          yaxis: {
+            labels: {
+              style: {
+                fontSize: "0.75em"
+              }
+            },
+            title: {
+              text: "Requests per second",
+              style: {
+                fontSize: "0.5em"
+              }
+            }
+          }
+        }
+      }
+    ]
+  };
+
+  var chart = new ApexCharts(
+    document.querySelector("[data-benchmarks-chart]"),
+    options
+  );
+  chart.render();
+</script>

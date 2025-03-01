@@ -1,0 +1,64 @@
+---
+import { getCollection, render } from "astro:content";
+import MainLayout from "../../layouts/MainLayout.astro";
+import { ArrowLeft } from "lucide-astro";
+import { format } from "date-fns";
+
+export async function getStaticPaths() {
+  const posts = await getCollection("blog");
+  return posts.map((post) => ({
+    params: { slug: post.id },
+    props: { post }
+  }));
+}
+
+const { data } = Astro.props.post;
+const { Content } = await render(Astro.props.post);
+---
+
+<MainLayout
+  title={data.title}
+  description={data.description}
+  cover={data.cover || "/blog-missing.png"}
+>
+  <main
+    class="max-w-5xl container mx-auto py-8 md:py-28 flex flex-col items-center px-4"
+  >
+    <div class="w-full mx-auto flex flex-row justify-between items-center">
+      <a
+        href="/blog"
+        class="group text-primary transition-all flex items-center justify-center mx-0 px-2 hover:bg-accent hover:text-accent-foreground h-11 rounded-lg"
+      >
+        <ArrowLeft
+          class="mr-2 w-5 h-5 group-hover:translate-x-1 transition-all align-top"
+        />
+        <span class="align-middle">Back</span>
+      </a>
+    </div>
+    <header class="text-start mb-8 w-full">
+      <div class="mb-2">
+        <h1 class="text-3xl md:text-5xl mb-8 py-4 font-bold">
+          {data.title}
+        </h1>
+        <img
+          src={data.cover || "/blog-missing.png"}
+          alt={data.title}
+          width={1200}
+          height={800}
+          class="w-full h-auto object-cover rounded-md"
+        />
+        <p class="mt-4 text-lg md:text-xl text-muted-foreground">
+          Published on: {
+            data.date === undefined
+              ? "Unknown date"
+              : format(data.date, "MMMM d, yyyy")
+          }
+        </p>
+      </div>
+    </header>
+    <div class="mb-6 w-full border-border border"></div>
+    <article class="prose w-full max-w-full md:prose-lg">
+      <Content />
+    </article>
+  </main>
+</MainLayout>

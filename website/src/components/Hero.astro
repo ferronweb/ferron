@@ -1,0 +1,44 @@
+---
+import "asciinema-player/dist/bundle/asciinema-player.css";
+import HeroCTA from "./HeroCTA";
+---
+
+<section class="flex flex-col md:flex-row mx-auto max-w-screen-xl px-3 py-12">
+  <div class="md:w-1/2 self-center text-center md:text-start">
+    <h1
+      class="font-bold text-5xl md:text-6xl leading-tight md:leading-tight md:text-start"
+    >
+      A <span
+        class="bg-clip-text text-transparent bg-gradient-to-r from-[#ffc420] to-[#ba0c0c]"
+        >fast, memory-safe</span
+      > web server powered by <span
+        class="bg-clip-text text-transparent bg-gradient-to-r from-[#ffc420] to-[#ba0c0c]"
+        >Rust</span
+      >
+    </h1>
+    <p class="text-muted-foreground text-lg my-4 md:w-10/12">
+      Ferron is a web server optimized for speed, security, and efficiency.
+      Written in Rust, it offers memory safety and performance, making it ideal
+      for modern websites.
+    </p>
+    <HeroCTA client:load />
+  </div>
+  <div class="w-full md:w-1/2 sm:px-5 py-8 md:py-16 self-center">
+    <div data-hero-demo class="rounded-xl"></div>
+  </div>
+</section>
+
+<script>
+  import heroRecording from "../assets/hero.cast?url";
+  import * as AsciinemaPlayer from "asciinema-player";
+
+  AsciinemaPlayer.create(
+    heroRecording,
+    document.querySelector("[data-hero-demo]"),
+    {
+      loop: true,
+      autoplay: true,
+      poster: "npt:0:0"
+    }
+  );
+</script>

@@ -1,0 +1,98 @@
+---
+import { footerLinks } from "../config";
+import SocialIcons from "./SocialIcons.astro";
+import Logo from "./Logo.astro";
+
+const currentYear = new Date().getFullYear();
+---
+
+<footer class="flex flex-col w-full transition-all border-border border-t">
+  <div
+    class="px-3 sm:px-12 md:px-24 lg:px-6 py-10 w-full mx-auto max-w-screen-xl"
+  >
+    <div
+      class="flex flex-col lg:flex-row justify-between max-lg:items-start max-sm:items-center items-center mb-6"
+    >
+      <div class="flex items-center mb-6 md:mb-0">
+        <Logo width={240} height={80} />
+      </div>
+      <div
+        class="flex flex-col items-center sm:items-start sm:flex-row justify-between w-full lg:w-auto space-y-6 sm:space-y-0 sm:space-x-6 lg:space-x-16"
+      >
+        <div class="flex flex-col items-center sm:items-start">
+          <div class="text-3xl font-bold text-primary font-rajdhani">
+            Quick links
+          </div>
+          {
+            footerLinks.otherPages.map((link) => (
+              <span>
+                <a
+                  href={link.href}
+                  class="text-base hover:text-primary hover:underline transition-colors duration-100"
+                >
+                  {link.label}
+                </a>
+              </span>
+            ))
+          }
+        </div>
+
+        <div class="flex flex-col items-center sm:items-start">
+          <div class="text-3xl font-bold text-primary font-rajdhani">
+            Resources
+          </div>
+          {
+            footerLinks.resources.map((link) => (
+              <span>
+                <a
+                  href={link.href}
+                  class="text-base hover:text-primary hover:underline transition-colors duration-100"
+                >
+                  {link.label}
+                </a>
+              </span>
+            ))
+          }
+        </div>
+
+        <div class="flex flex-col items-center sm:items-start">
+          <div class="text-3xl font-bold text-primary font-rajdhani">
+            Social
+          </div>
+          <div class="flex space-x-1 py-3">
+            <SocialIcons />
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="border-t mb-6 border-gray-300 dark:border-white/30"></div>
+    <div
+      class="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0 px-4"
+    >
+      <span class="text-sm font-light">
+        Copyright © {currentYear == 2025 ? "" : "2025-"}{currentYear}{" "}
+        <a
+          href={footerLinks.footerBottom.rightsReserved.href}
+          class="text-primary font-semibold"
+        >
+          {footerLinks.footerBottom.rightsReserved.label}
+        </a>
+      </span>
+      <span class="text-sm font-light">
+        <a
+          href={footerLinks.footerBottom.termsofService.href}
+          class="text-primary font-medium transition-all underline-offset-4 hover:underline"
+        >
+          {footerLinks.footerBottom.termsofService.label}{" "}
+        </a>
+        |{" "}
+        <a
+          href={footerLinks.footerBottom.privacyPolicy.href}
+          class="text-primary font-medium transition-all underline-offset-4 hover:underline"
+        >
+          {footerLinks.footerBottom.privacyPolicy.label}
+        </a>
+      </span>
+    </div>
+  </div>
+</footer>

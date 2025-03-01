@@ -1,0 +1,44 @@
+---
+import "@fontsource/inter";
+import "@fontsource/inter/700.css";
+import "@fontsource/rajdhani";
+import "@fontsource/rajdhani/700.css";
+import "../styles/global.css";
+import { SEO } from "astro-seo";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <SEO
+      title={Astro.props.title
+        ? `${Astro.props.title} - Ferron`
+        : "Ferron - a fast, memory-safe web server written in Rust"}
+      description={Astro.props.description}
+      openGraph={{
+        basic: {
+          title: Astro.props.title
+            ? `${Astro.props.title} - Ferron`
+            : "Ferron - a fast, memory-safe web server written in Rust",
+          type: "website",
+          image: `${Astro.url.origin}${Astro.props.image || "/opengraph.png"}`
+        }
+      }}
+      twitter={{
+        card: "summary_large_image",
+        site: "@ferron_web",
+        title: Astro.props.title
+          ? `${Astro.props.title} - Ferron`
+          : "Ferron - a fast, memory-safe web server written in Rust",
+        image: `${Astro.url.origin}${Astro.props.image || "/opengraph.png"}`,
+        description: Astro.props.description
+      }}
+    />
+  </head>
+  <body class="flex flex-col min-h-screen">
+    <slot />
+  </body>
+</html>

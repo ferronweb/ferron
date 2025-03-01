@@ -1,0 +1,13 @@
+---
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import Root from "./Root.astro";
+---
+
+<Root {...Astro.props}>
+  <Header />
+  <div class="grow">
+    <slot />
+  </div>
+  <Footer />
+</Root>

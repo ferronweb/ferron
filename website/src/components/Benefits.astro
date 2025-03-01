@@ -1,0 +1,32 @@
+---
+import { Bird, Blocks, Rocket, ShieldCheck } from "lucide-astro";
+import Benefit from "./Benefit.astro";
+---
+
+<section class="mx-auto px-3 py-16 md:py-24 max-w-screen-xl">
+  <h2 class="text-center font-bold text-4xl md:text-5xl hyphens-auto mb-2">
+    Why Ferron?
+  </h2>
+  <div class="flex flex-col md:flex-row md:flex-wrap">
+    <Benefit
+      icon={Bird}
+      title="Free as in freedom"
+      description="You don't need to worry about issues related to proprietary software, such as backdoors or licensing issues. Ferron is licensed under a permissive MIT license, and you can contribute to its developement via a Git repository."
+    />
+    <Benefit
+      icon={Rocket}
+      title="Fast"
+      description="Ferron leverages Rust's asynchronous programming capabilities to ensure fast request serving. According to our own benchmarks, it performs similarly to a popular Caddy web server."
+    />
+    <Benefit
+      icon={ShieldCheck}
+      title="Memory-safe"
+      description="Ferron is written in Rust, a programming language designed for memory safety. This ensures that Ferron has lower risk of memory safety bugs compared to popular web servers written in C or C++."
+    />
+    <Benefit
+      icon={Blocks}
+      title="Extensible"
+      description="You can extend Ferron by loading various server modules, which add various functionality, such as caching, proxying or dynamic content."
+    />
+  </div>
+</section>
