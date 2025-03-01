@@ -15,7 +15,7 @@ function FAQ() {
         <div className="border-b-2 border-border px-3" key={question.key}>
           <h3 className="font-inter">
             <button
-              className="py-3 w-full flex flex-row bg-inherit text-xl text-inherit"
+              className="py-2 md:py-3 w-full flex flex-row bg-inherit text-lg md:text-xl text-inherit"
               onClick={(e) => {
                 e.preventDefault();
                 setSelectedAccordion(
