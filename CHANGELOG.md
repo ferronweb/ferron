@@ -7,6 +7,7 @@
 - Fixed `wwwroot` configuration property resulting in a redirect loop
 - Rebranded the web server from "Project Karpacz" to "Ferron"
 - The directory listings no longer show a return link for the website root directory
+- The entries in the directory listings are now sorted alphabetically
 
 ## Project Karpacz 0.7.0
 **Released in February 26, 2025**

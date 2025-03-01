@@ -32,7 +32,14 @@ pub async fn generate_directory_listing(
   }
   let min_table_rows_length = table_rows.len();
 
+  // Create a vector containing entries, then sort them by file name.
+  let mut entries = Vec::new();
   while let Some(entry) = directory.next_entry().await? {
+    entries.push(entry);
+  }
+  entries.sort_by_cached_key(|entry| entry.file_name().to_string_lossy().to_string());
+
+  for entry in entries.iter() {
     let filename = entry.file_name().to_string_lossy().to_string();
     if filename.starts_with('.') {
       // Don't add files nor directories with "." at the beginning of their names
