@@ -3,6 +3,7 @@
 ## Ferron UNRELEASED
 **Not released yet**
 
+- Fixed `wwwroot` configuration property resulting in a redirect loop
 - Rebranded the web server from "Project Karpacz" to "Ferron"
 
 ## Project Karpacz 0.7.0

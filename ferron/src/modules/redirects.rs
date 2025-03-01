@@ -141,7 +141,7 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
                   false => "http",
                 })
                 .authority(match host_port {
-                  Some(port) => format!("{}:{}", host_name, port),
+                  Some(port) => format!("www.{}:{}", host_name, port),
                   None => host_name,
                 })
                 .path_and_query(path_and_query)
