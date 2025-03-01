@@ -153,11 +153,12 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
             },
             None => None,
           },
-        ) || match &host_url_rewrite_map_wrap.ip {
+        ) && match &host_url_rewrite_map_wrap.ip {
           Some(value) => ip_match(value as &str, socket_data.remote_addr.ip()),
           None => true,
         } {
           host_url_rewrite_map = host_url_rewrite_map_wrap.rewrite_map.iter();
+          break;
         }
       }
 

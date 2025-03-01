@@ -225,12 +225,13 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
             },
             None => None,
           },
-        ) || match &host_non_standard_codes_list_wrap.ip {
+        ) && match &host_non_standard_codes_list_wrap.ip {
           Some(value) => ip_match(value as &str, socket_data.remote_addr.ip()),
           None => true,
         } {
           host_non_standard_codes_list =
             host_non_standard_codes_list_wrap.non_standard_codes.iter();
+          break;
         }
       }
 
