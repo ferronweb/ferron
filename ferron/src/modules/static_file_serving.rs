@@ -719,6 +719,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                 if let Some(content_length) = content_length {
                   response_builder = response_builder.header(header::CONTENT_LENGTH, content_length)
                 }
+                response_builder = response_builder.header(header::CONTENT_TYPE, "text/html");
 
                 let response = response_builder.body(
                   Full::new(Bytes::from(directory_listing_html))

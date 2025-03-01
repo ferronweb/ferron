@@ -235,7 +235,7 @@ pub async fn request_handler(
               }
               let response = Response::builder()
                 .status(StatusCode::BAD_REQUEST)
-                .header(header::SERVER, SERVER_SOFTWARE)
+                .header(header::CONTENT_TYPE, "text/html")
                 .body(
                   Full::new(Bytes::from(generate_default_error_page(
                     StatusCode::BAD_REQUEST,
@@ -295,7 +295,7 @@ pub async fn request_handler(
         }
         let response = Response::builder()
           .status(StatusCode::BAD_REQUEST)
-          .header(header::SERVER, SERVER_SOFTWARE)
+          .header(header::CONTENT_TYPE, "text/html")
           .body(
             Full::new(Bytes::from(generate_default_error_page(
               StatusCode::BAD_REQUEST,
@@ -367,6 +367,7 @@ pub async fn request_handler(
       }
       let response = Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .header(header::CONTENT_TYPE, "text/html")
         .body(
           Full::new(Bytes::from(generate_default_error_page(
             StatusCode::INTERNAL_SERVER_ERROR,

@@ -3,6 +3,7 @@
 ## Ferron UNRELEASED
 **Not released yet**
 
+- Fixed directory listings and some server error pages displaying HTML as plain text
 - Fixed handling of per-host URL rewriting and non-standard code configuration
 - Fixed `wwwroot` configuration property resulting in a redirect loop
 - Rebranded the web server from "Project Karpacz" to "Ferron"
