@@ -24,10 +24,13 @@ pub async fn generate_directory_listing(
   let return_path = &return_path_vec.join("/") as &str;
 
   let mut table_rows = Vec::new();
-  table_rows.push(format!(
-    "<tr><td><a href=\"{}\">Return</a></td><td></td><td></td></tr>",
-    anti_xss(return_path)
-  ));
+  if !request_path_without_trailing_slashes.is_empty() {
+    table_rows.push(format!(
+      "<tr><td><a href=\"{}\">Return</a></td><td></td><td></td></tr>",
+      anti_xss(return_path)
+    ));
+  }
+  let min_table_rows_length = table_rows.len();
 
   while let Some(entry) = directory.next_entry().await? {
     let filename = entry.file_name().to_string_lossy().to_string();
@@ -81,7 +84,7 @@ pub async fn generate_directory_listing(
     };
   }
 
-  if table_rows.len() < 2 {
+  if table_rows.len() < min_table_rows_length {
     table_rows.push("<tr><td>No files found</td><td></td><td></td></tr>".to_string());
   }
 

@@ -6,6 +6,7 @@
 - Fixed handling of per-host URL rewriting and non-standard code configuration
 - Fixed `wwwroot` configuration property resulting in a redirect loop
 - Rebranded the web server from "Project Karpacz" to "Ferron"
+- The directory listings no longer show a return link for the website root directory
 
 ## Project Karpacz 0.7.0
 **Released in February 26, 2025**
