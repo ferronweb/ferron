@@ -27,8 +27,8 @@ Since Ferron is still a work in progress, installation instructions will be prov
 For now, you can clone the repository and explore the existing code:
 
 ```sh
-git clone https://github.com/DorianNiemiecSVRJS/project-karpacz.git
-cd project-karpacz
+git clone https://github.com/ferronweb/ferron.git
+cd ferron
 ```
 
 You can build and run the project using Cargo:
