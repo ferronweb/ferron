@@ -1,4 +1,9 @@
-# Project Karpacz change log
+# Ferron change log
+
+## Ferron UNRELEASED
+**Not released yet**
+
+- Rebranded the web server from "Project Karpacz" to "Ferron"
 
 ## Project Karpacz 0.7.0
 **Released in February 26, 2025**

@@ -1,4 +1,4 @@
-# Project Karpacz vulnerabilities
+# Ferron vulnerabilities
 Some older versions of Project Karpacz may contain security vulnerabilities. It's recommended to keep Project Karpacz up-to-date.
 
 ## Fixed in Project Karpacz 0.6.0

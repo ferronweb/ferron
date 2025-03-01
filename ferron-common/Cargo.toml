@@ -1,0 +1,16 @@
+[package]
+name = "ferron-common"
+version = "0.7.0"
+edition = "2021"
+
+[dependencies]
+hyper = { workspace = true }
+tokio = { workspace = true }
+http-body-util = { workspace = true }
+yaml-rust2 = { workspace = true }
+async-trait = { workspace = true }
+pin-project-lite = "0.2.16"
+async-channel = { workspace = true }
+
+[dev-dependencies]
+rusty-hook = { workspace = true }

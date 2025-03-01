@@ -1,0 +1,18 @@
+[package]
+name = "ferron-mod-example"
+version = "0.7.0"
+edition = "2021"
+
+[dependencies]
+async-trait.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+ferron-common = { workspace = true }
+tokio.workspace = true
+mimalloc = { workspace = true }
+
+[dev-dependencies]
+rusty-hook = { workspace = true }
+
+[lib]
+crate-type = ["dylib"]

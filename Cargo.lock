@@ -704,6 +704,91 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferron"
+version = "0.7.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "async-compression",
+ "async-trait",
+ "base64",
+ "cache_control",
+ "chrono",
+ "clap",
+ "fancy-regex",
+ "ferron-common",
+ "futures-util",
+ "hashlink",
+ "http-body-util",
+ "httparse",
+ "hyper",
+ "hyper-util",
+ "itertools 0.14.0",
+ "libloading",
+ "memmem",
+ "mimalloc",
+ "new_mime_guess",
+ "ocsp-stapler",
+ "password-auth",
+ "pin-project-lite",
+ "rand 0.9.0",
+ "rustls",
+ "rustls-native-certs",
+ "rustls-pemfile",
+ "rustls-pki-types",
+ "rusty-hook",
+ "sha2",
+ "tokio",
+ "tokio-rustls",
+ "tokio-rustls-acme",
+ "tokio-test",
+ "tokio-util",
+ "urlencoding",
+ "winresource",
+ "yaml-rust2",
+]
+
+[[package]]
+name = "ferron-common"
+version = "0.7.0"
+dependencies = [
+ "async-channel",
+ "async-trait",
+ "http-body-util",
+ "hyper",
+ "pin-project-lite",
+ "rusty-hook",
+ "tokio",
+ "yaml-rust2",
+]
+
+[[package]]
+name = "ferron-mod-example"
+version = "0.7.0"
+dependencies = [
+ "async-trait",
+ "ferron-common",
+ "http-body-util",
+ "hyper",
+ "mimalloc",
+ "rusty-hook",
+ "tokio",
+]
+
+[[package]]
+name = "ferron-passwd"
+version = "0.7.0"
+dependencies = [
+ "clap",
+ "mimalloc",
+ "password-auth",
+ "rpassword",
+ "rusty-hook",
+ "winresource",
+ "yaml-rust2",
+]
+
+[[package]]
 name = "flate2"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1687,91 +1772,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60946a68e5f9d28b0dc1c21bb8a97ee7d018a8b322fa57838ba31cc878e22d99"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "project-karpacz"
-version = "0.7.0"
-dependencies = [
- "anyhow",
- "async-channel",
- "async-compression",
- "async-trait",
- "base64",
- "cache_control",
- "chrono",
- "clap",
- "fancy-regex",
- "futures-util",
- "hashlink",
- "http-body-util",
- "httparse",
- "hyper",
- "hyper-util",
- "itertools 0.14.0",
- "libloading",
- "memmem",
- "mimalloc",
- "new_mime_guess",
- "ocsp-stapler",
- "password-auth",
- "pin-project-lite",
- "project-karpacz-common",
- "rand 0.9.0",
- "rustls",
- "rustls-native-certs",
- "rustls-pemfile",
- "rustls-pki-types",
- "rusty-hook",
- "sha2",
- "tokio",
- "tokio-rustls",
- "tokio-rustls-acme",
- "tokio-test",
- "tokio-util",
- "urlencoding",
- "winresource",
- "yaml-rust2",
-]
-
-[[package]]
-name = "project-karpacz-common"
-version = "0.7.0"
-dependencies = [
- "async-channel",
- "async-trait",
- "http-body-util",
- "hyper",
- "pin-project-lite",
- "rusty-hook",
- "tokio",
- "yaml-rust2",
-]
-
-[[package]]
-name = "project-karpacz-mod-example"
-version = "0.7.0"
-dependencies = [
- "async-trait",
- "http-body-util",
- "hyper",
- "mimalloc",
- "project-karpacz-common",
- "rusty-hook",
- "tokio",
-]
-
-[[package]]
-name = "project-karpacz-passwd"
-version = "0.7.0"
-dependencies = [
- "clap",
- "mimalloc",
- "password-auth",
- "rpassword",
- "rusty-hook",
- "winresource",
- "yaml-rust2",
 ]
 
 [[package]]
