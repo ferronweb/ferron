@@ -1,5 +1,4 @@
 ---
-import Banners from "../components/Banners.astro";
 import Header from "../components/Header.astro";
 import docLinks from "../docLinks";
 import Root from "./Root.astro";
@@ -11,7 +10,6 @@ const pathname = Astro.url.pathname;
   title={Astro.props.title}
   description="The Ferron documentation provides comprehensive information and instructions on how to install, use and configure the Ferron web server."
 >
-  <Banners />
   <Header docLinks={docLinks} />
   <div class="grow flex-1 overflow-x-hidden w-full max-w-screen-xl mx-auto">
     <aside
