@@ -5,7 +5,8 @@ import type { GetStaticPaths } from "astro";
 import { format } from "date-fns";
 import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-astro";
 
-export const getStaticPaths = async function ({ paginate }) {
+// prettier-ignore
+export const getStaticPaths = (async function ({ paginate }) {
   const posts = await getCollection("blog");
   return paginate(
     posts.sort((a, b) => {
@@ -22,7 +23,7 @@ export const getStaticPaths = async function ({ paginate }) {
     }),
     { pageSize: 6 }
   );
-} satisfies GetStaticPaths;
+}) satisfies GetStaticPaths;
 
 const { currentPage, data, lastPage } = Astro.props.page;
 
