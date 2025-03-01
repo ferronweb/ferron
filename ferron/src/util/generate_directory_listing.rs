@@ -29,8 +29,6 @@ pub async fn generate_directory_listing(
       "<tr><td><a href=\"{}\">Return</a></td><td></td><td></td></tr>",
       anti_xss(return_path)
     ));
-  } else {
-    request_path_without_trailing_slashes = "/";
   }
   let min_table_rows_length = table_rows.len();
 
@@ -50,7 +48,7 @@ pub async fn generate_directory_listing(
     match entry.metadata().await {
       Ok(metadata) => {
         let filename_link = format!(
-          "<a href=\"{}{}{}\">{}</a>",
+          "<a href=\"{}/{}{}\">{}</a>",
           request_path_without_trailing_slashes,
           anti_xss(urlencoding::encode(&filename).as_ref()),
           match metadata.is_dir() {
