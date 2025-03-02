@@ -27,7 +27,7 @@ function FAQ() {
                 {question.question}
               </span>
               <Plus
-                className={`${selectedAccordion == question.key ? "rotate-45" : ""} cursor-pointer duration-300 transition-transform`}
+                className={`${selectedAccordion == question.key ? "rotate-45" : ""} cursor-pointer duration-300 transition-transform self-center`}
               />
             </button>
           </h3>
