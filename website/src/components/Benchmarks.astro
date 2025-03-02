@@ -13,107 +13,110 @@
 </section>
 
 <script>
-  import ApexCharts from "apexcharts";
+  async function loadBenchmarkChart() {
+    let ApexCharts = (await import("apexcharts")).default;
 
-  const options = {
-    series: [
-      {
-        name: "Requests per second",
-        data: [139552.16, 125868.49, 104221.6, 14877.04]
-      }
-    ],
-    chart: {
-      type: "bar",
-      fontFamily: "Inter, sans-serif"
-    },
-    plotOptions: {
-      bar: {
-        borderRadius: 4,
-        borderRadiusApplication: "end",
-        horizontal: true
-      }
-    },
-    theme: {
-      mode: "dark",
-      monochrome: {
-        enabled: true,
-        color: "#ff4400"
-      }
-    },
-    dataLabels: {
-      enabled: false
-    },
-    xaxis: {
-      categories: [
-        "Project Karpacz 0.3.0",
-        "Caddy 2.6.2",
-        "Apache httpd 2.4.62 (mpm_event)",
-        "SVR.JS 4.5.0 (Bun 1.2.2)"
+    const options = {
+      series: [
+        {
+          name: "Requests per second",
+          data: [139552.16, 125868.49, 104221.6, 14877.04]
+        }
       ],
-      labels: {
-        style: {
-          fontSize: "1em"
+      chart: {
+        type: "bar",
+        fontFamily: "Inter, sans-serif"
+      },
+      plotOptions: {
+        bar: {
+          borderRadius: 4,
+          borderRadiusApplication: "end",
+          horizontal: true
         }
       },
-      title: {
-        text: "Requests per second",
-        offsetY: 30,
-        style: {
-          fontSize: "1em"
+      theme: {
+        mode: "dark",
+        monochrome: {
+          enabled: true,
+          color: "#ff4400"
         }
-      }
-    },
-    yaxis: {
-      labels: {
-        maxWidth: 300,
-        style: {
-          fontSize: "1em"
+      },
+      dataLabels: {
+        enabled: false
+      },
+      xaxis: {
+        categories: [
+          "Project Karpacz 0.3.0",
+          "Caddy 2.6.2",
+          "Apache httpd 2.4.62 (mpm_event)",
+          "SVR.JS 4.5.0 (Bun 1.2.2)"
+        ],
+        labels: {
+          style: {
+            fontSize: "1em"
+          }
+        },
+        title: {
+          text: "Requests per second",
+          offsetY: 30,
+          style: {
+            fontSize: "1em"
+          }
         }
-      }
-    },
-    responsive: [
-      {
-        breakpoint: 768,
-        options: {
-          plotOptions: {
-            bar: {
-              horizontal: false
-            }
-          },
-          xaxis: {
-            labels: {
-              style: {
-                fontSize: "0.75em"
+      },
+      yaxis: {
+        labels: {
+          maxWidth: 300,
+          style: {
+            fontSize: "1em"
+          }
+        }
+      },
+      responsive: [
+        {
+          breakpoint: 768,
+          options: {
+            plotOptions: {
+              bar: {
+                horizontal: false
               }
             },
-            title: {
-              text: null,
-              style: {
-                fontSize: "0.75em"
-              }
-            }
-          },
-          yaxis: {
-            labels: {
-              style: {
-                fontSize: "0.75em"
+            xaxis: {
+              labels: {
+                style: {
+                  fontSize: "0.75em"
+                }
+              },
+              title: {
+                text: null,
+                style: {
+                  fontSize: "0.75em"
+                }
               }
             },
-            title: {
-              text: "Requests per second",
-              style: {
-                fontSize: "0.5em"
+            yaxis: {
+              labels: {
+                style: {
+                  fontSize: "0.75em"
+                }
+              },
+              title: {
+                text: "Requests per second",
+                style: {
+                  fontSize: "0.5em"
+                }
               }
             }
           }
         }
-      }
-    ]
-  };
+      ]
+    };
 
-  var chart = new ApexCharts(
-    document.querySelector("[data-benchmarks-chart]"),
-    options
-  );
-  chart.render();
+    const chart = new ApexCharts(
+      document.querySelector("[data-benchmarks-chart]"),
+      options
+    );
+    chart.render();
+  }
+  loadBenchmarkChart();
 </script>
