@@ -1,7 +1,7 @@
 # Ferron change log
 
-## Ferron UNRELEASED
-**Not released yet**
+## Ferron 1.0.0-beta1
+**Released in March 2, 2025**
 
 - Fixed directory listings and some server error pages displaying HTML as plain text
 - Fixed handling of per-host URL rewriting and non-standard code configuration
