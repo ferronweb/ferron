@@ -2,7 +2,7 @@
 title: Server configuration properties
 ---
 
-Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is the description of configuration properties for this server.
+Ferron can be configured in the `ferron.yaml` file. Below is the description of configuration properties for this server.
 
 ## Global-only configuration properties
 
@@ -176,7 +176,7 @@ Project Karpacz can be configured in the `project-karpacz.yaml` file. Below is t
 
 ## Example configuration
 
-Below is the example Project Karpacz web server configuration:
+Below is the example Ferron web server configuration:
 
 ```yaml
 global:
@@ -190,8 +190,8 @@ global:
     maxConcurrentStreams: 100
     maxHeaderListSize: 8192
     enableConnectProtocol: true
-  logFilePath: "/var/log/project-karpacz/access.log"
-  errorLogFilePath: "/var/log/project-karpacz/error.log"
+  logFilePath: "/var/log/ferron/access.log"
+  errorLogFilePath: "/var/log/ferron/error.log"
   cert: "/etc/ssl/certs/server-cert.pem"
   key: "/etc/ssl/private/server-key.pem"
   tlsMinVersion: "TLSv1.2"

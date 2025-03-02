@@ -4,6 +4,17 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.0.0-beta1
+
+**Released in March 2, 2025**
+
+- Fixed directory listings and some server error pages displaying HTML as plain text
+- Fixed handling of per-host URL rewriting and non-standard code configuration
+- Fixed `wwwroot` configuration property resulting in a redirect loop
+- Rebranded the web server from "Project Karpacz" to "Ferron"
+- The directory listings no longer show a return link for the website root directory
+- The entries in the directory listings are now sorted alphabetically
+
 ## Project Karpacz 0.7.0
 
 **Released in February 26, 2025**
