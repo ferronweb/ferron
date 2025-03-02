@@ -14,18 +14,17 @@ We strongly discourage public disclosure of vulnerabilities before a fix is rele
 ## Security best practices
 To maintain security, we follow these principles:
 
-- **Memory Safety:** Ferron leverages Rust’s ownership model and borrow checker to eliminate memory-related vulnerabilities.
-- **Minimal Attack Surface:** Features are enabled only as needed, reducing exposure to potential threats.
-- **Regular Audits:** Code is reviewed regularly, and dependencies are monitored for security vulnerabilities.
-- **Safe Defaults:** Ferron has some insecure configuration disable by default, like exposing server versions or directory listings.
+- **Memory safety:** Ferron leverages Rust’s ownership model and borrow checker to eliminate memory-related vulnerabilities.
+- **Minimal attack surface:** Features are enabled only as needed, reducing exposure to potential threats.
+- **Regular audits:** Code is reviewed regularly, and dependencies are monitored for security vulnerabilities.
+- **Safe defaults:** Ferron has some insecure configuration disabled by default, like server version exposure or directory listings.
 
 ## Secure development process
 Ferron follows industry best practices to maintain a secure development lifecycle:
 
-1. **Code Review:** All changes undergo peer review with security checks.
-2. **Automated Testing:** Continuous integration includes security tests, fuzzing, and static analysis.
-3. **Dependency Management:** Regularly check and update dependencies to patch known vulnerabilities.
-4. **Responsible Disclosure:** Work with the security community to resolve issues before public disclosure.
+1. **Code review:** All changes undergo peer review with security checks.
+2. **Dependency management:** Regularly check and update dependencies to patch known vulnerabilities.
+3. **Responsible disclosure:** Work with the security community to resolve issues before public disclosure.
 
 ## Handling security incidents
 In the event of a security breach or vulnerability:
