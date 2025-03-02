@@ -40,7 +40,7 @@ cargo run -r --bin ferron
 
 ## Server configuration
 
-You can check the `CONFIGURATION.md` file to see configuration properties used by Ferron.
+You can check the [Ferron documentation](https://www.ferronweb.org/docs/configuration) to see configuration properties used by Ferron.
 
 ## Contributing
 
