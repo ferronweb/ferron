@@ -195,6 +195,8 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           }
         ))?;
 
+        let original_host = hyper_request_parts.headers.get(header::HOST).cloned();
+
         // Host header for host identification
         match authority {
           Some(authority) => {
@@ -212,7 +214,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           .headers
           .insert(header::CONNECTION, "keep-alive".parse()?);
 
-        // X-Forwarded-For header to send the client's IP to a server that's behind the reverse proxy
+        // X-Forwarded-* headers to send the client's IP to a server that's behind the reverse proxy
         hyper_request_parts.headers.insert(
           "x-forwarded-for",
           socket_data
@@ -222,6 +224,22 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
             .to_string()
             .parse()?,
         );
+
+        if socket_data.encrypted {
+          hyper_request_parts
+            .headers
+            .insert("x-forwarded-proto", "https".parse()?);
+        } else {
+          hyper_request_parts
+            .headers
+            .insert("x-forwarded-proto", "http".parse()?);
+        }
+
+        if let Some(original_host) = original_host {
+          hyper_request_parts
+            .headers
+            .insert("x-forwarded-host", original_host);
+        }
 
         let proxy_request = Request::from_parts(hyper_request_parts, request_body);
 
