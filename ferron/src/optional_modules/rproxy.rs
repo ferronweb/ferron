@@ -214,7 +214,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           .headers
           .insert(header::CONNECTION, "keep-alive".parse()?);
 
-        // X-Forwarded-* headers to send the client's IP to a server that's behind the reverse proxy
+        // X-Forwarded-* headers to send the client's data to a server that's behind the reverse proxy
         hyper_request_parts.headers.insert(
           "x-forwarded-for",
           socket_data
