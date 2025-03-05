@@ -867,6 +867,30 @@ pub fn validate_config(
           Err(anyhow::anyhow!("Invalid FastCGI path"))?
         }
       }
+      "fauth" => {
+        if !config.get("authTo").is_badvalue() && config.get("authTo").as_str().is_none() {
+          Err(anyhow::anyhow!(
+            "Invalid forwarded authentication target URL value"
+          ))?
+        }
+
+        if !config.get("forwardedAuthCopyHeaders").is_badvalue() {
+          if let Some(modules) = config.get("forwardedAuthCopyHeaders").as_vec() {
+            let modules_iter = modules.iter();
+            for module_name_yaml in modules_iter {
+              if module_name_yaml.as_str().is_none() {
+                Err(anyhow::anyhow!(
+                  "Invalid forwarded authentication response header to copy"
+                ))?
+              }
+            }
+          } else {
+            Err(anyhow::anyhow!(
+              "Invalid forwarded authentication response headers to copy configuration"
+            ))?
+          }
+        }
+      }
       _ => (),
     }
   }

@@ -59,6 +59,7 @@ mod ferron_modules {
 mod ferron_optional_modules {
   pub mod cache;
   pub mod cgi;
+  pub mod fauth;
   pub mod fcgi;
   pub mod fproxy;
   pub mod rproxy;
@@ -141,7 +142,7 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
     for module_name_yaml in modules.iter() {
       if let Some(module_name) = module_name_yaml.as_str() {
         let lib = match module_name {
-          "rproxy" | "fproxy" | "cache" | "cgi" | "scgi" | "fcgi" => None,
+          "rproxy" | "fproxy" | "cache" | "cgi" | "scgi" | "fcgi" | "fauth" => None,
           _ => Some(
             match unsafe {
               Library::new(library_filename(format!(
@@ -308,6 +309,23 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
         "fcgi" => {
           external_modules.push(
             match ferron_optional_modules::fcgi::server_module_init(&yaml_config) {
+              Ok(module) => module,
+              Err(err) => {
+                module_error = Some(anyhow::anyhow!(
+                  "Cannot initialize optional built-in module \"{}\": {}",
+                  module_name,
+                  err
+                ));
+                break;
+              }
+            },
+          );
+
+          modules_optional_builtin.push(module_name.clone());
+        }
+        "fauth" => {
+          external_modules.push(
+            match ferron_optional_modules::fauth::server_module_init(&yaml_config) {
               Ok(module) => module,
               Err(err) => {
                 module_error = Some(anyhow::anyhow!(
