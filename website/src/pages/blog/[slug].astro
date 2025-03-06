@@ -19,7 +19,7 @@ const { Content } = await render(Astro.props.post);
 <MainLayout
   title={data.title}
   description={data.description}
-  cover={data.cover || "/blog-missing.png"}
+  image={data.cover || "/blog-missing.png"}
 >
   <main
     class="max-w-5xl container mx-auto py-8 md:py-28 flex flex-col items-center px-4"
