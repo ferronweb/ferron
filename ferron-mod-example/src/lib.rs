@@ -28,6 +28,7 @@ struct ExampleModule;
 pub fn server_module_validate_config(
   _config: &ServerConfigRoot, // This is a configuration root created from YAML configuration
   _is_global: bool,
+  _is_location: bool,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   Ok(())
 }

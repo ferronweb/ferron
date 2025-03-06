@@ -349,7 +349,7 @@ async fn server_event_loop(
   logger: Sender<LogMessage>,
   modules: Vec<Box<dyn ServerModule + Send + Sync>>,
   module_config_validation_functions: Vec<
-    Symbol<'_, fn(&ServerConfigRoot, bool) -> Result<(), Box<dyn Error + Send + Sync>>>,
+    Symbol<'_, fn(&ServerConfigRoot, bool, bool) -> Result<(), Box<dyn Error + Send + Sync>>>,
   >,
   module_error: Option<anyhow::Error>,
   modules_optional_builtin: Vec<String>,
@@ -379,11 +379,12 @@ async fn server_event_loop(
     }
   };
 
-  for (config_to_validate, is_global) in prepared_config {
+  for (config_to_validate, is_global, is_location) in prepared_config {
     let config_root_to_validate = ServerConfigRoot::new(&config_to_validate);
     match validate_config(
       &config_root_to_validate,
       is_global,
+      is_location,
       &modules_optional_builtin,
     ) {
       Ok(_) => (),
@@ -403,7 +404,7 @@ async fn server_event_loop(
     };
     let module_config_validation_functions_iter = module_config_validation_functions.iter();
     for module_config_validation_function in module_config_validation_functions_iter {
-      match module_config_validation_function(&config_root_to_validate, is_global) {
+      match module_config_validation_function(&config_root_to_validate, is_global, is_location) {
         Ok(_) => (),
         Err(err) => {
           logger
@@ -1102,7 +1103,7 @@ pub fn start_server(
   yaml_config: Arc<Yaml>,
   modules: Vec<Box<dyn ServerModule + Send + Sync>>,
   module_config_validation_functions: Vec<
-    Symbol<'_, fn(&ServerConfigRoot, bool) -> Result<(), Box<dyn Error + Send + Sync>>>,
+    Symbol<'_, fn(&ServerConfigRoot, bool, bool) -> Result<(), Box<dyn Error + Send + Sync>>>,
   >,
   module_error: Option<anyhow::Error>,
   modules_optional_builtin: Vec<String>,

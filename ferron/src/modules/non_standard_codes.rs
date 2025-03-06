@@ -5,7 +5,10 @@ use std::time::Duration;
 use crate::ferron_util::ip_blocklist::IpBlockList;
 use crate::ferron_util::ip_match::ip_match;
 use crate::ferron_util::match_hostname::match_hostname;
-use crate::ferron_util::non_standard_code_structs::{NonStandardCode, NonStandardCodesWrap};
+use crate::ferron_util::match_location::match_location;
+use crate::ferron_util::non_standard_code_structs::{
+  NonStandardCode, NonStandardCodesLocationWrap, NonStandardCodesWrap,
+};
 use crate::ferron_util::ttl_cache::TtlCache;
 
 use async_trait::async_trait;
@@ -127,11 +130,33 @@ pub fn server_module_init(
     for host_yaml in hosts.iter() {
       let domain = host_yaml["domain"].as_str().map(String::from);
       let ip = host_yaml["ip"].as_str().map(String::from);
+      let mut locations = Vec::new();
+      if let Some(locations_yaml) = host_yaml["locations"].as_vec() {
+        for location_yaml in locations_yaml.iter() {
+          if let Some(path_str) = location_yaml["path"].as_str() {
+            let path = String::from(path_str);
+            if let Some(non_standard_codes_list_yaml) = location_yaml["nonStandardCodes"].as_vec() {
+              locations.push(NonStandardCodesLocationWrap::new(
+                path,
+                non_standard_codes_config_init(non_standard_codes_list_yaml)?,
+              ));
+            }
+          }
+        }
+      }
       if let Some(non_standard_codes_list_yaml) = host_yaml["nonStandardCodes"].as_vec() {
         host_non_standard_codes_lists.push(NonStandardCodesWrap::new(
           domain,
           ip,
           non_standard_codes_config_init(non_standard_codes_list_yaml)?,
+          locations,
+        ));
+      } else if !locations.is_empty() {
+        host_non_standard_codes_lists.push(NonStandardCodesWrap::new(
+          domain,
+          ip,
+          Vec::new(),
+          locations,
         ));
       }
     }
@@ -209,7 +234,9 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
       let hyper_request = request.get_hyper_request();
       let global_non_standard_codes_list = self.global_non_standard_codes_list.iter();
       let empty_vector = Vec::new();
+      let another_empty_vector = Vec::new();
       let mut host_non_standard_codes_list = empty_vector.iter();
+      let mut location_non_standard_codes_list = another_empty_vector.iter();
 
       // Should have used a HashMap instead of iterating over an array for better performance...
       for host_non_standard_codes_list_wrap in self.host_non_standard_codes_lists.iter() {
@@ -231,12 +258,21 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
         } {
           host_non_standard_codes_list =
             host_non_standard_codes_list_wrap.non_standard_codes.iter();
+          if let Ok(path_decoded) = urlencoding::decode(request.get_hyper_request().uri().path()) {
+            for location_wrap in host_non_standard_codes_list_wrap.locations.iter() {
+              if match_location(&location_wrap.path, &path_decoded) {
+                location_non_standard_codes_list = location_wrap.non_standard_codes.iter();
+                break;
+              }
+            }
+          }
           break;
         }
       }
 
-      let combined_non_standard_codes_list =
-        global_non_standard_codes_list.chain(host_non_standard_codes_list);
+      let combined_non_standard_codes_list = global_non_standard_codes_list
+        .chain(host_non_standard_codes_list)
+        .chain(location_non_standard_codes_list);
 
       let request_url = format!(
         "{}{}",

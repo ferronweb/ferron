@@ -30,6 +30,7 @@ mod ferron_util {
   pub mod ip_match;
   pub mod load_tls;
   pub mod match_hostname;
+  pub mod match_location;
   pub mod non_standard_code_structs;
   pub mod read_to_end_move;
   pub mod sizify;
@@ -206,7 +207,7 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
 
       // Retrieve the module configuration validation function
       let module_validate_config: Symbol<
-        fn(&ServerConfigRoot, bool) -> Result<(), Box<dyn Error + Send + Sync>>,
+        fn(&ServerConfigRoot, bool, bool) -> Result<(), Box<dyn Error + Send + Sync>>,
       > = match unsafe { lib.get(b"server_module_validate_config") } {
         Ok(module) => module,
         Err(err) => {

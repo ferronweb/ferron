@@ -353,6 +353,7 @@ pub async fn request_handler(
       true => None,
     },
     local_address.ip(),
+    request.uri().path(),
   ) {
     Some(config) => config,
     None => {

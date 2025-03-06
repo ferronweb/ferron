@@ -42,6 +42,7 @@ pub struct NonStandardCodesWrap {
   pub domain: Option<String>,
   pub ip: Option<String>,
   pub non_standard_codes: Vec<NonStandardCode>,
+  pub locations: Vec<NonStandardCodesLocationWrap>,
 }
 
 impl NonStandardCodesWrap {
@@ -49,10 +50,26 @@ impl NonStandardCodesWrap {
     domain: Option<String>,
     ip: Option<String>,
     non_standard_codes: Vec<NonStandardCode>,
+    locations: Vec<NonStandardCodesLocationWrap>,
   ) -> Self {
     NonStandardCodesWrap {
       domain,
       ip,
+      non_standard_codes,
+      locations,
+    }
+  }
+}
+
+pub struct NonStandardCodesLocationWrap {
+  pub path: String,
+  pub non_standard_codes: Vec<NonStandardCode>,
+}
+
+impl NonStandardCodesLocationWrap {
+  pub fn new(path: String, non_standard_codes: Vec<NonStandardCode>) -> Self {
+    NonStandardCodesLocationWrap {
+      path,
       non_standard_codes,
     }
   }

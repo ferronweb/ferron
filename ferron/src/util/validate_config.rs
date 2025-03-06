@@ -17,6 +17,7 @@ fn validate_ip(ip: &str) -> bool {
 pub fn validate_config(
   config: &ServerConfigRoot,
   is_global: bool,
+  is_location: bool,
   modules_optional_builtin: &[String],
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   let domain_badvalue = config.get("domain").is_badvalue();
@@ -39,10 +40,25 @@ pub fn validate_config(
     }
   }
 
-  if domain_badvalue && ip_badvalue && !is_global {
+  if domain_badvalue && ip_badvalue && !is_global && !is_location {
     Err(anyhow::anyhow!(
       "A host must either have IP address or domain name specified"
     ))?;
+  }
+
+  if !config.get("path").is_badvalue() {
+    if !is_location {
+      Err(anyhow::anyhow!(
+        "Location path configuration is only allowed in location configuration"
+      ))?;
+    }
+    if config.get("path").as_str().is_none() {
+      Err(anyhow::anyhow!("Invalid location path"))?;
+    }
+  }
+
+  if !config.get("locations").is_badvalue() && is_location {
+    Err(anyhow::anyhow!("Nested locations are not allowed"))?;
   }
 
   if !config.get("loadModules").is_badvalue() {
@@ -900,7 +916,7 @@ pub fn validate_config(
 
 pub fn prepare_config_for_validation(
   config: &Yaml,
-) -> Result<impl Iterator<Item = (Yaml, bool)>, Box<dyn Error + Send + Sync>> {
+) -> Result<impl Iterator<Item = (Yaml, bool, bool)>, Box<dyn Error + Send + Sync>> {
   let mut vector = Vec::new();
   if let Some(global_config) = config["global"].as_hash() {
     let global_config_yaml = Yaml::Hash(global_config.clone());
@@ -908,8 +924,14 @@ pub fn prepare_config_for_validation(
   }
 
   let mut vector2 = Vec::new();
+  let mut vector3 = Vec::new();
   if !config["hosts"].is_badvalue() {
     if let Some(hosts) = config["hosts"].as_vec() {
+      for host in hosts.iter() {
+        if let Some(locations) = host["locations"].as_vec() {
+          vector3.append(&mut locations.clone());
+        }
+      }
       vector2 = hosts.clone();
     } else {
       return Err(anyhow::anyhow!("Invalid virtual host configuration").into());
@@ -918,8 +940,9 @@ pub fn prepare_config_for_validation(
 
   let iter = vector
     .into_iter()
-    .map(|item| (item, true))
-    .chain(vector2.into_iter().map(|item| (item, false)));
+    .map(|item| (item, true, false))
+    .chain(vector2.into_iter().map(|item| (item, false, false)))
+    .chain(vector3.into_iter().map(|item| (item, false, true)));
 
   Ok(iter)
 }

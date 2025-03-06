@@ -33,6 +33,7 @@ pub struct UrlRewriteMapWrap {
   pub domain: Option<String>,
   pub ip: Option<String>,
   pub rewrite_map: Vec<UrlRewriteMapEntry>,
+  pub locations: Vec<UrlRewriteMapLocationWrap>,
 }
 
 impl UrlRewriteMapWrap {
@@ -40,11 +41,24 @@ impl UrlRewriteMapWrap {
     domain: Option<String>,
     ip: Option<String>,
     rewrite_map: Vec<UrlRewriteMapEntry>,
+    locations: Vec<UrlRewriteMapLocationWrap>,
   ) -> Self {
     UrlRewriteMapWrap {
       domain,
       ip,
       rewrite_map,
+      locations,
     }
+  }
+}
+
+pub struct UrlRewriteMapLocationWrap {
+  pub path: String,
+  pub rewrite_map: Vec<UrlRewriteMapEntry>,
+}
+
+impl UrlRewriteMapLocationWrap {
+  pub fn new(path: String, rewrite_map: Vec<UrlRewriteMapEntry>) -> Self {
+    UrlRewriteMapLocationWrap { path, rewrite_map }
   }
 }

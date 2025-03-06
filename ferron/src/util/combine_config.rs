@@ -3,13 +3,16 @@ use std::{collections::HashMap, net::IpAddr, sync::Arc};
 use ferron_common::ServerConfigRoot;
 use yaml_rust2::{yaml::Hash, Yaml};
 
-use crate::ferron_util::{ip_match::ip_match, match_hostname::match_hostname};
+use crate::ferron_util::{
+  ip_match::ip_match, match_hostname::match_hostname, match_location::match_location,
+};
 
 pub fn combine_config(
   global_config_root: Arc<ServerConfigRoot>,
   host_config: Arc<Yaml>,
   hostname: Option<&str>,
   client_ip: IpAddr,
+  path: &str,
 ) -> Option<ServerConfigRoot> {
   let global_config = global_config_root.as_hash();
   let combined_config = Some(global_config.clone());
@@ -30,7 +33,7 @@ pub fn combine_config(
           .unwrap_or(true);
 
         if domain_matched && ip_matched {
-          return Some(merge_configs(combined_config, host_hashtable));
+          return Some(merge_host_configs(combined_config, host_hashtable, path));
         }
       }
     }
@@ -39,10 +42,84 @@ pub fn combine_config(
   combined_config.map(ServerConfigRoot::from_hash)
 }
 
-fn merge_configs(global: Option<HashMap<String, Yaml>>, host: &Hash) -> ServerConfigRoot {
+fn merge_host_configs(
+  global: Option<HashMap<String, Yaml>>,
+  host: &Hash,
+  path: &str,
+) -> ServerConfigRoot {
   let mut merged = global.unwrap_or_default();
+  let mut locations = None;
 
   for (key, value) in host {
+    if let Some(key) = key.as_str() {
+      if key == "locations" {
+        if let Some(obtained_locations) = value.as_vec() {
+          locations = Some(obtained_locations);
+        }
+      } else {
+        match value {
+          Yaml::Array(host_array) => {
+            merged
+              .entry(key.to_string())
+              .and_modify(|global_val| {
+                if let Yaml::Array(global_array) = global_val {
+                  global_array.extend(host_array.clone());
+                } else {
+                  *global_val = Yaml::Array(host_array.clone());
+                }
+              })
+              .or_insert_with(|| Yaml::Array(host_array.clone()));
+          }
+          Yaml::Hash(host_hash) => {
+            merged
+              .entry(key.to_string())
+              .and_modify(|global_val| {
+                if let Yaml::Hash(global_hash) = global_val {
+                  for (k, v) in host_hash {
+                    global_hash.insert(k.clone(), v.clone());
+                  }
+                } else {
+                  *global_val = Yaml::Hash(host_hash.clone());
+                }
+              })
+              .or_insert_with(|| Yaml::Hash(host_hash.clone()));
+          }
+          _ => {
+            merged.insert(key.to_string(), value.clone());
+          }
+        }
+      }
+    }
+  }
+
+  if let Some(locations) = locations {
+    if let Ok(decoded_path) = urlencoding::decode(path) {
+      for location in locations {
+        if let Some(location_hashtable) = location.as_hash() {
+          let path_matched = location_hashtable
+            .get(&Yaml::String("path".to_string()))
+            .and_then(Yaml::as_str)
+            .map(|path_match| match_location(path_match, &decoded_path))
+            .unwrap_or(true);
+
+          if path_matched {
+            return merge_location_configs(Some(merged), location_hashtable);
+          }
+        }
+      }
+    }
+  }
+
+  ServerConfigRoot::from_hash(merged)
+}
+
+fn merge_location_configs(
+  global: Option<HashMap<String, Yaml>>,
+  location: &Hash,
+) -> ServerConfigRoot {
+  let mut merged = global.unwrap_or_default();
+
+  for (key, value) in location {
     if let Some(key) = key.as_str() {
       match value {
         Yaml::Array(host_array) => {
@@ -92,18 +169,18 @@ mod tests {
         global:
           key1:
             - global_value1
-          key2: 
+          key2:
             - global_value2
         hosts:
           - domain: example.com
             ip: 192.168.1.1
-            key1: 
+            key1:
               - host_value1
-            key2: 
+            key2:
               - host_value2
           - domain: test.com
             ip: 192.168.1.2
-            key3: 
+            key3:
               - host_value3
         "#;
 
@@ -121,7 +198,7 @@ mod tests {
     let hostname = Some("example.com");
     let client_ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
 
-    let result = combine_config(global_config_root, host_config, hostname, client_ip);
+    let result = combine_config(global_config_root, host_config, hostname, client_ip, "/");
     assert!(result.is_some());
 
     let result_yaml = result.unwrap();
@@ -137,7 +214,8 @@ mod tests {
     let hostname = Some("nonexistent.com");
     let client_ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
 
-    let result = combine_config(global_config_root, host_config, hostname, client_ip);
+    let result = combine_config(global_config_root, host_config, hostname, client_ip, "/");
+    assert!(result.is_some());
     assert!(result.unwrap().as_hash().get("key3").is_none());
   }
 
@@ -147,7 +225,8 @@ mod tests {
     let hostname = Some("example.com");
     let client_ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 2));
 
-    let result = combine_config(global_config_root, host_config, hostname, client_ip);
+    let result = combine_config(global_config_root, host_config, hostname, client_ip, "/");
+    assert!(result.is_some());
     assert!(result.unwrap().as_hash().get("key3").is_none());
   }
 
@@ -156,7 +235,7 @@ mod tests {
     let yaml_str = r#"
         global:
           key1: value1
-          key2: 
+          key2:
             - global_value2
         hosts: []
         "#;
@@ -169,7 +248,7 @@ mod tests {
     let hostname = None;
     let client_ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
 
-    let result = combine_config(global_config_root, host_config, hostname, client_ip);
+    let result = combine_config(global_config_root, host_config, hostname, client_ip, "/");
     assert!(result.is_some());
 
     let result_yaml = result.unwrap();
@@ -177,5 +256,73 @@ mod tests {
 
     assert_eq!(result_hash.get("key1").unwrap().as_str().unwrap(), "value1");
     assert_eq!(result_hash.get("key2").unwrap().as_vec().unwrap().len(), 1);
+  }
+
+  #[test]
+  fn test_combine_config_with_empty_host_config() {
+    let yaml_str = r#"
+        global:
+          key1: value1
+          key2:
+            - global_value2
+        hosts: []
+        "#;
+
+    let docs = YamlLoader::load_from_str(yaml_str).unwrap();
+    let config_yaml = docs[0].clone();
+    let global_config_root = Arc::new(ServerConfigRoot::new(&config_yaml["global"]));
+    let host_config = Arc::new(config_yaml["hosts"].clone());
+
+    let hostname = Some("example.com");
+    let client_ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
+
+    let result = combine_config(global_config_root, host_config, hostname, client_ip, "/");
+    assert!(result.is_some());
+
+    let result_yaml = result.unwrap();
+    let result_hash = result_yaml.as_hash();
+
+    assert_eq!(result_hash.get("key1").unwrap().as_str().unwrap(), "value1");
+    assert_eq!(result_hash.get("key2").unwrap().as_vec().unwrap().len(), 1);
+  }
+
+  #[test]
+  fn test_combine_config_with_path_match() {
+    let yaml_str = r#"
+        global:
+          key1:
+            - global_value1
+          key2:
+            - global_value2
+        hosts:
+          - domain: example.com
+            ip: 192.168.1.1
+            locations:
+              - path: /test
+                key3:
+                  - location_value
+        "#;
+
+    let docs = YamlLoader::load_from_str(yaml_str).unwrap();
+    let config_yaml = docs[0].clone();
+    let global_config_root = Arc::new(ServerConfigRoot::new(&config_yaml["global"]));
+    let host_config = Arc::new(config_yaml["hosts"].clone());
+
+    let hostname = Some("example.com");
+    let client_ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
+
+    let result = combine_config(
+      global_config_root,
+      host_config,
+      hostname,
+      client_ip,
+      "/test",
+    );
+    assert!(result.is_some());
+
+    let result_yaml = result.unwrap();
+    let result_hash = result_yaml.as_hash();
+
+    assert_eq!(result_hash.get("key3").unwrap().as_vec().unwrap().len(), 1);
   }
 }
