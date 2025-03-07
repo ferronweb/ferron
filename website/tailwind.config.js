@@ -100,6 +100,10 @@ export default {
             },
             code: {
               color: "inherit"
+            },
+            img: {
+              marginLeft: "auto",
+              marginRight: "auto"
             }
           }
         }
