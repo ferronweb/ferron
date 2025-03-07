@@ -5,7 +5,7 @@ global:
   errorLogFilePath: error.log
   loadModules:
    - cgi
-  wwwroot: /var/www/html # Replace "/var/www/html" with desired webroot
+  wwwroot: wwwroot # Replace "wwwroot" with desired webroot
   enableDirectoryListing: true
   cgiScriptExtensions:
    - .php # Necessary to be able to execute PHP scripts via PHP-CGI
