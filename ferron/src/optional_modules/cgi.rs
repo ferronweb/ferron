@@ -23,11 +23,10 @@ use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tokio::runtime::Handle;
 use tokio::sync::RwLock;
-use tokio_util::io::ReaderStream;
+use tokio_util::io::{ReaderStream, StreamReader};
 
 use crate::ferron_res::server_software::SERVER_SOFTWARE;
 use crate::ferron_util::cgi_response::CgiResponse;
-use crate::ferron_util::cgi_stdin_reader::CgiStdinReader;
 use crate::ferron_util::copy_move::Copy;
 use crate::ferron_util::ttl_cache::TtlCache;
 
@@ -596,7 +595,11 @@ async fn execute_cgi(
 
   let mut child = command.spawn()?;
 
-  let cgi_stdin_reader = CgiStdinReader::new(body);
+  let cgi_stdin_reader = StreamReader::new(
+    body
+      .into_data_stream()
+      .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err)),
+  );
 
   let stdin = match child.stdin.take() {
     Some(stdin) => stdin,

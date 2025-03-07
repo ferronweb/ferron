@@ -29,7 +29,6 @@ use tokio_util::io::{ReaderStream, SinkWriter, StreamReader};
 
 use crate::ferron_res::server_software::SERVER_SOFTWARE;
 use crate::ferron_util::cgi_response::CgiResponse;
-use crate::ferron_util::cgi_stdin_reader::CgiStdinReader;
 use crate::ferron_util::copy_move::Copy;
 use crate::ferron_util::fcgi_decoder::{FcgiDecodedData, FcgiDecoder};
 use crate::ferron_util::fcgi_encoder::FcgiEncoder;
@@ -691,7 +690,11 @@ async fn execute_fastcgi(
   let params_packet_terminating = construct_fastcgi_record(4, 1, &[]);
   socket_writer.write_all(&params_packet_terminating).await?;
 
-  let cgi_stdin_reader = CgiStdinReader::new(body);
+  let cgi_stdin_reader = StreamReader::new(
+    body
+      .into_data_stream()
+      .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err)),
+  );
 
   // Emulated standard input, standard output, and standard error
   type EitherStream = Either<Result<Bytes, std::io::Error>, Result<Bytes, std::io::Error>>;

@@ -17,7 +17,6 @@ mod ferron_res {
 mod ferron_util {
   pub mod anti_xss;
   pub mod cgi_response;
-  pub mod cgi_stdin_reader;
   pub mod combine_config;
   pub mod copy_move;
   pub mod error_pages;
