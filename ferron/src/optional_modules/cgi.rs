@@ -85,42 +85,6 @@ impl ServerModuleHandlers for CgiModuleHandlers {
         }
       }
 
-      let mut cgi_interpreters = HashMap::new();
-      cgi_interpreters.insert(".pl".to_string(), vec!["perl".to_string()]);
-      cgi_interpreters.insert(".py".to_string(), vec!["python".to_string()]);
-      cgi_interpreters.insert(".sh".to_string(), vec!["bash".to_string()]);
-      cgi_interpreters.insert(".ksh".to_string(), vec!["ksh".to_string()]);
-      cgi_interpreters.insert(".csh".to_string(), vec!["csh".to_string()]);
-      cgi_interpreters.insert(".rb".to_string(), vec!["ruby".to_string()]);
-      cgi_interpreters.insert(".php".to_string(), vec!["php-cgi".to_string()]);
-      if cfg!(windows) {
-        cgi_interpreters.insert(".exe".to_string(), vec![]);
-        cgi_interpreters.insert(
-          ".bat".to_string(),
-          vec!["cmd".to_string(), "/c".to_string()],
-        );
-        cgi_interpreters.insert(".vbs".to_string(), vec!["cscript".to_string()]);
-      }
-
-      let cgi_interpreters_yaml = config.get("cgiScriptInterpreters");
-      if let Some(cgi_interpreters_hashmap) = cgi_interpreters_yaml.as_hash() {
-        for (key_yaml, value_yaml) in cgi_interpreters_hashmap.iter() {
-          if let Some(key) = key_yaml.as_str() {
-            if value_yaml.is_null() {
-              cgi_interpreters.remove(key);
-            } else if let Some(value) = value_yaml.as_vec() {
-              let mut params = Vec::new();
-              for param_yaml in value.iter() {
-                if let Some(param) = param_yaml.as_str() {
-                  params.push(param.to_string());
-                }
-              }
-              cgi_interpreters.insert(key.to_string(), params);
-            }
-          }
-        }
-      }
-
       if let Some(wwwroot) = config.get("wwwroot").as_str() {
         let hyper_request = request.get_hyper_request();
 
@@ -318,6 +282,42 @@ impl ServerModuleHandlers for CgiModuleHandlers {
         };
 
         if let Some(execute_pathbuf) = execute_pathbuf {
+          let mut cgi_interpreters = HashMap::new();
+          cgi_interpreters.insert(".pl".to_string(), vec!["perl".to_string()]);
+          cgi_interpreters.insert(".py".to_string(), vec!["python".to_string()]);
+          cgi_interpreters.insert(".sh".to_string(), vec!["bash".to_string()]);
+          cgi_interpreters.insert(".ksh".to_string(), vec!["ksh".to_string()]);
+          cgi_interpreters.insert(".csh".to_string(), vec!["csh".to_string()]);
+          cgi_interpreters.insert(".rb".to_string(), vec!["ruby".to_string()]);
+          cgi_interpreters.insert(".php".to_string(), vec!["php-cgi".to_string()]);
+          if cfg!(windows) {
+            cgi_interpreters.insert(".exe".to_string(), vec![]);
+            cgi_interpreters.insert(
+              ".bat".to_string(),
+              vec!["cmd".to_string(), "/c".to_string()],
+            );
+            cgi_interpreters.insert(".vbs".to_string(), vec!["cscript".to_string()]);
+          }
+
+          let cgi_interpreters_yaml = config.get("cgiScriptInterpreters");
+          if let Some(cgi_interpreters_hashmap) = cgi_interpreters_yaml.as_hash() {
+            for (key_yaml, value_yaml) in cgi_interpreters_hashmap.iter() {
+              if let Some(key) = key_yaml.as_str() {
+                if value_yaml.is_null() {
+                  cgi_interpreters.remove(key);
+                } else if let Some(value) = value_yaml.as_vec() {
+                  let mut params = Vec::new();
+                  for param_yaml in value.iter() {
+                    if let Some(param) = param_yaml.as_str() {
+                      params.push(param.to_string());
+                    }
+                  }
+                  cgi_interpreters.insert(key.to_string(), params);
+                }
+              }
+            }
+          }
+
           return execute_cgi_with_environment_variables(
             request,
             socket_data,
