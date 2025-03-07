@@ -24,7 +24,7 @@ use tokio_util::io::{ReaderStream, StreamReader};
 
 use crate::ferron_res::server_software::SERVER_SOFTWARE;
 use crate::ferron_util::cgi_response::CgiResponse;
-use crate::ferron_util::copy_move::Copy;
+use crate::ferron_util::copy_move::Copier;
 
 pub fn server_module_init(
   _config: &ServerConfig,
@@ -487,10 +487,12 @@ async fn execute_scgi(
 
   let mut cgi_response = CgiResponse::new(stdout);
 
-  let stdin_copy_future = Copy::new(cgi_stdin_reader, stdin);
+  let stdin_copy_future = Copier::new(cgi_stdin_reader, stdin).copy();
   let mut stdin_copy_future_pinned = Box::pin(stdin_copy_future);
 
   let mut headers = [EMPTY_HEADER; 128];
+
+  let mut early_stdin_copied = false;
 
   // Needed to wrap this in another scope to prevent errors with multiple mutable borrows.
   {
@@ -510,6 +512,7 @@ async fn execute_scgi(
         head_obtained = true;
       },
       result = &mut stdin_copy_future_pinned => {
+        early_stdin_copied = true;
         result?;
       }
     }
@@ -569,7 +572,9 @@ async fn execute_scgi(
     ResponseData::builder_without_request()
       .response(response)
       .parallel_fn(async move {
-        stdin_copy_future_pinned.await.unwrap_or_default();
+        if !early_stdin_copied {
+          stdin_copy_future_pinned.await.unwrap_or_default();
+        }
       })
       .build(),
   )

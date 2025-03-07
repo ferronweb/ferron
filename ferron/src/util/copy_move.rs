@@ -1,17 +1,37 @@
-use futures_util::ready;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf, Result};
+use std::{
+  future::Future,
+  pin::Pin,
+  task::{Context, Poll},
+};
 
-pub struct Copy<R, W> {
+use futures_util::ready;
+use tokio::io::{AsyncRead, AsyncWrite};
+
+struct ZeroWriter<I> {
+  inner: I,
+}
+
+impl<I> Future for ZeroWriter<I>
+where
+  I: AsyncWrite + Unpin,
+{
+  type Output = Result<(), tokio::io::Error>;
+
+  fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    let mut empty_slice = [0u8; 0];
+    ready!(Pin::new(&mut self.inner).poll_write(cx, &mut empty_slice))?;
+    ready!(Pin::new(&mut self.inner).poll_flush(cx))?;
+    Poll::Ready(Ok(()))
+  }
+}
+
+pub struct Copier<R, W> {
   reader: R,
   writer: W,
-  buffer: Vec<u8>,
   zero_packet: bool,
 }
 
-impl<R, W> Copy<R, W>
+impl<R, W> Copier<R, W>
 where
   R: AsyncRead + Unpin,
   W: AsyncWrite + Unpin,
@@ -20,7 +40,6 @@ where
     Self {
       reader,
       writer,
-      buffer: vec![0; 1024], // You can adjust the buffer size as needed
       zero_packet: false,
     }
   }
@@ -29,43 +48,17 @@ where
     Self {
       reader,
       writer,
-      buffer: vec![0; 1024], // You can adjust the buffer size as needed
       zero_packet: true,
     }
   }
-}
 
-impl<R, W> Future for Copy<R, W>
-where
-  R: AsyncRead + Unpin,
-  W: AsyncWrite + Unpin,
-{
-  type Output = Result<usize>; // Number of bytes copied
-
-  fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-    let this = self.get_mut();
-
-    // Create a ReadBuf from the buffer
-    let mut read_buf = ReadBuf::new(&mut this.buffer);
-
-    // Read from the reader
-    ready!(Pin::new(&mut this.reader).poll_read(cx, &mut read_buf))?;
-
-    // Set the length of the ReadBuf
-    let bytes_read = read_buf.filled().len();
-
-    if !this.zero_packet && bytes_read == 0 {
-      // EOF reached
-      return Poll::Ready(Ok(0));
+  pub async fn copy(mut self) -> Result<u64, tokio::io::Error> {
+    let copied_size = tokio::io::copy(&mut self.reader, &mut self.writer).await?;
+    if self.zero_packet {
+      let zero_writer = ZeroWriter { inner: self.writer };
+      zero_writer.await?;
     }
-
-    // Write to the writer
-    let bytes_written = ready!(Pin::new(&mut this.writer).poll_write(cx, read_buf.filled()))?;
-
-    // Flush the writer to ensure all data is written
-    ready!(Pin::new(&mut this.writer).poll_flush(cx))?;
-
-    Poll::Ready(Ok(bytes_written))
+    Ok(copied_size)
   }
 }
 
@@ -73,6 +66,7 @@ where
 mod tests {
   use super::*;
   use std::pin::Pin;
+  use tokio::io::{ReadBuf, Result};
 
   struct MockReader {
     data: Vec<u8>,
@@ -138,11 +132,11 @@ mod tests {
     let reader = MockReader::new(data.clone());
     let writer = MockWriter::new();
 
-    let copy = Copy::new(reader, writer);
+    let copy = Copier::new(reader, writer).copy();
     let result = copy.await;
 
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), data.len());
+    assert_eq!(result.unwrap(), data.len() as u64);
   }
 
   #[tokio::test]
@@ -151,7 +145,7 @@ mod tests {
     let reader = MockReader::new(data.clone());
     let writer = MockWriter::new();
 
-    let copy = Copy::new(reader, writer);
+    let copy = Copier::new(reader, writer).copy();
     let result = copy.await;
 
     assert!(result.is_ok());

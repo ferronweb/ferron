@@ -29,7 +29,7 @@ use tokio_util::io::{ReaderStream, SinkWriter, StreamReader};
 
 use crate::ferron_res::server_software::SERVER_SOFTWARE;
 use crate::ferron_util::cgi_response::CgiResponse;
-use crate::ferron_util::copy_move::Copy;
+use crate::ferron_util::copy_move::Copier;
 use crate::ferron_util::fcgi_decoder::{FcgiDecodedData, FcgiDecoder};
 use crate::ferron_util::fcgi_encoder::FcgiEncoder;
 use crate::ferron_util::fcgi_name_value_pair::construct_fastcgi_name_value_pair;
@@ -710,7 +710,7 @@ async fn execute_fastcgi(
 
   let mut cgi_response = CgiResponse::new(stdout);
 
-  let stdin_copy_future = Copy::with_zero_packet_writing(cgi_stdin_reader, stdin);
+  let stdin_copy_future = Copier::with_zero_packet_writing(cgi_stdin_reader, stdin).copy();
   let mut stdin_copy_future_pinned = Box::pin(stdin_copy_future);
 
   let stderr_read_future = ReadToEndFuture::new(stderr);

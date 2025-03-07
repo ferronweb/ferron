@@ -16,7 +16,8 @@ impl Encoder<&[u8]> for FcgiEncoder {
 
   fn encode(&mut self, item: &[u8], dst: &mut BytesMut) -> Result<(), Self::Error> {
     let mut offset = 0;
-    while offset < item.len() {
+    let mut first_written = false;
+    while offset < item.len() || (item.is_empty() && !first_written) {
       let chunk_size = std::cmp::min(65536, item.len() - offset);
       let chunk = &item[offset..offset + chunk_size];
 
@@ -24,6 +25,7 @@ impl Encoder<&[u8]> for FcgiEncoder {
       let record = construct_fastcgi_record(5, 1, chunk);
       dst.put(record.as_slice());
 
+      first_written = true;
       offset += chunk_size;
     }
 
