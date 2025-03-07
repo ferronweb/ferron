@@ -18,8 +18,8 @@ where
   type Output = Result<(), tokio::io::Error>;
 
   fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-    let mut empty_slice = [0u8; 0];
-    ready!(Pin::new(&mut self.inner).poll_write(cx, &mut empty_slice))?;
+    let empty_slice = [0u8; 0];
+    ready!(Pin::new(&mut self.inner).poll_write(cx, &empty_slice))?;
     ready!(Pin::new(&mut self.inner).poll_flush(cx))?;
     Poll::Ready(Ok(()))
   }
