@@ -22,6 +22,12 @@ export default [
     label: "Docker"
   },
   {
+    href: "/docs/installation/manual",
+    target: "_self",
+    sub: true,
+    label: "Manual installation"
+  },
+  {
     href: "/docs/configuration",
     target: "_self",
     label: "Server configuration properties"
