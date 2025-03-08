@@ -1358,15 +1358,6 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
@@ -1604,8 +1595,7 @@ dependencies = [
 [[package]]
 name = "ocsp-stapler"
 version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa06cab7b77b6e17232440445d51df42cb9c948911d8abd20c15dd3dfedc2ed3"
+source = "git+https://github.com/DorianNiemiecSVRJS/ocsp-stapler.git#9651695bc2246ce8d8eda10e51a0d09f7fca0473"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1613,8 +1603,6 @@ dependencies = [
  "bytes",
  "chrono",
  "http",
- "itertools 0.13.0",
- "prometheus",
  "rasn",
  "rasn-ocsp",
  "rasn-pkix",
@@ -1773,27 +1761,6 @@ checksum = "a31971752e70b8b2686d7e46ec17fb38dad4051d94024c88df49b667caea9c84"
 dependencies = [
  "unicode-ident",
 ]
-
-[[package]]
-name = "prometheus"
-version = "0.13.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d33c28a30771f7f96db69893f78b857f7450d7e0237e9c8fc6427a81bae7ed1"
-dependencies = [
- "cfg-if",
- "fnv",
- "lazy_static",
- "memchr",
- "parking_lot",
- "protobuf",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "protobuf"
-version = "2.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "quinn"
