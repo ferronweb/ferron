@@ -29,7 +29,7 @@ COPY wwwroot/* /var/www/ferron
 RUN mkdir -p /var/log/ferron
 
 # Create a "ferron" user and grant the permissions for the log directory and the webroot to that user
-RUN useradd -d /nonexistent -s /usr/sbin/nologin ferron && chown -hR ferron:ferron /var/www/ferron && chown -hR ferron:ferron /var/log/ferron
+RUN useradd -d /nonexistent -s /usr/sbin/nologin -r ferron && chown -hR ferron:ferron /var/www/ferron && chown -hR ferron:ferron /var/log/ferron
 
 # Expose the port 80 (used for HTTP)
 EXPOSE 80
