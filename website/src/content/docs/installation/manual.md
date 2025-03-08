@@ -2,7 +2,7 @@
 title: Manual installation
 ---
 
-## Installation Steps
+## Installation steps
 
 1. **Download the Ferron ZIP archive**
 
