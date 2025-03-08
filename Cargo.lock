@@ -705,7 +705,7 @@ dependencies = [
 
 [[package]]
 name = "ferron"
-version = "1.0.0-beta1"
+version = "1.0.0-beta2"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -750,7 +750,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-common"
-version = "1.0.0-beta1"
+version = "1.0.0-beta2"
 dependencies = [
  "async-channel",
  "async-trait",
@@ -764,7 +764,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-mod-example"
-version = "1.0.0-beta1"
+version = "1.0.0-beta2"
 dependencies = [
  "async-trait",
  "ferron-common",
@@ -777,7 +777,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-passwd"
-version = "1.0.0-beta1"
+version = "1.0.0-beta2"
 dependencies = [
  "clap",
  "mimalloc",
