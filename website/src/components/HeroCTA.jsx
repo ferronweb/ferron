@@ -16,7 +16,8 @@ function HeroCTA() {
     const commands = {
       linux: "# Installer not available yet",
       windows: "REM Installer not available yet",
-      docker: "# Docker image not available yet"
+      docker:
+        "docker pull ferronserver/ferron && docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron"
     };
 
     setCommand(commands[selectedButton]);
