@@ -4,6 +4,16 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.0.0-beta2
+
+**Released in March 8, 2025**
+
+- Added a forwarded authentication module (_fauth_)
+- Added support for per-location configuration
+- Added support for X-Forwarded-Proto and X-Forwarded-Host headers for _rproxy_ module
+- Fixed bug with FastCGI connections not being closed when only partial request body is sent
+- Improved server performance when no CGI program is executed
+
 ## Ferron 1.0.0-beta1
 
 **Released in March 2, 2025**

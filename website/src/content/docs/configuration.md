@@ -71,7 +71,17 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
 - **automaticTLSLetsEncryptProduction** (_bool_; Project Karpacz 0.7.0 and newer)
   - Option to enable production Let's Encrypt ACME endpoint. If set to `false`, the staging Let's Encrypt ACME endpoint will be used. Default: `true`
 
-## Global & host configuration properties
+## Host configuration properties
+
+- **locations** (_Array&lt;Object&gt;_; Ferron 1.0.0-beta2 and newer)
+  - The list of locations specified for a specific host. The sub-properties of this property will be merged in combined server configuration. The URLs will not be rewritten. To rewrite the URLs, configure the URL rewrite map in location configuration. Default: None
+
+## Location configuration properties
+
+- **path** (_String_; Ferron 1.0.0-beta2 and newer)
+  - The path specified for a location. The location is matched against URL-decoded request URL. If it is the same, or the decoded request URL are levels above the specified path, the location configuration will be used. Default: None
+
+## Global, host & location configuration properties
 
 - **domain** (_String_)
   - The domain name of a host. This setting specifies the domain name associated with the host. Default: None
@@ -173,6 +183,10 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - Base URL, which FastCGI client will send requests to. TCP (for example `"tcp://localhost:4000/"`) and Unix socket URLs (only on Unix systems; for example `"unix:///run/fcgi.sock"`) are supported. Default: `"tcp://localhost:4000/"`
 - **fcgiPath** (_String_ or _Array&lt;String&gt;_; _fcgi_ module; Project Karpacz 0.6.0 and newer)
   - Base URL, which FastCGI client will handle the request if the request URL begins with it. If not specified, the SCGI client will be inactive. Default: None
+- **authTo** (_String_; _fauth_ module; Ferron 1.0.0-beta2 and newer)
+  - Base URL, which reverse proxy will send requests to for forwarded authentication. HTTP and HTTPS URLs are supported. Default: None
+- **forwardedAuthCopyHeaders** (_Array&lt;String&gt;_; _fauth_ module; Ferron 1.0.0-beta2 and newer)
+  - A list of response headers that will be copied from the forwarded authentication server response to the original request. Default: None
 
 ## Example configuration
 
@@ -223,12 +237,18 @@ hosts:
         isNotDirectory: true
         last: true
     wwwroot: "/var/www/example"
-    proxyTo: "http://backend-service:5000"
     errorPages:
       - scode: 404
         path: "/var/www/example/errors/404.html"
       - scode: 500
         path: "/var/www/example/errors/500.html"
+    locations:
+      - path: "/static"
+        wwwroot: "/var/www/static"
+        rewriteMap:
+        - regex: "^/static(?:[/?#](.*))?"
+          replacement: "/$1"
+          last: true
   - domain: "api.example.com"
     serverAdministratorEmail: "api-admin@example.com"
     disableToHTTPSRedirect: false
@@ -240,4 +260,5 @@ hosts:
     nonStandardCodes:
       - scode: 401
         url: "/restricted.html"
+    proxyTo: "http://backend-service:5000"
 ```

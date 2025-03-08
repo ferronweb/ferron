@@ -2,9 +2,9 @@
 title: PHP support
 ---
 
-Project Karpacz supports running PHP scripts either with a _cgi_ module (using PHP-CGI) or with a _fcgi_ module (using either PHP-CGI configured as a FastCGI server or PHP-FPM).
+Ferron supports running PHP scripts either with a _cgi_ module (using PHP-CGI) or with a _fcgi_ module (using either PHP-CGI configured as a FastCGI server or PHP-FPM).
 
-To configure PHP through CGI with Project Karpacz, you can use this configuration (for global configuration):
+To configure PHP through CGI with Ferron, you can use this configuration (for global configuration):
 
 ```yaml
 global:
@@ -12,7 +12,7 @@ global:
     - .php
 ```
 
-To configure PHP through FastCGI with Project Karpacz, you can use this configuration (for global configuration):
+To configure PHP through FastCGI with Ferron, you can use this configuration (for global configuration):
 
 ```yaml
 global:
