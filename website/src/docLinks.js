@@ -11,6 +11,17 @@ export default [
     label: "System requirements"
   },
   {
+    href: "/docs/installation",
+    target: "_self",
+    label: "Installation"
+  },
+  {
+    href: "/docs/installation/docker",
+    target: "_self",
+    sub: true,
+    label: "Docker"
+  },
+  {
     href: "/docs/configuration",
     target: "_self",
     label: "Server configuration properties"
