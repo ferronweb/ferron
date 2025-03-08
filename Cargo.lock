@@ -1594,8 +1594,9 @@ dependencies = [
 
 [[package]]
 name = "ocsp-stapler"
-version = "0.4.2"
-source = "git+https://github.com/DorianNiemiecSVRJS/ocsp-stapler.git#9651695bc2246ce8d8eda10e51a0d09f7fca0473"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbb04419bb16f0621ecf2736ea4a0f1dc651f68bf72682097744184f3f22dddd"
 dependencies = [
  "anyhow",
  "arc-swap",

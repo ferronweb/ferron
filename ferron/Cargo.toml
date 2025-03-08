@@ -24,7 +24,7 @@ async-trait = { workspace = true }
 ferron-common = { workspace = true }
 libloading = "0.8.6"
 rustls-native-certs = "0.8.1"
-ocsp-stapler = { git = "https://github.com/DorianNiemiecSVRJS/ocsp-stapler.git", default-features = false }
+ocsp-stapler = { version = "0.4.4", default-features = false }
 clap = { version = "4.5.28", features = ["derive"] }
 fancy-regex = "0.14.0"
 password-auth = { workspace = true }
