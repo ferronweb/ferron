@@ -25,8 +25,11 @@ COPY ferron-docker.yaml /etc/ferron.yaml
 RUN mkdir -p /var/www/ferron
 COPY wwwroot/* /var/www/ferron
 
-# Create a "ferron" user and grant the permissions for the webroot to that user
-RUN useradd -d /nonexistent -s /usr/sbin/nologin ferron && chown -hR ferron:ferron /var/www/ferron
+# Create a directory where Ferron logs are stored
+RUN mkdir -p /var/log/ferron
+
+# Create a "ferron" user and grant the permissions for the log directory and the webroot to that user
+RUN useradd -d /nonexistent -s /usr/sbin/nologin ferron && chown -hR ferron:ferron /var/www/ferron && chown -hR ferron:ferron /var/log/ferron
 
 # Expose the port 80 (used for HTTP)
 EXPOSE 80
