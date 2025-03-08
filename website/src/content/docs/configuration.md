@@ -26,7 +26,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
     - **enableConnectProtocol** (_bool_)
       - Enable the HTTP/2 CONNECT protocol. When set to `true`, the server will support the CONNECT method for tunneling TCP connections. Default: `false`
 - **logFilePath** (_String_)
-  - Path to the log file. This setting specifies the file path where the server will write its logs. Default: None
+  - Path to the log file. This setting specifies the file path where the server will write its logs. The logs written by Ferron use Combined Log Format. Default: None
 - **errorLogFilePath** (_String_)
   - Path to the error log file. This setting specifies the file path where the server will write its error logs. Default: None
 - **enableHTTP2** (_bool_)
