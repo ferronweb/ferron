@@ -24,5 +24,10 @@ export default [
     href: "/docs/php",
     target: "_self",
     label: "PHP support"
+  },
+  {
+    href: "https://rustdocs.ferronweb.org",
+    target: "_self",
+    label: "Rust crate documentation"
   }
 ];
