@@ -51,7 +51,7 @@ If you are using PHP-FPM only for Ferron, you can set the `listen.owner` and `li
 
 If you are using the _fproxy_ module, then hosts on the local network and local host are also accessible from the proxy. You may block these using a firewall, if you don’t want these hosts to be accessible from the proxy.
 
-## _rproxy_ module
+### _rproxy_ module
 
 The reverse proxy functionality is enabled when _proxyTo_ or _secureProxyTo_ configuration property is specified.
 
