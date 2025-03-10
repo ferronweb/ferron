@@ -22,7 +22,7 @@ const pathname = Astro.url.pathname;
               <a
                 href={link.href}
                 target={link.target || "_self"}
-                class={`${link.sub ? "ml-4" : ""} block align-middle ${pathname == link.href ? "bg-accent" : ""} text-inherit px-2 py-1 mx-1 rounded-sm hover:bg-accent/60 transition-colors`}
+                class={`${link.sub ? "ml-4" : ""} block align-middle ${pathname.replace(/\/+$/g, "") == link.href ? "bg-accent" : ""} text-inherit px-2 py-1 mx-1 rounded-sm hover:bg-accent/60 transition-colors`}
               >
                 {link.label}
               </a>
