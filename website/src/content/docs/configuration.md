@@ -121,7 +121,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
 - **disableTrailingSlashRedirects** (_bool_)
   - Option to disable redirects if the path points to a directory. When set to `true`, the server will not automatically redirect requests to a trailing slash if the path points to a directory. Default: `false`
 - **users** (_Array&lt;Object&gt;_)
-  - User list. This setting specifies an array of user objects that the server will use for authentication. Default: None
+  - User list. This setting specifies an array of user objects that the server will use for authentication. It's recommended to use the `ferron-passwd` tool to generate the user objects. Default: None
   - **Sub-properties**:
     - **user** (_String_)
       - Username. This setting specifies the username for a user. Default: None
