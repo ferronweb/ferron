@@ -893,17 +893,15 @@ pub async fn request_handler(
       };
       Ok(Response::from_parts(response_parts, response_body))
     }
-  } else if is_upgrade_request(&request) {
-    let mut websocket_handlers = None;
+  } else {
+    let is_websocket_request = is_upgrade_request(&request);
+    let mut request_data = RequestData::new(request, None);
+    let mut latest_auth_data = None;
+    let mut executed_handlers = Vec::new();
     for mut handlers in handlers_vec {
-      if handlers.does_websocket_requests(&combined_config, &socket_data) {
-        websocket_handlers = Some(handlers);
-        break;
-      }
-    }
+      if is_websocket_request && handlers.does_websocket_requests(&combined_config, &socket_data) {
+        let (request, _) = request_data.into_parts();
 
-    if let Some(mut websocket_handlers) = websocket_handlers {
-      if true {
         // Variables moved to before "tokio::spawn" to avoid issues with moved values
         let client_ip = socket_data.remote_addr.ip();
         let custom_headers_yaml = combined_config.get("customHeaders");
@@ -976,7 +974,7 @@ pub async fn request_handler(
         };
 
         tokio::spawn(async move {
-          let result = websocket_handlers
+          let result = handlers
             .websocket_request_handler(
               websocket,
               &request_uri,
@@ -1042,123 +1040,10 @@ pub async fn request_handler(
         if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
           response_parts.headers.insert(header::SERVER, server_string);
         };
-        Ok(Response::from_parts(response_parts, response_body))
-      } else {
-        let response = Response::builder()
-          .status(StatusCode::BAD_REQUEST)
-          .body(
-            Full::new(Bytes::from(generate_default_error_page(
-              StatusCode::INTERNAL_SERVER_ERROR,
-              None,
-            )))
-            .map_err(|e| match e {})
-            .boxed(),
-          )
-          .unwrap_or_default();
 
-        if log_enabled {
-          log_combined(
-            &logger,
-            socket_data.remote_addr.ip(),
-            None,
-            log_method,
-            log_request_path,
-            log_protocol,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                Err(_) => response.body().size_hint().exact(),
-              },
-              None => response.body().size_hint().exact(),
-            },
-            log_referrer,
-            log_user_agent,
-          )
-          .await;
-        }
-        let (mut response_parts, response_body) = response.into_parts();
-        if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
-          let custom_headers_hash_iter = custom_headers_hash.iter();
-          for (header_name, header_value) in custom_headers_hash_iter {
-            if let Some(header_name) = header_name.as_str() {
-              if let Some(header_value) = header_value.as_str() {
-                if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
-                    if let Ok(header_name) = HeaderName::from_str(header_name) {
-                      response_parts.headers.insert(header_name, header_value);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-          response_parts.headers.insert(header::SERVER, server_string);
-        };
-        Ok(Response::from_parts(response_parts, response_body))
+        return Ok(Response::from_parts(response_parts, response_body));
       }
-    } else {
-      let response = Response::builder()
-        .status(StatusCode::NOT_IMPLEMENTED)
-        .body(Empty::new().map_err(|e| match e {}).boxed())
-        .unwrap_or_default();
 
-      if log_enabled {
-        log_combined(
-          &logger,
-          socket_data.remote_addr.ip(),
-          None,
-          log_method,
-          log_request_path,
-          log_protocol,
-          response.status().as_u16(),
-          match response.headers().get(header::CONTENT_LENGTH) {
-            Some(header_value) => match header_value.to_str() {
-              Ok(header_value) => match header_value.parse::<u64>() {
-                Ok(content_length) => Some(content_length),
-                Err(_) => response.body().size_hint().exact(),
-              },
-              Err(_) => response.body().size_hint().exact(),
-            },
-            None => response.body().size_hint().exact(),
-          },
-          log_referrer,
-          log_user_agent,
-        )
-        .await;
-      }
-      let (mut response_parts, response_body) = response.into_parts();
-      if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
-        let custom_headers_hash_iter = custom_headers_hash.iter();
-        for (header_name, header_value) in custom_headers_hash_iter {
-          if let Some(header_name) = header_name.as_str() {
-            if let Some(header_value) = header_value.as_str() {
-              if !response_parts.headers.contains_key(header_name) {
-                if let Ok(header_value) = HeaderValue::from_str(header_value) {
-                  if let Ok(header_name) = HeaderName::from_str(header_name) {
-                    response_parts.headers.insert(header_name, header_value);
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-      if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-        response_parts.headers.insert(header::SERVER, server_string);
-      };
-      Ok(Response::from_parts(response_parts, response_body))
-    }
-  } else {
-    let mut request_data = RequestData::new(request, None);
-    let mut latest_auth_data = None;
-    let mut executed_handlers = Vec::new();
-    for mut handlers in handlers_vec {
       let response_result = match is_proxy_request {
         true => {
           handlers
