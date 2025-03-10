@@ -228,7 +228,11 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
     Ok(())
   }
 
-  fn does_websocket_requests(&mut self, _config: &ServerConfigRoot) -> bool {
+  fn does_websocket_requests(
+    &mut self,
+    _config: &ServerConfigRoot,
+    _socket_data: &SocketData,
+  ) -> bool {
     false
   }
 }

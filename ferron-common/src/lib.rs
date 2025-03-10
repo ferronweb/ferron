@@ -581,7 +581,7 @@ pub trait ServerModuleHandlers {
   ///
   /// # Returns
   ///
-  /// `true` if the module isn't a forward proxy module utlilzing CONNECT method, or `false` otherwise.
+  /// `true` if the module is a forward proxy module utlilzing CONNECT method, or `false` otherwise.
   fn does_connect_proxy_requests(&mut self) -> bool;
 
   /// Handles an incoming WebSocket request.
@@ -604,16 +604,21 @@ pub trait ServerModuleHandlers {
     error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>>;
 
-  /// Checks if the module is a forward proxy module utilizing CONNECT method.
+  /// Checks if the module is a module supporting WebSocket requests.
   ///
   /// # Parameters
   ///
   /// - `config`: A reference to the combined server configuration (`ServerConfig`). The combined configuration has properties in its root.
+  /// - `socket_data`: A reference to the `SocketData` containing socket-related information.
   ///
   /// # Returns
   ///
-  /// `true` if the module isn't a forward proxy module utlilzing CONNECT method, or `false` otherwise.
-  fn does_websocket_requests(&mut self, config: &ServerConfigRoot) -> bool;
+  /// `true` if the module is a module supporting WebSocket requests, or `false` otherwise.
+  fn does_websocket_requests(
+    &mut self,
+    config: &ServerConfigRoot,
+    socket_data: &SocketData,
+  ) -> bool;
 }
 
 /// Represents a server module that can provide handlers for processing requests.

@@ -156,7 +156,11 @@ impl ServerModuleHandlers for ExampleModuleHandlers {
   }
 
   /// Checks if the module supports WebSocket connections.
-  fn does_websocket_requests(&mut self, _config: &ServerConfigRoot) -> bool {
+  fn does_websocket_requests(
+    &mut self,
+    _config: &ServerConfigRoot,
+    _socket_data: &SocketData,
+  ) -> bool {
     // This module doesn't support WebSocket connections.
     false
   }

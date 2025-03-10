@@ -896,7 +896,7 @@ pub async fn request_handler(
   } else if is_upgrade_request(&request) {
     let mut websocket_handlers = None;
     for mut handlers in handlers_vec {
-      if handlers.does_websocket_requests(&combined_config) {
+      if handlers.does_websocket_requests(&combined_config, &socket_data) {
         websocket_handlers = Some(handlers);
         break;
       }
