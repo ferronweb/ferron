@@ -2,7 +2,7 @@
 title: PHP support
 ---
 
-Ferron supports running PHP scripts either with a _cgi_ module (using PHP-CGI) or with a _fcgi_ module (using either PHP-CGI configured as a FastCGI server or PHP-FPM).
+Ferron supports running PHP scripts either with a _cgi_ module (using PHP-CGI) or with a _fcgi_ module (using either PHP-CGI configured as a FastCGI server or PHP-FPM). This allows you to host websites built with PHP-based CMSes (like WordPress or Joomla) with Ferron.
 
 To configure PHP through CGI with Ferron, you can use this configuration:
 
