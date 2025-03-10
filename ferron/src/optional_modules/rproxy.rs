@@ -106,42 +106,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
-      let mut proxy_to = None;
-
-      // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
-      // The "proxyTo" and "secureProxyTo" are validated though.
-
-      if socket_data.encrypted {
-        let secure_proxy_to_yaml = config.get("secureProxyTo");
-        if let Some(secure_proxy_to_vector) = secure_proxy_to_yaml.as_vec() {
-          if !secure_proxy_to_vector.is_empty() {
-            if let Some(secure_proxy_to) =
-              secure_proxy_to_vector[rand::random_range(..secure_proxy_to_vector.len())].as_str()
-            {
-              proxy_to = Some(secure_proxy_to.to_string());
-            }
-          }
-        } else if let Some(secure_proxy_to) = secure_proxy_to_yaml.as_str() {
-          proxy_to = Some(secure_proxy_to.to_string());
-        }
-      }
-
-      if proxy_to.is_none() {
-        let proxy_to_yaml = config.get("proxyTo");
-        if let Some(proxy_to_vector) = proxy_to_yaml.as_vec() {
-          if !proxy_to_vector.is_empty() {
-            if let Some(proxy_to_str) =
-              proxy_to_vector[rand::random_range(..proxy_to_vector.len())].as_str()
-            {
-              proxy_to = Some(proxy_to_str.to_string());
-            }
-          }
-        } else if let Some(proxy_to_str) = proxy_to_yaml.as_str() {
-          proxy_to = Some(proxy_to_str.to_string());
-        }
-      }
-
-      if let Some(proxy_to) = proxy_to {
+      if let Some(proxy_to) = determine_proxy_to(config, socket_data.encrypted) {
         let (hyper_request, _auth_user) = request.into_parts();
         let (mut hyper_request_parts, request_body) = hyper_request.into_parts();
 
@@ -402,42 +367,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
     error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
-      let mut proxy_to = None;
-
-      // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
-      // The "proxyTo" and "secureProxyTo" are validated though.
-
-      if socket_data.encrypted {
-        let secure_proxy_to_yaml = config.get("secureProxyTo");
-        if let Some(secure_proxy_to_vector) = secure_proxy_to_yaml.as_vec() {
-          if !secure_proxy_to_vector.is_empty() {
-            if let Some(secure_proxy_to) =
-              secure_proxy_to_vector[rand::random_range(..secure_proxy_to_vector.len())].as_str()
-            {
-              proxy_to = Some(secure_proxy_to.to_string());
-            }
-          }
-        } else if let Some(secure_proxy_to) = secure_proxy_to_yaml.as_str() {
-          proxy_to = Some(secure_proxy_to.to_string());
-        }
-      }
-
-      if proxy_to.is_none() {
-        let proxy_to_yaml = config.get("proxyTo");
-        if let Some(proxy_to_vector) = proxy_to_yaml.as_vec() {
-          if !proxy_to_vector.is_empty() {
-            if let Some(proxy_to_str) =
-              proxy_to_vector[rand::random_range(..proxy_to_vector.len())].as_str()
-            {
-              proxy_to = Some(proxy_to_str.to_string());
-            }
-          }
-        } else if let Some(proxy_to_str) = proxy_to_yaml.as_str() {
-          proxy_to = Some(proxy_to_str.to_string());
-        }
-      }
-
-      if let Some(proxy_to) = proxy_to {
+      if let Some(proxy_to) = determine_proxy_to(config, socket_data.encrypted) {
         let proxy_request_url = proxy_to.parse::<hyper::Uri>()?;
         let scheme_str = proxy_request_url.scheme_str();
         let mut encrypted = false;
@@ -579,6 +509,44 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
     let proxy_to = config.get("proxyTo");
     proxy_to.as_vec().is_some() || proxy_to.as_str().is_some()
   }
+}
+
+fn determine_proxy_to(config: &ServerConfigRoot, encrypted: bool) -> Option<String> {
+  let mut proxy_to = None;
+  // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
+  // The "proxyTo" and "secureProxyTo" are validated though.
+
+  if encrypted {
+    let secure_proxy_to_yaml = config.get("secureProxyTo");
+    if let Some(secure_proxy_to_vector) = secure_proxy_to_yaml.as_vec() {
+      if !secure_proxy_to_vector.is_empty() {
+        if let Some(secure_proxy_to) =
+          secure_proxy_to_vector[rand::random_range(..secure_proxy_to_vector.len())].as_str()
+        {
+          proxy_to = Some(secure_proxy_to.to_string());
+        }
+      }
+    } else if let Some(secure_proxy_to) = secure_proxy_to_yaml.as_str() {
+      proxy_to = Some(secure_proxy_to.to_string());
+    }
+  }
+
+  if proxy_to.is_none() {
+    let proxy_to_yaml = config.get("proxyTo");
+    if let Some(proxy_to_vector) = proxy_to_yaml.as_vec() {
+      if !proxy_to_vector.is_empty() {
+        if let Some(proxy_to_str) =
+          proxy_to_vector[rand::random_range(..proxy_to_vector.len())].as_str()
+        {
+          proxy_to = Some(proxy_to_str.to_string());
+        }
+      }
+    } else if let Some(proxy_to_str) = proxy_to_yaml.as_str() {
+      proxy_to = Some(proxy_to_str.to_string());
+    }
+  }
+
+  proxy_to
 }
 
 async fn http_proxy(
