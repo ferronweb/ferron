@@ -43,6 +43,11 @@ export default [
     label: "PHP support"
   },
   {
+    href: "/docs/automatic-tls",
+    target: "_self",
+    label: "Automatic TLS"
+  },
+  {
     href: "https://rustdocs.ferronweb.org",
     target: "_self",
     label: "Rust crate documentation"
