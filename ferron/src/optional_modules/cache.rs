@@ -485,6 +485,7 @@ impl ServerModuleHandlers for CacheModuleHandlers {
   async fn websocket_request_handler(
     &mut self,
     _websocket: HyperWebsocket,
+    _uri: &hyper::Uri,
     _config: &ServerConfigRoot,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,

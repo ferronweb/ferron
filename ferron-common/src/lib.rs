@@ -589,6 +589,7 @@ pub trait ServerModuleHandlers {
   /// # Parameters
   ///
   /// - `websocket`: A `HyperWebsocket` object containing a future that resolves to a WebSocket stream.
+  /// - `uri`: A `hyper::Uri` object containig the HTTP request URI.
   /// - `config`: A reference to the combined server configuration (`ServerConfig`). The combined configuration has properties in its root.
   /// - `socket_data`: A reference to the `SocketData` containing socket-related information.
   /// - `error_logger`: A reference to an `ErrorLogger` for logging errors.
@@ -599,6 +600,7 @@ pub trait ServerModuleHandlers {
   async fn websocket_request_handler(
     &mut self,
     websocket: HyperWebsocket,
+    uri: &hyper::Uri,
     config: &ServerConfigRoot,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,

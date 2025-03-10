@@ -45,6 +45,8 @@ hashlink = "0.10.0"
 tokio-rustls-acme = "0.6.0"
 glob = "0.3.2"
 hyper-tungstenite = { workspace = true }
+tokio-tungstenite = { version = "0.26.2", features = ["rustls-tls-native-roots"] }
+http = "1.2.0"
 
 [dev-dependencies]
 tokio-test = { workspace = true }

@@ -9,6 +9,8 @@ use ferron_common::{
   ServerModule, ServerModuleHandlers, SocketData,
 };
 use ferron_common::{HyperResponse, WithRuntime};
+use futures_util::{SinkExt, StreamExt};
+use http::uri::{PathAndQuery, Scheme};
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Bytes;
@@ -24,6 +26,7 @@ use tokio::net::TcpStream;
 use tokio::runtime::Handle;
 use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
+use tokio_tungstenite::Connector;
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
 
@@ -392,20 +395,189 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
 
   async fn websocket_request_handler(
     &mut self,
-    _websocket: HyperWebsocket,
-    _config: &ServerConfigRoot,
-    _socket_data: &SocketData,
-    _error_logger: &ErrorLogger,
+    websocket: HyperWebsocket,
+    uri: &hyper::Uri,
+    config: &ServerConfigRoot,
+    socket_data: &SocketData,
+    error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    Ok(())
+    WithRuntime::new(self.handle.clone(), async move {
+      let mut proxy_to = None;
+
+      // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
+      // The "proxyTo" and "secureProxyTo" are validated though.
+
+      if socket_data.encrypted {
+        let secure_proxy_to_yaml = config.get("secureProxyTo");
+        if let Some(secure_proxy_to_vector) = secure_proxy_to_yaml.as_vec() {
+          if !secure_proxy_to_vector.is_empty() {
+            if let Some(secure_proxy_to) =
+              secure_proxy_to_vector[rand::random_range(..secure_proxy_to_vector.len())].as_str()
+            {
+              proxy_to = Some(secure_proxy_to.to_string());
+            }
+          }
+        } else if let Some(secure_proxy_to) = secure_proxy_to_yaml.as_str() {
+          proxy_to = Some(secure_proxy_to.to_string());
+        }
+      }
+
+      if proxy_to.is_none() {
+        let proxy_to_yaml = config.get("proxyTo");
+        if let Some(proxy_to_vector) = proxy_to_yaml.as_vec() {
+          if !proxy_to_vector.is_empty() {
+            if let Some(proxy_to_str) =
+              proxy_to_vector[rand::random_range(..proxy_to_vector.len())].as_str()
+            {
+              proxy_to = Some(proxy_to_str.to_string());
+            }
+          }
+        } else if let Some(proxy_to_str) = proxy_to_yaml.as_str() {
+          proxy_to = Some(proxy_to_str.to_string());
+        }
+      }
+
+      if let Some(proxy_to) = proxy_to {
+        let proxy_request_url = proxy_to.parse::<hyper::Uri>()?;
+        let scheme_str = proxy_request_url.scheme_str();
+        let mut encrypted = false;
+
+        match scheme_str {
+          Some("http") => {
+            encrypted = false;
+          }
+          Some("https") => {
+            encrypted = true;
+          }
+          _ => Err(anyhow::anyhow!(
+            "Only HTTP and HTTPS reverse proxy URLs are supported."
+          ))?,
+        };
+
+        let request_path = uri.path();
+
+        let path = match request_path.as_bytes().first() {
+          Some(b'/') => {
+            let mut proxy_request_path = proxy_request_url.path();
+            while proxy_request_path.as_bytes().last().copied() == Some(b'/') {
+              proxy_request_path = &proxy_request_path[..(proxy_request_path.len() - 1)];
+            }
+            format!("{}{}", proxy_request_path, request_path)
+          }
+          _ => request_path.to_string(),
+        };
+
+        let mut proxy_request_url_parts = proxy_request_url.into_parts();
+        proxy_request_url_parts.scheme = if encrypted {
+          Some(Scheme::from_str("wss")?)
+        } else {
+          Some(Scheme::from_str("ws")?)
+        };
+        match proxy_request_url_parts.path_and_query {
+          Some(path_and_query) => {
+            let path_and_query_string = match path_and_query.query() {
+              Some(query) => {
+                format!("{}?{}", path, query)
+              }
+              None => path,
+            };
+            proxy_request_url_parts.path_and_query =
+              Some(PathAndQuery::from_str(&path_and_query_string)?);
+          }
+          None => {
+            proxy_request_url_parts.path_and_query = Some(PathAndQuery::from_str(&path)?);
+          }
+        };
+
+        let proxy_request_url = hyper::Uri::from_parts(proxy_request_url_parts)?;
+
+        let connector = if !encrypted {
+          Connector::Plain
+        } else {
+          Connector::Rustls(Arc::new(
+            rustls::ClientConfig::builder()
+              .with_root_certificates(self.roots.clone())
+              .with_no_client_auth(),
+          ))
+        };
+
+        let client_bi_stream = websocket.await?;
+
+        let (proxy_bi_stream, _) = match tokio_tungstenite::connect_async_tls_with_config(
+          proxy_request_url,
+          None,
+          true,
+          Some(connector),
+        )
+        .await
+        {
+          Ok(data) => data,
+          Err(err) => {
+            error_logger
+              .log(&format!("Cannot connect to WebSocket server: {}", err))
+              .await;
+            return Ok(());
+          }
+        };
+
+        let (mut client_sink, mut client_stream) = client_bi_stream.split();
+        let (mut proxy_sink, mut proxy_stream) = proxy_bi_stream.split();
+
+        let client_to_proxy = async {
+          while let Some(Ok(value)) = client_stream.next().await {
+            if let Err(_) = proxy_sink.send(value).await {
+              break;
+            }
+          }
+        };
+
+        let proxy_to_client = async {
+          while let Some(Ok(value)) = proxy_stream.next().await {
+            if let Err(_) = client_sink.send(value).await {
+              break;
+            }
+          }
+        };
+
+        tokio::pin!(client_to_proxy);
+        tokio::pin!(proxy_to_client);
+
+        let client_to_proxy_first;
+        tokio::select! {
+          _ = &mut client_to_proxy => {
+            client_to_proxy_first = true;
+          }
+          _ = &mut proxy_to_client => {
+            client_to_proxy_first = false;
+          }
+        }
+
+        if client_to_proxy_first {
+          proxy_to_client.await;
+        } else {
+          client_to_proxy.await;
+        }
+      }
+
+      Ok(())
+    })
+    .await
   }
 
   fn does_websocket_requests(
     &mut self,
-    _config: &ServerConfigRoot,
-    _socket_data: &SocketData,
+    config: &ServerConfigRoot,
+    socket_data: &SocketData,
   ) -> bool {
-    false
+    if socket_data.encrypted {
+      let secure_proxy_to = config.get("secureProxyTo");
+      if secure_proxy_to.as_vec().is_some() || secure_proxy_to.as_str().is_some() {
+        return true;
+      }
+    }
+
+    let proxy_to = config.get("proxyTo");
+    proxy_to.as_vec().is_some() || proxy_to.as_str().is_some()
   }
 }
 

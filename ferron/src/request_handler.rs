@@ -907,6 +907,7 @@ pub async fn request_handler(
         // Variables moved to before "tokio::spawn" to avoid issues with moved values
         let client_ip = socket_data.remote_addr.ip();
         let custom_headers_yaml = combined_config.get("customHeaders");
+        let request_uri = request.uri().to_owned();
 
         let (original_response, websocket) = match hyper_tungstenite::upgrade(request, None) {
           Ok(data) => data,
@@ -976,7 +977,13 @@ pub async fn request_handler(
 
         tokio::spawn(async move {
           let result = websocket_handlers
-            .websocket_request_handler(websocket, &combined_config, &socket_data, &error_logger)
+            .websocket_request_handler(
+              websocket,
+              &request_uri,
+              &combined_config,
+              &socket_data,
+              &error_logger,
+            )
             .await;
           match result {
             Ok(_) => (),
