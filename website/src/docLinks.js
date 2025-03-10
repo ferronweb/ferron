@@ -43,6 +43,11 @@ export default [
     label: "PHP support"
   },
   {
+    href: "/docs/reverse-proxy",
+    target: "_self",
+    label: "Reverse proxy functionality"
+  },
+  {
     href: "/docs/automatic-tls",
     target: "_self",
     label: "Automatic TLS"
