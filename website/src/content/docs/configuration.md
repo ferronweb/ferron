@@ -131,7 +131,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - Non-standard status codes. This setting specifies an array of non-standard HTTP status codes that the server will use for specific responses. Default: None
   - **Sub-properties**:
     - **scode** (_u16_)
-      - Status code. This setting specifies the non-standard HTTP status code. Default: None
+      - Status code. This setting specifies the non-standard HTTP status code. If set to `401`, HTTP basic authentication is enabled (users are specified in `users` configuration property). Default: None
     - **url** (_String_)
       - URL to match or redirect to. This setting specifies the URL pattern that the server will use to match requests or the URL to which the server will redirect requests. Default: None
     - **regex** (_String_)
