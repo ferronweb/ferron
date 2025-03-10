@@ -184,7 +184,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
 - **fcgiPath** (_String_ or _Array&lt;String&gt;_; _fcgi_ module; Project Karpacz 0.6.0 and newer)
   - Base URL, which FastCGI client will handle the request if the request URL begins with it. If not specified, the SCGI client will be inactive. Default: None
 - **authTo** (_String_; _fauth_ module; Ferron 1.0.0-beta2 and newer)
-  - Base URL, which reverse proxy will send requests to for forwarded authentication. HTTP and HTTPS URLs are supported. Default: None
+  - Base URL, which web server will send requests to for forwarded authentication. HTTP and HTTPS URLs are supported. Default: None
 - **forwardedAuthCopyHeaders** (_Array&lt;String&gt;_; _fauth_ module; Ferron 1.0.0-beta2 and newer)
   - A list of response headers that will be copied from the forwarded authentication server response to the original request. Default: None
 
