@@ -12,6 +12,7 @@ use ferron_common::{
 use ferron_common::{HyperResponse, WithRuntime};
 use http_body_util::{BodyExt, Full};
 use hyper::Response;
+use hyper_tungstenite::HyperWebsocket;
 use mimalloc::MiMalloc;
 use tokio::runtime::Handle;
 
@@ -139,6 +140,24 @@ impl ServerModuleHandlers for ExampleModuleHandlers {
   /// Checks if the module is a forward proxy module utilizing CONNECT method.
   fn does_connect_proxy_requests(&mut self) -> bool {
     // This is not a forward proxy module utilizing CONNECT method
+    false
+  }
+
+  /// Handles WebSocket requests (not used in this module).
+  async fn websocket_request_handler(
+    &mut self,
+    _websocket: HyperWebsocket,
+    _config: &ServerConfigRoot,
+    _socket_data: &SocketData,
+    _error_logger: &ErrorLogger,
+  ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    // No proxy request handling needed.
+    Ok(())
+  }
+
+  /// Checks if the module supports WebSocket connections.
+  fn does_websocket_requests(&mut self, _config: &ServerConfigRoot) -> bool {
+    // This module doesn't support WebSocket connections.
     false
   }
 }

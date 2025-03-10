@@ -9,6 +9,7 @@ use ferron_common::{HyperUpgraded, WithRuntime};
 use http_body_util::{BodyExt, Empty};
 use hyper::header::HeaderValue;
 use hyper::{header, HeaderMap, Method, Response, StatusCode};
+use hyper_tungstenite::HyperWebsocket;
 use tokio::runtime::Handle;
 
 struct DefaultHandlerChecksModule;
@@ -113,6 +114,20 @@ impl ServerModuleHandlers for DefaultHandlerChecksModuleHandlers {
   }
 
   fn does_connect_proxy_requests(&mut self) -> bool {
+    false
+  }
+
+  async fn websocket_request_handler(
+    &mut self,
+    _websocket: HyperWebsocket,
+    _config: &ServerConfigRoot,
+    _socket_data: &SocketData,
+    _error_logger: &ErrorLogger,
+  ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    Ok(())
+  }
+
+  fn does_websocket_requests(&mut self, _config: &ServerConfigRoot) -> bool {
     false
   }
 }

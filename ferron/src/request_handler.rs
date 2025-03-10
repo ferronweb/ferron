@@ -19,6 +19,7 @@ use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use hyper::body::{Body, Bytes, Frame};
 use hyper::header::{self, HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
+use hyper_tungstenite::is_upgrade_request;
 use tokio::fs;
 use tokio::io::BufReader;
 use tokio_util::io::ReaderStream;
@@ -792,6 +793,260 @@ pub async fn request_handler(
         let response = Response::builder()
           .status(StatusCode::BAD_REQUEST)
           .body(Empty::new().map_err(|e| match e {}).boxed())
+          .unwrap_or_default();
+
+        if log_enabled {
+          log_combined(
+            &logger,
+            socket_data.remote_addr.ip(),
+            None,
+            log_method,
+            log_request_path,
+            log_protocol,
+            response.status().as_u16(),
+            match response.headers().get(header::CONTENT_LENGTH) {
+              Some(header_value) => match header_value.to_str() {
+                Ok(header_value) => match header_value.parse::<u64>() {
+                  Ok(content_length) => Some(content_length),
+                  Err(_) => response.body().size_hint().exact(),
+                },
+                Err(_) => response.body().size_hint().exact(),
+              },
+              None => response.body().size_hint().exact(),
+            },
+            log_referrer,
+            log_user_agent,
+          )
+          .await;
+        }
+        let (mut response_parts, response_body) = response.into_parts();
+        if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+          let custom_headers_hash_iter = custom_headers_hash.iter();
+          for (header_name, header_value) in custom_headers_hash_iter {
+            if let Some(header_name) = header_name.as_str() {
+              if let Some(header_value) = header_value.as_str() {
+                if !response_parts.headers.contains_key(header_name) {
+                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                    if let Ok(header_name) = HeaderName::from_str(header_name) {
+                      response_parts.headers.insert(header_name, header_value);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+          response_parts.headers.insert(header::SERVER, server_string);
+        };
+        Ok(Response::from_parts(response_parts, response_body))
+      }
+    } else {
+      let response = Response::builder()
+        .status(StatusCode::NOT_IMPLEMENTED)
+        .body(Empty::new().map_err(|e| match e {}).boxed())
+        .unwrap_or_default();
+
+      if log_enabled {
+        log_combined(
+          &logger,
+          socket_data.remote_addr.ip(),
+          None,
+          log_method,
+          log_request_path,
+          log_protocol,
+          response.status().as_u16(),
+          match response.headers().get(header::CONTENT_LENGTH) {
+            Some(header_value) => match header_value.to_str() {
+              Ok(header_value) => match header_value.parse::<u64>() {
+                Ok(content_length) => Some(content_length),
+                Err(_) => response.body().size_hint().exact(),
+              },
+              Err(_) => response.body().size_hint().exact(),
+            },
+            None => response.body().size_hint().exact(),
+          },
+          log_referrer,
+          log_user_agent,
+        )
+        .await;
+      }
+      let (mut response_parts, response_body) = response.into_parts();
+      if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+        let custom_headers_hash_iter = custom_headers_hash.iter();
+        for (header_name, header_value) in custom_headers_hash_iter {
+          if let Some(header_name) = header_name.as_str() {
+            if let Some(header_value) = header_value.as_str() {
+              if !response_parts.headers.contains_key(header_name) {
+                if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                  if let Ok(header_name) = HeaderName::from_str(header_name) {
+                    response_parts.headers.insert(header_name, header_value);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+        response_parts.headers.insert(header::SERVER, server_string);
+      };
+      Ok(Response::from_parts(response_parts, response_body))
+    }
+  } else if is_upgrade_request(&request) {
+    let mut websocket_handlers = None;
+    for mut handlers in handlers_vec {
+      if handlers.does_websocket_requests(&combined_config) {
+        websocket_handlers = Some(handlers);
+        break;
+      }
+    }
+
+    if let Some(mut websocket_handlers) = websocket_handlers {
+      if true {
+        // Variables moved to before "tokio::spawn" to avoid issues with moved values
+        let client_ip = socket_data.remote_addr.ip();
+        let custom_headers_yaml = combined_config.get("customHeaders");
+
+        let (original_response, websocket) = match hyper_tungstenite::upgrade(request, None) {
+          Ok(data) => data,
+          Err(err) => {
+            error_logger
+              .log(&format!("Error while upgrading WebSocket request: {}", err))
+              .await;
+            let response = Response::builder()
+              .status(StatusCode::INTERNAL_SERVER_ERROR)
+              .body(
+                Full::new(Bytes::from(generate_default_error_page(
+                  StatusCode::INTERNAL_SERVER_ERROR,
+                  None,
+                )))
+                .map_err(|e| match e {})
+                .boxed(),
+              )
+              .unwrap_or_default();
+
+            if log_enabled {
+              log_combined(
+                &logger,
+                socket_data.remote_addr.ip(),
+                None,
+                log_method,
+                log_request_path,
+                log_protocol,
+                response.status().as_u16(),
+                match response.headers().get(header::CONTENT_LENGTH) {
+                  Some(header_value) => match header_value.to_str() {
+                    Ok(header_value) => match header_value.parse::<u64>() {
+                      Ok(content_length) => Some(content_length),
+                      Err(_) => response.body().size_hint().exact(),
+                    },
+                    Err(_) => response.body().size_hint().exact(),
+                  },
+                  None => response.body().size_hint().exact(),
+                },
+                log_referrer,
+                log_user_agent,
+              )
+              .await;
+            }
+            let (mut response_parts, response_body) = response.into_parts();
+            if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+              let custom_headers_hash_iter = custom_headers_hash.iter();
+              for (header_name, header_value) in custom_headers_hash_iter {
+                if let Some(header_name) = header_name.as_str() {
+                  if let Some(header_value) = header_value.as_str() {
+                    if !response_parts.headers.contains_key(header_name) {
+                      if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                        if let Ok(header_name) = HeaderName::from_str(header_name) {
+                          response_parts.headers.insert(header_name, header_value);
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+              response_parts.headers.insert(header::SERVER, server_string);
+            };
+            return Ok(Response::from_parts(response_parts, response_body));
+          }
+        };
+
+        tokio::spawn(async move {
+          let result = websocket_handlers
+            .websocket_request_handler(websocket, &combined_config, &socket_data, &error_logger)
+            .await;
+          match result {
+            Ok(_) => (),
+            Err(err) => {
+              error_logger
+                .log(&format!("Unexpected error for WebSocket request: {}", err))
+                .await;
+            }
+          }
+        });
+
+        let response = original_response.map(|body| body.map_err(|err| match err {}).boxed());
+
+        if log_enabled {
+          log_combined(
+            &logger,
+            client_ip,
+            None,
+            log_method,
+            log_request_path,
+            log_protocol,
+            response.status().as_u16(),
+            match response.headers().get(header::CONTENT_LENGTH) {
+              Some(header_value) => match header_value.to_str() {
+                Ok(header_value) => match header_value.parse::<u64>() {
+                  Ok(content_length) => Some(content_length),
+                  Err(_) => response.body().size_hint().exact(),
+                },
+                Err(_) => response.body().size_hint().exact(),
+              },
+              None => response.body().size_hint().exact(),
+            },
+            log_referrer,
+            log_user_agent,
+          )
+          .await;
+        }
+
+        let (mut response_parts, response_body) = response.into_parts();
+        if let Some(custom_headers_hash) = custom_headers_yaml.as_hash() {
+          let custom_headers_hash_iter = custom_headers_hash.iter();
+          for (header_name, header_value) in custom_headers_hash_iter {
+            if let Some(header_name) = header_name.as_str() {
+              if let Some(header_value) = header_value.as_str() {
+                if !response_parts.headers.contains_key(header_name) {
+                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                    if let Ok(header_name) = HeaderName::from_str(header_name) {
+                      response_parts.headers.insert(header_name, header_value);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
+          response_parts.headers.insert(header::SERVER, server_string);
+        };
+        Ok(Response::from_parts(response_parts, response_body))
+      } else {
+        let response = Response::builder()
+          .status(StatusCode::BAD_REQUEST)
+          .body(
+            Full::new(Bytes::from(generate_default_error_page(
+              StatusCode::INTERNAL_SERVER_ERROR,
+              None,
+            )))
+            .map_err(|e| match e {})
+            .boxed(),
+          )
           .unwrap_or_default();
 
         if log_enabled {

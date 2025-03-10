@@ -44,6 +44,7 @@ pin-project-lite = "0.2.16"
 hashlink = "0.10.0"
 tokio-rustls-acme = "0.6.0"
 glob = "0.3.2"
+hyper-tungstenite = { workspace = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }

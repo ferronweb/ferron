@@ -11,6 +11,7 @@ use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Bytes;
 use hyper::{header, Request, StatusCode, Uri};
+use hyper_tungstenite::HyperWebsocket;
 use hyper_util::rt::TokioIo;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
@@ -218,6 +219,20 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
 
   fn does_connect_proxy_requests(&mut self) -> bool {
     true
+  }
+
+  async fn websocket_request_handler(
+    &mut self,
+    _websocket: HyperWebsocket,
+    _config: &ServerConfigRoot,
+    _socket_data: &SocketData,
+    _error_logger: &ErrorLogger,
+  ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    Ok(())
+  }
+
+  fn does_websocket_requests(&mut self, _config: &ServerConfigRoot) -> bool {
+    false
   }
 }
 

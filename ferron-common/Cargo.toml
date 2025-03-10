@@ -11,6 +11,7 @@ yaml-rust2 = { workspace = true }
 async-trait = { workspace = true }
 pin-project-lite = "0.2.16"
 async-channel = { workspace = true }
+hyper-tungstenite = { workspace = true }
 
 [dev-dependencies]
 rusty-hook = { workspace = true }

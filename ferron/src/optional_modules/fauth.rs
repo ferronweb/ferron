@@ -17,6 +17,7 @@ use hyper::body::Bytes;
 use hyper::client::conn::http1::SendRequest;
 use hyper::header::HeaderName;
 use hyper::{header, Method, Request, StatusCode, Uri};
+use hyper_tungstenite::HyperWebsocket;
 use hyper_util::rt::TokioIo;
 use rustls::pki_types::ServerName;
 use rustls::RootCertStore;
@@ -414,6 +415,20 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
   }
 
   fn does_connect_proxy_requests(&mut self) -> bool {
+    false
+  }
+
+  async fn websocket_request_handler(
+    &mut self,
+    _websocket: HyperWebsocket,
+    _config: &ServerConfigRoot,
+    _socket_data: &SocketData,
+    _error_logger: &ErrorLogger,
+  ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    Ok(())
+  }
+
+  fn does_websocket_requests(&mut self, _config: &ServerConfigRoot) -> bool {
     false
   }
 }

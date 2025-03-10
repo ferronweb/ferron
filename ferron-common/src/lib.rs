@@ -4,6 +4,7 @@ use async_channel::Sender;
 use async_trait::async_trait;
 use http_body_util::combinators::BoxBody;
 use hyper::{body::Bytes, upgrade::Upgraded, HeaderMap, Request, Response, StatusCode};
+use hyper_tungstenite::HyperWebsocket;
 use tokio::runtime::Handle;
 use yaml_rust2::Yaml;
 
@@ -582,6 +583,37 @@ pub trait ServerModuleHandlers {
   ///
   /// `true` if the module isn't a forward proxy module utlilzing CONNECT method, or `false` otherwise.
   fn does_connect_proxy_requests(&mut self) -> bool;
+
+  /// Handles an incoming WebSocket request.
+  ///
+  /// # Parameters
+  ///
+  /// - `websocket`: A `HyperWebsocket` object containing a future that resolves to a WebSocket stream.
+  /// - `config`: A reference to the combined server configuration (`ServerConfig`). The combined configuration has properties in its root.
+  /// - `socket_data`: A reference to the `SocketData` containing socket-related information.
+  /// - `error_logger`: A reference to an `ErrorLogger` for logging errors.
+  ///
+  /// # Returns
+  ///
+  /// A `Result` containing an empty value upon success, or a boxed `dyn Error` if an error occurs.
+  async fn websocket_request_handler(
+    &mut self,
+    websocket: HyperWebsocket,
+    config: &ServerConfigRoot,
+    socket_data: &SocketData,
+    error_logger: &ErrorLogger,
+  ) -> Result<(), Box<dyn Error + Send + Sync>>;
+
+  /// Checks if the module is a forward proxy module utilizing CONNECT method.
+  ///
+  /// # Parameters
+  ///
+  /// - `config`: A reference to the combined server configuration (`ServerConfig`). The combined configuration has properties in its root.
+  ///
+  /// # Returns
+  ///
+  /// `true` if the module isn't a forward proxy module utlilzing CONNECT method, or `false` otherwise.
+  fn does_websocket_requests(&mut self, config: &ServerConfigRoot) -> bool;
 }
 
 /// Represents a server module that can provide handlers for processing requests.
