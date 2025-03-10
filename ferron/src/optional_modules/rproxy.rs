@@ -455,7 +455,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
 
         let client_to_proxy = async {
           while let Some(Ok(value)) = client_stream.next().await {
-            if let Err(_) = proxy_sink.send(value).await {
+            if proxy_sink.send(value).await.is_err() {
               break;
             }
           }
@@ -463,7 +463,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
 
         let proxy_to_client = async {
           while let Some(Ok(value)) = proxy_stream.next().await {
-            if let Err(_) = client_sink.send(value).await {
+            if client_sink.send(value).await.is_err() {
               break;
             }
           }
