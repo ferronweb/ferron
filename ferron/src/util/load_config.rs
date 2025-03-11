@@ -104,7 +104,14 @@ fn load_config_inner(
 
       // Merge included configuration
       for included_file in include_files {
-        let yaml_to_include = load_config_inner(included_file, loaded_paths)?;
+        let included_file_resolved = if included_file.is_absolute() {
+          included_file
+        } else {
+          let mut canonical_dirname = canonical_pathbuf.clone();
+          canonical_dirname.pop();
+          canonical_dirname.join(included_file)
+        };
+        let yaml_to_include = load_config_inner(included_file_resolved, loaded_paths)?;
         if let Some(yaml_to_include_hashmap) = yaml_to_include.as_hash() {
           for (key, value) in yaml_to_include_hashmap.iter() {
             if let Some(key) = key.as_str() {
