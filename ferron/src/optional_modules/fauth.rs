@@ -25,7 +25,7 @@ use rustls_native_certs::load_native_certs;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio::runtime::Handle;
-use tokio::sync::RwLock;
+use tokio::sync::Mutex;
 use tokio_rustls::TlsConnector;
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
@@ -55,7 +55,7 @@ pub fn server_module_init(
 
   let mut connections_vec = Vec::new();
   for _ in 0..DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST {
-    connections_vec.push(RwLock::new(HashMap::new()));
+    connections_vec.push(Mutex::new(HashMap::new()));
   }
   Ok(Box::new(ForwardedAuthenticationModule::new(
     Arc::new(roots),
@@ -66,14 +66,14 @@ pub fn server_module_init(
 #[allow(clippy::type_complexity)]
 struct ForwardedAuthenticationModule {
   roots: Arc<RootCertStore>,
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
+  connections: Arc<Vec<Mutex<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
 }
 
 impl ForwardedAuthenticationModule {
   #[allow(clippy::type_complexity)]
   fn new(
     roots: Arc<RootCertStore>,
-    connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
+    connections: Arc<Vec<Mutex<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
   ) -> Self {
     ForwardedAuthenticationModule { roots, connections }
   }
@@ -93,7 +93,7 @@ impl ServerModule for ForwardedAuthenticationModule {
 struct ForwardedAuthenticationModuleHandlers {
   handle: Handle,
   roots: Arc<RootCertStore>,
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
+  connections: Arc<Vec<Mutex<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
 }
 
 #[async_trait]
@@ -249,38 +249,26 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
         let connections = &self.connections[rand::random_range(..self.connections.len())];
 
-        let rwlock_read = connections.read().await;
-        let sender_read_option = rwlock_read.get(&addr);
+        let mut connections_mutex = connections.lock().await;
+        let sender_option = connections_mutex.get_mut(&addr);
 
-        if let Some(sender_read) = sender_read_option {
-          if !sender_read.is_closed() {
-            drop(rwlock_read);
-            let mut rwlock_write = connections.write().await;
-            let sender_option = rwlock_write.get_mut(&addr);
-
-            if let Some(sender) = sender_option {
-              if !sender.is_closed() {
-                let result = http_forwarded_auth_kept_alive(
-                  sender,
-                  auth_request,
-                  error_logger,
-                  original_request,
-                  forwarded_auth_copy_headers,
-                )
-                .await;
-                drop(rwlock_write);
-                return result;
-              } else {
-                drop(rwlock_write);
-              }
-            } else {
-              drop(rwlock_write);
-            }
+        if let Some(sender) = sender_option {
+          if !sender.is_closed() {
+            let result = http_forwarded_auth_kept_alive(
+              sender,
+              auth_request,
+              error_logger,
+              original_request,
+              forwarded_auth_copy_headers,
+            )
+            .await;
+            drop(connections_mutex);
+            return result;
           } else {
-            drop(rwlock_read);
+            drop(connections_mutex);
           }
         } else {
-          drop(rwlock_read);
+          drop(connections_mutex);
         }
 
         let stream = match TcpStream::connect(&addr).await {
@@ -439,7 +427,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
 }
 
 async fn http_forwarded_auth(
-  connections: &RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>,
+  connections: &Mutex<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>,
   connect_addr: String,
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   proxy_request: Request<BoxBody<Bytes, hyper::Error>>,
@@ -521,9 +509,9 @@ async fn http_forwarded_auth(
   }
 
   if !sender.is_closed() {
-    let mut rwlock_write = connections.write().await;
-    rwlock_write.insert(connect_addr, sender);
-    drop(rwlock_write);
+    let mut connections_mutex = connections.lock().await;
+    connections_mutex.insert(connect_addr, sender);
+    drop(connections_mutex);
   }
 
   Ok(response)
