@@ -24,7 +24,7 @@ use rustls_native_certs::load_native_certs;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio::runtime::Handle;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
 use tokio_tungstenite::Connector;
 
@@ -55,7 +55,7 @@ pub fn server_module_init(
 
   let mut connections_vec = Vec::new();
   for _ in 0..DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST {
-    connections_vec.push(Mutex::new(HashMap::new()));
+    connections_vec.push(RwLock::new(HashMap::new()));
   }
   Ok(Box::new(ReverseProxyModule::new(
     Arc::new(roots),
@@ -66,14 +66,14 @@ pub fn server_module_init(
 #[allow(clippy::type_complexity)]
 struct ReverseProxyModule {
   roots: Arc<RootCertStore>,
-  connections: Arc<Vec<Mutex<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
+  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
 }
 
 impl ReverseProxyModule {
   #[allow(clippy::type_complexity)]
   fn new(
     roots: Arc<RootCertStore>,
-    connections: Arc<Vec<Mutex<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
+    connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
   ) -> Self {
     ReverseProxyModule { roots, connections }
   }
@@ -93,7 +93,7 @@ impl ServerModule for ReverseProxyModule {
 struct ReverseProxyModuleHandlers {
   handle: Handle,
   roots: Arc<RootCertStore>,
-  connections: Arc<Vec<Mutex<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
+  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
 }
 
 #[async_trait]
@@ -214,19 +214,31 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
 
         let connections = &self.connections[rand::random_range(..self.connections.len())];
 
-        let mut connections_mutex = connections.lock().await;
-        let sender_option = connections_mutex.get_mut(&addr);
+        let rwlock_read = connections.read().await;
+        let sender_read_option = rwlock_read.get(&addr);
 
-        if let Some(sender) = sender_option {
-          if !sender.is_closed() {
-            let result = http_proxy_kept_alive(sender, proxy_request, error_logger).await;
-            drop(connections_mutex);
-            return result;
+        if let Some(sender_read) = sender_read_option {
+          if !sender_read.is_closed() {
+            drop(rwlock_read);
+            let mut rwlock_write = connections.write().await;
+            let sender_option = rwlock_write.get_mut(&addr);
+
+            if let Some(sender) = sender_option {
+              if !sender.is_closed() {
+                let result = http_proxy_kept_alive(sender, proxy_request, error_logger).await;
+                drop(rwlock_write);
+                return result;
+              } else {
+                drop(rwlock_write);
+              }
+            } else {
+              drop(rwlock_write);
+            }
           } else {
-            drop(connections_mutex);
+            drop(rwlock_read);
           }
         } else {
-          drop(connections_mutex);
+          drop(rwlock_read);
         }
 
         let stream = match TcpStream::connect(&addr).await {
@@ -538,7 +550,7 @@ fn determine_proxy_to(config: &ServerConfigRoot, encrypted: bool) -> Option<Stri
 }
 
 async fn http_proxy(
-  connections: &Mutex<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>,
+  connections: &RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>,
   connect_addr: String,
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   proxy_request: Request<BoxBody<Bytes, hyper::Error>>,
@@ -600,9 +612,9 @@ async fn http_proxy(
   }
 
   if !sender.is_closed() {
-    let mut connections_mutex = connections.lock().await;
-    connections_mutex.insert(connect_addr, sender);
-    drop(connections_mutex);
+    let mut rwlock_write = connections.write().await;
+    rwlock_write.insert(connect_addr, sender);
+    drop(rwlock_write);
   }
 
   Ok(response)
