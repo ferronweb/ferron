@@ -758,6 +758,53 @@ pub fn validate_config(
             ))?
           }
         }
+
+        if !config.get("enableLoadBalancerHealthCheck").is_badvalue()
+          && config
+            .get("enableLoadBalancerHealthCheck")
+            .as_bool()
+            .is_none()
+        {
+          Err(anyhow::anyhow!(
+            "Invalid load balancer health check enabling option value"
+          ))?
+        }
+
+        if !config
+          .get("loadBalancerHealthCheckMaximumFails")
+          .is_badvalue()
+        {
+          if let Some(window) = config.get("loadBalancerHealthCheckMaximumFails").as_i64() {
+            if window < 0 {
+              Err(anyhow::anyhow!(
+                "Invalid load balancer health check maximum fails value"
+              ))?
+            }
+          } else {
+            Err(anyhow::anyhow!(
+              "Invalid load balancer health check maximum fails value"
+            ))?
+          }
+        }
+
+        if !config.get("loadBalancerHealthCheckWindow").is_badvalue() {
+          if !is_global {
+            Err(anyhow::anyhow!(
+        "Load balancer health check window configuration is not allowed in host configuration"
+      ))?
+          }
+          if let Some(window) = config.get("loadBalancerHealthCheckWindow").as_i64() {
+            if window < 0 {
+              Err(anyhow::anyhow!(
+                "Invalid load balancer health check window value"
+              ))?
+            }
+          } else {
+            Err(anyhow::anyhow!(
+              "Invalid load balancer health check window value"
+            ))?
+          }
+        }
       }
       "cache" => {
         if !config.get("cacheVaryHeaders").is_badvalue() {

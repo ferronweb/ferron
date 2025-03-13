@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use ferron_common::{
@@ -28,10 +29,12 @@ use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
 use tokio_tungstenite::Connector;
 
+use crate::ferron_util::ttl_cache::TtlCache;
+
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
 
 pub fn server_module_init(
-  _config: &ServerConfig,
+  config: &ServerConfig,
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
   let mut roots: RootCertStore = RootCertStore::empty();
   let certs_result = load_native_certs();
@@ -60,6 +63,11 @@ pub fn server_module_init(
   Ok(Box::new(ReverseProxyModule::new(
     Arc::new(roots),
     Arc::new(connections_vec),
+    Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(
+      config["global"]["loadBalancerHealthCheckWindow"]
+        .as_i64()
+        .unwrap_or(5000) as u64,
+    )))),
   )))
 }
 
@@ -67,6 +75,7 @@ pub fn server_module_init(
 struct ReverseProxyModule {
   roots: Arc<RootCertStore>,
   connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
+  failed_backends: Arc<RwLock<TtlCache<String, u64>>>,
 }
 
 impl ReverseProxyModule {
@@ -74,8 +83,13 @@ impl ReverseProxyModule {
   fn new(
     roots: Arc<RootCertStore>,
     connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
+    failed_backends: Arc<RwLock<TtlCache<String, u64>>>,
   ) -> Self {
-    ReverseProxyModule { roots, connections }
+    ReverseProxyModule {
+      roots,
+      connections,
+      failed_backends,
+    }
   }
 }
 
@@ -84,6 +98,7 @@ impl ServerModule for ReverseProxyModule {
     Box::new(ReverseProxyModuleHandlers {
       roots: self.roots.clone(),
       connections: self.connections.clone(),
+      failed_backends: self.failed_backends.clone(),
       handle,
     })
   }
@@ -94,6 +109,7 @@ struct ReverseProxyModuleHandlers {
   handle: Handle,
   roots: Arc<RootCertStore>,
   connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
+  failed_backends: Arc<RwLock<TtlCache<String, u64>>>,
 }
 
 #[async_trait]
@@ -106,7 +122,23 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
-      if let Some(proxy_to) = determine_proxy_to(config, socket_data.encrypted) {
+      let enable_health_check = config
+        .get("enableLoadBalancerHealthCheck")
+        .as_bool()
+        .unwrap_or(false);
+      let health_check_max_fails = config
+        .get("loadBalancerHealthCheckMaximumFails")
+        .as_i64()
+        .unwrap_or(3) as u64;
+      if let Some(proxy_to) = determine_proxy_to(
+        config,
+        socket_data.encrypted,
+        &self.failed_backends,
+        enable_health_check,
+        health_check_max_fails,
+      )
+      .await
+      {
         let (hyper_request, _auth_user) = request.into_parts();
         let (mut hyper_request_parts, request_body) = hyper_request.into_parts();
 
@@ -244,6 +276,12 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
         let stream = match TcpStream::connect(&addr).await {
           Ok(stream) => stream,
           Err(err) => {
+            if enable_health_check {
+              let mut failed_backends_write = self.failed_backends.write().await;
+              let proxy_to = proxy_to.clone();
+              let failed_attempts = failed_backends_write.get(&proxy_to);
+              failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
+            }
             match err.kind() {
               tokio::io::ErrorKind::ConnectionRefused
               | tokio::io::ErrorKind::NotFound
@@ -280,6 +318,12 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
         match stream.set_nodelay(true) {
           Ok(_) => (),
           Err(err) => {
+            if enable_health_check {
+              let mut failed_backends_write = self.failed_backends.write().await;
+              let proxy_to = proxy_to.clone();
+              let failed_attempts = failed_backends_write.get(&proxy_to);
+              failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
+            }
             error_logger.log(&format!("Bad gateway: {}", err)).await;
             return Ok(
               ResponseData::builder_without_request()
@@ -289,8 +333,23 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           }
         };
 
+        let failed_backends_option_borrowed = if enable_health_check {
+          Some(&*self.failed_backends)
+        } else {
+          None
+        };
+
         if !encrypted {
-          http_proxy(connections, addr, stream, proxy_request, error_logger).await
+          http_proxy(
+            connections,
+            addr,
+            stream,
+            proxy_request,
+            error_logger,
+            proxy_to,
+            failed_backends_option_borrowed,
+          )
+          .await
         } else {
           let tls_client_config = rustls::ClientConfig::builder()
             .with_root_certificates(self.roots.clone())
@@ -301,6 +360,12 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           let tls_stream = match connector.connect(domain, stream).await {
             Ok(stream) => stream,
             Err(err) => {
+              if enable_health_check {
+                let mut failed_backends_write = self.failed_backends.write().await;
+                let proxy_to = proxy_to.clone();
+                let failed_attempts = failed_backends_write.get(&proxy_to);
+                failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
+              }
               error_logger.log(&format!("Bad gateway: {}", err)).await;
               return Ok(
                 ResponseData::builder_without_request()
@@ -310,7 +375,16 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
             }
           };
 
-          http_proxy(connections, addr, tls_stream, proxy_request, error_logger).await
+          http_proxy(
+            connections,
+            addr,
+            tls_stream,
+            proxy_request,
+            error_logger,
+            proxy_to,
+            failed_backends_option_borrowed,
+          )
+          .await
         }
       } else {
         Ok(ResponseData::builder(request).build())
@@ -367,7 +441,23 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
     error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
-      if let Some(proxy_to) = determine_proxy_to(config, socket_data.encrypted) {
+      let enable_health_check = config
+        .get("enableLoadBalancerHealthCheck")
+        .as_bool()
+        .unwrap_or(false);
+      let health_check_max_fails = config
+        .get("loadBalancerHealthCheckMaximumFails")
+        .as_i64()
+        .unwrap_or(3) as u64;
+      if let Some(proxy_to) = determine_proxy_to(
+        config,
+        socket_data.encrypted,
+        &self.failed_backends,
+        enable_health_check,
+        health_check_max_fails,
+      )
+      .await
+      {
         let proxy_request_url = proxy_to.parse::<hyper::Uri>()?;
         let scheme_str = proxy_request_url.scheme_str();
         let mut encrypted = false;
@@ -511,7 +601,13 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
   }
 }
 
-fn determine_proxy_to(config: &ServerConfigRoot, encrypted: bool) -> Option<String> {
+async fn determine_proxy_to(
+  config: &ServerConfigRoot,
+  encrypted: bool,
+  failed_backends: &RwLock<TtlCache<String, u64>>,
+  enable_health_check: bool,
+  health_check_max_fails: u64,
+) -> Option<String> {
   let mut proxy_to = None;
   // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
   // The "proxyTo" and "secureProxyTo" are validated though.
@@ -519,7 +615,30 @@ fn determine_proxy_to(config: &ServerConfigRoot, encrypted: bool) -> Option<Stri
   if encrypted {
     let secure_proxy_to_yaml = config.get("secureProxyTo");
     if let Some(secure_proxy_to_vector) = secure_proxy_to_yaml.as_vec() {
-      if !secure_proxy_to_vector.is_empty() {
+      if enable_health_check {
+        let mut secure_proxy_to_vector = secure_proxy_to_vector.clone();
+        loop {
+          if !secure_proxy_to_vector.is_empty() {
+            let index = rand::random_range(..secure_proxy_to_vector.len());
+            if let Some(secure_proxy_to) = secure_proxy_to_vector[index].as_str() {
+              proxy_to = Some(secure_proxy_to.to_string());
+              let failed_backends_read = failed_backends.read().await;
+              let failed_backend_fails =
+                match failed_backends_read.get(&secure_proxy_to.to_string()) {
+                  Some(fails) => fails,
+                  None => break,
+                };
+              if failed_backend_fails > health_check_max_fails {
+                secure_proxy_to_vector.remove(index);
+              } else {
+                break;
+              }
+            }
+          } else {
+            break;
+          }
+        }
+      } else if !secure_proxy_to_vector.is_empty() {
         if let Some(secure_proxy_to) =
           secure_proxy_to_vector[rand::random_range(..secure_proxy_to_vector.len())].as_str()
         {
@@ -534,7 +653,29 @@ fn determine_proxy_to(config: &ServerConfigRoot, encrypted: bool) -> Option<Stri
   if proxy_to.is_none() {
     let proxy_to_yaml = config.get("proxyTo");
     if let Some(proxy_to_vector) = proxy_to_yaml.as_vec() {
-      if !proxy_to_vector.is_empty() {
+      if enable_health_check {
+        let mut proxy_to_vector = proxy_to_vector.clone();
+        loop {
+          if !proxy_to_vector.is_empty() {
+            let index = rand::random_range(..proxy_to_vector.len());
+            if let Some(proxy_to_str) = proxy_to_vector[index].as_str() {
+              proxy_to = Some(proxy_to_str.to_string());
+              let failed_backends_read = failed_backends.read().await;
+              let failed_backend_fails = match failed_backends_read.get(&proxy_to_str.to_string()) {
+                Some(fails) => fails,
+                None => break,
+              };
+              if failed_backend_fails > health_check_max_fails {
+                proxy_to_vector.remove(index);
+              } else {
+                break;
+              }
+            }
+          } else {
+            break;
+          }
+        }
+      } else if !proxy_to_vector.is_empty() {
         if let Some(proxy_to_str) =
           proxy_to_vector[rand::random_range(..proxy_to_vector.len())].as_str()
         {
@@ -555,12 +696,19 @@ async fn http_proxy(
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   proxy_request: Request<BoxBody<Bytes, hyper::Error>>,
   error_logger: &ErrorLogger,
+  proxy_to: String,
+  failed_backends: Option<&tokio::sync::RwLock<TtlCache<std::string::String, u64>>>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let io = TokioIo::new(stream);
 
   let (mut sender, conn) = match hyper::client::conn::http1::handshake(io).await {
     Ok(data) => data,
     Err(err) => {
+      if let Some(failed_backends) = failed_backends {
+        let mut failed_backends_write = failed_backends.write().await;
+        let failed_attempts = failed_backends_write.get(&proxy_to);
+        failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
+      }
       error_logger.log(&format!("Bad gateway: {}", err)).await;
       return Ok(
         ResponseData::builder_without_request()
