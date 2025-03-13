@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::{collections::HashSet, error::Error};
 
 use glob::glob;
@@ -65,7 +66,15 @@ fn load_config_inner(
     if let Some(include_yaml) = yaml_config["include"].as_vec() {
       for include_one_yaml in include_yaml.iter() {
         if let Some(include_glob) = include_one_yaml.as_str() {
-          let files_globbed = match glob(include_glob) {
+          let include_glob_pathbuf = PathBuf::from_str(include_glob)?;
+          let include_glob_pathbuf_canonicalized = if include_glob_pathbuf.is_absolute() {
+            include_glob_pathbuf
+          } else {
+            let mut canonical_dirname = canonical_pathbuf.clone();
+            canonical_dirname.pop();
+            canonical_dirname.join(include_glob_pathbuf)
+          };
+          let files_globbed = match glob(&include_glob_pathbuf_canonicalized.to_string_lossy()) {
             Ok(files_globbed) => files_globbed,
             Err(err) => {
               let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
