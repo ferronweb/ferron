@@ -858,12 +858,11 @@ async fn execute_fastcgi(
 
         if !stdin_copied {
           tokio::select! {
+            biased;
 
-          biased;
-
-          _ = &mut stdin_copy_future_pinned => {
-            stdin_copied = true;
-          },
+            _ = &mut stdin_copy_future_pinned => {
+              stdin_copied = true;
+            },
             result = &mut stderr_read_future_pinned => {
               let stderr_vec = result.unwrap_or(vec![]);
               let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
