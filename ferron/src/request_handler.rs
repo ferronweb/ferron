@@ -2,6 +2,7 @@ use std::convert::Infallible;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::ferron_res::server_software::SERVER_SOFTWARE;
 use crate::ferron_util::combine_config::combine_config;
@@ -22,6 +23,7 @@ use hyper::{HeaderMap, Method, Request, Response, StatusCode};
 use hyper_tungstenite::is_upgrade_request;
 use tokio::fs;
 use tokio::io::BufReader;
+use tokio::time::timeout;
 use tokio_util::io::ReaderStream;
 use yaml_rust2::Yaml;
 
@@ -154,7 +156,7 @@ async fn log_combined(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn request_handler(
+async fn request_handler_wrapped(
   mut request: Request<BoxBody<Bytes, hyper::Error>>,
   remote_address: SocketAddr,
   local_address: SocketAddr,
@@ -1619,5 +1621,53 @@ pub async fn request_handler(
       .await;
     }
     Ok(response)
+  }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn request_handler(
+  request: Request<BoxBody<Bytes, hyper::Error>>,
+  remote_address: SocketAddr,
+  local_address: SocketAddr,
+  encrypted: bool,
+  global_config_root: Arc<ServerConfigRoot>,
+  host_config: Arc<Yaml>,
+  logger: Sender<LogMessage>,
+  handlers_vec: impl Iterator<Item = Box<dyn ServerModuleHandlers + Send>> + Send + 'static,
+) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
+  let timeout_yaml = global_config_root.get("timeout");
+  if timeout_yaml.is_null() {
+    request_handler_wrapped(
+      request,
+      remote_address,
+      local_address,
+      encrypted,
+      global_config_root,
+      host_config,
+      logger,
+      handlers_vec,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!(e))
+  } else {
+    let timeout_millis = timeout_yaml.as_i64().unwrap_or(300000) as u64;
+    match timeout(
+      Duration::from_millis(timeout_millis),
+      request_handler_wrapped(
+        request,
+        remote_address,
+        local_address,
+        encrypted,
+        global_config_root,
+        host_config,
+        logger,
+        handlers_vec,
+      ),
+    )
+    .await
+    {
+      Ok(response) => response.map_err(|e| anyhow::anyhow!(e)),
+      Err(_) => Err(anyhow::anyhow!("The client or server has timed out")),
+    }
   }
 }

@@ -726,6 +726,23 @@ pub fn validate_config(
     }
   }
 
+  if !config.get("timeout").is_badvalue() {
+    if !is_global {
+      Err(anyhow::anyhow!(
+        "Server timeout configuration is not allowed in host configuration"
+      ))?
+    }
+    if !config.get("timeout").is_null() {
+      if let Some(maximum_cache_response_size) = config.get("timeout").as_i64() {
+        if maximum_cache_response_size < 0 {
+          Err(anyhow::anyhow!("Invalid server timeout"))?
+        }
+      } else {
+        Err(anyhow::anyhow!("Invalid server timeout"))?
+      }
+    }
+  }
+
   for module_optional_builtin in modules_optional_builtin.iter() {
     match module_optional_builtin as &str {
       "rproxy" => {
