@@ -95,9 +95,12 @@ struct Args {
 
 // Function to execute before starting the server
 #[allow(clippy::type_complexity)]
-fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>> {
+fn before_starting_server(
+  args: &Args,
+  first_start: bool,
+) -> Result<bool, Box<dyn Error + Send + Sync>> {
   // Load the configuration
-  let yaml_config = load_config(PathBuf::from(args.config))?;
+  let yaml_config = load_config(PathBuf::from(args.config.clone()))?;
 
   let mut module_error = None;
   let mut module_libs = Vec::new();
@@ -391,19 +394,25 @@ fn before_starting_server(args: Args) -> Result<(), Box<dyn Error + Send + Sync>
     module_config_validation_functions,
     module_error,
     modules_optional_builtin,
-  )?;
-
-  Ok(())
+    first_start,
+  )
 }
 
 // Entry point of the application
 fn main() {
-  let args = Args::parse(); // Parse command-line arguments
-  match before_starting_server(args) {
-    Ok(_) => (),
-    Err(err) => {
-      eprintln!("FATAL ERROR: {}", err);
-      std::process::exit(1);
+  let args = &Args::parse(); // Parse command-line arguments
+  let mut first_start = true;
+  loop {
+    match before_starting_server(args, first_start) {
+      Ok(false) => break,
+      Ok(true) => {
+        first_start = false;
+        println!("Reloading the server configuration...");
+      }
+      Err(err) => {
+        eprintln!("FATAL ERROR: {}", err);
+        std::process::exit(1);
+      }
     }
   }
 }

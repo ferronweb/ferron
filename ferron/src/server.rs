@@ -27,12 +27,12 @@ use rustls::sign::CertifiedKey;
 use rustls::version::{TLS12, TLS13};
 use rustls::{RootCertStore, ServerConfig};
 use rustls_native_certs::load_native_certs;
-use tokio::fs;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Handle;
 use tokio::sync::Mutex;
 use tokio::time;
+use tokio::{fs, signal};
 use tokio_rustls::TlsAcceptor;
 use tokio_rustls_acme::caches::DirCache;
 use tokio_rustls_acme::{AcmeAcceptor, AcmeConfig};
@@ -353,6 +353,7 @@ async fn server_event_loop(
   >,
   module_error: Option<anyhow::Error>,
   modules_optional_builtin: Vec<String>,
+  first_startup: bool,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   if let Some(module_error) = module_error {
     logger
@@ -637,17 +638,14 @@ async fn server_event_loop(
     }
   }
 
-  if crypto_provider.install_default().is_err() {
-    Err(anyhow::anyhow!("Cannot install crypto provider"))?
-  }
-
   // Build TLS configuration
-  let mut tls_config_builder_wants_verifier = ServerConfig::builder();
+  let tls_config_builder_wants_versions =
+    ServerConfig::builder_with_provider(Arc::new(crypto_provider.clone()));
 
   // Very simple minimum and maximum TLS version logic for now...
   let min_tls_version_option = yaml_config["global"]["tlsMinVersion"].as_str();
   let max_tls_version_option = yaml_config["global"]["tlsMaxVersion"].as_str();
-  match min_tls_version_option {
+  let tls_config_builder_wants_verifier = match min_tls_version_option {
     Some("TLSv1.3") => match max_tls_version_option {
       Some("TLSv1.2") => {
         logger
@@ -662,7 +660,22 @@ async fn server_event_loop(
         )))?
       }
       Some("TLSv1.3") | None => {
-        tls_config_builder_wants_verifier = ServerConfig::builder_with_protocol_versions(&[&TLS13]);
+        match tls_config_builder_wants_versions.with_protocol_versions(&[&TLS13]) {
+          Ok(builder) => builder,
+          Err(err) => {
+            logger
+              .send(LogMessage::new(
+                format!("Couldn't create the TLS server configuration: {}", err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+            Err(anyhow::anyhow!(format!(
+              "Couldn't create the TLS server configuration: {}",
+              err
+            )))?
+          }
+        }
       }
       _ => {
         logger
@@ -677,11 +690,40 @@ async fn server_event_loop(
     },
     Some("TLSv1.2") | None => match max_tls_version_option {
       Some("TLSv1.2") => {
-        tls_config_builder_wants_verifier = ServerConfig::builder_with_protocol_versions(&[&TLS12]);
+        match tls_config_builder_wants_versions.with_protocol_versions(&[&TLS12]) {
+          Ok(builder) => builder,
+          Err(err) => {
+            logger
+              .send(LogMessage::new(
+                format!("Couldn't create the TLS server configuration: {}", err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+            Err(anyhow::anyhow!(format!(
+              "Couldn't create the TLS server configuration: {}",
+              err
+            )))?
+          }
+        }
       }
       Some("TLSv1.3") | None => {
-        tls_config_builder_wants_verifier =
-          ServerConfig::builder_with_protocol_versions(&[&TLS12, &TLS13]);
+        match tls_config_builder_wants_versions.with_protocol_versions(&[&TLS12, &TLS13]) {
+          Ok(builder) => builder,
+          Err(err) => {
+            logger
+              .send(LogMessage::new(
+                format!("Couldn't create the TLS server configuration: {}", err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+            Err(anyhow::anyhow!(format!(
+              "Couldn't create the TLS server configuration: {}",
+              err
+            )))?
+          }
+        }
       }
       _ => {
         logger
@@ -704,7 +746,7 @@ async fn server_event_loop(
         .unwrap_or_default();
       Err(anyhow::anyhow!(String::from("Invalid minimum TLS version")))?
     }
-  }
+  };
 
   let tls_config_builder_wants_server_cert =
     match yaml_config["global"]["useClientCertificate"].as_bool() {
@@ -762,6 +804,20 @@ async fn server_event_loop(
   let mut addr_tls = SocketAddr::from((IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)), 443));
   let mut tls_enabled = false;
   let mut non_tls_disabled = false;
+
+  // Install a process-wide cryptography provider. If it fails, then warn about it.
+  if crypto_provider.install_default().is_err() && first_startup {
+    logger
+      .send(LogMessage::new(
+        "Cannot install a process-wide cryptography provider".to_string(),
+        true,
+      ))
+      .await
+      .unwrap_or_default();
+    Err(anyhow::anyhow!(
+      "Cannot install a process-wide cryptography provider"
+    ))?;
+  }
 
   // Read port configurations from YAML
   if let Some(read_port) = yaml_config["global"]["port"].as_i64() {
@@ -958,6 +1014,7 @@ async fn server_event_loop(
   }
 
   // Leak the modules vector to work around the lifetime issues in Rust
+  // FIXME: Don't leak the modules vector to ensure lower memory usage in case of SIGHUP.
   let modules_leaked = Box::leak(Box::new(modules));
 
   // Create a global configuration root
@@ -1107,7 +1164,8 @@ pub fn start_server(
   >,
   module_error: Option<anyhow::Error>,
   modules_optional_builtin: Vec<String>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+  first_startup: bool,
+) -> Result<bool, Box<dyn Error + Send + Sync>> {
   if let Some(environment_variables_hash) = yaml_config["global"]["environmentVariables"].as_hash()
   {
     let environment_variables_hash_iter = environment_variables_hash.iter();
@@ -1245,19 +1303,49 @@ pub fn start_server(
 
   // Run the server event loop
   server_runtime.block_on(async {
-    let result = server_event_loop(
+    let event_loop_future = server_event_loop(
       yaml_config,
       logger,
       modules,
       module_config_validation_functions,
       module_error,
       modules_optional_builtin,
-    )
-    .await;
+      first_startup,
+    );
 
-    // Sleep the Tokio runtime to ensure error logs are saved
-    time::sleep(tokio::time::Duration::from_millis(100)).await;
+    #[cfg(unix)]
+    {
+      match signal::unix::signal(signal::unix::SignalKind::hangup()) {
+        Ok(mut signal) => {
+          tokio::select! {
+            result = event_loop_future => {
+              // Sleep the Tokio runtime to ensure error logs are saved
+              time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    result
+              result.map(|_| false)
+            },
+            _ = signal.recv() => Ok(true)
+          }
+        }
+        Err(_) => {
+          let result = event_loop_future.await;
+
+          // Sleep the Tokio runtime to ensure error logs are saved
+          time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+          result.map(|_| false)
+        }
+      }
+    }
+
+    #[cfg(not(unix))]
+    {
+      let result = event_loop_future.await;
+
+      // Sleep the Tokio runtime to ensure error logs are saved
+      time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+      result.map(|_| false)
+    }
   })
 }
