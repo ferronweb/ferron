@@ -66,7 +66,18 @@ fn load_config_inner(
     if let Some(include_yaml) = yaml_config["include"].as_vec() {
       for include_one_yaml in include_yaml.iter() {
         if let Some(include_glob) = include_one_yaml.as_str() {
-          let include_glob_pathbuf = PathBuf::from_str(include_glob)?;
+          let include_glob_pathbuf = match PathBuf::from_str(include_glob) {
+            Ok(pathbuf) => pathbuf,
+            Err(err) => {
+              let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
+
+              Err(anyhow::anyhow!(
+                "Failed to determine includes for the server configuration file at \"{}\": {}",
+                canonical_path,
+                err
+              ))?
+            }
+          };
           let include_glob_pathbuf_canonicalized = if include_glob_pathbuf.is_absolute() {
             include_glob_pathbuf
           } else {
