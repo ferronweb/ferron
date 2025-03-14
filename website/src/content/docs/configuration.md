@@ -70,6 +70,10 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - The path to the directory used by automatic TLS to store cache data, such as cached certificates. Default: None
 - **automaticTLSLetsEncryptProduction** (_bool_; Project Karpacz 0.7.0 and newer)
   - Option to enable production Let's Encrypt ACME endpoint. If set to `false`, the staging Let's Encrypt ACME endpoint will be used. Default: `true`
+- **loadBalancerHealthCheckWindow** (_u32_; _rproxy_ module; Ferron 1.0.0-beta3 and newer)
+  - A window (in milliseconds) between each failed connection report made by a load balancer. Default: `5000`
+- **timeout** (_u32_ or `null`; Ferron 1.0.0-beta3 and newer)
+  - A maximum time (in milliseconds) for server to process the request, after which the server resets the connection. If set to `null`, the timeout is disabled. It's not recommended to disable the timeout, as disabling it may leave the server vulnerable to Slow HTTP attacks. Default: `300000`
 
 ## Host configuration properties
 
@@ -187,6 +191,14 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - Base URL, which web server will send requests to for forwarded authentication. HTTP and HTTPS URLs are supported. Default: None
 - **forwardedAuthCopyHeaders** (_Array&lt;String&gt;_; _fauth_ module; Ferron 1.0.0-beta2 and newer)
   - A list of response headers that will be copied from the forwarded authentication server response to the original request. Default: None
+- **enableLoadBalancerHealthCheck** (_u32_; _rproxy_ module; Ferron 1.0.0-beta3 and newer)
+  - Option to enable passive health checks for the load balancer. If the connection by the load balancer fails, the load balancer notes the failed connection, and if there are too many of them, the load balancer temporarily marks the backend server as "bad" and will not choose the backend server. Default: `false`
+- **loadBalancerHealthCheckMaximumFails** (_u32_; _rproxy_ module; Ferron 1.0.0-beta3 and newer)
+  - Maximum reported failed connections, before a backend server is marked as "bad" and not chosen by the load balancer. Default: `3`
+
+## Server configuration includes
+
+Server configuration includes can be specified in the `include` section in the server configuration (at the same level as `global` and `host` would have). The `include` section is a list of glob patterns that match the configuration file names to be merged.
 
 ## Example configuration
 
@@ -261,4 +273,8 @@ hosts:
       - scode: 401
         url: "/restricted.html"
     proxyTo: "http://backend-service:5000"
+
+# # Uncomment to enable configuration file includes
+#include:
+#  - /etc/ferron.d/**/*.yaml
 ```

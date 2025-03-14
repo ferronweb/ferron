@@ -4,6 +4,16 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.0.0-beta3
+
+**Released in March 14, 2025**
+
+- Added support for configuration file includes
+- Added support for passive health checks for load balancer
+- Added support for request processing timeouts to prevent slow HTTP attacks
+- Added support for WebSocket request handlers
+- Added support for WebSocket reverse proxying
+
 ## Ferron 1.0.0-beta2
 
 **Released in March 8, 2025**
