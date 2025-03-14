@@ -494,6 +494,7 @@ async fn server_event_loop(
     crypto_provider.kx_groups = kx_groups;
   }
 
+  let crypto_provider_cloned = crypto_provider.clone();
   let mut sni_resolver = CustomSniResolver::new();
   let mut certified_keys = Vec::new();
 
@@ -553,7 +554,7 @@ async fn server_event_loop(
             )))?
           }
         };
-        let signing_key = match crypto_provider.key_provider.load_private_key(key) {
+        let signing_key = match crypto_provider_cloned.key_provider.load_private_key(key) {
           Ok(key) => key,
           Err(err) => {
             logger
@@ -612,7 +613,7 @@ async fn server_event_loop(
                   )))?
                 }
               };
-              let signing_key = match crypto_provider.key_provider.load_private_key(key) {
+              let signing_key = match crypto_provider_cloned.key_provider.load_private_key(key) {
                 Ok(key) => key,
                 Err(err) => {
                   logger
@@ -640,7 +641,7 @@ async fn server_event_loop(
 
   // Build TLS configuration
   let tls_config_builder_wants_versions =
-    ServerConfig::builder_with_provider(Arc::new(crypto_provider.clone()));
+    ServerConfig::builder_with_provider(Arc::new(crypto_provider_cloned));
 
   // Very simple minimum and maximum TLS version logic for now...
   let min_tls_version_option = yaml_config["global"]["tlsMinVersion"].as_str();
