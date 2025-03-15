@@ -87,6 +87,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 // Struct for command-line arguments
 /// A fast, memory-safe web server written in Rust
 #[derive(Parser, Debug)]
+#[command(name = "Ferron")]
 #[command(version, about, long_about = None)]
 struct Args {
   /// The path to the server configuration file
