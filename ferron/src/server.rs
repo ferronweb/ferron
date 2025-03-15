@@ -162,19 +162,16 @@ async fn accept_connection(
               .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
             let (request_parts, request_body) = request.into_parts();
             let request = Request::from_parts(request_parts, request_body.boxed());
-            async move {
-              request_handler(
-                request,
-                remote_address,
-                local_address,
-                true,
-                global_config_root,
-                host_config,
-                logger,
-                handlers_vec_clone,
-              )
-              .await
-            }
+            request_handler(
+              request,
+              remote_address,
+              local_address,
+              true,
+              global_config_root,
+              host_config,
+              logger,
+              handlers_vec_clone,
+            )
           }),
         )
         .await
@@ -254,19 +251,16 @@ async fn accept_connection(
               .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
             let (request_parts, request_body) = request.into_parts();
             let request = Request::from_parts(request_parts, request_body.boxed());
-            async move {
-              request_handler(
-                request,
-                remote_address,
-                local_address,
-                true,
-                global_config_root,
-                host_config,
-                logger,
-                handlers_vec_clone,
-              )
-              .await
-            }
+            request_handler(
+              request,
+              remote_address,
+              local_address,
+              true,
+              global_config_root,
+              host_config,
+              logger,
+              handlers_vec_clone,
+            )
           }),
         )
         .await
@@ -331,19 +325,16 @@ async fn accept_connection(
               .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
             let (request_parts, request_body) = request.into_parts();
             let request = Request::from_parts(request_parts, request_body.boxed());
-            async move {
-              request_handler(
-                request,
-                remote_address,
-                local_address,
-                false,
-                global_config_root,
-                host_config,
-                logger,
-                handlers_vec_clone,
-              )
-              .await
-            }
+            request_handler(
+              request,
+              remote_address,
+              local_address,
+              false,
+              global_config_root,
+              host_config,
+              logger,
+              handlers_vec_clone,
+            )
           }),
         )
         .await
