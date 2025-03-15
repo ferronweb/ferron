@@ -53,6 +53,11 @@ export default [
     label: "Automatic TLS"
   },
   {
+    href: "/docs/ferrbench",
+    target: "_self",
+    label: "FerrBench"
+  },
+  {
     href: "https://rustdocs.ferronweb.org",
     target: "_self",
     label: "Rust crate documentation"
