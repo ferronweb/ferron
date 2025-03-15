@@ -1308,7 +1308,7 @@ pub fn start_server(
   });
 
   // Run the server event loop
-  server_runtime.block_on(async {
+  let result = server_runtime.block_on(async {
     let event_loop_future = server_event_loop(
       yaml_config,
       logger,
@@ -1353,5 +1353,10 @@ pub fn start_server(
 
       result.map(|_| false)
     }
-  })
+  });
+
+  // Wait 10 seconds or until all tasks are complete
+  server_runtime.shutdown_timeout(time::Duration::from_secs(10));
+
+  result
 }
