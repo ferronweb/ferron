@@ -29,6 +29,7 @@ use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
 use tokio_tungstenite::Connector;
 
+use crate::ferron_util::no_server_verifier::NoServerVerifier;
 use crate::ferron_util::ttl_cache::TtlCache;
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
@@ -130,6 +131,10 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
         .get("loadBalancerHealthCheckMaximumFails")
         .as_i64()
         .unwrap_or(3) as u64;
+      let disable_certificate_verification = config
+        .get("disableProxyCertificateVerification")
+        .as_bool()
+        .unwrap_or(false);
       if let Some(proxy_to) = determine_proxy_to(
         config,
         socket_data.encrypted,
@@ -351,9 +356,14 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           )
           .await
         } else {
-          let tls_client_config = rustls::ClientConfig::builder()
-            .with_root_certificates(self.roots.clone())
-            .with_no_client_auth();
+          let tls_client_config = (if disable_certificate_verification {
+            rustls::ClientConfig::builder()
+              .dangerous()
+              .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
+          } else {
+            rustls::ClientConfig::builder().with_root_certificates(self.roots.clone())
+          })
+          .with_no_client_auth();
           let connector = TlsConnector::from(Arc::new(tls_client_config));
           let domain = ServerName::try_from(host)?.to_owned();
 
@@ -449,6 +459,11 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
         .get("loadBalancerHealthCheckMaximumFails")
         .as_i64()
         .unwrap_or(3) as u64;
+
+      let disable_certificate_verification = config
+        .get("disableProxyCertificateVerification")
+        .as_bool()
+        .unwrap_or(false);
       if let Some(proxy_to) = determine_proxy_to(
         config,
         socket_data.encrypted,
@@ -515,9 +530,14 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           Connector::Plain
         } else {
           Connector::Rustls(Arc::new(
-            rustls::ClientConfig::builder()
-              .with_root_certificates(self.roots.clone())
-              .with_no_client_auth(),
+            (if disable_certificate_verification {
+              rustls::ClientConfig::builder()
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
+            } else {
+              rustls::ClientConfig::builder().with_root_certificates(self.roots.clone())
+            })
+            .with_no_client_auth(),
           ))
         };
 

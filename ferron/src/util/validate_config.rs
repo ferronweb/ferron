@@ -807,8 +807,8 @@ pub fn validate_config(
         if !config.get("loadBalancerHealthCheckWindow").is_badvalue() {
           if !is_global {
             Err(anyhow::anyhow!(
-        "Load balancer health check window configuration is not allowed in host configuration"
-      ))?
+              "Load balancer health check window configuration is not allowed in host configuration"
+            ))?
           }
           if let Some(window) = config.get("loadBalancerHealthCheckWindow").as_i64() {
             if window < 0 {
@@ -821,6 +821,19 @@ pub fn validate_config(
               "Invalid load balancer health check window value"
             ))?
           }
+        }
+
+        if !config
+          .get("disableProxyCertificateVerification")
+          .is_badvalue()
+          && config
+            .get("disableProxyCertificateVerification")
+            .as_bool()
+            .is_none()
+        {
+          Err(anyhow::anyhow!(
+            "Invalid proxy certificate verification disabling option value"
+          ))?
         }
       }
       "cache" => {

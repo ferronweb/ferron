@@ -31,6 +31,7 @@ mod ferron_util {
   pub mod load_tls;
   pub mod match_hostname;
   pub mod match_location;
+  pub mod no_server_verifier;
   pub mod non_standard_code_structs;
   pub mod read_to_end_move;
   pub mod sizify;
