@@ -164,7 +164,7 @@ async fn request_handler_wrapped(
   global_config_root: Arc<ServerConfigRoot>,
   host_config: Arc<Yaml>,
   logger: Sender<LogMessage>,
-  handlers_vec: impl Iterator<Item = Box<dyn ServerModuleHandlers + Send>> + Send + 'static,
+  handlers_vec: Vec<Box<dyn ServerModuleHandlers + Send>>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
   let is_proxy_request = match request.version() {
     hyper::Version::HTTP_2 | hyper::Version::HTTP_3 => {
@@ -1633,7 +1633,7 @@ pub async fn request_handler(
   global_config_root: Arc<ServerConfigRoot>,
   host_config: Arc<Yaml>,
   logger: Sender<LogMessage>,
-  handlers_vec: impl Iterator<Item = Box<dyn ServerModuleHandlers + Send>> + Send + 'static,
+  handlers_vec: Vec<Box<dyn ServerModuleHandlers + Send>>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
   let timeout_yaml = global_config_root.get("timeout");
   if timeout_yaml.is_null() {

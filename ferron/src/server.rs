@@ -48,7 +48,7 @@ async fn accept_connection(
   global_config_root: Arc<ServerConfigRoot>,
   host_config: Arc<Yaml>,
   logger: Sender<LogMessage>,
-  handlers_vec: impl Iterator<Item = Box<dyn ServerModuleHandlers + Send>> + Send + Clone + 'static,
+  modules: Arc<Vec<Box<dyn ServerModule + std::marker::Send + Sync>>>,
 ) {
   // Disable Nagle algorithm to improve performance
   if let Err(err) = stream.set_nodelay(true) {
@@ -146,6 +146,10 @@ async fn accept_connection(
         }
       }
 
+      let handlers_vec = modules
+        .iter()
+        .map(|module| module.get_handlers(Handle::current()));
+
       if let Err(err) = http2_builder
         .serve_connection_with_upgrades(
           io,
@@ -153,7 +157,9 @@ async fn accept_connection(
             let global_config_root = global_config_root.clone();
             let host_config = host_config.clone();
             let logger = logger_clone.clone();
-            let handlers_vec_clone = handlers_vec.clone();
+            let handlers_vec_clone = handlers_vec
+              .clone()
+              .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
             let (request_parts, request_body) = request.into_parts();
             let request = Request::from_parts(request_parts, request_body.boxed());
             async move {
@@ -232,6 +238,10 @@ async fn accept_connection(
         }
       }
 
+      let handlers_vec = modules
+        .iter()
+        .map(|module| module.get_handlers(Handle::current()));
+
       if let Err(err) = http2_builder
         .serve_connection_with_upgrades(
           io,
@@ -239,7 +249,9 @@ async fn accept_connection(
             let global_config_root = global_config_root.clone();
             let host_config = host_config.clone();
             let logger = logger_clone.clone();
-            let handlers_vec_clone = handlers_vec.clone();
+            let handlers_vec_clone = handlers_vec
+              .clone()
+              .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
             let (request_parts, request_body) = request.into_parts();
             let request = Request::from_parts(request_parts, request_body.boxed());
             async move {
@@ -303,6 +315,10 @@ async fn accept_connection(
         }
       }
 
+      let handlers_vec = modules
+        .iter()
+        .map(|module| module.get_handlers(Handle::current()));
+
       if let Err(err) = http2_builder
         .serve_connection_with_upgrades(
           io,
@@ -310,7 +326,9 @@ async fn accept_connection(
             let global_config_root = global_config_root.clone();
             let host_config = host_config.clone();
             let logger = logger_clone.clone();
-            let handlers_vec_clone = handlers_vec.clone();
+            let handlers_vec_clone = handlers_vec
+              .clone()
+              .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
             let (request_parts, request_body) = request.into_parts();
             let request = Request::from_parts(request_parts, request_body.boxed());
             async move {
@@ -1014,9 +1032,8 @@ async fn server_event_loop(
     });
   }
 
-  // Leak the modules vector to work around the lifetime issues in Rust
-  // FIXME: Don't leak the modules vector to ensure lower memory usage in case of SIGHUP.
-  let modules_leaked = Box::leak(Box::new(modules));
+  // Wrap the modules vector in an Arc
+  let modules_arc = Arc::new(modules);
 
   // Create a global configuration root
   let global_config_root = Arc::new(ServerConfigRoot::new(&yaml_config["global"]));
@@ -1024,9 +1041,6 @@ async fn server_event_loop(
 
   // Main loop to accept incoming connections
   loop {
-    let handlers_vec = modules_leaked
-      .iter()
-      .map(|module| module.get_handlers(Handle::current()));
     match &listener {
       Some(listener) => match &listener_tls {
         Some(listener_tls) => {
@@ -1042,7 +1056,7 @@ async fn server_event_loop(
                       global_config_root.clone(),
                       host_config.clone(),
                       logger.clone(),
-                      handlers_vec,
+                      modules_arc.clone(),
                     )
                     .await;
                   }
@@ -1069,7 +1083,7 @@ async fn server_event_loop(
                       global_config_root.clone(),
                       host_config.clone(),
                       logger.clone(),
-                      handlers_vec,
+                      modules_arc.clone(),
                     )
                     .await;
                   }
@@ -1096,7 +1110,7 @@ async fn server_event_loop(
               global_config_root.clone(),
               host_config.clone(),
               logger.clone(),
-              handlers_vec,
+              modules_arc.clone(),
             )
             .await;
           }
@@ -1124,7 +1138,7 @@ async fn server_event_loop(
                 global_config_root.clone(),
                 host_config.clone(),
                 logger.clone(),
-                handlers_vec,
+                modules_arc.clone(),
               )
               .await;
             }
