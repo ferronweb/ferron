@@ -1,0 +1,22 @@
+body:not(#\#) .apexcharts-tooltip-title {
+    padding: 6px;
+    margin-bottom: 4px
+}
+
+body:not(#\#) .apexcharts-tooltip-series-group {
+    padding: 0 10px;
+}
+
+body:not(#\#) .apexcharts-tooltip-series-group.apexcharts-active,
+body:not(#\#) .apexcharts-tooltip-series-group:last-child {
+    padding-bottom: 4px
+}
+
+body:not(#\#) .apexcharts-tooltip-y-group {
+    padding: 6px 0 5px
+}
+
+body:not(#\#) .apexcharts-custom-tooltip,
+body:not(#\#) .apexcharts-tooltip-box {
+    padding: 4px 8px
+}
