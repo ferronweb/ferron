@@ -21,5 +21,10 @@ export default defineConfig({
     },
     optimizeDeps: { include: ["asciinema-player"] }
   },
-  integrations: [react(), sitemap()]
+  integrations: [react(), sitemap()],
+  markdown: {
+    shikiConfig: {
+      theme: "nord"
+    }
+  }
 });
