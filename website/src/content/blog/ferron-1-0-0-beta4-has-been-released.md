@@ -1,7 +1,7 @@
 ---
 title: "Ferron 1.0.0-beta4 has been released"
 description: We are excited to announce the release of Ferron 1.0.0-beta4. This release brings several new features, improvements, and fixes.
-date: 2025-03-14 14:15:00
+date: 2025-03-16 13:57:00
 cover: /img/covers/ferron-1-0-0-beta4-has-been-released.png
 ---
 
