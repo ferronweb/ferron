@@ -218,9 +218,9 @@ async fn request_handler_wrapped(
   // Construct SocketData
   let mut socket_data = SocketData::new(remote_address, local_address, encrypted);
 
-  // Set "Host" request header for HTTP/2 and HTTP/3 connections
   match request.version() {
     hyper::Version::HTTP_2 | hyper::Version::HTTP_3 => {
+      // Set "Host" request header for HTTP/2 and HTTP/3 connections
       if let Some(authority) = request.uri().authority() {
         let authority = authority.to_owned();
         let headers = request.headers_mut();
@@ -228,6 +228,25 @@ async fn request_handler_wrapped(
           if let Ok(authority_value) = HeaderValue::from_bytes(authority.as_str().as_bytes()) {
             headers.append(header::HOST, authority_value);
           }
+        }
+      }
+
+      // Normalize the Cookie header for HTTP/2 and HTTP/3
+      let mut cookie_normalized = String::new();
+      let mut cookie_set = false;
+      let headers = request.headers_mut();
+      for cookie in headers.get_all(header::COOKIE) {
+        if let Ok(cookie) = cookie.to_str() {
+          if cookie_set {
+            cookie_normalized.push_str("; ");
+          }
+          cookie_set = true;
+          cookie_normalized.push_str(cookie);
+        }
+      }
+      if cookie_set {
+        if let Ok(cookie_value) = HeaderValue::from_bytes(cookie_normalized.as_bytes()) {
+          headers.insert(header::COOKIE, cookie_value);
         }
       }
     }
