@@ -1,6 +1,6 @@
 body:not(#\#) .apexcharts-tooltip-title {
     padding: 6px;
-    margin-bottom: 4px
+    margin-bottom: 4px;
 }
 
 body:not(#\#) .apexcharts-tooltip-series-group {
@@ -9,14 +9,24 @@ body:not(#\#) .apexcharts-tooltip-series-group {
 
 body:not(#\#) .apexcharts-tooltip-series-group.apexcharts-active,
 body:not(#\#) .apexcharts-tooltip-series-group:last-child {
-    padding-bottom: 4px
+    padding-bottom: 4px;
 }
 
 body:not(#\#) .apexcharts-tooltip-y-group {
-    padding: 6px 0 5px
+    padding: 6px 0 5px;
 }
 
 body:not(#\#) .apexcharts-custom-tooltip,
 body:not(#\#) .apexcharts-tooltip-box {
-    padding: 4px 8px
+    padding: 4px 8px;
+}
+
+body:not(#\#) .apexcharts-menu-item {
+    padding: 6px 7px;
+}
+
+body:not(#\#) .apexcharts-menu {
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    padding: 3px;
 }
