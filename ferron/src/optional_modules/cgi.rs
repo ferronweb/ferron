@@ -528,6 +528,10 @@ async fn execute_cgi_with_environment_variables(
     );
   }
 
+  if socket_data.encrypted {
+    environment_variables.insert("HTTPS".to_string(), "ON".to_string());
+  }
+
   for (header_name, header_value) in hyper_request.headers().iter() {
     let env_header_name = match *header_name {
       header::CONTENT_LENGTH => "CONTENT_LENGTH".to_string(),

@@ -550,6 +550,10 @@ async fn execute_fastcgi_with_environment_variables(
     );
   }
 
+  if socket_data.encrypted {
+    environment_variables.insert("HTTPS".to_string(), "ON".to_string());
+  }
+
   let mut content_length_set = false;
   for (header_name, header_value) in hyper_request.headers().iter() {
     let env_header_name = match *header_name {
