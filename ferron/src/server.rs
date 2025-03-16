@@ -27,12 +27,12 @@ use rustls::sign::CertifiedKey;
 use rustls::version::{TLS12, TLS13};
 use rustls::{RootCertStore, ServerConfig};
 use rustls_native_certs::load_native_certs;
+use tokio::fs;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Handle;
 use tokio::sync::Mutex;
 use tokio::time;
-use tokio::{fs, signal};
 use tokio_rustls::TlsAcceptor;
 use tokio_rustls_acme::caches::DirCache;
 use tokio_rustls_acme::{AcmeAcceptor, AcmeConfig};
@@ -1321,6 +1321,8 @@ pub fn start_server(
 
     #[cfg(unix)]
     {
+      use tokio::signal;
+
       match signal::unix::signal(signal::unix::SignalKind::hangup()) {
         Ok(mut signal) => {
           tokio::select! {
