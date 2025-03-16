@@ -218,6 +218,22 @@ async fn request_handler_wrapped(
   // Construct SocketData
   let mut socket_data = SocketData::new(remote_address, local_address, encrypted);
 
+  // Set "Host" request header for HTTP/2 and HTTP/3 connections
+  match request.version() {
+    hyper::Version::HTTP_2 | hyper::Version::HTTP_3 => {
+      if let Some(authority) = request.uri().authority() {
+        let authority = authority.to_owned();
+        let headers = request.headers_mut();
+        if !headers.contains_key(header::HOST) {
+          if let Ok(authority_value) = HeaderValue::from_bytes(authority.as_str().as_bytes()) {
+            headers.append(header::HOST, authority_value);
+          }
+        }
+      }
+    }
+    _ => (),
+  }
+
   let host_header_option = request.headers().get(header::HOST);
   if let Some(header_data) = host_header_option {
     match header_data.to_str() {
