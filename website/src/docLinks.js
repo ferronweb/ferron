@@ -16,6 +16,12 @@ export default [
     label: "Installation"
   },
   {
+    href: "/docs/installation/installer-linux",
+    target: "_self",
+    sub: true,
+    label: "Installer (GNU/Linux)"
+  },
+  {
     href: "/docs/installation/docker",
     target: "_self",
     sub: true,

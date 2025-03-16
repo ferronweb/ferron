@@ -14,7 +14,8 @@ function HeroCTA() {
 
   useEffect(() => {
     const commands = {
-      linux: "# Installer not available yet",
+      linux:
+        'sudo bash -c "$(curl -fsSL https://downloads.ferronweb.org/install.sh)"',
       windows: "REM Installer not available yet",
       docker:
         "docker pull ferronserver/ferron && docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron"
