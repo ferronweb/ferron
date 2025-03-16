@@ -4,6 +4,15 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.0.0-beta4
+
+**Released in March 16, 2025**
+
+- Added an option to disable backend server certificate verification for the reverse proxy
+- Added support for CGI/SCGI/FastCGI "HTTPS" environment variable
+- Added support for configuration reloading without entirely restarting the server via a "SIGHUP" signal
+- Fixed virtual host resolution not working for HTTP/2 connections
+
 ## Ferron 1.0.0-beta3
 
 **Released in March 14, 2025**

@@ -195,6 +195,8 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - Option to enable passive health checks for the load balancer. If the connection by the load balancer fails, the load balancer notes the failed connection, and if there are too many of them, the load balancer temporarily marks the backend server as "bad" and will not choose the backend server. Default: `false`
 - **loadBalancerHealthCheckMaximumFails** (_u32_; _rproxy_ module; Ferron 1.0.0-beta3 and newer)
   - Maximum reported failed connections, before a backend server is marked as "bad" and not chosen by the load balancer. Default: `3`
+- **disableProxyCertificateVerification** (_bool_; _rproxy_ module; Ferron 1.0.0-beta4 and newer)
+  - Option to disable backend server certificate verification for the reverse proxy. Setting this to `true` is not recommended for production use. Default: `false`
 
 ## Server configuration includes
 
