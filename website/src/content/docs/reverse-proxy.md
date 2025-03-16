@@ -12,20 +12,22 @@ global:
   proxyTo: http://localhost:3000/ # Replace "http://localhost:3000" with the backend server URL
 ```
 
-Ferron multiplexer to several backends
---------------------------------------
+## Example: Ferron multiplexing to several backend servers
 
-DNS points for `example.com` and `bar.example` to one _ferron instance_.
+In this example, the `example.com` and `bar.example.com` domains point to a server running Ferron.
 
-https://example.com  is "main site", https://example.com/agenda  is calender stuff.
+Below are assumptions made for this example:
+- `https://example.com` is "main site", while `https://example.com/agenda` is hosting a calendar service.
+- `https://foo.example.com` is passed to `https://saas.foo.net`
+- `https://bar.example.com` is the front for an internal backend.
 
-https://foo.example.com goes to https://saas.foo.net
-
-https://bar.example.com is _front_ for an _internal backend_.
-
+You can configure Ferron like this:
 
 ```yaml
 global:
+  secure: true
+  cert: /path/to/certificate.crt # Replace "/path/to/certificate.crt" to the path to the TLS certificate
+  key: /path/to/private.key # Replace "/path/to/private.key" to the path to the private key
   loadModules:
     - rproxy
 
@@ -38,11 +40,9 @@ hosts:
       - path: "/" # Catch-all path
         proxyTo: http://localhost:3000/
   - domain: foo.example.com
-    secureProxyTo: https://saas.foo.net
+    proxyTo: https://saas.foo.net
   - domain: bar.example.com
     proxyTo: http://backend.example.net:4000
 ```
 
-For the `to http://calender.example.net:5000/agenda/example`
-you probably have tell the calender back to strip 'agenda/'
-or you will have to configure URL rewriting.
+For `http://calender.example.net:5000/agenda/example`, you will probably have to either configure the calendar service to strip 'agenda/' or configure URL rewriting in Ferron.
