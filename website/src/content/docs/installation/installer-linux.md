@@ -27,6 +27,10 @@ Ferron installed via the installer for GNU/Linux has following file structure:
 - _/var/www/ferron_ - Ferron's web root
 - _/etc/ferron.yaml_ - Ferron configuration
 
+## Updating Ferron
+
+You can update Ferron to the latest version using the `ferron-updater` command.
+
 ## Managing the Ferron service
 ### Stopping the service
 To stop the Ferron service, run:
