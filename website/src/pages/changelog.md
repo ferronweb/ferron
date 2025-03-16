@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.0.0-beta5
+
+**Released in March 16, 2025**
+
+- Fixed a bug related to HTTP cookies and HTTP/2
+
 ## Ferron 1.0.0-beta4
 
 **Released in March 16, 2025**
