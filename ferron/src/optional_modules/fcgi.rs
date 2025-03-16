@@ -578,10 +578,28 @@ async fn execute_fastcgi_with_environment_variables(
         result
       }
     };
-    environment_variables.insert(
-      env_header_name,
-      String::from_utf8_lossy(header_value.as_bytes()).to_string(),
-    );
+    if environment_variables.contains_key(&env_header_name) {
+      let value = environment_variables.get_mut(&env_header_name);
+      if let Some(value) = value {
+        if env_header_name == "HTTP_COOKIE" {
+          value.push_str("; ");
+        } else {
+          // See https://stackoverflow.com/a/1801191
+          value.push_str(", ");
+        }
+        value.push_str(String::from_utf8_lossy(header_value.as_bytes()).as_ref());
+      } else {
+        environment_variables.insert(
+          env_header_name,
+          String::from_utf8_lossy(header_value.as_bytes()).to_string(),
+        );
+      }
+    } else {
+      environment_variables.insert(
+        env_header_name,
+        String::from_utf8_lossy(header_value.as_bytes()).to_string(),
+      );
+    }
   }
 
   if !content_length_set {
