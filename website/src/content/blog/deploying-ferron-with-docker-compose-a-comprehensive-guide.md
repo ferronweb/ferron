@@ -81,8 +81,6 @@ services:
     container_name: nodejs_web_application
     build:
       context: ./app
-    ports:
-      - "3000" # Expose the app on port 3000
     restart: always
     networks:
       - my-network
@@ -214,8 +212,6 @@ services:
   php:
     image: php:fpm
     container_name: php_fpm
-    ports:
-      - "9000" # Expose PHP-FPM on port 9000
     volumes:
       - ./app:/var/www/ferron  # Shared volume with web server (the directory need to be the same path as in Ferron, otherwise PHP-FPM will respond with "File not found.")
     networks:
@@ -267,3 +263,5 @@ You have now set up a web server that can run PHP scripts with Ferron and Docker
 ## Conclusion
 
 In conclusion, combining Ferron with Docker Compose offers a powerful and flexible solution for deploying web servers and applications. Whether you're setting up a simple static web server, a reverse proxy for a Node.js application, or a PHP web server, Docker Compose simplifies the process by providing isolated environments, streamlined deployment, and scalability. By following the configurations outlined in this post, you can efficiently manage and deploy various web services, ensuring robust performance and ease of maintenance. Embrace the benefits of containerization and enhance your web infrastructure with Ferron and Docker Compose.
+
+_We have updated this post to remove configuration that exposes the ports of the web applications not meant to be exposed for security reasons._
