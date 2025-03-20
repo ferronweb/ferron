@@ -3,6 +3,8 @@ import "@fontsource/inter";
 import "@fontsource/inter/700.css";
 import "@fontsource/rajdhani";
 import "@fontsource/rajdhani/700.css";
+import inter400Woff2 from "@fontsource/inter/files/inter-latin-400-italic.woff2?url";
+import rajdhani700Woff2 from "@fontsource/rajdhani/files/rajdhani-latin-700-normal.woff2?url";
 import "../styles/global.css";
 import { SEO } from "astro-seo";
 ---
@@ -13,6 +15,20 @@ import { SEO } from "astro-seo";
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href={inter400Woff2}
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href={rajdhani700Woff2}
+      crossorigin="anonymous"
+    />
     <SEO
       title={Astro.props.title
         ? `${Astro.props.title} - Ferron`
