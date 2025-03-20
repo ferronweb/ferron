@@ -1,5 +1,5 @@
 ---
-import { Bird, Blocks, Rocket, ShieldCheck } from "lucide-astro";
+import { Bird, Blocks, Lock, Rocket, Server, ShieldCheck } from "lucide-astro";
 import Benefit from "./Benefit.astro";
 ---
 
@@ -27,6 +27,16 @@ import Benefit from "./Benefit.astro";
       icon={Blocks}
       title="Extensible"
       description="You can extend Ferron by loading various server modules, which add various functionality, such as caching, proxying or dynamic content."
+    />
+    <Benefit
+      icon={Lock}
+      title="Automatic TLS"
+      description="Ferron supports automatic TLS for public websites via Let's Encrypt, which can be optionally enabled. This means you might not need to worry about manual TLS certificate management, as Ferron will obtain these certificates automatically."
+    />
+    <Benefit
+      icon={Server}
+      title="Cross-platform"
+      description="Ferron can be run across multiple operating systems, including GNU/Linux, Windows Server, and FreeBSD. This means you can deploy Ferron on your preferred platform without compatibility concerns."
     />
   </div>
 </section>
