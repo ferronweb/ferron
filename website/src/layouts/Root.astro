@@ -25,6 +25,9 @@ import { SEO } from "astro-seo";
             : "Ferron - a fast, memory-safe web server written in Rust",
           type: "website",
           image: `${Astro.url.origin}${Astro.props.image || "/opengraph.png"}`
+        },
+        optional: {
+          description: Astro.props.description
         }
       }}
       twitter={{
