@@ -879,6 +879,23 @@ pub fn validate_config(
             Err(anyhow::anyhow!("Invalid maximum cache response size"))?
           }
         }
+
+        if !config.get("maximumCacheEntries").is_badvalue() {
+          if !is_global {
+            Err(anyhow::anyhow!(
+              "Maximum cache entries configuration is not allowed in host configuration"
+            ))?
+          }
+          if !config.get("maximumCacheEntries").is_null() {
+            if let Some(maximum_cache_response_size) = config.get("maximumCacheEntries").as_i64() {
+              if maximum_cache_response_size < 0 {
+                Err(anyhow::anyhow!("Invalid maximum cache entries"))?
+              }
+            } else {
+              Err(anyhow::anyhow!("Invalid maximum cache entries"))?
+            }
+          }
+        }
       }
       "cgi" => {
         if !config.get("cgiScriptExtensions").is_badvalue() {

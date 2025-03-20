@@ -11,6 +11,7 @@ use ferron_common::{
 };
 use ferron_common::{HyperResponse, WithRuntime};
 use futures_util::{StreamExt, TryStreamExt};
+use hashlink::LinkedHashMap;
 use http_body_util::{BodyExt, Full, StreamBody};
 use hyper::body::{Bytes, Frame};
 use hyper::header::HeaderValue;
@@ -24,11 +25,16 @@ const CACHE_HEADER_NAME: &str = "X-Ferron-Cache";
 const DEFAULT_MAX_AGE: u64 = 300;
 
 pub fn server_module_init(
-  _config: &ServerConfig,
+  config: &ServerConfig,
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
+  let maximum_cache_entries = config["global"]["maximumCacheEntries"]
+    .as_i64()
+    .map(|v| v as usize);
+
   Ok(Box::new(CacheModule::new(
+    Arc::new(RwLock::new(LinkedHashMap::new())),
     Arc::new(RwLock::new(HashMap::new())),
-    Arc::new(RwLock::new(HashMap::new())),
+    maximum_cache_entries,
   )))
 }
 
@@ -36,7 +42,7 @@ pub fn server_module_init(
 struct CacheModule {
   cache: Arc<
     RwLock<
-      HashMap<
+      LinkedHashMap<
         String,
         (
           StatusCode,
@@ -49,6 +55,7 @@ struct CacheModule {
     >,
   >,
   vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+  maximum_cache_entries: Option<usize>,
 }
 
 impl CacheModule {
@@ -56,7 +63,7 @@ impl CacheModule {
   fn new(
     cache: Arc<
       RwLock<
-        HashMap<
+        LinkedHashMap<
           String,
           (
             StatusCode,
@@ -69,8 +76,13 @@ impl CacheModule {
       >,
     >,
     vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+    maximum_cache_entries: Option<usize>,
   ) -> Self {
-    CacheModule { cache, vary_cache }
+    CacheModule {
+      cache,
+      vary_cache,
+      maximum_cache_entries,
+    }
   }
 }
 
@@ -79,6 +91,7 @@ impl ServerModule for CacheModule {
     Box::new(CacheModuleHandlers {
       cache: self.cache.clone(),
       vary_cache: self.vary_cache.clone(),
+      maximum_cache_entries: self.maximum_cache_entries,
       cache_vary_headers_configured: Vec::new(),
       cache_ignore_headers_configured: Vec::new(),
       maximum_cached_response_size: None,
@@ -97,7 +110,7 @@ struct CacheModuleHandlers {
   handle: Handle,
   cache: Arc<
     RwLock<
-      HashMap<
+      LinkedHashMap<
         String,
         (
           StatusCode,
@@ -110,6 +123,7 @@ struct CacheModuleHandlers {
     >,
   >,
   vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+  maximum_cache_entries: Option<usize>,
   cache_vary_headers_configured: Vec<String>,
   cache_ignore_headers_configured: Vec<String>,
   maximum_cached_response_size: Option<u64>,
@@ -423,6 +437,15 @@ impl ServerModuleHandlers for CacheModuleHandlers {
 
                 timestamp.elapsed() <= max_age.unwrap_or(Duration::from_secs(DEFAULT_MAX_AGE))
               });
+
+              if let Some(maximum_cache_entries) = self.maximum_cache_entries {
+                // Remove a value at the front of the list
+                while rwlock_write.len() > 0 && rwlock_write.len() >= maximum_cache_entries {
+                  rwlock_write.pop_front();
+                }
+              }
+
+              // This inserts a value at the back of the list
               rwlock_write.insert(
                 cache_key_with_vary,
                 (
