@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::hash::RandomState;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -32,7 +33,7 @@ pub fn server_module_init(
     .map(|v| v as usize);
 
   Ok(Box::new(CacheModule::new(
-    Arc::new(RwLock::new(LinkedHashMap::new())),
+    Arc::new(RwLock::new(LinkedHashMap::with_hasher(RandomState::new()))),
     Arc::new(RwLock::new(HashMap::new())),
     maximum_cache_entries,
   )))
@@ -51,6 +52,7 @@ struct CacheModule {
           Instant,
           Option<CacheControl>,
         ),
+        RandomState,
       >,
     >,
   >,
@@ -72,6 +74,7 @@ impl CacheModule {
             Instant,
             Option<CacheControl>,
           ),
+          RandomState,
         >,
       >,
     >,
@@ -119,6 +122,7 @@ struct CacheModuleHandlers {
           Instant,
           Option<CacheControl>,
         ),
+        RandomState,
       >,
     >,
   >,
