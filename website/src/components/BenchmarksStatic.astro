@@ -1,0 +1,134 @@
+---
+import "../styles/apexcharts-fix.css";
+---
+
+<section class="mx-auto px-3 py-16 max-w-screen-xl">
+  <h2 class="text-center font-bold text-4xl md:text-5xl hyphens-auto">
+    Ferron is a fast web server
+  </h2>
+  <p class="text-center text-lg md:text-xl text-muted-foreground my-5">
+    As you can see on the benchmark results below, Ferron is 12% faster in
+    static file serving than Caddy, and 19% faster than Apache httpd (with
+    prefork MPM). This makes Ferron a good choice for a fast, memory-safe web
+    server.
+  </p>
+  <div data-benchmarks-static-chart class="max-w-4xl mx-auto w-full my-5"></div>
+  <p class="text-sm md:text-base text-muted-foreground">
+    The static web server performance is measured by running a "wrk -c 100 -d 60
+    -t 6 https://localhost/index.nginx-debian.html" command on a server with a
+    AMD Ryzen 5 8600G CPU. The web servers serve a default page that comes with
+    NGINX web server. All web servers also have logging the requests into a log
+    file enabled.
+  </p>
+</section>
+
+<script>
+  async function loadBenchmarkChart() {
+    let ApexCharts = (await import("apexcharts")).default;
+
+    const options = {
+      series: [
+        {
+          name: "Requests per second",
+          data: [143008.65, 127734.27, 120266.84, 92028.37, 16103.61]
+        }
+      ],
+      chart: {
+        type: "bar",
+        fontFamily: "Inter, sans-serif",
+        background: "#2E3440"
+      },
+      plotOptions: {
+        bar: {
+          borderRadius: 4,
+          borderRadiusApplication: "end",
+          horizontal: true
+        }
+      },
+      theme: {
+        mode: "dark",
+        monochrome: {
+          enabled: true,
+          color: "#ff4400"
+        }
+      },
+      dataLabels: {
+        enabled: false
+      },
+      xaxis: {
+        categories: [
+          "Ferron 1.0.0-beta1",
+          "Caddy 2.6.2",
+          "Apache httpd 2.4.62 (mpm_prefork)",
+          "Apache httpd 2.4.62 (mpm_event)",
+          "SVR.JS 4.5.0 (Bun 1.2.4)"
+        ],
+        labels: {
+          style: {
+            fontSize: "1em"
+          }
+        },
+        title: {
+          text: "Requests per second",
+          offsetY: 30,
+          style: {
+            fontSize: "1em"
+          }
+        }
+      },
+      yaxis: {
+        labels: {
+          maxWidth: 320,
+          style: {
+            fontSize: "1em"
+          }
+        }
+      },
+      responsive: [
+        {
+          breakpoint: 768,
+          options: {
+            plotOptions: {
+              bar: {
+                horizontal: false
+              }
+            },
+            xaxis: {
+              labels: {
+                style: {
+                  fontSize: "0.625em"
+                }
+              },
+              title: {
+                text: null,
+                style: {
+                  fontSize: "0.625em"
+                }
+              }
+            },
+            yaxis: {
+              labels: {
+                style: {
+                  fontSize: "0.75em"
+                }
+              },
+              title: {
+                text: "Requests per second",
+                style: {
+                  fontSize: "0.5em"
+                }
+              }
+            }
+          }
+        }
+      ]
+    };
+
+    const chart = new ApexCharts(
+      document.querySelector("[data-benchmarks-static-chart]"),
+      options
+    );
+    chart.render();
+  }
+  loadBenchmarkChart();
+</script>

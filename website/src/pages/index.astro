@@ -1,5 +1,6 @@
 ---
-import Benchmarks from "../components/Benchmarks.astro";
+import BenchmarksStatic from "../components/BenchmarksStatic.astro";
+import BenchmarksProxy from "../components/BenchmarksProxy.astro";
 import Benefits from "../components/Benefits.astro";
 import FAQ from "../components/FAQ";
 import Hero from "../components/Hero.astro";
@@ -14,6 +15,7 @@ import MainLayout from "../layouts/MainLayout.astro";
 >
   <Hero />
   <Benefits />
-  <Benchmarks />
+  <BenchmarksStatic />
+  <BenchmarksProxy />
   <FAQ client:load />
 </MainLayout>

@@ -4,21 +4,22 @@ import "../styles/apexcharts-fix.css";
 
 <section class="mx-auto px-3 py-16 max-w-screen-xl">
   <h2 class="text-center font-bold text-4xl md:text-5xl hyphens-auto">
-    Ferron is a fast web server
+    Ferron is also a fast reverse proxy
   </h2>
   <p class="text-center text-lg md:text-xl text-muted-foreground my-5">
-    As you can see on the benchmark results below, Ferron is 12% faster in
-    static file serving than Caddy, and 19% faster than Apache httpd (with
-    prefork MPM). This makes Ferron a good choice for a fast, memory-safe web
-    server.
+    As you can see on the benchmark results below, Ferron is 16% faster in
+    reverse proxying than Traefik, 26% faster than Apache httpd (with event
+    MPM), and 51% faster than Caddy. This makes Ferron a good choice for a fast
+    reverse proxy, without being stuck configuring it.
   </p>
-  <div data-benchmarks-chart class="max-w-4xl mx-auto w-full"></div>
-  <p class="text-sm md:text-base text-muted-foreground my-5">
-    The static web server performance is measured by running a "wrk -c 100 -d 60
-    -t 6 https://localhost/index.nginx-debian.html" command on a server with a
-    AMD Ryzen 5 8600G CPU. The web servers serve a default page that comes with
-    NGINX web server. All web servers also have logging the requests into a log
-    file enabled.
+  <div data-benchmarks-proxy-chart class="max-w-4xl mx-auto w-full my-5"></div>
+  <p class="text-sm md:text-base text-muted-foreground">
+    The reverse proxy performance is measured by running a "ferrbench -c 100 -d
+    60s -t 6 -h https://localhost" command on a server with a AMD Ryzen 5 8600G
+    CPU. The web servers pass requests to a "Hello World" application built with
+    Express, Node.js, and run with PM2. All web servers also have logging the
+    requests into a log file enabled. NGINX is excluded due to possible
+    misconfiguration.
   </p>
 </section>
 
@@ -30,7 +31,7 @@ import "../styles/apexcharts-fix.css";
       series: [
         {
           name: "Requests per second",
-          data: [143008.65, 127734.27, 120266.84, 92028.37, 16103.61]
+          data: [39936.67, 34558.68, 31585.11, 26482.54]
         }
       ],
       chart: {
@@ -57,11 +58,10 @@ import "../styles/apexcharts-fix.css";
       },
       xaxis: {
         categories: [
-          "Ferron 1.0.0-beta1",
-          "Caddy 2.6.2",
-          "Apache httpd 2.4.62 (mpm_prefork)",
-          "Apache httpd 2.4.62 (mpm_event)",
-          "SVR.JS 4.5.0 (Bun 1.2.4)"
+          "Ferron 1.0.0-beta5",
+          "Traefik 3.3.4",
+          "Apache httpd 2.4.63 (mpm_event)",
+          "Caddy 2.9.1"
         ],
         labels: {
           style: {
@@ -125,7 +125,7 @@ import "../styles/apexcharts-fix.css";
     };
 
     const chart = new ApexCharts(
-      document.querySelector("[data-benchmarks-chart]"),
+      document.querySelector("[data-benchmarks-proxy-chart]"),
       options
     );
     chart.render();
