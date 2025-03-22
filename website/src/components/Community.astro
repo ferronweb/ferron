@@ -1,0 +1,48 @@
+---
+import { Star } from "lucide-astro";
+---
+
+<section class="mx-auto px-3 py-16 max-w-screen-xl">
+  <h2 class="text-center font-bold text-4xl md:text-5xl hyphens-auto">
+    Join the Ferron community!
+  </h2>
+  <p class="text-center text-lg md:text-xl text-muted-foreground my-5">
+    Ferron is an open-source project built by developers like you. Whether
+    you're a user, contributor, or enthusiast, we'd love for you to join our
+    growing community!
+  </p>
+  <p class="text-center text-xl md:text-2xl my-5 font-bold">
+    <Star class="inline-block align-middle h-6 w-6 mr-2" /><span
+      class="align-middle">300+ stars on GitHub and counting!</span
+    >
+  </p>
+  <div class="flex flex-col md:flex-row md:flex-wrap max-w-screen-lg mx-auto">
+    <div class="p-6 w-full md:w-1/2 text-center">
+      <div class="mb-5">
+        <a
+          href="https://github.com/ferronweb/ferron"
+          target="_self"
+          class="bg-primary text-primary-foreground rounded-md px-5 py-2 md:px-8 md:py-3 text-lg md:text-xl hover:bg-primary/75 transition-colors"
+        >
+          Contribute on GitHub
+        </a>
+      </div>
+      <p>
+        Help us improve Ferron by submitting code, reporting issues, or
+        suggesting features.
+      </p>
+    </div>
+    <div class="p-6 w-full md:w-1/2 text-center">
+      <div class="mb-5">
+        <a
+          href="https://x.com/ferron_web"
+          target="_self"
+          class="bg-secondary text-secondary-foreground rounded-md px-5 py-2 md:px-8 md:py-3 text-lg md:text-xl hover:bg-secondary/75 transition-colors"
+        >
+          Follow on X (Twitter)
+        </a>
+      </div>
+      <p>Stay updated on the latest Ferron news and releases.</p>
+    </div>
+  </div>
+</section>

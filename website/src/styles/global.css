@@ -30,7 +30,7 @@ body {
   --primary: 16, 100%, 50%;
   --primary-foreground: 0, 0%, 100%;
 
-  --secondary: 0, 0%, 100%;
+  --secondary: 16, 75%, 87.5%;
   --secondary-foreground: 222.2, 47.4%, 11.2%;
 
   --accent: 16, 66.7%, 92.1%;
@@ -66,7 +66,7 @@ body {
   --primary: 16, 100%, 50%;
   --primary-foreground: 0, 0%, 100%;
 
-  --secondary: 20, 14.3%, 4.1%;
+  --secondary: 16, 75%, 20%;
   --secondary-foreground: 213, 31%, 91%;
 
   --destructive: 0, 63%, 31%;
