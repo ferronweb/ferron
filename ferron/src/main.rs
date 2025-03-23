@@ -16,13 +16,19 @@ mod ferron_res {
 #[path = "util"]
 mod ferron_util {
   pub mod anti_xss;
+  #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
   pub mod cgi_response;
   pub mod combine_config;
+  #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
   pub mod copy_move;
   pub mod error_pages;
+  #[cfg(feature = "fcgi")]
   pub mod fcgi_decoder;
+  #[cfg(feature = "fcgi")]
   pub mod fcgi_encoder;
+  #[cfg(feature = "fcgi")]
   pub mod fcgi_name_value_pair;
+  #[cfg(feature = "fcgi")]
   pub mod fcgi_record;
   pub mod generate_directory_listing;
   pub mod ip_blocklist;
@@ -31,11 +37,14 @@ mod ferron_util {
   pub mod load_tls;
   pub mod match_hostname;
   pub mod match_location;
+  #[cfg(any(feature = "rproxy", feature = "fauth"))]
   pub mod no_server_verifier;
   pub mod non_standard_code_structs;
+  #[cfg(feature = "fcgi")]
   pub mod read_to_end_move;
   pub mod sizify;
   pub mod sni;
+  #[cfg(feature = "fcgi")]
   pub mod split_stream_by_map;
   pub mod ttl_cache;
   pub mod url_rewrite_structs;
@@ -151,6 +160,7 @@ fn before_starting_server(
 
   let mut external_modules = Vec::new();
   let mut module_config_validation_functions = Vec::new();
+  #[allow(unused_mut)]
   let mut modules_optional_builtin = Vec::new();
   // Iterate over loaded module libraries and initialize them
   for (lib, module_name) in module_libs.iter() {
