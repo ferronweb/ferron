@@ -28,7 +28,6 @@
 Ferron consists of multiple components:
 
 - **`ferron`**: The main web server.
-- **`ferron-common`**: A shared component used by `ferron` and its modules.
 - **`ferron-passwd`**: A tool for generating user entries with hashed passwords, which can be copied into the web server's configuration file.
 
 ## Installation
@@ -50,6 +49,8 @@ You can then build and run the web server using Cargo:
 cargo build -r
 cargo run -r --bin ferron
 ```
+
+Optional modules can be chosen to be compiled in via Cargo "features".
 
 ## Server configuration
 
