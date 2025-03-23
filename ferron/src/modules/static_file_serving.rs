@@ -7,6 +7,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_compression::tokio::bufread::{BrotliEncoder, DeflateEncoder, GzipEncoder, ZstdEncoder};
+use async_compression::zstd::CParameter;
+use async_compression::Level;
 use async_trait::async_trait;
 use chrono::offset::Local;
 use chrono::DateTime;
@@ -651,12 +653,18 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                     let file_bufreader = BufReader::with_capacity(12800, file);
 
                     // Construct a boxed body
+                    // Wrap Encoders in BufReaders for better performance.
                     let boxed_body = if use_brotli {
                       let reader_stream = ReaderStream::new(BrotliEncoder::new(file_bufreader));
                       let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
                       stream_body.boxed()
                     } else if use_zstd {
-                      let reader_stream = ReaderStream::new(ZstdEncoder::new(file_bufreader));
+                      // Limit the Zstandard window size to 128K (2^17 bytes) to support many HTTP clients
+                      let reader_stream = ReaderStream::new(ZstdEncoder::with_quality_and_params(
+                        file_bufreader,
+                        Level::Default,
+                        &[CParameter::window_log(17)],
+                      ));
                       let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
                       stream_body.boxed()
                     } else if use_deflate {
