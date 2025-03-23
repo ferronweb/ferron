@@ -762,20 +762,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferron-mod-example"
-version = "1.0.0-beta6"
-dependencies = [
- "async-trait",
- "ferron-common",
- "http-body-util",
- "hyper",
- "hyper-tungstenite",
- "mimalloc",
- "rusty-hook",
- "tokio",
-]
-
-[[package]]
 name = "ferron-passwd"
 version = "1.0.0-beta6"
 dependencies = [

@@ -1,7 +1,3 @@
-// Current limitation of external modules (as dynamic libraries)
-// - TcpStream (as a client connection) will hang the server for high concurrency
-// - tokio::spawn will hang the server
-
 use std::error::Error;
 
 use async_trait::async_trait;
@@ -13,29 +9,12 @@ use ferron_common::{HyperResponse, WithRuntime};
 use http_body_util::{BodyExt, Full};
 use hyper::Response;
 use hyper_tungstenite::HyperWebsocket;
-use mimalloc::MiMalloc;
 use tokio::runtime::Handle;
-
-// It's very important to not remove these two lines below, otherwise a HTTP request will trigger a segmentation fault!
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
 
 // Define a struct for the module implementation
 struct ExampleModule;
 
-/// Validates the server configuration.
-/// Since this module has no configurable properties, it always returns Ok(()).
-#[no_mangle]
-pub fn server_module_validate_config(
-  _config: &ServerConfigRoot, // This is a configuration root created from YAML configuration
-  _is_global: bool,
-  _is_location: bool,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
-  Ok(())
-}
-
 /// Initializes the server module and returns an instance of `ExampleModule`.
-#[no_mangle]
 pub fn server_module_init(
   _config: &ServerConfig, // This is YAML configuration parsed as-is. If used, you would have to clone it, otherwise every configuration property would be a BadValue.
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {

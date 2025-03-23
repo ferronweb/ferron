@@ -72,18 +72,16 @@ mod ferron_optional_modules {
   pub mod cache;
   #[cfg(feature = "cgi")]
   pub mod cgi;
+  #[cfg(feature = "example")]
+  pub mod example;
   #[cfg(feature = "fauth")]
   pub mod fauth;
-
   #[cfg(feature = "fcgi")]
   pub mod fcgi;
-
   #[cfg(feature = "fproxy")]
   pub mod fproxy;
-
   #[cfg(feature = "rproxy")]
   pub mod rproxy;
-
   #[cfg(feature = "scgi")]
   pub mod scgi;
 }
@@ -324,6 +322,24 @@ fn before_starting_server(
         "fauth" => {
           external_modules.push(
             match ferron_optional_modules::fauth::server_module_init(&yaml_config) {
+              Ok(module) => module,
+              Err(err) => {
+                module_error = Some(anyhow::anyhow!(
+                  "Cannot initialize optional built-in module \"{}\": {}",
+                  module_name,
+                  err
+                ));
+                break;
+              }
+            },
+          );
+
+          modules_optional_builtin.push(module_name.clone());
+        }
+        #[cfg(feature = "example")]
+        "example" => {
+          external_modules.push(
+            match ferron_optional_modules::example::server_module_init(&yaml_config) {
               Ok(module) => module,
               Err(err) => {
                 module_error = Some(anyhow::anyhow!(

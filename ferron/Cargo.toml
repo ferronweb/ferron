@@ -53,9 +53,10 @@ tokio-test = { workspace = true }
 rusty-hook = { workspace = true }
 
 [features]
-default = ["cgi", "fauth", "fcgi", "fproxy", "rproxy", "scgi"]
+default = ["cache", "cgi", "fauth", "fcgi", "fproxy", "rproxy", "scgi"]
 cache = ["itertools"]
 cgi = ["httparse", "memmem"]
+example = []
 fauth = []
 fcgi = ["httparse", "memmem", "pin-project-lite"]
 fproxy = []

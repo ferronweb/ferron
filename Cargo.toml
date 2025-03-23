@@ -2,7 +2,6 @@
 members = [
     "ferron",
     "ferron-common",
-    "ferron-mod-example",
     "ferron-passwd",
 ]
 resolver = "2"

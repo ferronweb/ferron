@@ -30,7 +30,6 @@ Ferron consists of multiple components:
 - **`ferron`**: The main web server.
 - **`ferron-common`**: A shared component used by `ferron` and its modules.
 - **`ferron-passwd`**: A tool for generating user entries with hashed passwords, which can be copied into the web server's configuration file.
-- **`ferron-mod-example`**: A dynamically linked module that can be loaded by `ferron` and responds with "Hello World!" for requests to the `/hello` URL.
 
 ## Installation
 
