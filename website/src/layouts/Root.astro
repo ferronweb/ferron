@@ -5,6 +5,7 @@ import "@fontsource/rajdhani";
 import "@fontsource/rajdhani/700.css";
 import "../styles/global.css";
 import { SEO } from "astro-seo";
+import { ClientRouter } from "astro:transitions";
 ---
 
 <!doctype html>
@@ -40,6 +41,7 @@ import { SEO } from "astro-seo";
         description: Astro.props.description
       }}
     />
+    <ClientRouter />
   </head>
   <body class="flex flex-col min-h-screen">
     <slot />

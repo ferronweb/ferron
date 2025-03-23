@@ -130,5 +130,10 @@ import "../styles/apexcharts-fix.css";
     );
     chart.render();
   }
+
+  document.addEventListener("astro:after-swap", () => {
+    loadBenchmarkChart();
+  });
+
   loadBenchmarkChart();
 </script>

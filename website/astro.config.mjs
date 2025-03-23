@@ -26,5 +26,9 @@ export default defineConfig({
     shikiConfig: {
       theme: "nord"
     }
+  },
+  prefetch: {
+    prefetchAll: true,
+    defaultStrategy: "tap"
   }
 });

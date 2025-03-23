@@ -186,36 +186,42 @@ const docLinks = Astro.props.docLinks;
     document.documentElement.classList.remove("disable-css-transitions");
   }
 
-  let themeSelector = document.querySelector("[data-theme-selector]");
-  if (themeSelector) {
-    themeSelector.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (!areThemesSupported) throw new Error("Themes are not supported");
-      localStorage.setItem("theme", isDarkMode ? "light" : "dark");
-      isDarkMode = !isDarkMode;
-      updateTheme();
-    });
+  function initializeHeader() {
+    let themeSelector = document.querySelector("[data-theme-selector]");
+    if (themeSelector) {
+      themeSelector.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (!areThemesSupported) throw new Error("Themes are not supported");
+        localStorage.setItem("theme", isDarkMode ? "light" : "dark");
+        isDarkMode = !isDarkMode;
+        updateTheme();
+      });
+    }
+
+    updateTheme();
+
+    let menuButton = document.querySelector("[data-header-menu-toggle]");
+    let menuClose = document.querySelector("[data-header-menu-close]");
+    let menu = document.querySelector("[data-header-menu]");
+    if (menuButton) {
+      menuButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (menu) {
+          menu.classList.replace("left-full", "left-0");
+        }
+      });
+    }
+    if (menuClose) {
+      menuClose.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (menu) {
+          menu.classList.replace("left-0", "left-full");
+        }
+      });
+    }
   }
 
-  updateTheme();
+  document.addEventListener("astro:after-swap", initializeHeader);
 
-  let menuButton = document.querySelector("[data-header-menu-toggle]");
-  let menuClose = document.querySelector("[data-header-menu-close]");
-  let menu = document.querySelector("[data-header-menu]");
-  if (menuButton) {
-    menuButton.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (menu) {
-        menu.classList.replace("left-full", "left-0");
-      }
-    });
-  }
-  if (menuClose) {
-    menuClose.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (menu) {
-        menu.classList.replace("left-0", "left-full");
-      }
-    });
-  }
+  initializeHeader();
 </script>
