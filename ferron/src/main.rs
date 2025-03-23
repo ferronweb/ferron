@@ -92,10 +92,8 @@ use std::{error::Error, path::PathBuf};
 
 // External crate imports
 use clap::Parser;
-use ferron_common::{ServerConfig, ServerConfigRoot, ServerModule};
 use ferron_server::start_server;
 use ferron_util::load_config::load_config;
-use libloading::{library_filename, Library, Symbol};
 use mimalloc::MiMalloc;
 
 // Set the global allocator to use mimalloc for performance optimization
@@ -129,238 +127,167 @@ fn before_starting_server(
   if let Some(modules) = yaml_config["global"]["loadModules"].as_vec() {
     for module_name_yaml in modules.iter() {
       if let Some(module_name) = module_name_yaml.as_str() {
-        let lib = match module_name {
-          "rproxy" | "fproxy" | "cache" | "cgi" | "scgi" | "fcgi" | "fauth" => None,
-          _ => Some(
-            match unsafe {
-              Library::new(library_filename(format!(
-                "ferron_mod_{}",
-                module_name.replace("/", "_")
-              )))
-            } {
-              Ok(lib) => lib,
-              Err(err) => {
-                module_error = Some(anyhow::anyhow!(
-                  "Cannot load module \"{}\": {}",
-                  module_name,
-                  err
-                ));
-                break;
-              }
-            },
-          ),
-        };
-
-        module_libs.push((lib, String::from(module_name)));
+        module_libs.push(String::from(module_name));
       }
     }
   }
 
   let mut external_modules = Vec::new();
-  let mut module_config_validation_functions = Vec::new();
   #[allow(unused_mut)]
   let mut modules_optional_builtin = Vec::new();
   // Iterate over loaded module libraries and initialize them
-  for (lib, module_name) in module_libs.iter() {
-    if let Some(lib) = lib {
-      // Retrieve the module initialization function
-      let module_init: Symbol<
-        fn(
-          &ServerConfig,
-        ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>>,
-      > = match unsafe { lib.get(b"server_module_init") } {
-        Ok(module) => module,
-        Err(err) => {
-          module_error = Some(anyhow::anyhow!(
-            "Cannot load module \"{}\": {}",
-            module_name,
-            err
-          ));
-          break;
-        }
-      };
+  for module_name in module_libs.iter() {
+    match module_name as &str {
+      #[cfg(feature = "rproxy")]
+      "rproxy" => {
+        external_modules.push(
+          match ferron_optional_modules::rproxy::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
 
-      // Initialize the module
-      external_modules.push(match module_init(&yaml_config) {
-        Ok(module) => module,
-        Err(err) => {
-          module_error = Some(anyhow::anyhow!(
-            "Cannot initialize module \"{}\": {}",
-            module_name,
-            err
-          ));
-          break;
-        }
-      });
+        modules_optional_builtin.push(module_name.clone());
+      }
+      #[cfg(feature = "fproxy")]
+      "fproxy" => {
+        external_modules.push(
+          match ferron_optional_modules::fproxy::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
 
-      // Retrieve the module configuration validation function
-      let module_validate_config: Symbol<
-        fn(&ServerConfigRoot, bool, bool) -> Result<(), Box<dyn Error + Send + Sync>>,
-      > = match unsafe { lib.get(b"server_module_validate_config") } {
-        Ok(module) => module,
-        Err(err) => {
-          module_error = Some(anyhow::anyhow!(
-            "Cannot load module \"{}\": {}",
-            module_name,
-            err
-          ));
-          break;
-        }
-      };
-      module_config_validation_functions.push(module_validate_config);
-    } else {
-      match module_name as &str {
-        #[cfg(feature = "rproxy")]
-        "rproxy" => {
-          external_modules.push(
-            match ferron_optional_modules::rproxy::server_module_init(&yaml_config) {
-              Ok(module) => module,
-              Err(err) => {
-                module_error = Some(anyhow::anyhow!(
-                  "Cannot initialize optional built-in module \"{}\": {}",
-                  module_name,
-                  err
-                ));
-                break;
-              }
-            },
-          );
+        modules_optional_builtin.push(module_name.clone());
+      }
+      #[cfg(feature = "cache")]
+      "cache" => {
+        external_modules.push(
+          match ferron_optional_modules::cache::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
 
-          modules_optional_builtin.push(module_name.clone());
-        }
-        #[cfg(feature = "fproxy")]
-        "fproxy" => {
-          external_modules.push(
-            match ferron_optional_modules::fproxy::server_module_init(&yaml_config) {
-              Ok(module) => module,
-              Err(err) => {
-                module_error = Some(anyhow::anyhow!(
-                  "Cannot initialize optional built-in module \"{}\": {}",
-                  module_name,
-                  err
-                ));
-                break;
-              }
-            },
-          );
+        modules_optional_builtin.push(module_name.clone());
+      }
+      #[cfg(feature = "cgi")]
+      "cgi" => {
+        external_modules.push(
+          match ferron_optional_modules::cgi::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
 
-          modules_optional_builtin.push(module_name.clone());
-        }
-        #[cfg(feature = "cache")]
-        "cache" => {
-          external_modules.push(
-            match ferron_optional_modules::cache::server_module_init(&yaml_config) {
-              Ok(module) => module,
-              Err(err) => {
-                module_error = Some(anyhow::anyhow!(
-                  "Cannot initialize optional built-in module \"{}\": {}",
-                  module_name,
-                  err
-                ));
-                break;
-              }
-            },
-          );
+        modules_optional_builtin.push(module_name.clone());
+      }
+      #[cfg(feature = "scgi")]
+      "scgi" => {
+        external_modules.push(
+          match ferron_optional_modules::scgi::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
 
-          modules_optional_builtin.push(module_name.clone());
-        }
-        #[cfg(feature = "cgi")]
-        "cgi" => {
-          external_modules.push(
-            match ferron_optional_modules::cgi::server_module_init(&yaml_config) {
-              Ok(module) => module,
-              Err(err) => {
-                module_error = Some(anyhow::anyhow!(
-                  "Cannot initialize optional built-in module \"{}\": {}",
-                  module_name,
-                  err
-                ));
-                break;
-              }
-            },
-          );
+        modules_optional_builtin.push(module_name.clone());
+      }
+      #[cfg(feature = "fcgi")]
+      "fcgi" => {
+        external_modules.push(
+          match ferron_optional_modules::fcgi::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
 
-          modules_optional_builtin.push(module_name.clone());
-        }
-        #[cfg(feature = "scgi")]
-        "scgi" => {
-          external_modules.push(
-            match ferron_optional_modules::scgi::server_module_init(&yaml_config) {
-              Ok(module) => module,
-              Err(err) => {
-                module_error = Some(anyhow::anyhow!(
-                  "Cannot initialize optional built-in module \"{}\": {}",
-                  module_name,
-                  err
-                ));
-                break;
-              }
-            },
-          );
+        modules_optional_builtin.push(module_name.clone());
+      }
+      #[cfg(feature = "fauth")]
+      "fauth" => {
+        external_modules.push(
+          match ferron_optional_modules::fauth::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
 
-          modules_optional_builtin.push(module_name.clone());
-        }
-        #[cfg(feature = "fcgi")]
-        "fcgi" => {
-          external_modules.push(
-            match ferron_optional_modules::fcgi::server_module_init(&yaml_config) {
-              Ok(module) => module,
-              Err(err) => {
-                module_error = Some(anyhow::anyhow!(
-                  "Cannot initialize optional built-in module \"{}\": {}",
-                  module_name,
-                  err
-                ));
-                break;
-              }
-            },
-          );
+        modules_optional_builtin.push(module_name.clone());
+      }
+      #[cfg(feature = "example")]
+      "example" => {
+        external_modules.push(
+          match ferron_optional_modules::example::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
 
-          modules_optional_builtin.push(module_name.clone());
-        }
-        #[cfg(feature = "fauth")]
-        "fauth" => {
-          external_modules.push(
-            match ferron_optional_modules::fauth::server_module_init(&yaml_config) {
-              Ok(module) => module,
-              Err(err) => {
-                module_error = Some(anyhow::anyhow!(
-                  "Cannot initialize optional built-in module \"{}\": {}",
-                  module_name,
-                  err
-                ));
-                break;
-              }
-            },
-          );
-
-          modules_optional_builtin.push(module_name.clone());
-        }
-        #[cfg(feature = "example")]
-        "example" => {
-          external_modules.push(
-            match ferron_optional_modules::example::server_module_init(&yaml_config) {
-              Ok(module) => module,
-              Err(err) => {
-                module_error = Some(anyhow::anyhow!(
-                  "Cannot initialize optional built-in module \"{}\": {}",
-                  module_name,
-                  err
-                ));
-                break;
-              }
-            },
-          );
-
-          modules_optional_builtin.push(module_name.clone());
-        }
-        _ => {
-          module_error = Some(anyhow::anyhow!(
-            "The optional built-in module \"{}\" doesn't exist",
-            module_name
-          ));
-          break;
-        }
+        modules_optional_builtin.push(module_name.clone());
+      }
+      _ => {
+        module_error = Some(anyhow::anyhow!(
+          "The optional built-in module \"{}\" doesn't exist",
+          module_name
+        ));
+        break;
       }
     }
   }
@@ -437,7 +364,6 @@ fn before_starting_server(
   start_server(
     Arc::new(yaml_config),
     modules,
-    module_config_validation_functions,
     module_error,
     modules_optional_builtin,
     first_start,

@@ -17,7 +17,6 @@ use hyper::body::Incoming;
 use hyper::service::service_fn;
 use hyper::Request;
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
-use libloading::Symbol;
 use ocsp_stapler::Stapler;
 use rustls::crypto::ring::cipher_suite::*;
 use rustls::crypto::ring::default_provider;
@@ -357,9 +356,6 @@ async fn server_event_loop(
   yaml_config: Arc<Yaml>,
   logger: Sender<LogMessage>,
   modules: Vec<Box<dyn ServerModule + Send + Sync>>,
-  module_config_validation_functions: Vec<
-    Symbol<'_, fn(&ServerConfigRoot, bool, bool) -> Result<(), Box<dyn Error + Send + Sync>>>,
-  >,
   module_error: Option<anyhow::Error>,
   modules_optional_builtin: Vec<String>,
   first_startup: bool,
@@ -412,25 +408,6 @@ async fn server_event_loop(
         )))?
       }
     };
-    let module_config_validation_functions_iter = module_config_validation_functions.iter();
-    for module_config_validation_function in module_config_validation_functions_iter {
-      match module_config_validation_function(&config_root_to_validate, is_global, is_location) {
-        Ok(_) => (),
-        Err(err) => {
-          logger
-            .send(LogMessage::new(
-              format!("Server configuration validation failed: {}", err),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
-          Err(anyhow::anyhow!(format!(
-            "Server configuration validation failed: {}",
-            err
-          )))?
-        }
-      };
-    }
   }
 
   let mut crypto_provider = default_provider();
@@ -1165,9 +1142,6 @@ async fn server_event_loop(
 pub fn start_server(
   yaml_config: Arc<Yaml>,
   modules: Vec<Box<dyn ServerModule + Send + Sync>>,
-  module_config_validation_functions: Vec<
-    Symbol<'_, fn(&ServerConfigRoot, bool, bool) -> Result<(), Box<dyn Error + Send + Sync>>>,
-  >,
   module_error: Option<anyhow::Error>,
   modules_optional_builtin: Vec<String>,
   first_startup: bool,
@@ -1313,7 +1287,6 @@ pub fn start_server(
       yaml_config,
       logger,
       modules,
-      module_config_validation_functions,
       module_error,
       modules_optional_builtin,
       first_startup,

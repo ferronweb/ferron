@@ -22,7 +22,6 @@ futures-util = "0.3.31"
 chrono = "0.4.39"
 async-trait = { workspace = true }
 ferron-common = { workspace = true }
-libloading = "0.8.6"
 rustls-native-certs = "0.8.1"
 ocsp-stapler = { version = "0.4.4", default-features = false }
 clap = { version = "4.5.28", features = ["derive"] }
