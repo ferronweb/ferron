@@ -653,7 +653,6 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                     let file_bufreader = BufReader::with_capacity(12800, file);
 
                     // Construct a boxed body
-                    // Wrap Encoders in BufReaders for better performance.
                     let boxed_body = if use_brotli {
                       let reader_stream = ReaderStream::new(BrotliEncoder::new(file_bufreader));
                       let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
