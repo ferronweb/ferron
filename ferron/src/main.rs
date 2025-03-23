@@ -59,12 +59,23 @@ mod ferron_modules {
 // Import optional project modules from "modules" directory
 #[path = "optional_modules"]
 mod ferron_optional_modules {
+  #[cfg(feature = "cache")]
   pub mod cache;
+  #[cfg(feature = "cgi")]
   pub mod cgi;
+  #[cfg(feature = "fauth")]
   pub mod fauth;
+
+  #[cfg(feature = "fcgi")]
   pub mod fcgi;
+
+  #[cfg(feature = "fproxy")]
   pub mod fproxy;
+
+  #[cfg(feature = "rproxy")]
   pub mod rproxy;
+
+  #[cfg(feature = "scgi")]
   pub mod scgi;
 }
 
@@ -191,6 +202,7 @@ fn before_starting_server(
       module_config_validation_functions.push(module_validate_config);
     } else {
       match module_name as &str {
+        #[cfg(feature = "rproxy")]
         "rproxy" => {
           external_modules.push(
             match ferron_optional_modules::rproxy::server_module_init(&yaml_config) {
@@ -208,6 +220,7 @@ fn before_starting_server(
 
           modules_optional_builtin.push(module_name.clone());
         }
+        #[cfg(feature = "fproxy")]
         "fproxy" => {
           external_modules.push(
             match ferron_optional_modules::fproxy::server_module_init(&yaml_config) {
@@ -225,6 +238,7 @@ fn before_starting_server(
 
           modules_optional_builtin.push(module_name.clone());
         }
+        #[cfg(feature = "cache")]
         "cache" => {
           external_modules.push(
             match ferron_optional_modules::cache::server_module_init(&yaml_config) {
@@ -242,6 +256,7 @@ fn before_starting_server(
 
           modules_optional_builtin.push(module_name.clone());
         }
+        #[cfg(feature = "cgi")]
         "cgi" => {
           external_modules.push(
             match ferron_optional_modules::cgi::server_module_init(&yaml_config) {
@@ -259,6 +274,7 @@ fn before_starting_server(
 
           modules_optional_builtin.push(module_name.clone());
         }
+        #[cfg(feature = "scgi")]
         "scgi" => {
           external_modules.push(
             match ferron_optional_modules::scgi::server_module_init(&yaml_config) {
@@ -276,6 +292,7 @@ fn before_starting_server(
 
           modules_optional_builtin.push(module_name.clone());
         }
+        #[cfg(feature = "fcgi")]
         "fcgi" => {
           external_modules.push(
             match ferron_optional_modules::fcgi::server_module_init(&yaml_config) {
@@ -293,6 +310,7 @@ fn before_starting_server(
 
           modules_optional_builtin.push(module_name.clone());
         }
+        #[cfg(feature = "fauth")]
         "fauth" => {
           external_modules.push(
             match ferron_optional_modules::fauth::server_module_init(&yaml_config) {

@@ -52,5 +52,15 @@ http = "1.2.0"
 tokio-test = { workspace = true }
 rusty-hook = { workspace = true }
 
+[features]
+default = ["cache", "cgi", "fauth", "fcgi", "fproxy", "rproxy", "scgi"]
+cache = []
+cgi = []
+fauth = []
+fcgi = []
+fproxy = []
+rproxy = []
+scgi = []
+
 [build-dependencies]
 winresource = "0.1.19"

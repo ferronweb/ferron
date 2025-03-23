@@ -745,6 +745,7 @@ pub fn validate_config(
 
   for module_optional_builtin in modules_optional_builtin.iter() {
     match module_optional_builtin as &str {
+      #[cfg(feature = "rproxy")]
       "rproxy" => {
         if !config.get("proxyTo").is_badvalue() {
           if let Some(proxy_urls) = config.get("proxyTo").as_vec() {
@@ -836,6 +837,7 @@ pub fn validate_config(
           ))?
         }
       }
+      #[cfg(feature = "cache")]
       "cache" => {
         if !config.get("cacheVaryHeaders").is_badvalue() {
           if let Some(modules) = config.get("cacheVaryHeaders").as_vec() {
@@ -897,6 +899,7 @@ pub fn validate_config(
           }
         }
       }
+      #[cfg(feature = "cgi")]
       "cgi" => {
         if !config.get("cgiScriptExtensions").is_badvalue() {
           if let Some(cgi_script_extensions) = config.get("cgiScriptExtensions").as_vec() {
@@ -944,6 +947,7 @@ pub fn validate_config(
           }
         }
       }
+      #[cfg(feature = "scgi")]
       "scgi" => {
         if !config.get("scgiTo").is_badvalue() && config.get("scgiTo").as_str().is_none() {
           Err(anyhow::anyhow!("Invalid SCGI target URL value"))?
@@ -953,6 +957,7 @@ pub fn validate_config(
           Err(anyhow::anyhow!("Invalid SCGI path"))?
         }
       }
+      #[cfg(feature = "fcgi")]
       "fcgi" => {
         if !config.get("fcgiScriptExtensions").is_badvalue() {
           if let Some(fastcgi_script_extensions) = config.get("fcgiScriptExtensions").as_vec() {
@@ -977,6 +982,7 @@ pub fn validate_config(
           Err(anyhow::anyhow!("Invalid FastCGI path"))?
         }
       }
+      #[cfg(feature = "fauth")]
       "fauth" => {
         if !config.get("authTo").is_badvalue() && config.get("authTo").as_str().is_none() {
           Err(anyhow::anyhow!(
