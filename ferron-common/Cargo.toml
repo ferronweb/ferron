@@ -1,6 +1,6 @@
 [package]
 name = "ferron-common"
-version = "1.0.0-beta5"
+version = "1.0.0-beta6"
 edition = "2021"
 
 [dependencies]
