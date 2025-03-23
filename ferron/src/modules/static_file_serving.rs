@@ -654,7 +654,11 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
 
                     // Construct a boxed body
                     let boxed_body = if use_brotli {
-                      let reader_stream = ReaderStream::new(BrotliEncoder::new(file_bufreader));
+                      // Brotli compression quality of 4
+                      let reader_stream = ReaderStream::new(BrotliEncoder::with_quality(
+                        file_bufreader,
+                        Level::Precise(4),
+                      ));
                       let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
                       stream_body.boxed()
                     } else if use_zstd {
