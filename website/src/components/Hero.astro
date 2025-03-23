@@ -32,7 +32,7 @@ import HeroCTA from "./HeroCTA";
   import heroRecording from "../assets/hero.cast?url";
   import * as AsciinemaPlayer from "asciinema-player";
 
-  document.addEventListener("astro:page-load", () => {
+  function loadPlayer() {
     AsciinemaPlayer.create(
       heroRecording,
       document.querySelector("[data-hero-demo]"),
@@ -45,5 +45,11 @@ import HeroCTA from "./HeroCTA";
         theme: "nord"
       }
     );
+  }
+
+  document.addEventListener("astro:after-swap", () => {
+    loadPlayer();
   });
+
+  loadPlayer();
 </script>
