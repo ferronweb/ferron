@@ -33,18 +33,17 @@ import HeroCTA from "./HeroCTA";
   import * as AsciinemaPlayer from "asciinema-player";
 
   function loadPlayer() {
-    AsciinemaPlayer.create(
-      heroRecording,
-      document.querySelector("[data-hero-demo]"),
-      {
-        loop: true,
-        autoplay: true,
-        poster: "npt:0:0",
-        cols: 70,
-        rows: 22,
-        theme: "nord"
-      }
-    );
+    const heroElement = document.querySelector("[data-hero-demo]");
+    if (!heroElement) return;
+
+    AsciinemaPlayer.create(heroRecording, heroElement, {
+      loop: true,
+      autoplay: true,
+      poster: "npt:0:0",
+      cols: 70,
+      rows: 22,
+      theme: "nord"
+    });
   }
 
   document.addEventListener("astro:after-swap", () => {

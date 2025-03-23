@@ -124,10 +124,12 @@ import "../styles/apexcharts-fix.css";
       ]
     };
 
-    const chart = new ApexCharts(
-      document.querySelector("[data-benchmarks-static-chart]"),
-      options
+    const chartElement = document.querySelector(
+      "[data-benchmarks-static-chart]"
     );
+    if (!chartElement) return;
+
+    const chart = new ApexCharts(chartElement, options);
     chart.render();
   }
 
