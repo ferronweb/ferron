@@ -6,17 +6,17 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::ferron_common::{
+  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
+  ServerModuleHandlers, SocketData,
+};
+use crate::ferron_common::{HyperUpgraded, WithRuntime};
 use async_compression::tokio::bufread::{BrotliEncoder, DeflateEncoder, GzipEncoder, ZstdEncoder};
 use async_compression::zstd::CParameter;
 use async_compression::Level;
 use async_trait::async_trait;
 use chrono::offset::Local;
 use chrono::DateTime;
-use ferron_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
-  ServerModuleHandlers, SocketData,
-};
-use ferron_common::{HyperUpgraded, WithRuntime};
 use futures_util::TryStreamExt;
 use hashlink::LruCache;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};

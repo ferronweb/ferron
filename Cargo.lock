@@ -710,7 +710,6 @@ dependencies = [
  "chrono",
  "clap",
  "fancy-regex",
- "ferron-common",
  "futures-util",
  "glob",
  "hashlink",
@@ -742,21 +741,6 @@ dependencies = [
  "tokio-util",
  "urlencoding",
  "winresource",
- "yaml-rust2",
-]
-
-[[package]]
-name = "ferron-common"
-version = "1.0.0-beta6"
-dependencies = [
- "async-channel",
- "async-trait",
- "http-body-util",
- "hyper",
- "hyper-tungstenite",
- "pin-project-lite",
- "rusty-hook",
- "tokio",
  "yaml-rust2",
 ]
 

@@ -3,12 +3,12 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_trait::async_trait;
-use ferron_common::{
+use crate::ferron_common::{
   ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
   ServerModuleHandlers, SocketData,
 };
-use ferron_common::{HyperUpgraded, WithRuntime};
+use crate::ferron_common::{HyperUpgraded, WithRuntime};
+use async_trait::async_trait;
 use http_body_util::{BodyExt, Empty};
 use hyper::{header, Response, StatusCode};
 use hyper_tungstenite::HyperWebsocket;

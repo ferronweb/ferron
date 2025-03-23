@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{error::Error, future::Future, net::SocketAddr, pin::Pin};
 
 use async_channel::Sender;
@@ -8,7 +10,9 @@ use hyper_tungstenite::HyperWebsocket;
 use tokio::runtime::Handle;
 use yaml_rust2::Yaml;
 
+#[path = "log.rs"]
 mod log;
+#[path = "with_runtime.rs"]
 mod with_runtime;
 
 /// Contains information about a network socket, including remote and local addresses,
@@ -44,7 +48,7 @@ impl SocketData {
 }
 
 /// Represents a log message. This is a type alias for `crate::log::LogMessage`.
-pub type LogMessage = crate::log::LogMessage;
+pub type LogMessage = log::LogMessage;
 
 /// Represents the server configuration object. This is a type alias for `Yaml` from the `yaml_rust2` crate.
 pub type ServerConfig = Yaml;
@@ -60,7 +64,7 @@ pub type HyperUpgraded = Upgraded;
 
 /// A wrapper that ensures a function is executed within a specific runtime context.
 /// This is a type alias for `crate::with_runtime::WithRuntime<F>`.
-pub type WithRuntime<F> = crate::with_runtime::WithRuntime<F>;
+pub type WithRuntime<F> = with_runtime::WithRuntime<F>;
 
 /// Contains data related to an HTTP request, including the original Hyper request
 /// and optional authentication user information.
@@ -175,7 +179,7 @@ impl ErrorLogger {
   /// # Examples
   ///
   /// ```
-  /// # use ferron_common::ErrorLogger;
+  /// # use crate::ferron_common::ErrorLogger;
   /// # #[tokio::main]
   /// # async fn main() {
   /// let (tx, mut rx) = async_channel::bounded(100);

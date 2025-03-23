@@ -4,12 +4,12 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_trait::async_trait;
-use ferron_common::{
+use crate::ferron_common::{
   ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerModule,
   ServerModuleHandlers, SocketData,
 };
-use ferron_common::{HyperResponse, WithRuntime};
+use crate::ferron_common::{HyperResponse, WithRuntime};
+use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use http::uri::{PathAndQuery, Scheme};
 use http_body_util::combinators::BoxBody;

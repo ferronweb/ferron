@@ -6,12 +6,12 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_trait::async_trait;
-use ferron_common::{
+use crate::ferron_common::{
   ErrorLogger, HyperRequest, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
   ServerModuleHandlers, SocketData,
 };
-use ferron_common::{HyperUpgraded, WithRuntime};
+use crate::ferron_common::{HyperUpgraded, WithRuntime};
+use async_trait::async_trait;
 use futures_util::TryStreamExt;
 use hashlink::LinkedHashMap;
 use http_body_util::{BodyExt, StreamBody};

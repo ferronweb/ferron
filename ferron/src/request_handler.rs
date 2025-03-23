@@ -9,9 +9,11 @@ use crate::ferron_util::combine_config::combine_config;
 use crate::ferron_util::error_pages::generate_default_error_page;
 use crate::ferron_util::url_sanitizer::sanitize_url;
 
+use crate::ferron_common::{
+  ErrorLogger, LogMessage, RequestData, ServerModuleHandlers, SocketData,
+};
 use async_channel::Sender;
 use chrono::prelude::*;
-use ferron_common::{ErrorLogger, LogMessage, RequestData, ServerModuleHandlers, SocketData};
 use futures_util::TryStreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};

@@ -12,6 +12,10 @@ mod ferron_res {
   pub mod server_software;
 }
 
+// Import common modules from "common" directory
+#[path = "common/mod.rs"]
+mod ferron_common;
+
 // Import utility modules from "util" directory
 #[path = "util"]
 mod ferron_util {

@@ -9,13 +9,13 @@ use crate::ferron_util::url_rewrite_structs::{
   UrlRewriteMapEntry, UrlRewriteMapLocationWrap, UrlRewriteMapWrap,
 };
 
-use async_trait::async_trait;
-use fancy_regex::RegexBuilder;
-use ferron_common::{
+use crate::ferron_common::{
   ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
   ServerModuleHandlers, SocketData,
 };
-use ferron_common::{HyperUpgraded, WithRuntime};
+use crate::ferron_common::{HyperUpgraded, WithRuntime};
+use async_trait::async_trait;
+use fancy_regex::RegexBuilder;
 use hyper::{header, Request, StatusCode};
 use hyper_tungstenite::HyperWebsocket;
 use tokio::fs;

@@ -1,4 +1,4 @@
-use ferron_common::ServerConfig;
+use crate::ferron_common::ServerConfig;
 use hyper::header::{HeaderName, HeaderValue};
 use std::error::Error;
 use std::net::IpAddr;

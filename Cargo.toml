@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "ferron",
-    "ferron-common",
     "ferron-passwd",
 ]
 resolver = "2"
@@ -10,7 +9,6 @@ resolver = "2"
 hyper = { version = "1.6.0", features = ["http1", "http2", "server"] }
 tokio = { version = "1.43.0", features = ["full"] }
 tokio-test = "0.4.4"
-ferron-common = { path = "./ferron-common" }
 http-body-util = "0.1"
 yaml-rust2 = "0.10.0"
 async-trait = "0.1.86"

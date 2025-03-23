@@ -4,13 +4,13 @@ use std::hash::RandomState;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use async_trait::async_trait;
-use cache_control::{Cachability, CacheControl};
-use ferron_common::{
+use crate::ferron_common::{
   ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerModule,
   ServerModuleHandlers, SocketData,
 };
-use ferron_common::{HyperResponse, WithRuntime};
+use crate::ferron_common::{HyperResponse, WithRuntime};
+use async_trait::async_trait;
+use cache_control::{Cachability, CacheControl};
 use futures_util::{StreamExt, TryStreamExt};
 use hashlink::LinkedHashMap;
 use http_body_util::{BodyExt, Full, StreamBody};

@@ -8,9 +8,9 @@ use crate::ferron_util::load_tls::{load_certs, load_private_key};
 use crate::ferron_util::sni::CustomSniResolver;
 use crate::ferron_util::validate_config::{prepare_config_for_validation, validate_config};
 
+use crate::ferron_common::{LogMessage, ServerModule, ServerModuleHandlers};
 use async_channel::Sender;
 use chrono::prelude::*;
-use ferron_common::{LogMessage, ServerModule, ServerModuleHandlers};
 use futures_util::StreamExt;
 use http_body_util::BodyExt;
 use hyper::body::Incoming;

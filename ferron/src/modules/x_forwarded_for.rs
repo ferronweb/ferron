@@ -1,12 +1,12 @@
 use std::error::Error;
 use std::net::{IpAddr, SocketAddr};
 
-use async_trait::async_trait;
-use ferron_common::{
+use crate::ferron_common::{
   ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
   ServerModuleHandlers, SocketData,
 };
-use ferron_common::{HyperUpgraded, WithRuntime};
+use crate::ferron_common::{HyperUpgraded, WithRuntime};
+use async_trait::async_trait;
 use hyper::StatusCode;
 use hyper_tungstenite::HyperWebsocket;
 use tokio::runtime::Handle;

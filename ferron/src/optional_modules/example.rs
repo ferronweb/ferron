@@ -1,11 +1,11 @@
 use std::error::Error;
 
-use async_trait::async_trait;
-use ferron_common::{
+use crate::ferron_common::{
   ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerModule,
   ServerModuleHandlers, SocketData,
 };
-use ferron_common::{HyperResponse, WithRuntime};
+use crate::ferron_common::{HyperResponse, WithRuntime};
+use async_trait::async_trait;
 use http_body_util::{BodyExt, Full};
 use hyper::Response;
 use hyper_tungstenite::HyperWebsocket;
