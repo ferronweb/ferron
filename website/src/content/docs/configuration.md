@@ -74,6 +74,8 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - A window (in milliseconds) between each failed connection report made by a load balancer. Default: `5000`
 - **timeout** (_u32_ or `null`; Ferron 1.0.0-beta3 and newer)
   - A maximum time (in milliseconds) for server to process the request, after which the server resets the connection. If set to `null`, the timeout is disabled. It's not recommended to disable the timeout, as disabling it may leave the server vulnerable to Slow HTTP attacks. Default: `300000`
+- **maximumCacheEntries** (_u32_ or `null`; _cache_ module; Ferron 1.0.0-beta6 and newer)
+  - Maximum amount of cache entries that can be stored in the cache. If set to `null`, the cache can theoretically store unlimited entries. The cache keys for entries depend on the request method, the request URL, the "Host" header value, and varying request headers. Default: `null`
 
 ## Host configuration properties
 

@@ -6,6 +6,10 @@ description: Discover security vulnerabilities of outdated Ferron versions. Stay
 
 Some older versions of Ferron may contain security vulnerabilities. It's recommended to keep Ferron up-to-date.
 
+## Fixed in Ferron 1.0.0-beta6
+
+- An attacker could send a lot of concurrent requests that have a header defining accepted compression algorithm to be Brotli (for example using `ferrbench -c 100 -d 1h -t 12 -H "Accept-Encoding: br" -h https://victim.example --http2` command) to make the server stop accepting HTTP requests, due to inefficient compression process. (CWE-400).
+
 ## Fixed in Ferron 1.0.0-beta3
 
 - An attacker could send a request body smaller than the specified length, wait for a long time, and repeat with many connections to possibly exhaust the server resources. This is because the server doesn't implement server timeouts. (CWE-400)

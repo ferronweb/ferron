@@ -4,6 +4,14 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.0.0-beta6
+
+**Released in March 23, 2025**
+
+- Added option for limiting the cache size by a specific number of entries
+- Limited the Zstandard window size to 128KB for better HTTP client support
+- Optimized Brotli compression for static files
+
 ## Ferron 1.0.0-beta5
 
 **Released in March 16, 2025**
