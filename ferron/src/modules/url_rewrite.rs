@@ -12,8 +12,8 @@ use crate::ferron_util::url_rewrite_structs::{
 use async_trait::async_trait;
 use fancy_regex::RegexBuilder;
 use ferron_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerConfigRoot,
-  ServerModule, ServerModuleHandlers, SocketData,
+  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
+  ServerModuleHandlers, SocketData,
 };
 use ferron_common::{HyperUpgraded, WithRuntime};
 use hyper::{header, Request, StatusCode};
@@ -150,7 +150,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -219,7 +219,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
       for url_rewrite_map_entry in combined_url_rewrite_map {
         // Check if it's a file or a directory according to the rewrite map configuration
         if url_rewrite_map_entry.is_not_directory || url_rewrite_map_entry.is_not_file {
-          if let Some(wwwroot) = config.get("wwwroot").as_str() {
+          if let Some(wwwroot) = config["wwwroot"].as_str() {
             let path = Path::new(wwwroot);
             let mut relative_path = &rewritten_url[1..];
             while relative_path.as_bytes().first().copied() == Some(b'/') {
@@ -270,7 +270,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
       if rewritten_url == original_url {
         Ok(ResponseData::builder(request).build())
       } else {
-        if config.get("enableRewriteLogging").as_bool() == Some(true) {
+        if config["enableRewriteLogging"].as_bool() == Some(true) {
           error_logger
             .log(&format!(
               "URL rewritten from \"{}\" to \"{}\"",
@@ -294,7 +294,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -319,7 +319,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
     &mut self,
     _upgraded_request: HyperUpgraded,
     _connect_address: &str,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -334,18 +334,14 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
     &mut self,
     _websocket: HyperWebsocket,
     _uri: &hyper::Uri,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
   }
 
-  fn does_websocket_requests(
-    &mut self,
-    _config: &ServerConfigRoot,
-    _socket_data: &SocketData,
-  ) -> bool {
+  fn does_websocket_requests(&mut self, _config: &ServerConfig, _socket_data: &SocketData) -> bool {
     false
   }
 }

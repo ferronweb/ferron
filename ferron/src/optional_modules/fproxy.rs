@@ -3,8 +3,8 @@ use std::str::FromStr;
 
 use async_trait::async_trait;
 use ferron_common::{
-  ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerConfigRoot,
-  ServerModule, ServerModuleHandlers, SocketData,
+  ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerModule,
+  ServerModuleHandlers, SocketData,
 };
 use ferron_common::{HyperResponse, WithRuntime};
 use http_body_util::combinators::BoxBody;
@@ -46,7 +46,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -56,7 +56,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -179,7 +179,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
     &mut self,
     upgraded_request: HyperUpgraded,
     connect_address: &str,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -225,18 +225,14 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
     &mut self,
     _websocket: HyperWebsocket,
     _uri: &hyper::Uri,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
   }
 
-  fn does_websocket_requests(
-    &mut self,
-    _config: &ServerConfigRoot,
-    _socket_data: &SocketData,
-  ) -> bool {
+  fn does_websocket_requests(&mut self, _config: &ServerConfig, _socket_data: &SocketData) -> bool {
     false
   }
 }

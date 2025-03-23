@@ -15,8 +15,8 @@ use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine};
 use fancy_regex::RegexBuilder;
 use ferron_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerConfigRoot,
-  ServerModule, ServerModuleHandlers, SocketData,
+  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
+  ServerModuleHandlers, SocketData,
 };
 use ferron_common::{HyperUpgraded, WithRuntime};
 use http_body_util::{BodyExt, Empty};
@@ -227,7 +227,7 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -401,7 +401,7 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
                 };
 
                 if let Some((username, password)) = parse_basic_auth(authorization_str) {
-                  if let Some(users_vec_yaml) = config.get("users").as_vec() {
+                  if let Some(users_vec_yaml) = config["users"].as_vec() {
                     let mut authorized_user = None;
                     for user_yaml in users_vec_yaml {
                       if let Some(username_db) = user_yaml["name"].as_str() {
@@ -482,7 +482,7 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -507,7 +507,7 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
     &mut self,
     _upgraded_request: HyperUpgraded,
     _connect_address: &str,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -522,18 +522,14 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
     &mut self,
     _websocket: HyperWebsocket,
     _uri: &hyper::Uri,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
   }
 
-  fn does_websocket_requests(
-    &mut self,
-    _config: &ServerConfigRoot,
-    _socket_data: &SocketData,
-  ) -> bool {
+  fn does_websocket_requests(&mut self, _config: &ServerConfig, _socket_data: &SocketData) -> bool {
     false
   }
 }

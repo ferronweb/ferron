@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use ferron_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerConfigRoot,
-  ServerModule, ServerModuleHandlers, SocketData,
+  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
+  ServerModuleHandlers, SocketData,
 };
 use ferron_common::{HyperUpgraded, WithRuntime};
 use hyper::StatusCode;
@@ -62,7 +62,7 @@ impl ServerModuleHandlers for BlockListModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -82,7 +82,7 @@ impl ServerModuleHandlers for BlockListModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -107,7 +107,7 @@ impl ServerModuleHandlers for BlockListModuleHandlers {
     &mut self,
     _upgraded_request: HyperUpgraded,
     _connect_address: &str,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -122,18 +122,14 @@ impl ServerModuleHandlers for BlockListModuleHandlers {
     &mut self,
     _websocket: HyperWebsocket,
     _uri: &hyper::Uri,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
   }
 
-  fn does_websocket_requests(
-    &mut self,
-    _config: &ServerConfigRoot,
-    _socket_data: &SocketData,
-  ) -> bool {
+  fn does_websocket_requests(&mut self, _config: &ServerConfig, _socket_data: &SocketData) -> bool {
     false
   }
 }

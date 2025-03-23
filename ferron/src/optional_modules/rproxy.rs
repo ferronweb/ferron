@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use ferron_common::{
-  ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerConfigRoot,
-  ServerModule, ServerModuleHandlers, SocketData,
+  ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerModule,
+  ServerModuleHandlers, SocketData,
 };
 use ferron_common::{HyperResponse, WithRuntime};
 use futures_util::{SinkExt, StreamExt};
@@ -118,21 +118,18 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
-      let enable_health_check = config
-        .get("enableLoadBalancerHealthCheck")
+      let enable_health_check = config["enableLoadBalancerHealthCheck"]
         .as_bool()
         .unwrap_or(false);
-      let health_check_max_fails = config
-        .get("loadBalancerHealthCheckMaximumFails")
+      let health_check_max_fails = config["loadBalancerHealthCheckMaximumFails"]
         .as_i64()
         .unwrap_or(3) as u64;
-      let disable_certificate_verification = config
-        .get("disableProxyCertificateVerification")
+      let disable_certificate_verification = config["disableProxyCertificateVerification"]
         .as_bool()
         .unwrap_or(false);
       if let Some(proxy_to) = determine_proxy_to(
@@ -406,7 +403,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -431,7 +428,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
     &mut self,
     _upgraded_request: HyperUpgraded,
     _connect_address: &str,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -446,22 +443,19 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
     &mut self,
     websocket: HyperWebsocket,
     uri: &hyper::Uri,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
-      let enable_health_check = config
-        .get("enableLoadBalancerHealthCheck")
+      let enable_health_check = config["enableLoadBalancerHealthCheck"]
         .as_bool()
         .unwrap_or(false);
-      let health_check_max_fails = config
-        .get("loadBalancerHealthCheckMaximumFails")
+      let health_check_max_fails = config["loadBalancerHealthCheckMaximumFails"]
         .as_i64()
         .unwrap_or(3) as u64;
 
-      let disable_certificate_verification = config
-        .get("disableProxyCertificateVerification")
+      let disable_certificate_verification = config["disableProxyCertificateVerification"]
         .as_bool()
         .unwrap_or(false);
       if let Some(proxy_to) = determine_proxy_to(
@@ -604,25 +598,21 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
     .await
   }
 
-  fn does_websocket_requests(
-    &mut self,
-    config: &ServerConfigRoot,
-    socket_data: &SocketData,
-  ) -> bool {
+  fn does_websocket_requests(&mut self, config: &ServerConfig, socket_data: &SocketData) -> bool {
     if socket_data.encrypted {
-      let secure_proxy_to = config.get("secureProxyTo");
+      let secure_proxy_to = &config["secureProxyTo"];
       if secure_proxy_to.as_vec().is_some() || secure_proxy_to.as_str().is_some() {
         return true;
       }
     }
 
-    let proxy_to = config.get("proxyTo");
+    let proxy_to = &config["proxyTo"];
     proxy_to.as_vec().is_some() || proxy_to.as_str().is_some()
   }
 }
 
 async fn determine_proxy_to(
-  config: &ServerConfigRoot,
+  config: &ServerConfig,
   encrypted: bool,
   failed_backends: &RwLock<TtlCache<String, u64>>,
   enable_health_check: bool,
@@ -633,7 +623,7 @@ async fn determine_proxy_to(
   // The "proxyTo" and "secureProxyTo" are validated though.
 
   if encrypted {
-    let secure_proxy_to_yaml = config.get("secureProxyTo");
+    let secure_proxy_to_yaml = &config["secureProxyTo"];
     if let Some(secure_proxy_to_vector) = secure_proxy_to_yaml.as_vec() {
       if enable_health_check {
         let mut secure_proxy_to_vector = secure_proxy_to_vector.clone();
@@ -671,7 +661,7 @@ async fn determine_proxy_to(
   }
 
   if proxy_to.is_none() {
-    let proxy_to_yaml = config.get("proxyTo");
+    let proxy_to_yaml = &config["proxyTo"];
     if let Some(proxy_to_vector) = proxy_to_yaml.as_vec() {
       if enable_health_check {
         let mut proxy_to_vector = proxy_to_vector.clone();

@@ -2,7 +2,7 @@ use std::error::Error;
 
 use async_trait::async_trait;
 use ferron_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfigRoot, ServerModule,
+  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
   ServerModuleHandlers, SocketData,
 };
 use ferron_common::{HyperUpgraded, WithRuntime};
@@ -38,17 +38,17 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       let hyper_request = request.get_hyper_request();
 
-      if config.get("secure").as_bool() == Some(true)
+      if config["secure"].as_bool() == Some(true)
         && !socket_data.encrypted
-        && config.get("disableNonEncryptedServer").as_bool() != Some(true)
-        && config.get("disableToHTTPSRedirect").as_bool() != Some(true)
+        && config["disableNonEncryptedServer"].as_bool() != Some(true)
+        && config["disableToHTTPSRedirect"].as_bool() != Some(true)
       {
         let host_header_option = hyper_request.headers().get(header::HOST);
         let host_header = match host_header_option {
@@ -84,7 +84,7 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
 
         let new_uri = Uri::builder()
           .scheme("https")
-          .authority(match config.get("sport").as_i64() {
+          .authority(match config["sport"].as_i64() {
             None | Some(443) => host_name,
             Some(port) => format!("{}:{}", host_name, port),
           })
@@ -103,11 +103,11 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
         );
       }
 
-      let domain_yaml = config.get("domain");
+      let domain_yaml = &config["domain"];
       let domain = domain_yaml.as_str();
 
       if let Some(domain) = domain {
-        if config.get("wwwredirect").as_bool() == Some(true) {
+        if config["wwwredirect"].as_bool() == Some(true) {
           // Even more code rewritten from SVR.JS...
           if let Some(host_header_value) = hyper_request.headers().get(header::HOST) {
             let host_header = host_header_value.to_str()?;
@@ -171,14 +171,14 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-    if config.get("secure").as_bool() == Some(true)
+    if config["secure"].as_bool() == Some(true)
       && !socket_data.encrypted
-      && config.get("disableNonEncryptedServer").as_bool() != Some(true)
-      && config.get("disableToHTTPSRedirect").as_bool() != Some(true)
+      && config["disableNonEncryptedServer"].as_bool() != Some(true)
+      && config["disableToHTTPSRedirect"].as_bool() != Some(true)
     {
       return Ok(
         ResponseData::builder(request)
@@ -207,7 +207,7 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
     &mut self,
     _upgraded_request: HyperUpgraded,
     _connect_address: &str,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -222,18 +222,14 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
     &mut self,
     _websocket: HyperWebsocket,
     _uri: &hyper::Uri,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
   }
 
-  fn does_websocket_requests(
-    &mut self,
-    _config: &ServerConfigRoot,
-    _socket_data: &SocketData,
-  ) -> bool {
+  fn does_websocket_requests(&mut self, _config: &ServerConfig, _socket_data: &SocketData) -> bool {
     false
   }
 }

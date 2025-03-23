@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, future::Future, net::SocketAddr, pin::Pin};
+use std::{error::Error, future::Future, net::SocketAddr, pin::Pin};
 
 use async_channel::Sender;
 use async_trait::async_trait;
@@ -394,86 +394,6 @@ impl ResponseDataBuilder {
   }
 }
 
-/// Represents the root configuration for the server.
-///
-/// This struct encapsulates a mapping between configuration property names and their corresponding
-/// YAML values, allowing for organized access to server settings.
-pub struct ServerConfigRoot {
-  hashmap: HashMap<String, ServerConfig>,
-}
-
-impl ServerConfigRoot {
-  /// Constructs a new `ServerConfigRoot` instance from a given YAML hash.
-  ///
-  /// This function takes a YAML object, expects it to be a hash (mapping), and converts it into
-  /// a `HashMap` where each key is a `String` and each value is a `Yaml` object. This allows for
-  /// easy retrieval of configuration properties by their names.
-  ///
-  /// # Parameters
-  ///
-  /// - `hashmap_yaml`: A reference to `ServerConfig` object expected to be a hash containing configuration properties.
-  ///
-  /// # Returns
-  ///
-  /// A `ServerConfigRoot` instance containing the parsed configuration properties.
-  pub fn new(hashmap_yaml: &ServerConfig) -> Self {
-    let mut hashmap = HashMap::new();
-
-    if let Some(hashmap_yaml) = hashmap_yaml.as_hash() {
-      for (key, value) in hashmap_yaml.iter() {
-        if let Some(key_str) = key.as_str() {
-          hashmap.insert(key_str.to_string(), value.clone());
-        }
-      }
-    }
-
-    ServerConfigRoot { hashmap }
-  }
-
-  /// Constructs a new `ServerConfigRoot` instance from an existing `HashMap<String, ServerConfig>`.
-  ///
-  /// # Parameters
-  ///
-  /// - `hashmap`: A `HashMap<String, ServerConfig>` hashmap.
-  ///
-  /// # Returns
-  ///
-  /// A `ServerConfigRoot` instance containing the parsed configuration properties.
-  pub fn from_hash(hashmap: HashMap<String, ServerConfig>) -> Self {
-    ServerConfigRoot { hashmap }
-  }
-
-  /// Retrieves a configuration property by its name.
-  ///
-  /// This function looks up the provided property name in the internal hashmap and returns
-  /// a clone of the corresponding `Yaml` value if found. If the property is not found, it
-  /// returns `Yaml::BadValue`.
-  ///
-  /// # Parameters
-  ///
-  /// - `property`: A string slice representing the name of the configuration property to retrieve.
-  ///
-  /// # Returns
-  ///
-  /// A `ServerConfig` object corresponding to the requested property, or `ServerConfig::BadValue` if the property
-  /// does not exist in the configuration.
-  pub fn get(&self, property: &str) -> ServerConfig {
-    match self.hashmap.get(property) {
-      Some(yaml) => yaml.clone(),
-      None => ServerConfig::BadValue,
-    }
-  }
-
-  /// Provides a reference to an underlying hashmap.
-  ///
-  /// # Returns
-  ///
-  /// A reference to `HashMap<String, ServerConfig>` hashmap.
-  pub fn as_hash(&self) -> &HashMap<String, ServerConfig> {
-    &self.hashmap
-  }
-}
-
 /// Defines the interface for server module handlers, specifying how requests should be processed.
 #[async_trait]
 pub trait ServerModuleHandlers {
@@ -492,7 +412,7 @@ pub trait ServerModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>>;
@@ -512,7 +432,7 @@ pub trait ServerModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>>;
@@ -572,7 +492,7 @@ pub trait ServerModuleHandlers {
     &mut self,
     upgraded_request: HyperUpgraded,
     connect_address: &str,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>>;
@@ -601,7 +521,7 @@ pub trait ServerModuleHandlers {
     &mut self,
     websocket: HyperWebsocket,
     uri: &hyper::Uri,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>>;
@@ -616,11 +536,7 @@ pub trait ServerModuleHandlers {
   /// # Returns
   ///
   /// `true` if the module is a module supporting WebSocket requests, or `false` otherwise.
-  fn does_websocket_requests(
-    &mut self,
-    config: &ServerConfigRoot,
-    socket_data: &SocketData,
-  ) -> bool;
+  fn does_websocket_requests(&mut self, config: &ServerConfig, socket_data: &SocketData) -> bool;
 }
 
 /// Represents a server module that can provide handlers for processing requests.

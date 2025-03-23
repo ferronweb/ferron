@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use cache_control::{Cachability, CacheControl};
 use ferron_common::{
-  ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerConfigRoot,
-  ServerModule, ServerModuleHandlers, SocketData,
+  ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerModule,
+  ServerModuleHandlers, SocketData,
 };
 use ferron_common::{HyperResponse, WithRuntime};
 use futures_util::{StreamExt, TryStreamExt};
@@ -143,12 +143,12 @@ impl ServerModuleHandlers for CacheModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
-      self.cache_vary_headers_configured = match config.get("cacheVaryHeaders").as_vec() {
+      self.cache_vary_headers_configured = match config["cacheVaryHeaders"].as_vec() {
         Some(vector) => {
           let mut new_vector = Vec::new();
           for yaml_value in vector.iter() {
@@ -160,7 +160,7 @@ impl ServerModuleHandlers for CacheModuleHandlers {
         }
         None => Vec::new(),
       };
-      self.cache_ignore_headers_configured = match config.get("cacheIgnoreHeaders").as_vec() {
+      self.cache_ignore_headers_configured = match config["cacheIgnoreHeaders"].as_vec() {
         Some(vector) => {
           let mut new_vector = Vec::new();
           for yaml_value in vector.iter() {
@@ -172,8 +172,7 @@ impl ServerModuleHandlers for CacheModuleHandlers {
         }
         None => Vec::new(),
       };
-      self.maximum_cached_response_size = config
-        .get("maximumCachedResponseSize")
+      self.maximum_cached_response_size = config["maximumCachedResponseSize"]
         .as_i64()
         .map(|f| f as u64);
 
@@ -307,7 +306,7 @@ impl ServerModuleHandlers for CacheModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -498,7 +497,7 @@ impl ServerModuleHandlers for CacheModuleHandlers {
     &mut self,
     _upgraded_request: HyperUpgraded,
     _connect_address: &str,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -513,18 +512,14 @@ impl ServerModuleHandlers for CacheModuleHandlers {
     &mut self,
     _websocket: HyperWebsocket,
     _uri: &hyper::Uri,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
   }
 
-  fn does_websocket_requests(
-    &mut self,
-    _config: &ServerConfigRoot,
-    _socket_data: &SocketData,
-  ) -> bool {
+  fn does_websocket_requests(&mut self, _config: &ServerConfig, _socket_data: &SocketData) -> bool {
     false
   }
 }

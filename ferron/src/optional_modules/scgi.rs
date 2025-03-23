@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
 use ferron_common::{
-  ErrorLogger, HyperRequest, HyperResponse, RequestData, ResponseData, ServerConfig,
-  ServerConfigRoot, ServerModule, ServerModuleHandlers, SocketData,
+  ErrorLogger, HyperRequest, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
+  ServerModuleHandlers, SocketData,
 };
 use ferron_common::{HyperUpgraded, WithRuntime};
 use futures_util::TryStreamExt;
@@ -55,19 +55,19 @@ impl ServerModuleHandlers for ScgiModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       let mut scgi_to = "tcp://localhost:4000/";
-      let scgi_to_yaml = config.get("scgiTo");
+      let scgi_to_yaml = &config["scgiTo"];
       if let Some(scgi_to_obtained) = scgi_to_yaml.as_str() {
         scgi_to = scgi_to_obtained;
       }
 
       let mut scgi_path = None;
-      if let Some(scgi_path_obtained) = config.get("scgiPath").as_str() {
+      if let Some(scgi_path_obtained) = config["scgiPath"].as_str() {
         scgi_path = Some(scgi_path_obtained.to_string());
       }
 
@@ -96,7 +96,7 @@ impl ServerModuleHandlers for ScgiModuleHandlers {
         if let Some(stripped_request_path) =
           request_path_with_slashes.strip_prefix(canonical_scgi_path)
         {
-          let wwwroot_yaml = config.get("wwwroot");
+          let wwwroot_yaml = &config["wwwroot"];
           let wwwroot = wwwroot_yaml.as_str().unwrap_or("/nonexistent");
 
           let wwwroot_unknown = PathBuf::from(wwwroot);
@@ -138,7 +138,7 @@ impl ServerModuleHandlers for ScgiModuleHandlers {
             wwwroot,
             execute_pathbuf,
             execute_path_info,
-            config.get("serverAdministratorEmail").as_str(),
+            config["serverAdministratorEmail"].as_str(),
             scgi_to,
           )
           .await;
@@ -152,7 +152,7 @@ impl ServerModuleHandlers for ScgiModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -177,7 +177,7 @@ impl ServerModuleHandlers for ScgiModuleHandlers {
     &mut self,
     _upgraded_request: HyperUpgraded,
     _connect_address: &str,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -192,18 +192,14 @@ impl ServerModuleHandlers for ScgiModuleHandlers {
     &mut self,
     _websocket: HyperWebsocket,
     _uri: &hyper::Uri,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
   }
 
-  fn does_websocket_requests(
-    &mut self,
-    _config: &ServerConfigRoot,
-    _socket_data: &SocketData,
-  ) -> bool {
+  fn does_websocket_requests(&mut self, _config: &ServerConfig, _socket_data: &SocketData) -> bool {
     false
   }
 }

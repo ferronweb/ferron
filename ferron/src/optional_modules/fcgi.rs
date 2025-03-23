@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use ferron_common::{
-  ErrorLogger, HyperRequest, HyperResponse, RequestData, ResponseData, ServerConfig,
-  ServerConfigRoot, ServerModule, ServerModuleHandlers, SocketData,
+  ErrorLogger, HyperRequest, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
+  ServerModuleHandlers, SocketData,
 };
 use ferron_common::{HyperUpgraded, WithRuntime};
 use futures_util::future::Either;
@@ -78,14 +78,14 @@ impl ServerModuleHandlers for FcgiModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       let mut fastcgi_script_exts = Vec::new();
 
-      let fastcgi_script_exts_yaml = config.get("fcgiScriptExtensions");
+      let fastcgi_script_exts_yaml = &config["fcgiScriptExtensions"];
       if let Some(fastcgi_script_exts_obtained) = fastcgi_script_exts_yaml.as_vec() {
         for fastcgi_script_ext_yaml in fastcgi_script_exts_obtained.iter() {
           if let Some(fastcgi_script_ext) = fastcgi_script_ext_yaml.as_str() {
@@ -95,13 +95,13 @@ impl ServerModuleHandlers for FcgiModuleHandlers {
       }
 
       let mut fastcgi_to = "tcp://localhost:4000/";
-      let fastcgi_to_yaml = config.get("fcgiTo");
+      let fastcgi_to_yaml = &config["fcgiTo"];
       if let Some(fastcgi_to_obtained) = fastcgi_to_yaml.as_str() {
         fastcgi_to = fastcgi_to_obtained;
       }
 
       let mut fastcgi_path = None;
-      if let Some(fastcgi_path_obtained) = config.get("fcgiPath").as_str() {
+      if let Some(fastcgi_path_obtained) = config["fcgiPath"].as_str() {
         fastcgi_path = Some(fastcgi_path_obtained.to_string());
       }
 
@@ -134,7 +134,7 @@ impl ServerModuleHandlers for FcgiModuleHandlers {
         if let Some(stripped_request_path) =
           request_path_with_slashes.strip_prefix(canonical_fastcgi_path)
         {
-          let wwwroot_yaml = config.get("wwwroot");
+          let wwwroot_yaml = &config["wwwroot"];
           let wwwroot = wwwroot_yaml.as_str().unwrap_or("/nonexistent");
 
           let wwwroot_unknown = PathBuf::from(wwwroot);
@@ -173,14 +173,14 @@ impl ServerModuleHandlers for FcgiModuleHandlers {
       }
 
       if execute_pathbuf.is_none() {
-        if let Some(wwwroot) = config.get("wwwroot").as_str() {
+        if let Some(wwwroot) = config["wwwroot"].as_str() {
           let cache_key = format!(
             "{}{}{}",
-            match config.get("ip").as_str() {
+            match config["ip"].as_str() {
               Some(ip) => format!("{}-", ip),
               None => String::from(""),
             },
-            match config.get("domain").as_str() {
+            match config["domain"].as_str() {
               Some(domain) => format!("{}-", domain),
               None => String::from(""),
             },
@@ -348,7 +348,7 @@ impl ServerModuleHandlers for FcgiModuleHandlers {
             wwwroot_detected.as_path(),
             execute_pathbuf,
             execute_path_info,
-            config.get("serverAdministratorEmail").as_str(),
+            config["serverAdministratorEmail"].as_str(),
             fastcgi_to,
           )
           .await;
@@ -363,7 +363,7 @@ impl ServerModuleHandlers for FcgiModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -388,7 +388,7 @@ impl ServerModuleHandlers for FcgiModuleHandlers {
     &mut self,
     _upgraded_request: HyperUpgraded,
     _connect_address: &str,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -403,18 +403,14 @@ impl ServerModuleHandlers for FcgiModuleHandlers {
     &mut self,
     _websocket: HyperWebsocket,
     _uri: &hyper::Uri,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
   }
 
-  fn does_websocket_requests(
-    &mut self,
-    _config: &ServerConfigRoot,
-    _socket_data: &SocketData,
-  ) -> bool {
+  fn does_websocket_requests(&mut self, _config: &ServerConfig, _socket_data: &SocketData) -> bool {
     false
   }
 }

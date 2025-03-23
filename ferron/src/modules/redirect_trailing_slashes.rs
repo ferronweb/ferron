@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use ferron_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfigRoot, ServerModule,
+  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
   ServerModuleHandlers, SocketData,
 };
 use ferron_common::{HyperUpgraded, WithRuntime};
@@ -53,13 +53,13 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
-      if config.get("disableTrailingSlashRedirects").as_bool() != Some(true) {
-        if let Some(wwwroot) = config.get("wwwroot").as_str() {
+      if config["disableTrailingSlashRedirects"].as_bool() != Some(true) {
+        if let Some(wwwroot) = config["wwwroot"].as_str() {
           let hyper_request = request.get_hyper_request();
 
           let request_path = hyper_request.uri().path();
@@ -80,11 +80,11 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
             _ => {
               let cache_key = format!(
                 "{}{}{}",
-                match config.get("ip").as_str() {
+                match config["ip"].as_str() {
                   Some(ip) => format!("{}-", ip),
                   None => String::from(""),
                 },
-                match config.get("domain").as_str() {
+                match config["domain"].as_str() {
                   Some(domain) => format!("{}-", domain),
                   None => String::from(""),
                 },
@@ -182,7 +182,7 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -207,7 +207,7 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
     &mut self,
     _upgraded_request: HyperUpgraded,
     _connect_address: &str,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -222,18 +222,14 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
     &mut self,
     _websocket: HyperWebsocket,
     _uri: &hyper::Uri,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
   }
 
-  fn does_websocket_requests(
-    &mut self,
-    _config: &ServerConfigRoot,
-    _socket_data: &SocketData,
-  ) -> bool {
+  fn does_websocket_requests(&mut self, _config: &ServerConfig, _socket_data: &SocketData) -> bool {
     false
   }
 }

@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use ferron_common::{
-  ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerConfigRoot,
-  ServerModule, ServerModuleHandlers, SocketData,
+  ErrorLogger, HyperUpgraded, RequestData, ResponseData, ServerConfig, ServerModule,
+  ServerModuleHandlers, SocketData,
 };
 use ferron_common::{HyperResponse, WithRuntime};
 use http_body_util::combinators::BoxBody;
@@ -101,18 +101,18 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
   async fn request_handler(
     &mut self,
     request: RequestData,
-    config: &ServerConfigRoot,
+    config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       let mut auth_to = None;
 
-      if let Some(auth_to_str) = config.get("authTo").as_str() {
+      if let Some(auth_to_str) = config["authTo"].as_str() {
         auth_to = Some(auth_to_str.to_string());
       }
 
-      let forwarded_auth_copy_headers = match config.get("forwardedAuthCopyHeaders").as_vec() {
+      let forwarded_auth_copy_headers = match config["forwardedAuthCopyHeaders"].as_vec() {
         Some(vector) => {
           let mut new_vector = Vec::new();
           for yaml_value in vector.iter() {
@@ -382,7 +382,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
   async fn proxy_request_handler(
     &mut self,
     request: RequestData,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -407,7 +407,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
     &mut self,
     _upgraded_request: HyperUpgraded,
     _connect_address: &str,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -422,18 +422,14 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
     &mut self,
     _websocket: HyperWebsocket,
     _uri: &hyper::Uri,
-    _config: &ServerConfigRoot,
+    _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
   }
 
-  fn does_websocket_requests(
-    &mut self,
-    _config: &ServerConfigRoot,
-    _socket_data: &SocketData,
-  ) -> bool {
+  fn does_websocket_requests(&mut self, _config: &ServerConfig, _socket_data: &SocketData) -> bool {
     false
   }
 }

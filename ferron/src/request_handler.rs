@@ -11,9 +11,7 @@ use crate::ferron_util::url_sanitizer::sanitize_url;
 
 use async_channel::Sender;
 use chrono::prelude::*;
-use ferron_common::{
-  ErrorLogger, LogMessage, RequestData, ServerConfigRoot, ServerModuleHandlers, SocketData,
-};
+use ferron_common::{ErrorLogger, LogMessage, RequestData, ServerModuleHandlers, SocketData};
 use futures_util::TryStreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
@@ -29,11 +27,11 @@ use yaml_rust2::Yaml;
 
 async fn generate_error_response(
   status_code: StatusCode,
-  config: &ServerConfigRoot,
+  config: &Yaml,
   headers: &Option<HeaderMap>,
 ) -> Response<BoxBody<Bytes, std::io::Error>> {
   let bare_body =
-    generate_default_error_page(status_code, config.get("serverAdministratorEmail").as_str());
+    generate_default_error_page(status_code, config["serverAdministratorEmail"].as_str());
   let mut content_length: Option<u64> = match bare_body.len().try_into() {
     Ok(content_length) => Some(content_length),
     Err(_) => None,
@@ -42,7 +40,7 @@ async fn generate_error_response(
     .map_err(|e| match e {})
     .boxed();
 
-  if let Some(error_pages) = config.get("errorPages").as_vec() {
+  if let Some(error_pages) = config["errorPages"].as_vec() {
     for error_page_yaml in error_pages {
       if let Some(page_status_code) = error_page_yaml["scode"].as_i64() {
         let page_status_code = match StatusCode::from_u16(match page_status_code.try_into() {
@@ -161,8 +159,7 @@ async fn request_handler_wrapped(
   remote_address: SocketAddr,
   local_address: SocketAddr,
   encrypted: bool,
-  global_config_root: Arc<ServerConfigRoot>,
-  host_config: Arc<Yaml>,
+  config: Arc<Yaml>,
   logger: Sender<LogMessage>,
   handlers_vec: Vec<Box<dyn ServerModuleHandlers + Send>>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
@@ -209,11 +206,8 @@ async fn request_handler_wrapped(
     },
     None => None,
   };
-  let log_enabled = global_config_root.get("logFilePath").as_str().is_some();
-  let error_log_enabled = global_config_root
-    .get("errorLogFilePath")
-    .as_str()
-    .is_some();
+  let log_enabled = config["global"]["logFilePath"].as_str().is_some();
+  let error_log_enabled = config["global"]["errorLogFilePath"].as_str().is_some();
 
   // Construct SocketData
   let mut socket_data = SocketData::new(remote_address, local_address, encrypted);
@@ -378,8 +372,7 @@ async fn request_handler_wrapped(
 
   // Combine the server configuration
   let combined_config = match combine_config(
-    global_config_root,
-    host_config,
+    config,
     match is_proxy_request || is_connect_proxy_request {
       false => match request.headers().get(header::HOST) {
         Some(value) => match value.to_str() {
@@ -451,8 +444,7 @@ async fn request_handler_wrapped(
   let url_pathname = request.uri().path();
   let sanitized_url_pathname = match sanitize_url(
     url_pathname,
-    combined_config
-      .get("allowDoubleSlashes")
+    combined_config["allowDoubleSlashes"]
       .as_bool()
       .unwrap_or_default(),
   ) {
@@ -494,7 +486,7 @@ async fn request_handler_wrapped(
         .await;
       }
       let (mut response_parts, response_body) = response.into_parts();
-      if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+      if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
         let custom_headers_hash_iter = custom_headers_hash.iter();
         for (header_name, header_value) in custom_headers_hash_iter {
           if let Some(header_name) = header_name.as_str() {
@@ -574,7 +566,7 @@ async fn request_handler_wrapped(
             .await;
           }
           let (mut response_parts, response_body) = response.into_parts();
-          if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+          if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
             let custom_headers_hash_iter = custom_headers_hash.iter();
             for (header_name, header_value) in custom_headers_hash_iter {
               if let Some(header_name) = header_name.as_str() {
@@ -636,7 +628,7 @@ async fn request_handler_wrapped(
           .await;
         }
         let (mut response_parts, response_body) = response.into_parts();
-        if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+        if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
           let custom_headers_hash_iter = custom_headers_hash.iter();
           for (header_name, header_value) in custom_headers_hash_iter {
             if let Some(header_name) = header_name.as_str() {
@@ -701,7 +693,7 @@ async fn request_handler_wrapped(
       .await;
     }
     let (mut response_parts, response_body) = response.into_parts();
-    if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+    if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
       let custom_headers_hash_iter = custom_headers_hash.iter();
       for (header_name, header_value) in custom_headers_hash_iter {
         if let Some(header_name) = header_name.as_str() {
@@ -742,7 +734,7 @@ async fn request_handler_wrapped(
       if let Some(connect_address) = request.uri().authority().map(|auth| auth.to_string()) {
         // Variables moved to before "tokio::spawn" to avoid issues with moved values
         let client_ip = socket_data.remote_addr.ip();
-        let custom_headers_yaml = combined_config.get("customHeaders");
+        let custom_headers_yaml = combined_config["customHeaders"].clone();
 
         tokio::spawn(async move {
           match hyper::upgrade::on(request).await {
@@ -857,7 +849,7 @@ async fn request_handler_wrapped(
           .await;
         }
         let (mut response_parts, response_body) = response.into_parts();
-        if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+        if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
           let custom_headers_hash_iter = custom_headers_hash.iter();
           for (header_name, header_value) in custom_headers_hash_iter {
             if let Some(header_name) = header_name.as_str() {
@@ -909,7 +901,7 @@ async fn request_handler_wrapped(
         .await;
       }
       let (mut response_parts, response_body) = response.into_parts();
-      if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+      if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
         let custom_headers_hash_iter = custom_headers_hash.iter();
         for (header_name, header_value) in custom_headers_hash_iter {
           if let Some(header_name) = header_name.as_str() {
@@ -941,7 +933,7 @@ async fn request_handler_wrapped(
 
         // Variables moved to before "tokio::spawn" to avoid issues with moved values
         let client_ip = socket_data.remote_addr.ip();
-        let custom_headers_yaml = combined_config.get("customHeaders");
+        let custom_headers_yaml = combined_config["customHeaders"].clone();
         let request_uri = request.uri().to_owned();
 
         let (original_response, websocket) = match hyper_tungstenite::upgrade(request, None) {
@@ -987,7 +979,7 @@ async fn request_handler_wrapped(
               .await;
             }
             let (mut response_parts, response_body) = response.into_parts();
-            if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+            if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
               let custom_headers_hash_iter = custom_headers_hash.iter();
               for (header_name, header_value) in custom_headers_hash_iter {
                 if let Some(header_name) = header_name.as_str() {
@@ -1120,7 +1112,7 @@ async fn request_handler_wrapped(
           match response {
             Some(response) => {
               let (mut response_parts, response_body) = response.into_parts();
-              if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+              if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
                 let custom_headers_hash_iter = custom_headers_hash.iter();
                 for (header_name, header_value) in custom_headers_hash_iter {
                   if let Some(header_name) = header_name.as_str() {
@@ -1194,9 +1186,7 @@ async fn request_handler_wrapped(
                       .await;
                     }
                     let (mut response_parts, response_body) = response.into_parts();
-                    if let Some(custom_headers_hash) =
-                      combined_config.get("customHeaders").as_hash()
-                    {
+                    if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
                       let custom_headers_hash_iter = custom_headers_hash.iter();
                       for (header_name, header_value) in custom_headers_hash_iter {
                         if let Some(header_name) = header_name.as_str() {
@@ -1251,7 +1241,7 @@ async fn request_handler_wrapped(
               Some(status) => {
                 let response = generate_error_response(status, &combined_config, &headers).await;
                 let (mut response_parts, response_body) = response.into_parts();
-                if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+                if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
                   let custom_headers_hash_iter = custom_headers_hash.iter();
                   for (header_name, header_value) in custom_headers_hash_iter {
                     if let Some(header_name) = header_name.as_str() {
@@ -1325,8 +1315,7 @@ async fn request_handler_wrapped(
                         .await;
                       }
                       let (mut response_parts, response_body) = response.into_parts();
-                      if let Some(custom_headers_hash) =
-                        combined_config.get("customHeaders").as_hash()
+                      if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash()
                       {
                         let custom_headers_hash_iter = custom_headers_hash.iter();
                         for (header_name, header_value) in custom_headers_hash_iter {
@@ -1395,7 +1384,7 @@ async fn request_handler_wrapped(
               .await;
 
           let (mut response_parts, response_body) = response.into_parts();
-          if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+          if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
             let custom_headers_hash_iter = custom_headers_hash.iter();
             for (header_name, header_value) in custom_headers_hash_iter {
               if let Some(header_name) = header_name.as_str() {
@@ -1470,7 +1459,7 @@ async fn request_handler_wrapped(
                   .await;
                 }
                 let (mut response_parts, response_body) = response.into_parts();
-                if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+                if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
                   let custom_headers_hash_iter = custom_headers_hash.iter();
                   for (header_name, header_value) in custom_headers_hash_iter {
                     if let Some(header_name) = header_name.as_str() {
@@ -1536,7 +1525,7 @@ async fn request_handler_wrapped(
     let response = generate_error_response(StatusCode::NOT_FOUND, &combined_config, &None).await;
 
     let (mut response_parts, response_body) = response.into_parts();
-    if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+    if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
       let custom_headers_hash_iter = custom_headers_hash.iter();
       for (header_name, header_value) in custom_headers_hash_iter {
         if let Some(header_name) = header_name.as_str() {
@@ -1607,7 +1596,7 @@ async fn request_handler_wrapped(
             .await;
           }
           let (mut response_parts, response_body) = response.into_parts();
-          if let Some(custom_headers_hash) = combined_config.get("customHeaders").as_hash() {
+          if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
             let custom_headers_hash_iter = custom_headers_hash.iter();
             for (header_name, header_value) in custom_headers_hash_iter {
               if let Some(header_name) = header_name.as_str() {
@@ -1665,20 +1654,18 @@ pub async fn request_handler(
   remote_address: SocketAddr,
   local_address: SocketAddr,
   encrypted: bool,
-  global_config_root: Arc<ServerConfigRoot>,
-  host_config: Arc<Yaml>,
+  config: Arc<Yaml>,
   logger: Sender<LogMessage>,
   handlers_vec: Vec<Box<dyn ServerModuleHandlers + Send>>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
-  let timeout_yaml = global_config_root.get("timeout");
+  let timeout_yaml = &config["global"]["timeout"];
   if timeout_yaml.is_null() {
     request_handler_wrapped(
       request,
       remote_address,
       local_address,
       encrypted,
-      global_config_root,
-      host_config,
+      config,
       logger,
       handlers_vec,
     )
@@ -1693,8 +1680,7 @@ pub async fn request_handler(
         remote_address,
         local_address,
         encrypted,
-        global_config_root,
-        host_config,
+        config,
         logger,
         handlers_vec,
       ),
