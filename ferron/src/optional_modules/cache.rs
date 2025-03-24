@@ -360,7 +360,7 @@ impl ServerModuleHandlers for CacheModuleHandlers {
               if let Some(bytes) = frame_unwrapped.data_ref() {
                 response_body_buffer.extend_from_slice(bytes);
                 if let Some(maximum_cached_response_size) = self.maximum_cached_response_size {
-                  if response_body_buffer.len() > maximum_cached_response_size.try_into()? {
+                  if response_body_buffer.len() as u64 > maximum_cached_response_size {
                     maximum_cached_response_size_exceeded = true;
                     break;
                   }
