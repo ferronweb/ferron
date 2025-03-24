@@ -6,17 +6,10 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-hyper = { version = "1.6.0", features = ["http1", "http2", "server"] }
-tokio = { version = "1.43.0", features = ["full"] }
-tokio-test = "0.4.4"
-http-body-util = "0.1"
 yaml-rust2 = "0.10.0"
-async-trait = "0.1.86"
 password-auth = { version = "1.0.0", features = ["argon2", "pbkdf2", "scrypt"] }
 rusty-hook = "0.11.2"
-async-channel = "2.3.1"
-mimalloc = { version = "0.1.43", features = ["local_dynamic_tls"] }
-hyper-tungstenite = "0.17.0"
+mimalloc = "0.1.43"
 
 [profile.release]
 strip = true
