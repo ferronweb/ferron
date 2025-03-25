@@ -76,7 +76,7 @@ If you don't have an non-root non-system user, create it using the command below
 
 ```bash
 # Replace "sysadmin" with your chosen username
-usermod -m -s /bin/bash sysadmin
+useradd -m -s /bin/bash sysadmin
 passwd sysadmin
 ```
 
