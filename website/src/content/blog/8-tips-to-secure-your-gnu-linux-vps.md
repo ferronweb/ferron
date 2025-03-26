@@ -146,6 +146,7 @@ ssh -p 22 sysadmin@vps.example
 ```
 
 If public-key authentication is working, log into the VPS, and if you're using OpenSSH, change the SSH service configuration (for example at `/etc/ssh/sshd_config`) to include this directive:
+
 ```
 PasswordAuthentication no
 ```

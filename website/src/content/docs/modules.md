@@ -35,6 +35,7 @@ To run PHP scripts with this module, you may need to adjust the PHP configuratio
 This module is inspired by [Traefik's ForwardAuth middleware](https://doc.traefik.io/traefik/middlewares/http/forwardauth/). If the authentication server replies with a 2xx status code, access is allowed, and the initial request is executed. If not, the response from the authentication server is sent back.
 
 The following request headers are provided to the authentication server:
+
 - **X-Forwarded-Method** - the HTTP method used by the original request
 - **X-Forwarded-Proto** - if the original request is encrypted, it's `"https"`, otherwise it's `"http"`.
 - **X-Forwarded-Host** - the value of the _Host_ header from the original request
@@ -56,6 +57,7 @@ If you are using the _fproxy_ module, then hosts on the local network and local 
 The reverse proxy functionality is enabled when _proxyTo_ or _secureProxyTo_ configuration property is specified.
 
 The following request headers are provided to the backend server:
+
 - **X-Forwarded-Proto** (Ferron 1.0.0-beta2 and newer) - if the original request is encrypted, it's `"https"`, otherwise it's `"http"`.
 - **X-Forwarded-Host** (Ferron 1.0.0-beta2 and newer) - the value of the _Host_ header from the original request
 - **X-Forwarded-For** - the client's IP address

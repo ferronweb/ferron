@@ -262,9 +262,9 @@ hosts:
       - path: "/static"
         wwwroot: "/var/www/static"
         rewriteMap:
-        - regex: "^/static(?:[/?#](.*))?"
-          replacement: "/$1"
-          last: true
+          - regex: "^/static(?:[/?#](.*))?"
+            replacement: "/$1"
+            last: true
   - domain: "api.example.com"
     serverAdministratorEmail: "api-admin@example.com"
     disableToHTTPSRedirect: false
@@ -277,7 +277,6 @@ hosts:
       - scode: 401
         url: "/restricted.html"
     proxyTo: "http://backend-service:5000"
-
 # # Uncomment to enable configuration file includes
 #include:
 #  - /etc/ferron.d/**/*.yaml

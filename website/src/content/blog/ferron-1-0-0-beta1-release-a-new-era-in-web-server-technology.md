@@ -41,4 +41,4 @@ We invite you to try out Ferron 1.0.0-beta1 and experience the difference for yo
 
 Thank you for your continued support, and we look forward to serving you with Ferron!
 
-*The Ferron Team*
+_The Ferron Team_

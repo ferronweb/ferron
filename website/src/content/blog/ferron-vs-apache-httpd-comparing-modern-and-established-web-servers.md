@@ -4,7 +4,8 @@ description: This blog post compares Ferron, a modern Rust-based web server, wit
 date: 2025-03-07 15:20:00
 cover: /img/covers/ferron-vs-apache-httpd-comparing-modern-and-established-web-servers.png
 ---
-Ferron is a modern web server developed in Rust, that emphasizes performance, safety, and modularity. By using Rust's memory  safety features, Ferron aims to serve web content securely and efficiently.
+
+Ferron is a modern web server developed in Rust, that emphasizes performance, safety, and modularity. By using Rust's memory safety features, Ferron aims to serve web content securely and efficiently.
 
 Apache httpd on the other hand is a open-source web server software developed by the Apache Software Foundation. Since 1995, Apache httpd has played a very important role in the growth of World Wide Web, becoming one of the most widely used web servers in the world.
 
@@ -47,7 +48,7 @@ Apache httpd on the other hand is a widely used web server with a long-standing 
 - **URL rewriting and filtering** - modules like `mod_rewrite` and `mod_filter` enable administrators to manipulate URLs and content, facilitating security measures such as input validation and request filtering.
 - **Comprehensive logging** - Apache httpd's logging capabilities, managed by modules like `mod_log_config`, allow detailed monitoring of server activity, aiding in the detection and analysis of potential security incidents.
 
-Both Ferron and Apache httpd prioritize security but approach it differently based on their design philosophies and architectures. Ferron's implementation in Rust provides inherent memory safety and modern concurrency features, reducing certain classes of vulnerabilities. Apache's extensive module ecosystem offers a wide array of configurable security features, allowing administrators to implement tailored security measures. The choice between the two may depend on specific security requirements, performance considerations, and familiarity with the respective ecosystems. 
+Both Ferron and Apache httpd prioritize security but approach it differently based on their design philosophies and architectures. Ferron's implementation in Rust provides inherent memory safety and modern concurrency features, reducing certain classes of vulnerabilities. Apache's extensive module ecosystem offers a wide array of configurable security features, allowing administrators to implement tailored security measures. The choice between the two may depend on specific security requirements, performance considerations, and familiarity with the respective ecosystems.
 
 ## Modules and extensibility
 

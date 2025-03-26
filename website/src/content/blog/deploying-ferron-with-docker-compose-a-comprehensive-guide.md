@@ -22,7 +22,7 @@ For this use case, we are going to use Ferron's Docker image, along with a volum
 First, create a directory which will contain the Docker Compose configuration and the webroot. Then create a `docker-compose.yml` file with these contents:
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   web:
@@ -42,14 +42,14 @@ After creating the Docker Compose configuration, create a `html` directory, and 
 ```html
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ferron + Docker Compose test</title>
-</head>
-<body>
+  </head>
+  <body>
     <h1>Ferron + Docker Compose test</h1>
-</body>
+  </body>
 </html>
 ```
 
@@ -74,7 +74,7 @@ For this use case, we are also going to use Ferron's Docker image, along with cu
 First, create a directory which will contain the Docker Compose configuration and the web application code. Then create a `docker-compose.yml` file with these contents:
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   app:
@@ -193,14 +193,14 @@ For this use case, we are also going to use Ferron's Docker image, along with cu
 First, create a directory which will contain the Docker Compose configuration and the webroot. Then create a `docker-compose.yml` file with these contents:
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   web:
     image: ferronserver/ferron
     container_name: ferron_php_server
     ports:
-      - "80:80"  # Expose Ferron on port 80
+      - "80:80" # Expose Ferron on port 80
     volumes:
       - ./app:/var/www/ferron
       - ./ferron.yaml:/etc/ferron.yaml
@@ -213,7 +213,7 @@ services:
     image: php:fpm
     container_name: php_fpm
     volumes:
-      - ./app:/var/www/ferron  # Shared volume with web server (the directory need to be the same path as in Ferron, otherwise PHP-FPM will respond with "File not found.")
+      - ./app:/var/www/ferron # Shared volume with web server (the directory need to be the same path as in Ferron, otherwise PHP-FPM will respond with "File not found.")
     networks:
       - app-network
 

@@ -17,6 +17,7 @@ global:
 In this example, the `example.com` and `bar.example.com` domains point to a server running Ferron.
 
 Below are assumptions made for this example:
+
 - `https://example.com` is "main site", while `https://example.com/agenda` is hosting a calendar service.
 - `https://foo.example.com` is passed to `https://saas.foo.net`
 - `https://bar.example.com` is the front for an internal backend.

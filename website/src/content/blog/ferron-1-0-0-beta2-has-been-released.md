@@ -33,4 +33,4 @@ Performance improvements have been made for cases where no CGI program is execut
 
 We appreciate all the feedback and contributions from our community. Your support helps us improve Ferron with each release. Thank you for being a part of this journey!
 
-*The Ferron Team*
+_The Ferron Team_

@@ -10,11 +10,11 @@ We are excited to introduce Ferron 1.0.0-beta5, where we have fixed a bug relate
 ## Key improvements and fixes
 
 ### Bugfix for HTTP cookies and HTTP/2
+
 Fixed an issue related to the HTTP Cookie header for HTTP/2 requests.
 
 ## Thank you!
 
 We appreciate all the feedback and contributions from our community. Your support helps us improve Ferron with each release. Thank you for being a part of this journey!
 
-*The Ferron Team*
-
+_The Ferron Team_
