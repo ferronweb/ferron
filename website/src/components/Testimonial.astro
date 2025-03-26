@@ -1,0 +1,63 @@
+<div class="p-2 break-inside-avoid">
+  <div
+    class="bg-card text-card-foreground border-border border w-full h-full rounded-lg p-3"
+  >
+    <div class="flex flex-row items-center mb-2">
+      <div class="flex-grow self-center px-1">
+        <h3 class="text-2xl font-bold">{Astro.props.name}</h3>
+        {
+          Astro.props.description ? (
+            <p class="text-muted-foreground text-sm">
+              {Astro.props.description}
+            </p>
+          ) : (
+            ""
+          )
+        }
+      </div>
+      <a
+        class="self-start items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground p-1"
+        href={Astro.props.sourceLink}
+      >
+        {
+          Astro.props.source == "x" ? (
+            <>
+              <span class="sr-only">X icon</span>
+              <svg
+                width="25"
+                height="25"
+                viewBox="0 0 25 25"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M19.0039 2.34375H22.4512L14.9219 10.9473L23.7793 22.6562H16.8457L11.4111 15.5566L5.2002 22.6562H1.74805L9.7998 13.4521L1.30859 2.34375H8.41797L13.3252 8.83301L19.0039 2.34375ZM17.793 20.5957H19.7021L7.37793 4.29688H5.32715L17.793 20.5957Z"
+                  fill="currentColor"
+                />
+              </svg>
+            </>
+          ) : Astro.props.source == "hackernews" ? (
+            <>
+              <span class="sr-only">Hacker News icon</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="25"
+                height="25"
+                viewBox="0 0 448 512"
+                fill="none"
+              >
+                <path
+                  d="M0 32v448h448V32H0zm21.2 197.2H21c.1-.1 .2-.3 .3-.4 0 .1 0 .3-.1 .4zm218 53.9V384h-31.4V281.3L128 128h37.3c52.5 98.3 49.2 101.2 59.3 125.6 12.3-27 5.8-24.4 60.6-125.6H320l-80.8 155.1z"
+                  fill="currentColor"
+                />
+              </svg>
+            </>
+          ) : (
+            ""
+          )
+        }
+      </a>
+    </div>
+    <p class="text-muted-foreground">{Astro.props.testimonial}</p>
+  </div>
+</div>
