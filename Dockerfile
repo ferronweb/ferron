@@ -16,7 +16,6 @@ FROM devuan/devuan
 # Copy the compiled binaries from the builder stage
 COPY --from=builder /usr/src/ferron/target/release/ferron /usr/sbin/ferron
 COPY --from=builder /usr/src/ferron/target/release/ferron-passwd /usr/sbin/ferron-passwd
-COPY --from=builder /usr/src/ferron/target/release/libferron_mod_*.so /usr/lib
 
 # Copy the web server configuration
 COPY ferron-docker.yaml /etc/ferron.yaml
