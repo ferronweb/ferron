@@ -896,10 +896,11 @@ async fn server_event_loop(
 
   // Configure ALPN protocols
   let mut alpn_protocols = vec![b"http/1.1".to_vec(), b"http/1.0".to_vec()];
-  if let Some(enable_http2) = yaml_config["global"]["enableHTTP2"].as_bool() {
-    if enable_http2 {
-      alpn_protocols.insert(0, b"h2".to_vec());
-    }
+  if yaml_config["global"]["enableHTTP2"]
+    .as_bool()
+    .unwrap_or(true)
+  {
+    alpn_protocols.insert(0, b"h2".to_vec());
   }
   tls_config.alpn_protocols = alpn_protocols;
   let tls_config_arc = Arc::new(tls_config);
