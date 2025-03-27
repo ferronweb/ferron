@@ -111,11 +111,7 @@ async fn accept_connection(
       let io = TokioIo::new(tls_stream);
       let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 
-      if let Some(enable_http2) = config["global"]["enableHTTP2"].as_bool() {
-        if !enable_http2 {
-          builder = builder.http1_only();
-        }
-      } else {
+      if !config["global"]["enableHTTP2"].as_bool().unwrap_or(true) {
         builder = builder.http1_only();
       }
 
@@ -198,11 +194,7 @@ async fn accept_connection(
       let io = TokioIo::new(tls_stream);
       let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
 
-      if let Some(enable_http2) = config["global"]["enableHTTP2"].as_bool() {
-        if !enable_http2 {
-          builder = builder.http1_only();
-        }
-      } else {
+      if !config["global"]["enableHTTP2"].as_bool().unwrap_or(true) {
         builder = builder.http1_only();
       }
 
@@ -277,11 +269,8 @@ async fn accept_connection(
     let io = TokioIo::new(stream);
     tokio::task::spawn(async move {
       let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-      if let Some(enable_http2) = config["global"]["enableHTTP2"].as_bool() {
-        if !enable_http2 {
-          builder = builder.http1_only();
-        }
-      } else {
+      // HTTP/2 is disabled by default for non-encrypted connections
+      if !config["global"]["enableHTTP2"].as_bool().unwrap_or(false) {
         builder = builder.http1_only();
       }
 
