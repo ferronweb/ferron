@@ -305,9 +305,10 @@ async fn request_handler_wrapped(
                 .await;
               }
               let (mut response_parts, response_body) = response.into_parts();
-              if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-                response_parts.headers.insert(header::SERVER, server_string);
-              };
+              response_parts
+                .headers
+                .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
               return Ok(Response::from_parts(response_parts, response_body));
             }
           };
@@ -364,9 +365,10 @@ async fn request_handler_wrapped(
           .await;
         }
         let (mut response_parts, response_body) = response.into_parts();
-        if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-          response_parts.headers.insert(header::SERVER, server_string);
-        };
+        response_parts
+          .headers
+          .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
         return Ok(Response::from_parts(response_parts, response_body));
       }
     }
@@ -436,9 +438,10 @@ async fn request_handler_wrapped(
         .await;
       }
       let (mut response_parts, response_body) = response.into_parts();
-      if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-        response_parts.headers.insert(header::SERVER, server_string);
-      };
+      response_parts
+        .headers
+        .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
       return Ok(Response::from_parts(response_parts, response_body));
     }
   };
@@ -504,9 +507,10 @@ async fn request_handler_wrapped(
           }
         }
       }
-      if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-        response_parts.headers.insert(header::SERVER, server_string);
-      };
+      response_parts
+        .headers
+        .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
       return Ok(Response::from_parts(response_parts, response_body));
     }
   };
@@ -584,9 +588,10 @@ async fn request_handler_wrapped(
               }
             }
           }
-          if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-            response_parts.headers.insert(header::SERVER, server_string);
-          };
+          response_parts
+            .headers
+            .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
           return Ok(Response::from_parts(response_parts, response_body));
         }
       },
@@ -646,9 +651,10 @@ async fn request_handler_wrapped(
             }
           }
         }
-        if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-          response_parts.headers.insert(header::SERVER, server_string);
-        };
+        response_parts
+          .headers
+          .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
         return Ok(Response::from_parts(response_parts, response_body));
       }
     };
@@ -711,9 +717,10 @@ async fn request_handler_wrapped(
         }
       }
     }
-    if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-      response_parts.headers.insert(header::SERVER, server_string);
-    };
+    response_parts
+      .headers
+      .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
     return Ok(Response::from_parts(response_parts, response_body));
   }
 
@@ -816,9 +823,10 @@ async fn request_handler_wrapped(
             }
           }
         }
-        if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-          response_parts.headers.insert(header::SERVER, server_string);
-        };
+        response_parts
+          .headers
+          .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
         Ok(Response::from_parts(response_parts, response_body))
       } else {
         let response = Response::builder()
@@ -867,9 +875,10 @@ async fn request_handler_wrapped(
             }
           }
         }
-        if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-          response_parts.headers.insert(header::SERVER, server_string);
-        };
+        response_parts
+          .headers
+          .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
         Ok(Response::from_parts(response_parts, response_body))
       }
     } else {
@@ -919,9 +928,10 @@ async fn request_handler_wrapped(
           }
         }
       }
-      if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-        response_parts.headers.insert(header::SERVER, server_string);
-      };
+      response_parts
+        .headers
+        .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
       Ok(Response::from_parts(response_parts, response_body))
     }
   } else {
@@ -997,9 +1007,10 @@ async fn request_handler_wrapped(
                 }
               }
             }
-            if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-              response_parts.headers.insert(header::SERVER, server_string);
-            };
+            response_parts
+              .headers
+              .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
             return Ok(Response::from_parts(response_parts, response_body));
           }
         };
@@ -1068,9 +1079,9 @@ async fn request_handler_wrapped(
             }
           }
         }
-        if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-          response_parts.headers.insert(header::SERVER, server_string);
-        };
+        response_parts
+          .headers
+          .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
 
         return Ok(Response::from_parts(response_parts, response_body));
       }
@@ -1130,9 +1141,10 @@ async fn request_handler_wrapped(
                   }
                 }
               }
-              if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-                response_parts.headers.insert(header::SERVER, server_string);
-              };
+              response_parts
+                .headers
+                .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
               let mut response = Response::from_parts(response_parts, response_body);
 
               while let Some(mut executed_handler) = executed_handlers.pop() {
@@ -1204,9 +1216,10 @@ async fn request_handler_wrapped(
                         }
                       }
                     }
-                    if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-                      response_parts.headers.insert(header::SERVER, server_string);
-                    };
+                    response_parts
+                      .headers
+                      .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
                     return Ok(Response::from_parts(response_parts, response_body));
                   }
                 };
@@ -1259,9 +1272,10 @@ async fn request_handler_wrapped(
                     }
                   }
                 }
-                if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-                  response_parts.headers.insert(header::SERVER, server_string);
-                };
+                response_parts
+                  .headers
+                  .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
                 let mut response = Response::from_parts(response_parts, response_body);
 
                 while let Some(mut executed_handler) = executed_handlers.pop() {
@@ -1334,9 +1348,10 @@ async fn request_handler_wrapped(
                           }
                         }
                       }
-                      if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-                        response_parts.headers.insert(header::SERVER, server_string);
-                      };
+                      response_parts
+                        .headers
+                        .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
                       return Ok(Response::from_parts(response_parts, response_body));
                     }
                   };
@@ -1402,9 +1417,9 @@ async fn request_handler_wrapped(
               }
             }
           }
-          if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-            response_parts.headers.insert(header::SERVER, server_string);
-          };
+          response_parts
+            .headers
+            .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
 
           let mut response = Response::from_parts(response_parts, response_body);
 
@@ -1477,9 +1492,10 @@ async fn request_handler_wrapped(
                     }
                   }
                 }
-                if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-                  response_parts.headers.insert(header::SERVER, server_string);
-                };
+                response_parts
+                  .headers
+                  .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
                 return Ok(Response::from_parts(response_parts, response_body));
               }
             };
@@ -1543,9 +1559,10 @@ async fn request_handler_wrapped(
         }
       }
     }
-    if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-      response_parts.headers.insert(header::SERVER, server_string);
-    };
+    response_parts
+      .headers
+      .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
     let mut response = Response::from_parts(response_parts, response_body);
 
     while let Some(mut executed_handler) = executed_handlers.pop() {
@@ -1614,9 +1631,10 @@ async fn request_handler_wrapped(
               }
             }
           }
-          if let Ok(server_string) = HeaderValue::from_str(SERVER_SOFTWARE) {
-            response_parts.headers.insert(header::SERVER, server_string);
-          };
+          response_parts
+            .headers
+            .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
           return Ok(Response::from_parts(response_parts, response_body));
         }
       };
