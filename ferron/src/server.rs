@@ -32,10 +32,17 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Handle;
 use tokio::sync::Mutex;
 use tokio::time;
+use tokio_rustls::server::TlsStream;
 use tokio_rustls::TlsAcceptor;
 use tokio_rustls_acme::caches::DirCache;
 use tokio_rustls_acme::{AcmeAcceptor, AcmeConfig};
 use yaml_rust2::Yaml;
+
+// Enum for maybe TLS stream
+enum MaybeTlsStream {
+  Tls(TlsStream<TcpStream>),
+  Plain(TcpStream),
+}
 
 // Function to accept and handle incoming connections
 #[allow(clippy::too_many_arguments)]
@@ -77,8 +84,8 @@ async fn accept_connection(
 
   let logger_clone = logger.clone();
 
-  if let Some((acme_acceptor, tls_config)) = acme_acceptor_config_option {
-    tokio::task::spawn(async move {
+  tokio::task::spawn(async move {
+    let maybe_tls_stream = if let Some((acme_acceptor, tls_config)) = acme_acceptor_config_option {
       let start_handshake = match acme_acceptor.accept(stream).await {
         Ok(Some(start_handshake)) => start_handshake,
         Ok(None) => return,
@@ -108,75 +115,8 @@ async fn accept_connection(
         }
       };
 
-      let io = TokioIo::new(tls_stream);
-      let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-
-      if !config["global"]["enableHTTP2"].as_bool().unwrap_or(true) {
-        builder = builder.http1_only();
-      }
-
-      let mut http1_builder = &mut builder.http1();
-      http1_builder = http1_builder.timer(TokioTimer::new());
-      let mut http2_builder = &mut http1_builder.http2();
-      http2_builder = http2_builder.timer(TokioTimer::new());
-      let http2_settings = &config["global"]["http2Settings"];
-      if let Some(initial_window_size) = http2_settings["initialWindowSize"].as_i64() {
-        http2_builder = http2_builder.initial_stream_window_size(initial_window_size as u32);
-      }
-      if let Some(max_frame_size) = http2_settings["maxFrameSize"].as_i64() {
-        http2_builder = http2_builder.max_frame_size(max_frame_size as u32);
-      }
-      if let Some(max_concurrent_streams) = http2_settings["maxConcurrentStreams"].as_i64() {
-        http2_builder = http2_builder.max_concurrent_streams(max_concurrent_streams as u32);
-      }
-      if let Some(max_header_list_size) = http2_settings["maxHeaderListSize"].as_i64() {
-        http2_builder = http2_builder.max_header_list_size(max_header_list_size as u32);
-      }
-      if let Some(enable_connect_protocol) = http2_settings["enableConnectProtocol"].as_bool() {
-        if enable_connect_protocol {
-          http2_builder = http2_builder.enable_connect_protocol();
-        }
-      }
-
-      let handlers_vec = modules
-        .iter()
-        .map(|module| module.get_handlers(Handle::current()));
-
-      if let Err(err) = http2_builder
-        .serve_connection_with_upgrades(
-          io,
-          service_fn(move |request: Request<Incoming>| {
-            let config = config.clone();
-            let logger = logger_clone.clone();
-            let handlers_vec_clone = handlers_vec
-              .clone()
-              .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
-            let (request_parts, request_body) = request.into_parts();
-            let request = Request::from_parts(request_parts, request_body.boxed());
-            request_handler(
-              request,
-              remote_address,
-              local_address,
-              true,
-              config,
-              logger,
-              handlers_vec_clone,
-            )
-          }),
-        )
-        .await
-      {
-        logger
-          .send(LogMessage::new(
-            format!("Error serving HTTPS connection: {:?}", err),
-            true,
-          ))
-          .await
-          .unwrap_or_default();
-      }
-    });
-  } else if let Some(tls_acceptor) = tls_acceptor_option {
-    tokio::task::spawn(async move {
+      MaybeTlsStream::Tls(tls_stream)
+    } else if let Some(tls_acceptor) = tls_acceptor_option {
       let tls_stream = match tls_acceptor.accept(stream).await {
         Ok(tls_stream) => tls_stream,
         Err(err) => {
@@ -191,125 +131,145 @@ async fn accept_connection(
         }
       };
 
+      MaybeTlsStream::Tls(tls_stream)
+    } else {
+      MaybeTlsStream::Plain(stream)
+    };
+
+    if let MaybeTlsStream::Tls(tls_stream) = maybe_tls_stream {
+      let alpn_protocol = tls_stream.get_ref().1.alpn_protocol();
+      let allow_http2;
+
+      if config["global"]["enableHTTP2"].as_bool().unwrap_or(true) {
+        if alpn_protocol == Some("h2".as_bytes()) {
+          allow_http2 = true;
+        } else {
+          // Don't allow HTTP/2 if "h2" ALPN offering was't present
+          allow_http2 = false;
+        }
+      } else {
+        allow_http2 = false;
+      }
+
       let io = TokioIo::new(tls_stream);
-      let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-
-      if !config["global"]["enableHTTP2"].as_bool().unwrap_or(true) {
-        builder = builder.http1_only();
-      }
-
-      let mut http1_builder = &mut builder.http1();
-      http1_builder = http1_builder.timer(TokioTimer::new());
-      let mut http2_builder = &mut http1_builder.http2();
-      http2_builder = http2_builder.timer(TokioTimer::new());
-      if let Some(initial_window_size) =
-        config["global"]["http2Settings"]["initialWindowSize"].as_i64()
-      {
-        http2_builder = http2_builder.initial_stream_window_size(initial_window_size as u32);
-      }
-      if let Some(max_frame_size) = config["global"]["http2Settings"]["maxFrameSize"].as_i64() {
-        http2_builder = http2_builder.max_frame_size(max_frame_size as u32);
-      }
-      if let Some(max_concurrent_streams) =
-        config["global"]["http2Settings"]["maxConcurrentStreams"].as_i64()
-      {
-        http2_builder = http2_builder.max_concurrent_streams(max_concurrent_streams as u32);
-      }
-      if let Some(max_header_list_size) =
-        config["global"]["http2Settings"]["maxHeaderListSize"].as_i64()
-      {
-        http2_builder = http2_builder.max_header_list_size(max_header_list_size as u32);
-      }
-      if let Some(enable_connect_protocol) =
-        config["global"]["http2Settings"]["enableConnectProtocol"].as_bool()
-      {
-        if enable_connect_protocol {
-          http2_builder = http2_builder.enable_connect_protocol();
-        }
-      }
-
       let handlers_vec = modules
         .iter()
         .map(|module| module.get_handlers(Handle::current()));
 
-      if let Err(err) = http2_builder
-        .serve_connection_with_upgrades(
-          io,
-          service_fn(move |request: Request<Incoming>| {
-            let config = config.clone();
-            let logger = logger_clone.clone();
-            let handlers_vec_clone = handlers_vec
-              .clone()
-              .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
-            let (request_parts, request_body) = request.into_parts();
-            let request = Request::from_parts(request_parts, request_body.boxed());
-            request_handler(
-              request,
-              remote_address,
-              local_address,
-              true,
-              config,
-              logger,
-              handlers_vec_clone,
-            )
-          }),
-        )
-        .await
-      {
-        logger
-          .send(LogMessage::new(
-            format!("Error serving HTTPS connection: {:?}", err),
-            true,
-          ))
+      if allow_http2 {
+        let mut http2_builder = hyper::server::conn::http2::Builder::new(TokioExecutor::new());
+        http2_builder.timer(TokioTimer::new());
+        if let Some(initial_window_size) =
+          config["global"]["http2Settings"]["initialWindowSize"].as_i64()
+        {
+          http2_builder.initial_stream_window_size(initial_window_size as u32);
+        }
+        if let Some(max_frame_size) = config["global"]["http2Settings"]["maxFrameSize"].as_i64() {
+          http2_builder.max_frame_size(max_frame_size as u32);
+        }
+        if let Some(max_concurrent_streams) =
+          config["global"]["http2Settings"]["maxConcurrentStreams"].as_i64()
+        {
+          http2_builder.max_concurrent_streams(max_concurrent_streams as u32);
+        }
+        if let Some(max_header_list_size) =
+          config["global"]["http2Settings"]["maxHeaderListSize"].as_i64()
+        {
+          http2_builder.max_header_list_size(max_header_list_size as u32);
+        }
+        if let Some(enable_connect_protocol) =
+          config["global"]["http2Settings"]["enableConnectProtocol"].as_bool()
+        {
+          if enable_connect_protocol {
+            http2_builder.enable_connect_protocol();
+          }
+        }
+
+        if let Err(err) = http2_builder
+          .serve_connection(
+            io,
+            service_fn(move |request: Request<Incoming>| {
+              let config = config.clone();
+              let logger = logger_clone.clone();
+              let handlers_vec_clone = handlers_vec
+                .clone()
+                .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
+              let (request_parts, request_body) = request.into_parts();
+              let request = Request::from_parts(request_parts, request_body.boxed());
+              request_handler(
+                request,
+                remote_address,
+                local_address,
+                true,
+                config,
+                logger,
+                handlers_vec_clone,
+              )
+            }),
+          )
           .await
-          .unwrap_or_default();
-      }
-    });
-  } else {
-    let io = TokioIo::new(stream);
-    tokio::task::spawn(async move {
-      let mut builder = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-      // HTTP/2 is disabled by default for non-encrypted connections
-      if !config["global"]["enableHTTP2"].as_bool().unwrap_or(false) {
-        builder = builder.http1_only();
-      }
+        {
+          logger
+            .send(LogMessage::new(
+              format!("Error serving HTTPS connection: {:?}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+        }
+      } else {
+        let mut http1_builder = hyper::server::conn::http1::Builder::new();
 
-      let mut http1_builder = &mut builder.http1();
-      http1_builder = http1_builder.timer(TokioTimer::new());
-      let mut http2_builder = &mut http1_builder.http2();
-      http2_builder = http2_builder.timer(TokioTimer::new());
-      if let Some(initial_window_size) =
-        config["global"]["http2Settings"]["initialWindowSize"].as_i64()
-      {
-        http2_builder = http2_builder.initial_stream_window_size(initial_window_size as u32);
-      }
-      if let Some(max_frame_size) = config["global"]["http2Settings"]["maxFrameSize"].as_i64() {
-        http2_builder = http2_builder.max_frame_size(max_frame_size as u32);
-      }
-      if let Some(max_concurrent_streams) =
-        config["global"]["http2Settings"]["maxConcurrentStreams"].as_i64()
-      {
-        http2_builder = http2_builder.max_concurrent_streams(max_concurrent_streams as u32);
-      }
-      if let Some(max_header_list_size) =
-        config["global"]["http2Settings"]["maxHeaderListSize"].as_i64()
-      {
-        http2_builder = http2_builder.max_header_list_size(max_header_list_size as u32);
-      }
-      if let Some(enable_connect_protocol) =
-        config["global"]["http2Settings"]["enableConnectProtocol"].as_bool()
-      {
-        if enable_connect_protocol {
-          http2_builder = http2_builder.enable_connect_protocol();
+        // The timer is neccessary for the header timeout to work to mitigate Slowloris.
+        http1_builder.timer(TokioTimer::new());
+
+        if let Err(err) = http1_builder
+          .serve_connection(
+            io,
+            service_fn(move |request: Request<Incoming>| {
+              let config = config.clone();
+              let logger = logger_clone.clone();
+              let handlers_vec_clone = handlers_vec
+                .clone()
+                .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
+              let (request_parts, request_body) = request.into_parts();
+              let request = Request::from_parts(request_parts, request_body.boxed());
+              request_handler(
+                request,
+                remote_address,
+                local_address,
+                true,
+                config,
+                logger,
+                handlers_vec_clone,
+              )
+            }),
+          )
+          .with_upgrades()
+          .await
+        {
+          logger
+            .send(LogMessage::new(
+              format!("Error serving HTTPS connection: {:?}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
         }
       }
-
+    } else if let MaybeTlsStream::Plain(stream) = maybe_tls_stream {
+      let io = TokioIo::new(stream);
       let handlers_vec = modules
         .iter()
         .map(|module| module.get_handlers(Handle::current()));
 
-      if let Err(err) = http2_builder
-        .serve_connection_with_upgrades(
+      let mut http1_builder = hyper::server::conn::http1::Builder::new();
+
+      // The timer is neccessary for the header timeout to work to mitigate Slowloris.
+      http1_builder.timer(TokioTimer::new());
+
+      if let Err(err) = http1_builder
+        .serve_connection(
           io,
           service_fn(move |request: Request<Incoming>| {
             let config = config.clone();
@@ -330,6 +290,7 @@ async fn accept_connection(
             )
           }),
         )
+        .with_upgrades()
         .await
       {
         logger
@@ -340,8 +301,8 @@ async fn accept_connection(
           .await
           .unwrap_or_default();
       }
-    });
-  }
+    }
+  });
 }
 
 // Main server event loop
