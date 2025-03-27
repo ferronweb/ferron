@@ -497,7 +497,9 @@ async fn request_handler_wrapped(
           if let Some(header_name) = header_name.as_str() {
             if let Some(header_value) = header_value.as_str() {
               if !response_parts.headers.contains_key(header_name) {
-                if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                if let Ok(header_value) =
+                  HeaderValue::from_str(&header_value.replace("{path}", url_pathname))
+                {
                   if let Ok(header_name) = HeaderName::from_str(header_name) {
                     response_parts.headers.insert(header_name, header_value);
                   }
@@ -578,7 +580,9 @@ async fn request_handler_wrapped(
               if let Some(header_name) = header_name.as_str() {
                 if let Some(header_value) = header_value.as_str() {
                   if !response_parts.headers.contains_key(header_name) {
-                    if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                    if let Ok(header_value) = HeaderValue::from_str(
+                      &header_value.replace("{path}", &sanitized_url_pathname),
+                    ) {
                       if let Ok(header_name) = HeaderName::from_str(header_name) {
                         response_parts.headers.insert(header_name, header_value);
                       }
@@ -641,7 +645,9 @@ async fn request_handler_wrapped(
             if let Some(header_name) = header_name.as_str() {
               if let Some(header_value) = header_value.as_str() {
                 if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                  if let Ok(header_value) =
+                    HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
+                  {
                     if let Ok(header_name) = HeaderName::from_str(header_name) {
                       response_parts.headers.insert(header_name, header_value);
                     }
@@ -707,7 +713,9 @@ async fn request_handler_wrapped(
         if let Some(header_name) = header_name.as_str() {
           if let Some(header_value) = header_value.as_str() {
             if !response_parts.headers.contains_key(header_name) {
-              if let Ok(header_value) = HeaderValue::from_str(header_value) {
+              if let Ok(header_value) =
+                HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
+              {
                 if let Ok(header_name) = HeaderName::from_str(header_name) {
                   response_parts.headers.insert(header_name, header_value);
                 }
@@ -813,7 +821,9 @@ async fn request_handler_wrapped(
             if let Some(header_name) = header_name.as_str() {
               if let Some(header_value) = header_value.as_str() {
                 if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                  if let Ok(header_value) =
+                    HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
+                  {
                     if let Ok(header_name) = HeaderName::from_str(header_name) {
                       response_parts.headers.insert(header_name, header_value);
                     }
@@ -865,7 +875,9 @@ async fn request_handler_wrapped(
             if let Some(header_name) = header_name.as_str() {
               if let Some(header_value) = header_value.as_str() {
                 if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                  if let Ok(header_value) =
+                    HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
+                  {
                     if let Ok(header_name) = HeaderName::from_str(header_name) {
                       response_parts.headers.insert(header_name, header_value);
                     }
@@ -918,7 +930,9 @@ async fn request_handler_wrapped(
           if let Some(header_name) = header_name.as_str() {
             if let Some(header_value) = header_value.as_str() {
               if !response_parts.headers.contains_key(header_name) {
-                if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                if let Ok(header_value) =
+                  HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
+                {
                   if let Ok(header_name) = HeaderName::from_str(header_name) {
                     response_parts.headers.insert(header_name, header_value);
                   }
@@ -997,7 +1011,9 @@ async fn request_handler_wrapped(
                 if let Some(header_name) = header_name.as_str() {
                   if let Some(header_value) = header_value.as_str() {
                     if !response_parts.headers.contains_key(header_name) {
-                      if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                      if let Ok(header_value) = HeaderValue::from_str(
+                        &header_value.replace("{path}", &sanitized_url_pathname),
+                      ) {
                         if let Ok(header_name) = HeaderName::from_str(header_name) {
                           response_parts.headers.insert(header_name, header_value);
                         }
@@ -1069,7 +1085,9 @@ async fn request_handler_wrapped(
             if let Some(header_name) = header_name.as_str() {
               if let Some(header_value) = header_value.as_str() {
                 if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                  if let Ok(header_value) =
+                    HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
+                  {
                     if let Ok(header_name) = HeaderName::from_str(header_name) {
                       response_parts.headers.insert(header_name, header_value);
                     }
@@ -1131,7 +1149,9 @@ async fn request_handler_wrapped(
                   if let Some(header_name) = header_name.as_str() {
                     if let Some(header_value) = header_value.as_str() {
                       if !response_parts.headers.contains_key(header_name) {
-                        if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                        if let Ok(header_value) = HeaderValue::from_str(
+                          &header_value.replace("{path}", &sanitized_url_pathname),
+                        ) {
                           if let Ok(header_name) = HeaderName::from_str(header_name) {
                             response_parts.headers.insert(header_name, header_value);
                           }
@@ -1206,7 +1226,9 @@ async fn request_handler_wrapped(
                         if let Some(header_name) = header_name.as_str() {
                           if let Some(header_value) = header_value.as_str() {
                             if !response_parts.headers.contains_key(header_name) {
-                              if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                              if let Ok(header_value) = HeaderValue::from_str(
+                                &header_value.replace("{path}", &sanitized_url_pathname),
+                              ) {
                                 if let Ok(header_name) = HeaderName::from_str(header_name) {
                                   response_parts.headers.insert(header_name, header_value);
                                 }
@@ -1262,7 +1284,9 @@ async fn request_handler_wrapped(
                     if let Some(header_name) = header_name.as_str() {
                       if let Some(header_value) = header_value.as_str() {
                         if !response_parts.headers.contains_key(header_name) {
-                          if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                          if let Ok(header_value) = HeaderValue::from_str(
+                            &header_value.replace("{path}", &sanitized_url_pathname),
+                          ) {
                             if let Ok(header_name) = HeaderName::from_str(header_name) {
                               response_parts.headers.insert(header_name, header_value);
                             }
@@ -1338,7 +1362,9 @@ async fn request_handler_wrapped(
                           if let Some(header_name) = header_name.as_str() {
                             if let Some(header_value) = header_value.as_str() {
                               if !response_parts.headers.contains_key(header_name) {
-                                if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                                if let Ok(header_value) = HeaderValue::from_str(
+                                  &header_value.replace("{path}", &sanitized_url_pathname),
+                                ) {
                                   if let Ok(header_name) = HeaderName::from_str(header_name) {
                                     response_parts.headers.insert(header_name, header_value);
                                   }
@@ -1407,7 +1433,9 @@ async fn request_handler_wrapped(
               if let Some(header_name) = header_name.as_str() {
                 if let Some(header_value) = header_value.as_str() {
                   if !response_parts.headers.contains_key(header_name) {
-                    if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                    if let Ok(header_value) = HeaderValue::from_str(
+                      &header_value.replace("{path}", &sanitized_url_pathname),
+                    ) {
                       if let Ok(header_name) = HeaderName::from_str(header_name) {
                         response_parts.headers.insert(header_name, header_value);
                       }
@@ -1482,7 +1510,9 @@ async fn request_handler_wrapped(
                     if let Some(header_name) = header_name.as_str() {
                       if let Some(header_value) = header_value.as_str() {
                         if !response_parts.headers.contains_key(header_name) {
-                          if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                          if let Ok(header_value) = HeaderValue::from_str(
+                            &header_value.replace("{path}", &sanitized_url_pathname),
+                          ) {
                             if let Ok(header_name) = HeaderName::from_str(header_name) {
                               response_parts.headers.insert(header_name, header_value);
                             }
@@ -1549,7 +1579,9 @@ async fn request_handler_wrapped(
         if let Some(header_name) = header_name.as_str() {
           if let Some(header_value) = header_value.as_str() {
             if !response_parts.headers.contains_key(header_name) {
-              if let Ok(header_value) = HeaderValue::from_str(header_value) {
+              if let Ok(header_value) =
+                HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
+              {
                 if let Ok(header_name) = HeaderName::from_str(header_name) {
                   response_parts.headers.insert(header_name, header_value);
                 }
@@ -1621,7 +1653,9 @@ async fn request_handler_wrapped(
               if let Some(header_name) = header_name.as_str() {
                 if let Some(header_value) = header_value.as_str() {
                   if !response_parts.headers.contains_key(header_name) {
-                    if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                    if let Ok(header_value) = HeaderValue::from_str(
+                      &header_value.replace("{path}", &sanitized_url_pathname),
+                    ) {
                       if let Ok(header_name) = HeaderName::from_str(header_name) {
                         response_parts.headers.insert(header_name, header_value);
                       }
