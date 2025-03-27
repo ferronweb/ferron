@@ -105,14 +105,14 @@ async fn generate_error_response(
 async fn log_combined(
   logger: &Sender<LogMessage>,
   client_ip: IpAddr,
-  auth_user: Option<String>,
-  method: String,
-  request_path: String,
-  protocol: String,
+  auth_user: Option<&str>,
+  method: &str,
+  request_path: &str,
+  protocol: &str,
   status_code: u16,
   content_length: Option<u64>,
-  referrer: Option<String>,
-  user_agent: Option<String>,
+  referrer: Option<&str>,
+  user_agent: Option<&str>,
 ) {
   let now: DateTime<Local> = Local::now();
   let formatted_time = now.format("%d/%b/%Y:%H:%M:%S %z").to_string();
@@ -121,10 +121,7 @@ async fn log_combined(
       format!(
         "{} - {} [{}] \"{} {} {}\" {} {} {} {}",
         client_ip,
-        match auth_user {
-          Some(auth_user) => auth_user,
-          None => String::from("-"),
-        },
+        auth_user.unwrap_or("-"),
         formatted_time,
         method,
         request_path,
@@ -175,7 +172,7 @@ async fn request_handler_wrapped(
 
   // Collect request data for logging
   let log_method = String::from(request.method().as_str());
-  let log_request_path = match is_proxy_request {
+  let original_request_path = match is_proxy_request {
     true => request.uri().to_string(),
     false => format!(
       "{}{}",
@@ -285,9 +282,9 @@ async fn request_handler_wrapped(
                   &logger,
                   socket_data.remote_addr.ip(),
                   None,
-                  log_method,
-                  log_request_path,
-                  log_protocol,
+                  &log_method,
+                  &original_request_path,
+                  &log_protocol,
                   response.status().as_u16(),
                   match response.headers().get(header::CONTENT_LENGTH) {
                     Some(header_value) => match header_value.to_str() {
@@ -299,8 +296,8 @@ async fn request_handler_wrapped(
                     },
                     None => response.body().size_hint().exact(),
                   },
-                  log_referrer,
-                  log_user_agent,
+                  log_referrer.as_ref().map(|s| s as &str),
+                  log_user_agent.as_ref().map(|s| s as &str),
                 )
                 .await;
               }
@@ -345,9 +342,9 @@ async fn request_handler_wrapped(
             &logger,
             socket_data.remote_addr.ip(),
             None,
-            log_method,
-            log_request_path,
-            log_protocol,
+            &log_method,
+            &original_request_path,
+            &log_protocol,
             response.status().as_u16(),
             match response.headers().get(header::CONTENT_LENGTH) {
               Some(header_value) => match header_value.to_str() {
@@ -359,8 +356,8 @@ async fn request_handler_wrapped(
               },
               None => response.body().size_hint().exact(),
             },
-            log_referrer,
-            log_user_agent,
+            log_referrer.as_ref().map(|s| s as &str),
+            log_user_agent.as_ref().map(|s| s as &str),
           )
           .await;
         }
@@ -418,9 +415,9 @@ async fn request_handler_wrapped(
           &logger,
           socket_data.remote_addr.ip(),
           None,
-          log_method,
-          log_request_path,
-          log_protocol,
+          &log_method,
+          &original_request_path,
+          &log_protocol,
           response.status().as_u16(),
           match response.headers().get(header::CONTENT_LENGTH) {
             Some(header_value) => match header_value.to_str() {
@@ -432,8 +429,8 @@ async fn request_handler_wrapped(
             },
             None => response.body().size_hint().exact(),
           },
-          log_referrer,
-          log_user_agent,
+          log_referrer.as_ref().map(|s| s as &str),
+          log_user_agent.as_ref().map(|s| s as &str),
         )
         .await;
       }
@@ -471,9 +468,9 @@ async fn request_handler_wrapped(
           &logger,
           socket_data.remote_addr.ip(),
           None,
-          log_method,
-          log_request_path,
-          log_protocol,
+          &log_method,
+          &original_request_path,
+          &log_protocol,
           response.status().as_u16(),
           match response.headers().get(header::CONTENT_LENGTH) {
             Some(header_value) => match header_value.to_str() {
@@ -485,8 +482,8 @@ async fn request_handler_wrapped(
             },
             None => response.body().size_hint().exact(),
           },
-          log_referrer,
-          log_user_agent,
+          log_referrer.as_ref().map(|s| s as &str),
+          log_user_agent.as_ref().map(|s| s as &str),
         )
         .await;
       }
@@ -497,7 +494,9 @@ async fn request_handler_wrapped(
           if let Some(header_name) = header_name.as_str() {
             if let Some(header_value) = header_value.as_str() {
               if !response_parts.headers.contains_key(header_name) {
-                if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                if let Ok(header_value) =
+                  HeaderValue::from_str(&header_value.replace("{path}", &original_request_path))
+                {
                   if let Ok(header_name) = HeaderName::from_str(header_name) {
                     response_parts.headers.insert(header_name, header_value);
                   }
@@ -552,9 +551,9 @@ async fn request_handler_wrapped(
               &logger,
               socket_data.remote_addr.ip(),
               None,
-              log_method,
-              log_request_path,
-              log_protocol,
+              &log_method,
+              &original_request_path,
+              &log_protocol,
               response.status().as_u16(),
               match response.headers().get(header::CONTENT_LENGTH) {
                 Some(header_value) => match header_value.to_str() {
@@ -566,8 +565,8 @@ async fn request_handler_wrapped(
                 },
                 None => response.body().size_hint().exact(),
               },
-              log_referrer,
-              log_user_agent,
+              log_referrer.as_ref().map(|s| s as &str),
+              log_user_agent.as_ref().map(|s| s as &str),
             )
             .await;
           }
@@ -578,7 +577,9 @@ async fn request_handler_wrapped(
               if let Some(header_name) = header_name.as_str() {
                 if let Some(header_value) = header_value.as_str() {
                   if !response_parts.headers.contains_key(header_name) {
-                    if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                    if let Ok(header_value) =
+                      HeaderValue::from_str(&header_value.replace("{path}", &original_request_path))
+                    {
                       if let Ok(header_name) = HeaderName::from_str(header_name) {
                         response_parts.headers.insert(header_name, header_value);
                       }
@@ -615,9 +616,9 @@ async fn request_handler_wrapped(
             &logger,
             socket_data.remote_addr.ip(),
             None,
-            log_method,
-            log_request_path,
-            log_protocol,
+            &log_method,
+            &original_request_path,
+            &log_protocol,
             response.status().as_u16(),
             match response.headers().get(header::CONTENT_LENGTH) {
               Some(header_value) => match header_value.to_str() {
@@ -629,8 +630,8 @@ async fn request_handler_wrapped(
               },
               None => response.body().size_hint().exact(),
             },
-            log_referrer,
-            log_user_agent,
+            log_referrer.as_ref().map(|s| s as &str),
+            log_user_agent.as_ref().map(|s| s as &str),
           )
           .await;
         }
@@ -641,7 +642,9 @@ async fn request_handler_wrapped(
             if let Some(header_name) = header_name.as_str() {
               if let Some(header_value) = header_value.as_str() {
                 if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                  if let Ok(header_value) =
+                    HeaderValue::from_str(&header_value.replace("{path}", &original_request_path))
+                  {
                     if let Ok(header_name) = HeaderName::from_str(header_name) {
                       response_parts.headers.insert(header_name, header_value);
                     }
@@ -681,9 +684,9 @@ async fn request_handler_wrapped(
         &logger,
         socket_data.remote_addr.ip(),
         None,
-        log_method,
-        log_request_path,
-        log_protocol,
+        &log_method,
+        &original_request_path,
+        &log_protocol,
         response.status().as_u16(),
         match response.headers().get(header::CONTENT_LENGTH) {
           Some(header_value) => match header_value.to_str() {
@@ -695,8 +698,8 @@ async fn request_handler_wrapped(
           },
           None => response.body().size_hint().exact(),
         },
-        log_referrer,
-        log_user_agent,
+        log_referrer.as_ref().map(|s| s as &str),
+        log_user_agent.as_ref().map(|s| s as &str),
       )
       .await;
     }
@@ -707,7 +710,9 @@ async fn request_handler_wrapped(
         if let Some(header_name) = header_name.as_str() {
           if let Some(header_value) = header_value.as_str() {
             if !response_parts.headers.contains_key(header_name) {
-              if let Ok(header_value) = HeaderValue::from_str(header_value) {
+              if let Ok(header_value) =
+                HeaderValue::from_str(&header_value.replace("{path}", &original_request_path))
+              {
                 if let Ok(header_name) = HeaderName::from_str(header_name) {
                   response_parts.headers.insert(header_name, header_value);
                 }
@@ -786,9 +791,9 @@ async fn request_handler_wrapped(
             &logger,
             client_ip,
             None,
-            log_method,
-            log_request_path,
-            log_protocol,
+            &log_method,
+            &original_request_path,
+            &log_protocol,
             response.status().as_u16(),
             match response.headers().get(header::CONTENT_LENGTH) {
               Some(header_value) => match header_value.to_str() {
@@ -800,8 +805,8 @@ async fn request_handler_wrapped(
               },
               None => response.body().size_hint().exact(),
             },
-            log_referrer,
-            log_user_agent,
+            log_referrer.as_ref().map(|s| s as &str),
+            log_user_agent.as_ref().map(|s| s as &str),
           )
           .await;
         }
@@ -813,7 +818,9 @@ async fn request_handler_wrapped(
             if let Some(header_name) = header_name.as_str() {
               if let Some(header_value) = header_value.as_str() {
                 if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                  if let Ok(header_value) =
+                    HeaderValue::from_str(&header_value.replace("{path}", &original_request_path))
+                  {
                     if let Ok(header_name) = HeaderName::from_str(header_name) {
                       response_parts.headers.insert(header_name, header_value);
                     }
@@ -839,9 +846,9 @@ async fn request_handler_wrapped(
             &logger,
             socket_data.remote_addr.ip(),
             None,
-            log_method,
-            log_request_path,
-            log_protocol,
+            &log_method,
+            &original_request_path,
+            &log_protocol,
             response.status().as_u16(),
             match response.headers().get(header::CONTENT_LENGTH) {
               Some(header_value) => match header_value.to_str() {
@@ -853,8 +860,8 @@ async fn request_handler_wrapped(
               },
               None => response.body().size_hint().exact(),
             },
-            log_referrer,
-            log_user_agent,
+            log_referrer.as_ref().map(|s| s as &str),
+            log_user_agent.as_ref().map(|s| s as &str),
           )
           .await;
         }
@@ -865,7 +872,9 @@ async fn request_handler_wrapped(
             if let Some(header_name) = header_name.as_str() {
               if let Some(header_value) = header_value.as_str() {
                 if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                  if let Ok(header_value) =
+                    HeaderValue::from_str(&header_value.replace("{path}", &original_request_path))
+                  {
                     if let Ok(header_name) = HeaderName::from_str(header_name) {
                       response_parts.headers.insert(header_name, header_value);
                     }
@@ -892,9 +901,9 @@ async fn request_handler_wrapped(
           &logger,
           socket_data.remote_addr.ip(),
           None,
-          log_method,
-          log_request_path,
-          log_protocol,
+          &log_method,
+          &original_request_path,
+          &log_protocol,
           response.status().as_u16(),
           match response.headers().get(header::CONTENT_LENGTH) {
             Some(header_value) => match header_value.to_str() {
@@ -906,8 +915,8 @@ async fn request_handler_wrapped(
             },
             None => response.body().size_hint().exact(),
           },
-          log_referrer,
-          log_user_agent,
+          log_referrer.as_ref().map(|s| s as &str),
+          log_user_agent.as_ref().map(|s| s as &str),
         )
         .await;
       }
@@ -918,7 +927,9 @@ async fn request_handler_wrapped(
           if let Some(header_name) = header_name.as_str() {
             if let Some(header_value) = header_value.as_str() {
               if !response_parts.headers.contains_key(header_name) {
-                if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                if let Ok(header_value) =
+                  HeaderValue::from_str(&header_value.replace("{path}", &original_request_path))
+                {
                   if let Ok(header_name) = HeaderName::from_str(header_name) {
                     response_parts.headers.insert(header_name, header_value);
                   }
@@ -971,9 +982,9 @@ async fn request_handler_wrapped(
                 &logger,
                 socket_data.remote_addr.ip(),
                 None,
-                log_method,
-                log_request_path,
-                log_protocol,
+                &log_method,
+                &original_request_path,
+                &log_protocol,
                 response.status().as_u16(),
                 match response.headers().get(header::CONTENT_LENGTH) {
                   Some(header_value) => match header_value.to_str() {
@@ -985,8 +996,8 @@ async fn request_handler_wrapped(
                   },
                   None => response.body().size_hint().exact(),
                 },
-                log_referrer,
-                log_user_agent,
+                log_referrer.as_ref().map(|s| s as &str),
+                log_user_agent.as_ref().map(|s| s as &str),
               )
               .await;
             }
@@ -997,7 +1008,9 @@ async fn request_handler_wrapped(
                 if let Some(header_name) = header_name.as_str() {
                   if let Some(header_value) = header_value.as_str() {
                     if !response_parts.headers.contains_key(header_name) {
-                      if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                      if let Ok(header_value) = HeaderValue::from_str(
+                        &header_value.replace("{path}", &original_request_path),
+                      ) {
                         if let Ok(header_name) = HeaderName::from_str(header_name) {
                           response_parts.headers.insert(header_name, header_value);
                         }
@@ -1042,9 +1055,9 @@ async fn request_handler_wrapped(
             &logger,
             client_ip,
             None,
-            log_method,
-            log_request_path,
-            log_protocol,
+            &log_method,
+            &original_request_path,
+            &log_protocol,
             response.status().as_u16(),
             match response.headers().get(header::CONTENT_LENGTH) {
               Some(header_value) => match header_value.to_str() {
@@ -1056,8 +1069,8 @@ async fn request_handler_wrapped(
               },
               None => response.body().size_hint().exact(),
             },
-            log_referrer,
-            log_user_agent,
+            log_referrer.as_ref().map(|s| s as &str),
+            log_user_agent.as_ref().map(|s| s as &str),
           )
           .await;
         }
@@ -1069,7 +1082,9 @@ async fn request_handler_wrapped(
             if let Some(header_name) = header_name.as_str() {
               if let Some(header_value) = header_value.as_str() {
                 if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                  if let Ok(header_value) =
+                    HeaderValue::from_str(&header_value.replace("{path}", &original_request_path))
+                  {
                     if let Ok(header_name) = HeaderName::from_str(header_name) {
                       response_parts.headers.insert(header_name, header_value);
                     }
@@ -1131,7 +1146,9 @@ async fn request_handler_wrapped(
                   if let Some(header_name) = header_name.as_str() {
                     if let Some(header_value) = header_value.as_str() {
                       if !response_parts.headers.contains_key(header_name) {
-                        if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                        if let Ok(header_value) = HeaderValue::from_str(
+                          &header_value.replace("{path}", &original_request_path),
+                        ) {
                           if let Ok(header_name) = HeaderName::from_str(header_name) {
                             response_parts.headers.insert(header_name, header_value);
                           }
@@ -1179,10 +1196,10 @@ async fn request_handler_wrapped(
                       log_combined(
                         &logger,
                         socket_data.remote_addr.ip(),
-                        auth_data,
-                        log_method,
-                        log_request_path,
-                        log_protocol,
+                        auth_data.as_ref().map(|s| s as &str),
+                        &log_method,
+                        &original_request_path,
+                        &log_protocol,
                         response.status().as_u16(),
                         match response.headers().get(header::CONTENT_LENGTH) {
                           Some(header_value) => match header_value.to_str() {
@@ -1194,8 +1211,8 @@ async fn request_handler_wrapped(
                           },
                           None => response.body().size_hint().exact(),
                         },
-                        log_referrer,
-                        log_user_agent,
+                        log_referrer.as_ref().map(|s| s as &str),
+                        log_user_agent.as_ref().map(|s| s as &str),
                       )
                       .await;
                     }
@@ -1206,7 +1223,9 @@ async fn request_handler_wrapped(
                         if let Some(header_name) = header_name.as_str() {
                           if let Some(header_value) = header_value.as_str() {
                             if !response_parts.headers.contains_key(header_name) {
-                              if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                              if let Ok(header_value) = HeaderValue::from_str(
+                                &header_value.replace("{path}", &original_request_path),
+                              ) {
                                 if let Ok(header_name) = HeaderName::from_str(header_name) {
                                   response_parts.headers.insert(header_name, header_value);
                                 }
@@ -1229,10 +1248,10 @@ async fn request_handler_wrapped(
                 log_combined(
                   &logger,
                   socket_data.remote_addr.ip(),
-                  auth_data,
-                  log_method,
-                  log_request_path,
-                  log_protocol,
+                  auth_data.as_ref().map(|s| s as &str),
+                  &log_method,
+                  &original_request_path,
+                  &log_protocol,
                   response.status().as_u16(),
                   match response.headers().get(header::CONTENT_LENGTH) {
                     Some(header_value) => match header_value.to_str() {
@@ -1244,8 +1263,8 @@ async fn request_handler_wrapped(
                     },
                     None => response.body().size_hint().exact(),
                   },
-                  log_referrer,
-                  log_user_agent,
+                  log_referrer.as_ref().map(|s| s as &str),
+                  log_user_agent.as_ref().map(|s| s as &str),
                 )
                 .await;
               }
@@ -1262,7 +1281,9 @@ async fn request_handler_wrapped(
                     if let Some(header_name) = header_name.as_str() {
                       if let Some(header_value) = header_value.as_str() {
                         if !response_parts.headers.contains_key(header_name) {
-                          if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                          if let Ok(header_value) = HeaderValue::from_str(
+                            &header_value.replace("{path}", &original_request_path),
+                          ) {
                             if let Ok(header_name) = HeaderName::from_str(header_name) {
                               response_parts.headers.insert(header_name, header_value);
                             }
@@ -1310,10 +1331,10 @@ async fn request_handler_wrapped(
                         log_combined(
                           &logger,
                           socket_data.remote_addr.ip(),
-                          auth_data,
-                          log_method,
-                          log_request_path,
-                          log_protocol,
+                          auth_data.as_ref().map(|s| s as &str),
+                          &log_method,
+                          &original_request_path,
+                          &log_protocol,
                           response.status().as_u16(),
                           match response.headers().get(header::CONTENT_LENGTH) {
                             Some(header_value) => match header_value.to_str() {
@@ -1325,8 +1346,8 @@ async fn request_handler_wrapped(
                             },
                             None => response.body().size_hint().exact(),
                           },
-                          log_referrer,
-                          log_user_agent,
+                          log_referrer.as_ref().map(|s| s as &str),
+                          log_user_agent.as_ref().map(|s| s as &str),
                         )
                         .await;
                       }
@@ -1338,7 +1359,9 @@ async fn request_handler_wrapped(
                           if let Some(header_name) = header_name.as_str() {
                             if let Some(header_value) = header_value.as_str() {
                               if !response_parts.headers.contains_key(header_name) {
-                                if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                                if let Ok(header_value) = HeaderValue::from_str(
+                                  &header_value.replace("{path}", &original_request_path),
+                                ) {
                                   if let Ok(header_name) = HeaderName::from_str(header_name) {
                                     response_parts.headers.insert(header_name, header_value);
                                   }
@@ -1361,10 +1384,10 @@ async fn request_handler_wrapped(
                   log_combined(
                     &logger,
                     socket_data.remote_addr.ip(),
-                    auth_data,
-                    log_method,
-                    log_request_path,
-                    log_protocol,
+                    auth_data.as_ref().map(|s| s as &str),
+                    &log_method,
+                    &original_request_path,
+                    &log_protocol,
                     response.status().as_u16(),
                     match response.headers().get(header::CONTENT_LENGTH) {
                       Some(header_value) => match header_value.to_str() {
@@ -1376,8 +1399,8 @@ async fn request_handler_wrapped(
                       },
                       None => response.body().size_hint().exact(),
                     },
-                    log_referrer,
-                    log_user_agent,
+                    log_referrer.as_ref().map(|s| s as &str),
+                    log_user_agent.as_ref().map(|s| s as &str),
                   )
                   .await;
                 }
@@ -1407,7 +1430,9 @@ async fn request_handler_wrapped(
               if let Some(header_name) = header_name.as_str() {
                 if let Some(header_value) = header_value.as_str() {
                   if !response_parts.headers.contains_key(header_name) {
-                    if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                    if let Ok(header_value) =
+                      HeaderValue::from_str(&header_value.replace("{path}", &original_request_path))
+                    {
                       if let Ok(header_name) = HeaderName::from_str(header_name) {
                         response_parts.headers.insert(header_name, header_value);
                       }
@@ -1455,10 +1480,10 @@ async fn request_handler_wrapped(
                   log_combined(
                     &logger,
                     socket_data.remote_addr.ip(),
-                    latest_auth_data,
-                    log_method,
-                    log_request_path,
-                    log_protocol,
+                    latest_auth_data.as_ref().map(|s| s as &str),
+                    &log_method,
+                    &original_request_path,
+                    &log_protocol,
                     response.status().as_u16(),
                     match response.headers().get(header::CONTENT_LENGTH) {
                       Some(header_value) => match header_value.to_str() {
@@ -1470,8 +1495,8 @@ async fn request_handler_wrapped(
                       },
                       None => response.body().size_hint().exact(),
                     },
-                    log_referrer,
-                    log_user_agent,
+                    log_referrer.as_ref().map(|s| s as &str),
+                    log_user_agent.as_ref().map(|s| s as &str),
                   )
                   .await;
                 }
@@ -1482,7 +1507,9 @@ async fn request_handler_wrapped(
                     if let Some(header_name) = header_name.as_str() {
                       if let Some(header_value) = header_value.as_str() {
                         if !response_parts.headers.contains_key(header_name) {
-                          if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                          if let Ok(header_value) = HeaderValue::from_str(
+                            &header_value.replace("{path}", &original_request_path),
+                          ) {
                             if let Ok(header_name) = HeaderName::from_str(header_name) {
                               response_parts.headers.insert(header_name, header_value);
                             }
@@ -1515,10 +1542,10 @@ async fn request_handler_wrapped(
             log_combined(
               &logger,
               socket_data.remote_addr.ip(),
-              latest_auth_data,
-              log_method,
-              log_request_path,
-              log_protocol,
+              latest_auth_data.as_ref().map(|s| s as &str),
+              &log_method,
+              &original_request_path,
+              &log_protocol,
               response.status().as_u16(),
               match response.headers().get(header::CONTENT_LENGTH) {
                 Some(header_value) => match header_value.to_str() {
@@ -1530,8 +1557,8 @@ async fn request_handler_wrapped(
                 },
                 None => response.body().size_hint().exact(),
               },
-              log_referrer,
-              log_user_agent,
+              log_referrer.as_ref().map(|s| s as &str),
+              log_user_agent.as_ref().map(|s| s as &str),
             )
             .await;
           }
@@ -1549,7 +1576,9 @@ async fn request_handler_wrapped(
         if let Some(header_name) = header_name.as_str() {
           if let Some(header_value) = header_value.as_str() {
             if !response_parts.headers.contains_key(header_name) {
-              if let Ok(header_value) = HeaderValue::from_str(header_value) {
+              if let Ok(header_value) =
+                HeaderValue::from_str(&header_value.replace("{path}", &original_request_path))
+              {
                 if let Ok(header_name) = HeaderName::from_str(header_name) {
                   response_parts.headers.insert(header_name, header_value);
                 }
@@ -1594,10 +1623,10 @@ async fn request_handler_wrapped(
             log_combined(
               &logger,
               socket_data.remote_addr.ip(),
-              latest_auth_data,
-              log_method,
-              log_request_path,
-              log_protocol,
+              latest_auth_data.as_ref().map(|s| s as &str),
+              &log_method,
+              &original_request_path,
+              &log_protocol,
               response.status().as_u16(),
               match response.headers().get(header::CONTENT_LENGTH) {
                 Some(header_value) => match header_value.to_str() {
@@ -1609,8 +1638,8 @@ async fn request_handler_wrapped(
                 },
                 None => response.body().size_hint().exact(),
               },
-              log_referrer,
-              log_user_agent,
+              log_referrer.as_ref().map(|s| s as &str),
+              log_user_agent.as_ref().map(|s| s as &str),
             )
             .await;
           }
@@ -1621,7 +1650,9 @@ async fn request_handler_wrapped(
               if let Some(header_name) = header_name.as_str() {
                 if let Some(header_value) = header_value.as_str() {
                   if !response_parts.headers.contains_key(header_name) {
-                    if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                    if let Ok(header_value) =
+                      HeaderValue::from_str(&header_value.replace("{path}", &original_request_path))
+                    {
                       if let Ok(header_name) = HeaderName::from_str(header_name) {
                         response_parts.headers.insert(header_name, header_value);
                       }
@@ -1644,10 +1675,10 @@ async fn request_handler_wrapped(
       log_combined(
         &logger,
         socket_data.remote_addr.ip(),
-        latest_auth_data,
-        log_method,
-        log_request_path,
-        log_protocol,
+        latest_auth_data.as_ref().map(|s| s as &str),
+        &log_method,
+        &original_request_path,
+        &log_protocol,
         response.status().as_u16(),
         match response.headers().get(header::CONTENT_LENGTH) {
           Some(header_value) => match header_value.to_str() {
@@ -1659,8 +1690,8 @@ async fn request_handler_wrapped(
           },
           None => response.body().size_hint().exact(),
         },
-        log_referrer,
-        log_user_agent,
+        log_referrer.as_ref().map(|s| s as &str),
+        log_user_agent.as_ref().map(|s| s as &str),
       )
       .await;
     }
