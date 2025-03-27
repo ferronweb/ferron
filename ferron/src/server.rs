@@ -138,17 +138,17 @@ async fn accept_connection(
 
     if let MaybeTlsStream::Tls(tls_stream) = maybe_tls_stream {
       let alpn_protocol = tls_stream.get_ref().1.alpn_protocol();
-      let allow_http2;
+      let is_http2;
 
       if config["global"]["enableHTTP2"].as_bool().unwrap_or(true) {
         if alpn_protocol == Some("h2".as_bytes()) {
-          allow_http2 = true;
+          is_http2 = true;
         } else {
           // Don't allow HTTP/2 if "h2" ALPN offering was't present
-          allow_http2 = false;
+          is_http2 = false;
         }
       } else {
-        allow_http2 = false;
+        is_http2 = false;
       }
 
       let io = TokioIo::new(tls_stream);
@@ -156,7 +156,7 @@ async fn accept_connection(
         .iter()
         .map(|module| module.get_handlers(Handle::current()));
 
-      if allow_http2 {
+      if is_http2 {
         let mut http2_builder = hyper::server::conn::http2::Builder::new(TokioExecutor::new());
         http2_builder.timer(TokioTimer::new());
         if let Some(initial_window_size) =
