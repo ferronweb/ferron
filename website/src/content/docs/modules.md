@@ -4,7 +4,7 @@ title: Server modules
 
 You can extend Ferron with modules written in Rust.
 
-The following modules are built into Ferron:
+The following modules are built into Ferron and are enabled by default:
 
 - _cache_ (from Project Karpacz 0.4.0) - this module enables server response caching.
 - _cgi_ (from Project Karpacz 0.5.0) - this module enables the execution of CGI programs.
@@ -14,9 +14,9 @@ The following modules are built into Ferron:
 - _rproxy_ (from Project Karpacz 0.2.0) - this module enables reverse proxy functionality.
 - _scgi_ (from Project Karpacz 0.6.0) - this module enables the support for connecting to SCGI servers.
 
-The following modules are dynamically linked (not supported on musl libc builds), and available in both source and binary form:
+The following modules are built into Ferron, but are disabled by default:
 
-- _example_ - this module responds with "Hello World!" for "/hello" request paths.
+- _example_ (was dynamically linked up to Ferron 1.0.0-beta6) - this module responds with "Hello World!" for "/hello" request paths.
 
 ## Module notes
 

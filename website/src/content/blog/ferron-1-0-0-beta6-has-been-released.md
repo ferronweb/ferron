@@ -2,7 +2,7 @@
 title: "Ferron 1.0.0-beta6 has been released"
 description: We are excited to announce the release of Ferron 1.0.0-beta6. This release brings several new features, improvements, and fixes.
 date: 2025-03-23 12:10:00
-cover: /img/covers/ferron-1-0-0-beta5-has-been-released.png
+cover: /img/covers/ferron-1-0-0-beta6-has-been-released.png
 ---
 
 We are excited to introduce Ferron 1.0.0-beta6, packed with new features, enhancements, and some important fixes. This update brings improved performance and security, ensuring a more robust and efficient web server experience.

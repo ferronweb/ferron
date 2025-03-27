@@ -30,7 +30,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
 - **errorLogFilePath** (_String_)
   - Path to the error log file. This setting specifies the file path where the server will write its error logs. Default: None
 - **enableHTTP2** (_bool_)
-  - Option to enable HTTP/2. When set to `true`, the server will support the HTTP/2 protocol. Default: `false`
+  - Option to enable HTTP/2. When set to `true`, the server will support the HTTP/2 protocol. Default: `true` on Ferron 1.0.0-beta7 and newer (previously it was `false`)
 - **cert** (_String_)
   - Path to the TLS certificate. This setting specifies the file path to the TLS certificate used for HTTPS connections. Default: None
 - **key** (_String_)

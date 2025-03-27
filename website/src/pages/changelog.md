@@ -4,6 +4,14 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.0.0-beta7
+
+**Released in March 27, 2025**
+
+- Dropped support for dynamically-loaded server modules (Ferron now only supports compiled-in optional modules that can be disabled via Cargo features)
+- HTTP/2 is now enabled by default for encrypted connections
+- Refactored HTTP connection acception logic
+
 ## Ferron 1.0.0-beta6
 
 **Released in March 23, 2025**
