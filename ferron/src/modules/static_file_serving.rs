@@ -111,7 +111,6 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
       if let Some(wwwroot) = config["wwwroot"].as_str() {
         let hyper_request = request.get_hyper_request();
         let request_path = hyper_request.uri().path();
-        //let request_query = hyper_request.uri().query();
         let mut request_path_bytes = request_path.bytes();
         if request_path_bytes.len() < 1 || request_path_bytes.nth(0) != Some(b'/') {
           return Ok(
@@ -120,6 +119,10 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
               .build(),
           );
         }
+
+        let original_request_path = request
+          .get_original_url()
+          .map_or(request_path, |u| u.path());
 
         let cache_key = format!(
           "{}{}{}",
@@ -720,7 +723,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                 };
 
                 let directory_listing_html =
-                  generate_directory_listing(directory, request_path, description).await?;
+                  generate_directory_listing(directory, original_request_path, description).await?;
                 let content_length: Option<u64> = match directory_listing_html.len().try_into() {
                   Ok(content_length) => Some(content_length),
                   Err(_) => None,
