@@ -23,8 +23,3 @@ The server now respects the original request URL before rewriting when generatin
 We appreciate all the feedback and contributions from our community. Your support helps us improve Ferron with each release. Thank you for being a part of this journey!
 
 _The Ferron Team_
-
-
-Here's your updated announcement with the improvements and fixes included:  
-
----
