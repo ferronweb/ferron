@@ -572,7 +572,7 @@ async fn execute_cgi_with_environment_variables(
     }
   }
 
-  let (hyper_request, _) = request.into_parts();
+  let (hyper_request, _, _) = request.into_parts();
 
   execute_cgi(
     hyper_request,

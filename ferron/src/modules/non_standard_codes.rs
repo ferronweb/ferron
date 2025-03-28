@@ -470,8 +470,8 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
       }
 
       if auth_user.is_some() {
-        let (hyper_request, _) = request.into_parts();
-        Ok(ResponseData::builder(RequestData::new(hyper_request, auth_user)).build())
+        let (hyper_request, _, original_url) = request.into_parts();
+        Ok(ResponseData::builder(RequestData::new(hyper_request, auth_user, original_url)).build())
       } else {
         Ok(ResponseData::builder(request).build())
       }

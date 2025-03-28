@@ -278,13 +278,14 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
             ))
             .await;
         }
-        let (hyper_request, auth_user) = request.into_parts();
+        let (hyper_request, auth_user, _) = request.into_parts();
         let (mut parts, body) = hyper_request.into_parts();
+        let original_url = parts.uri.clone();
         let mut url_parts = parts.uri.into_parts();
         url_parts.path_and_query = Some(rewritten_url.parse()?);
         parts.uri = hyper::Uri::from_parts(url_parts)?;
         let hyper_request = Request::from_parts(parts, body);
-        let request = RequestData::new(hyper_request, auth_user);
+        let request = RequestData::new(hyper_request, auth_user, Some(original_url));
         Ok(ResponseData::builder(request).build())
       }
     })

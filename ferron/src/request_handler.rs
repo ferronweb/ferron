@@ -950,12 +950,12 @@ async fn request_handler_wrapped(
     }
   } else {
     let is_websocket_request = is_upgrade_request(&request);
-    let mut request_data = RequestData::new(request, None);
+    let mut request_data = RequestData::new(request, None, None);
     let mut latest_auth_data = None;
     let mut executed_handlers = Vec::new();
     for mut handlers in handlers_vec {
       if is_websocket_request && handlers.does_websocket_requests(&combined_config, &socket_data) {
-        let (request, _) = request_data.into_parts();
+        let (request, _, _) = request_data.into_parts();
 
         // Variables moved to before "tokio::spawn" to avoid issues with moved values
         let client_ip = socket_data.remote_addr.ip();
@@ -1123,6 +1123,7 @@ async fn request_handler_wrapped(
           let (
             request_option,
             auth_data,
+            original_url,
             response,
             status,
             headers,
@@ -1411,7 +1412,7 @@ async fn request_handler_wrapped(
               }
               None => match request_option {
                 Some(request) => {
-                  request_data = RequestData::new(request, auth_data);
+                  request_data = RequestData::new(request, auth_data, original_url);
                   continue;
                 }
                 None => {

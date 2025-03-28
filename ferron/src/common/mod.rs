@@ -5,7 +5,7 @@ use std::{error::Error, future::Future, net::SocketAddr, pin::Pin};
 use async_channel::Sender;
 use async_trait::async_trait;
 use http_body_util::combinators::BoxBody;
-use hyper::{body::Bytes, upgrade::Upgraded, HeaderMap, Request, Response, StatusCode};
+use hyper::{body::Bytes, upgrade::Upgraded, HeaderMap, Request, Response, StatusCode, Uri};
 use hyper_tungstenite::HyperWebsocket;
 use tokio::runtime::Handle;
 use yaml_rust2::Yaml;
@@ -71,6 +71,7 @@ pub type WithRuntime<F> = with_runtime::WithRuntime<F>;
 pub struct RequestData {
   hyper_request: HyperRequest,
   auth_user: Option<String>,
+  original_url: Option<Uri>,
 }
 
 impl RequestData {
@@ -84,10 +85,15 @@ impl RequestData {
   /// # Returns
   ///
   /// A new `RequestData` instance with the provided parameters.
-  pub fn new(hyper_request: HyperRequest, auth_user: Option<String>) -> Self {
+  pub fn new(
+    hyper_request: HyperRequest,
+    auth_user: Option<String>,
+    original_url: Option<Uri>,
+  ) -> Self {
     RequestData {
       hyper_request,
       auth_user,
+      original_url,
     }
   }
 
@@ -108,6 +114,27 @@ impl RequestData {
   pub fn get_auth_user(&self) -> Option<&str> {
     match &self.auth_user {
       Some(auth_user) => Some(auth_user),
+      None => None,
+    }
+  }
+
+  /// Sets the original URL (before URL rewriting) for the request.
+  ///
+  /// # Parameters
+  ///
+  /// - `original_url`: An `Uri` object representing the original request URL before rewriting.
+  pub fn set_original_url(&mut self, original_url: Uri) {
+    self.original_url = Some(original_url);
+  }
+
+  /// Retrieves the original URL (before URL rewriting) associated with the request, if any.
+  ///
+  /// # Returns
+  ///
+  /// An `Option` containing a reference to the `Uri` object representing the original request URL before rewriting, or `None` if not set.
+  pub fn get_original_url(&self) -> Option<&Uri> {
+    match &self.original_url {
+      Some(original_url) => Some(original_url),
       None => None,
     }
   }
@@ -134,9 +161,9 @@ impl RequestData {
   ///
   /// # Returns
   ///
-  /// A tuple containing the `HyperRequest` object and an optional authenticated user string.
-  pub fn into_parts(self) -> (HyperRequest, Option<String>) {
-    (self.hyper_request, self.auth_user)
+  /// A tuple containing the `HyperRequest` object, an optional authenticated user string, and an optional `Uri` object representing the original request URL before rewriting.
+  pub fn into_parts(self) -> (HyperRequest, Option<String>, Option<Uri>) {
+    (self.hyper_request, self.auth_user, self.original_url)
   }
 }
 
@@ -215,6 +242,7 @@ impl Clone for ErrorLogger {
 pub struct ResponseData {
   request: Option<HyperRequest>,
   auth_user: Option<String>,
+  original_url: Option<Uri>,
   response: Option<Response<BoxBody<Bytes, std::io::Error>>>,
   response_status: Option<StatusCode>,
   response_headers: Option<HeaderMap>,
@@ -233,11 +261,12 @@ impl ResponseData {
   ///
   /// A `ResponseDataBuilder` initialized with the provided request data.
   pub fn builder(request: RequestData) -> ResponseDataBuilder {
-    let (request, auth_user) = request.into_parts();
+    let (request, auth_user, original_url) = request.into_parts();
 
     ResponseDataBuilder {
       request: Some(request),
       auth_user,
+      original_url,
       response: None,
       response_status: None,
       response_headers: None,
@@ -255,6 +284,7 @@ impl ResponseData {
     ResponseDataBuilder {
       request: None,
       auth_user: None,
+      original_url: None,
       response: None,
       response_status: None,
       response_headers: None,
@@ -270,6 +300,7 @@ impl ResponseData {
   /// A tuple containing:
   /// - The optional original `HyperRequest` object.
   /// - An optional authenticated user string.
+  /// - An optional `Uri` object representing the original request URL (before rewriting)
   /// - An optional `Response` object encapsulated in a `BoxBody` with `Bytes` and `std::io::Error`.
   /// - An optional HTTP `StatusCode`.
   /// - An optional `HeaderMap` containing the HTTP headers.
@@ -281,6 +312,7 @@ impl ResponseData {
   ) -> (
     Option<HyperRequest>,
     Option<String>,
+    Option<Uri>,
     Option<Response<BoxBody<Bytes, std::io::Error>>>,
     Option<StatusCode>,
     Option<HeaderMap>,
@@ -290,6 +322,7 @@ impl ResponseData {
     (
       self.request,
       self.auth_user,
+      self.original_url,
       self.response,
       self.response_status,
       self.response_headers,
@@ -302,6 +335,7 @@ impl ResponseData {
 pub struct ResponseDataBuilder {
   request: Option<HyperRequest>,
   auth_user: Option<String>,
+  original_url: Option<Uri>,
   response: Option<Response<BoxBody<Bytes, std::io::Error>>>,
   response_status: Option<StatusCode>,
   response_headers: Option<HeaderMap>,
@@ -389,6 +423,7 @@ impl ResponseDataBuilder {
     ResponseData {
       request: self.request,
       auth_user: self.auth_user,
+      original_url: self.original_url,
       response: self.response,
       response_status: self.response_status,
       response_headers: self.response_headers,

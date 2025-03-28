@@ -126,7 +126,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
       };
 
       if let Some(auth_to) = auth_to {
-        let (hyper_request, auth_user) = request.into_parts();
+        let (hyper_request, auth_user, original_url) = request.into_parts();
         let (hyper_request_parts, request_body) = hyper_request.into_parts();
 
         let auth_request_url = auth_to.parse::<hyper::Uri>()?;
@@ -245,7 +245,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
           Empty::new().map_err(|e| match e {}).boxed(),
         );
         let original_hyper_request = Request::from_parts(hyper_request_parts, request_body);
-        let original_request = RequestData::new(original_hyper_request, auth_user);
+        let original_request = RequestData::new(original_hyper_request, auth_user, original_url);
 
         let connections = &self.connections[rand::random_range(..self.connections.len())];
 

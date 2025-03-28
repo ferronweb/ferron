@@ -141,7 +141,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
       )
       .await
       {
-        let (hyper_request, _auth_user) = request.into_parts();
+        let (hyper_request, _auth_user, _original_url) = request.into_parts();
         let (mut hyper_request_parts, request_body) = hyper_request.into_parts();
 
         let proxy_request_url = proxy_to.parse::<hyper::Uri>()?;

@@ -392,7 +392,7 @@ async fn execute_scgi_with_environment_variables(
     environment_variables.insert("CONTENT_LENGTH".to_string(), "0".to_string());
   }
 
-  let (hyper_request, _) = request.into_parts();
+  let (hyper_request, _, _) = request.into_parts();
 
   execute_scgi(hyper_request, error_logger, scgi_to, environment_variables).await
 }
