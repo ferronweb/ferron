@@ -181,7 +181,12 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
           None => true,
         } {
           host_url_rewrite_map = host_url_rewrite_map_wrap.rewrite_map.iter();
-          if let Ok(path_decoded) = urlencoding::decode(request.get_hyper_request().uri().path()) {
+          if let Ok(path_decoded) = urlencoding::decode(
+            request
+              .get_original_url()
+              .unwrap_or(request.get_hyper_request().uri())
+              .path(),
+          ) {
             for location_wrap in host_url_rewrite_map_wrap.locations.iter() {
               if match_location(&location_wrap.path, &path_decoded) {
                 location_url_rewrite_map = location_wrap.rewrite_map.iter();

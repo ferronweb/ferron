@@ -259,7 +259,12 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
         } {
           host_non_standard_codes_list =
             host_non_standard_codes_list_wrap.non_standard_codes.iter();
-          if let Ok(path_decoded) = urlencoding::decode(request.get_hyper_request().uri().path()) {
+          if let Ok(path_decoded) = urlencoding::decode(
+            request
+              .get_original_url()
+              .unwrap_or(request.get_hyper_request().uri())
+              .path(),
+          ) {
             for location_wrap in host_non_standard_codes_list_wrap.locations.iter() {
               if match_location(&location_wrap.path, &path_decoded) {
                 location_non_standard_codes_list = location_wrap.non_standard_codes.iter();
