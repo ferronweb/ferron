@@ -4,6 +4,14 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.0.0-beta8
+
+**Released in March 28, 2025**
+
+- Added support for `{path}` placeholders for custom header values
+- The server now uses the request URL before rewriting in CGI, SCGI, and FastCGI "REQUEST_URI" environment variables (this fixed the redirect loop when URL rewriting is used with Joomla)
+- The server now uses the request URL before rewriting in directory listings
+
 ## Ferron 1.0.0-beta7
 
 **Released in March 27, 2025**

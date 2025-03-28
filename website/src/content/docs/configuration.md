@@ -96,7 +96,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
 - **serverAdministratorEmail** (_String_)
   - Server administrator's email address. This setting specifies the email address of the server administrator, which may be used for contact purposes. Default: None
 - **customHeaders** (_Object_)
-  - Custom HTTP headers. This object contains custom HTTP headers that the server will include in its responses. Default: None
+  - Custom HTTP headers. This object contains custom HTTP headers that the server will include in its responses. From Ferron 1.0.0-beta8, you can use the `{path}` placeholder that will be replaced by the request URL in the custom HTTP header values. Default: None
 - **disableToHTTPSRedirect** (_bool_)
   - Option to disable redirects from the HTTP server to the HTTPS server. When set to `true`, the server will not automatically redirect HTTP requests to HTTPS. Default: `false`
 - **wwwredirect** (_bool_)
