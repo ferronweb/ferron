@@ -218,6 +218,8 @@ async fn execute_scgi_with_environment_variables(
   let mut environment_variables: LinkedHashMap<String, String> = LinkedHashMap::new();
 
   let hyper_request = request.get_hyper_request();
+  let original_request_uri = request.get_original_url().unwrap_or(hyper_request.uri());
+
   if let Some(auth_user) = request.get_auth_user() {
     if let Some(authorization) = hyper_request.headers().get(header::AUTHORIZATION) {
       let authorization_value = String::from_utf8_lossy(authorization.as_bytes()).to_string();
@@ -302,8 +304,8 @@ async fn execute_scgi_with_environment_variables(
     "REQUEST_URI".to_string(),
     format!(
       "{}{}",
-      hyper_request.uri().path(),
-      match hyper_request.uri().query() {
+      original_request_uri.path(),
+      match original_request_uri.query() {
         Some(query) => format!("?{}", query),
         None => String::from(""),
       }
