@@ -64,6 +64,11 @@ export default [
     label: "FerrBench"
   },
   {
+    href: "/docs/web-application-compatibility",
+    target: "_self",
+    label: "Compatibility with web applications"
+  },
+  {
     href: "https://rustdocs.ferronweb.org",
     target: "_self",
     label: "Rust crate documentation"
