@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.0.0-beta9
+
+**Released in March 29, 2025**
+
+- The server now uses the directory containing the executed CGI program as a working directory for the CGI program (this fixed YaBB setup not starting at all)
+
 ## Ferron 1.0.0-beta8
 
 **Released in March 28, 2025**
