@@ -76,3 +76,9 @@ hosts:
 ```
 
 If you enable and configure a `cache` module in Ferron, you can install the [Server Cache for Joomla](https://www.web-expert.gr/en/joomla-extensions/item/127-nginx-server-cache-joomla) extension. This extension sets `Cache-Control` header, which will be then used by the `cache` module.
+
+## Uptime Kuma
+
+Uptime Kuma is a self-hosted server uptime monitoring tool.
+
+We tested Ferron 1.0.0-beta8 (as a reverse proxy) with Uptime Kuma, and it works without any problems.
