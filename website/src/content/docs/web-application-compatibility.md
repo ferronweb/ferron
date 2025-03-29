@@ -82,3 +82,29 @@ If you enable and configure a `cache` module in Ferron, you can install the [Ser
 Uptime Kuma is a self-hosted server uptime monitoring tool.
 
 We tested Ferron 1.0.0-beta8 (as a reverse proxy) with Uptime Kuma, and it works without any problems.
+
+## YaBB
+
+YaBB is a free Internet forum package written in Perl.
+
+We tested Ferron 1.0.0-beta9 with YaBB, and it works without any problems.
+
+You can use the configuration below for websites powered by YaBB:
+
+```yaml
+global:
+  loadModules:
+   - cgi
+  logFilePath: /var/log/ferron/access.log # Replace with the path to the access log
+  errorLogFilePath: /var/log/ferron/error.log # Replace with the path to the error log
+
+hosts:
+  - domain: "*"
+    wwwroot: /var/www/ferron # Replace with the path to the webroot
+    nonStandardCodes:
+      - scode: 301
+        regex: "^/(?:$|[?#])"
+        location: /cgi-bin/yabb2/YaBB.pl
+      - scode: 403
+        regex: "^/cgi-bin/yabb2/(?:Convert|Backups|Templates|Members|Sources|Admin|Messages|Languages|Variables|Boards|Help|Modules)(?:$|[/?#])"
+```
