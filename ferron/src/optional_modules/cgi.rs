@@ -633,6 +633,10 @@ async fn execute_cgi(
 
   command.envs(environment_variables);
 
+  let mut execute_dir_pathbuf = execute_pathbuf.clone();
+  execute_dir_pathbuf.pop();
+  command.current_dir(execute_dir_pathbuf);
+
   let mut child = command.spawn()?;
 
   let cgi_stdin_reader = StreamReader::new(
