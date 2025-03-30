@@ -59,7 +59,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
 - **blocklist** (_Array&lt;String&gt;_)
   - IP block list. This setting specifies an array of IP addresses that the server will block from accessing its services. The block list will only work with non-forward proxy requests. Default: None
 - **enableOCSPStapling** (_bool_)
-  - Option to enable OCSP stapling. When set to `true`, the server will use OCSP stapling to provide certificate revocation status to clients. Certificates with `Must-Staple` extension will not work with automatic TLS enabled. Default: `false`
+  - Option to enable OCSP stapling. When set to `true`, the server will use OCSP stapling to provide certificate revocation status to clients. Certificates with `Must-Staple` extension will not work with automatic TLS enabled. Default: `true` on Ferron 1.0.0-beta10 and newer (previously it was `false`)
 - **environmentVariables** (_Object_)
   - Environment variables. This object contains environment variables that the server will use during operation. Default: None
 - **enableAutomaticTLS** (_bool_; Project Karpacz 0.7.0 and newer)
