@@ -699,7 +699,7 @@ dependencies = [
 
 [[package]]
 name = "ferron"
-version = "1.0.0-beta9"
+version = "1.0.0-beta10"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -746,7 +746,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-passwd"
-version = "1.0.0-beta9"
+version = "1.0.0-beta10"
 dependencies = [
  "clap",
  "mimalloc",
