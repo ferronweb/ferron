@@ -57,7 +57,7 @@ fn non_standard_codes_config_init(
       },
       None => None,
     };
-    let url = non_standard_codes_list_entry["path"]
+    let url = non_standard_codes_list_entry["url"]
       .as_str()
       .map(|s| s.to_string());
 
