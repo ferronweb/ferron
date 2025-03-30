@@ -568,8 +568,8 @@ pub fn validate_config(
             "Invalid non-standard status code configuration"
           ))?
         }
-        if !non_standard_code_yaml["non_standard_codeList"].is_badvalue() {
-          if let Some(users) = non_standard_code_yaml["non_standard_codeList"].as_vec() {
+        if !non_standard_code_yaml["userList"].is_badvalue() {
+          if let Some(users) = non_standard_code_yaml["userList"].as_vec() {
             let users_iter = users.iter();
             for user_yaml in users_iter {
               if user_yaml.as_str().is_none() {
@@ -584,8 +584,8 @@ pub fn validate_config(
             ))?
           }
         }
-        if !non_standard_code_yaml["non_standard_codes"].is_badvalue() {
-          if let Some(users) = non_standard_code_yaml["non_standard_codes"].as_vec() {
+        if !non_standard_code_yaml["users"].is_badvalue() {
+          if let Some(users) = non_standard_code_yaml["users"].as_vec() {
             let users_iter = users.iter();
             for user_yaml in users_iter {
               match user_yaml.as_str() {
