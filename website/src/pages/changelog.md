@@ -4,6 +4,13 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.0.0-beta10
+
+**Released in March 30, 2025**
+
+- Fixed bug with "userList" and "users" property validation for non-standard codes
+- The server now enables OCSP stapling by default
+
 ## Ferron 1.0.0-beta9
 
 **Released in March 29, 2025**
