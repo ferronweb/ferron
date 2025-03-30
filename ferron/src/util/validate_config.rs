@@ -1004,6 +1004,8 @@ pub fn prepare_config_for_validation(
       for host in hosts.iter() {
         if let Some(locations) = host["locations"].as_vec() {
           vector3.append(&mut locations.clone());
+        } else {
+          return Err(anyhow::anyhow!("Invalid location configuration").into());
         }
       }
       vector2 = hosts.clone();
