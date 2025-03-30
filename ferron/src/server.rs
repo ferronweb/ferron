@@ -854,10 +854,14 @@ async fn server_event_loop(
     let acceptor = acme_state.acceptor();
 
     // Create TLS configuration
-    tls_config = match yaml_config["global"]["enableOCSPStapling"].as_bool() {
-      Some(true) => tls_config_builder_wants_server_cert
-        .with_cert_resolver(Arc::new(Stapler::new(acme_state.resolver()))),
-      _ => tls_config_builder_wants_server_cert.with_cert_resolver(acme_state.resolver()),
+    tls_config = if yaml_config["global"]["enableOCSPStapling"]
+      .as_bool()
+      .unwrap_or(true)
+    {
+      tls_config_builder_wants_server_cert
+        .with_cert_resolver(Arc::new(Stapler::new(acme_state.resolver())))
+    } else {
+      tls_config_builder_wants_server_cert.with_cert_resolver(acme_state.resolver())
     };
 
     let acme_logger = logger.clone();
@@ -878,15 +882,17 @@ async fn server_event_loop(
     Some(acceptor)
   } else {
     // Create TLS configuration
-    tls_config = match yaml_config["global"]["enableOCSPStapling"].as_bool() {
-      Some(true) => {
-        let ocsp_stapler_arc = Arc::new(Stapler::new(Arc::new(sni_resolver)));
-        for certified_key in certified_keys.iter() {
-          ocsp_stapler_arc.preload(certified_key.clone());
-        }
-        tls_config_builder_wants_server_cert.with_cert_resolver(ocsp_stapler_arc.clone())
+    tls_config = if yaml_config["global"]["enableOCSPStapling"]
+      .as_bool()
+      .unwrap_or(true)
+    {
+      let ocsp_stapler_arc = Arc::new(Stapler::new(Arc::new(sni_resolver)));
+      for certified_key in certified_keys.iter() {
+        ocsp_stapler_arc.preload(certified_key.clone());
       }
-      _ => tls_config_builder_wants_server_cert.with_cert_resolver(Arc::new(sni_resolver)),
+      tls_config_builder_wants_server_cert.with_cert_resolver(ocsp_stapler_arc.clone())
+    } else {
+      tls_config_builder_wants_server_cert.with_cert_resolver(Arc::new(sni_resolver))
     };
 
     // Drop the ACME configuration
