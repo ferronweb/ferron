@@ -43,7 +43,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
     - **key** (_String_)
       - Path to the SNI private key. This setting specifies the file path to the private key associated with the SNI certificate. Default: None
 - **loadModules** (_Array&lt;String&gt;_)
-  - Modules to load. This setting specifies an array of modules that the server should load at startup. First module in the array is loaded first. Default: None
+  - Modules to load. This setting specifies an array of modules that the server should load at startup. The module handlers are executed in order of the list of modules to load defined in this property (for example if `cache` module is first specified, and then `fcgi`, then the `cache` module handler will be first executed, then `fcgi`). Default: None
 - **useClientCertificate** (_bool_)
   - Option to require client to provide its certificate. When set to `true`, the server will require clients to present a valid certificate for authentication. Default: `false`
 - **cipherSuite** (_Array&lt;String&gt;_)
