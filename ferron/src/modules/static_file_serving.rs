@@ -234,7 +234,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                         .finalize()
                         .iter()
                         .fold(String::new(), |mut output, b| {
-                          let _ = write!(output, "{b:02x}");
+                          let _ = write!(output, "\"{b:02x}\"");
                           output
                         })
                     })
