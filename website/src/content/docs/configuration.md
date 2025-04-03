@@ -223,7 +223,7 @@ global:
   logFilePath: "/var/log/ferron/access.log"
   errorLogFilePath: "/var/log/ferron/error.log"
   cert: "/etc/ssl/certs/fallback.crt"
-  key: "/etc/ssl/private/fallback.pem"
+  key: "/etc/ssl/private/fallback.key"
   tlsMinVersion: "TLSv1.2"
   tlsMaxVersion: "TLSv1.3"
   disableNonEncryptedServer: false
@@ -241,10 +241,10 @@ global:
   sni:
     "example.com": 
       cert: "/etc/ssl/certs/example-com.crt"
-      key: "/etc/ssl/private/example-com.pem"
+      key: "/etc/ssl/private/example-com.key"
     "*.example.com": 
       cert: "/etc/ssl/certs/example-com.crt"
-      key: "/etc/ssl/private/example-com.pem"
+      key: "/etc/ssl/private/example-com.key"
 
 hosts:
   - domain: "example.com"
