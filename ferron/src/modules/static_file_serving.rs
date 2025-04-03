@@ -234,7 +234,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                         .finalize()
                         .iter()
                         .fold(String::new(), |mut output, b| {
-                          let _ = write!(output, "\"{b:02x}\"");
+                          let _ = write!(output, "{b:02x}");
                           output
                         })
                     })
@@ -604,7 +604,22 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                   .header(header::ACCEPT_RANGES, "bytes");
 
                 if let Some(etag) = etag_option {
-                  response_builder = response_builder.header(header::ETAG, etag);
+                  if use_brotli {
+                    response_builder =
+                      response_builder.header(header::ETAG, format!("\"{}-br\"", etag));
+                  } else if use_zstd {
+                    response_builder =
+                      response_builder.header(header::ETAG, format!("\"{}-zstd\"", etag));
+                  } else if use_deflate {
+                    response_builder =
+                      response_builder.header(header::ETAG, format!("\"{}-deflate\"", etag));
+                  } else if use_gzip {
+                    response_builder =
+                      response_builder.header(header::ETAG, format!("\"{}-gzip\"", etag));
+                  } else {
+                    response_builder =
+                      response_builder.header(header::ETAG, format!("\"{}\"", etag));
+                  }
                 }
 
                 if let Some(content_type) = content_type_option {
