@@ -419,6 +419,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                 let mut use_deflate = false;
                 let mut use_brotli = false;
                 let mut use_zstd = false;
+                let mut compression_possible = false;
 
                 if config["enableCompression"].as_bool() != Some(false) {
                   // A hard-coded list of non-compressible file extension
@@ -559,6 +560,8 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                   };
 
                   if metadata.len() > 256 && file_extension_compressible {
+                    compression_possible = true;
+
                     // Some web browsers have broken HTTP compression handling
                     let is_netscape_4_broken_html_compression =
                       user_agent.starts_with("Mozilla/4.");
@@ -603,6 +606,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                   .status(StatusCode::OK)
                   .header(header::ACCEPT_RANGES, "bytes");
 
+                let has_etag = etag_option.is_some();
                 if let Some(etag) = etag_option {
                   if use_brotli {
                     response_builder =
@@ -620,6 +624,14 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                     response_builder =
                       response_builder.header(header::ETAG, format!("\"{}\"", etag));
                   }
+                }
+
+                if has_etag && compression_possible {
+                  response_builder = response_builder.header(header::VARY, "Accept-Encoding, ETag");
+                } else if has_etag {
+                  response_builder = response_builder.header(header::VARY, "ETag");
+                } else if compression_possible {
+                  response_builder = response_builder.header(header::VARY, "Accept-Encoding");
                 }
 
                 if let Some(content_type) = content_type_option {
