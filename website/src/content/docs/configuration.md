@@ -36,7 +36,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
 - **key** (_String_)
   - Path to the private key. This setting specifies the file path to the private key associated with the TLS certificate. Default: None
 - **sni** (_Object_)
-  - SNI certificate and key data. This object contains the certificate and key data for Server Name Indication (SNI), which allows multiple SSL certificates to be used on the same IP address. Default: None
+  - SNI certificate and key data. This object contains the certificate and key data for Server Name Indication (SNI), which allows multiple SSL certificates to be used on the same IP address. The object keys are SNI hostnames, while the object values are objects where certificates and private keys can be specified. Default: None
   - **Sub-properties**:
     - **cert** (_String_)
       - Path to the SNI certificate. This setting specifies the file path to the SNI certificate. Default: None
@@ -222,8 +222,8 @@ global:
     enableConnectProtocol: true
   logFilePath: "/var/log/ferron/access.log"
   errorLogFilePath: "/var/log/ferron/error.log"
-  cert: "/etc/ssl/certs/server-cert.pem"
-  key: "/etc/ssl/private/server-key.pem"
+  cert: "/etc/ssl/certs/fallback.crt"
+  key: "/etc/ssl/private/fallback.pem"
   tlsMinVersion: "TLSv1.2"
   tlsMaxVersion: "TLSv1.3"
   disableNonEncryptedServer: false
@@ -238,6 +238,13 @@ global:
     MAX_THREADS: "16"
   loadModules:
     - "rproxy"
+  sni:
+    "example.com": 
+      cert: "/etc/ssl/certs/example-com.crt"
+      key: "/etc/ssl/private/example-com.pem"
+    "*.example.com": 
+      cert: "/etc/ssl/certs/example-com.crt"
+      key: "/etc/ssl/private/example-com.pem"
 
 hosts:
   - domain: "example.com"
