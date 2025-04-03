@@ -98,6 +98,19 @@ fn parse_range_header(range_str: &str, default_end: u64) -> Option<(u64, u64)> {
   None
 }
 
+fn extract_etag_inner(input: &str) -> Option<String> {
+  // Remove the surrounding double quotes
+  let trimmed = input.trim_matches('"');
+
+  // Split the string at the hyphen and take the first part
+  let parts: Vec<&str> = trimmed.split('-').collect();
+  if parts.is_empty() {
+    None
+  } else {
+    Some(parts[0].to_string())
+  }
+}
+
 #[async_trait]
 impl ServerModuleHandlers for StaticFileServingModuleHandlers {
   async fn request_handler(
@@ -253,17 +266,19 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                 {
                   match if_none_match_value.to_str() {
                     Ok(if_none_match) => {
-                      if if_none_match == etag {
-                        return Ok(
-                          ResponseData::builder(request)
-                            .response(
-                              Response::builder()
-                                .status(StatusCode::NOT_MODIFIED)
-                                .header(header::ETAG, etag)
-                                .body(Empty::new().map_err(|e| match e {}).boxed())?,
-                            )
-                            .build(),
-                        );
+                      if let Some(etag_extracted) = extract_etag_inner(if_none_match) {
+                        if etag_extracted == etag {
+                          return Ok(
+                            ResponseData::builder(request)
+                              .response(
+                                Response::builder()
+                                  .status(StatusCode::NOT_MODIFIED)
+                                  .header(header::ETAG, etag)
+                                  .body(Empty::new().map_err(|e| match e {}).boxed())?,
+                              )
+                              .build(),
+                          );
+                        }
                       }
                     }
                     Err(_) => {
@@ -279,15 +294,19 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                 if let Some(if_match_value) = hyper_request.headers().get(header::IF_MATCH) {
                   match if_match_value.to_str() {
                     Ok(if_match) => {
-                      if if_match != "*" && if_match != etag {
-                        let mut header_map = HeaderMap::new();
-                        header_map.insert(header::ETAG, if_match_value.clone());
-                        return Ok(
-                          ResponseData::builder(request)
-                            .status(StatusCode::PRECONDITION_FAILED)
-                            .headers(header_map)
-                            .build(),
-                        );
+                      if if_match != "*" {
+                        if let Some(etag_extracted) = extract_etag_inner(if_match) {
+                          if etag_extracted != etag {
+                            let mut header_map = HeaderMap::new();
+                            header_map.insert(header::ETAG, if_match_value.clone());
+                            return Ok(
+                              ResponseData::builder(request)
+                                .status(StatusCode::PRECONDITION_FAILED)
+                                .headers(header_map)
+                                .build(),
+                            );
+                          }
+                        }
                       }
                     }
                     Err(_) => {
