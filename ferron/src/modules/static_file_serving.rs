@@ -19,6 +19,7 @@ use chrono::offset::Local;
 use chrono::DateTime;
 use futures_util::TryStreamExt;
 use hashlink::LruCache;
+use http::HeaderValue;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use hyper::body::Bytes;
 use hyper::{body::Frame, Response, StatusCode};
@@ -217,6 +218,149 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
             }
 
             if metadata.is_file() {
+              // Check if compression is possible at all
+              let mut compression_possible = false;
+
+              if config["enableCompression"].as_bool() != Some(false) {
+                // A hard-coded list of non-compressible file extension
+                let non_compressible_file_extensions = vec![
+                  "7z",
+                  "air",
+                  "amlx",
+                  "apk",
+                  "apng",
+                  "appinstaller",
+                  "appx",
+                  "appxbundle",
+                  "arj",
+                  "au",
+                  "avif",
+                  "bdoc",
+                  "boz",
+                  "br",
+                  "bz",
+                  "bz2",
+                  "caf",
+                  "class",
+                  "doc",
+                  "docx",
+                  "dot",
+                  "dvi",
+                  "ear",
+                  "epub",
+                  "flv",
+                  "gdoc",
+                  "gif",
+                  "gsheet",
+                  "gslides",
+                  "gz",
+                  "iges",
+                  "igs",
+                  "jar",
+                  "jnlp",
+                  "jp2",
+                  "jpe",
+                  "jpeg",
+                  "jpf",
+                  "jpg",
+                  "jpg2",
+                  "jpgm",
+                  "jpm",
+                  "jpx",
+                  "kmz",
+                  "latex",
+                  "m1v",
+                  "m2a",
+                  "m2v",
+                  "m3a",
+                  "m4a",
+                  "mesh",
+                  "mk3d",
+                  "mks",
+                  "mkv",
+                  "mov",
+                  "mp2",
+                  "mp2a",
+                  "mp3",
+                  "mp4",
+                  "mp4a",
+                  "mp4v",
+                  "mpe",
+                  "mpeg",
+                  "mpg",
+                  "mpg4",
+                  "mpga",
+                  "msg",
+                  "msh",
+                  "msix",
+                  "msixbundle",
+                  "odg",
+                  "odp",
+                  "ods",
+                  "odt",
+                  "oga",
+                  "ogg",
+                  "ogv",
+                  "ogx",
+                  "opus",
+                  "p12",
+                  "pdf",
+                  "pfx",
+                  "pgp",
+                  "pkpass",
+                  "png",
+                  "pot",
+                  "pps",
+                  "ppt",
+                  "pptx",
+                  "qt",
+                  "ser",
+                  "silo",
+                  "sit",
+                  "snd",
+                  "spx",
+                  "stpxz",
+                  "stpz",
+                  "swf",
+                  "tif",
+                  "tiff",
+                  "ubj",
+                  "usdz",
+                  "vbox-extpack",
+                  "vrml",
+                  "war",
+                  "wav",
+                  "weba",
+                  "webm",
+                  "wmv",
+                  "wrl",
+                  "x3dbz",
+                  "x3dvz",
+                  "xla",
+                  "xlc",
+                  "xlm",
+                  "xls",
+                  "xlsx",
+                  "xlt",
+                  "xlw",
+                  "xpi",
+                  "xps",
+                  "zip",
+                  "zst",
+                ];
+                let file_extension = joined_pathbuf
+                  .extension()
+                  .map_or_else(|| "".to_string(), |ext| ext.to_string_lossy().to_string());
+                let file_extension_compressible =
+                  !non_compressible_file_extensions.contains(&(&file_extension as &str));
+
+                if metadata.len() > 256 && file_extension_compressible {
+                  compression_possible = true;
+                }
+              }
+
+              let vary;
+
               // Handle ETags
               let mut etag_option = None;
               if config["enableETag"].as_bool() != Some(false) {
@@ -261,6 +405,12 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                   }
                 };
 
+                vary = if compression_possible {
+                  "Accept-Encoding, ETag, Range"
+                } else {
+                  "ETag, Range"
+                };
+
                 if let Some(if_none_match_value) =
                   hyper_request.headers().get(header::IF_NONE_MATCH)
                 {
@@ -274,6 +424,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                                 Response::builder()
                                   .status(StatusCode::NOT_MODIFIED)
                                   .header(header::ETAG, etag)
+                                  .header(header::VARY, vary)
                                   .body(Empty::new().map_err(|e| match e {}).boxed())?,
                               )
                               .build(),
@@ -282,11 +433,16 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                       }
                     }
                     Err(_) => {
+                      let mut header_map = HeaderMap::new();
+                      if let Ok(vary) = HeaderValue::from_str(vary) {
+                        header_map.insert(header::VARY, vary);
+                      }
                       return Ok(
                         ResponseData::builder(request)
                           .status(StatusCode::BAD_REQUEST)
+                          .headers(header_map)
                           .build(),
-                      )
+                      );
                     }
                   }
                 }
@@ -299,6 +455,9 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                           if etag_extracted != etag {
                             let mut header_map = HeaderMap::new();
                             header_map.insert(header::ETAG, if_match_value.clone());
+                            if let Ok(vary) = HeaderValue::from_str(vary) {
+                              header_map.insert(header::VARY, vary);
+                            }
                             return Ok(
                               ResponseData::builder(request)
                                 .status(StatusCode::PRECONDITION_FAILED)
@@ -310,15 +469,26 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                       }
                     }
                     Err(_) => {
+                      let mut header_map = HeaderMap::new();
+                      if let Ok(vary) = HeaderValue::from_str(vary) {
+                        header_map.insert(header::VARY, vary);
+                      }
                       return Ok(
                         ResponseData::builder(request)
                           .status(StatusCode::BAD_REQUEST)
+                          .headers(header_map)
                           .build(),
-                      )
+                      );
                     }
                   }
                 }
                 etag_option = Some(etag);
+              } else {
+                vary = if compression_possible {
+                  "Accept-Encoding, Range"
+                } else {
+                  "Range"
+                };
               }
 
               let content_type_option = new_mime_guess::from_path(&joined_pathbuf)
@@ -329,11 +499,16 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                 Some(value) => match value.to_str() {
                   Ok(value) => Some(value),
                   Err(_) => {
+                    let mut header_map = HeaderMap::new();
+                    if let Ok(vary) = HeaderValue::from_str(vary) {
+                      header_map.insert(header::VARY, vary);
+                    }
                     return Ok(
                       ResponseData::builder(request)
                         .status(StatusCode::BAD_REQUEST)
+                        .headers(header_map)
                         .build(),
-                    )
+                    );
                   }
                 },
                 None => None,
@@ -342,9 +517,14 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
               if let Some(range_header) = range_header {
                 let file_length = metadata.len();
                 if file_length == 0 {
+                  let mut header_map = HeaderMap::new();
+                  if let Ok(vary) = HeaderValue::from_str(vary) {
+                    header_map.insert(header::VARY, vary);
+                  }
                   return Ok(
                     ResponseData::builder(request)
                       .status(StatusCode::RANGE_NOT_SATISFIABLE)
+                      .headers(header_map)
                       .build(),
                   );
                 }
@@ -355,9 +535,14 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                     || range_begin > file_length - 1
                     || range_begin > range_end
                   {
+                    let mut header_map = HeaderMap::new();
+                    if let Ok(vary) = HeaderValue::from_str(vary) {
+                      header_map.insert(header::VARY, vary);
+                    }
                     return Ok(
                       ResponseData::builder(request)
                         .status(StatusCode::RANGE_NOT_SATISFIABLE)
+                        .headers(header_map)
                         .build(),
                     );
                   }
@@ -381,6 +566,8 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                   if let Some(content_type) = content_type_option {
                     response_builder = response_builder.header(header::CONTENT_TYPE, content_type);
                   }
+
+                  response_builder = response_builder.header(header::VARY, vary);
 
                   let response = match request_method {
                     &Method::HEAD => {
@@ -427,9 +614,15 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
 
                   return Ok(ResponseData::builder(request).response(response).build());
                 } else {
+                  let mut header_map = HeaderMap::new();
+                  if let Ok(vary) = HeaderValue::from_str(vary) {
+                    header_map.insert(header::VARY, vary);
+                  }
+
                   return Ok(
                     ResponseData::builder(request)
                       .status(StatusCode::RANGE_NOT_SATISFIABLE)
+                      .headers(header_map)
                       .build(),
                   );
                 }
@@ -438,181 +631,43 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                 let mut use_deflate = false;
                 let mut use_brotli = false;
                 let mut use_zstd = false;
-                let mut compression_possible = false;
 
-                if config["enableCompression"].as_bool() != Some(false) {
-                  // A hard-coded list of non-compressible file extension
-                  let non_compressible_file_extensions = vec![
-                    "7z",
-                    "air",
-                    "amlx",
-                    "apk",
-                    "apng",
-                    "appinstaller",
-                    "appx",
-                    "appxbundle",
-                    "arj",
-                    "au",
-                    "avif",
-                    "bdoc",
-                    "boz",
-                    "br",
-                    "bz",
-                    "bz2",
-                    "caf",
-                    "class",
-                    "doc",
-                    "docx",
-                    "dot",
-                    "dvi",
-                    "ear",
-                    "epub",
-                    "flv",
-                    "gdoc",
-                    "gif",
-                    "gsheet",
-                    "gslides",
-                    "gz",
-                    "iges",
-                    "igs",
-                    "jar",
-                    "jnlp",
-                    "jp2",
-                    "jpe",
-                    "jpeg",
-                    "jpf",
-                    "jpg",
-                    "jpg2",
-                    "jpgm",
-                    "jpm",
-                    "jpx",
-                    "kmz",
-                    "latex",
-                    "m1v",
-                    "m2a",
-                    "m2v",
-                    "m3a",
-                    "m4a",
-                    "mesh",
-                    "mk3d",
-                    "mks",
-                    "mkv",
-                    "mov",
-                    "mp2",
-                    "mp2a",
-                    "mp3",
-                    "mp4",
-                    "mp4a",
-                    "mp4v",
-                    "mpe",
-                    "mpeg",
-                    "mpg",
-                    "mpg4",
-                    "mpga",
-                    "msg",
-                    "msh",
-                    "msix",
-                    "msixbundle",
-                    "odg",
-                    "odp",
-                    "ods",
-                    "odt",
-                    "oga",
-                    "ogg",
-                    "ogv",
-                    "ogx",
-                    "opus",
-                    "p12",
-                    "pdf",
-                    "pfx",
-                    "pgp",
-                    "pkpass",
-                    "png",
-                    "pot",
-                    "pps",
-                    "ppt",
-                    "pptx",
-                    "qt",
-                    "ser",
-                    "silo",
-                    "sit",
-                    "snd",
-                    "spx",
-                    "stpxz",
-                    "stpz",
-                    "swf",
-                    "tif",
-                    "tiff",
-                    "ubj",
-                    "usdz",
-                    "vbox-extpack",
-                    "vrml",
-                    "war",
-                    "wav",
-                    "weba",
-                    "webm",
-                    "wmv",
-                    "wrl",
-                    "x3dbz",
-                    "x3dvz",
-                    "xla",
-                    "xlc",
-                    "xlm",
-                    "xls",
-                    "xlsx",
-                    "xlt",
-                    "xlw",
-                    "xpi",
-                    "xps",
-                    "zip",
-                    "zst",
-                  ];
-                  let file_extension = joined_pathbuf
-                    .extension()
-                    .map_or_else(|| "".to_string(), |ext| ext.to_string_lossy().to_string());
-                  let file_extension_compressible =
-                    !non_compressible_file_extensions.contains(&(&file_extension as &str));
-
+                if compression_possible {
                   let user_agent = match hyper_request.headers().get(header::USER_AGENT) {
                     Some(user_agent_value) => user_agent_value.to_str().unwrap_or_default(),
                     None => "",
                   };
 
-                  if metadata.len() > 256 && file_extension_compressible {
-                    compression_possible = true;
-
-                    // Some web browsers have broken HTTP compression handling
-                    let is_netscape_4_broken_html_compression =
-                      user_agent.starts_with("Mozilla/4.");
-                    let is_netscape_4_broken_compression =
-                      match user_agent.strip_prefix("Mozilla/4.") {
-                        Some(stripped_user_agent) => matches!(
-                          stripped_user_agent.chars().nth(0),
-                          Some('6') | Some('7') | Some('8')
-                        ),
-                        None => false,
-                      };
-                    let is_w3m_broken_html_compression = user_agent.starts_with("w3m/");
-                    if !(content_type_option == Some("text/html".to_string())
-                      && (is_netscape_4_broken_html_compression || is_w3m_broken_html_compression))
-                      && !is_netscape_4_broken_compression
+                  // Some web browsers have broken HTTP compression handling
+                  let is_netscape_4_broken_html_compression = user_agent.starts_with("Mozilla/4.");
+                  let is_netscape_4_broken_compression = match user_agent.strip_prefix("Mozilla/4.")
+                  {
+                    Some(stripped_user_agent) => matches!(
+                      stripped_user_agent.chars().nth(0),
+                      Some('6') | Some('7') | Some('8')
+                    ),
+                    None => false,
+                  };
+                  let is_w3m_broken_html_compression = user_agent.starts_with("w3m/");
+                  if !(content_type_option == Some("text/html".to_string())
+                    && (is_netscape_4_broken_html_compression || is_w3m_broken_html_compression))
+                    && !is_netscape_4_broken_compression
+                  {
+                    let accept_encoding = match hyper_request.headers().get(header::ACCEPT_ENCODING)
                     {
-                      let accept_encoding =
-                        match hyper_request.headers().get(header::ACCEPT_ENCODING) {
-                          Some(header_value) => header_value.to_str().unwrap_or_default(),
-                          None => "",
-                        };
+                      Some(header_value) => header_value.to_str().unwrap_or_default(),
+                      None => "",
+                    };
 
-                      // Checking the Accept-Encoding header naively...
-                      if accept_encoding.contains("br") {
-                        use_brotli = true;
-                      } else if accept_encoding.contains("zstd") {
-                        use_zstd = true;
-                      } else if accept_encoding.contains("deflate") {
-                        use_deflate = true;
-                      } else if accept_encoding.contains("gzip") {
-                        use_gzip = true;
-                      }
+                    // Checking the Accept-Encoding header naively...
+                    if accept_encoding.contains("br") {
+                      use_brotli = true;
+                    } else if accept_encoding.contains("zstd") {
+                      use_zstd = true;
+                    } else if accept_encoding.contains("deflate") {
+                      use_deflate = true;
+                    } else if accept_encoding.contains("gzip") {
+                      use_gzip = true;
                     }
                   }
                 }
@@ -625,7 +680,6 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                   .status(StatusCode::OK)
                   .header(header::ACCEPT_RANGES, "bytes");
 
-                let has_etag = etag_option.is_some();
                 if let Some(etag) = etag_option {
                   if use_brotli {
                     response_builder =
@@ -645,13 +699,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                   }
                 }
 
-                if has_etag && compression_possible {
-                  response_builder = response_builder.header(header::VARY, "Accept-Encoding, ETag");
-                } else if has_etag {
-                  response_builder = response_builder.header(header::VARY, "ETag");
-                } else if compression_possible {
-                  response_builder = response_builder.header(header::VARY, "Accept-Encoding");
-                }
+                response_builder = response_builder.header(header::VARY, vary);
 
                 if let Some(content_type) = content_type_option {
                   response_builder = response_builder.header(header::CONTENT_TYPE, content_type);
