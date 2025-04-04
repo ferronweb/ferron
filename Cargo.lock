@@ -378,8 +378,7 @@ checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 [[package]]
 name = "cache_control"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bf2a5fb3207c12b5d208ebc145f967fea5cac41a021c37417ccc31ba40f39ee"
+source = "git+https://github.com/DorianNiemiecSVRJS/rust-cache-control.git#2229d7b60c30eb1291654e2a8935c3c0ae9948e7"
 
 [[package]]
 name = "cc"
