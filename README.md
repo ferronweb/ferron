@@ -50,6 +50,8 @@ cargo build -r
 cargo run -r --bin ferron
 ```
 
+You can also use [Ferron Forge](https://github.com/ferronweb/ferron-forge) to build the web server. Ferron Forge outputs a ZIP archive that can be used by the Ferron installer.
+
 ## Server configuration
 
 You can check the [Ferron documentation](https://www.ferronweb.org/docs/configuration) to see configuration properties used by Ferron.
