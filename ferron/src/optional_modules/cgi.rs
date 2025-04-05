@@ -46,7 +46,7 @@ struct CgiModule {
 impl CgiModule {
   #[allow(clippy::type_complexity)]
   fn new(path_cache: Arc<RwLock<TtlCache<String, (Option<PathBuf>, Option<String>)>>>) -> Self {
-    CgiModule { path_cache }
+    Self { path_cache }
   }
 }
 
@@ -639,11 +639,7 @@ async fn execute_cgi(
 
   let mut child = command.spawn()?;
 
-  let cgi_stdin_reader = StreamReader::new(
-    body
-      .into_data_stream()
-      .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err)),
-  );
+  let cgi_stdin_reader = StreamReader::new(body.into_data_stream().map_err(std::io::Error::other));
 
   let stdin = match child.stdin.take() {
     Some(stdin) => stdin,

@@ -123,7 +123,7 @@ impl UrlRewriteModule {
     global_url_rewrite_map: Arc<Vec<UrlRewriteMapEntry>>,
     host_url_rewrite_maps: Arc<Vec<UrlRewriteMapWrap>>,
   ) -> Self {
-    UrlRewriteModule {
+    Self {
       global_url_rewrite_map,
       host_url_rewrite_maps,
     }
@@ -170,10 +170,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
             None => None,
           },
           match hyper_request.headers().get(header::HOST) {
-            Some(value) => match value.to_str() {
-              Ok(value) => Some(value),
-              Err(_) => None,
-            },
+            Some(value) => value.to_str().ok(),
             None => None,
           },
         ) && match &host_url_rewrite_map_wrap.ip {

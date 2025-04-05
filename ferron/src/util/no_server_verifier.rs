@@ -8,7 +8,7 @@ pub struct NoServerVerifier;
 
 impl NoServerVerifier {
   pub fn new() -> Self {
-    NoServerVerifier
+    Self
   }
 }
 

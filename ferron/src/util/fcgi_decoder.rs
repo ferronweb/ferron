@@ -23,7 +23,7 @@ pub struct FcgiDecoder {
 
 impl FcgiDecoder {
   pub fn new() -> Self {
-    FcgiDecoder {
+    Self {
       header: Vec::new(),
       content_length: 0,
       padding_length: 0,
@@ -84,30 +84,18 @@ impl Decoder for FcgiDecoder {
                   let protocol_status = content[4];
                   match protocol_status {
                     0 => (),
-                    1 => {
-                      return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "FastCGI server overloaded",
-                      ))
-                    }
+                    1 => return Err(std::io::Error::other("FastCGI server overloaded")),
                     2 => {
-                      return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
+                      return Err(std::io::Error::other(
                         "Role not supported by the FastCGI application",
                       ))
                     }
                     3 => {
-                      return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
+                      return Err(std::io::Error::other(
                         "Multiplexed connections not supported by the FastCGI application",
                       ))
                     }
-                    _ => {
-                      return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Unknown error",
-                      ))
-                    }
+                    _ => return Err(std::io::Error::other("Unknown error")),
                   }
 
                   self.state = FcgiDecodeState::Finished;

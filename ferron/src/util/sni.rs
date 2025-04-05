@@ -10,7 +10,7 @@ pub struct CustomSniResolver {
 
 impl CustomSniResolver {
   pub fn new() -> Self {
-    CustomSniResolver {
+    Self {
       fallback_cert_key: None,
       cert_keys: HashMap::new(),
     }

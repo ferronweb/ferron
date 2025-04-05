@@ -34,10 +34,7 @@ async fn generate_error_response(
 ) -> Response<BoxBody<Bytes, std::io::Error>> {
   let bare_body =
     generate_default_error_page(status_code, config["serverAdministratorEmail"].as_str());
-  let mut content_length: Option<u64> = match bare_body.len().try_into() {
-    Ok(content_length) => Some(content_length),
-    Err(_) => None,
-  };
+  let mut content_length: Option<u64> = bare_body.len().try_into().ok();
   let mut response_body = Full::new(Bytes::from(bare_body))
     .map_err(|e| match e {})
     .boxed();
@@ -379,10 +376,7 @@ async fn request_handler_wrapped(
     config,
     match is_proxy_request || is_connect_proxy_request {
       false => match request.headers().get(header::HOST) {
-        Some(value) => match value.to_str() {
-          Ok(value) => Some(value),
-          Err(_) => None,
-        },
+        Some(value) => value.to_str().ok(),
         None => None,
       },
       true => None,

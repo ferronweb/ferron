@@ -39,7 +39,7 @@ impl SocketData {
   ///
   /// A new `SocketData` instance with the provided parameters.
   pub fn new(remote_addr: SocketAddr, local_addr: SocketAddr, encrypted: bool) -> Self {
-    SocketData {
+    Self {
       remote_addr,
       local_addr,
       encrypted,
@@ -90,7 +90,7 @@ impl RequestData {
     auth_user: Option<String>,
     original_url: Option<Uri>,
   ) -> Self {
-    RequestData {
+    Self {
       hyper_request,
       auth_user,
       original_url,
@@ -183,7 +183,7 @@ impl ErrorLogger {
   ///
   /// A new `ErrorLogger` instance associated with the provided logger.
   pub fn new(logger: Sender<LogMessage>) -> Self {
-    ErrorLogger {
+    Self {
       logger: Some(logger),
     }
   }
@@ -194,7 +194,7 @@ impl ErrorLogger {
   ///
   /// A new `ErrorLogger` instance not associated with any logger.
   pub fn without_logger() -> Self {
-    ErrorLogger { logger: None }
+    Self { logger: None }
   }
 
   /// Logs an error message asynchronously.
@@ -231,7 +231,7 @@ impl Clone for ErrorLogger {
   ///
   /// A cloned `ErrorLogger` instance
   fn clone(&self) -> Self {
-    ErrorLogger {
+    Self {
       logger: self.logger.clone(),
     }
   }

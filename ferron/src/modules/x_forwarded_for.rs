@@ -20,7 +20,7 @@ pub fn server_module_init(
 
 impl XForwardedForModule {
   fn new() -> Self {
-    XForwardedForModule
+    Self
   }
 }
 

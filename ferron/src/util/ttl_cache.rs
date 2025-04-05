@@ -12,7 +12,7 @@ where
   V: Clone,
 {
   pub fn new(ttl: Duration) -> Self {
-    TtlCache {
+    Self {
       cache: HashMap::new(),
       ttl,
     }

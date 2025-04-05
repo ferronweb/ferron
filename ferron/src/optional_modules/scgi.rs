@@ -37,7 +37,7 @@ struct ScgiModule;
 
 impl ScgiModule {
   fn new() -> Self {
-    ScgiModule
+    Self
   }
 }
 
@@ -514,11 +514,7 @@ async fn execute_scgi(
     .write_all(&environment_variables_netstring)
     .await?;
 
-  let cgi_stdin_reader = StreamReader::new(
-    body
-      .into_data_stream()
-      .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err)),
-  );
+  let cgi_stdin_reader = StreamReader::new(body.into_data_stream().map_err(std::io::Error::other));
 
   // Emulated standard input and standard output
   // SCGI doesn't support standard error

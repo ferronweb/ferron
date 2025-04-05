@@ -20,7 +20,7 @@ pub fn server_module_init(
 
 impl RedirectsModule {
   fn new() -> Self {
-    RedirectsModule
+    Self
   }
 }
 

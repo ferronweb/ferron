@@ -182,7 +182,7 @@ impl NonStandardCodesModule {
     host_non_standard_codes_lists: Arc<Vec<NonStandardCodesWrap>>,
     brute_force_db: Arc<RwLock<TtlCache<String, u8>>>,
   ) -> Self {
-    NonStandardCodesModule {
+    Self {
       global_non_standard_codes_list,
       host_non_standard_codes_lists,
       brute_force_db,
@@ -247,10 +247,7 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
             None => None,
           },
           match hyper_request.headers().get(header::HOST) {
-            Some(value) => match value.to_str() {
-              Ok(value) => Some(value),
-              Err(_) => None,
-            },
+            Some(value) => value.to_str().ok(),
             None => None,
           },
         ) && match &host_non_standard_codes_list_wrap.ip {

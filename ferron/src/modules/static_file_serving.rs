@@ -55,7 +55,7 @@ impl StaticFileServingModule {
     pathbuf_cache: Arc<RwLock<TtlCache<String, PathBuf>>>,
     etag_cache: Arc<RwLock<LruCache<String, String>>>,
   ) -> Self {
-    StaticFileServingModule {
+    Self {
       pathbuf_cache,
       etag_cache,
     }
@@ -811,17 +811,11 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                   },
                 };
 
-                let description = match fs::read_to_string(joined_maindesc_pathbuf).await {
-                  Ok(contents) => Some(contents),
-                  Err(_) => None,
-                };
+                let description = (fs::read_to_string(joined_maindesc_pathbuf).await).ok();
 
                 let directory_listing_html =
                   generate_directory_listing(directory, original_request_path, description).await?;
-                let content_length: Option<u64> = match directory_listing_html.len().try_into() {
-                  Ok(content_length) => Some(content_length),
-                  Err(_) => None,
-                };
+                let content_length: Option<u64> = directory_listing_html.len().try_into().ok();
 
                 let mut response_builder = Response::builder().status(StatusCode::OK);
 

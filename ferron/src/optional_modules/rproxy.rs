@@ -86,7 +86,7 @@ impl ReverseProxyModule {
     connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
     failed_backends: Arc<RwLock<TtlCache<String, u64>>>,
   ) -> Self {
-    ReverseProxyModule {
+    Self {
       roots,
       connections,
       failed_backends,
@@ -750,7 +750,7 @@ async fn http_proxy(
 
         response = ResponseData::builder_without_request()
                   .response(proxy_response.map(|b| {
-                    b.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+                    b.map_err(|e| std::io::Error::other(e.to_string()))
                       .boxed()
                   }))
                   .parallel_fn(async move {
@@ -796,10 +796,7 @@ async fn http_proxy_kept_alive(
   };
 
   let response = ResponseData::builder_without_request()
-    .response(proxy_response.map(|b| {
-      b.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
-        .boxed()
-    }))
+    .response(proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed()))
     .build();
 
   Ok(response)

@@ -30,7 +30,7 @@ struct RedirectTrailingSlashesModule {
 
 impl RedirectTrailingSlashesModule {
   fn new(cache: Arc<RwLock<TtlCache<String, bool>>>) -> Self {
-    RedirectTrailingSlashesModule { cache }
+    Self { cache }
   }
 }
 
