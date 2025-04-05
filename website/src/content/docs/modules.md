@@ -24,7 +24,7 @@ The following modules are built into Ferron, but are disabled by default:
 
 The _cache_ module is a simple in-memory cache module for Ferron that works with "Cache-Control" and "Vary" headers. The cache is shared across all threads.
 
-If you use this module with Ferron's static file serving functionality, set the caching headers for the cache to work, and add "ETag" and "Accept-Encoding" to either a list of headers in the Vary header or in the _cacheVaryHeaders_ property in the Ferron configuration.
+If you use this module with Ferron's static file serving functionality, set the caching headers for the cache to work, and add "Accept-Encoding", "If-Match", "If-None-Match", and "Range" to either a list of headers in the Vary header or in the _cacheVaryHeaders_ property in the Ferron configuration.
 
 ### _cgi_ module
 
