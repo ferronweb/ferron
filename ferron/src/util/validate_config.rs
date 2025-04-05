@@ -1002,10 +1002,12 @@ pub fn prepare_config_for_validation(
   if !config["hosts"].is_badvalue() {
     if let Some(hosts) = config["hosts"].as_vec() {
       for host in hosts.iter() {
-        if let Some(locations) = host["locations"].as_vec() {
-          vector3.append(&mut locations.clone());
-        } else {
-          return Err(anyhow::anyhow!("Invalid location configuration").into());
+        if !host["locations"].is_badvalue() {
+          if let Some(locations) = host["locations"].as_vec() {
+            vector3.append(&mut locations.clone());
+          } else {
+            return Err(anyhow::anyhow!("Invalid location configuration").into());
+          }
         }
       }
       vector2 = hosts.clone();
