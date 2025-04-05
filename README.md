@@ -1,6 +1,9 @@
 <p align="center">
   <a href="https://www.ferronweb.org" target="_blank">
-    <img src="logo.png" width="256">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="logo-dark.png">
+      <img alt="Ferron logo" src="logo.png" width="256">
+    </picture>
   </a>
 </p>
 <p align="center">
