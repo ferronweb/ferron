@@ -4,6 +4,15 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.0.0-beta11
+
+**Released in April 5, 2025**
+
+- ETags now are wrapped in double quotes and vary based on the used compression algorithm
+- Fixed bug with handling the "s-maxage" directive in "Cache-Control" header value
+- The server now adds "Vary" header to the static content responses
+- The server now doesn't add "Status" CGI/SCGI/FastCGI header as a HTTP response header
+
 ## Ferron 1.0.0-beta10
 
 **Released in March 30, 2025**
