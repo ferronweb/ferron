@@ -406,9 +406,9 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                 };
 
                 vary = if compression_possible {
-                  "Accept-Encoding, ETag, Range"
+                  "Accept-Encoding, If-Match, If-None-Match, Range"
                 } else {
-                  "ETag, Range"
+                  "If-Match, If-None-Match, Range"
                 };
 
                 if let Some(if_none_match_value) =
