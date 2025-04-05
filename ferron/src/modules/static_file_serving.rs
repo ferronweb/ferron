@@ -418,12 +418,13 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                     Ok(if_none_match) => {
                       if let Some(etag_extracted) = extract_etag_inner(if_none_match) {
                         if etag_extracted == etag {
+                          let etag_original = if_none_match.to_string();
                           return Ok(
                             ResponseData::builder(request)
                               .response(
                                 Response::builder()
                                   .status(StatusCode::NOT_MODIFIED)
-                                  .header(header::ETAG, etag)
+                                  .header(header::ETAG, etag_original)
                                   .header(header::VARY, vary)
                                   .body(Empty::new().map_err(|e| match e {}).boxed())?,
                               )
