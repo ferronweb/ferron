@@ -702,6 +702,7 @@ async fn execute_cgi(
     if header == EMPTY_HEADER {
       break;
     }
+    let mut is_status_header = false;
     match &header.name.to_lowercase() as &str {
       "location" => {
         if !(300..=399).contains(&status_code) {
@@ -709,6 +710,7 @@ async fn execute_cgi(
         }
       }
       "status" => {
+        is_status_header = true;
         let header_value_cow = String::from_utf8_lossy(header.value);
         let mut split_status = header_value_cow.split(" ");
         let first_part = split_status.next();
@@ -727,7 +729,9 @@ async fn execute_cgi(
       }
       _ => (),
     }
-    response_builder = response_builder.header(header.name, header.value);
+    if !is_status_header {
+      response_builder = response_builder.header(header.name, header.value);
+    }
   }
 
   response_builder = response_builder.status(status_code);
