@@ -81,7 +81,7 @@ impl CacheModule {
     vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
     maximum_cache_entries: Option<usize>,
   ) -> Self {
-    CacheModule {
+    Self {
       cache,
       vary_cache,
       maximum_cache_entries,
@@ -443,7 +443,7 @@ impl ServerModuleHandlers for CacheModuleHandlers {
 
               if let Some(maximum_cache_entries) = self.maximum_cache_entries {
                 // Remove a value at the front of the list
-                while rwlock_write.len() > 0 && rwlock_write.len() >= maximum_cache_entries {
+                while !rwlock_write.is_empty() && rwlock_write.len() >= maximum_cache_entries {
                   rwlock_write.pop_front();
                 }
               }

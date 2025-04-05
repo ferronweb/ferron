@@ -23,7 +23,7 @@ where
 {
   // Constructor to create a new CgiResponse instance
   pub fn new(stream: R) -> Self {
-    CgiResponse {
+    Self {
       stream,
       response_buf: Vec::with_capacity(RESPONSE_BUFFER_CAPACITY),
       response_head_length: None,

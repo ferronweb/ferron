@@ -7,7 +7,7 @@ pub struct FcgiEncoder;
 
 impl FcgiEncoder {
   pub fn new() -> Self {
-    FcgiEncoder
+    Self
   }
 }
 

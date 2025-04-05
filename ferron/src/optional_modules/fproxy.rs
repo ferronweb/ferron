@@ -27,7 +27,7 @@ struct ForwardProxyModule;
 
 impl ForwardProxyModule {
   fn new() -> Self {
-    ForwardProxyModule
+    Self
   }
 }
 
@@ -278,7 +278,7 @@ async fn http_proxy(
 
         response = ResponseData::builder_without_request()
                   .response(proxy_response.map(|b| {
-                    b.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+                    b.map_err(|e| std::io::Error::other(e.to_string()))
                       .boxed()
                   }))
                   .parallel_fn(async move {

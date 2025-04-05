@@ -21,7 +21,7 @@ pub fn server_module_init(
 
 impl DefaultHandlerChecksModule {
   fn new() -> Self {
-    DefaultHandlerChecksModule
+    Self
   }
 }
 

@@ -16,7 +16,7 @@ impl LogMessage {
   ///
   /// A `LogMessage` object containing the specified message and error status.
   pub fn new(message: String, is_error: bool) -> Self {
-    LogMessage { is_error, message }
+    Self { is_error, message }
   }
 
   /// Consumes the `LogMessage` and returns its components.

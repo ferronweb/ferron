@@ -40,7 +40,7 @@ pub fn server_module_init(
 
 impl BlockListModule {
   fn new(blocklist: Arc<IpBlockList>) -> Self {
-    BlockListModule { blocklist }
+    Self { blocklist }
   }
 }
 

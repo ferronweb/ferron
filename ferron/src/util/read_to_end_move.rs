@@ -10,7 +10,7 @@ pub struct ReadToEndFuture<R> {
 
 impl<R> ReadToEndFuture<R> {
   pub fn new(reader: R) -> Self {
-    ReadToEndFuture {
+    Self {
       reader,
       buffer: Vec::new(),
     }
@@ -58,7 +58,7 @@ mod tests {
 
   impl MockReader {
     fn new(data: &[u8]) -> Self {
-      MockReader {
+      Self {
         data: data.to_vec(),
         position: 0,
       }
@@ -107,7 +107,7 @@ mod tests {
       _cx: &mut Context<'_>,
       _buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-      Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "read error")))
+      Poll::Ready(Err(io::Error::other("read error")))
     }
   }
 

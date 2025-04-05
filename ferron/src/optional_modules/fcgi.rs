@@ -54,7 +54,7 @@ struct FcgiModule {
 impl FcgiModule {
   #[allow(clippy::type_complexity)]
   fn new(path_cache: Arc<RwLock<TtlCache<String, (Option<PathBuf>, Option<String>)>>>) -> Self {
-    FcgiModule { path_cache }
+    Self { path_cache }
   }
 }
 
@@ -730,11 +730,7 @@ async fn execute_fastcgi(
   let params_packet_terminating = construct_fastcgi_record(4, 1, &[]);
   socket_writer.write_all(&params_packet_terminating).await?;
 
-  let cgi_stdin_reader = StreamReader::new(
-    body
-      .into_data_stream()
-      .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err)),
-  );
+  let cgi_stdin_reader = StreamReader::new(body.into_data_stream().map_err(std::io::Error::other));
 
   // Emulated standard input, standard output, and standard error
   type EitherStream = Either<Result<Bytes, std::io::Error>, Result<Bytes, std::io::Error>>;

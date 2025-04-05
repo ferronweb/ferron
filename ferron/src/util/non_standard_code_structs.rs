@@ -25,7 +25,7 @@ impl NonStandardCode {
     user_list: Option<Vec<String>>,
     users: Option<IpBlockList>,
   ) -> Self {
-    NonStandardCode {
+    Self {
       status_code,
       url,
       regex,
@@ -52,7 +52,7 @@ impl NonStandardCodesWrap {
     non_standard_codes: Vec<NonStandardCode>,
     locations: Vec<NonStandardCodesLocationWrap>,
   ) -> Self {
-    NonStandardCodesWrap {
+    Self {
       domain,
       ip,
       non_standard_codes,
@@ -68,7 +68,7 @@ pub struct NonStandardCodesLocationWrap {
 
 impl NonStandardCodesLocationWrap {
   pub fn new(path: String, non_standard_codes: Vec<NonStandardCode>) -> Self {
-    NonStandardCodesLocationWrap {
+    Self {
       path,
       non_standard_codes,
     }

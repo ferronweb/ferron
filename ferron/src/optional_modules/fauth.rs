@@ -75,7 +75,7 @@ impl ForwardedAuthenticationModule {
     roots: Arc<RootCertStore>,
     connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
   ) -> Self {
-    ForwardedAuthenticationModule { roots, connections }
+    Self { roots, connections }
   }
 }
 
@@ -495,7 +495,7 @@ async fn http_forwarded_auth(
         } else {
           response = ResponseData::builder_without_request()
           .response(proxy_response.map(|b| {
-            b.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+            b.map_err(|e| std::io::Error::other(e.to_string()))
               .boxed()
           }))
           .parallel_fn(async move {
@@ -564,10 +564,7 @@ async fn http_forwarded_auth_kept_alive(
     ResponseData::builder(original_request).build()
   } else {
     ResponseData::builder_without_request()
-      .response(proxy_response.map(|b| {
-        b.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
-          .boxed()
-      }))
+      .response(proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed()))
       .build()
   };
 

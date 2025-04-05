@@ -18,7 +18,7 @@ impl UrlRewriteMapEntry {
     last: bool,
     allow_double_slashes: bool,
   ) -> Self {
-    UrlRewriteMapEntry {
+    Self {
       regex,
       replacement,
       is_not_directory,
@@ -43,7 +43,7 @@ impl UrlRewriteMapWrap {
     rewrite_map: Vec<UrlRewriteMapEntry>,
     locations: Vec<UrlRewriteMapLocationWrap>,
   ) -> Self {
-    UrlRewriteMapWrap {
+    Self {
       domain,
       ip,
       rewrite_map,
@@ -59,6 +59,6 @@ pub struct UrlRewriteMapLocationWrap {
 
 impl UrlRewriteMapLocationWrap {
   pub fn new(path: String, rewrite_map: Vec<UrlRewriteMapEntry>) -> Self {
-    UrlRewriteMapLocationWrap { path, rewrite_map }
+    Self { path, rewrite_map }
   }
 }
