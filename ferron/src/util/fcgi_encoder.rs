@@ -18,7 +18,7 @@ impl Encoder<&[u8]> for FcgiEncoder {
     let mut offset = 0;
     let mut first_written = false;
     while offset < item.len() || (item.is_empty() && !first_written) {
-      let chunk_size = std::cmp::min(65536, item.len() - offset);
+      let chunk_size = std::cmp::min(65535, item.len() - offset);
       let chunk = &item[offset..offset + chunk_size];
 
       // Record type 5 means STDIN
