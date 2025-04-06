@@ -33,11 +33,7 @@ Ferron consists of multiple components:
 - **`ferron`**: The main web server.
 - **`ferron-passwd`**: A tool for generating user entries with hashed passwords, which can be copied into the web server's configuration file.
 
-## Installation
-
-Since Ferron is still a work in progress, installation instructions will be provided once an initial release is available. Stay tuned!
-
-## Building Ferron
+## Building Ferron from source
 
 You can clone the repository and explore the existing code:
 
