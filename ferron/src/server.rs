@@ -1110,6 +1110,9 @@ pub fn start_server(
             && !variable_name.contains('=')
             && !variable_value.contains('\0')
           {
+            // Safety: the environment variables are set before threads are spawned
+            // The `std::env::set_var` function is safe to use in single-threaded environments
+            // In Rust 2024 edition, the `std::env::set_var` function would be `unsafe`.
             env::set_var(variable_name, variable_value);
           }
         }
