@@ -6,13 +6,13 @@ You can extend Ferron with modules written in Rust.
 
 The following modules are built into Ferron and are enabled by default:
 
-- _cache_ (from Project Karpacz 0.4.0) - this module enables server response caching.
-- _cgi_ (from Project Karpacz 0.5.0) - this module enables the execution of CGI programs.
+- _cache_ (from v0.4.0) - this module enables server response caching.
+- _cgi_ (from v0.5.0) - this module enables the execution of CGI programs.
 - _fauth_ (from Ferron 1.0.0-beta2) - this module enables authentication forwarded to the authentication server.
-- _fcgi_ (from Project Karpacz 0.6.0) - this module enables the support for connecting to FastCGI servers.
-- _fproxy_ (from Project Karpacz 0.3.0) - this module enables forward proxy functionality.
-- _rproxy_ (from Project Karpacz 0.2.0) - this module enables reverse proxy functionality.
-- _scgi_ (from Project Karpacz 0.6.0) - this module enables the support for connecting to SCGI servers.
+- _fcgi_ (from v0.6.0) - this module enables the support for connecting to FastCGI servers.
+- _fproxy_ (from v0.3.0) - this module enables forward proxy functionality.
+- _rproxy_ (from v0.2.0) - this module enables reverse proxy functionality.
+- _scgi_ (from v0.6.0) - this module enables the support for connecting to SCGI servers.
 
 The following modules are built into Ferron, but are disabled by default:
 
