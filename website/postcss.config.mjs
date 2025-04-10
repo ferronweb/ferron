@@ -281,10 +281,10 @@ const config = {
         }
 
         if (prefixedSelector.match(/\.ap-hud/) && prefixedSelector.match(/\.ap-control-bar[^ ]*$/)) {
-          return `body:not(#\\#):not(#\\#) ${selector}`;
+          return `body:not(#\\#):not(#\\#):not(#\\#) ${selector}`;
         }
 
-        return `body:not(#\\#) ${selector}`;
+        return `body:not(#\\#):not(#\\#) ${selector}`;
       },
     }),
     postcssCascadeLayers,
