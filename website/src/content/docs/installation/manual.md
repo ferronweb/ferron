@@ -74,7 +74,3 @@ By default, Ferron serves content from the `wwwroot` directory. Open a web brows
     ```
 
   Follow the on-screen prompts to generate the necessary entries for your configuration file.
-
-- **Modules**:
-
-  Ferron supports dynamically linked modules (`libferron_mod_*.so` or `ferron_mod_*.dll`) to extend its functionality. To load a module, specify the module name in the `loadModules` property of the `ferron.yaml` configuration file.

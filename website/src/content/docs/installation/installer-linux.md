@@ -24,7 +24,6 @@ Ferron installed via the installer for GNU/Linux has following file structure:
 
 - _/usr/sbin/ferron_ - Ferron web server
 - _/usr/sbin/ferron-passwd_ - Ferron user management tool
-- _/usr/lib/libferron_mod\_\*.so_ - dynamically linked modules that can be loaded by Ferron
 - _/var/log/ferron/access.log_ - Ferron access log in Combined Log Format
 - _/var/log/ferron/error.log_ - Ferron error log
 - _/var/www/ferron_ - Ferron's web root
