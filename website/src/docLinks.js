@@ -22,6 +22,12 @@ export default [
     label: "Installer (GNU/Linux)"
   },
   {
+    href: "/docs/installation/installer-windows",
+    target: "_self",
+    sub: true,
+    label: "Installer (Windows Server)"
+  },
+  {
     href: "/docs/installation/docker",
     target: "_self",
     sub: true,
