@@ -62,13 +62,13 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - Option to enable OCSP stapling. When set to `true`, the server will use OCSP stapling to provide certificate revocation status to clients. Certificates with `Must-Staple` extension will not work with automatic TLS enabled. Default: `true` on Ferron 1.0.0-beta10 and newer (previously it was `false`)
 - **environmentVariables** (_Object_)
   - Environment variables. This object contains environment variables that the server will use during operation. Default: None
-- **enableAutomaticTLS** (_bool_; Project Karpacz 0.7.0 and newer)
+- **enableAutomaticTLS** (_bool_; v0.7.0 and newer)
   - Option to enable automatic TLS through Let's Encrypt. The automatic TLS will use an TLS-ALPN-01 ACME challenge. The domain names for the certificate will be extracted from the host configuration (wildcard domains are ignored, since TLS-ALPN-01 ACME challenge doesn't support them). The automatic TLS will work when the HTTPS port is set to `443`. Default: `false`
-- **automaticTLSContactEmail** (_String_; Project Karpacz 0.7.0 and newer)
+- **automaticTLSContactEmail** (_String_; v0.7.0 and newer)
   - The email address used by automatic TLS for an account in Let's Encrypt. This email address can be used to send notifications by Let's Encrypt. Default: None
-- **automaticTLSContactCacheDirectory** (_String_; Project Karpacz 0.7.0 and newer)
+- **automaticTLSContactCacheDirectory** (_String_; v0.7.0 and newer)
   - The path to the directory used by automatic TLS to store cache data, such as cached certificates. Default: None
-- **automaticTLSLetsEncryptProduction** (_bool_; Project Karpacz 0.7.0 and newer)
+- **automaticTLSLetsEncryptProduction** (_bool_; v0.7.0 and newer)
   - Option to enable production Let's Encrypt ACME endpoint. If set to `false`, the staging Let's Encrypt ACME endpoint will be used. Default: `true`
 - **loadBalancerHealthCheckWindow** (_u32_; _rproxy_ module; Ferron 1.0.0-beta3 and newer)
   - A window (in milliseconds) between each failed connection report made by a load balancer. Default: `5000`
@@ -165,29 +165,29 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - Option to enable HTTP compression. When set to `true`, the server will compress responses using gzip or other compression algorithms to reduce bandwidth usage. Default: `true`
 - **enableDirectoryListing** (_bool_)
   - Option to enable directory listings. When set to `true`, the server will generate and display a list of files and directories when a directory is requested. Default: `false`
-- **proxyTo** (_String_ or _Array&lt;String&gt;_; _rproxy_ module; Project Karpacz 0.2.0 and newer)
-  - Base URL, which reverse proxy will send requests to. HTTP and HTTPS URLs are supported. From Project Karpacz 0.4.0, it's also possible to specify an array of base URLs (requests will be randomly distributed). Default: None
-- **secureProxyTo** (_String_ or _Array&lt;String&gt;_; _rproxy_ module; Project Karpacz 0.2.0 and newer)
-  - Base URL, which reverse proxy will send requests to, if the client is connected via HTTPS. HTTP and HTTPS URLs are supported. From Project Karpacz 0.4.0, it's also possible to specify an array of base URLs (requests will be randomly distributed). Default: None
-- **cacheVaryHeaders** (_Array&lt;String&gt;_; _cache_ module; Project Karpacz 0.4.0 and newer)
+- **proxyTo** (_String_ or _Array&lt;String&gt;_; _rproxy_ module; v0.2.0 and newer)
+  - Base URL, which reverse proxy will send requests to. HTTP and HTTPS URLs are supported. From v0.4.0, it's also possible to specify an array of base URLs (requests will be randomly distributed). Default: None
+- **secureProxyTo** (_String_ or _Array&lt;String&gt;_; _rproxy_ module; v0.2.0 and newer)
+  - Base URL, which reverse proxy will send requests to, if the client is connected via HTTPS. HTTP and HTTPS URLs are supported. From v0.4.0, it's also possible to specify an array of base URLs (requests will be randomly distributed). Default: None
+- **cacheVaryHeaders** (_Array&lt;String&gt;_; _cache_ module; v0.4.0 and newer)
   - A list of request headers that can vary in a cache. Supplements the “Vary” response header. Default: None
-- **cacheIgnoreHeaders** (_Array&lt;String&gt;_; _cache_ module; Project Karpacz 0.4.0 and newer)
+- **cacheIgnoreHeaders** (_Array&lt;String&gt;_; _cache_ module; v0.4.0 and newer)
   - A list of response headers that will not be stored in a cache. Default: None
-- **maximumCacheResponseSize** (_u64_ or `null`; _cache_ module; Project Karpacz 0.4.0 and newer)
+- **maximumCacheResponseSize** (_u64_ or `null`; _cache_ module; v0.4.0 and newer)
   - A maximum response size to be cached in bytes. If `null`, the maximum response size is unlimited theoretically. Default: `null`
-- **cgiScriptExtensions** (_Array&lt;String&gt;_; _cgi_ module; Project Karpacz 0.5.0 and newer)
+- **cgiScriptExtensions** (_Array&lt;String&gt;_; _cgi_ module; v0.5.0 and newer)
   - CGI script extensions, which will be handled via CGI handler outside the `cgi-bin` directory. Default: None
-- **cgiScriptInterpreters** (_Object_; _cgi_ module; Project Karpacz 0.5.0 and newer)
+- **cgiScriptInterpreters** (_Object_; _cgi_ module; v0.5.0 and newer)
   - CGI script interpreters used by the CGI handler. The object keys represent the extension, for which a specific interpreter is used, while object values can be either an _Array&lt;String&gt;_ representing first arguments of the CGI script (the first argument is the path to the interpreter), or `null` for removing the default interpreter. Default: None, the default interpreterss are set for _.pl_, _.py_, _.sh_, _.ksh_, _.csh_, _.rb_ and _.php_ extensions, and addtionally _.exe_, _.bat_ and _.vbs_ extensions for Windows.
-- **scgiTo** (_String_; _scgi_ module; Project Karpacz 0.6.0 and newer)
+- **scgiTo** (_String_; _scgi_ module; v0.6.0 and newer)
   - Base URL, which SCGI client will send requests to. TCP (for example `"tcp://localhost:4000/"`) and Unix socket URLs (only on Unix systems; for example `"unix:///run/scgi.sock"`) are supported. Default: `"tcp://localhost:4000/"`
-- **scgiPath** (_String_; _scgi_ module; Project Karpacz 0.6.0 and newer)
+- **scgiPath** (_String_; _scgi_ module; v0.6.0 and newer)
   - Base URL, which SCGI client will handle the request if the request URL begins with it. If not specified, the SCGI client will be inactive. Default: None
-- **fcgiScriptExtensions** (_Array&lt;String&gt;_; _fcgi_ module; Project Karpacz 0.6.0 and newer)
+- **fcgiScriptExtensions** (_Array&lt;String&gt;_; _fcgi_ module; v0.6.0 and newer)
   - FastCGI script extensions, which will be handled via FastCGI handler outside the specified FastCGI path. Default: None
-- **fcgiTo** (_String_; _fcgi_ module; Project Karpacz 0.6.0 and newer)
+- **fcgiTo** (_String_; _fcgi_ module; v0.6.0 and newer)
   - Base URL, which FastCGI client will send requests to. TCP (for example `"tcp://localhost:4000/"`) and Unix socket URLs (only on Unix systems; for example `"unix:///run/fcgi.sock"`) are supported. Default: `"tcp://localhost:4000/"`
-- **fcgiPath** (_String_; _fcgi_ module; Project Karpacz 0.6.0 and newer)
+- **fcgiPath** (_String_; _fcgi_ module; v0.6.0 and newer)
   - Base URL, which FastCGI client will handle the request if the request URL begins with it. If not specified, the SCGI client will be inactive. Default: None
 - **authTo** (_String_; _fauth_ module; Ferron 1.0.0-beta2 and newer)
   - Base URL, which web server will send requests to for forwarded authentication. HTTP and HTTPS URLs are supported. Default: None
