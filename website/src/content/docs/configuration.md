@@ -30,7 +30,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
 - **errorLogFilePath** (_String_)
   - Path to the error log file. This setting specifies the file path where the server will write its error logs. Default: None
 - **enableHTTP2** (_bool_)
-  - Option to enable HTTP/2. When set to `true`, the server will support the HTTP/2 protocol. Default: `true` on Ferron 1.0.0-beta7 and newer (previously it was `false`)
+  - Option to enable HTTP/2. When set to `true`, the server will support the HTTP/2 protocol. Default: `true`
 - **cert** (_String_)
   - Path to the TLS certificate. This setting specifies the file path to the TLS certificate used for HTTPS connections. Default: None
 - **key** (_String_)
@@ -59,32 +59,32 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
 - **blocklist** (_Array&lt;String&gt;_)
   - IP block list. This setting specifies an array of IP addresses that the server will block from accessing its services. The block list will only work with non-forward proxy requests. Default: None
 - **enableOCSPStapling** (_bool_)
-  - Option to enable OCSP stapling. When set to `true`, the server will use OCSP stapling to provide certificate revocation status to clients. Certificates with `Must-Staple` extension will not work with automatic TLS enabled. Default: `true` on Ferron 1.0.0-beta10 and newer (previously it was `false`)
+  - Option to enable OCSP stapling. When set to `true`, the server will use OCSP stapling to provide certificate revocation status to clients. Certificates with `Must-Staple` extension will not work with automatic TLS enabled. Default: `true`
 - **environmentVariables** (_Object_)
   - Environment variables. This object contains environment variables that the server will use during operation. Default: None
-- **enableAutomaticTLS** (_bool_; v0.7.0 and newer)
+- **enableAutomaticTLS** (_bool_)
   - Option to enable automatic TLS through Let's Encrypt. The automatic TLS will use an TLS-ALPN-01 ACME challenge. The domain names for the certificate will be extracted from the host configuration (wildcard domains are ignored, since TLS-ALPN-01 ACME challenge doesn't support them). The automatic TLS will work when the HTTPS port is set to `443`. Default: `false`
-- **automaticTLSContactEmail** (_String_; v0.7.0 and newer)
+- **automaticTLSContactEmail** (_String_)
   - The email address used by automatic TLS for an account in Let's Encrypt. This email address can be used to send notifications by Let's Encrypt. Default: None
-- **automaticTLSContactCacheDirectory** (_String_; v0.7.0 and newer)
+- **automaticTLSContactCacheDirectory** (_String_)
   - The path to the directory used by automatic TLS to store cache data, such as cached certificates. Default: None
-- **automaticTLSLetsEncryptProduction** (_bool_; v0.7.0 and newer)
+- **automaticTLSLetsEncryptProduction** (_bool_)
   - Option to enable production Let's Encrypt ACME endpoint. If set to `false`, the staging Let's Encrypt ACME endpoint will be used. Default: `true`
-- **loadBalancerHealthCheckWindow** (_u32_; _rproxy_ module; Ferron 1.0.0-beta3 and newer)
+- **loadBalancerHealthCheckWindow** (_u32_; _rproxy_ module)
   - A window (in milliseconds) between each failed connection report made by a load balancer. Default: `5000`
-- **timeout** (_u32_ or `null`; Ferron 1.0.0-beta3 and newer)
+- **timeout** (_u32_ or `null`)
   - A maximum time (in milliseconds) for server to process the request, after which the server resets the connection. If set to `null`, the timeout is disabled. It's not recommended to disable the timeout, as disabling it may leave the server vulnerable to Slow HTTP attacks. Default: `300000`
-- **maximumCacheEntries** (_u32_ or `null`; _cache_ module; Ferron 1.0.0-beta6 and newer)
+- **maximumCacheEntries** (_u32_ or `null`; _cache_ module)
   - Maximum amount of cache entries that can be stored in the cache. If set to `null`, the cache can theoretically store unlimited entries. The cache keys for entries depend on the request method, the request URL, the "Host" header value, and varying request headers. Default: `null`
 
 ## Host configuration properties
 
-- **locations** (_Array&lt;Object&gt;_; Ferron 1.0.0-beta2 and newer)
+- **locations** (_Array&lt;Object&gt;_)
   - The list of locations specified for a specific host. The sub-properties of this property will be merged in combined server configuration. The URLs will not be rewritten. To rewrite the URLs, configure the URL rewrite map in location configuration. Default: None
 
 ## Location configuration properties
 
-- **path** (_String_; Ferron 1.0.0-beta2 and newer)
+- **path** (_String_)
   - The path specified for a location. The location is matched against URL-decoded request URL. If it is the same, or the decoded request URL are levels above the specified path, the location configuration will be used. Default: None
 
 ## Global, host & location configuration properties
@@ -96,7 +96,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
 - **serverAdministratorEmail** (_String_)
   - Server administrator's email address. This setting specifies the email address of the server administrator, which may be used for contact purposes. Default: None
 - **customHeaders** (_Object_)
-  - Custom HTTP headers. This object contains custom HTTP headers that the server will include in its responses. From Ferron 1.0.0-beta8, you can use the `{path}` placeholder that will be replaced by the request URL in the custom HTTP header values. Default: None
+  - Custom HTTP headers. This object contains custom HTTP headers that the server will include in its responses. You can also use the `{path}` placeholder that will be replaced by the request URL in the custom HTTP header values. Default: None
 - **disableToHTTPSRedirect** (_bool_)
   - Option to disable redirects from the HTTP server to the HTTPS server. When set to `true`, the server will not automatically redirect HTTP requests to HTTPS. Default: `false`
 - **wwwredirect** (_bool_)
@@ -165,39 +165,39 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - Option to enable HTTP compression. When set to `true`, the server will compress responses using gzip or other compression algorithms to reduce bandwidth usage. Default: `true`
 - **enableDirectoryListing** (_bool_)
   - Option to enable directory listings. When set to `true`, the server will generate and display a list of files and directories when a directory is requested. Default: `false`
-- **proxyTo** (_String_ or _Array&lt;String&gt;_; _rproxy_ module; v0.2.0 and newer)
-  - Base URL, which reverse proxy will send requests to. HTTP and HTTPS URLs are supported. From v0.4.0, it's also possible to specify an array of base URLs (requests will be randomly distributed). Default: None
-- **secureProxyTo** (_String_ or _Array&lt;String&gt;_; _rproxy_ module; v0.2.0 and newer)
-  - Base URL, which reverse proxy will send requests to, if the client is connected via HTTPS. HTTP and HTTPS URLs are supported. From v0.4.0, it's also possible to specify an array of base URLs (requests will be randomly distributed). Default: None
-- **cacheVaryHeaders** (_Array&lt;String&gt;_; _cache_ module; v0.4.0 and newer)
+- **proxyTo** (_String_ or _Array&lt;String&gt;_; _rproxy_ module)
+  - Base URL, which reverse proxy will send requests to. HTTP and HTTPS URLs are supported. It's also possible to specify an array of base URLs (requests will be randomly distributed). Default: None
+- **secureProxyTo** (_String_ or _Array&lt;String&gt;_; _rproxy_ module)
+  - Base URL, which reverse proxy will send requests to, if the client is connected via HTTPS. HTTP and HTTPS URLs are supported. It's also possible to specify an array of base URLs (requests will be randomly distributed). Default: None
+- **cacheVaryHeaders** (_Array&lt;String&gt;_; _cache_ module)
   - A list of request headers that can vary in a cache. Supplements the “Vary” response header. Default: None
-- **cacheIgnoreHeaders** (_Array&lt;String&gt;_; _cache_ module; v0.4.0 and newer)
+- **cacheIgnoreHeaders** (_Array&lt;String&gt;_; _cache_ module)
   - A list of response headers that will not be stored in a cache. Default: None
-- **maximumCacheResponseSize** (_u64_ or `null`; _cache_ module; v0.4.0 and newer)
+- **maximumCacheResponseSize** (_u64_ or `null`; _cache_ module)
   - A maximum response size to be cached in bytes. If `null`, the maximum response size is unlimited theoretically. Default: `null`
-- **cgiScriptExtensions** (_Array&lt;String&gt;_; _cgi_ module; v0.5.0 and newer)
+- **cgiScriptExtensions** (_Array&lt;String&gt;_; _cgi_ module)
   - CGI script extensions, which will be handled via CGI handler outside the `cgi-bin` directory. Default: None
-- **cgiScriptInterpreters** (_Object_; _cgi_ module; v0.5.0 and newer)
+- **cgiScriptInterpreters** (_Object_; _cgi_ module)
   - CGI script interpreters used by the CGI handler. The object keys represent the extension, for which a specific interpreter is used, while object values can be either an _Array&lt;String&gt;_ representing first arguments of the CGI script (the first argument is the path to the interpreter), or `null` for removing the default interpreter. Default: None, the default interpreterss are set for _.pl_, _.py_, _.sh_, _.ksh_, _.csh_, _.rb_ and _.php_ extensions, and addtionally _.exe_, _.bat_ and _.vbs_ extensions for Windows.
-- **scgiTo** (_String_; _scgi_ module; v0.6.0 and newer)
+- **scgiTo** (_String_; _scgi_ module)
   - Base URL, which SCGI client will send requests to. TCP (for example `"tcp://localhost:4000/"`) and Unix socket URLs (only on Unix systems; for example `"unix:///run/scgi.sock"`) are supported. Default: `"tcp://localhost:4000/"`
-- **scgiPath** (_String_; _scgi_ module; v0.6.0 and newer)
+- **scgiPath** (_String_; _scgi_ module)
   - Base URL, which SCGI client will handle the request if the request URL begins with it. If not specified, the SCGI client will be inactive. Default: None
-- **fcgiScriptExtensions** (_Array&lt;String&gt;_; _fcgi_ module; v0.6.0 and newer)
+- **fcgiScriptExtensions** (_Array&lt;String&gt;_; _fcgi_ module)
   - FastCGI script extensions, which will be handled via FastCGI handler outside the specified FastCGI path. Default: None
-- **fcgiTo** (_String_; _fcgi_ module; v0.6.0 and newer)
+- **fcgiTo** (_String_; _fcgi_ module)
   - Base URL, which FastCGI client will send requests to. TCP (for example `"tcp://localhost:4000/"`) and Unix socket URLs (only on Unix systems; for example `"unix:///run/fcgi.sock"`) are supported. Default: `"tcp://localhost:4000/"`
-- **fcgiPath** (_String_; _fcgi_ module; v0.6.0 and newer)
+- **fcgiPath** (_String_; _fcgi_ module)
   - Base URL, which FastCGI client will handle the request if the request URL begins with it. If not specified, the SCGI client will be inactive. Default: None
-- **authTo** (_String_; _fauth_ module; Ferron 1.0.0-beta2 and newer)
+- **authTo** (_String_; _fauth_ module)
   - Base URL, which web server will send requests to for forwarded authentication. HTTP and HTTPS URLs are supported. Default: None
-- **forwardedAuthCopyHeaders** (_Array&lt;String&gt;_; _fauth_ module; Ferron 1.0.0-beta2 and newer)
+- **forwardedAuthCopyHeaders** (_Array&lt;String&gt;_; _fauth_ module)
   - A list of response headers that will be copied from the forwarded authentication server response to the original request. Default: None
-- **enableLoadBalancerHealthCheck** (_u32_; _rproxy_ module; Ferron 1.0.0-beta3 and newer)
+- **enableLoadBalancerHealthCheck** (_u32_; _rproxy_ module)
   - Option to enable passive health checks for the load balancer. If the connection by the load balancer fails, the load balancer notes the failed connection, and if there are too many of them, the load balancer temporarily marks the backend server as "bad" and will not choose the backend server. Default: `false`
-- **loadBalancerHealthCheckMaximumFails** (_u32_; _rproxy_ module; Ferron 1.0.0-beta3 and newer)
+- **loadBalancerHealthCheckMaximumFails** (_u32_; _rproxy_ module)
   - Maximum reported failed connections, before a backend server is marked as "bad" and not chosen by the load balancer. Default: `3`
-- **disableProxyCertificateVerification** (_bool_; _rproxy_ module; Ferron 1.0.0-beta4 and newer)
+- **disableProxyCertificateVerification** (_bool_; _rproxy_ module)
   - Option to disable backend server certificate verification for the reverse proxy. Setting this to `true` is not recommended for production use. Default: `false`
 
 ## Server configuration includes
