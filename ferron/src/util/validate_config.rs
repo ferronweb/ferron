@@ -1,9 +1,43 @@
 use crate::ferron_common::ServerConfig;
 use hyper::header::{HeaderName, HeaderValue};
+use std::collections::HashSet;
 use std::error::Error;
 use std::net::IpAddr;
 use std::str::FromStr;
-use yaml_rust2::Yaml;
+use yaml_rust2::{yaml, Yaml};
+
+// Struct to store used configuration properties
+struct UsedProperties<'a> {
+  config: &'a ServerConfig,
+  properties: HashSet<String>,
+}
+
+impl<'a> UsedProperties<'a> {
+  fn new(config: &'a ServerConfig) -> Self {
+    UsedProperties {
+      config,
+      properties: HashSet::new(),
+    }
+  }
+
+  fn contains(&mut self, property: &str) -> bool {
+    self.properties.insert(property.to_string());
+    !self.config[property].is_badvalue()
+  }
+
+  fn unused(&self) -> Vec<String> {
+    let empty_hashmap = yaml::Hash::new();
+    let all_properties = self
+      .config
+      .as_hash()
+      .unwrap_or(&empty_hashmap)
+      .keys()
+      .filter_map(|a| a.as_str().map(|a| a.to_string()));
+    all_properties
+      .filter(|item| !self.properties.contains(item))
+      .collect()
+  }
+}
 
 fn validate_ip(ip: &str) -> bool {
   let _: IpAddr = match ip.parse() {
@@ -19,9 +53,11 @@ pub fn validate_config(
   is_global: bool,
   is_location: bool,
   modules_optional_builtin: &[String],
-) -> Result<(), Box<dyn Error + Send + Sync>> {
-  let domain_badvalue = config["domain"].is_badvalue();
-  let ip_badvalue = config["ip"].is_badvalue();
+) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
+  let mut used_properties = UsedProperties::new(&config);
+
+  let domain_badvalue = !used_properties.contains("domain");
+  let ip_badvalue = !used_properties.contains("ip");
 
   if !domain_badvalue && config["domain"].as_str().is_none() {
     Err(anyhow::anyhow!("Invalid domain name"))?
@@ -46,7 +82,7 @@ pub fn validate_config(
     ))?;
   }
 
-  if !config["path"].is_badvalue() {
+  if used_properties.contains("path") {
     if !is_location {
       Err(anyhow::anyhow!(
         "Location path configuration is only allowed in location configuration"
@@ -57,11 +93,11 @@ pub fn validate_config(
     }
   }
 
-  if !config["locations"].is_badvalue() && is_location {
+  if used_properties.contains("locations") && is_location {
     Err(anyhow::anyhow!("Nested locations are not allowed"))?;
   }
 
-  if !config["loadModules"].is_badvalue() {
+  if used_properties.contains("loadModules") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Module configuration is not allowed in host configuration"
@@ -79,7 +115,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["port"].is_badvalue() {
+  if used_properties.contains("port") {
     if !is_global {
       Err(anyhow::anyhow!(
         "HTTP port configuration is not allowed in host configuration"
@@ -94,7 +130,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["sport"].is_badvalue() {
+  if used_properties.contains("sport") {
     if !is_global {
       Err(anyhow::anyhow!(
         "HTTPS port configuration is not allowed in host configuration"
@@ -109,7 +145,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["secure"].is_badvalue() {
+  if used_properties.contains("secure") {
     if !is_global {
       Err(anyhow::anyhow!(
         "HTTPS enabling configuration is not allowed in host configuration"
@@ -120,7 +156,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["enableHTTP2"].is_badvalue() {
+  if used_properties.contains("enableHTTP2") {
     if !is_global {
       Err(anyhow::anyhow!(
         "HTTP/2 enabling configuration is not allowed in host configuration"
@@ -131,7 +167,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["logFilePath"].is_badvalue() {
+  if used_properties.contains("logFilePath") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Log file configuration is not allowed in host configuration"
@@ -142,7 +178,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["errorLogFilePath"].is_badvalue() {
+  if used_properties.contains("errorLogFilePath") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Error log file configuration is not allowed in host configuration"
@@ -153,7 +189,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["cert"].is_badvalue() {
+  if used_properties.contains("cert") {
     if !is_global {
       Err(anyhow::anyhow!(
         "TLS certificate configuration is not allowed in host configuration"
@@ -164,7 +200,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["key"].is_badvalue() {
+  if used_properties.contains("key") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Private key configuration is not allowed in host configuration"
@@ -175,7 +211,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["sni"].is_badvalue() {
+  if used_properties.contains("sni") {
     if !is_global {
       Err(anyhow::anyhow!(
         "SNI configuration is not allowed in host configuration"
@@ -206,7 +242,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["http2Options"].is_badvalue() {
+  if used_properties.contains("http2Options") {
     if !is_global {
       Err(anyhow::anyhow!(
         "HTTP/2 configuration is not allowed in host configuration"
@@ -252,7 +288,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["useClientCertificate"].is_badvalue() {
+  if used_properties.contains("useClientCertificate") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Client certificate verfication enabling option is not allowed in host configuration"
@@ -265,7 +301,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["cipherSuite"].is_badvalue() {
+  if used_properties.contains("cipherSuite") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Cipher suite configuration is not allowed in host configuration"
@@ -283,7 +319,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["ecdhCurve"].is_badvalue() {
+  if used_properties.contains("ecdhCurve") {
     if !is_global {
       Err(anyhow::anyhow!(
         "ECDH curve configuration is not allowed in host configuration"
@@ -301,7 +337,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["tlsMinVersion"].is_badvalue() {
+  if used_properties.contains("tlsMinVersion") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Minimum TLS version is not allowed in host configuration"
@@ -312,7 +348,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["tlsMaxVersion"].is_badvalue() {
+  if used_properties.contains("tlsMaxVersion") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Maximum TLS version is not allowed in host configuration"
@@ -323,7 +359,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["enableOCSPStapling"].is_badvalue() {
+  if used_properties.contains("enableOCSPStapling") {
     if !is_global {
       Err(anyhow::anyhow!(
         "OCSP stapling enabling option is not allowed in host configuration"
@@ -336,7 +372,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["serverAdministratorEmail"].is_badvalue()
+  if used_properties.contains("serverAdministratorEmail")
     && config["serverAdministratorEmail"].as_str().is_none()
   {
     Err(anyhow::anyhow!(
@@ -344,13 +380,14 @@ pub fn validate_config(
     ))?
   }
 
-  if !config["enableIPSpoofing"].is_badvalue() && config["enableIPSpoofing"].as_bool().is_none() {
+  if used_properties.contains("enableIPSpoofing") && config["enableIPSpoofing"].as_bool().is_none()
+  {
     Err(anyhow::anyhow!(
       "Invalid X-Forwarded-For enabling option value"
     ))?
   }
 
-  if !config["disableNonEncryptedServer"].is_badvalue() {
+  if used_properties.contains("disableNonEncryptedServer") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Non-encrypted server disabling option is not allowed in host configuration"
@@ -363,7 +400,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["blocklist"].is_badvalue() {
+  if used_properties.contains("blocklist") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Block list configuration is not allowed in host configuration"
@@ -386,7 +423,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["environmentVariables"].is_badvalue() {
+  if used_properties.contains("environmentVariables") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Environment variable configuration is not allowed in host configuration"
@@ -404,7 +441,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["disableToHTTPSRedirect"].is_badvalue()
+  if used_properties.contains("disableToHTTPSRedirect")
     && config["disableToHTTPSRedirect"].as_bool().is_none()
   {
     Err(anyhow::anyhow!(
@@ -412,13 +449,13 @@ pub fn validate_config(
     ))?
   }
 
-  if !config["wwwredirect"].is_badvalue() && config["wwwredirect"].as_bool().is_none() {
+  if used_properties.contains("wwwredirect") && config["wwwredirect"].as_bool().is_none() {
     Err(anyhow::anyhow!(
       "Invalid to \"www.\" URL redirect disabling option value"
     ))?
   }
 
-  if !config["customHeaders"].is_badvalue() {
+  if used_properties.contains("customHeaders") {
     if let Some(custom_headers_hash) = config["customHeaders"].as_hash() {
       let custom_headers_hash_iter = custom_headers_hash.iter();
       for (header_name, header_value) in custom_headers_hash_iter {
@@ -441,7 +478,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["rewriteMap"].is_badvalue() {
+  if used_properties.contains("rewriteMap") {
     if let Some(rewrite_map) = config["rewriteMap"].as_vec() {
       let rewrite_map_iter = rewrite_map.iter();
       for rewrite_map_entry_yaml in rewrite_map_iter {
@@ -482,7 +519,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["enableRewriteLogging"].is_badvalue()
+  if used_properties.contains("enableRewriteLogging")
     && config["enableRewriteLogging"].as_bool().is_none()
   {
     Err(anyhow::anyhow!(
@@ -490,7 +527,7 @@ pub fn validate_config(
     ))?
   }
 
-  if !config["disableTrailingSlashRedirects"].is_badvalue()
+  if used_properties.contains("disableTrailingSlashRedirects")
     && config["disableTrailingSlashRedirects"].as_bool().is_none()
   {
     Err(anyhow::anyhow!(
@@ -498,7 +535,7 @@ pub fn validate_config(
     ))?
   }
 
-  if !config["users"].is_badvalue() {
+  if used_properties.contains("users") {
     if let Some(users) = config["users"].as_vec() {
       let users_iter = users.iter();
       for user_yaml in users_iter {
@@ -517,7 +554,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["nonStandardCodes"].is_badvalue() {
+  if used_properties.contains("nonStandardCodes") {
     if let Some(non_standard_codes) = config["nonStandardCodes"].as_vec() {
       let non_standard_codes_iter = non_standard_codes.iter();
       for non_standard_code_yaml in non_standard_codes_iter {
@@ -615,7 +652,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["errorPages"].is_badvalue() {
+  if used_properties.contains("errorPages") {
     if let Some(error_pages) = config["errorPages"].as_vec() {
       let error_pages_iter = error_pages.iter();
       for error_page_yaml in error_pages_iter {
@@ -634,25 +671,27 @@ pub fn validate_config(
     }
   }
 
-  if !config["wwwroot"].is_badvalue() && config["wwwroot"].as_str().is_none() {
+  if used_properties.contains("wwwroot") && config["wwwroot"].as_str().is_none() {
     Err(anyhow::anyhow!("Invalid webroot"))?
   }
 
-  if !config["enableETag"].is_badvalue() && config["enableETag"].as_bool().is_none() {
+  if used_properties.contains("enableETag") && config["enableETag"].as_bool().is_none() {
     Err(anyhow::anyhow!("Invalid ETag enabling option"))?
   }
 
-  if !config["enableCompression"].is_badvalue() && config["enableCompression"].as_bool().is_none() {
+  if used_properties.contains("enableCompression")
+    && config["enableCompression"].as_bool().is_none()
+  {
     Err(anyhow::anyhow!("Invalid HTTP compression enabling option"))?
   }
 
-  if !config["enableDirectoryListing"].is_badvalue()
+  if used_properties.contains("enableDirectoryListing")
     && config["enableDirectoryListing"].as_bool().is_none()
   {
     Err(anyhow::anyhow!("Invalid directory listing enabling option"))?
   }
 
-  if !config["enableAutomaticTLS"].is_badvalue() {
+  if used_properties.contains("enableAutomaticTLS") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Automatic TLS enabling configuration is not allowed in host configuration"
@@ -665,7 +704,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["automaticTLSContactEmail"].is_badvalue() {
+  if used_properties.contains("automaticTLSContactEmail") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Automatic TLS contact email address configuration is not allowed in host configuration"
@@ -678,7 +717,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["automaticTLSContactCacheDirectory"].is_badvalue() {
+  if used_properties.contains("automaticTLSContactCacheDirectory") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Automatic TLS cache directory configuration is not allowed in host configuration"
@@ -694,7 +733,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["automaticTLSLetsEncryptProduction"].is_badvalue() {
+  if used_properties.contains("automaticTLSLetsEncryptProduction") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Let's Encrypt production endpoint for automatic TLS enabling configuration is not allowed in host configuration"
@@ -710,7 +749,7 @@ pub fn validate_config(
     }
   }
 
-  if !config["timeout"].is_badvalue() {
+  if used_properties.contains("timeout") {
     if !is_global {
       Err(anyhow::anyhow!(
         "Server timeout configuration is not allowed in host configuration"
@@ -731,7 +770,7 @@ pub fn validate_config(
     match module_optional_builtin as &str {
       #[cfg(feature = "rproxy")]
       "rproxy" => {
-        if !config["proxyTo"].is_badvalue() {
+        if used_properties.contains("proxyTo") {
           if let Some(proxy_urls) = config["proxyTo"].as_vec() {
             let proxy_urls_iter = proxy_urls.iter();
             for proxy_url_yaml in proxy_urls_iter {
@@ -744,7 +783,7 @@ pub fn validate_config(
           }
         }
 
-        if !config["secureProxyTo"].is_badvalue() {
+        if used_properties.contains("secureProxyTo") {
           if let Some(proxy_urls) = config["secureProxyTo"].as_vec() {
             let proxy_urls_iter = proxy_urls.iter();
             for proxy_url_yaml in proxy_urls_iter {
@@ -761,7 +800,7 @@ pub fn validate_config(
           }
         }
 
-        if !config["enableLoadBalancerHealthCheck"].is_badvalue()
+        if used_properties.contains("enableLoadBalancerHealthCheck")
           && config["enableLoadBalancerHealthCheck"].as_bool().is_none()
         {
           Err(anyhow::anyhow!(
@@ -769,7 +808,7 @@ pub fn validate_config(
           ))?
         }
 
-        if !config["loadBalancerHealthCheckMaximumFails"].is_badvalue() {
+        if used_properties.contains("loadBalancerHealthCheckMaximumFails") {
           if let Some(window) = config["loadBalancerHealthCheckMaximumFails"].as_i64() {
             if window < 0 {
               Err(anyhow::anyhow!(
@@ -783,7 +822,7 @@ pub fn validate_config(
           }
         }
 
-        if !config["loadBalancerHealthCheckWindow"].is_badvalue() {
+        if used_properties.contains("loadBalancerHealthCheckWindow") {
           if !is_global {
             Err(anyhow::anyhow!(
               "Load balancer health check window configuration is not allowed in host configuration"
@@ -802,7 +841,7 @@ pub fn validate_config(
           }
         }
 
-        if !config["disableProxyCertificateVerification"].is_badvalue()
+        if used_properties.contains("disableProxyCertificateVerification")
           && config["disableProxyCertificateVerification"]
             .as_bool()
             .is_none()
@@ -814,7 +853,7 @@ pub fn validate_config(
       }
       #[cfg(feature = "cache")]
       "cache" => {
-        if !config["cacheVaryHeaders"].is_badvalue() {
+        if used_properties.contains("cacheVaryHeaders") {
           if let Some(modules) = config["cacheVaryHeaders"].as_vec() {
             let modules_iter = modules.iter();
             for module_name_yaml in modules_iter {
@@ -829,7 +868,7 @@ pub fn validate_config(
           }
         }
 
-        if !config["cacheIgnoreHeaders"].is_badvalue() {
+        if used_properties.contains("cacheIgnoreHeaders") {
           if let Some(modules) = config["cacheIgnoreHeaders"].as_vec() {
             let modules_iter = modules.iter();
             for module_name_yaml in modules_iter {
@@ -844,7 +883,7 @@ pub fn validate_config(
           }
         }
 
-        if !config["maximumCacheResponseSize"].is_badvalue()
+        if used_properties.contains("maximumCacheResponseSize")
           && !config["maximumCacheResponseSize"].is_null()
         {
           if let Some(maximum_cache_response_size) = config["maximumCacheResponseSize"].as_i64() {
@@ -856,7 +895,7 @@ pub fn validate_config(
           }
         }
 
-        if !config["maximumCacheEntries"].is_badvalue() {
+        if used_properties.contains("maximumCacheEntries") {
           if !is_global {
             Err(anyhow::anyhow!(
               "Maximum cache entries configuration is not allowed in host configuration"
@@ -875,7 +914,7 @@ pub fn validate_config(
       }
       #[cfg(feature = "cgi")]
       "cgi" => {
-        if !config["cgiScriptExtensions"].is_badvalue() {
+        if used_properties.contains("cgiScriptExtensions") {
           if let Some(cgi_script_extensions) = config["cgiScriptExtensions"].as_vec() {
             let cgi_script_extensions_iter = cgi_script_extensions.iter();
             for cgi_script_extension_yaml in cgi_script_extensions_iter {
@@ -890,7 +929,7 @@ pub fn validate_config(
           }
         }
 
-        if !config["cgiScriptInterpreters"].is_badvalue() {
+        if used_properties.contains("cgiScriptInterpreters") {
           if let Some(cgi_script_interpreters) = config["cgiScriptInterpreters"].as_hash() {
             for (cgi_script_interpreter_extension_unknown, cgi_script_interpreter_params_unknown) in
               cgi_script_interpreters.iter()
@@ -923,17 +962,17 @@ pub fn validate_config(
       }
       #[cfg(feature = "scgi")]
       "scgi" => {
-        if !config["scgiTo"].is_badvalue() && config["scgiTo"].as_str().is_none() {
+        if used_properties.contains("scgiTo") && config["scgiTo"].as_str().is_none() {
           Err(anyhow::anyhow!("Invalid SCGI target URL value"))?
         }
 
-        if !config["scgiPath"].is_badvalue() && config["scgiPath"].as_str().is_none() {
+        if used_properties.contains("scgiPath") && config["scgiPath"].as_str().is_none() {
           Err(anyhow::anyhow!("Invalid SCGI path"))?
         }
       }
       #[cfg(feature = "fcgi")]
       "fcgi" => {
-        if !config["fcgiScriptExtensions"].is_badvalue() {
+        if used_properties.contains("fcgiScriptExtensions") {
           if let Some(fastcgi_script_extensions) = config["fcgiScriptExtensions"].as_vec() {
             let fastcgi_script_extensions_iter = fastcgi_script_extensions.iter();
             for fastcgi_script_extension_yaml in fastcgi_script_extensions_iter {
@@ -948,23 +987,23 @@ pub fn validate_config(
           }
         }
 
-        if !config["fcgiTo"].is_badvalue() && config["fcgiTo"].as_str().is_none() {
+        if used_properties.contains("fcgiTo") && config["fcgiTo"].as_str().is_none() {
           Err(anyhow::anyhow!("Invalid FastCGI target URL value"))?
         }
 
-        if !config["fcgiPath"].is_badvalue() && config["fcgiPath"].as_str().is_none() {
+        if used_properties.contains("fcgiPath") && config["fcgiPath"].as_str().is_none() {
           Err(anyhow::anyhow!("Invalid FastCGI path"))?
         }
       }
       #[cfg(feature = "fauth")]
       "fauth" => {
-        if !config["authTo"].is_badvalue() && config["authTo"].as_str().is_none() {
+        if used_properties.contains("authTo") && config["authTo"].as_str().is_none() {
           Err(anyhow::anyhow!(
             "Invalid forwarded authentication target URL value"
           ))?
         }
 
-        if !config["forwardedAuthCopyHeaders"].is_badvalue() {
+        if used_properties.contains("forwardedAuthCopyHeaders") {
           if let Some(modules) = config["forwardedAuthCopyHeaders"].as_vec() {
             let modules_iter = modules.iter();
             for module_name_yaml in modules_iter {
@@ -985,7 +1024,7 @@ pub fn validate_config(
     }
   }
 
-  Ok(())
+  Ok(used_properties.unused())
 }
 
 pub fn prepare_config_for_validation(

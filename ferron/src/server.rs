@@ -347,7 +347,20 @@ async fn server_event_loop(
       is_location,
       &modules_optional_builtin,
     ) {
-      Ok(_) => (),
+      Ok(unused_properties) => {
+        for unused_property in unused_properties {
+          logger
+            .send(LogMessage::new(
+              format!(
+                "Unused configuration property detected: \"{}\". You might load an appropriate module to use this configuration property",
+                unused_property
+              ),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+        }
+      }
       Err(err) => {
         logger
           .send(LogMessage::new(
