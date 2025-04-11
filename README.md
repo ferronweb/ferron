@@ -22,7 +22,7 @@
 ## Features
 
 - **High performance** - built with Rust’s async capabilities for optimal speed.
-- **Memory-safe** - built with Rust, which is a programming language offering memory safety.
+- **Memory-safe** - built with Rust, which is a programming language offering 70% memory safety.
 - **Extensibility** - modular architecture for easy customization.
 - **Secure** - focus on robust security practices and safe concurrency.
 
