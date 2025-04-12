@@ -88,6 +88,8 @@ mod ferron_optional_modules {
   pub mod rproxy;
   #[cfg(feature = "scgi")]
   pub mod scgi;
+  #[cfg(feature = "wsgi")]
+  pub mod wsgi;
 }
 
 // Standard library imports
@@ -272,6 +274,24 @@ fn before_starting_server(
       "example" => {
         external_modules.push(
           match ferron_optional_modules::example::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
+
+        modules_optional_builtin.push(module_name.clone());
+      }
+      #[cfg(feature = "wsgi")]
+      "wsgi" => {
+        external_modules.push(
+          match ferron_optional_modules::wsgi::server_module_init(&yaml_config) {
             Ok(module) => module,
             Err(err) => {
               module_error = Some(anyhow::anyhow!(
