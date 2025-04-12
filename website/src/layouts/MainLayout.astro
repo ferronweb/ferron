@@ -2,18 +2,18 @@
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import Root from "./Root.astro";
-// import Banner from "../components/Banner.astro";
+import Banner from "../components/Banner.astro";
 ---
 
 <Root {...Astro.props}>
-  {
-    /*<Banner>
+  <Banner>
     <p>
-      Project Karpacz is now Ferron. Note that we are still working on Ferron's
-      website. <a href="/blog/introducing-ferron">Read the blog post</a>
+      We have just released Ferron 1.0.0! <a
+        href="/blog/ferron-1-0-0-a-new-era-for-web-servers"
+        >Read the blog post</a
+      >
     </p>
-  </Banner>*/
-  }
+  </Banner>
   <Header />
   <div class="grow">
     <slot />

@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.0.0
+
+**Released in April 12, 2025**
+
+- First stable release
+
 ## Ferron 1.0.0-beta11
 
 **Released in April 5, 2025**
