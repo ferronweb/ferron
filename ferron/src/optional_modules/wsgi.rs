@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::ffi::CString;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -31,10 +32,7 @@ use tokio::runtime::Handle;
 use tokio::sync::Mutex;
 
 fn load_wsgi_application(file_path: &Path) -> Result<Py<PyFunction>, Box<dyn Error + Send + Sync>> {
-  let script_name = match file_path.file_name() {
-    Some(script_name) => script_name.to_string_lossy().to_string(),
-    None => Err(anyhow::anyhow!("Can't determine the script name"))?,
-  };
+  let script_name = file_path.to_string_lossy().to_string();
   let script_name_cstring = CString::from_str(&script_name)?;
   let module_name = script_name
     .strip_suffix(".py")
@@ -44,7 +42,15 @@ fn load_wsgi_application(file_path: &Path) -> Result<Py<PyFunction>, Box<dyn Err
     .map(|c| if c.is_lowercase() { '_' } else { c })
     .collect::<String>();
   let module_name_cstring = CString::from_str(&module_name)?;
-  let script_data = std::fs::read_to_string(file_path)?;
+  let mut script_data = String::from(
+    r#"
+import sys
+import os
+sys.path.append(os.path.dirname(__file__))
+
+"#,
+  );
+  std::fs::File::open(file_path)?.read_to_string(&mut script_data)?;
   let script_data_cstring = CString::from_str(&script_data)?;
   let wsgi_application = Python::with_gil(move |py| -> PyResult<Py<PyFunction>> {
     let wsgi_application = PyModule::from_code(
