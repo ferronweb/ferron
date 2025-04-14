@@ -1,3 +1,9 @@
+// This module would provide higher WSGI application performance,
+// if it used a process pool dedicated for WSGI applications (aka pre-fork model)
+// instead of spawning blocking threads in a Tokio runtime,
+// because of Python's GIL, which causes the WSGI application in current setup
+// to effectively run as single-threaded single-process.
+
 use std::collections::HashMap;
 use std::error::Error;
 use std::ffi::CString;
