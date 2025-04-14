@@ -575,6 +575,7 @@ async fn execute_wsgi(
   let wsgi_head_clone = wsgi_head.clone();
   let body_iterator = tokio::task::spawn_blocking(move || {
     Python::with_gil(move |py| -> PyResult<Py<PyIterator>> {
+      // TODO: exc_info kwarg
       let start_response = PyCFunction::new_closure(
         py,
         None,
@@ -602,6 +603,7 @@ async fn execute_wsgi(
         },
       )?;
       let mut environment = HashMap::new();
+      let is_https = environment_variables.contains_key("HTTPS");
       for (environment_variable, environment_variable_value) in environment_variables {
         environment.insert(
           environment_variable,
@@ -611,6 +613,10 @@ async fn execute_wsgi(
       environment.insert(
         "wsgi.version".to_string(),
         PyTuple::new(py, [1, 0])?.into_any(),
+      );
+      environment.insert(
+        "wsgi.url_scheme".to_string(),
+        PyString::new(py, if is_https { "https" } else { "http" }).into_any(),
       );
       // TODO: more WSGI-specific environment variables
       let body_unknown = wsgi_application.call(py, (environment, start_response), None)?;
