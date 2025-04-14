@@ -44,9 +44,12 @@ fn load_wsgi_application(file_path: &Path) -> Result<Py<PyAny>, Box<dyn Error + 
   let module_name_cstring = CString::from_str(&module_name)?;
   let mut script_data = String::from(
     r#"
-import sys
-import os
-sys.path.append(os.path.dirname(__file__))
+try:
+  import sys
+  import os
+  sys.path.append(os.path.dirname(__file__))
+except:
+  pass
 
 "#,
   );
