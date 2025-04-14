@@ -26,12 +26,12 @@ use hyper::header;
 use hyper::Response;
 use hyper_tungstenite::HyperWebsocket;
 use pyo3::prelude::*;
-use pyo3::types::{PyCFunction, PyDict, PyFunction, PyIterator, PyString, PyTuple};
+use pyo3::types::{PyAny, PyCFunction, PyDict, PyIterator, PyString, PyTuple};
 use tokio::fs;
 use tokio::runtime::Handle;
 use tokio::sync::Mutex;
 
-fn load_wsgi_application(file_path: &Path) -> Result<Py<PyFunction>, Box<dyn Error + Send + Sync>> {
+fn load_wsgi_application(file_path: &Path) -> Result<Py<PyAny>, Box<dyn Error + Send + Sync>> {
   let script_name = file_path.to_string_lossy().to_string();
   let script_name_cstring = CString::from_str(&script_name)?;
   let module_name = script_name
@@ -52,7 +52,7 @@ sys.path.append(os.path.dirname(__file__))
   );
   std::fs::File::open(file_path)?.read_to_string(&mut script_data)?;
   let script_data_cstring = CString::from_str(&script_data)?;
-  let wsgi_application = Python::with_gil(move |py| -> PyResult<Py<PyFunction>> {
+  let wsgi_application = Python::with_gil(move |py| -> PyResult<Py<PyAny>> {
     let wsgi_application = PyModule::from_code(
       py,
       &script_data_cstring,
@@ -60,9 +60,6 @@ sys.path.append(os.path.dirname(__file__))
       &module_name_cstring,
     )?
     .getattr("application")?
-    .unbind()
-    .downcast_bound::<PyFunction>(py)?
-    .clone()
     .unbind();
     Ok(wsgi_application)
   })?;
@@ -132,14 +129,14 @@ pub fn server_module_init(
 }
 
 struct WsgiModule {
-  global_wsgi_application: Option<Arc<Py<PyFunction>>>,
+  global_wsgi_application: Option<Arc<Py<PyAny>>>,
   global_wsgi_path: Option<String>,
   host_wsgi_applications: Arc<Vec<WsgiApplicationWrap>>,
 }
 
 impl WsgiModule {
   fn new(
-    global_wsgi_application: Option<Arc<Py<PyFunction>>>,
+    global_wsgi_application: Option<Arc<Py<PyAny>>>,
     global_wsgi_path: Option<String>,
     host_wsgi_applications: Arc<Vec<WsgiApplicationWrap>>,
   ) -> Self {
@@ -164,7 +161,7 @@ impl ServerModule for WsgiModule {
 
 struct WsgiModuleHandlers {
   handle: Handle,
-  global_wsgi_application: Option<Arc<Py<PyFunction>>>,
+  global_wsgi_application: Option<Arc<Py<PyAny>>>,
   global_wsgi_path: Option<String>,
   host_wsgi_applications: Arc<Vec<WsgiApplicationWrap>>,
 }
@@ -377,7 +374,7 @@ async fn execute_wsgi_with_environment_variables(
   execute_pathbuf: PathBuf,
   path_info: Option<String>,
   server_administrator_email: Option<&str>,
-  wsgi_application: Arc<Py<PyFunction>>,
+  wsgi_application: Arc<Py<PyAny>>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let mut environment_variables: LinkedHashMap<String, String> = LinkedHashMap::new();
 
@@ -571,7 +568,7 @@ async fn execute_wsgi_with_environment_variables(
 async fn execute_wsgi(
   _hyper_request: HyperRequest,
   _error_logger: &ErrorLogger,
-  wsgi_application: Arc<Py<PyFunction>>,
+  wsgi_application: Arc<Py<PyAny>>,
   environment_variables: LinkedHashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let wsgi_head = Arc::new(Mutex::new(ResponseHead::new()));
