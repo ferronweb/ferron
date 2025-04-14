@@ -22,6 +22,7 @@ use crate::ferron_res::server_software::SERVER_SOFTWARE;
 use crate::ferron_util::ip_match::ip_match;
 use crate::ferron_util::match_hostname::match_hostname;
 use crate::ferron_util::match_location::match_location;
+use crate::ferron_util::wsgi_error_stream::WsgiErrorStream;
 use crate::ferron_util::wsgi_structs::{WsgiApplicationLocationWrap, WsgiApplicationWrap};
 use async_trait::async_trait;
 use futures_util::{StreamExt, TryStreamExt};
@@ -577,12 +578,13 @@ async fn execute_wsgi_with_environment_variables(
 
 async fn execute_wsgi(
   _hyper_request: HyperRequest,
-  _error_logger: &ErrorLogger,
+  error_logger: &ErrorLogger,
   wsgi_application: Arc<Py<PyAny>>,
   environment_variables: LinkedHashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let wsgi_head = Arc::new(Mutex::new(ResponseHead::new()));
   let wsgi_head_clone = wsgi_head.clone();
+  let error_logger_owned = error_logger.to_owned();
   let body_iterator = tokio::task::spawn_blocking(move || {
     Python::with_gil(move |py| -> PyResult<Py<PyIterator>> {
       // TODO: exc_info kwarg
@@ -627,6 +629,12 @@ async fn execute_wsgi(
       environment.insert(
         "wsgi.url_scheme".to_string(),
         PyString::new(py, if is_https { "https" } else { "http" }).into_any(),
+      );
+      environment.insert(
+        "wsgi.errors".to_string(),
+        WsgiErrorStream::new(error_logger_owned)
+          .into_pyobject(py)?
+          .into_any(),
       );
       environment.insert(
         "wsgi.multithread".to_string(),
