@@ -3,6 +3,7 @@
 // instead of spawning blocking threads in a Tokio runtime,
 // because of Python's GIL, which causes the WSGI application in current setup
 // to effectively run as single-threaded single-process.
+// Pre-forking a process pool isn't supported on Windows.
 
 use std::collections::HashMap;
 use std::error::Error;
