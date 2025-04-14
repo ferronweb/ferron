@@ -33,7 +33,7 @@ use hyper::header;
 use hyper::Response;
 use hyper_tungstenite::HyperWebsocket;
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyCFunction, PyDict, PyIterator, PyString, PyTuple};
+use pyo3::types::{PyAny, PyBool, PyCFunction, PyDict, PyIterator, PyString, PyTuple};
 use tokio::fs;
 use tokio::runtime::Handle;
 use tokio::sync::Mutex;
@@ -627,6 +627,18 @@ async fn execute_wsgi(
       environment.insert(
         "wsgi.url_scheme".to_string(),
         PyString::new(py, if is_https { "https" } else { "http" }).into_any(),
+      );
+      environment.insert(
+        "wsgi.multithread".to_string(),
+        PyBool::new(py, true).as_any().clone(),
+      );
+      environment.insert(
+        "wsgi.multiprocess".to_string(),
+        PyBool::new(py, false).as_any().clone(),
+      );
+      environment.insert(
+        "wsgi.run_once".to_string(),
+        PyBool::new(py, false).as_any().clone(),
       );
       // TODO: more WSGI-specific environment variables
       let body_unknown = wsgi_application.call(py, (environment, start_response), None)?;
