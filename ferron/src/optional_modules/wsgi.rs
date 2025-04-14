@@ -594,7 +594,7 @@ async fn execute_wsgi(
           for header in args_native.1 {
             header_map.append(
               HeaderName::from_str(&header.0).map_err(|e| anyhow::anyhow!(e))?,
-              HeaderValue::from_str(&header.0).map_err(|e| anyhow::anyhow!(e))?,
+              HeaderValue::from_str(&header.1).map_err(|e| anyhow::anyhow!(e))?,
             );
           }
           wsgi_head_locked.headers = Some(header_map);
