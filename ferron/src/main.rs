@@ -54,6 +54,8 @@ mod ferron_util {
   pub mod url_rewrite_structs;
   pub mod url_sanitizer;
   pub mod validate_config;
+  #[cfg(feature = "wsgi")]
+  pub mod wsgi_structs;
 }
 
 // Import project modules from "modules" directory

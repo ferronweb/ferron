@@ -1020,6 +1020,18 @@ pub fn validate_config(
           }
         }
       }
+      #[cfg(feature = "wsgi")]
+      "wsgi" => {
+        if used_properties.contains("wsgiApplicationPath")
+          && config["wsgiApplicationPath"].as_str().is_none()
+        {
+          Err(anyhow::anyhow!("Invalid path to the WSGI application"))?
+        }
+
+        if used_properties.contains("wsgiPath") && config["wsgiPath"].as_str().is_none() {
+          Err(anyhow::anyhow!("Invalid WSGI request base path"))?
+        }
+      }
       _ => (),
     }
   }
