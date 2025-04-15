@@ -92,3 +92,81 @@ impl WsgiInputStream {
     }
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::io::Cursor;
+  use tokio::io::BufReader;
+
+  fn create_stream(data: &str) -> WsgiInputStream {
+    let cursor = Cursor::new(data.as_bytes().to_vec());
+    let reader = BufReader::new(cursor);
+    WsgiInputStream::new(reader)
+  }
+
+  #[test]
+  fn test_read() {
+    let mut stream = create_stream("Hello, world!");
+    let result = stream.read(5).unwrap();
+    assert_eq!(result, b"Hello");
+  }
+
+  #[test]
+  fn test_read_full() {
+    let mut stream = create_stream("Hello");
+    let result = stream.read(10).unwrap(); // try to read more than available
+    assert_eq!(result, b"Hello");
+  }
+
+  #[test]
+  fn test_readline_no_limit() {
+    let mut stream = create_stream("line1\nline2\n");
+    let result = stream.readline(None).unwrap();
+    assert_eq!(result, b"line1\n");
+
+    let result = stream.readline(None).unwrap();
+    assert_eq!(result, b"line2\n");
+  }
+
+  #[test]
+  fn test_readline_with_limit() {
+    let mut stream = create_stream("line1\nline2\n");
+    let result = stream.readline(Some(3)).unwrap();
+    assert_eq!(result, b"lin"); // Only 3 bytes
+  }
+
+  #[test]
+  fn test_readlines_no_hint() {
+    let mut stream = create_stream("line1\nline2\nline3\n");
+    let result = stream.readlines(None).unwrap();
+    assert_eq!(result, vec![b"line1\n", b"line2\n", b"line3\n"]);
+  }
+
+  #[test]
+  fn test_readlines_with_hint() {
+    let mut stream = create_stream("line1\nline2\nline3\n");
+    let result = stream.readlines(Some(10)).unwrap(); // Should stop when bytes exceed 10
+    let total: usize = result.iter().map(|l| l.len()).sum();
+    assert!(total > 0 && total <= 10);
+  }
+
+  #[test]
+  fn test_iterator_behavior() {
+    let mut stream = create_stream("line1\nline2\n");
+
+    let mut results = Vec::new();
+    while let Some(line) = stream.__next__().unwrap() {
+      results.push(line);
+    }
+
+    assert_eq!(results, vec![b"line1\n", b"line2\n"]);
+  }
+
+  #[test]
+  fn test_iterator_eof() {
+    let mut stream = create_stream("");
+    let result = stream.__next__().unwrap();
+    assert_eq!(result, None);
+  }
+}
