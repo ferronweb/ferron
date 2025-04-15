@@ -58,7 +58,7 @@ impl WsgiInputStream {
   fn readlines(&mut self, hint: Option<isize>) -> PyResult<Vec<Vec<u8>>> {
     let mut total_bytes = 0;
     let mut lines = Vec::new();
-    let hint: Option<_> = if hint.is_none_or(|s| s < 0) {
+    let hint = if hint.is_none_or(|s| s < 0) {
       None
     } else {
       hint.map(|s| s as usize)
