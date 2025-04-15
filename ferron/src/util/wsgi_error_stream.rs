@@ -1,7 +1,6 @@
 use crate::ferron_common::ErrorLogger;
+use crate::ferron_util::async_to_sync::async_to_sync;
 use pyo3::prelude::*;
-
-use super::async_to_sync::async_to_sync;
 
 #[pyclass]
 pub struct WsgiErrorStream {
