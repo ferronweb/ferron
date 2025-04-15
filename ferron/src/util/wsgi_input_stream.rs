@@ -28,14 +28,14 @@ impl WsgiInputStream {
   #[pyo3(signature = (size=-1))]
   fn readline(&mut self, size: Option<isize>) -> PyResult<Vec<u8>> {
     let mut buffer = Vec::new();
-    let size = if size.map_or(true, |s| s < 0) {
+    let size = if size.is_none_or(|s| s < 0) {
       None
     } else {
       size.map(|s| s as usize)
     };
     loop {
       let reader_buffer = async_to_sync(self.body_reader.fill_buf())?.to_vec();
-      if reader_buffer.len() == 0 {
+      if reader_buffer.is_empty() {
         break;
       }
       if let Some(eol_position) = reader_buffer.iter().position(|&char| char == b'\n') {
@@ -58,7 +58,7 @@ impl WsgiInputStream {
   fn readlines(&mut self, hint: Option<isize>) -> PyResult<Vec<Vec<u8>>> {
     let mut total_bytes = 0;
     let mut lines = Vec::new();
-    let hint: Option<_> = if hint.map_or(true, |s| s < 0) {
+    let hint: Option<_> = if hint.is_none_or(|s| s < 0) {
       None
     } else {
       hint.map(|s| s as usize)
@@ -71,7 +71,7 @@ impl WsgiInputStream {
       }
       total_bytes += line.len();
       lines.push(line);
-      if hint.map_or(false, |hint| hint > total_bytes) {
+      if hint.is_some_and(|hint| hint > total_bytes) {
         break;
       }
     }
@@ -84,7 +84,7 @@ impl WsgiInputStream {
 
   fn __next__(&mut self) -> PyResult<Option<Vec<u8>>> {
     let line = self.readline(None)?;
-    if line.len() == 0 {
+    if line.is_empty() {
       // If a "readline()" function in WSGI input stream Python class returns 0 bytes (not even "\n"), it means EOF.
       Ok(None)
     } else {

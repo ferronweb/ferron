@@ -725,12 +725,12 @@ async fn execute_wsgi(
     let response_stream_first_item = futures_util::stream::once(async move { Ok(first_chunk) });
     let response_stream_combined = response_stream_first_item.chain(response_stream);
     let stream_body = StreamBody::new(response_stream_combined.map_ok(Frame::data));
-    let response_body = BodyExt::boxed(stream_body);
-    response_body
+
+    BodyExt::boxed(stream_body)
   } else {
     let stream_body = StreamBody::new(response_stream.map_ok(Frame::data));
-    let response_body = BodyExt::boxed(stream_body);
-    response_body
+
+    BodyExt::boxed(stream_body)
   };
 
   let mut wsgi_head_locked = wsgi_head.lock().await;
