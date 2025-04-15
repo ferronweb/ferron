@@ -59,6 +59,8 @@ mod ferron_util {
   #[cfg(feature = "wsgi")]
   pub mod wsgi_error_stream;
   #[cfg(feature = "wsgi")]
+  pub mod wsgi_input_stream;
+  #[cfg(feature = "wsgi")]
   pub mod wsgi_structs;
 }
 

@@ -23,6 +23,7 @@ use crate::ferron_util::ip_match::ip_match;
 use crate::ferron_util::match_hostname::match_hostname;
 use crate::ferron_util::match_location::match_location;
 use crate::ferron_util::wsgi_error_stream::WsgiErrorStream;
+use crate::ferron_util::wsgi_input_stream::WsgiInputStream;
 use crate::ferron_util::wsgi_structs::{WsgiApplicationLocationWrap, WsgiApplicationWrap};
 use async_trait::async_trait;
 use futures_util::{StreamExt, TryStreamExt};
@@ -36,8 +37,10 @@ use hyper_tungstenite::HyperWebsocket;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBool, PyCFunction, PyDict, PyIterator, PyString, PyTuple};
 use tokio::fs;
+use tokio::io::AsyncReadExt;
 use tokio::runtime::Handle;
 use tokio::sync::Mutex;
+use tokio_util::io::StreamReader;
 
 fn load_wsgi_application(file_path: &Path) -> Result<Py<PyAny>, Box<dyn Error + Send + Sync>> {
   let script_name = file_path.to_string_lossy().to_string();
@@ -577,11 +580,13 @@ async fn execute_wsgi_with_environment_variables(
 }
 
 async fn execute_wsgi(
-  _hyper_request: HyperRequest,
+  hyper_request: HyperRequest,
   error_logger: &ErrorLogger,
   wsgi_application: Arc<Py<PyAny>>,
   environment_variables: LinkedHashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
+  let (_, body) = hyper_request.into_parts();
+  let body_reader = StreamReader::new(body.into_data_stream().map_err(std::io::Error::other));
   let wsgi_head = Arc::new(Mutex::new(ResponseHead::new()));
   let wsgi_head_clone = wsgi_head.clone();
   let error_logger_owned = error_logger.to_owned();
@@ -614,8 +619,14 @@ async fn execute_wsgi(
           Ok(())
         },
       )?;
-      let mut environment = HashMap::new();
+      let mut environment: HashMap<String, Bound<'_, PyAny>> = HashMap::new();
       let is_https = environment_variables.contains_key("HTTPS");
+      let content_length = if let Some(content_length) = environment_variables.get("CONTENT_LENGTH")
+      {
+        content_length.parse::<u64>().ok()
+      } else {
+        None
+      };
       for (environment_variable, environment_variable_value) in environment_variables {
         environment.insert(
           environment_variable,
@@ -629,6 +640,16 @@ async fn execute_wsgi(
       environment.insert(
         "wsgi.url_scheme".to_string(),
         PyString::new(py, if is_https { "https" } else { "http" }).into_any(),
+      );
+      environment.insert(
+        "wsgi.input".to_string(),
+        (if let Some(content_length) = content_length {
+          WsgiInputStream::new(body_reader.take(content_length))
+        } else {
+          WsgiInputStream::new(body_reader)
+        })
+        .into_pyobject(py)?
+        .into_any(),
       );
       environment.insert(
         "wsgi.errors".to_string(),
@@ -648,7 +669,6 @@ async fn execute_wsgi(
         "wsgi.run_once".to_string(),
         PyBool::new(py, false).as_any().clone(),
       );
-      // TODO: more WSGI-specific environment variables
       let body_unknown = wsgi_application.call(py, (environment, start_response), None)?;
       let body_iterator = body_unknown
         .downcast_bound::<PyIterator>(py)?
