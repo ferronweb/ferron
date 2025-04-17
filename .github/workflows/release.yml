@@ -43,10 +43,10 @@ jobs:
       - name: Setup Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Determine Ferron version
+      - name: Determine Ferron Version
         shell: bash
         run: |
-          "FERRON_VERSION=$(git tag --sort=-version:refname | head -n 1 | sed s/[^0-9a-zA-Z.+-]//g)" >> $GITHUB_ENV
+          echo "FERRON_VERSION=$(git tag --sort=-version:refname | head -n 1 | sed s/[^0-9a-zA-Z.+-]//g)" >> $GITHUB_ENV
 
       - name: Install Cross
         if: matrix.command == 'cross'
