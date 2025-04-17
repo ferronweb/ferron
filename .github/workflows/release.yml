@@ -86,5 +86,5 @@ jobs:
       - name: Release Ferron on Ferron's servers
         shell: bash
         run: |
-          ssh ferron-servers "rm -rf ferron/${{ env.FERRON_VERSION }}; mkdir -p ferron/${{ env.FERRON_VERSION }}"
+          ssh ferron-servers "mkdir -p ferron/${{ env.FERRON_VERSION }} || true"
           scp ferron.zip ferron-servers:ferron/${{ env.FERRON_VERSION }}/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip
