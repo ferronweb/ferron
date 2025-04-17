@@ -24,19 +24,19 @@ jobs:
           - name: i686-unknown-linux-gnu
             runner: ubuntu-22.04
             target: i686-unknown-linux-gnu
-            command: cargo
+            command: cross
           - name: aarch64-unknown-linux-gnu
             runner: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
-            command: cargo
+            command: cross
           - name: armv7-unknown-linux-gnueabihf
             runner: ubuntu-22.04
             target: armv7-unknown-linux-gnueabihf
-            command: cargo
+            command: cross
           - name: riscv64gc-unknown-linux-gnu
             runner: ubuntu-22.04
             target: riscv64gc-unknown-linux-gnu
-            command: cargo
+            command: cross
           - name: x86_64-pc-windows-msvc
             runner: windows-latest
             target: x86_64-pc-windows-msvc
