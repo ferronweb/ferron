@@ -34,6 +34,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          ref: main
+          fetch-depth: 0
  
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
