@@ -17,6 +17,8 @@ Ferron (along with modules) is currently available for GNU/Linux, Windows Server
 - [ARM64 GNU/Linux](https://downloads.ferronweb.org/1.0.0/ferron-1.0.0-aarch64-unknown-linux-gnu.zip)
 - [ARM64 Windows](https://downloads.ferronweb.org/1.0.0/ferron-1.0.0-aarch64-pc-windows-msvc.zip)
 - [ARMv7 hardfloat GNU/Linux](https://downloads.ferronweb.org/1.0.0/ferron-1.0.0-armv7-unknown-linux-gnueabihf.zip)
+- [macOS (on Apple Silicon)](https://downloads.ferronweb.org/1.0.0/ferron-1.0.0-aarch64-apple-darwin.zip)
+- [macOS (on Intel CPUs)](https://downloads.ferronweb.org/1.0.0/ferron-1.0.0-x86_64-apple-darwin.zip)
 - [RISC-V GNU/Linux](https://downloads.ferronweb.org/1.0.0/ferron-1.0.0-riscv64gc-unknown-linux-gnu.zip)
 
 Older versions of Ferron can be found at the [Ferron download server](https://downloads.ferronweb.org/).
