@@ -63,7 +63,7 @@ jobs:
         run: |
           ${{ matrix.command }} build --verbose --locked --release --target ${{ matrix.target }}
           mkdir release
-          find target/${{ matrix.target }}/release -mindepth 1 -maxdepth 1 -type f ! -name "*.*" -o -name "*.exe" -o -name "*.dll" -o -name "*.dylib" -o -name "*.so" -exec cp -a {} release \;
+          find target/${{ matrix.target }}/release -mindepth 2 -maxdepth 2 -type f ! -name "*.*" -o -name "*.exe" -o -name "*.dll" -o -name "*.dylib" -o -name "*.so" -exec cp -a {} release \;
           cp -a ferron.yaml release
           cp -a wwwroot release
 
