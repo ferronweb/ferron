@@ -69,10 +69,12 @@ jobs:
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall --no-confirm cross
 
-      - name: Build binaries and prepare for packaging
+      - name: Build binaries
+        run: "${{ matrix.command }} build --verbose --locked --release --target ${{ matrix.target }}"
+
+      - name: Prepare for packaging
         shell: bash
         run: |
-          ${{ matrix.command }} build --verbose --locked --release --target ${{ matrix.target }}
           mkdir release
           find target/${{ matrix.target }}/release -mindepth 2 -maxdepth 2 -type f ! -name "*.*" -o -name "*.exe" -o -name "*.dll" -o -name "*.dylib" -o -name "*.so" -exec cp -a {} release \;
           cp -a ferron.yaml release
