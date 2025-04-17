@@ -20,7 +20,7 @@ jobs:
           - name: x86_64-unknown-linux-musl
             runner: ubuntu-22.04
             target: x86_64-unknown-linux-musl
-            command: cargo
+            command: cross
           - name: x86_64-pc-windows-msvc
             runner: windows-latest
             target: x86_64-pc-windows-msvc
