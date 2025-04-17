@@ -92,8 +92,8 @@ jobs:
         uses: thedoctor0/zip-release@0.7.5
         with:
           type: "zip"
-          filename: "ferron.zip"
-          path: "release"
+          filename: "../ferron.zip"
+          directory: "release"
 
       - name: Set up SSH
         uses: LuisEnMarroquin/setup-ssh-action@v2.0.5
@@ -135,8 +135,8 @@ jobs:
         uses: thedoctor0/zip-release@0.7.5
         with:
           type: "zip"
-          filename: "ferron-rustdocs.zip"
-          path: "target/doc"
+          filename: "../../ferron-rustdocs.zip"
+          directory: "target/doc"
       
       - name: Set up SSH
         uses: LuisEnMarroquin/setup-ssh-action@v2.0.5
