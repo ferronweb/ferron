@@ -80,4 +80,4 @@ jobs:
         shell: bash
         run: |
           ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOSTNAME }} "rm -rf ferron/${{ env.FERRON_VERSION }}; mkdir -p ferron/${{ env.FERRON_VERSION }}"
-          scp -P ${{ secrets.SSH_PORT }} ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOSTNAME }}:ferron/${{ env.FERRON_VERSION }}
+          scp -P ${{ secrets.SSH_PORT }} ferron.zip ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOSTNAME }}:ferron/${{ env.FERRON_VERSION }}/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip
