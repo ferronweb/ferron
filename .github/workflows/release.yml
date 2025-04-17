@@ -88,3 +88,6 @@ jobs:
         run: |
           ssh ferron-servers "mkdir -p ferron/${{ env.FERRON_VERSION }} || true"
           scp ferron.zip ferron-servers:ferron/${{ env.FERRON_VERSION }}/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip
+
+          # The "move-ferron-archive" is a custom command that moves the ZIP archive to be served by the download server
+          ssh ferron-servers "sudo move-ferron-archive ${{ env.FERRON_VERSION }} ${{ matrix.target }}"
