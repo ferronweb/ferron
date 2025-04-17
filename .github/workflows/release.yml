@@ -40,10 +40,10 @@ jobs:
         with:
           targets: "${{ matrix.target }}"
  
-      - name: Setup Cache
+      - name: Setup cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Determine Ferron Version
+      - name: Determine Ferron version
         shell: bash
         run: |
           echo "FERRON_VERSION=$(git tag --sort=-version:refname | head -n 1 | sed s/[^0-9a-zA-Z.+-]//g)" >> $GITHUB_ENV
@@ -55,7 +55,7 @@ jobs:
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall --no-confirm cross
 
-      - name: Build Binary and Preprare For Packaging
+      - name: Build binaries and preprare for packaging
         shell: bash
         run: |
           ${{ matrix.command }} build --verbose --locked --release --target ${{ matrix.target }}
@@ -64,7 +64,7 @@ jobs:
           cp -a ferron.yaml release
           cp -a wwwroot release
 
-      - name: Create a Release ZIP Archive
+      - name: Create a release ZIP archive
         uses: thedoctor0/zip-release@0.7.5
         with:
           type: "zip"
