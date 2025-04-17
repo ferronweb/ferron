@@ -129,6 +129,15 @@ jobs:
           type: "zip"
           filename: "ferron-rustdocs.zip"
           path: "target/doc"
+      
+      - name: Set up SSH
+        uses: LuisEnMarroquin/setup-ssh-action@v2.0.5
+        with:
+          ORIGIN: ${{ secrets.SSH_HOSTNAME }}
+          SSHKEY: ${{ secrets.SSH_KEY }}
+          NAME: ferron-servers
+          PORT: ${{ secrets.SSH_PORT }}
+          USER: ${{ secrets.SSH_USERNAME }}
 
       - name: Deploy the documentation
         shell: bash
