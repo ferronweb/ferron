@@ -104,3 +104,36 @@ jobs:
 
           # The "move-ferron-archive" is a custom command that moves the ZIP archive to be served by the download server
           ssh ferron-servers "sudo move-ferron-archive ${{ env.FERRON_VERSION }} ${{ matrix.target }}"
+
+  docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: main
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Generate the Rust crate documentation
+        run: "cargo doc --verbose --locked --release"
+
+      - name: Create the documentation ZIP archive
+        uses: thedoctor0/zip-release@0.7.5
+        with:
+          type: "zip"
+          filename: "ferron-rustdocs.zip"
+          path: "target/doc"
+
+      - name: Deploy the documentation
+        shell: bash
+        run: |
+          scp ferron-rustdocs.zip ferron-servers:.
+
+          # The "deploy-ferron-rustdocs" is a custom command that deploys the Ferron's Rust crate documentation
+          ssh ferron-servers "sudo deploy-ferron-rustdocs ferron-rustdocs.zip && rm ferron-rustdocs.zip"
