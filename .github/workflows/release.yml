@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    branches: [ "develop" ]
+
+jobs:
+  release:
+    # Set the job to run on the platform specified by the matrix below
+    runs-on: ${{ matrix.runner }}
+ 
+    # Define the build matrix for cross-compilation
+    strategy:
+      matrix:
+        include:
+          - name: linux-amd64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            command: cargo
+          - name: win-amd64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            command: cargo
+          - name: macos-amd64
+            runner: macos-latest
+            target: x86_64-apple-darwin
+            command: cargo
+          - name: macos-arm64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            command: cargo
+ 
+    # The steps to run for each matrix item
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+ 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: "${{ matrix.target }}"
+ 
+      - name: Setup Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Determine Ferron version
+        shell: bash
+        run: |
+          "FERRON_VERSION=$(git tag --sort=-version:refname | head -n 1 | sed s/[^0-9a-zA-Z.+-]//g)" >> $GITHUB_ENV
+
+      - name: Install Cross
+        if: matrix.command == 'cross'
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cross
+
+      - name: Build Binary and Preprare For Packaging
+        shell: bash
+        run: |
+          ${{ matrix.command }} build --verbose --locked --release --target ${{ matrix.target }}
+          mkdir release
+          find target/${{ matrix.target }}/release -mindepth 1 -maxdepth 1 -type f ! -name "*.*" -o -name "*.exe" -o -name "*.dll" -o -name "*.dylib" -o -name "*.so" -exec cp -a {} release \;
+          cp -a ferron.yaml release
+          cp -a wwwroot release
+
+      - name: Create a Release ZIP Archive
+        uses: thedoctor0/zip-release@0.7.5
+        with:
+          type: "zip"
+          filename: "ferron.zip"
+          path: "release"
+
+      - name: Set up SSH
+        uses: LuisEnMarroquin/setup-ssh-action@v2.0.5
+        with:
+          SSHKEY: ${{ secrets.SSH_KEY }}
+
+      - name: Release Ferron on Ferron's servers
+        shell: bash
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOSTNAME }} "rm -rf ferron/${{ env.FERRON_VERSION }}; mkdir -p ferron/${{ env.FERRON_VERSION }}"
+          scp -P ${{ secrets.SSH_PORT }} ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOSTNAME }}:ferron/${{ env.FERRON_VERSION }}
