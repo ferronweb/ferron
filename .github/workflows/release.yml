@@ -109,7 +109,7 @@ jobs:
         run: |
           mkdir release
           find target/${{ matrix.target }}/release -mindepth 1 -maxdepth 1 -type f ! -name "*.*" -o -name "*.exe" -o -name "*.dll" -o -name "*.dylib" -o -name "*.so" | sed -E "s|(.*)|cp -a \1 release|" | bash
-          cp -a ferron.yaml release
+          cp -a ferron-release.yaml release/ferron.yaml
           cp -a wwwroot release
 
       - name: Create a release ZIP archive
