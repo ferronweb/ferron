@@ -77,10 +77,14 @@ jobs:
       - name: Set up SSH
         uses: LuisEnMarroquin/setup-ssh-action@v2.0.5
         with:
+          ORIGIN: ${{ secrets.SSH_HOSTNAME }}
           SSHKEY: ${{ secrets.SSH_KEY }}
+          NAME: ferron-servers
+          PORT: ${{ secrets.SSH_PORT }}
+          USER: ${{ secrets.SSH_USERNAME }}
 
       - name: Release Ferron on Ferron's servers
         shell: bash
         run: |
-          ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOSTNAME }} "rm -rf ferron/${{ env.FERRON_VERSION }}; mkdir -p ferron/${{ env.FERRON_VERSION }}"
-          scp -o StrictHostKeyChecking=no -P ${{ secrets.SSH_PORT }} ferron.zip ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOSTNAME }}:ferron/${{ env.FERRON_VERSION }}/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip
+          ssh ferron-servers "rm -rf ferron/${{ env.FERRON_VERSION }}; mkdir -p ferron/${{ env.FERRON_VERSION }}"
+          scp ferron.zip ferron-servers:ferron/${{ env.FERRON_VERSION }}/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip
