@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  docker:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
