@@ -48,8 +48,8 @@ jobs:
           file: ./Dockerfile
           push: true
           tags:
-           - ferronserver/ferron-staging:${{ env.FERRON_VERSION }}
-           - ferronserver/ferron-staging:latest
+           - "ferronserver/ferron-staging:${{ env.FERRON_VERSION }}"
+           - "ferronserver/ferron-staging:latest"
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
