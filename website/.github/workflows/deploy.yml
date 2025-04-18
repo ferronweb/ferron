@@ -1,0 +1,49 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: latest
+
+      - name: Install dependencies
+        run: "npm ci || npm install"
+
+      - name: Build the website
+        run: npm run build
+
+      - name: Create the website ZIP archive
+        uses: thedoctor0/zip-release@0.7.5
+        with:
+          type: "zip"
+          filename: "../ferron-website.zip"
+          directory: "dist"
+      
+      - name: Set up SSH
+        uses: LuisEnMarroquin/setup-ssh-action@v2.0.5
+        with:
+          ORIGIN: ${{ secrets.SSH_HOSTNAME }}
+          SSHKEY: ${{ secrets.SSH_KEY }}
+          NAME: ferron-servers
+          PORT: ${{ secrets.SSH_PORT }}
+          USER: ${{ secrets.SSH_USERNAME }}
+
+      - name: Deploy the website
+        shell: bash
+        run: |
+          scp ferron-website.zip ferron-servers:.
+
+          # The "deploy-ferron-website" is a custom command that deploys the Ferron website
+          ssh ferron-servers "sudo deploy-ferron-website ferron-website.zip && rm ferron-website.zip"
