@@ -704,6 +704,19 @@ pub fn validate_config(
     }
   }
 
+  if used_properties.contains("useAutomaticTLSHTTPChallenge") {
+    if !is_global {
+      Err(anyhow::anyhow!(
+        "Automatic TLS HTTP challenge enabling configuration is not allowed in host configuration"
+      ))?
+    }
+    if config["useAutomaticTLSHTTPChallenge"].as_bool().is_none() {
+      Err(anyhow::anyhow!(
+        "Invalid automatic TLS HTTP challenge enabling option value"
+      ))?
+    }
+  }
+
   if used_properties.contains("automaticTLSContactEmail") {
     if !is_global {
       Err(anyhow::anyhow!(

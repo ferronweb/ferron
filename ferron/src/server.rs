@@ -27,7 +27,7 @@ use rustls::version::{TLS12, TLS13};
 use rustls::{RootCertStore, ServerConfig};
 use rustls_acme::acme::ACME_TLS_ALPN_NAME;
 use rustls_acme::caches::DirCache;
-use rustls_acme::{is_tls_alpn_challenge, AcmeConfig};
+use rustls_acme::{is_tls_alpn_challenge, AcmeConfig, ResolvesServerCertAcme, UseChallenge};
 use rustls_native_certs::load_native_certs;
 use tokio::fs;
 use tokio::io::{AsyncWriteExt, BufWriter};
@@ -51,6 +51,7 @@ async fn accept_connection(
   stream: TcpStream,
   remote_address: SocketAddr,
   tls_config_option: Option<(Arc<ServerConfig>, Option<Arc<ServerConfig>>)>,
+  acme_http01_resolver_option: Option<Arc<ResolvesServerCertAcme>>,
   config: Arc<Yaml>,
   logger: Sender<LogMessage>,
   modules: Arc<Vec<Box<dyn ServerModule + std::marker::Send + Sync>>>,
@@ -196,6 +197,7 @@ async fn accept_connection(
               let handlers_vec_clone = handlers_vec
                 .clone()
                 .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
+              let acme_http01_resolver_option_clone = acme_http01_resolver_option.clone();
               let (request_parts, request_body) = request.into_parts();
               let request = Request::from_parts(request_parts, request_body.boxed());
               request_handler(
@@ -206,6 +208,7 @@ async fn accept_connection(
                 config,
                 logger,
                 handlers_vec_clone,
+                acme_http01_resolver_option_clone,
               )
             }),
           )
@@ -234,6 +237,7 @@ async fn accept_connection(
               let handlers_vec_clone = handlers_vec
                 .clone()
                 .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
+              let acme_http01_resolver_option_clone = acme_http01_resolver_option.clone();
               let (request_parts, request_body) = request.into_parts();
               let request = Request::from_parts(request_parts, request_body.boxed());
               request_handler(
@@ -244,6 +248,7 @@ async fn accept_connection(
                 config,
                 logger,
                 handlers_vec_clone,
+                acme_http01_resolver_option_clone,
               )
             }),
           )
@@ -279,6 +284,7 @@ async fn accept_connection(
             let handlers_vec_clone = handlers_vec
               .clone()
               .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
+            let acme_http01_resolver_option_clone = acme_http01_resolver_option.clone();
             let (request_parts, request_body) = request.into_parts();
             let request = Request::from_parts(request_parts, request_body.boxed());
             request_handler(
@@ -289,6 +295,7 @@ async fn accept_connection(
               config,
               logger,
               handlers_vec_clone,
+              acme_http01_resolver_option_clone,
             )
           }),
         )
@@ -455,6 +462,14 @@ async fn server_event_loop(
 
   let mut automatic_tls_enabled = false;
   let mut acme_letsencrypt_production = true;
+  let acme_use_http_challenge = yaml_config["global"]["useAutomaticTLSHTTPChallenge"]
+    .as_bool()
+    .unwrap_or(false);
+  let acme_challenge_type = if acme_use_http_challenge {
+    UseChallenge::Http01
+  } else {
+    UseChallenge::TlsAlpn01
+  };
 
   // Read automatic TLS configuration
   if let Some(read_automatic_tls_enabled) = yaml_config["global"]["enableAutomaticTLS"].as_bool() {
@@ -856,7 +871,7 @@ async fn server_event_loop(
   }
 
   // Create ACME configuration
-  let mut acme_config = AcmeConfig::new(acme_domains);
+  let mut acme_config = AcmeConfig::new(acme_domains).challenge_type(acme_challenge_type);
   if let Some(acme_contact_unwrapped) = acme_contact {
     acme_config = acme_config.contact_push(format!("mailto:{}", acme_contact_unwrapped));
   }
@@ -864,8 +879,10 @@ async fn server_event_loop(
   acme_config_with_cache =
     acme_config_with_cache.directory_lets_encrypt(acme_letsencrypt_production);
 
-  let acme_config = if tls_enabled && automatic_tls_enabled {
+  let (acme_config, acme_http01_resolver) = if tls_enabled && automatic_tls_enabled {
     let mut acme_state = acme_config_with_cache.state();
+
+    let acme_resolver = acme_state.resolver();
 
     // Create TLS configuration
     tls_config = if yaml_config["global"]["enableOCSPStapling"]
@@ -873,9 +890,9 @@ async fn server_event_loop(
       .unwrap_or(true)
     {
       tls_config_builder_wants_server_cert
-        .with_cert_resolver(Arc::new(Stapler::new(acme_state.resolver())))
+        .with_cert_resolver(Arc::new(Stapler::new(acme_resolver.clone())))
     } else {
-      tls_config_builder_wants_server_cert.with_cert_resolver(acme_state.resolver())
+      tls_config_builder_wants_server_cert.with_cert_resolver(acme_resolver.clone())
     };
 
     let acme_logger = logger.clone();
@@ -893,10 +910,14 @@ async fn server_event_loop(
       }
     });
 
-    let mut acme_config = tls_config.clone();
-    acme_config.alpn_protocols.push(ACME_TLS_ALPN_NAME.to_vec());
+    if acme_use_http_challenge {
+      (None, Some(acme_resolver))
+    } else {
+      let mut acme_config = tls_config.clone();
+      acme_config.alpn_protocols.push(ACME_TLS_ALPN_NAME.to_vec());
 
-    Some(acme_config)
+      (Some(acme_config), None)
+    }
   } else {
     // Create TLS configuration
     tls_config = if yaml_config["global"]["enableOCSPStapling"]
@@ -914,7 +935,7 @@ async fn server_event_loop(
 
     // Drop the ACME configuration
     drop(acme_config_with_cache);
-    None
+    (None, None)
   };
 
   // Configure ALPN protocols
@@ -989,6 +1010,7 @@ async fn server_event_loop(
                       stream,
                       remote_address,
                       None,
+                      acme_http01_resolver.clone(),
                       yaml_config.clone(),
                       logger.clone(),
                       modules_arc.clone(),
@@ -1013,6 +1035,7 @@ async fn server_event_loop(
                       stream,
                       remote_address,
                       Some((tls_config_arc.clone(), acme_config_arc.clone())),
+                      None,
                       yaml_config.clone(),
                       logger.clone(),
                       modules_arc.clone(),
@@ -1038,6 +1061,7 @@ async fn server_event_loop(
               stream,
               remote_address,
               None,
+              acme_http01_resolver.clone(),
               yaml_config.clone(),
               logger.clone(),
               modules_arc.clone(),
@@ -1063,6 +1087,7 @@ async fn server_event_loop(
                 stream,
                 remote_address,
                 Some((tls_config_arc.clone(), acme_config_arc.clone())),
+                None,
                 yaml_config.clone(),
                 logger.clone(),
                 modules_arc.clone(),
