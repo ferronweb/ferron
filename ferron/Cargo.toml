@@ -13,7 +13,7 @@ http-body-util = "0.1.0"
 hyper-util = { version = "0.1", features = ["full"] }
 tokio-util = { version = "0.7.13", features = ["io"] }
 rustls = { version = "0.23.24", default-features = false, features = ["tls12", "std", "ring"] }
-rustls-acme = { version = "0.13.0", default-features = false, features = ["tls12", "ring", "tokio"] }
+rustls-acme = { version = "0.13.0", default-features = false, features = ["tls12", "ring"] }
 tokio-rustls = { version = "0.26.1", default-features = false, features = ["tls12", "ring"] }
 rustls-pki-types = "1.11.0"
 rustls-pemfile = "2.2.0"
