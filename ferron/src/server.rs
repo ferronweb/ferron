@@ -21,10 +21,13 @@ use ocsp_stapler::Stapler;
 use rustls::crypto::ring::cipher_suite::*;
 use rustls::crypto::ring::default_provider;
 use rustls::crypto::ring::kx_group::*;
-use rustls::server::WebPkiClientVerifier;
+use rustls::server::{Acceptor, WebPkiClientVerifier};
 use rustls::sign::CertifiedKey;
 use rustls::version::{TLS12, TLS13};
 use rustls::{RootCertStore, ServerConfig};
+use rustls_acme::acme::ACME_TLS_ALPN_NAME;
+use rustls_acme::caches::DirCache;
+use rustls_acme::{is_tls_alpn_challenge, AcmeConfig};
 use rustls_native_certs::load_native_certs;
 use tokio::fs;
 use tokio::io::{AsyncWriteExt, BufWriter};
@@ -33,9 +36,7 @@ use tokio::runtime::Handle;
 use tokio::sync::Mutex;
 use tokio::time;
 use tokio_rustls::server::TlsStream;
-use tokio_rustls::TlsAcceptor;
-use tokio_rustls_acme::caches::DirCache;
-use tokio_rustls_acme::{AcmeAcceptor, AcmeConfig};
+use tokio_rustls::LazyConfigAcceptor;
 use yaml_rust2::Yaml;
 
 // Enum for maybe TLS stream
@@ -49,8 +50,7 @@ enum MaybeTlsStream {
 async fn accept_connection(
   stream: TcpStream,
   remote_address: SocketAddr,
-  tls_acceptor_option: Option<TlsAcceptor>,
-  acme_acceptor_config_option: Option<(AcmeAcceptor, Arc<ServerConfig>)>,
+  tls_config_option: Option<(Arc<ServerConfig>, Option<Arc<ServerConfig>>)>,
   config: Arc<Yaml>,
   logger: Sender<LogMessage>,
   modules: Arc<Vec<Box<dyn ServerModule + std::marker::Send + Sync>>>,
@@ -85,10 +85,9 @@ async fn accept_connection(
   let logger_clone = logger.clone();
 
   tokio::task::spawn(async move {
-    let maybe_tls_stream = if let Some((acme_acceptor, tls_config)) = acme_acceptor_config_option {
-      let start_handshake = match acme_acceptor.accept(stream).await {
-        Ok(Some(start_handshake)) => start_handshake,
-        Ok(None) => return,
+    let maybe_tls_stream = if let Some((tls_config, acme_config_option)) = tls_config_option {
+      let start_handshake = match LazyConfigAcceptor::new(Acceptor::default(), stream).await {
+        Ok(start_handshake) => start_handshake,
         Err(err) => {
           logger
             .send(LogMessage::new(
@@ -100,24 +99,27 @@ async fn accept_connection(
           return;
         }
       };
+
+      if let Some(acme_config) = acme_config_option {
+        if is_tls_alpn_challenge(&start_handshake.client_hello()) {
+          match start_handshake.into_stream(acme_config).await {
+            Ok(_) => (),
+            Err(err) => {
+              logger
+                .send(LogMessage::new(
+                  format!("Error during TLS handshake: {:?}", err),
+                  true,
+                ))
+                .await
+                .unwrap_or_default();
+              return;
+            }
+          };
+          return;
+        }
+      }
 
       let tls_stream = match start_handshake.into_stream(tls_config).await {
-        Ok(tls_stream) => tls_stream,
-        Err(err) => {
-          logger
-            .send(LogMessage::new(
-              format!("Error during TLS handshake: {:?}", err),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
-          return;
-        }
-      };
-
-      MaybeTlsStream::Tls(tls_stream)
-    } else if let Some(tls_acceptor) = tls_acceptor_option {
-      let tls_stream = match tls_acceptor.accept(stream).await {
         Ok(tls_stream) => tls_stream,
         Err(err) => {
           logger
@@ -862,9 +864,8 @@ async fn server_event_loop(
   acme_config_with_cache =
     acme_config_with_cache.directory_lets_encrypt(acme_letsencrypt_production);
 
-  let acme_tls_acceptor = if tls_enabled && automatic_tls_enabled {
+  let acme_config = if tls_enabled && automatic_tls_enabled {
     let mut acme_state = acme_config_with_cache.state();
-    let acceptor = acme_state.acceptor();
 
     // Create TLS configuration
     tls_config = if yaml_config["global"]["enableOCSPStapling"]
@@ -892,7 +893,10 @@ async fn server_event_loop(
       }
     });
 
-    Some(acceptor)
+    let mut acme_config = tls_config.clone();
+    acme_config.alpn_protocols.push(ACME_TLS_ALPN_NAME.to_vec());
+
+    Some(acme_config)
   } else {
     // Create TLS configuration
     tls_config = if yaml_config["global"]["enableOCSPStapling"]
@@ -923,12 +927,7 @@ async fn server_event_loop(
   }
   tls_config.alpn_protocols = alpn_protocols;
   let tls_config_arc = Arc::new(tls_config);
-
-  let acme_tls_acceptor_and_config =
-    acme_tls_acceptor.map(|acceptor| (acceptor, tls_config_arc.clone()));
-
-  // Create TLS acceptor
-  let tls_acceptor = TlsAcceptor::from(tls_config_arc.clone());
+  let acme_config_arc = acme_config.map(Arc::new);
 
   let mut listener = None;
   let mut listener_tls = None;
@@ -990,7 +989,6 @@ async fn server_event_loop(
                       stream,
                       remote_address,
                       None,
-                      None,
                       yaml_config.clone(),
                       logger.clone(),
                       modules_arc.clone(),
@@ -1011,12 +1009,10 @@ async fn server_event_loop(
               status = listener_tls.accept() => {
                 match status {
                   Ok((stream, remote_address)) => {
-                    let tls_acceptor = tls_acceptor.clone();
                     accept_connection(
                       stream,
                       remote_address,
-                      Some(tls_acceptor),
-                      acme_tls_acceptor_and_config.clone(),
+                      Some((tls_config_arc.clone(), acme_config_arc.clone())),
                       yaml_config.clone(),
                       logger.clone(),
                       modules_arc.clone(),
@@ -1042,7 +1038,6 @@ async fn server_event_loop(
               stream,
               remote_address,
               None,
-              None,
               yaml_config.clone(),
               logger.clone(),
               modules_arc.clone(),
@@ -1064,12 +1059,10 @@ async fn server_event_loop(
         match &listener_tls {
           Some(listener_tls) => match listener_tls.accept().await {
             Ok((stream, remote_address)) => {
-              let tls_acceptor = tls_acceptor.clone();
               accept_connection(
                 stream,
                 remote_address,
-                Some(tls_acceptor),
-                acme_tls_acceptor_and_config.clone(),
+                Some((tls_config_arc.clone(), acme_config_arc.clone())),
                 yaml_config.clone(),
                 logger.clone(),
                 modules_arc.clone(),

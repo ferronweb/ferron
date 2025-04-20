@@ -13,6 +13,7 @@ http-body-util = "0.1.0"
 hyper-util = { version = "0.1", features = ["full"] }
 tokio-util = { version = "0.7.13", features = ["io"] }
 rustls = { version = "0.23.24", default-features = false, features = ["tls12", "std", "ring"] }
+rustls-acme = { version = "0.13.0", default-features = false, features = ["tls12", "ring", "tokio"] }
 tokio-rustls = { version = "0.26.1", default-features = false, features = ["tls12", "ring"] }
 rustls-pki-types = "1.11.0"
 rustls-pemfile = "2.2.0"
@@ -40,7 +41,6 @@ memmem = { version = "0.1.1", optional = true }
 httparse = { version = "1.10.0", optional = true }
 pin-project-lite = "0.2.16"
 hashlink = "0.10.0"
-tokio-rustls-acme = "0.7.0"
 glob = "0.3.2"
 hyper-tungstenite = "0.17.0"
 tokio-tungstenite = { version = "0.26.2", features = ["rustls-tls-native-roots"] }
