@@ -20,8 +20,6 @@ mod ferron_common;
 #[path = "util"]
 mod ferron_util {
   pub mod anti_xss;
-  #[cfg(feature = "wsgi")]
-  pub mod async_to_sync;
   #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
   pub mod cgi_response;
   pub mod combine_config;

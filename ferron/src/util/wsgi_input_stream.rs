@@ -1,6 +1,5 @@
 use std::pin::Pin;
 
-use crate::ferron_util::async_to_sync::async_to_sync;
 use pyo3::prelude::*;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt};
 
@@ -21,7 +20,7 @@ impl WsgiInputStream {
 impl WsgiInputStream {
   fn read(&mut self, size: usize) -> PyResult<Vec<u8>> {
     let mut buffer = vec![0u8; size];
-    let read_bytes = async_to_sync(self.body_reader.read(&mut buffer))?;
+    let read_bytes = futures_lite::future::block_on(self.body_reader.read(&mut buffer))?;
     Ok(buffer[0..read_bytes].to_vec())
   }
 
@@ -34,7 +33,7 @@ impl WsgiInputStream {
       size.map(|s| s as usize)
     };
     loop {
-      let reader_buffer = async_to_sync(self.body_reader.fill_buf())?.to_vec();
+      let reader_buffer = futures_lite::future::block_on(self.body_reader.fill_buf())?.to_vec();
       if reader_buffer.is_empty() {
         break;
       }
@@ -65,7 +64,8 @@ impl WsgiInputStream {
     };
     loop {
       let mut line = Vec::new();
-      let bytes_read = async_to_sync(self.body_reader.read_until(b'\n', &mut line))?;
+      let bytes_read =
+        futures_lite::future::block_on(self.body_reader.read_until(b'\n', &mut line))?;
       if bytes_read == 0 {
         break;
       }

@@ -1,5 +1,4 @@
 use crate::ferron_common::ErrorLogger;
-use crate::ferron_util::async_to_sync::async_to_sync;
 use pyo3::prelude::*;
 
 #[pyclass]
@@ -16,7 +15,7 @@ impl WsgiErrorStream {
 #[pymethods]
 impl WsgiErrorStream {
   fn write(&self, data: &str) -> PyResult<usize> {
-    async_to_sync(
+    futures_lite::future::block_on(
       self
         .error_logger
         .log(&format!("There was a WSGI error: {}", data)),
@@ -27,7 +26,7 @@ impl WsgiErrorStream {
   fn writelines(&self, lines: Vec<String>) -> PyResult<()> {
     for line in lines {
       // Each `log_blocking` call prints a separate line
-      async_to_sync(
+      futures_lite::future::block_on(
         self
           .error_logger
           .log(&format!("There was a WSGI error: {}", line)),

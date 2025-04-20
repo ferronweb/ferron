@@ -46,6 +46,7 @@ hyper-tungstenite = "0.17.0"
 tokio-tungstenite = { version = "0.26.2", features = ["rustls-tls-native-roots"] }
 http = "1.2.0"
 pyo3 = { version = "0.24.1", optional = true, features = ["anyhow", "auto-initialize"] }
+futures-lite = "2.6.0"
 
 [dev-dependencies]
 tokio-test = "0.4.4"
