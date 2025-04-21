@@ -39,7 +39,7 @@ export const questions = [
     key: "item-3",
     question: "How was Ferron created?",
     answer:
-      'The idea of developing a web server in a systems programming language arose when Dorian Niemiec, the creator of SVR.JS, found its Node.js implementation too slow based on performance benchmarks. He first experimented with various programming languages for web servers, and found Rust to be efficient enough. Then he experimented with building a custom low-level HTTP handler, but encountered conflicts with Rust\'s borrow checker, leading to lifetime issues, so he used Hyper instead. The end result became "Project Karpacz" (named after a city in Poland near the mountains), and later "Ferron".'
+      'The idea of developing a web server in a systems programming language arose when Dorian Niemiec, the creator of SVR.JS, found its Node.js implementation too slow based on performance benchmarks. He first experimented with various programming languages for web servers, and found Rust to be efficient enough. Then he experimented with building a custom low-level HTTP handler, but encountered conflicts with Rust\'s borrow checker, leading to lifetime issues, so he used Hyper instead. The end result became "Project Karpacz" (named after a town in Poland near the mountains), and later "Ferron".'
   },
   {
     key: "item-4",
