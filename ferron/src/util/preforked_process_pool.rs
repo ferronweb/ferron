@@ -7,6 +7,7 @@ use interprocess::unnamed_pipe::{Recver, Sender};
 use nix::unistd::{ForkResult, Pid};
 use tokio::sync::Mutex;
 
+#[allow(clippy::type_complexity)]
 pub struct PreforkedProcessPool {
   inner: Vec<(Arc<Mutex<(TokioSender, TokioRecver)>>, Pid)>,
 }
@@ -15,7 +16,7 @@ impl PreforkedProcessPool {
   // This function is `unsafe`, due to forking function in `nix` crate also being `unsafe`.
   pub unsafe fn new(
     num_processes: usize,
-    pool_fn: impl Fn(Sender, Recver) -> (),
+    pool_fn: impl Fn(Sender, Recver),
   ) -> Result<Self, Box<dyn Error + Send + Sync>> {
     let mut processes = Vec::new();
     for _ in 0..num_processes {
@@ -45,7 +46,7 @@ impl PreforkedProcessPool {
   pub async fn obtain_process(
     &self,
   ) -> Result<Arc<Mutex<(TokioSender, TokioRecver)>>, Box<dyn Error + Send + Sync>> {
-    if self.inner.len() == 0 {
+    if self.inner.is_empty() {
       Err(anyhow::anyhow!(
         "The process pool doesn't have any processes"
       ))?
