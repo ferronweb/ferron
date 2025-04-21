@@ -52,7 +52,7 @@ export const questions = [
     question:
       "What are the differences between Ferron and other web servers written in Rust?",
     answer:
-      "Ferron is a standalone, general-purpose web server. Unlike web application frameworks such as Actix Web or Axum, which are designed for building web applications in Rust, Ferron operates independently as a server. Other standalone web servers, like Static Web Server or binserve, are primarily focused on serving static files, whereas Ferron is built for broader use cases."
+      "Ferron is a standalone, general-purpose web server. Unlike web application frameworks such as Actix Web or Axum, which are designed for building web applications in Rust, Ferron operates independently as a server. Other standalone web servers, like Static Web Server or binserve, are primarily focused on serving static files, whereas Ferron is built for broader use cases. Even more different standalone servers, like Sōzu are designed as reverse proxies, while Ferron can also serve static files and dynamic content."
   },
   {
     key: "item-6",
