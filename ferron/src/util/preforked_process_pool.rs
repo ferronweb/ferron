@@ -2,6 +2,7 @@ use std::error::Error;
 use std::os::fd::OwnedFd;
 use std::sync::Arc;
 
+use interprocess::os::unix::unnamed_pipe::UnnamedPipeExt;
 use interprocess::unnamed_pipe::tokio::{Recver as TokioRecver, Sender as TokioSender};
 use interprocess::unnamed_pipe::{Recver, Sender};
 use nix::unistd::{ForkResult, Pid};
@@ -20,14 +21,29 @@ impl PreforkedProcessPool {
   ) -> Result<Self, Box<dyn Error + Send + Sync>> {
     let mut processes = Vec::new();
     for _ in 0..num_processes {
-      let (tx_parent, rx_child) = interprocess::unnamed_pipe::tokio::pipe()?;
-      let (tx_child, rx_parent) = interprocess::unnamed_pipe::tokio::pipe()?;
+      // Create unnamed pipes
+      let (tx_parent, rx_child) = interprocess::unnamed_pipe::pipe()?;
+      let (tx_child, rx_parent) = interprocess::unnamed_pipe::pipe()?;
+
+      // Set parent pipes to be non-blocking, because they'll be used in an asynchronous context
+      tx_parent.set_nonblocking(true).unwrap_or_default();
+      rx_parent.set_nonblocking(true).unwrap_or_default();
+
+      // Obtain the file descriptors of the pipes
+      let tx_parent_fd: OwnedFd = tx_parent.try_into()?;
+      let rx_parent_fd: OwnedFd = rx_parent.try_into()?;
       let tx_child_fd: OwnedFd = tx_child.try_into()?;
       let rx_child_fd: OwnedFd = rx_child.try_into()?;
 
       match nix::unistd::fork() {
         Ok(ForkResult::Parent { child }) => {
-          processes.push((Arc::new(Mutex::new((tx_parent, rx_parent))), child));
+          processes.push((
+            Arc::new(Mutex::new((
+              tx_parent_fd.try_into()?,
+              rx_parent_fd.try_into()?,
+            ))),
+            child,
+          ));
         }
         Ok(ForkResult::Child) => {
           pool_fn(tx_child_fd.into(), rx_child_fd.into());
@@ -85,7 +101,7 @@ impl Drop for PreforkedProcessPool {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use std::io::{ErrorKind, Read, Write};
+  use std::io::{Read, Write};
   use std::time::Duration;
   use tokio::io::{AsyncReadExt, AsyncWriteExt};
   use tokio::time::timeout;
@@ -102,15 +118,7 @@ mod tests {
         Ok(n) => {
           let _ = tx.write_all(&buffer[..n]);
         }
-        Err(err) => {
-          // IMPORTANT! Don't break the read loop when the ErrorKind is `ErrorKind::WouldBlock`
-          match err.kind() {
-            ErrorKind::WouldBlock => {
-              // The IPC channel might not be ready yet...
-            }
-            _ => break,
-          }
-        }
+        Err(_) => break,
       }
     }
   }
