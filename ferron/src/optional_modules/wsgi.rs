@@ -34,6 +34,7 @@ use hyper::body::{Bytes, Frame};
 use hyper::header;
 use hyper::Response;
 use hyper_tungstenite::HyperWebsocket;
+use pyo3::exceptions::{PyAssertionError, PyException};
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBool, PyCFunction, PyDict, PyIterator, PyString, PyTuple};
 use tokio::fs;
@@ -367,6 +368,7 @@ struct ResponseHead {
   status: StatusCode,
   headers: Option<HeaderMap>,
   is_set: bool,
+  is_sent: bool,
 }
 
 impl ResponseHead {
@@ -375,6 +377,7 @@ impl ResponseHead {
       status: StatusCode::OK,
       headers: None,
       is_set: false,
+      is_sent: false,
     }
   }
 }
@@ -592,14 +595,39 @@ async fn execute_wsgi(
   let error_logger_owned = error_logger.to_owned();
   let body_iterator = tokio::task::spawn_blocking(move || {
     Python::with_gil(move |py| -> PyResult<Py<PyIterator>> {
-      // TODO: exc_info kwarg
       let start_response = PyCFunction::new_closure(
         py,
         None,
         None,
-        move |args: &Bound<'_, PyTuple>, _kwargs: Option<&Bound<'_, PyDict>>| -> PyResult<_> {
+        move |args: &Bound<'_, PyTuple>, kwargs: Option<&Bound<'_, PyDict>>| -> PyResult<_> {
           let args_native = args.extract::<(String, Vec<(String, String)>)>()?;
+          let exc_info = kwargs.map_or(Ok(None), |kwargs| {
+            let exc_info = kwargs.get_item("exc_info");
+            if let Ok(Some(exc_info)) = exc_info {
+              if exc_info.is_none() {
+                Ok(None)
+              } else {
+                Ok(Some(exc_info))
+              }
+            } else {
+              exc_info
+            }
+          })?;
           let mut wsgi_head_locked = wsgi_head_clone.blocking_lock();
+          if let Some(exc_info) = exc_info {
+            if wsgi_head_locked.is_sent {
+              let exc_info_tuple = exc_info.downcast::<PyTuple>()?;
+              let exc_info_exception = exc_info_tuple
+                .get_item(1)?
+                .getattr("with_traceback")?
+                .call((exc_info_tuple.get_item(2)?,), None)?
+                .downcast::<PyException>()?
+                .clone();
+              Err(exc_info_exception)?
+            }
+          } else if wsgi_head_locked.is_set {
+            Err(PyAssertionError::new_err("Headers already set"))?
+          }
           let status_code_string_option = args_native.0.split(" ").next();
           if let Some(status_code_string) = status_code_string_option {
             wsgi_head_locked.status =
@@ -739,6 +767,7 @@ async fn execute_wsgi(
   if let Some(headers) = wsgi_head_locked.headers.take() {
     *hyper_response.headers_mut() = headers;
   }
+  wsgi_head_locked.is_sent = true;
 
   Ok(
     ResponseData::builder_without_request()
