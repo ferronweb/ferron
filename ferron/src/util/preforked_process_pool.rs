@@ -106,11 +106,8 @@ mod tests {
   use tokio::io::{AsyncReadExt, AsyncWriteExt};
   use tokio::time::timeout;
 
-  fn dummy_pool_fn(tx: Sender, rx: Recver) {
+  fn dummy_pool_fn(mut tx: Sender, mut rx: Recver) {
     // Simulate child doing some work and echoing a message
-    let mut rx = rx;
-    let mut tx = tx;
-
     let mut buffer = [0u8; 128];
 
     loop {
