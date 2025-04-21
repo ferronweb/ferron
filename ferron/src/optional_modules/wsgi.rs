@@ -35,14 +35,17 @@ use hyper::Response;
 use hyper_tungstenite::HyperWebsocket;
 use pyo3::exceptions::{PyAssertionError, PyException};
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyBool, PyCFunction, PyDict, PyIterator, PyString, PyTuple};
+use pyo3::types::{PyAny, PyBool, PyCFunction, PyDict, PyIterator, PyList, PyString, PyTuple};
 use tokio::fs;
 use tokio::io::AsyncReadExt;
 use tokio::runtime::Handle;
 use tokio::sync::Mutex;
 use tokio_util::io::StreamReader;
 
-fn load_wsgi_application(file_path: &Path) -> Result<Py<PyAny>, Box<dyn Error + Send + Sync>> {
+fn load_wsgi_application(
+  file_path: &Path,
+  clear_sys_path: bool,
+) -> Result<Py<PyAny>, Box<dyn Error + Send + Sync>> {
   let script_dirname = file_path
     .parent()
     .map(|path| path.to_string_lossy().to_string());
@@ -59,19 +62,14 @@ fn load_wsgi_application(file_path: &Path) -> Result<Py<PyAny>, Box<dyn Error + 
   let script_data = std::fs::read_to_string(file_path)?;
   let script_data_cstring = CString::from_str(&script_data)?;
   let wsgi_application = Python::with_gil(move |py| -> PyResult<Py<PyAny>> {
-    // Equivalent of the Python code below:
-    //
-    // try:
-    //   import sys
-    //   import os
-    //   sys.path.append(os.path.dirname(__file__))
-    // except:
-    //   pass
+    let mut sys_path_old = None;
     if let Some(script_dirname) = script_dirname {
       if let Ok(sys_module) = PyModule::import(py, "sys") {
-        if let Ok(sys_path) = sys_module.getattr("path") {
-          if let Ok(sys_path_append) = sys_path.getattr("append") {
-            let _ = sys_path_append.call((script_dirname,), None);
+        if let Ok(sys_path_any) = sys_module.getattr("path") {
+          if let Ok(sys_path) = sys_path_any.downcast::<PyList>() {
+            let sys_path = sys_path.clone();
+            sys_path_old = sys_path.extract::<Vec<String>>().ok();
+            sys_path.insert(0, script_dirname).unwrap_or_default();
           }
         }
       }
@@ -84,6 +82,13 @@ fn load_wsgi_application(file_path: &Path) -> Result<Py<PyAny>, Box<dyn Error + 
     )?
     .getattr("application")?
     .unbind();
+    if clear_sys_path {
+      if let Some(sys_path) = sys_path_old {
+        if let Ok(sys_module) = PyModule::import(py, "sys") {
+          sys_module.setattr("path", sys_path).unwrap_or_default();
+        }
+      }
+    }
     Ok(wsgi_application)
   })?;
   Ok(wsgi_application)
@@ -94,9 +99,13 @@ pub fn server_module_init(
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
   let mut global_wsgi_application = None;
   let mut host_wsgi_applications = Vec::new();
+  let clear_sys_path = config["global"]["wsgiClearModuleImportPath"]
+    .as_bool()
+    .unwrap_or(false);
   if let Some(wsgi_application_path) = config["global"]["wsgiApplicationPath"].as_str() {
     global_wsgi_application = Some(Arc::new(load_wsgi_application(
       PathBuf::from_str(wsgi_application_path)?.as_path(),
+      clear_sys_path,
     )?));
   }
   let global_wsgi_path = config["global"]["wsgiPath"].as_str().map(|s| s.to_string());
@@ -115,6 +124,7 @@ pub fn server_module_init(
                 path,
                 Arc::new(load_wsgi_application(
                   PathBuf::from_str(wsgi_application_path)?.as_path(),
+                  clear_sys_path,
                 )?),
                 location_yaml["wsgiPath"].as_str().map(|s| s.to_string()),
               ));
@@ -128,6 +138,7 @@ pub fn server_module_init(
           ip,
           Some(Arc::new(load_wsgi_application(
             PathBuf::from_str(wsgi_application_path)?.as_path(),
+            clear_sys_path,
           )?)),
           host_yaml["wsgiPath"].as_str().map(|s| s.to_string()),
           locations,

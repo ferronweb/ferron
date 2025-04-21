@@ -1031,6 +1031,19 @@ pub fn validate_config(
         if used_properties.contains("wsgiPath") && config["wsgiPath"].as_str().is_none() {
           Err(anyhow::anyhow!("Invalid WSGI request base path"))?
         }
+
+        if used_properties.contains("wsgiClearModuleImportPath") {
+          if !is_global {
+            Err(anyhow::anyhow!(
+              "WSGI Python module import path clearing option is not allowed in host configuration"
+            ))?
+          }
+          if config["wsgiClearModuleImportPath"].as_bool().is_none() {
+            Err(anyhow::anyhow!(
+              "Invalid WSGI Python module import path clearing option value"
+            ))?
+          }
+        }
       }
       _ => (),
     }
