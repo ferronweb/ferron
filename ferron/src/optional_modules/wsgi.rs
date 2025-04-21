@@ -8,7 +8,6 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::ffi::CString;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -44,6 +43,9 @@ use tokio::sync::Mutex;
 use tokio_util::io::StreamReader;
 
 fn load_wsgi_application(file_path: &Path) -> Result<Py<PyAny>, Box<dyn Error + Send + Sync>> {
+  let script_dirname = file_path
+    .parent()
+    .map(|path| path.to_string_lossy().to_string());
   let script_name = file_path.to_string_lossy().to_string();
   let script_name_cstring = CString::from_str(&script_name)?;
   let module_name = script_name
@@ -54,20 +56,26 @@ fn load_wsgi_application(file_path: &Path) -> Result<Py<PyAny>, Box<dyn Error + 
     .map(|c| if c.is_lowercase() { '_' } else { c })
     .collect::<String>();
   let module_name_cstring = CString::from_str(&module_name)?;
-  let mut script_data = String::from(
-    r#"
-try:
-  import sys
-  import os
-  sys.path.append(os.path.dirname(__file__))
-except:
-  pass
-
-"#,
-  );
-  std::fs::File::open(file_path)?.read_to_string(&mut script_data)?;
+  let script_data = std::fs::read_to_string(file_path)?;
   let script_data_cstring = CString::from_str(&script_data)?;
   let wsgi_application = Python::with_gil(move |py| -> PyResult<Py<PyAny>> {
+    // Equivalent of the Python code below:
+    //
+    // try:
+    //   import sys
+    //   import os
+    //   sys.path.append(os.path.dirname(__file__))
+    // except:
+    //   pass
+    if let Some(script_dirname) = script_dirname {
+      if let Ok(sys_module) = PyModule::import(py, "sys") {
+        if let Ok(sys_path) = sys_module.getattr("path") {
+          if let Ok(sys_path_append) = sys_path.getattr("append") {
+            let _ = sys_path_append.call((script_dirname,), None);
+          }
+        }
+      }
+    }
     let wsgi_application = PyModule::from_code(
       py,
       &script_data_cstring,
