@@ -63,6 +63,7 @@ fproxy = []
 rproxy = []
 scgi = ["httparse", "memmem"]
 wsgi = ["pyo3"]
+wsgid = ["pyo3"]
 
 [build-dependencies]
 winresource = "0.1.19"

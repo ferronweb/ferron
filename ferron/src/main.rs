@@ -96,6 +96,8 @@ mod ferron_optional_modules {
   pub mod scgi;
   #[cfg(feature = "wsgi")]
   pub mod wsgi;
+  #[cfg(feature = "wsgid")]
+  pub mod wsgid;
 }
 
 // Standard library imports
@@ -298,6 +300,24 @@ fn before_starting_server(
       "wsgi" => {
         external_modules.push(
           match ferron_optional_modules::wsgi::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
+
+        modules_optional_builtin.push(module_name.clone());
+      }
+      #[cfg(feature = "wsgid")]
+      "wsgid" => {
+        external_modules.push(
+          match ferron_optional_modules::wsgid::server_module_init(&yaml_config) {
             Ok(module) => module,
             Err(err) => {
               module_error = Some(anyhow::anyhow!(
