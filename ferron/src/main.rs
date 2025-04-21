@@ -44,6 +44,8 @@ mod ferron_util {
   #[cfg(any(feature = "rproxy", feature = "fauth"))]
   pub mod no_server_verifier;
   pub mod non_standard_code_structs;
+  #[cfg(all(unix, feature = "wsgid"))]
+  pub mod preforked_process_pool;
   #[cfg(feature = "fcgi")]
   pub mod read_to_end_move;
   pub mod sizify;
