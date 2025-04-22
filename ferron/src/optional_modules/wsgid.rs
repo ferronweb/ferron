@@ -30,7 +30,7 @@ use async_trait::async_trait;
 use futures_util::{StreamExt, TryStreamExt};
 use hashlink::LinkedHashMap;
 use http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
-use http_body_util::{BodyExt, StreamBody};
+use http_body_util::{BodyExt, Empty, StreamBody};
 use hyper::body::{Bytes, Frame};
 use hyper::header;
 use hyper::Response;
