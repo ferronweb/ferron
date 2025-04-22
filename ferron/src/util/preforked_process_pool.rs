@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::ops::Deref;
+use std::io::{Read, Write};
 use std::os::fd::OwnedFd;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -9,7 +9,9 @@ use interprocess::unnamed_pipe::tokio::{Recver as TokioRecver, Sender as TokioSe
 use interprocess::unnamed_pipe::{Recver, Sender};
 use nix::sys::signal::{SigSet, SigmaskHow};
 use nix::unistd::{ForkResult, Pid};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{Mutex, RwLock};
+use tokio_util::bytes::BufMut;
 
 #[allow(clippy::type_complexity)]
 pub struct PreforkedProcessPool {
@@ -167,22 +169,57 @@ impl Drop for PreforkedProcessPool {
   }
 }
 
+pub fn read_ipc_message(rx: &mut Recver) -> Result<Vec<u8>, std::io::Error> {
+  let mut message_size_buffer = [0u8; 4];
+  rx.read_exact(&mut message_size_buffer)?;
+  let message_size = u32::from_be_bytes(message_size_buffer);
+
+  let mut buffer = vec![0u8; message_size as usize];
+  rx.read_exact(&mut buffer)?;
+  Ok(buffer)
+}
+
+pub async fn read_ipc_message_async(rx: &mut TokioRecver) -> Result<Vec<u8>, std::io::Error> {
+  let mut message_size_buffer = [0u8; 4];
+  rx.read_exact(&mut message_size_buffer).await?;
+  let message_size = u32::from_be_bytes(message_size_buffer);
+
+  let mut buffer = vec![0u8; message_size as usize];
+  rx.read_exact(&mut buffer).await?;
+  Ok(buffer)
+}
+
+pub fn write_ipc_message(tx: &mut Sender, message: &[u8]) -> Result<(), std::io::Error> {
+  let mut packet = Vec::new();
+  packet.put_slice(&(message.len() as u32).to_be_bytes());
+  packet.put_slice(message);
+  tx.write_all(&packet)?;
+  Ok(())
+}
+
+pub async fn write_ipc_message_async(
+  tx: &mut TokioSender,
+  message: &[u8],
+) -> Result<(), std::io::Error> {
+  let mut packet = Vec::new();
+  packet.put_slice(&(message.len() as u32).to_be_bytes());
+  packet.put_slice(message);
+  tx.write_all(&packet).await?;
+  Ok(())
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
-  use std::io::{Read, Write};
   use std::time::Duration;
-  use tokio::io::{AsyncReadExt, AsyncWriteExt};
   use tokio::time::timeout;
 
   fn dummy_pool_fn(mut tx: Sender, mut rx: Recver) {
     // Simulate child doing some work and echoing a message
-    let mut buffer = [0u8; 128];
-
     loop {
-      match rx.read(&mut buffer) {
-        Ok(n) => {
-          let _ = tx.write_all(&buffer[..n]);
+      match read_ipc_message(&mut rx) {
+        Ok(message) => {
+          let _ = write_ipc_message(&mut tx, &message);
         }
         Err(_) => break,
       }
@@ -203,14 +240,13 @@ mod tests {
     let (tx, rx) = &mut *proc;
 
     // Write and read a message
-    tx.write_all(b"hello").await.unwrap();
-    let mut buf = vec![0; 5];
-    timeout(Duration::from_secs(2), rx.read_exact(&mut buf))
+    write_ipc_message_async(tx, b"hello").await.unwrap();
+    let message = timeout(Duration::from_secs(2), read_ipc_message_async(rx))
       .await
       .expect("Timed out reading")
       .unwrap();
 
-    assert_eq!(&buf, b"hello");
+    assert_eq!(&message, b"hello");
   }
 
   #[tokio::test]
