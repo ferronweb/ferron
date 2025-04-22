@@ -28,7 +28,7 @@ use async_trait::async_trait;
 use futures_util::{StreamExt, TryStreamExt};
 use hashlink::LinkedHashMap;
 use http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
-use http_body_util::{BodyExt, StreamBody};
+use http_body_util::{BodyExt, Empty, StreamBody};
 use hyper::body::{Bytes, Frame};
 use hyper::header;
 use hyper::Response;
@@ -723,9 +723,7 @@ async fn execute_wsgi(
 
     BodyExt::boxed(stream_body)
   } else {
-    let stream_body = StreamBody::new(response_stream.map_ok(Frame::data));
-
-    BodyExt::boxed(stream_body)
+    BodyExt::boxed(Empty::new().map_err(|e| match e {}))
   };
 
   let mut wsgi_head_locked = wsgi_head.lock().await;
