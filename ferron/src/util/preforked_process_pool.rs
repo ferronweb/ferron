@@ -40,10 +40,10 @@ impl PreforkedProcessPool {
       rx_parent.set_nonblocking(true).unwrap_or_default();
 
       // Obtain the file descriptors of the pipes
-      let tx_parent_fd: OwnedFd = tx_parent.try_into()?;
-      let rx_parent_fd: OwnedFd = rx_parent.try_into()?;
-      let tx_child_fd: OwnedFd = tx_child.try_into()?;
-      let rx_child_fd: OwnedFd = rx_child.try_into()?;
+      let tx_parent_fd: OwnedFd = tx_parent.into();
+      let rx_parent_fd: OwnedFd = rx_parent.into();
+      let tx_child_fd: OwnedFd = tx_child.into();
+      let rx_child_fd: OwnedFd = rx_child.into();
 
       match nix::unistd::fork() {
         Ok(ForkResult::Parent { child }) => {
@@ -222,13 +222,8 @@ mod tests {
 
   fn dummy_pool_fn(mut tx: Sender, mut rx: Recver) {
     // Simulate child doing some work and echoing a message
-    loop {
-      match read_ipc_message(&mut rx) {
-        Ok(message) => {
-          let _ = write_ipc_message(&mut tx, &message);
-        }
-        Err(_) => break,
-      }
+    while let Ok(message) = read_ipc_message(&mut rx) {
+      let _ = write_ipc_message(&mut tx, &message);
     }
   }
 
