@@ -65,7 +65,8 @@ impl ResponseHead {
 fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
   let wsgi_application_result: Result<Py<PyAny>, Box<dyn Error + Send + Sync>> =
     load_wsgi_application(wsgi_script_path.as_path(), false);
-  let mut body_iterator_option = None;
+  let mut body_iterators = HashMap::new();
+  let mut application_id = 0;
   let mut wsgi_head = Arc::new(Mutex::new(ResponseHead::new()));
   let rx_mutex = Arc::new(Mutex::new(rx));
   let tx_mutex = Arc::new(Mutex::new(tx));
@@ -206,11 +207,14 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
             .unbind();
           Ok(body_iterator)
         })?;
-        body_iterator_option = Some(Arc::new(body_iterator));
+        let current_application_id = application_id;
+        body_iterators.insert(current_application_id, Arc::new(body_iterator));
+        application_id += 1;
         write_ipc_message(
           &mut tx_mutex.blocking_lock(),
           &serde_pickle::to_vec::<ProcessPoolToServerMessage>(
             &ProcessPoolToServerMessage {
+              application_id: Some(current_application_id),
               status_code: None,
               headers: None,
               body_chunk: None,
@@ -222,61 +226,70 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
           )?,
         )?
       } else if received_message.requests_body_chunk {
-        if let Some(body_iterator_arc) = &body_iterator_option {
-          let wsgi_head_clone = wsgi_head.clone();
-          let body_iterator_arc_clone = body_iterator_arc.clone();
-          let body_chunk_result = Python::with_gil(|py| -> PyResult<Option<Vec<u8>>> {
-            let mut body_iterator_bound = body_iterator_arc_clone.bind(py).clone();
-            if let Some(body_chunk) = body_iterator_bound.next() {
-              Ok(Some(body_chunk?.extract::<Vec<u8>>()?))
-            } else {
-              Ok(None)
-            }
-          });
-
-          let body_chunk = (match body_chunk_result {
-            Err(error) => Err(std::io::Error::other(error)),
-            Ok(None) => Ok(None),
-            Ok(Some(chunk)) => {
-              let wsgi_head_locked = wsgi_head_clone.blocking_lock();
-              if !wsgi_head_locked.is_set {
-                Err(std::io::Error::other(
-                  "The \"start_response\" function hasn't been called.",
-                ))
+        if let Some(application_id) = received_message.application_id {
+          if let Some(body_iterator_arc) = body_iterators.get(&application_id) {
+            let wsgi_head_clone = wsgi_head.clone();
+            let body_iterator_arc_clone = body_iterator_arc.clone();
+            let body_chunk_result = Python::with_gil(|py| -> PyResult<Option<Vec<u8>>> {
+              let mut body_iterator_bound = body_iterator_arc_clone.bind(py).clone();
+              if let Some(body_chunk) = body_iterator_bound.next() {
+                Ok(Some(body_chunk?.extract::<Vec<u8>>()?))
               } else {
-                Ok(Some(chunk))
+                Ok(None)
               }
+            });
+
+            let body_chunk = (match body_chunk_result {
+              Err(error) => Err(std::io::Error::other(error)),
+              Ok(None) => Ok(None),
+              Ok(Some(chunk)) => {
+                let wsgi_head_locked = wsgi_head_clone.blocking_lock();
+                if !wsgi_head_locked.is_set {
+                  Err(std::io::Error::other(
+                    "The \"start_response\" function hasn't been called.",
+                  ))
+                } else {
+                  Ok(Some(chunk))
+                }
+              }
+            })?;
+
+            let status_code;
+            let headers;
+
+            let mut wsgi_head_locked = wsgi_head_clone.blocking_lock();
+            if wsgi_head_locked.is_sent {
+              status_code = None;
+              headers = None;
+            } else {
+              status_code = Some(wsgi_head_locked.status);
+              headers = wsgi_head_locked.headers.take();
+              wsgi_head_locked.is_sent = true;
             }
-          })?;
+            drop(wsgi_head_locked);
 
-          let status_code;
-          let headers;
+            if body_chunk.is_none() {
+              body_iterators.remove(&application_id);
+            }
 
-          let mut wsgi_head_locked = wsgi_head_clone.blocking_lock();
-          if wsgi_head_locked.is_sent {
-            status_code = None;
-            headers = None;
+            write_ipc_message(
+              &mut tx_mutex.blocking_lock(),
+              &serde_pickle::to_vec::<ProcessPoolToServerMessage>(
+                &ProcessPoolToServerMessage {
+                  application_id: None,
+                  status_code,
+                  headers,
+                  body_chunk,
+                  error_log_line: None,
+                  error_message: None,
+                  requests_body_chunk: false,
+                },
+                SerOptions::default(),
+              )?,
+            )?
           } else {
-            status_code = Some(wsgi_head_locked.status);
-            headers = wsgi_head_locked.headers.take();
-            wsgi_head_locked.is_sent = true;
+            Err(anyhow::anyhow!("The WSGI request wasn't initialized"))?
           }
-          drop(wsgi_head_locked);
-
-          write_ipc_message(
-            &mut tx_mutex.blocking_lock(),
-            &serde_pickle::to_vec::<ProcessPoolToServerMessage>(
-              &ProcessPoolToServerMessage {
-                status_code,
-                headers,
-                body_chunk,
-                error_log_line: None,
-                error_message: None,
-                requests_body_chunk: false,
-              },
-              SerOptions::default(),
-            )?,
-          )?
         } else {
           Err(anyhow::anyhow!("The WSGI request wasn't initialized"))?
         }
@@ -290,6 +303,7 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
         &mut tx_mutex.blocking_lock(),
         &serde_pickle::to_vec::<ProcessPoolToServerMessage>(
           &ProcessPoolToServerMessage {
+            application_id: None,
             status_code: None,
             headers: None,
             body_chunk: None,
@@ -849,12 +863,13 @@ async fn execute_wsgi(
   let ipc_mutex = wsgi_process_pool
     .obtain_process_with_init_async_ipc()
     .await?;
-  {
+  let application_id = {
     let (tx, rx) = &mut *ipc_mutex.lock().await;
     write_ipc_message_async(
       tx,
       &serde_pickle::to_vec(
         &ServerToProcessPoolMessage {
+          application_id: None,
           environment_variables: Some(environment_variables),
           body_chunk: None,
           requests_body_chunk: false,
@@ -864,15 +879,21 @@ async fn execute_wsgi(
     )
     .await?;
 
-    if let Some(error_message) = serde_pickle::from_slice::<ProcessPoolToServerMessage>(
+    let received_message = serde_pickle::from_slice::<ProcessPoolToServerMessage>(
       &read_ipc_message_async(rx).await?,
       DeOptions::default(),
-    )?
-    .error_message
-    {
+    )?;
+
+    if let Some(error_message) = received_message.error_message {
       Err(anyhow::anyhow!(error_message))?
     }
-  }
+
+    if let Some(application_id) = received_message.application_id {
+      application_id
+    } else {
+      Err(anyhow::anyhow!("Can't determine the WSGI application ID"))?
+    }
+  };
 
   let wsgi_head = Arc::new(Mutex::new(ResponseHeadHyper::new()));
   let wsgi_head_clone = wsgi_head.clone();
@@ -886,6 +907,7 @@ async fn execute_wsgi(
           tx,
           &serde_pickle::to_vec(
             &ServerToProcessPoolMessage {
+              application_id: Some(application_id),
               environment_variables: None,
               body_chunk: None,
               requests_body_chunk: true,
