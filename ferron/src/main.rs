@@ -60,8 +60,12 @@ mod ferron_util {
   pub mod wsgi_error_stream;
   #[cfg(feature = "wsgi")]
   pub mod wsgi_input_stream;
+  #[cfg(any(feature = "wsgi", feature = "wsgid"))]
+  pub mod wsgi_load_application;
   #[cfg(feature = "wsgi")]
   pub mod wsgi_structs;
+  #[cfg(feature = "wsgid")]
+  pub mod wsgid_structs;
 }
 
 // Import project modules from "modules" directory

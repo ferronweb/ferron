@@ -1045,6 +1045,22 @@ pub fn validate_config(
           }
         }
       }
+      #[cfg(feature = "wsgid")]
+      "wsgid" => {
+        if used_properties.contains("wsgidApplicationPath")
+          && config["wsgidApplicationPath"].as_str().is_none()
+        {
+          Err(anyhow::anyhow!(
+            "Invalid path to the WSGI (with pre-forked process pool) application"
+          ))?
+        }
+
+        if used_properties.contains("wsgidPath") && config["wsgidPath"].as_str().is_none() {
+          Err(anyhow::anyhow!(
+            "Invalid WSGI (with pre-forked process pool) request base path"
+          ))?
+        }
+      }
       _ => (),
     }
   }

@@ -58,6 +58,12 @@ impl PreforkedProcessPool {
           nix::sys::signal::sigprocmask(SigmaskHow::SIG_SETMASK, Some(&SigSet::all()), None)
             .unwrap_or_default();
 
+          #[cfg(target_os = "linux")]
+          {
+            // Stop child process after the parent process is stopped on Linux systems
+            nix::sys::prctl::set_pdeathsig(nix::sys::signal::SIGKILL).unwrap_or_default();
+          }
+
           pool_fn(tx_child_fd.into(), rx_child_fd.into());
 
           // Exit the process in the process pool
