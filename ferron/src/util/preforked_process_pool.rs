@@ -1,16 +1,24 @@
 use std::error::Error;
+use std::ops::Deref;
 use std::os::fd::OwnedFd;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use interprocess::os::unix::unnamed_pipe::UnnamedPipeExt;
 use interprocess::unnamed_pipe::tokio::{Recver as TokioRecver, Sender as TokioSender};
 use interprocess::unnamed_pipe::{Recver, Sender};
+use nix::sys::signal::{SigSet, SigmaskHow};
 use nix::unistd::{ForkResult, Pid};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
 #[allow(clippy::type_complexity)]
 pub struct PreforkedProcessPool {
-  inner: Vec<(Arc<Mutex<(TokioSender, TokioRecver)>>, Pid)>,
+  inner: Vec<(
+    Arc<RwLock<Option<Result<Arc<Mutex<(TokioSender, TokioRecver)>>, std::io::Error>>>>,
+    Pid,
+    Arc<Mutex<Option<(OwnedFd, OwnedFd)>>>,
+  )>,
+  async_ipc_initialized: Arc<RwLock<AtomicBool>>,
 }
 
 impl PreforkedProcessPool {
@@ -38,14 +46,16 @@ impl PreforkedProcessPool {
       match nix::unistd::fork() {
         Ok(ForkResult::Parent { child }) => {
           processes.push((
-            Arc::new(Mutex::new((
-              tx_parent_fd.try_into()?,
-              rx_parent_fd.try_into()?,
-            ))),
+            Arc::new(RwLock::new(None)),
             child,
+            Arc::new(Mutex::new(Some((tx_parent_fd, rx_parent_fd)))),
           ));
         }
         Ok(ForkResult::Child) => {
+          // Block all the signals
+          nix::sys::signal::sigprocmask(SigmaskHow::SIG_SETMASK, Some(&SigSet::all()), None)
+            .unwrap_or_default();
+
           pool_fn(tx_child_fd.into(), rx_child_fd.into());
 
           // Exit the process in the process pool
@@ -56,7 +66,40 @@ impl PreforkedProcessPool {
         }
       }
     }
-    Ok(Self { inner: processes })
+    Ok(Self {
+      inner: processes,
+      async_ipc_initialized: Arc::new(RwLock::new(AtomicBool::new(false))),
+    })
+  }
+
+  pub async fn init_async_ipc(&self) {
+    if !self
+      .async_ipc_initialized
+      .read()
+      .await
+      .load(Ordering::Relaxed)
+    {
+      for inner_process in &self.inner {
+        let fds_option = inner_process.2.lock().await.take();
+        if let Some((tx_fd, rx_fd)) = fds_option {
+          let ipc_io_result = match tx_fd.try_into() {
+            Ok(tx) => match rx_fd.try_into() {
+              Ok(rx) => Ok(Arc::new(Mutex::new((tx, rx)))),
+              Err(err) => Err(err),
+            },
+            Err(err) => Err(err),
+          };
+
+          inner_process.0.write().await.replace(ipc_io_result);
+        }
+      }
+
+      self
+        .async_ipc_initialized
+        .write()
+        .await
+        .store(true, Ordering::Relaxed);
+    }
   }
 
   pub async fn obtain_process(
@@ -67,7 +110,14 @@ impl PreforkedProcessPool {
         "The process pool doesn't have any processes"
       ))?
     } else if self.inner.len() == 1 {
-      Ok(self.inner[0].0.clone())
+      let process_option = self.inner[0].0.read().await;
+      let process = match process_option.as_ref() {
+        Some(arc_mutex_result) => arc_mutex_result
+          .as_ref()
+          .map_err(|e| std::io::Error::new(e.kind(), e.to_string()))?,
+        None => Err(anyhow::anyhow!("Asynchronous IPC not initialized yet"))?,
+      };
+      Ok(process.clone())
     } else {
       let first_random_choice = rand::random_range(0..self.inner.len());
       let second_random_choice_reduced = rand::random_range(0..self.inner.len() - 1);
@@ -76,16 +126,35 @@ impl PreforkedProcessPool {
       } else {
         second_random_choice_reduced + 1
       };
-      let first_random_process = &self.inner[first_random_choice].0;
-      let second_random_process = &self.inner[second_random_choice].0;
-      let first_random_process_references = Arc::strong_count(first_random_process);
-      let second_random_process_references = Arc::strong_count(second_random_process);
-      if first_random_process_references < second_random_process_references {
+      let first_random_process_option = self.inner[first_random_choice].0.read().await;
+      let second_random_process_option = self.inner[second_random_choice].0.read().await;
+      let first_random_process = match first_random_process_option.as_ref() {
+        Some(arc_mutex_result) => arc_mutex_result
+          .as_ref()
+          .map_err(|e| std::io::Error::new(e.kind(), e.to_string()))?,
+        None => Err(anyhow::anyhow!("Asynchronous IPC not initialized yet"))?,
+      };
+      let second_random_process = match second_random_process_option.as_ref() {
+        Some(arc_mutex_result) => arc_mutex_result
+          .as_ref()
+          .map_err(|e| std::io::Error::new(e.kind(), e.to_string()))?,
+        None => Err(anyhow::anyhow!("Asynchronous IPC not initialized yet"))?,
+      };
+      let first_random_process_reference = Arc::strong_count(first_random_process);
+      let second_random_process_reference = Arc::strong_count(second_random_process);
+      if first_random_process_reference < second_random_process_reference {
         Ok(first_random_process.clone())
       } else {
         Ok(second_random_process.clone())
       }
     }
+  }
+
+  pub async fn obtain_process_with_init_async_ipc(
+    &self,
+  ) -> Result<Arc<Mutex<(TokioSender, TokioRecver)>>, Box<dyn Error + Send + Sync>> {
+    self.init_async_ipc().await;
+    self.obtain_process().await
   }
 }
 
@@ -129,7 +198,7 @@ mod tests {
   #[tokio::test]
   async fn test_obtain_process_and_communication() {
     let pool = unsafe { PreforkedProcessPool::new(1, dummy_pool_fn) }.unwrap();
-    let proc = pool.obtain_process().await.unwrap();
+    let proc = pool.obtain_process_with_init_async_ipc().await.unwrap();
     let mut proc = proc.lock().await;
     let (tx, rx) = &mut *proc;
 
@@ -148,9 +217,9 @@ mod tests {
   async fn test_obtain_process_balancing() {
     let pool = unsafe { PreforkedProcessPool::new(3, dummy_pool_fn) }.unwrap();
 
-    let _p1 = pool.obtain_process().await.unwrap();
-    let _p2 = pool.obtain_process().await.unwrap();
-    let _p3 = pool.obtain_process().await.unwrap();
+    let _p1 = pool.obtain_process_with_init_async_ipc().await.unwrap();
+    let _p2 = pool.obtain_process_with_init_async_ipc().await.unwrap();
+    let _p3 = pool.obtain_process_with_init_async_ipc().await.unwrap();
 
     // This ensures reference counts differ
     let chosen = pool.obtain_process().await;
@@ -159,8 +228,11 @@ mod tests {
 
   #[tokio::test]
   async fn test_obtain_process_empty_pool() {
-    let empty_pool = PreforkedProcessPool { inner: Vec::new() };
-    let result = empty_pool.obtain_process().await;
+    let empty_pool = PreforkedProcessPool {
+      inner: Vec::new(),
+      async_ipc_initialized: Arc::new(RwLock::new(AtomicBool::new(false))),
+    };
+    let result = empty_pool.obtain_process_with_init_async_ipc().await;
     assert!(result.is_err());
   }
 }
