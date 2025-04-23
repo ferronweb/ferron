@@ -88,10 +88,10 @@ mod tests {
     let lines = vec!["line one".into(), "line two".into()];
     stream.writelines(lines.clone()).unwrap();
 
-    for i in 0..lines.len() {
+    for line in lines {
       let received = read_ipc_message(&mut rx).unwrap();
       let msg: ProcessPoolToServerMessage = postcard::from_bytes(&received).unwrap();
-      assert_eq!(msg.error_log_line, Some(lines[i].clone()));
+      assert_eq!(msg.error_log_line, Some(line.clone()));
     }
   }
 }

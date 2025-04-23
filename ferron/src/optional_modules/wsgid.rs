@@ -902,8 +902,8 @@ async fn execute_wsgi(
           &postcard::to_allocvec(&ServerToProcessPoolMessage {
             application_id: None,
             environment_variables: None,
-            body_chunk: body_chunk,
-            body_error_message: body_error_message,
+            body_chunk,
+            body_error_message,
             requests_body_chunk: false,
           })?,
         )
@@ -987,8 +987,8 @@ async fn execute_wsgi(
               &postcard::to_allocvec(&ServerToProcessPoolMessage {
                 application_id: None,
                 environment_variables: None,
-                body_chunk: body_chunk,
-                body_error_message: body_error_message,
+                body_chunk,
+                body_error_message,
                 requests_body_chunk: false,
               })?,
             )

@@ -132,11 +132,11 @@ mod tests {
     let received_message =
       postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message(&mut rx_outer).unwrap())
         .unwrap();
-    assert_eq!(received_message.requests_body_chunk, true);
+    assert!(received_message.requests_body_chunk);
     let received_message =
       postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message(&mut rx_outer).unwrap())
         .unwrap();
-    assert_eq!(received_message.requests_body_chunk, true);
+    assert!(received_message.requests_body_chunk);
   }
 
   #[test]
