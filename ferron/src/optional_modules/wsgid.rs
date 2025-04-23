@@ -39,7 +39,7 @@ use interprocess::unnamed_pipe::{Recver, Sender};
 use pyo3::exceptions::{PyAssertionError, PyException};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyCFunction, PyDict, PyIterator, PyString, PyTuple};
-use serde_pickle::{DeOptions, SerOptions};
+//use postcard::{DeOptions, SerOptions};
 use tokio::fs;
 use tokio::runtime::Handle;
 use tokio::sync::Mutex;
@@ -77,13 +77,11 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
       Err(_) => break,
     };
 
-    let received_message = match serde_pickle::from_slice::<ServerToProcessPoolMessage>(
-      &received_raw_message,
-      DeOptions::default(),
-    ) {
-      Ok(message) => message,
-      Err(_) => continue,
-    };
+    let received_message =
+      match postcard::from_bytes::<ServerToProcessPoolMessage>(&received_raw_message) {
+        Ok(message) => message,
+        Err(_) => continue,
+      };
 
     if let Some(error) = (|| -> Result<(), Box<dyn Error + Send + Sync>> {
       let wsgi_application = wsgi_application_result
@@ -212,18 +210,15 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
         application_id += 1;
         write_ipc_message(
           &mut tx_mutex.blocking_lock(),
-          &serde_pickle::to_vec::<ProcessPoolToServerMessage>(
-            &ProcessPoolToServerMessage {
-              application_id: Some(current_application_id),
-              status_code: None,
-              headers: None,
-              body_chunk: None,
-              error_log_line: None,
-              error_message: None,
-              requests_body_chunk: false,
-            },
-            SerOptions::default(),
-          )?,
+          &postcard::to_allocvec::<ProcessPoolToServerMessage>(&ProcessPoolToServerMessage {
+            application_id: Some(current_application_id),
+            status_code: None,
+            headers: None,
+            body_chunk: None,
+            error_log_line: None,
+            error_message: None,
+            requests_body_chunk: false,
+          })?,
         )?
       } else if received_message.requests_body_chunk {
         if let Some(application_id) = received_message.application_id {
@@ -274,18 +269,15 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
 
             write_ipc_message(
               &mut tx_mutex.blocking_lock(),
-              &serde_pickle::to_vec::<ProcessPoolToServerMessage>(
-                &ProcessPoolToServerMessage {
-                  application_id: None,
-                  status_code,
-                  headers,
-                  body_chunk,
-                  error_log_line: None,
-                  error_message: None,
-                  requests_body_chunk: false,
-                },
-                SerOptions::default(),
-              )?,
+              &postcard::to_allocvec::<ProcessPoolToServerMessage>(&ProcessPoolToServerMessage {
+                application_id: None,
+                status_code,
+                headers,
+                body_chunk,
+                error_log_line: None,
+                error_message: None,
+                requests_body_chunk: false,
+              })?,
             )?
           } else {
             Err(anyhow::anyhow!("The WSGI request wasn't initialized"))?
@@ -301,18 +293,15 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
     {
       if write_ipc_message(
         &mut tx_mutex.blocking_lock(),
-        &serde_pickle::to_vec::<ProcessPoolToServerMessage>(
-          &ProcessPoolToServerMessage {
-            application_id: None,
-            status_code: None,
-            headers: None,
-            body_chunk: None,
-            error_log_line: None,
-            error_message: Some(error.to_string()),
-            requests_body_chunk: false,
-          },
-          SerOptions::default(),
-        )
+        &postcard::to_allocvec::<ProcessPoolToServerMessage>(&ProcessPoolToServerMessage {
+          application_id: None,
+          status_code: None,
+          headers: None,
+          body_chunk: None,
+          error_log_line: None,
+          error_message: Some(error.to_string()),
+          requests_body_chunk: false,
+        })
         .unwrap_or_default(),
       )
       .is_err()
@@ -867,22 +856,17 @@ async fn execute_wsgi(
     let (tx, rx) = &mut *ipc_mutex.lock().await;
     write_ipc_message_async(
       tx,
-      &serde_pickle::to_vec(
-        &ServerToProcessPoolMessage {
-          application_id: None,
-          environment_variables: Some(environment_variables),
-          body_chunk: None,
-          requests_body_chunk: false,
-        },
-        SerOptions::default(),
-      )?,
+      &postcard::to_allocvec(&ServerToProcessPoolMessage {
+        application_id: None,
+        environment_variables: Some(environment_variables),
+        body_chunk: None,
+        requests_body_chunk: false,
+      })?,
     )
     .await?;
 
-    let received_message = serde_pickle::from_slice::<ProcessPoolToServerMessage>(
-      &read_ipc_message_async(rx).await?,
-      DeOptions::default(),
-    )?;
+    let received_message =
+      postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message_async(rx).await?)?;
 
     if let Some(error_message) = received_message.error_message {
       Err(anyhow::anyhow!(error_message))?
@@ -905,22 +889,17 @@ async fn execute_wsgi(
         let (tx, rx) = &mut *ipc_mutex_borrowed.lock().await;
         write_ipc_message_async(
           tx,
-          &serde_pickle::to_vec(
-            &ServerToProcessPoolMessage {
-              application_id: Some(application_id),
-              environment_variables: None,
-              body_chunk: None,
-              requests_body_chunk: true,
-            },
-            SerOptions::default(),
-          )?,
+          &postcard::to_allocvec(&ServerToProcessPoolMessage {
+            application_id: Some(application_id),
+            environment_variables: None,
+            body_chunk: None,
+            requests_body_chunk: true,
+          })?,
         )
         .await?;
 
-        let received_message = serde_pickle::from_slice::<ProcessPoolToServerMessage>(
-          &read_ipc_message_async(rx).await?,
-          DeOptions::default(),
-        )?;
+        let received_message =
+          postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message_async(rx).await?)?;
 
         // TODO: add support for HTTP POST bodies and error log
         if let Some(error_message) = received_message.error_message {
