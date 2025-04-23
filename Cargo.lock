@@ -756,6 +756,7 @@ dependencies = [
  "async-compression",
  "async-trait",
  "base64",
+ "bytes",
  "cache_control",
  "chrono",
  "clap",

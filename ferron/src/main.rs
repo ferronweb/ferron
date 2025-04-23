@@ -65,7 +65,11 @@ mod ferron_util {
   #[cfg(feature = "wsgi")]
   pub mod wsgi_structs;
   #[cfg(feature = "wsgid")]
+  pub mod wsgid_body_reader;
+  #[cfg(feature = "wsgid")]
   pub mod wsgid_error_stream;
+  #[cfg(feature = "wsgid")]
+  pub mod wsgid_input_stream;
   #[cfg(feature = "wsgid")]
   pub mod wsgid_message_structs;
   #[cfg(feature = "wsgid")]

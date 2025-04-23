@@ -3,6 +3,7 @@ compile_error!("This module is supported only on Unix and Unix-like systems.");
 
 use std::collections::HashMap;
 use std::error::Error;
+use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -22,7 +23,9 @@ use crate::ferron_util::preforked_process_pool::{
   PreforkedProcessPool,
 };
 use crate::ferron_util::wsgi_load_application::load_wsgi_application;
+use crate::ferron_util::wsgid_body_reader::WsgidBodyReader;
 use crate::ferron_util::wsgid_error_stream::WsgidErrorStream;
+use crate::ferron_util::wsgid_input_stream::WsgidInputStream;
 use crate::ferron_util::wsgid_message_structs::{
   ProcessPoolToServerMessage, ServerToProcessPoolMessage,
 };
@@ -92,6 +95,7 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
         wsgi_head = Arc::new(Mutex::new(ResponseHead::new()));
         let wsgi_head_clone = wsgi_head.clone();
         let tx_mutex_clone = tx_mutex.clone();
+        let rx_mutex_clone = rx_mutex.clone();
         let body_iterator = Python::with_gil(move |py| -> PyResult<Py<PyIterator>> {
           let start_response = PyCFunction::new_closure(
             py,
@@ -151,12 +155,12 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
           )?;
           let mut environment: HashMap<String, Bound<'_, PyAny>> = HashMap::new();
           let is_https = environment_variables.contains_key("HTTPS");
-          /*let content_length =
-          if let Some(content_length) = environment_variables.get("CONTENT_LENGTH") {
-            content_length.parse::<u64>().ok()
-          } else {
-            None
-          };*/
+          let content_length =
+            if let Some(content_length) = environment_variables.get("CONTENT_LENGTH") {
+              content_length.parse::<u64>().ok()
+            } else {
+              None
+            };
           for (environment_variable, environment_variable_value) in environment_variables {
             environment.insert(
               environment_variable,
@@ -171,17 +175,25 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
             "wsgi.url_scheme".to_string(),
             PyString::new(py, if is_https { "https" } else { "http" }).into_any(),
           );
-          // TODO: implement "wsgi.input"
-          /*environment.insert(
+          environment.insert(
             "wsgi.input".to_string(),
             (if let Some(content_length) = content_length {
-              WsgiInputStream::new(body_reader.take(content_length))
+              WsgidInputStream::new(
+                BufReader::new(WsgidBodyReader::new(
+                  tx_mutex_clone.clone(),
+                  rx_mutex_clone.clone(),
+                ))
+                .take(content_length),
+              )
             } else {
-              WsgiInputStream::new(body_reader)
+              WsgidInputStream::new(BufReader::new(WsgidBodyReader::new(
+                tx_mutex_clone.clone(),
+                rx_mutex_clone.clone(),
+              )))
             })
             .into_pyobject(py)?
             .into_any(),
-          );*/
+          );
           environment.insert(
             "wsgi.errors".to_string(),
             WsgidErrorStream::new(tx_mutex_clone.clone())
@@ -828,7 +840,7 @@ async fn execute_wsgi_with_environment_variables(
 }
 
 async fn execute_wsgi(
-  _hyper_request: HyperRequest,
+  hyper_request: HyperRequest,
   error_logger: &ErrorLogger,
   wsgi_process_pool: Arc<PreforkedProcessPool>,
   environment_variables: LinkedHashMap<String, String>,
@@ -836,6 +848,8 @@ async fn execute_wsgi(
   let ipc_mutex = wsgi_process_pool
     .obtain_process_with_init_async_ipc()
     .await?;
+  let (_, body) = hyper_request.into_parts();
+  let mut body_stream = body.into_data_stream().map_err(std::io::Error::other);
   let application_id = {
     let (tx, rx) = &mut *ipc_mutex.lock().await;
     write_ipc_message_async(
@@ -844,6 +858,7 @@ async fn execute_wsgi(
         application_id: None,
         environment_variables: Some(environment_variables),
         body_chunk: None,
+        body_error_message: None,
         requests_body_chunk: false,
       })?,
     )
@@ -865,6 +880,34 @@ async fn execute_wsgi(
 
       if let Some(error_log_line) = received_message.error_log_line {
         error_logger.log(&error_log_line).await;
+      } else if received_message.requests_body_chunk {
+        let body_chunk;
+        let body_error_message;
+        match body_stream.next().await {
+          None => {
+            body_chunk = None;
+            body_error_message = None;
+          }
+          Some(Err(err)) => {
+            body_chunk = None;
+            body_error_message = Some(err.to_string());
+          }
+          Some(Ok(chunk)) => {
+            body_chunk = Some(chunk.to_vec());
+            body_error_message = None;
+          }
+        };
+        write_ipc_message_async(
+          tx,
+          &postcard::to_allocvec(&ServerToProcessPoolMessage {
+            application_id: None,
+            environment_variables: None,
+            body_chunk: body_chunk,
+            body_error_message: body_error_message,
+            requests_body_chunk: false,
+          })?,
+        )
+        .await?;
       }
     }
 
@@ -874,9 +917,11 @@ async fn execute_wsgi(
   let wsgi_head = Arc::new(Mutex::new(ResponseHeadHyper::new()));
   let wsgi_head_clone = wsgi_head.clone();
   let error_logger_arc = Arc::new(error_logger.clone());
+  let body_stream_mutex = Arc::new(Mutex::new(body_stream));
   let mut response_stream = futures_util::stream::unfold(ipc_mutex, move |ipc_mutex| {
     let wsgi_head_clone = wsgi_head_clone.clone();
     let error_logger_arc_clone = error_logger_arc.clone();
+    let body_stream_mutex_clone = body_stream_mutex.clone();
     Box::pin(async move {
       let ipc_mutex_borrowed = &ipc_mutex;
       let chunk_result: Result<Option<Bytes>, Box<dyn Error + Send + Sync>> = async {
@@ -887,6 +932,7 @@ async fn execute_wsgi(
             application_id: Some(application_id),
             environment_variables: None,
             body_chunk: None,
+            body_error_message: None,
             requests_body_chunk: true,
           })?,
         )
@@ -919,6 +965,34 @@ async fn execute_wsgi(
             return Ok(Some(Bytes::from(body_chunk)));
           } else if let Some(error_log_line) = received_message.error_log_line {
             error_logger_arc_clone.log(&error_log_line).await;
+          } else if received_message.requests_body_chunk {
+            let body_chunk;
+            let body_error_message;
+            match body_stream_mutex_clone.lock().await.next().await {
+              None => {
+                body_chunk = None;
+                body_error_message = None;
+              }
+              Some(Err(err)) => {
+                body_chunk = None;
+                body_error_message = Some(err.to_string());
+              }
+              Some(Ok(chunk)) => {
+                body_chunk = Some(chunk.to_vec());
+                body_error_message = None;
+              }
+            };
+            write_ipc_message_async(
+              tx,
+              &postcard::to_allocvec(&ServerToProcessPoolMessage {
+                application_id: None,
+                environment_variables: None,
+                body_chunk: body_chunk,
+                body_error_message: body_error_message,
+                requests_body_chunk: false,
+              })?,
+            )
+            .await?;
           } else {
             return Ok(None);
           }

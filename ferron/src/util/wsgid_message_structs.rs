@@ -7,6 +7,7 @@ pub struct ServerToProcessPoolMessage {
   pub environment_variables: Option<LinkedHashMap<String, String>>,
   #[serde(with = "serde_bytes")]
   pub body_chunk: Option<Vec<u8>>,
+  pub body_error_message: Option<String>,
   pub requests_body_chunk: bool,
 }
 
