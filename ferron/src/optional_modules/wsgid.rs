@@ -22,6 +22,7 @@ use crate::ferron_util::preforked_process_pool::{
   PreforkedProcessPool,
 };
 use crate::ferron_util::wsgi_load_application::load_wsgi_application;
+use crate::ferron_util::wsgid_error_stream::WsgidErrorStream;
 use crate::ferron_util::wsgid_message_structs::{
   ProcessPoolToServerMessage, ServerToProcessPoolMessage,
 };
@@ -90,6 +91,7 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
       if let Some(environment_variables) = received_message.environment_variables {
         wsgi_head = Arc::new(Mutex::new(ResponseHead::new()));
         let wsgi_head_clone = wsgi_head.clone();
+        let tx_mutex_clone = tx_mutex.clone();
         let body_iterator = Python::with_gil(move |py| -> PyResult<Py<PyIterator>> {
           let start_response = PyCFunction::new_closure(
             py,
@@ -169,7 +171,7 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
             "wsgi.url_scheme".to_string(),
             PyString::new(py, if is_https { "https" } else { "http" }).into_any(),
           );
-          // TODO: implement "wsgi.input" and "wsgi.errors"
+          // TODO: implement "wsgi.input"
           /*environment.insert(
             "wsgi.input".to_string(),
             (if let Some(content_length) = content_length {
@@ -179,13 +181,13 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
             })
             .into_pyobject(py)?
             .into_any(),
-          );
+          );*/
           environment.insert(
             "wsgi.errors".to_string(),
-            WsgiErrorStream::new(error_logger_owned)
+            WsgidErrorStream::new(tx_mutex_clone.clone())
               .into_pyobject(py)?
               .into_any(),
-          );*/
+          );
           environment.insert(
             "wsgi.multithread".to_string(),
             PyBool::new(py, false).as_any().clone(),
@@ -611,24 +613,6 @@ impl ServerModuleHandlers for WsgidModuleHandlers {
   }
 }
 
-/*struct ResponseHead {
-  status: StatusCode,
-  headers: Option<HeaderMap>,
-  is_set: bool,
-  is_sent: bool,
-}
-
-impl ResponseHead {
-  fn new() -> Self {
-    Self {
-      status: StatusCode::OK,
-      headers: None,
-      is_set: false,
-      is_sent: false,
-    }
-  }
-}*/
-
 struct ResponseHeadHyper {
   status: StatusCode,
   headers: Option<HeaderMap>,
@@ -845,7 +829,7 @@ async fn execute_wsgi_with_environment_variables(
 
 async fn execute_wsgi(
   _hyper_request: HyperRequest,
-  _error_logger: &ErrorLogger,
+  error_logger: &ErrorLogger,
   wsgi_process_pool: Arc<PreforkedProcessPool>,
   environment_variables: LinkedHashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -865,24 +849,34 @@ async fn execute_wsgi(
     )
     .await?;
 
-    let received_message =
-      postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message_async(rx).await?)?;
+    let application_id;
+    loop {
+      let received_message =
+        postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message_async(rx).await?)?;
 
-    if let Some(error_message) = received_message.error_message {
-      Err(anyhow::anyhow!(error_message))?
+      if let Some(error_message) = received_message.error_message {
+        Err(anyhow::anyhow!(error_message))?
+      }
+
+      if let Some(application_id_obtained) = received_message.application_id {
+        application_id = application_id_obtained;
+        break;
+      }
+
+      if let Some(error_log_line) = received_message.error_log_line {
+        error_logger.log(&error_log_line).await;
+      }
     }
 
-    if let Some(application_id) = received_message.application_id {
-      application_id
-    } else {
-      Err(anyhow::anyhow!("Can't determine the WSGI application ID"))?
-    }
+    application_id
   };
 
   let wsgi_head = Arc::new(Mutex::new(ResponseHeadHyper::new()));
   let wsgi_head_clone = wsgi_head.clone();
+  let error_logger_arc = Arc::new(error_logger.clone());
   let mut response_stream = futures_util::stream::unfold(ipc_mutex, move |ipc_mutex| {
     let wsgi_head_clone = wsgi_head_clone.clone();
+    let error_logger_arc_clone = error_logger_arc.clone();
     Box::pin(async move {
       let ipc_mutex_borrowed = &ipc_mutex;
       let chunk_result: Result<Option<Bytes>, Box<dyn Error + Send + Sync>> = async {
@@ -898,32 +892,36 @@ async fn execute_wsgi(
         )
         .await?;
 
-        let received_message =
-          postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message_async(rx).await?)?;
+        loop {
+          let received_message =
+            postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message_async(rx).await?)?;
 
-        // TODO: add support for HTTP POST bodies and error log
-        if let Some(error_message) = received_message.error_message {
-          Err(anyhow::anyhow!(error_message))?
-        } else if let Some(body_chunk) = received_message.body_chunk {
-          if let Some(status_code) = received_message.status_code {
-            let mut wsgi_head_locked = wsgi_head_clone.lock().await;
-            wsgi_head_locked.status = StatusCode::from_u16(status_code)?;
-            if let Some(headers) = received_message.headers {
-              let mut header_map = HeaderMap::new();
-              for (key, value) in headers {
-                for value in value {
-                  header_map.append(
-                    HeaderName::from_str(&key)?,
-                    HeaderValue::from_bytes(value.as_bytes())?,
-                  );
+          // TODO: add support for HTTP POST bodies and error log
+          if let Some(error_message) = received_message.error_message {
+            Err(anyhow::anyhow!(error_message))?
+          } else if let Some(body_chunk) = received_message.body_chunk {
+            if let Some(status_code) = received_message.status_code {
+              let mut wsgi_head_locked = wsgi_head_clone.lock().await;
+              wsgi_head_locked.status = StatusCode::from_u16(status_code)?;
+              if let Some(headers) = received_message.headers {
+                let mut header_map = HeaderMap::new();
+                for (key, value) in headers {
+                  for value in value {
+                    header_map.append(
+                      HeaderName::from_str(&key)?,
+                      HeaderValue::from_bytes(value.as_bytes())?,
+                    );
+                  }
                 }
+                wsgi_head_locked.headers = Some(header_map);
               }
-              wsgi_head_locked.headers = Some(header_map);
             }
+            return Ok(Some(Bytes::from(body_chunk)));
+          } else if let Some(error_log_line) = received_message.error_log_line {
+            error_logger_arc_clone.log(&error_log_line).await;
+          } else {
+            return Ok(None);
           }
-          Ok(Some(Bytes::from(body_chunk)))
-        } else {
-          Ok(None)
         }
       }
       .await;
