@@ -34,6 +34,12 @@ export default [
     label: "Docker"
   },
   {
+    href: "/docs/installation/package-managers",
+    target: "_self",
+    sub: true,
+    label: "Package managers"
+  },
+  {
     href: "/docs/installation/manual",
     target: "_self",
     sub: true,
