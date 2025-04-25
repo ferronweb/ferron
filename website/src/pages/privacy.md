@@ -32,6 +32,9 @@ We retain collected data for only as long as necessary for the purposes outlined
 
 We do not share your data with external third parties, except as required by law. Our analytics provider, Matomo, is self-hosted and configured to anonymize data where possible.
 
+## Opt-out from Analytics
+
+You can opt out from analytics using [this form](/analytics-optout).
 ## Your Rights
 
 Since we collect minimal data, most traditional privacy rights (such as the right to access, delete, or modify data) may not apply. However, if you have concerns about your data, you may contact us at [privacy@ferronweb.org](mailto:privacy@ferronweb.org).
