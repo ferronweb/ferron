@@ -1061,6 +1061,31 @@ pub fn validate_config(
           ))?
         }
       }
+      #[cfg(feature = "asgi")]
+      "asgi" => {
+        if used_properties.contains("asgiApplicationPath")
+          && config["asgiApplicationPath"].as_str().is_none()
+        {
+          Err(anyhow::anyhow!("Invalid path to the ASGI application"))?
+        }
+
+        if used_properties.contains("asgiPath") && config["asgiPath"].as_str().is_none() {
+          Err(anyhow::anyhow!("Invalid ASGI request base path"))?
+        }
+
+        if used_properties.contains("asgiClearModuleImportPath") {
+          if !is_global {
+            Err(anyhow::anyhow!(
+              "ASGI Python module import path clearing option is not allowed in host configuration"
+            ))?
+          }
+          if config["asgiClearModuleImportPath"].as_bool().is_none() {
+            Err(anyhow::anyhow!(
+              "Invalid ASGI Python module import path clearing option value"
+            ))?
+          }
+        }
+      }
       _ => (),
     }
   }

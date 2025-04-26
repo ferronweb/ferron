@@ -53,6 +53,7 @@ serde = { version = "1.0.219", optional = true, features = ["derive"] }
 serde_bytes = { version = "0.11.17", optional = true }
 postcard = { version = "1.1.1", optional = true, features = ["use-std"] }
 bytes = { version = "1.10.1", optional = true }
+pyo3-async-runtimes = { version = "0.24.0", optional = true, features = ["tokio", "tokio-runtime"] }
 
 [dev-dependencies]
 tokio-test = "0.4.4"
@@ -60,6 +61,7 @@ rusty-hook = { workspace = true }
 
 [features]
 default = ["cache", "cgi", "fauth", "fcgi", "fproxy", "rproxy", "scgi"]
+asgi = ["pyo3", "pyo3-async-runtimes"]
 cache = ["cache_control", "itertools"]
 cgi = ["httparse", "memmem"]
 example = []

@@ -20,6 +20,10 @@ mod ferron_common;
 #[path = "util"]
 mod ferron_util {
   pub mod anti_xss;
+  #[cfg(feature = "asgi")]
+  pub mod asgi_messages;
+  #[cfg(feature = "asgi")]
+  pub mod asgi_structs;
   #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
   pub mod cgi_response;
   pub mod combine_config;
@@ -92,6 +96,8 @@ mod ferron_modules {
 // Import optional project modules from "modules" directory
 #[path = "optional_modules"]
 mod ferron_optional_modules {
+  #[cfg(feature = "asgi")]
+  pub mod asgi;
   #[cfg(feature = "cache")]
   pub mod cache;
   #[cfg(feature = "cgi")]
@@ -332,6 +338,24 @@ fn before_starting_server(
       "wsgid" => {
         external_modules.push(
           match ferron_optional_modules::wsgid::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
+
+        modules_optional_builtin.push(module_name.clone());
+      }
+      #[cfg(feature = "asgi")]
+      "asgi" => {
+        external_modules.push(
+          match ferron_optional_modules::asgi::server_module_init(&yaml_config) {
             Ok(module) => module,
             Err(err) => {
               module_error = Some(anyhow::anyhow!(
