@@ -1356,82 +1356,82 @@ async fn server_event_loop(
     }
 
     tokio::select! {
-        status = listener_accept => {
-          match status {
-            Ok((stream, remote_address)) => {
-              accept_connection(
-                stream,
-                remote_address,
-                None,
-                acme_http01_resolver.clone(),
-                yaml_config.clone(),
-                logger.clone(),
-                modules_arc.clone(),
-                None
-              )
-              .await;
-            }
-            Err(err) => {
-              logger
-                .send(LogMessage::new(
-                  format!("Cannot accept a connection: {}", err),
-                  true,
-                ))
-                .await
-                .unwrap_or_default();
-            }
+      status = listener_accept => {
+        match status {
+          Ok((stream, remote_address)) => {
+            accept_connection(
+              stream,
+              remote_address,
+              None,
+              acme_http01_resolver.clone(),
+              yaml_config.clone(),
+              logger.clone(),
+              modules_arc.clone(),
+              None
+            )
+            .await;
           }
-        },
-        status = listener_tls_accept => {
-          match status {
-            Ok((stream, remote_address)) => {
-              accept_connection(
-                stream,
-                remote_address,
-                Some((tls_config_arc.clone(), acme_config_arc.clone())),
-                None,
-                yaml_config.clone(),
-                logger.clone(),
-                modules_arc.clone(),
-                http3_enabled
-              )
-              .await;
-            }
-            Err(err) => {
-              logger
-                .send(LogMessage::new(
-                  format!("Cannot accept a connection: {}", err),
-                  true,
-                ))
-                .await
-                .unwrap_or_default();
-            }
-          }
-        },
-        status = listener_quic_accept => {
-          match status {
-            Some(connection_attempt) => {
-              let local_ip = SocketAddr::new(connection_attempt.local_ip().unwrap_or(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0))), addr_tls.port());
-              accept_quic_connection(
-                connection_attempt,
-                local_ip,
-                yaml_config.clone(),
-                logger.clone(),
-                modules_arc.clone()
-              )
-              .await;
-            }
-            None => {
-              logger
-                .send(LogMessage::new(
-                  "HTTP/3 connections can't be accepted anymore".to_string(),
-                  true,
-                ))
-                .await
-                .unwrap_or_default();
-            }
+          Err(err) => {
+            logger
+              .send(LogMessage::new(
+                format!("Cannot accept a connection: {}", err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
           }
         }
+      },
+      status = listener_tls_accept => {
+        match status {
+          Ok((stream, remote_address)) => {
+            accept_connection(
+              stream,
+              remote_address,
+              Some((tls_config_arc.clone(), acme_config_arc.clone())),
+              None,
+              yaml_config.clone(),
+              logger.clone(),
+              modules_arc.clone(),
+              http3_enabled
+            )
+            .await;
+          }
+          Err(err) => {
+            logger
+              .send(LogMessage::new(
+                format!("Cannot accept a connection: {}", err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
+        }
+      },
+      status = listener_quic_accept => {
+        match status {
+          Some(connection_attempt) => {
+            let local_ip = SocketAddr::new(connection_attempt.local_ip().unwrap_or(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0))), addr_tls.port());
+            accept_quic_connection(
+              connection_attempt,
+              local_ip,
+              yaml_config.clone(),
+              logger.clone(),
+              modules_arc.clone()
+            )
+            .await;
+          }
+          None => {
+            logger
+              .send(LogMessage::new(
+                "HTTP/3 connections can't be accepted anymore".to_string(),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
+        }
+      }
     };
   }
 }
