@@ -1,7 +1,7 @@
 // WARNING: We have measured this module on our computers, and found it to be slower than Uvicorn (with 1 worker).
 //          This might be because pyo3_async_runtimes crate uses `asyncio`, while Uvicorn might use `uvloop`.
 //          It might be more performant to just use Ferron as a reverse proxy for Uvicorn (or any other ASGI server)
-// TODO: HTTP trailers, WebSocket protocol
+// TODO: WebSocket protocol
 
 use std::error::Error;
 use std::ffi::CString;
@@ -27,7 +27,7 @@ use crate::ferron_util::match_location::match_location;
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use http::{HeaderName, HeaderValue, Response, Version};
+use http::{HeaderMap, HeaderName, HeaderValue, Response, Version};
 use http_body_util::{BodyExt, StreamBody};
 use hyper::body::{Bytes, Frame};
 use hyper::{header, StatusCode};
@@ -174,6 +174,10 @@ async fn asgi_application_fn(
 
     scope_asgi.set_item("spec_version", "1.0")?;
     scope.set_item("asgi", scope_asgi)?;
+    let scope_extensions = PyDict::new(py);
+    scope_extensions.set_item("http.response.trailers", PyDict::new(py))?;
+    scope.set_item("extensions", scope_extensions)?;
+
     let receive = PyCFunction::new_closure(
       py,
       None,
@@ -902,65 +906,139 @@ async fn execute_asgi(
 
   let response_body_stream = futures_util::stream::unfold(
     (asgi_tx, asgi_rx, false),
-    async |(asgi_tx, asgi_rx, body_end)| {
-      if body_end {
-        asgi_tx
-          .send(IncomingAsgiMessage::Message(
-            IncomingAsgiMessageInner::HttpDisconnect,
-          ))
-          .await
-          .unwrap_or_default();
-        asgi_tx
-          .send(IncomingAsgiMessage::ClientDisconnected)
-          .await
-          .unwrap_or_default();
-        return None;
-      }
-      loop {
-        match asgi_rx.recv().await {
-          Err(err) => {
-            return Some((
-              Err(std::io::Error::other(err.to_string())),
-              (asgi_tx, asgi_rx, false),
+    move |(asgi_tx, asgi_rx, request_end)| {
+      let has_trailers = asgi_http_response_start.trailers;
+      async move {
+        if request_end {
+          asgi_tx
+            .send(IncomingAsgiMessage::Message(
+              IncomingAsgiMessageInner::HttpDisconnect,
             ))
-          }
-          Ok(OutgoingAsgiMessage::Finished) => return None,
-          Ok(OutgoingAsgiMessage::Error(err)) => {
-            return Some((
-              Err(std::io::Error::other(err.to_string())),
-              (asgi_tx, asgi_rx, false),
-            ))
-          }
-          Ok(OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::HttpResponseBody(
-            http_response_body,
-          ))) => {
-            if !http_response_body.more_body {
-              if http_response_body.body.is_empty() {
-                asgi_tx
-                  .send(IncomingAsgiMessage::Message(
-                    IncomingAsgiMessageInner::HttpDisconnect,
-                  ))
-                  .await
-                  .unwrap_or_default();
-                asgi_tx
-                  .send(IncomingAsgiMessage::ClientDisconnected)
-                  .await
-                  .unwrap_or_default();
-                return None;
-              } else {
+            .await
+            .unwrap_or_default();
+          asgi_tx
+            .send(IncomingAsgiMessage::ClientDisconnected)
+            .await
+            .unwrap_or_default();
+          return None;
+        }
+        loop {
+          match asgi_rx.recv().await {
+            Err(err) => {
+              return Some((
+                Err(std::io::Error::other(err.to_string())),
+                (asgi_tx, asgi_rx, false),
+              ))
+            }
+            Ok(OutgoingAsgiMessage::Finished) => return None,
+            Ok(OutgoingAsgiMessage::Error(err)) => {
+              return Some((
+                Err(std::io::Error::other(err.to_string())),
+                (asgi_tx, asgi_rx, false),
+              ))
+            }
+            Ok(OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::HttpResponseBody(
+              http_response_body,
+            ))) => {
+              if !http_response_body.more_body {
+                if http_response_body.body.is_empty() {
+                  if !has_trailers {
+                    asgi_tx
+                      .send(IncomingAsgiMessage::Message(
+                        IncomingAsgiMessageInner::HttpDisconnect,
+                      ))
+                      .await
+                      .unwrap_or_default();
+                    asgi_tx
+                      .send(IncomingAsgiMessage::ClientDisconnected)
+                      .await
+                      .unwrap_or_default();
+                    return None;
+                  }
+                } else {
+                  return Some((
+                    Ok(Frame::data(Bytes::from(http_response_body.body))),
+                    (asgi_tx, asgi_rx, !has_trailers),
+                  ));
+                }
+              } else if !http_response_body.body.is_empty() {
                 return Some((
                   Ok(Frame::data(Bytes::from(http_response_body.body))),
-                  (asgi_tx, asgi_rx, true),
+                  (asgi_tx, asgi_rx, false),
                 ));
               }
-            } else if !http_response_body.body.is_empty() {
-              return Some((
-                Ok(Frame::data(Bytes::from(http_response_body.body))),
-                (asgi_tx, asgi_rx, false),
-              ));
             }
+            Ok(OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::HttpResponseTrailers(
+              http_response_trailers,
+            ))) => {
+              if !http_response_trailers.more_trailers {
+                if http_response_trailers.headers.is_empty() {
+                  asgi_tx
+                    .send(IncomingAsgiMessage::Message(
+                      IncomingAsgiMessageInner::HttpDisconnect,
+                    ))
+                    .await
+                    .unwrap_or_default();
+                  asgi_tx
+                    .send(IncomingAsgiMessage::ClientDisconnected)
+                    .await
+                    .unwrap_or_default();
+                  return None;
+                } else {
+                  match async {
+                    let mut headers = HeaderMap::new();
+                    for (header_name, header_value) in http_response_trailers.headers {
+                      if !header_name.is_empty() && header_name[0] != b':' {
+                        headers.append(
+                          HeaderName::from_bytes(&header_name)?,
+                          HeaderValue::from_bytes(&header_value)?,
+                        );
+                      }
+                    }
+                    Ok::<_, Box<dyn Error + Send + Sync>>(headers)
+                  }
+                  .await
+                  {
+                    Ok(headers) => {
+                      return Some((Ok(Frame::trailers(headers)), (asgi_tx, asgi_rx, true)))
+                    }
+                    Err(err) => {
+                      return Some((
+                        Err(std::io::Error::other(err.to_string())),
+                        (asgi_tx, asgi_rx, false),
+                      ))
+                    }
+                  }
+                }
+              } else if !http_response_trailers.headers.is_empty() {
+                match async {
+                  let mut headers = HeaderMap::new();
+                  for (header_name, header_value) in http_response_trailers.headers {
+                    if !header_name.is_empty() && header_name[0] != b':' {
+                      headers.append(
+                        HeaderName::from_bytes(&header_name)?,
+                        HeaderValue::from_bytes(&header_value)?,
+                      );
+                    }
+                  }
+                  Ok::<_, Box<dyn Error + Send + Sync>>(headers)
+                }
+                .await
+                {
+                  Ok(headers) => {
+                    return Some((Ok(Frame::trailers(headers)), (asgi_tx, asgi_rx, true)))
+                  }
+                  Err(err) => {
+                    return Some((
+                      Err(std::io::Error::other(err.to_string())),
+                      (asgi_tx, asgi_rx, false),
+                    ))
+                  }
+                }
+              }
+            }
+            _ => (),
           }
-          _ => (),
         }
       }
     },
@@ -971,10 +1049,12 @@ async fn execute_asgi(
   *hyper_response.status_mut() = StatusCode::from_u16(asgi_http_response_start.status)?;
   let headers = hyper_response.headers_mut();
   for (header_name, header_value) in asgi_http_response_start.headers {
-    headers.append(
-      HeaderName::from_bytes(&header_name)?,
-      HeaderValue::from_bytes(&header_value)?,
-    );
+    if !header_name.is_empty() && header_name[0] != b':' {
+      headers.append(
+        HeaderName::from_bytes(&header_name)?,
+        HeaderValue::from_bytes(&header_value)?,
+      );
+    }
   }
 
   Ok(

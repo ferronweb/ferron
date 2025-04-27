@@ -48,6 +48,7 @@ pub enum OutgoingAsgiMessageInner {
   LifespanShutdownFailed(LifespanFailed),
   HttpResponseStart(AsgiHttpResponseStart),
   HttpResponseBody(AsgiHttpBody),
+  HttpResponseTrailers(AsgiHttpTrailers),
   Unknown,
 }
 
@@ -64,8 +65,12 @@ pub struct AsgiHttpBody {
 pub struct AsgiHttpResponseStart {
   pub status: u16,
   pub headers: Vec<(Vec<u8>, Vec<u8>)>,
-  #[allow(dead_code)]
   pub trailers: bool,
+}
+
+pub struct AsgiHttpTrailers {
+  pub headers: Vec<(Vec<u8>, Vec<u8>)>,
+  pub more_trailers: bool,
 }
 
 pub fn asgi_event_to_outgoing_struct(
@@ -133,6 +138,34 @@ pub fn asgi_event_to_outgoing_struct(
         .get_item("more_body")?
         .map_or(Ok(false), |x| x.extract())?,
     })),
+    "http.response.trailers" => Ok(OutgoingAsgiMessageInner::HttpResponseTrailers(
+      AsgiHttpTrailers {
+        headers: event.get_item("headers")?.map_or(
+          Ok(Ok(Vec::new())),
+          |header_list_py: Bound<'_, PyAny>| {
+            header_list_py
+              .extract::<Vec<Vec<Vec<u8>>>>()
+              .map(|header_list| {
+                let mut new_header_list = Vec::new();
+                for header in header_list {
+                  if header.len() != 2 {
+                    return Err(anyhow::anyhow!("Headers must be two-item iterables"));
+                  }
+                  let mut header_iter = header.into_iter();
+                  new_header_list.push((
+                    header_iter.next().unwrap_or(b"".to_vec()),
+                    header_iter.next().unwrap_or(b"".to_vec()),
+                  ));
+                }
+                Ok(new_header_list)
+              })
+          },
+        )??,
+        more_trailers: event
+          .get_item("more_trailers")?
+          .map_or(Ok(false), |x| x.extract())?,
+      },
+    )),
     _ => Ok(OutgoingAsgiMessageInner::Unknown),
   }
 }
