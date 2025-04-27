@@ -1,5 +1,5 @@
-// WARNING: We have measured this module on our computers, and found it to be slower than Uvicorn (with 1 worker).
-//          This might be because pyo3_async_runtimes crate uses `asyncio`, while Uvicorn might use `uvloop`.
+// WARNING: We have measured this module on our computers, and found it to be slower than Uvicorn (with 1 worker),
+//          with FastAPI application, vanilla ASGI application is found out to be faster than Uvicorn (with 1 worker).
 //          It might be more performant to just use Ferron as a reverse proxy for Uvicorn (or any other ASGI server)
 // TODO: WebSocket protocol
 
@@ -314,6 +314,11 @@ async fn asgi_init_event_loop_fn(
   mut channels: Vec<(Sender<AsgiChannelResult>, Receiver<()>)>,
 ) {
   Python::with_gil(|py| {
+    // Try installing `uvloop`, when it fails, use `asyncio` fallback instead.
+    if let Ok(uvloop) = py.import("uvloop") {
+      let _ = uvloop.call_method0("install");
+    }
+
     pyo3_async_runtimes::tokio::run::<_, ()>(py, async move {
       let asgi_lifetime_channels = asgi_lifetime_init_fn(asgi_applications.clone()).await;
       for asgi_lifetime_channel_result in &asgi_lifetime_channels {
