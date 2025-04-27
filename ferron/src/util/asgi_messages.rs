@@ -19,6 +19,7 @@ pub enum OutgoingAsgiMessage {
 pub enum AsgiInitData {
   Lifespan,
   Http(AsgiHttpInitData),
+  Websocket(AsgiWebsocketInitData),
 }
 
 pub struct AsgiHttpInitData {
@@ -31,11 +32,23 @@ pub struct AsgiHttpInitData {
   pub execute_pathbuf: PathBuf,
 }
 
+pub struct AsgiWebsocketInitData {
+  pub uri: Uri,
+  pub socket_data: SocketData,
+  #[allow(dead_code)]
+  pub error_logger: ErrorLogger,
+  pub wwwroot: PathBuf,
+  pub execute_pathbuf: PathBuf,
+}
+
 pub enum IncomingAsgiMessageInner {
   LifespanStartup,
   LifespanShutdown,
   HttpRequest(AsgiHttpBody),
   HttpDisconnect,
+  WebsocketConnect,
+  WebsocketReceive(AsgiWebsocketMessage),
+  WebsocketDisconnect(AsgiWebsocketClose),
 }
 
 pub enum OutgoingAsgiMessageInner {
@@ -48,6 +61,11 @@ pub enum OutgoingAsgiMessageInner {
   HttpResponseStart(AsgiHttpResponseStart),
   HttpResponseBody(AsgiHttpBody),
   HttpResponseTrailers(AsgiHttpTrailers),
+  #[allow(dead_code)]
+  WebsocketAccept(AsgiWebsocketAccept),
+  WebsocketSend(AsgiWebsocketMessage),
+  #[allow(dead_code)]
+  WebsocketClose(AsgiWebsocketClose),
   Unknown,
 }
 
@@ -70,6 +88,22 @@ pub struct AsgiHttpResponseStart {
 pub struct AsgiHttpTrailers {
   pub headers: Vec<(Vec<u8>, Vec<u8>)>,
   pub more_trailers: bool,
+}
+
+#[allow(dead_code)]
+pub struct AsgiWebsocketAccept {
+  pub subprotocol: Option<String>,
+  pub headers: Vec<(Vec<u8>, Vec<u8>)>,
+}
+
+pub struct AsgiWebsocketClose {
+  pub code: u16,
+  pub reason: String,
+}
+
+pub struct AsgiWebsocketMessage {
+  pub bytes: Option<Vec<u8>>,
+  pub text: Option<String>,
 }
 
 pub fn asgi_event_to_outgoing_struct(
@@ -165,6 +199,49 @@ pub fn asgi_event_to_outgoing_struct(
           .map_or(Ok(false), |x| x.extract())?,
       },
     )),
+    "websocket.accept" => Ok(OutgoingAsgiMessageInner::WebsocketAccept(
+      AsgiWebsocketAccept {
+        subprotocol: event
+          .get_item("subprotocol")?
+          .map_or(Ok(None), |x| x.extract())?,
+        headers: event.get_item("headers")?.map_or(
+          Ok(Ok(Vec::new())),
+          |header_list_py: Bound<'_, PyAny>| {
+            header_list_py
+              .extract::<Vec<Vec<Vec<u8>>>>()
+              .map(|header_list| {
+                let mut new_header_list = Vec::new();
+                for header in header_list {
+                  if header.len() != 2 {
+                    return Err(anyhow::anyhow!("Headers must be two-item iterables"));
+                  }
+                  let mut header_iter = header.into_iter();
+                  new_header_list.push((
+                    header_iter.next().unwrap_or(b"".to_vec()),
+                    header_iter.next().unwrap_or(b"".to_vec()),
+                  ));
+                }
+                Ok(new_header_list)
+              })
+          },
+        )??,
+      },
+    )),
+    "websocket.close" => Ok(OutgoingAsgiMessageInner::WebsocketClose(
+      AsgiWebsocketClose {
+        code: event.get_item("code")?.map_or(Ok(1000), |x| x.extract())?,
+        reason: event
+          .get_item("reason")?
+          .map_or(Ok(None), |x| x.extract())?
+          .unwrap_or("".to_string()),
+      },
+    )),
+    "websocket.send" => Ok(OutgoingAsgiMessageInner::WebsocketSend(
+      AsgiWebsocketMessage {
+        bytes: event.get_item("bytes")?.map_or(Ok(None), |x| x.extract())?,
+        text: event.get_item("text")?.map_or(Ok(None), |x| x.extract())?,
+      },
+    )),
     _ => Ok(OutgoingAsgiMessageInner::Unknown),
   }
 }
@@ -187,6 +264,19 @@ pub fn incoming_struct_to_asgi_event(incoming: IncomingAsgiMessageInner) -> PyRe
       }
       IncomingAsgiMessageInner::HttpDisconnect => {
         event.set_item("type", "http.disconnect")?;
+      }
+      IncomingAsgiMessageInner::WebsocketConnect => {
+        event.set_item("type", "websocket.connect")?;
+      }
+      IncomingAsgiMessageInner::WebsocketDisconnect(websocket_close) => {
+        event.set_item("type", "websocket.connect")?;
+        event.set_item("code", websocket_close.code)?;
+        event.set_item("reason", websocket_close.reason)?;
+      }
+      IncomingAsgiMessageInner::WebsocketReceive(websocket_message) => {
+        event.set_item("type", "websocket.connect")?;
+        event.set_item("bytes", websocket_message.bytes)?;
+        event.set_item("text", websocket_message.text)?;
       }
     };
 

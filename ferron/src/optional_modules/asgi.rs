@@ -1,7 +1,6 @@
 // WARNING: We have measured this module on our computers, and found it to be slower than Uvicorn (with 1 worker),
 //          with FastAPI application, vanilla ASGI application is found out to be faster than Uvicorn (with 1 worker).
-//          It might be more performant to just use Ferron as a reverse proxy for Uvicorn (or any other ASGI server)
-// TODO: WebSocket protocol
+//          It might be more performant to just use Ferron as a reverse proxy for Uvicorn (or any other ASGI server).
 
 use std::error::Error;
 use std::ffi::CString;
@@ -18,8 +17,8 @@ use crate::ferron_common::{
 use crate::ferron_common::{HyperResponse, WithRuntime};
 use crate::ferron_util::asgi_messages::{
   asgi_event_to_outgoing_struct, incoming_struct_to_asgi_event, AsgiHttpBody, AsgiHttpInitData,
-  AsgiInitData, IncomingAsgiMessage, IncomingAsgiMessageInner, OutgoingAsgiMessage,
-  OutgoingAsgiMessageInner,
+  AsgiInitData, AsgiWebsocketClose, AsgiWebsocketInitData, AsgiWebsocketMessage,
+  IncomingAsgiMessage, IncomingAsgiMessageInner, OutgoingAsgiMessage, OutgoingAsgiMessageInner,
 };
 use crate::ferron_util::asgi_structs::{AsgiApplicationLocationWrap, AsgiApplicationWrap};
 use crate::ferron_util::ip_match::ip_match;
@@ -27,7 +26,7 @@ use crate::ferron_util::match_hostname::match_hostname;
 use crate::ferron_util::match_location::match_location;
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures_util::{SinkExt, StreamExt};
 use http::{HeaderMap, HeaderName, HeaderValue, Response, Version};
 use http_body_util::{BodyExt, StreamBody};
 use hyper::body::{Bytes, Frame};
@@ -38,6 +37,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyCFunction, PyDict, PyList, PyTuple, PyType};
 use tokio::fs;
 use tokio::runtime::{Handle, Runtime};
+use tokio::sync::Mutex;
+use tokio_tungstenite::tungstenite::protocol::CloseFrame;
+use tokio_tungstenite::tungstenite::Message;
 use tokio_util::sync::CancellationToken;
 
 type AsgiChannelResult =
@@ -170,6 +172,71 @@ async fn asgi_application_fn(
             http_init_data.socket_data.local_addr.port(),
           ),
         )?;
+      }
+      AsgiInitData::Websocket(websocket_init_data) => {
+        let path = websocket_init_data.uri.path().to_owned();
+        let query_string = websocket_init_data.uri.query().unwrap_or("").to_owned();
+        let original_request_uri = websocket_init_data.uri;
+        scope.set_item("type", "websocket")?;
+        scope_asgi.set_item("version", "2.5")?;
+        scope.set_item(
+          "http_version",
+          "1.1", // WebSocket is supported only on HTTP/1.1 in Ferron
+        )?;
+        scope.set_item(
+          "scheme",
+          if websocket_init_data.socket_data.encrypted {
+            "wss"
+          } else {
+            "ws"
+          },
+        )?;
+        scope.set_item("path", urlencoding::decode(&path)?)?;
+        scope.set_item("raw_path", original_request_uri.to_string().as_bytes())?;
+        scope.set_item("query_string", query_string.as_bytes())?;
+        if let Ok(script_path) = websocket_init_data
+          .execute_pathbuf
+          .as_path()
+          .strip_prefix(websocket_init_data.wwwroot)
+        {
+          scope.set_item(
+            "root_path",
+            format!(
+              "/{}",
+              match cfg!(windows) {
+                true => script_path.to_string_lossy().to_string().replace("\\", "/"),
+                false => script_path.to_string_lossy().to_string(),
+              }
+            ),
+          )?;
+        }
+        // Ferron doesn't send original request headers (before WebSocket upgrade) to WebSocket request handlers
+        scope.set_item("headers", PyList::empty(py))?;
+        scope.set_item(
+          "client",
+          (
+            websocket_init_data
+              .socket_data
+              .remote_addr
+              .ip()
+              .to_canonical()
+              .to_string(),
+            websocket_init_data.socket_data.remote_addr.port(),
+          ),
+        )?;
+        scope.set_item(
+          "server",
+          (
+            websocket_init_data
+              .socket_data
+              .local_addr
+              .ip()
+              .to_canonical()
+              .to_string(),
+            websocket_init_data.socket_data.local_addr.port(),
+          ),
+        )?;
+        scope.set_item("subprotocols", PyList::empty(py))?;
       }
     };
 
@@ -508,6 +575,7 @@ pub fn server_module_init(
               locations.push(AsgiApplicationLocationWrap::new(
                 path,
                 asgi_application_id,
+                asgi_application_path.to_string(),
                 location_yaml["asgiPath"].as_str().map(|s| s.to_string()),
               ));
             }
@@ -524,6 +592,7 @@ pub fn server_module_init(
           domain,
           ip,
           Some(asgi_application_id),
+          Some(asgi_application_path.to_string()),
           host_yaml["asgiPath"].as_str().map(|s| s.to_string()),
           locations,
         ));
@@ -531,6 +600,7 @@ pub fn server_module_init(
         host_asgi_application_ids.push(AsgiApplicationWrap::new(
           domain,
           ip,
+          None,
           None,
           host_yaml["asgiPath"].as_str().map(|s| s.to_string()),
           locations,
@@ -819,17 +889,127 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
 
   async fn websocket_request_handler(
     &mut self,
-    _websocket: HyperWebsocket,
-    _uri: &hyper::Uri,
-    _config: &ServerConfig,
-    _socket_data: &SocketData,
-    _error_logger: &ErrorLogger,
+    websocket: HyperWebsocket,
+    uri: &hyper::Uri,
+    config: &ServerConfig,
+    socket_data: &SocketData,
+    error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    Ok(())
+    WithRuntime::new(self.handle.clone(), async move {
+      // Use .take() instead of .clone(), since the values in Options will only be used once.
+      let mut asgi_application_id = self.global_asgi_application_id.take();
+      let mut asgi_path = self.global_asgi_path.take();
+
+      // Should have used a HashMap instead of iterating over an array for better performance...
+      for host_asgi_application_wrap in self.host_asgi_application_ids.iter() {
+        // Workaround for Ferron not providing the domain name for WebSocket connections
+        let config_test_domain = host_asgi_application_wrap
+          .domain
+          .as_ref()
+          .map(|value| value as &str);
+        let obtained_domain = config["domain"].as_str();
+        if config_test_domain == obtained_domain
+          && config["asgiApplicationPath"].as_str()
+            == host_asgi_application_wrap.asgi_application_path.as_deref()
+          && match &host_asgi_application_wrap.ip {
+            Some(value) => ip_match(value as &str, socket_data.remote_addr.ip()),
+            None => true,
+          }
+        {
+          asgi_application_id = host_asgi_application_wrap.asgi_application_id;
+          asgi_path = host_asgi_application_wrap.asgi_path.clone();
+          if let Ok(path_decoded) = urlencoding::decode(uri.path()) {
+            for location_wrap in host_asgi_application_wrap.locations.iter() {
+              if match_location(&location_wrap.path, &path_decoded) {
+                asgi_application_id = Some(location_wrap.asgi_application_id);
+                asgi_path = location_wrap.asgi_path.clone();
+                break;
+              }
+            }
+          }
+          break;
+        }
+      }
+
+      let request_path = uri.path();
+      let mut request_path_bytes = request_path.bytes();
+      if request_path_bytes.len() < 1 || request_path_bytes.nth(0) != Some(b'/') {
+        return Ok(());
+      }
+
+      if let Some(asgi_application_id) = asgi_application_id {
+        let asgi_path = asgi_path.unwrap_or("/".to_string());
+        let mut canonical_asgi_path: &str = &asgi_path;
+        if canonical_asgi_path.bytes().last() == Some(b'/') {
+          canonical_asgi_path = &canonical_asgi_path[..(canonical_asgi_path.len() - 1)];
+        }
+
+        let request_path_with_slashes = match request_path == canonical_asgi_path {
+          true => format!("{}/", request_path),
+          false => request_path.to_string(),
+        };
+        if let Some(stripped_request_path) =
+          request_path_with_slashes.strip_prefix(canonical_asgi_path)
+        {
+          let wwwroot_yaml = &config["wwwroot"];
+          let wwwroot = wwwroot_yaml.as_str().unwrap_or("/nonexistent");
+
+          let wwwroot_unknown = PathBuf::from(wwwroot);
+          let wwwroot_pathbuf = match wwwroot_unknown.as_path().is_absolute() {
+            true => wwwroot_unknown,
+            false => match fs::canonicalize(&wwwroot_unknown).await {
+              Ok(pathbuf) => pathbuf,
+              Err(_) => wwwroot_unknown,
+            },
+          };
+          let wwwroot = wwwroot_pathbuf.as_path();
+
+          let mut relative_path = &request_path[1..];
+          while relative_path.as_bytes().first().copied() == Some(b'/') {
+            relative_path = &relative_path[1..];
+          }
+
+          let decoded_relative_path = match urlencoding::decode(relative_path) {
+            Ok(path) => path.to_string(),
+            Err(_) => {
+              return Ok(());
+            }
+          };
+
+          let joined_pathbuf = wwwroot.join(decoded_relative_path);
+          let execute_pathbuf = joined_pathbuf;
+          let execute_path_info = stripped_request_path
+            .strip_prefix("/")
+            .map(|s| s.to_string());
+
+          let (tx, rx) = {
+            let (tx, rx) = &self.asgi_event_loop_communication[asgi_application_id];
+            tx.send(()).await?;
+            rx.recv().await??
+          };
+
+          return execute_asgi_websocket(
+            websocket,
+            uri,
+            socket_data,
+            error_logger,
+            wwwroot,
+            execute_pathbuf,
+            execute_path_info,
+            config["serverAdministratorEmail"].as_str(),
+            tx,
+            rx,
+          )
+          .await;
+        }
+      }
+      Ok(())
+    })
+    .await
   }
 
-  fn does_websocket_requests(&mut self, _config: &ServerConfig, _socket_data: &SocketData) -> bool {
-    false
+  fn does_websocket_requests(&mut self, config: &ServerConfig, _socket_data: &SocketData) -> bool {
+    config["wsgiApplicationPath"].as_str().is_some()
   }
 }
 
@@ -1067,4 +1247,230 @@ async fn execute_asgi(
       .response(hyper_response)
       .build(),
   )
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn execute_asgi_websocket(
+  websocket: HyperWebsocket,
+  uri: &hyper::Uri,
+  socket_data: &SocketData,
+  error_logger: &ErrorLogger,
+  wwwroot: &Path,
+  execute_pathbuf: PathBuf,
+  _path_info: Option<String>,
+  _server_administrator_email: Option<&str>,
+  asgi_tx: Sender<IncomingAsgiMessage>,
+  asgi_rx: Receiver<OutgoingAsgiMessage>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+  asgi_tx
+    .send(IncomingAsgiMessage::Init(AsgiInitData::Websocket(
+      AsgiWebsocketInitData {
+        uri: uri.to_owned(),
+        socket_data: SocketData {
+          remote_addr: socket_data.remote_addr,
+          local_addr: socket_data.local_addr,
+          encrypted: socket_data.encrypted,
+        },
+        error_logger: error_logger.clone(),
+        wwwroot: wwwroot.to_path_buf(),
+        execute_pathbuf,
+      },
+    )))
+    .await?;
+
+  asgi_tx
+    .send(IncomingAsgiMessage::Message(
+      IncomingAsgiMessageInner::WebsocketConnect,
+    ))
+    .await?;
+
+  let client_bi_stream;
+  loop {
+    match asgi_rx.recv().await? {
+      OutgoingAsgiMessage::Finished => Err(anyhow::anyhow!(
+        "ASGI application returned before sending the WebSocket accept event"
+      ))?,
+      OutgoingAsgiMessage::Error(err) => Err(err)?,
+      OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::WebsocketAccept(_)) => {
+        client_bi_stream = websocket.await?;
+        break;
+      }
+      OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::WebsocketClose(_)) => {
+        asgi_tx
+          .send(IncomingAsgiMessage::Message(
+            IncomingAsgiMessageInner::WebsocketDisconnect(AsgiWebsocketClose {
+              code: 1005,
+              reason: "ASGI application closed the WebSocket connection before accepting it"
+                .to_string(),
+            }),
+          ))
+          .await
+          .unwrap_or_default();
+      }
+      _ => (),
+    }
+  }
+
+  let (client_sink, mut client_stream) = client_bi_stream.split();
+
+  let client_disconnected_mutex = Arc::new(Mutex::new(AtomicBool::new(false)));
+  let client_disconnected_mutex_clone = client_disconnected_mutex.clone();
+
+  let asgi_tx_clone = asgi_tx.clone();
+  let (ping, pong) = async_channel::unbounded();
+
+  tokio::spawn(async move {
+    while let Some(websocket_frame) = client_stream.next().await {
+      match websocket_frame {
+        Err(_) => {
+          let client_disconnected = client_disconnected_mutex_clone.lock().await;
+          if !client_disconnected.load(Ordering::Relaxed) {
+            client_disconnected.store(true, Ordering::Relaxed);
+            asgi_tx_clone
+              .send(IncomingAsgiMessage::Message(
+                IncomingAsgiMessageInner::WebsocketDisconnect(AsgiWebsocketClose {
+                  code: 1005,
+                  reason: "Error while receiving WebSocket data".to_string(),
+                }),
+              ))
+              .await
+              .unwrap_or_default();
+          }
+        }
+        Ok(Message::Ping(message)) => {
+          ping.send(message).await.unwrap_or_default();
+        }
+        Ok(Message::Binary(message)) => {
+          asgi_tx_clone
+            .send(IncomingAsgiMessage::Message(
+              IncomingAsgiMessageInner::WebsocketReceive(AsgiWebsocketMessage {
+                bytes: Some(message.to_vec()),
+                text: None,
+              }),
+            ))
+            .await
+            .unwrap_or_default();
+        }
+        Ok(Message::Text(message)) => {
+          asgi_tx_clone
+            .send(IncomingAsgiMessage::Message(
+              IncomingAsgiMessageInner::WebsocketReceive(AsgiWebsocketMessage {
+                bytes: None,
+                text: Some(message.to_string()),
+              }),
+            ))
+            .await
+            .unwrap_or_default();
+        }
+        Ok(Message::Close(close_frame)) => {
+          let client_disconnected = client_disconnected_mutex_clone.lock().await;
+          if !client_disconnected.load(Ordering::Relaxed) {
+            client_disconnected.store(true, Ordering::Relaxed);
+            client_disconnected_mutex_clone
+              .lock()
+              .await
+              .store(true, Ordering::Relaxed);
+            let (status_code, message) = if let Some(close_frame) = close_frame {
+              (close_frame.code.into(), close_frame.reason.to_string())
+            } else {
+              (
+                1005,
+                "Websocket connection closed for unknown reason".to_string(),
+              )
+            };
+            asgi_tx_clone
+              .send(IncomingAsgiMessage::Message(
+                IncomingAsgiMessageInner::WebsocketDisconnect(AsgiWebsocketClose {
+                  code: status_code,
+                  reason: message,
+                }),
+              ))
+              .await
+              .unwrap_or_default();
+          }
+        }
+        _ => (),
+      }
+    }
+  });
+
+  let client_sink_mutex = Arc::new(Mutex::new(client_sink));
+  let client_sink_mutex_cloned = client_sink_mutex.clone();
+
+  tokio::spawn(async move {
+    while let Ok(message) = pong.recv().await {
+      if client_sink_mutex_cloned
+        .lock()
+        .await
+        .send(Message::Pong(message))
+        .await
+        .is_err()
+      {
+        break;
+      }
+    }
+  });
+
+  loop {
+    match asgi_rx.recv().await? {
+      OutgoingAsgiMessage::Finished => Err(anyhow::anyhow!(
+        "ASGI application returned before sending the WebSocket accept event"
+      ))?,
+      OutgoingAsgiMessage::Error(err) => Err(err)?,
+      OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::WebsocketSend(websocket_message)) => {
+        let frame_option = if let Some(bytes) = websocket_message.bytes {
+          Some(Message::binary(bytes))
+        } else {
+          websocket_message.text.map(Message::text)
+        };
+        if let Some(frame) = frame_option {
+          let mut client_sink = client_sink_mutex.lock().await;
+          if let Err(err) = client_sink.send(frame).await {
+            drop(client_sink);
+            let client_disconnected = client_disconnected_mutex.lock().await;
+            if !client_disconnected.load(Ordering::Relaxed) {
+              client_disconnected.store(true, Ordering::Relaxed);
+              asgi_tx
+                .send(IncomingAsgiMessage::Message(
+                  IncomingAsgiMessageInner::WebsocketDisconnect(AsgiWebsocketClose {
+                    code: 1005,
+                    reason: "Error while sending WebSocket data".to_string(),
+                  }),
+                ))
+                .await
+                .unwrap_or_default();
+            }
+            Err(err)?;
+          }
+        }
+      }
+      OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::WebsocketClose(websocket_close)) => {
+        let client_disconnected = client_disconnected_mutex.lock().await;
+        if !client_disconnected.load(Ordering::Relaxed) {
+          client_disconnected.store(true, Ordering::Relaxed);
+          asgi_tx
+            .send(IncomingAsgiMessage::Message(
+              IncomingAsgiMessageInner::WebsocketDisconnect(AsgiWebsocketClose {
+                code: websocket_close.code,
+                reason: websocket_close.reason.clone(),
+              }),
+            ))
+            .await
+            .unwrap_or_default();
+        }
+        let mut client_sink = client_sink_mutex.lock().await;
+        client_sink
+          .send(Message::Close(Some(CloseFrame {
+            code: websocket_close.code.into(),
+            reason: websocket_close.reason.into(),
+          })))
+          .await?;
+        client_sink.close().await.unwrap_or_default();
+        break;
+      }
+      _ => (),
+    }
+  }
+
+  Ok(())
 }
