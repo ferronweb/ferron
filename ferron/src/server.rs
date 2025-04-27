@@ -1341,7 +1341,10 @@ async fn server_event_loop(
       }
     };
 
-    if listener_borrowed.is_none() && listener_tls_borrowed.is_none() {
+    if listener_borrowed.is_none()
+      && listener_tls_borrowed.is_none()
+      && listener_quic_borrowed.is_none()
+    {
       logger
         .send(LogMessage::new(
           String::from("No server is listening"),
