@@ -999,63 +999,38 @@ async fn server_event_loop(
 
   // Main loop to accept incoming connections
   loop {
-    match &listener {
-      Some(listener) => match &listener_tls {
-        Some(listener_tls) => {
-          tokio::select! {
-              status = listener.accept() => {
-                match status {
-                  Ok((stream, remote_address)) => {
-                    accept_connection(
-                      stream,
-                      remote_address,
-                      None,
-                      acme_http01_resolver.clone(),
-                      yaml_config.clone(),
-                      logger.clone(),
-                      modules_arc.clone(),
-                    )
-                    .await;
-                  }
-                  Err(err) => {
-                    logger
-                      .send(LogMessage::new(
-                        format!("Cannot accept a connection: {}", err),
-                        true,
-                      ))
-                      .await
-                      .unwrap_or_default();
-                  }
-                }
-              },
-              status = listener_tls.accept() => {
-                match status {
-                  Ok((stream, remote_address)) => {
-                    accept_connection(
-                      stream,
-                      remote_address,
-                      Some((tls_config_arc.clone(), acme_config_arc.clone())),
-                      None,
-                      yaml_config.clone(),
-                      logger.clone(),
-                      modules_arc.clone(),
-                    )
-                    .await;
-                  }
-                  Err(err) => {
-                    logger
-                      .send(LogMessage::new(
-                        format!("Cannot accept a connection: {}", err),
-                        true,
-                      ))
-                      .await
-                      .unwrap_or_default();
-                  }
-                }
-              }
-          };
-        }
-        None => match listener.accept().await {
+    if listener.is_none() && listener_tls.is_none() {
+      logger
+        .send(LogMessage::new(
+          String::from("No server is listening"),
+          true,
+        ))
+        .await
+        .unwrap_or_default();
+      Err(anyhow::anyhow!("No server is listening"))?;
+    }
+
+    let listener_borrowed = &listener;
+    let listener_accept = async move {
+      if let Some(listener) = listener_borrowed {
+        listener.accept().await
+      } else {
+        futures_util::future::pending().await
+      }
+    };
+
+    let listener_tls_borrowed = &listener_tls;
+    let listener_tls_accept = async move {
+      if let Some(listener_tls) = listener_tls_borrowed {
+        listener_tls.accept().await
+      } else {
+        futures_util::future::pending().await
+      }
+    };
+
+    tokio::select! {
+      status = listener_accept => {
+        match status {
           Ok((stream, remote_address)) => {
             accept_connection(
               stream,
@@ -1077,47 +1052,34 @@ async fn server_event_loop(
               .await
               .unwrap_or_default();
           }
-        },
+        }
       },
-      None => {
-        match &listener_tls {
-          Some(listener_tls) => match listener_tls.accept().await {
-            Ok((stream, remote_address)) => {
-              accept_connection(
-                stream,
-                remote_address,
-                Some((tls_config_arc.clone(), acme_config_arc.clone())),
-                None,
-                yaml_config.clone(),
-                logger.clone(),
-                modules_arc.clone(),
-              )
-              .await;
-            }
-            Err(err) => {
-              logger
-                .send(LogMessage::new(
-                  format!("Cannot accept a connection: {}", err),
-                  true,
-                ))
-                .await
-                .unwrap_or_default();
-            }
-          },
-          None => {
-            // No server is listening...
+      status = listener_tls_accept => {
+        match status {
+          Ok((stream, remote_address)) => {
+            accept_connection(
+              stream,
+              remote_address,
+              Some((tls_config_arc.clone(), acme_config_arc.clone())),
+              None,
+              yaml_config.clone(),
+              logger.clone(),
+              modules_arc.clone(),
+            )
+            .await;
+          }
+          Err(err) => {
             logger
               .send(LogMessage::new(
-                String::from("No server is listening"),
+                format!("Cannot accept a connection: {}", err),
                 true,
               ))
               .await
               .unwrap_or_default();
-            Err(anyhow::anyhow!("No server is listening"))?;
           }
         }
       }
-    }
+    };
   }
 }
 
