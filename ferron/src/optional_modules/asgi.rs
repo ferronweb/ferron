@@ -7,6 +7,7 @@ use std::error::Error;
 use std::ffi::CString;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 
@@ -178,26 +179,36 @@ async fn asgi_application_fn(
     scope_extensions.set_item("http.response.trailers", PyDict::new(py))?;
     scope.set_item("extensions", scope_extensions)?;
 
+    let client_disconnected = Arc::new(AtomicBool::new(false));
+    let client_disconnected_clone = client_disconnected.clone();
+
     let receive = PyCFunction::new_closure(
       py,
       None,
       None,
       move |args: &Bound<'_, PyTuple>, _: Option<&Bound<'_, PyDict>>| -> PyResult<_> {
         let rx = rx_clone.clone();
+        let client_disconnected = client_disconnected.clone();
         Ok(
           pyo3_async_runtimes::tokio::future_into_py(args.py(), async move {
-            let message = rx
-              .recv()
-              .await
-              .map_err(|e| PyErr::new::<PyOSError, _>(e.to_string()))?;
-            match message {
-              IncomingAsgiMessage::Init(_) => Err(PyErr::new::<PyOSError, _>(
-                "Unexpected ASGI initialization message",
-              )),
-              IncomingAsgiMessage::ClientDisconnected => {
-                Err(PyErr::new::<PyOSError, _>("Client disconnected"))
+            if client_disconnected.load(Ordering::Relaxed) {
+              Err(PyErr::new::<PyOSError, _>("Client disconnected"))
+            } else {
+              let message = rx
+                .recv()
+                .await
+                .map_err(|e| PyErr::new::<PyOSError, _>(e.to_string()))?;
+              match message {
+                IncomingAsgiMessage::Init(_) => Err(PyErr::new::<PyOSError, _>(
+                  "Unexpected ASGI initialization message",
+                )),
+                IncomingAsgiMessage::Message(message) => {
+                  if let IncomingAsgiMessageInner::HttpDisconnect = &message {
+                    client_disconnected.store(true, Ordering::Relaxed);
+                  }
+                  incoming_struct_to_asgi_event(message)
+                }
               }
-              IncomingAsgiMessage::Message(message) => incoming_struct_to_asgi_event(message),
             }
           })?
           .unbind(),
@@ -212,12 +223,17 @@ async fn asgi_application_fn(
         let event = args.get_item(0)?.downcast::<PyDict>()?.clone();
         let message = asgi_event_to_outgoing_struct(event)?;
         let tx = tx_clone.clone();
+        let client_disconnected = client_disconnected_clone.clone();
         Ok(
           pyo3_async_runtimes::tokio::future_into_py(args.py(), async move {
-            tx.send(OutgoingAsgiMessage::Message(message))
-              .await
-              .map_err(|e| PyErr::new::<PyOSError, _>(e.to_string()))?;
-            Ok(())
+            if client_disconnected.load(Ordering::Relaxed) {
+              Err(PyErr::new::<PyOSError, _>("Client disconnected"))
+            } else {
+              tx.send(OutgoingAsgiMessage::Message(message))
+                .await
+                .map_err(|e| PyErr::new::<PyOSError, _>(e.to_string()))?;
+              Ok(())
+            }
           })?
           .unbind(),
         )
@@ -870,10 +886,6 @@ async fn execute_asgi(
             ))
             .await
             .unwrap_or_default();
-          asgi_tx_clone
-            .send(IncomingAsgiMessage::ClientDisconnected)
-            .await
-            .unwrap_or_default();
         }
         None => {
           asgi_tx_clone
@@ -921,10 +933,6 @@ async fn execute_asgi(
             ))
             .await
             .unwrap_or_default();
-          asgi_tx
-            .send(IncomingAsgiMessage::ClientDisconnected)
-            .await
-            .unwrap_or_default();
           return None;
         }
         loop {
@@ -954,10 +962,6 @@ async fn execute_asgi(
                       ))
                       .await
                       .unwrap_or_default();
-                    asgi_tx
-                      .send(IncomingAsgiMessage::ClientDisconnected)
-                      .await
-                      .unwrap_or_default();
                     return None;
                   }
                 } else {
@@ -982,10 +986,6 @@ async fn execute_asgi(
                     .send(IncomingAsgiMessage::Message(
                       IncomingAsgiMessageInner::HttpDisconnect,
                     ))
-                    .await
-                    .unwrap_or_default();
-                  asgi_tx
-                    .send(IncomingAsgiMessage::ClientDisconnected)
                     .await
                     .unwrap_or_default();
                   return None;

@@ -8,7 +8,6 @@ use crate::ferron_common::{ErrorLogger, SocketData};
 pub enum IncomingAsgiMessage {
   Init(AsgiInitData),
   Message(IncomingAsgiMessageInner),
-  ClientDisconnected,
 }
 
 pub enum OutgoingAsgiMessage {
