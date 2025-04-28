@@ -13,11 +13,12 @@ http-body-util = "0.1.0"
 hyper-util = { version = "0.1", features = ["full"] }
 tokio-util = { version = "0.7.13", features = ["io"] }
 rustls = { version = "0.23.24", default-features = false, features = ["tls12", "std", "ring"] }
+rustls-acme = { version = "0.13.0", default-features = false, features = ["tls12", "ring"] }
 tokio-rustls = { version = "0.26.1", default-features = false, features = ["tls12", "ring"] }
 rustls-pki-types = "1.11.0"
 rustls-pemfile = "2.2.0"
 yaml-rust2 = { workspace = true }
-anyhow = "1.0.95"
+anyhow = "1.0.98"
 futures-util = "0.3.31"
 chrono = "0.4.39"
 async-trait = "0.1.86"
@@ -40,7 +41,6 @@ memmem = { version = "0.1.1", optional = true }
 httparse = { version = "1.10.0", optional = true }
 pin-project-lite = "0.2.16"
 hashlink = "0.10.0"
-tokio-rustls-acme = "0.7.0"
 glob = "0.3.2"
 hyper-tungstenite = "0.17.0"
 tokio-tungstenite = { version = "0.26.2", features = ["rustls-tls-native-roots"] }
@@ -54,6 +54,9 @@ serde_bytes = { version = "0.11.17", optional = true }
 postcard = { version = "1.1.1", optional = true, features = ["use-std"] }
 bytes = { version = "1.10.1", optional = true }
 pyo3-async-runtimes = { version = "0.24.0", optional = true, features = ["tokio", "tokio-runtime"] }
+h3 = "0.0.7"
+h3-quinn = "0.0.9"
+quinn = "0.11.7"
 
 [dev-dependencies]
 tokio-test = "0.4.4"

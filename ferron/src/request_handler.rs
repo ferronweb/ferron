@@ -15,12 +15,14 @@ use crate::ferron_common::{
 use async_channel::Sender;
 use chrono::prelude::*;
 use futures_util::TryStreamExt;
+use http::header::CONTENT_TYPE;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use hyper::body::{Body, Bytes, Frame};
 use hyper::header::{self, HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
 use hyper_tungstenite::is_upgrade_request;
+use rustls_acme::ResolvesServerCertAcme;
 use tokio::fs;
 use tokio::io::BufReader;
 use tokio::time::timeout;
@@ -154,13 +156,15 @@ async fn log_combined(
 
 #[allow(clippy::too_many_arguments)]
 async fn request_handler_wrapped(
-  mut request: Request<BoxBody<Bytes, hyper::Error>>,
+  mut request: Request<BoxBody<Bytes, std::io::Error>>,
   remote_address: SocketAddr,
   local_address: SocketAddr,
   encrypted: bool,
   config: Arc<Yaml>,
   logger: Sender<LogMessage>,
   handlers_vec: Vec<Box<dyn ServerModuleHandlers + Send>>,
+  acme_http01_resolver_option: Option<Arc<ResolvesServerCertAcme>>,
+  http3_alt_port: Option<u16>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
   let is_proxy_request = match request.version() {
     hyper::Version::HTTP_2 | hyper::Version::HTTP_3 => {
@@ -302,6 +306,24 @@ async fn request_handler_wrapped(
                 .await;
               }
               let (mut response_parts, response_body) = response.into_parts();
+              if let Some(http3_alt_port) = http3_alt_port {
+                if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+                  Some(value) => HeaderValue::from_bytes(
+                    format!(
+                      "{}, h3=\":{}\", h3-29=\":{}\"",
+                      String::from_utf8_lossy(value.as_bytes()),
+                      http3_alt_port,
+                      http3_alt_port
+                    )
+                    .as_bytes(),
+                  ),
+                  None => HeaderValue::from_bytes(
+                    format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+                  ),
+                } {
+                  response_parts.headers.insert(header::ALT_SVC, header_value);
+                }
+              }
               response_parts
                 .headers
                 .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
@@ -362,6 +384,24 @@ async fn request_handler_wrapped(
           .await;
         }
         let (mut response_parts, response_body) = response.into_parts();
+        if let Some(http3_alt_port) = http3_alt_port {
+          if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+            Some(value) => HeaderValue::from_bytes(
+              format!(
+                "{}, h3=\":{}\", h3-29=\":{}\"",
+                String::from_utf8_lossy(value.as_bytes()),
+                http3_alt_port,
+                http3_alt_port
+              )
+              .as_bytes(),
+            ),
+            None => HeaderValue::from_bytes(
+              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+            ),
+          } {
+            response_parts.headers.insert(header::ALT_SVC, header_value);
+          }
+        }
         response_parts
           .headers
           .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
@@ -432,6 +472,24 @@ async fn request_handler_wrapped(
         .await;
       }
       let (mut response_parts, response_body) = response.into_parts();
+      if let Some(http3_alt_port) = http3_alt_port {
+        if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+          Some(value) => HeaderValue::from_bytes(
+            format!(
+              "{}, h3=\":{}\", h3-29=\":{}\"",
+              String::from_utf8_lossy(value.as_bytes()),
+              http3_alt_port,
+              http3_alt_port
+            )
+            .as_bytes(),
+          ),
+          None => HeaderValue::from_bytes(
+            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+          ),
+        } {
+          response_parts.headers.insert(header::ALT_SVC, header_value);
+        }
+      }
       response_parts
         .headers
         .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
@@ -501,6 +559,24 @@ async fn request_handler_wrapped(
               }
             }
           }
+        }
+      }
+      if let Some(http3_alt_port) = http3_alt_port {
+        if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+          Some(value) => HeaderValue::from_bytes(
+            format!(
+              "{}, h3=\":{}\", h3-29=\":{}\"",
+              String::from_utf8_lossy(value.as_bytes()),
+              http3_alt_port,
+              http3_alt_port
+            )
+            .as_bytes(),
+          ),
+          None => HeaderValue::from_bytes(
+            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+          ),
+        } {
+          response_parts.headers.insert(header::ALT_SVC, header_value);
         }
       }
       response_parts
@@ -586,6 +662,24 @@ async fn request_handler_wrapped(
               }
             }
           }
+          if let Some(http3_alt_port) = http3_alt_port {
+            if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+              Some(value) => HeaderValue::from_bytes(
+                format!(
+                  "{}, h3=\":{}\", h3-29=\":{}\"",
+                  String::from_utf8_lossy(value.as_bytes()),
+                  http3_alt_port,
+                  http3_alt_port
+                )
+                .as_bytes(),
+              ),
+              None => HeaderValue::from_bytes(
+                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+              ),
+            } {
+              response_parts.headers.insert(header::ALT_SVC, header_value);
+            }
+          }
           response_parts
             .headers
             .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
@@ -649,6 +743,24 @@ async fn request_handler_wrapped(
                 }
               }
             }
+          }
+        }
+        if let Some(http3_alt_port) = http3_alt_port {
+          if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+            Some(value) => HeaderValue::from_bytes(
+              format!(
+                "{}, h3=\":{}\", h3-29=\":{}\"",
+                String::from_utf8_lossy(value.as_bytes()),
+                http3_alt_port,
+                http3_alt_port
+              )
+              .as_bytes(),
+            ),
+            None => HeaderValue::from_bytes(
+              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+            ),
+          } {
+            response_parts.headers.insert(header::ALT_SVC, header_value);
           }
         }
         response_parts
@@ -719,12 +831,123 @@ async fn request_handler_wrapped(
         }
       }
     }
+    if let Some(http3_alt_port) = http3_alt_port {
+      if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+        Some(value) => HeaderValue::from_bytes(
+          format!(
+            "{}, h3=\":{}\", h3-29=\":{}\"",
+            String::from_utf8_lossy(value.as_bytes()),
+            http3_alt_port,
+            http3_alt_port
+          )
+          .as_bytes(),
+        ),
+        None => HeaderValue::from_bytes(
+          format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+        ),
+      } {
+        response_parts.headers.insert(header::ALT_SVC, header_value);
+      }
+    }
     response_parts
       .headers
       .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
 
     return Ok(Response::from_parts(response_parts, response_body));
   }
+
+  // HTTP-01 ACME challenge for automatic TLS
+  if let Some(acme_http01_resolver) = acme_http01_resolver_option {
+    if let Some(challenge_token) = request
+      .uri()
+      .path()
+      .strip_prefix("/.well-known/acme-challenge/")
+    {
+      if let Some(acme_response) = acme_http01_resolver.get_http_01_key_auth(challenge_token) {
+        let response = Response::builder()
+          .status(StatusCode::OK)
+          .header(
+            CONTENT_TYPE,
+            HeaderValue::from_static("application/octet-stream"),
+          )
+          .body(
+            Full::new(Bytes::from(acme_response))
+              .map_err(|e| match e {})
+              .boxed(),
+          )
+          .unwrap_or_default();
+
+        let (mut response_parts, response_body) = response.into_parts();
+        if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
+          let custom_headers_hash_iter = custom_headers_hash.iter();
+          for (header_name, header_value) in custom_headers_hash_iter {
+            if let Some(header_name) = header_name.as_str() {
+              if let Some(header_value) = header_value.as_str() {
+                if !response_parts.headers.contains_key(header_name) {
+                  if let Ok(header_value) =
+                    HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
+                  {
+                    if let Ok(header_name) = HeaderName::from_str(header_name) {
+                      response_parts.headers.insert(header_name, header_value);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        if let Some(http3_alt_port) = http3_alt_port {
+          if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+            Some(value) => HeaderValue::from_bytes(
+              format!(
+                "{}, h3=\":{}\", h3-29=\":{}\"",
+                String::from_utf8_lossy(value.as_bytes()),
+                http3_alt_port,
+                http3_alt_port
+              )
+              .as_bytes(),
+            ),
+            None => HeaderValue::from_bytes(
+              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+            ),
+          } {
+            response_parts.headers.insert(header::ALT_SVC, header_value);
+          }
+        }
+        response_parts
+          .headers
+          .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
+        let response = Response::from_parts(response_parts, response_body);
+
+        if log_enabled {
+          log_combined(
+            &logger,
+            socket_data.remote_addr.ip(),
+            None,
+            log_method,
+            log_request_path,
+            log_protocol,
+            response.status().as_u16(),
+            match response.headers().get(header::CONTENT_LENGTH) {
+              Some(header_value) => match header_value.to_str() {
+                Ok(header_value) => match header_value.parse::<u64>() {
+                  Ok(content_length) => Some(content_length),
+                  Err(_) => response.body().size_hint().exact(),
+                },
+                Err(_) => response.body().size_hint().exact(),
+              },
+              None => response.body().size_hint().exact(),
+            },
+            log_referrer,
+            log_user_agent,
+          )
+          .await;
+        }
+        return Ok(response);
+      }
+    }
+  };
 
   let cloned_logger = logger.clone();
   let error_logger = match error_log_enabled {
@@ -827,6 +1050,24 @@ async fn request_handler_wrapped(
             }
           }
         }
+        if let Some(http3_alt_port) = http3_alt_port {
+          if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+            Some(value) => HeaderValue::from_bytes(
+              format!(
+                "{}, h3=\":{}\", h3-29=\":{}\"",
+                String::from_utf8_lossy(value.as_bytes()),
+                http3_alt_port,
+                http3_alt_port
+              )
+              .as_bytes(),
+            ),
+            None => HeaderValue::from_bytes(
+              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+            ),
+          } {
+            response_parts.headers.insert(header::ALT_SVC, header_value);
+          }
+        }
         response_parts
           .headers
           .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
@@ -879,6 +1120,24 @@ async fn request_handler_wrapped(
                 }
               }
             }
+          }
+        }
+        if let Some(http3_alt_port) = http3_alt_port {
+          if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+            Some(value) => HeaderValue::from_bytes(
+              format!(
+                "{}, h3=\":{}\", h3-29=\":{}\"",
+                String::from_utf8_lossy(value.as_bytes()),
+                http3_alt_port,
+                http3_alt_port
+              )
+              .as_bytes(),
+            ),
+            None => HeaderValue::from_bytes(
+              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+            ),
+          } {
+            response_parts.headers.insert(header::ALT_SVC, header_value);
           }
         }
         response_parts
@@ -934,6 +1193,24 @@ async fn request_handler_wrapped(
               }
             }
           }
+        }
+      }
+      if let Some(http3_alt_port) = http3_alt_port {
+        if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+          Some(value) => HeaderValue::from_bytes(
+            format!(
+              "{}, h3=\":{}\", h3-29=\":{}\"",
+              String::from_utf8_lossy(value.as_bytes()),
+              http3_alt_port,
+              http3_alt_port
+            )
+            .as_bytes(),
+          ),
+          None => HeaderValue::from_bytes(
+            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+          ),
+        } {
+          response_parts.headers.insert(header::ALT_SVC, header_value);
         }
       }
       response_parts
@@ -1017,6 +1294,24 @@ async fn request_handler_wrapped(
                 }
               }
             }
+            if let Some(http3_alt_port) = http3_alt_port {
+              if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+                Some(value) => HeaderValue::from_bytes(
+                  format!(
+                    "{}, h3=\":{}\", h3-29=\":{}\"",
+                    String::from_utf8_lossy(value.as_bytes()),
+                    http3_alt_port,
+                    http3_alt_port
+                  )
+                  .as_bytes(),
+                ),
+                None => HeaderValue::from_bytes(
+                  format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+                ),
+              } {
+                response_parts.headers.insert(header::ALT_SVC, header_value);
+              }
+            }
             response_parts
               .headers
               .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
@@ -1091,6 +1386,24 @@ async fn request_handler_wrapped(
             }
           }
         }
+        if let Some(http3_alt_port) = http3_alt_port {
+          if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+            Some(value) => HeaderValue::from_bytes(
+              format!(
+                "{}, h3=\":{}\", h3-29=\":{}\"",
+                String::from_utf8_lossy(value.as_bytes()),
+                http3_alt_port,
+                http3_alt_port
+              )
+              .as_bytes(),
+            ),
+            None => HeaderValue::from_bytes(
+              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+            ),
+          } {
+            response_parts.headers.insert(header::ALT_SVC, header_value);
+          }
+        }
         response_parts
           .headers
           .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
@@ -1154,6 +1467,24 @@ async fn request_handler_wrapped(
                       }
                     }
                   }
+                }
+              }
+              if let Some(http3_alt_port) = http3_alt_port {
+                if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+                  Some(value) => HeaderValue::from_bytes(
+                    format!(
+                      "{}, h3=\":{}\", h3-29=\":{}\"",
+                      String::from_utf8_lossy(value.as_bytes()),
+                      http3_alt_port,
+                      http3_alt_port
+                    )
+                    .as_bytes(),
+                  ),
+                  None => HeaderValue::from_bytes(
+                    format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+                  ),
+                } {
+                  response_parts.headers.insert(header::ALT_SVC, header_value);
                 }
               }
               response_parts
@@ -1233,6 +1564,25 @@ async fn request_handler_wrapped(
                         }
                       }
                     }
+                    if let Some(http3_alt_port) = http3_alt_port {
+                      if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+                        Some(value) => HeaderValue::from_bytes(
+                          format!(
+                            "{}, h3=\":{}\", h3-29=\":{}\"",
+                            String::from_utf8_lossy(value.as_bytes()),
+                            http3_alt_port,
+                            http3_alt_port
+                          )
+                          .as_bytes(),
+                        ),
+                        None => HeaderValue::from_bytes(
+                          format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
+                            .as_bytes(),
+                        ),
+                      } {
+                        response_parts.headers.insert(header::ALT_SVC, header_value);
+                      }
+                    }
                     response_parts
                       .headers
                       .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
@@ -1289,6 +1639,25 @@ async fn request_handler_wrapped(
                         }
                       }
                     }
+                  }
+                }
+                if let Some(http3_alt_port) = http3_alt_port {
+                  if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+                    Some(value) => HeaderValue::from_bytes(
+                      format!(
+                        "{}, h3=\":{}\", h3-29=\":{}\"",
+                        String::from_utf8_lossy(value.as_bytes()),
+                        http3_alt_port,
+                        http3_alt_port
+                      )
+                      .as_bytes(),
+                    ),
+                    None => HeaderValue::from_bytes(
+                      format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
+                        .as_bytes(),
+                    ),
+                  } {
+                    response_parts.headers.insert(header::ALT_SVC, header_value);
                   }
                 }
                 response_parts
@@ -1369,6 +1738,26 @@ async fn request_handler_wrapped(
                           }
                         }
                       }
+                      if let Some(http3_alt_port) = http3_alt_port {
+                        if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC)
+                        {
+                          Some(value) => HeaderValue::from_bytes(
+                            format!(
+                              "{}, h3=\":{}\", h3-29=\":{}\"",
+                              String::from_utf8_lossy(value.as_bytes()),
+                              http3_alt_port,
+                              http3_alt_port
+                            )
+                            .as_bytes(),
+                          ),
+                          None => HeaderValue::from_bytes(
+                            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
+                              .as_bytes(),
+                          ),
+                        } {
+                          response_parts.headers.insert(header::ALT_SVC, header_value);
+                        }
+                      }
                       response_parts
                         .headers
                         .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
@@ -1438,6 +1827,24 @@ async fn request_handler_wrapped(
                   }
                 }
               }
+            }
+          }
+          if let Some(http3_alt_port) = http3_alt_port {
+            if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+              Some(value) => HeaderValue::from_bytes(
+                format!(
+                  "{}, h3=\":{}\", h3-29=\":{}\"",
+                  String::from_utf8_lossy(value.as_bytes()),
+                  http3_alt_port,
+                  http3_alt_port
+                )
+                .as_bytes(),
+              ),
+              None => HeaderValue::from_bytes(
+                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+              ),
+            } {
+              response_parts.headers.insert(header::ALT_SVC, header_value);
             }
           }
           response_parts
@@ -1517,6 +1924,25 @@ async fn request_handler_wrapped(
                     }
                   }
                 }
+                if let Some(http3_alt_port) = http3_alt_port {
+                  if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+                    Some(value) => HeaderValue::from_bytes(
+                      format!(
+                        "{}, h3=\":{}\", h3-29=\":{}\"",
+                        String::from_utf8_lossy(value.as_bytes()),
+                        http3_alt_port,
+                        http3_alt_port
+                      )
+                      .as_bytes(),
+                    ),
+                    None => HeaderValue::from_bytes(
+                      format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
+                        .as_bytes(),
+                    ),
+                  } {
+                    response_parts.headers.insert(header::ALT_SVC, header_value);
+                  }
+                }
                 response_parts
                   .headers
                   .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
@@ -1584,6 +2010,24 @@ async fn request_handler_wrapped(
             }
           }
         }
+      }
+    }
+    if let Some(http3_alt_port) = http3_alt_port {
+      if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+        Some(value) => HeaderValue::from_bytes(
+          format!(
+            "{}, h3=\":{}\", h3-29=\":{}\"",
+            String::from_utf8_lossy(value.as_bytes()),
+            http3_alt_port,
+            http3_alt_port
+          )
+          .as_bytes(),
+        ),
+        None => HeaderValue::from_bytes(
+          format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+        ),
+      } {
+        response_parts.headers.insert(header::ALT_SVC, header_value);
       }
     }
     response_parts
@@ -1660,6 +2104,24 @@ async fn request_handler_wrapped(
               }
             }
           }
+          if let Some(http3_alt_port) = http3_alt_port {
+            if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+              Some(value) => HeaderValue::from_bytes(
+                format!(
+                  "{}, h3=\":{}\", h3-29=\":{}\"",
+                  String::from_utf8_lossy(value.as_bytes()),
+                  http3_alt_port,
+                  http3_alt_port
+                )
+                .as_bytes(),
+              ),
+              None => HeaderValue::from_bytes(
+                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+              ),
+            } {
+              response_parts.headers.insert(header::ALT_SVC, header_value);
+            }
+          }
           response_parts
             .headers
             .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
@@ -1699,13 +2161,15 @@ async fn request_handler_wrapped(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn request_handler(
-  request: Request<BoxBody<Bytes, hyper::Error>>,
+  request: Request<BoxBody<Bytes, std::io::Error>>,
   remote_address: SocketAddr,
   local_address: SocketAddr,
   encrypted: bool,
   config: Arc<Yaml>,
   logger: Sender<LogMessage>,
   handlers_vec: Vec<Box<dyn ServerModuleHandlers + Send>>,
+  acme_http01_resolver_option: Option<Arc<ResolvesServerCertAcme>>,
+  http3_alt_port: Option<u16>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
   let timeout_yaml = &config["global"]["timeout"];
   if timeout_yaml.is_null() {
@@ -1717,6 +2181,8 @@ pub async fn request_handler(
       config,
       logger,
       handlers_vec,
+      acme_http01_resolver_option,
+      http3_alt_port,
     )
     .await
     .map_err(|e| anyhow::anyhow!(e))
@@ -1732,6 +2198,8 @@ pub async fn request_handler(
         config,
         logger,
         handlers_vec,
+        acme_http01_resolver_option,
+        http3_alt_port,
       ),
     )
     .await

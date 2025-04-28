@@ -75,7 +75,7 @@ pub fn server_module_init(
 #[allow(clippy::type_complexity)]
 struct ReverseProxyModule {
   roots: Arc<RootCertStore>,
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
+  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>>>,
   failed_backends: Arc<RwLock<TtlCache<String, u64>>>,
 }
 
@@ -83,7 +83,7 @@ impl ReverseProxyModule {
   #[allow(clippy::type_complexity)]
   fn new(
     roots: Arc<RootCertStore>,
-    connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
+    connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>>>,
     failed_backends: Arc<RwLock<TtlCache<String, u64>>>,
   ) -> Self {
     Self {
@@ -109,7 +109,7 @@ impl ServerModule for ReverseProxyModule {
 struct ReverseProxyModuleHandlers {
   handle: Handle,
   roots: Arc<RootCertStore>,
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>>>,
+  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>>>,
   failed_backends: Arc<RwLock<TtlCache<String, u64>>>,
 }
 
@@ -701,10 +701,10 @@ async fn determine_proxy_to(
 }
 
 async fn http_proxy(
-  connections: &RwLock<HashMap<String, SendRequest<BoxBody<Bytes, hyper::Error>>>>,
+  connections: &RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>,
   connect_addr: String,
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
-  proxy_request: Request<BoxBody<Bytes, hyper::Error>>,
+  proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_to: String,
   failed_backends: Option<&tokio::sync::RwLock<TtlCache<std::string::String, u64>>>,
@@ -779,8 +779,8 @@ async fn http_proxy(
 }
 
 async fn http_proxy_kept_alive(
-  sender: &mut SendRequest<BoxBody<Bytes, hyper::Error>>,
-  proxy_request: Request<BoxBody<Bytes, hyper::Error>>,
+  sender: &mut SendRequest<BoxBody<Bytes, std::io::Error>>,
+  proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let proxy_response = match sender.send_request(proxy_request).await {

@@ -12,8 +12,11 @@ use crate::ferron_common::{LogMessage, ServerModule, ServerModuleHandlers};
 use async_channel::Sender;
 use chrono::prelude::*;
 use futures_util::StreamExt;
-use http_body_util::BodyExt;
-use hyper::body::Incoming;
+use h3_quinn::quinn;
+use h3_quinn::quinn::crypto::rustls::QuicServerConfig;
+use http::Response;
+use http_body_util::{BodyExt, StreamBody};
+use hyper::body::{Buf, Bytes, Frame, Incoming};
 use hyper::service::service_fn;
 use hyper::Request;
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
@@ -21,10 +24,13 @@ use ocsp_stapler::Stapler;
 use rustls::crypto::ring::cipher_suite::*;
 use rustls::crypto::ring::default_provider;
 use rustls::crypto::ring::kx_group::*;
-use rustls::server::WebPkiClientVerifier;
+use rustls::server::{Acceptor, WebPkiClientVerifier};
 use rustls::sign::CertifiedKey;
 use rustls::version::{TLS12, TLS13};
 use rustls::{RootCertStore, ServerConfig};
+use rustls_acme::acme::ACME_TLS_ALPN_NAME;
+use rustls_acme::caches::DirCache;
+use rustls_acme::{is_tls_alpn_challenge, AcmeConfig, ResolvesServerCertAcme, UseChallenge};
 use rustls_native_certs::load_native_certs;
 use tokio::fs;
 use tokio::io::{AsyncWriteExt, BufWriter};
@@ -33,9 +39,7 @@ use tokio::runtime::Handle;
 use tokio::sync::Mutex;
 use tokio::time;
 use tokio_rustls::server::TlsStream;
-use tokio_rustls::TlsAcceptor;
-use tokio_rustls_acme::caches::DirCache;
-use tokio_rustls_acme::{AcmeAcceptor, AcmeConfig};
+use tokio_rustls::LazyConfigAcceptor;
 use yaml_rust2::Yaml;
 
 // Enum for maybe TLS stream
@@ -44,22 +48,258 @@ enum MaybeTlsStream {
   Plain(TcpStream),
 }
 
+// Function to accept and handle incoming QUIC connections
+#[allow(clippy::too_many_arguments)]
+async fn accept_quic_connection(
+  connection_attempt: quinn::Incoming,
+  local_address: SocketAddr,
+  config: Arc<Yaml>,
+  logger: Sender<LogMessage>,
+  modules: Arc<Vec<Box<dyn ServerModule + std::marker::Send + Sync>>>,
+) {
+  let remote_address = connection_attempt.remote_address();
+
+  let logger_clone = logger.clone();
+
+  tokio::task::spawn(async move {
+    match connection_attempt.await {
+      Ok(connection) => {
+        let mut h3_conn: h3::server::Connection<h3_quinn::Connection, Bytes> =
+          match h3::server::Connection::new(h3_quinn::Connection::new(connection)).await {
+            Ok(h3_conn) => h3_conn,
+            Err(err) => {
+              logger_clone
+                .send(LogMessage::new(
+                  format!("Error serving HTTP/3 connection: {}", err),
+                  true,
+                ))
+                .await
+                .unwrap_or_default();
+              return;
+            }
+          };
+
+        loop {
+          match h3_conn.accept().await {
+            Ok(Some(resolver)) => {
+              let config = config.clone();
+              let remote_address = remote_address;
+
+              let logger_clone = logger_clone.clone();
+              let modules = modules.clone();
+              tokio::spawn(async move {
+                let handlers_vec = modules
+                  .iter()
+                  .map(|module| module.get_handlers(Handle::current()));
+
+                let (request, stream) = resolver;
+                let (mut send, receive) = stream.split();
+                let request_body_stream = futures_util::stream::unfold(
+                  (receive, false),
+                  async move |(mut receive, mut is_body_finished)| loop {
+                    if !is_body_finished {
+                      match receive.recv_data().await {
+                        Ok(Some(mut data)) => {
+                          return Some((
+                            Ok(Frame::data(data.copy_to_bytes(data.remaining()))),
+                            (receive, false),
+                          ))
+                        }
+                        Ok(None) => is_body_finished = true,
+                        Err(err) => {
+                          return Some((
+                            Err(std::io::Error::other(err.to_string())),
+                            (receive, false),
+                          ))
+                        }
+                      }
+                    } else {
+                      match receive.recv_trailers().await {
+                        Ok(Some(trailers)) => {
+                          return Some((Ok(Frame::trailers(trailers)), (receive, true)))
+                        }
+                        Ok(None) => is_body_finished = true,
+                        Err(err) => {
+                          return Some((
+                            Err(std::io::Error::other(err.to_string())),
+                            (receive, true),
+                          ))
+                        }
+                      }
+                    }
+                  },
+                );
+                let request_body = BodyExt::boxed(StreamBody::new(request_body_stream));
+                let (request_parts, _) = request.into_parts();
+                let request = Request::from_parts(request_parts, request_body);
+                let handlers_vec_clone = handlers_vec
+                  .clone()
+                  .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
+                let response = match request_handler(
+                  request,
+                  remote_address,
+                  local_address,
+                  true,
+                  config,
+                  logger_clone.clone(),
+                  handlers_vec_clone,
+                  None,
+                  None,
+                )
+                .await
+                {
+                  Ok(response) => response,
+                  Err(err) => {
+                    logger_clone
+                      .send(LogMessage::new(
+                        format!("Error serving HTTP/3 connection: {}", err),
+                        true,
+                      ))
+                      .await
+                      .unwrap_or_default();
+                    return;
+                  }
+                };
+                let (response_parts, mut response_body) = response.into_parts();
+                if let Err(err) = send
+                  .send_response(Response::from_parts(response_parts, ()))
+                  .await
+                {
+                  logger_clone
+                    .send(LogMessage::new(
+                      format!("Error serving HTTP/3 connection: {}", err),
+                      true,
+                    ))
+                    .await
+                    .unwrap_or_default();
+                  return;
+                }
+                let mut had_trailers = false;
+                while let Some(chunk) = response_body.frame().await {
+                  match chunk {
+                    Ok(frame) => {
+                      if frame.is_data() {
+                        match frame.into_data() {
+                          Ok(data) => {
+                            if let Err(err) = send.send_data(data).await {
+                              logger_clone
+                                .send(LogMessage::new(
+                                  format!("Error serving HTTP/3 connection: {}", err),
+                                  true,
+                                ))
+                                .await
+                                .unwrap_or_default();
+                              return;
+                            }
+                          }
+                          Err(_) => {
+                            logger_clone
+                            .send(LogMessage::new(
+                              "Error serving HTTP/3 connection: the frame isn't really a data frame".to_string(),
+                              true,
+                            ))
+                            .await
+                            .unwrap_or_default();
+                            return;
+                          }
+                        }
+                      } else if frame.is_trailers() {
+                        match frame.into_trailers() {
+                          Ok(trailers) => {
+                            had_trailers = true;
+                            if let Err(err) = send.send_trailers(trailers).await {
+                              logger_clone
+                                .send(LogMessage::new(
+                                  format!("Error serving HTTP/3 connection: {}", err),
+                                  true,
+                                ))
+                                .await
+                                .unwrap_or_default();
+                              return;
+                            }
+                          }
+                          Err(_) => {
+                            logger_clone
+                            .send(LogMessage::new(
+                              "Error serving HTTP/3 connection: the frame isn't really a trailers frame".to_string(),
+                              true,
+                            ))
+                            .await
+                            .unwrap_or_default();
+                            return;
+                          }
+                        }
+                      }
+                    }
+                    Err(err) => {
+                      logger_clone
+                        .send(LogMessage::new(
+                          format!("Error serving HTTP/3 connection: {}", err),
+                          true,
+                        ))
+                        .await
+                        .unwrap_or_default();
+                      return;
+                    }
+                  }
+                }
+                if !had_trailers {
+                  if let Err(err) = send.finish().await {
+                    logger_clone
+                      .send(LogMessage::new(
+                        format!("Error serving HTTP/3 connection: {}", err),
+                        true,
+                      ))
+                      .await
+                      .unwrap_or_default();
+                  }
+                }
+              });
+            }
+            Ok(None) => break,
+            Err(err) => {
+              logger_clone
+                .send(LogMessage::new(
+                  format!("Error serving HTTP/3 connection: {}", err),
+                  true,
+                ))
+                .await
+                .unwrap_or_default();
+              return;
+            }
+          }
+        }
+      }
+      Err(err) => {
+        logger_clone
+          .send(LogMessage::new(
+            format!("Cannot accept a connection: {}", err),
+            true,
+          ))
+          .await
+          .unwrap_or_default();
+      }
+    }
+  });
+}
+
 // Function to accept and handle incoming connections
 #[allow(clippy::too_many_arguments)]
 async fn accept_connection(
   stream: TcpStream,
   remote_address: SocketAddr,
-  tls_acceptor_option: Option<TlsAcceptor>,
-  acme_acceptor_config_option: Option<(AcmeAcceptor, Arc<ServerConfig>)>,
+  tls_config_option: Option<(Arc<ServerConfig>, Option<Arc<ServerConfig>>)>,
+  acme_http01_resolver_option: Option<Arc<ResolvesServerCertAcme>>,
   config: Arc<Yaml>,
   logger: Sender<LogMessage>,
   modules: Arc<Vec<Box<dyn ServerModule + std::marker::Send + Sync>>>,
+  http3_enabled: Option<u16>,
 ) {
   // Disable Nagle algorithm to improve performance
   if let Err(err) = stream.set_nodelay(true) {
     logger
       .send(LogMessage::new(
-        format!("Cannot disable Nagle algorithm: {:?}", err),
+        format!("Cannot disable Nagle algorithm: {}", err),
         true,
       ))
       .await
@@ -73,7 +313,7 @@ async fn accept_connection(
     Err(err) => {
       logger
         .send(LogMessage::new(
-          format!("Cannot obtain local address of the connection: {:?}", err),
+          format!("Cannot obtain local address of the connection: {}", err),
           true,
         ))
         .await
@@ -85,14 +325,13 @@ async fn accept_connection(
   let logger_clone = logger.clone();
 
   tokio::task::spawn(async move {
-    let maybe_tls_stream = if let Some((acme_acceptor, tls_config)) = acme_acceptor_config_option {
-      let start_handshake = match acme_acceptor.accept(stream).await {
-        Ok(Some(start_handshake)) => start_handshake,
-        Ok(None) => return,
+    let maybe_tls_stream = if let Some((tls_config, acme_config_option)) = tls_config_option {
+      let start_handshake = match LazyConfigAcceptor::new(Acceptor::default(), stream).await {
+        Ok(start_handshake) => start_handshake,
         Err(err) => {
           logger
             .send(LogMessage::new(
-              format!("Error during TLS handshake: {:?}", err),
+              format!("Error during TLS handshake: {}", err),
               true,
             ))
             .await
@@ -100,29 +339,32 @@ async fn accept_connection(
           return;
         }
       };
+
+      if let Some(acme_config) = acme_config_option {
+        if is_tls_alpn_challenge(&start_handshake.client_hello()) {
+          match start_handshake.into_stream(acme_config).await {
+            Ok(_) => (),
+            Err(err) => {
+              logger
+                .send(LogMessage::new(
+                  format!("Error during TLS handshake: {}", err),
+                  true,
+                ))
+                .await
+                .unwrap_or_default();
+              return;
+            }
+          };
+          return;
+        }
+      }
 
       let tls_stream = match start_handshake.into_stream(tls_config).await {
         Ok(tls_stream) => tls_stream,
         Err(err) => {
           logger
             .send(LogMessage::new(
-              format!("Error during TLS handshake: {:?}", err),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
-          return;
-        }
-      };
-
-      MaybeTlsStream::Tls(tls_stream)
-    } else if let Some(tls_acceptor) = tls_acceptor_option {
-      let tls_stream = match tls_acceptor.accept(stream).await {
-        Ok(tls_stream) => tls_stream,
-        Err(err) => {
-          logger
-            .send(LogMessage::new(
-              format!("Error during TLS handshake: {:?}", err),
+              format!("Error during TLS handshake: {}", err),
               true,
             ))
             .await
@@ -194,8 +436,14 @@ async fn accept_connection(
               let handlers_vec_clone = handlers_vec
                 .clone()
                 .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
+              let acme_http01_resolver_option_clone = acme_http01_resolver_option.clone();
               let (request_parts, request_body) = request.into_parts();
-              let request = Request::from_parts(request_parts, request_body.boxed());
+              let request = Request::from_parts(
+                request_parts,
+                request_body
+                  .map_err(|e| std::io::Error::other(e.to_string()))
+                  .boxed(),
+              );
               request_handler(
                 request,
                 remote_address,
@@ -204,6 +452,8 @@ async fn accept_connection(
                 config,
                 logger,
                 handlers_vec_clone,
+                acme_http01_resolver_option_clone,
+                http3_enabled,
               )
             }),
           )
@@ -211,7 +461,7 @@ async fn accept_connection(
         {
           logger
             .send(LogMessage::new(
-              format!("Error serving HTTPS connection: {:?}", err),
+              format!("Error serving HTTPS connection: {}", err),
               true,
             ))
             .await
@@ -232,8 +482,14 @@ async fn accept_connection(
               let handlers_vec_clone = handlers_vec
                 .clone()
                 .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
+              let acme_http01_resolver_option_clone = acme_http01_resolver_option.clone();
               let (request_parts, request_body) = request.into_parts();
-              let request = Request::from_parts(request_parts, request_body.boxed());
+              let request = Request::from_parts(
+                request_parts,
+                request_body
+                  .map_err(|e| std::io::Error::other(e.to_string()))
+                  .boxed(),
+              );
               request_handler(
                 request,
                 remote_address,
@@ -242,6 +498,8 @@ async fn accept_connection(
                 config,
                 logger,
                 handlers_vec_clone,
+                acme_http01_resolver_option_clone,
+                http3_enabled,
               )
             }),
           )
@@ -250,7 +508,7 @@ async fn accept_connection(
         {
           logger
             .send(LogMessage::new(
-              format!("Error serving HTTPS connection: {:?}", err),
+              format!("Error serving HTTPS connection: {}", err),
               true,
             ))
             .await
@@ -277,8 +535,14 @@ async fn accept_connection(
             let handlers_vec_clone = handlers_vec
               .clone()
               .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
+            let acme_http01_resolver_option_clone = acme_http01_resolver_option.clone();
             let (request_parts, request_body) = request.into_parts();
-            let request = Request::from_parts(request_parts, request_body.boxed());
+            let request = Request::from_parts(
+              request_parts,
+              request_body
+                .map_err(|e| std::io::Error::other(e.to_string()))
+                .boxed(),
+            );
             request_handler(
               request,
               remote_address,
@@ -287,6 +551,8 @@ async fn accept_connection(
               config,
               logger,
               handlers_vec_clone,
+              acme_http01_resolver_option_clone,
+              http3_enabled,
             )
           }),
         )
@@ -295,7 +561,7 @@ async fn accept_connection(
       {
         logger
           .send(LogMessage::new(
-            format!("Error serving HTTP connection: {:?}", err),
+            format!("Error serving HTTP connection: {}", err),
             true,
           ))
           .await
@@ -453,6 +719,14 @@ async fn server_event_loop(
 
   let mut automatic_tls_enabled = false;
   let mut acme_letsencrypt_production = true;
+  let acme_use_http_challenge = yaml_config["global"]["useAutomaticTLSHTTPChallenge"]
+    .as_bool()
+    .unwrap_or(false);
+  let acme_challenge_type = if acme_use_http_challenge {
+    UseChallenge::Http01
+  } else {
+    UseChallenge::TlsAlpn01
+  };
 
   // Read automatic TLS configuration
   if let Some(read_automatic_tls_enabled) = yaml_config["global"]["enableAutomaticTLS"].as_bool() {
@@ -854,7 +1128,7 @@ async fn server_event_loop(
   }
 
   // Create ACME configuration
-  let mut acme_config = AcmeConfig::new(acme_domains);
+  let mut acme_config = AcmeConfig::new(acme_domains).challenge_type(acme_challenge_type);
   if let Some(acme_contact_unwrapped) = acme_contact {
     acme_config = acme_config.contact_push(format!("mailto:{}", acme_contact_unwrapped));
   }
@@ -862,9 +1136,10 @@ async fn server_event_loop(
   acme_config_with_cache =
     acme_config_with_cache.directory_lets_encrypt(acme_letsencrypt_production);
 
-  let acme_tls_acceptor = if tls_enabled && automatic_tls_enabled {
+  let (acme_config, acme_http01_resolver) = if tls_enabled && automatic_tls_enabled {
     let mut acme_state = acme_config_with_cache.state();
-    let acceptor = acme_state.acceptor();
+
+    let acme_resolver = acme_state.resolver();
 
     // Create TLS configuration
     tls_config = if yaml_config["global"]["enableOCSPStapling"]
@@ -872,9 +1147,9 @@ async fn server_event_loop(
       .unwrap_or(true)
     {
       tls_config_builder_wants_server_cert
-        .with_cert_resolver(Arc::new(Stapler::new(acme_state.resolver())))
+        .with_cert_resolver(Arc::new(Stapler::new(acme_resolver.clone())))
     } else {
-      tls_config_builder_wants_server_cert.with_cert_resolver(acme_state.resolver())
+      tls_config_builder_wants_server_cert.with_cert_resolver(acme_resolver.clone())
     };
 
     let acme_logger = logger.clone();
@@ -892,7 +1167,14 @@ async fn server_event_loop(
       }
     });
 
-    Some(acceptor)
+    if acme_use_http_challenge {
+      (None, Some(acme_resolver))
+    } else {
+      let mut acme_config = tls_config.clone();
+      acme_config.alpn_protocols.push(ACME_TLS_ALPN_NAME.to_vec());
+
+      (Some(acme_config), None)
+    }
   } else {
     // Create TLS configuration
     tls_config = if yaml_config["global"]["enableOCSPStapling"]
@@ -910,6 +1192,37 @@ async fn server_event_loop(
 
     // Drop the ACME configuration
     drop(acme_config_with_cache);
+    (None, None)
+  };
+
+  let quic_config = if tls_enabled
+    && yaml_config["global"]["enableHTTP3"]
+      .as_bool()
+      .unwrap_or(false)
+  {
+    let mut quic_tls_config = tls_config.clone();
+    quic_tls_config.max_early_data_size = u32::MAX;
+    quic_tls_config.alpn_protocols = vec![b"h3".to_vec(), b"h3-29".to_vec()];
+    let quic_config = quinn::ServerConfig::with_crypto(Arc::new(match QuicServerConfig::try_from(
+      quic_tls_config,
+    ) {
+      Ok(quinn_config) => quinn_config,
+      Err(err) => {
+        logger
+          .send(LogMessage::new(
+            format!("There was a problem when starting HTTP/3 server: {}", err),
+            true,
+          ))
+          .await
+          .unwrap_or_default();
+        Err(anyhow::anyhow!(format!(
+          "There was a problem when starting HTTP/3 server: {}",
+          err
+        )))?
+      }
+    }));
+    Some(quic_config)
+  } else {
     None
   };
 
@@ -923,15 +1236,11 @@ async fn server_event_loop(
   }
   tls_config.alpn_protocols = alpn_protocols;
   let tls_config_arc = Arc::new(tls_config);
-
-  let acme_tls_acceptor_and_config =
-    acme_tls_acceptor.map(|acceptor| (acceptor, tls_config_arc.clone()));
-
-  // Create TLS acceptor
-  let tls_acceptor = TlsAcceptor::from(tls_config_arc.clone());
+  let acme_config_arc = acme_config.map(Arc::new);
 
   let mut listener = None;
   let mut listener_tls = None;
+  let mut listener_quic = None;
 
   // Bind to the specified ports
   if !non_tls_disabled {
@@ -972,80 +1281,93 @@ async fn server_event_loop(
         )))?
       }
     });
+
+    if let Some(quic_config) = quic_config {
+      println!("HTTP/3 server is listening at {}", addr_tls);
+      listener_quic = Some(match quinn::Endpoint::server(quic_config, addr_tls) {
+        Ok(listener) => listener,
+        Err(err) => {
+          logger
+            .send(LogMessage::new(
+              format!("Cannot listen to HTTP/3 port: {}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+          Err(anyhow::anyhow!(format!(
+            "Cannot listen to HTTP/3 port: {}",
+            err
+          )))?
+        }
+      });
+    }
   }
 
   // Wrap the modules vector in an Arc
   let modules_arc = Arc::new(modules);
 
+  let http3_enabled = if listener_tls.is_some() {
+    Some(addr_tls.port())
+  } else {
+    None
+  };
+
   // Main loop to accept incoming connections
   loop {
-    match &listener {
-      Some(listener) => match &listener_tls {
-        Some(listener_tls) => {
-          tokio::select! {
-              status = listener.accept() => {
-                match status {
-                  Ok((stream, remote_address)) => {
-                    accept_connection(
-                      stream,
-                      remote_address,
-                      None,
-                      None,
-                      yaml_config.clone(),
-                      logger.clone(),
-                      modules_arc.clone(),
-                    )
-                    .await;
-                  }
-                  Err(err) => {
-                    logger
-                      .send(LogMessage::new(
-                        format!("Cannot accept a connection: {}", err),
-                        true,
-                      ))
-                      .await
-                      .unwrap_or_default();
-                  }
-                }
-              },
-              status = listener_tls.accept() => {
-                match status {
-                  Ok((stream, remote_address)) => {
-                    let tls_acceptor = tls_acceptor.clone();
-                    accept_connection(
-                      stream,
-                      remote_address,
-                      Some(tls_acceptor),
-                      acme_tls_acceptor_and_config.clone(),
-                      yaml_config.clone(),
-                      logger.clone(),
-                      modules_arc.clone(),
-                    )
-                    .await;
-                  }
-                  Err(err) => {
-                    logger
-                      .send(LogMessage::new(
-                        format!("Cannot accept a connection: {}", err),
-                        true,
-                      ))
-                      .await
-                      .unwrap_or_default();
-                  }
-                }
-              }
-          };
-        }
-        None => match listener.accept().await {
+    let listener_borrowed = &listener;
+    let listener_accept = async move {
+      if let Some(listener) = listener_borrowed {
+        listener.accept().await
+      } else {
+        futures_util::future::pending().await
+      }
+    };
+
+    let listener_tls_borrowed = &listener_tls;
+    let listener_tls_accept = async move {
+      if let Some(listener_tls) = listener_tls_borrowed {
+        listener_tls.accept().await
+      } else {
+        futures_util::future::pending().await
+      }
+    };
+
+    let listener_quic_borrowed = &listener_quic;
+    let listener_quic_accept = async move {
+      if let Some(listener_quic) = listener_quic_borrowed {
+        listener_quic.accept().await
+      } else {
+        futures_util::future::pending().await
+      }
+    };
+
+    if listener_borrowed.is_none()
+      && listener_tls_borrowed.is_none()
+      && listener_quic_borrowed.is_none()
+    {
+      logger
+        .send(LogMessage::new(
+          String::from("No server is listening"),
+          true,
+        ))
+        .await
+        .unwrap_or_default();
+      Err(anyhow::anyhow!("No server is listening"))?;
+    }
+
+    tokio::select! {
+      status = listener_accept => {
+        match status {
           Ok((stream, remote_address)) => {
             accept_connection(
               stream,
               remote_address,
               None,
-              None,
+              acme_http01_resolver.clone(),
               yaml_config.clone(),
               logger.clone(),
               modules_arc.clone(),
+              None
             )
             .await;
           }
@@ -1058,48 +1380,59 @@ async fn server_event_loop(
               .await
               .unwrap_or_default();
           }
-        },
+        }
       },
-      None => {
-        match &listener_tls {
-          Some(listener_tls) => match listener_tls.accept().await {
-            Ok((stream, remote_address)) => {
-              let tls_acceptor = tls_acceptor.clone();
-              accept_connection(
-                stream,
-                remote_address,
-                Some(tls_acceptor),
-                acme_tls_acceptor_and_config.clone(),
-                yaml_config.clone(),
-                logger.clone(),
-                modules_arc.clone(),
-              )
-              .await;
-            }
-            Err(err) => {
-              logger
-                .send(LogMessage::new(
-                  format!("Cannot accept a connection: {}", err),
-                  true,
-                ))
-                .await
-                .unwrap_or_default();
-            }
-          },
-          None => {
-            // No server is listening...
+      status = listener_tls_accept => {
+        match status {
+          Ok((stream, remote_address)) => {
+            accept_connection(
+              stream,
+              remote_address,
+              Some((tls_config_arc.clone(), acme_config_arc.clone())),
+              None,
+              yaml_config.clone(),
+              logger.clone(),
+              modules_arc.clone(),
+              http3_enabled
+            )
+            .await;
+          }
+          Err(err) => {
             logger
               .send(LogMessage::new(
-                String::from("No server is listening"),
+                format!("Cannot accept a connection: {}", err),
                 true,
               ))
               .await
               .unwrap_or_default();
-            Err(anyhow::anyhow!("No server is listening"))?;
+          }
+        }
+      },
+      status = listener_quic_accept => {
+        match status {
+          Some(connection_attempt) => {
+            let local_ip = SocketAddr::new(connection_attempt.local_ip().unwrap_or(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0))), addr_tls.port());
+            accept_quic_connection(
+              connection_attempt,
+              local_ip,
+              yaml_config.clone(),
+              logger.clone(),
+              modules_arc.clone()
+            )
+            .await;
+          }
+          None => {
+            logger
+              .send(LogMessage::new(
+                "HTTP/3 connections can't be accepted anymore".to_string(),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
           }
         }
       }
-    }
+    };
   }
 }
 

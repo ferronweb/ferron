@@ -76,7 +76,13 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
 
         let mut parts: Vec<&str> = host_header.split(':').collect();
 
-        if parts.len() > 1 && !(parts[0].starts_with('[') && parts.last().unwrap().ends_with(']')) {
+        if parts.len() > 1
+          && !(parts[0].starts_with('[')
+            && parts
+              .last()
+              .map(|part| part.ends_with(']'))
+              .unwrap_or(false))
+        {
           parts.pop();
         }
 
@@ -128,7 +134,11 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
             let mut host_port: Option<&str> = None;
 
             if parts.len() > 1
-              && !(parts[0].starts_with('[') && parts.last().unwrap().ends_with(']'))
+              && !(parts[0].starts_with('[')
+                && parts
+                  .last()
+                  .map(|part| part.ends_with(']'))
+                  .unwrap_or(false))
             {
               host_port = parts.pop();
             }

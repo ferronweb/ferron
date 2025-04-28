@@ -239,7 +239,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
 
 async fn http_proxy(
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
-  proxy_request: Request<BoxBody<Bytes, hyper::Error>>,
+  proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let io = TokioIo::new(stream);

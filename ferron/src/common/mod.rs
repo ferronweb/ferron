@@ -54,7 +54,7 @@ pub type LogMessage = log::LogMessage;
 pub type ServerConfig = Yaml;
 
 /// Represents the HTTP request from Hyper.
-pub type HyperRequest = Request<BoxBody<Bytes, hyper::Error>>;
+pub type HyperRequest = Request<BoxBody<Bytes, std::io::Error>>;
 
 /// Represents the HTTP response from Hyper.
 pub type HyperResponse = Response<BoxBody<Bytes, std::io::Error>>;

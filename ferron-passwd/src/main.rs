@@ -2,6 +2,7 @@ use clap::Parser;
 use mimalloc::MiMalloc;
 use password_auth::generate_hash;
 use rpassword::prompt_password;
+use std::process;
 use yaml_rust2::{yaml, Yaml, YamlEmitter};
 
 #[global_allocator]
@@ -19,12 +20,24 @@ struct Args {
 fn main() {
   let args = Args::parse();
 
-  let password = prompt_password("Password: ").unwrap();
-  let password2 = prompt_password("Confirm password: ").unwrap();
+  let password = match prompt_password("Password: ") {
+    Ok(pass) => pass,
+    Err(e) => {
+      eprintln!("Error reading password: {}", e);
+      process::exit(1);
+    }
+  };
+  let password2 = match prompt_password("Confirm password: ") {
+    Ok(pass) => pass,
+    Err(e) => {
+      eprintln!("Error reading password confirmation: {}", e);
+      process::exit(1);
+    }
+  };
 
   if password != password2 {
     eprintln!("Passwords don't match!");
-    std::process::exit(1);
+    process::exit(1);
   }
 
   let password_hash = generate_hash(password);
@@ -42,7 +55,10 @@ fn main() {
   let yaml_data = Yaml::Array(vec![Yaml::Hash(yaml_user_hashmap)]);
 
   let mut output = String::new();
-  YamlEmitter::new(&mut output).dump(&yaml_data).unwrap();
+  if let Err(e) = YamlEmitter::new(&mut output).dump(&yaml_data) {
+    eprintln!("Error generating YAML output: {}", e);
+    process::exit(1);
+  }
 
   println!("Copy the user object below into \"users\" property of either global configuration or a virtual host in the \"ferron.yaml\" file. Remember about the indentation in the server configuration.");
   println!("{}", output);
