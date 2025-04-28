@@ -269,12 +269,12 @@ pub fn incoming_struct_to_asgi_event(incoming: IncomingAsgiMessageInner) -> PyRe
         event.set_item("type", "websocket.connect")?;
       }
       IncomingAsgiMessageInner::WebsocketDisconnect(websocket_close) => {
-        event.set_item("type", "websocket.connect")?;
+        event.set_item("type", "websocket.disconnect")?;
         event.set_item("code", websocket_close.code)?;
         event.set_item("reason", websocket_close.reason)?;
       }
       IncomingAsgiMessageInner::WebsocketReceive(websocket_message) => {
-        event.set_item("type", "websocket.connect")?;
+        event.set_item("type", "websocket.receive")?;
         event.set_item("bytes", websocket_message.bytes)?;
         event.set_item("text", websocket_message.text)?;
       }
