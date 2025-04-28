@@ -1009,7 +1009,7 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
   }
 
   fn does_websocket_requests(&mut self, config: &ServerConfig, _socket_data: &SocketData) -> bool {
-    config["wsgiApplicationPath"].as_str().is_some()
+    config["asgiApplicationPath"].as_str().is_some()
   }
 }
 
