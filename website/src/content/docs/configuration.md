@@ -76,6 +76,14 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - A maximum time (in milliseconds) for server to process the request, after which the server resets the connection. If set to `null`, the timeout is disabled. It's not recommended to disable the timeout, as disabling it may leave the server vulnerable to Slow HTTP attacks. Default: `300000`
 - **maximumCacheEntries** (_u32_ or `null`; _cache_ module)
   - Maximum amount of cache entries that can be stored in the cache. If set to `null`, the cache can theoretically store unlimited entries. The cache keys for entries depend on the request method, the request URL, the "Host" header value, and varying request headers. Default: `null`
+- **useAutomaticTLSHTTPChallenge** (_bool_; Ferron 1.1.0 and newer)
+  - Option to enable HTTP-based ACME challenge for automatic TLS. When set to `true`, the server will use the HTTP-01 ACME challenge instead of TLS-ALPN-01 one. Default: `false`
+- **enableHTTP3** (_bool_; Ferron 1.1.0 and newer)
+  - Option to enable HTTP/3. When set to `true`, the server will support the HTTP/3 protocol. Currently, HTTP/3 support is experimental. The `TLS_AES_128_GCM_SHA256` needs to be enabled, otherwise HTTP/3 server wouldn't start at all. Default: `false`
+- **wsgiClearModuleImportPath** (_bool_; _wsgi_ module; Ferron 1.1.0 and newer)
+  - Option to enable clearing Python module import paths. Setting this option to `true` improves the compatiblity with setups involving multiple WSGI applications, however module imports inside functions must not be used in the WSGI application. Default: `false`
+- **asgiClearModuleImportPath** (_bool_; _asgi_ module; Ferron 1.1.0 and newer)
+  - Option to enable clearing Python module import paths. Setting this option to `true` improves the compatiblity with setups involving multiple ASGI applications, however module imports inside functions must not be used in the ASGI application. Default: `false`
 
 ## Host configuration properties
 
@@ -199,6 +207,18 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - Maximum reported failed connections, before a backend server is marked as "bad" and not chosen by the load balancer. Default: `3`
 - **disableProxyCertificateVerification** (_bool_; _rproxy_ module)
   - Option to disable backend server certificate verification for the reverse proxy. Setting this to `true` is not recommended for production use. Default: `false`
+- **wsgiApplicationPath** (_String_; _wsgi_ module; Ferron 1.1.0 and newer)
+  - Path to the file containing the WSGI application. The WSGI application must have an `application` WSGI callback. Default: None
+- **wsgiPath** (_String_; _wsgi_ module; Ferron 1.1.0 and newer)
+  - Base URL, which WSGI handler will handle the request if the request URL begins with it. Default: `"/"`
+- **wsgidApplicationPath** (_String_; _wsgid_ module; Ferron 1.1.0 and newer)
+  - Path to the file containing the WSGI application. The WSGI application must have an `application` WSGI callback. Default: None
+- **wsgidPath** (_String_; _wsgid_ module; Ferron 1.1.0 and newer)
+  - Base URL, which WSGI handler (with pre-forked process pool) will handle the request if the request URL begins with it. Default: `"/"`
+- **asgiApplicationPath** (_String_; _asgi_ module; Ferron 1.1.0 and newer)
+  - Path to the file containing the ASGI application. The ASGI application must have an `application` ASGI callback. Default: None
+- **asgiPath** (_String_; _asgi_ module; Ferron 1.1.0 and newer)
+  - Base URL, which ASGI handler will handle the request if the request URL begins with it. Default: `"/"`
 
 ## Server configuration includes
 

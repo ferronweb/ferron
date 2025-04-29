@@ -4,6 +4,14 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.1.0
+
+**Released in April 29, 2025**
+
+- Added experimental support for HTTP/3 
+- Added support for HTTP-01 ACME challenge for automatic TLS
+- Added support for WSGI and ASGI (not enabled by default, you must compile Ferron yourself to use these features)
+
 ## Ferron 1.0.0
 
 **Released in April 12, 2025**
