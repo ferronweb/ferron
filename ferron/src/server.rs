@@ -1308,7 +1308,7 @@ async fn server_event_loop(
   // Wrap the modules vector in an Arc
   let modules_arc = Arc::new(modules);
 
-  let http3_enabled = if listener_tls.is_some() {
+  let http3_enabled = if listener_quic.is_some() {
     Some(addr_tls.port())
   } else {
     None
