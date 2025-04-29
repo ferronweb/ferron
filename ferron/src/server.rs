@@ -118,7 +118,9 @@ async fn accept_quic_connection(
                         Ok(Some(trailers)) => {
                           return Some((Ok(Frame::trailers(trailers)), (receive, true)))
                         }
-                        Ok(None) => is_body_finished = true,
+                        Ok(None) => {
+                          return None;
+                        }
                         Err(err) => {
                           return Some((
                             Err(std::io::Error::other(err.to_string())),
