@@ -4,6 +4,13 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.1.1
+
+**Released in April 29, 2025**
+
+- Fixed an infinite loop when fetching the request body from the HTTP/3 client
+- Fixed duplicate alternative services in "Alt-Svc" header when using the "cache" module
+
 ## Ferron 1.1.0
 
 **Released in April 29, 2025**
