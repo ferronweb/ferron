@@ -74,6 +74,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: "${{ matrix.target }}"
+ 
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Determine Ferron version
         shell: bash
@@ -96,11 +99,8 @@ jobs:
         shell: bash
         run: |
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-          cargo binstall --no-confirm cross
+          cargo binstall --no-confirm cross --force
 
-      - name: Setup cache
-        uses: Swatinem/rust-cache@v2
-        
       - name: Build binaries
         run: "${{ matrix.command }} build --verbose --locked --release --target ${{ matrix.target }}"
 
