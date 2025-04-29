@@ -308,15 +308,19 @@ async fn request_handler_wrapped(
               let (mut response_parts, response_body) = response.into_parts();
               if let Some(http3_alt_port) = http3_alt_port {
                 if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-                  Some(value) => HeaderValue::from_bytes(
-                    format!(
-                      "{}, h3=\":{}\", h3-29=\":{}\"",
-                      String::from_utf8_lossy(value.as_bytes()),
-                      http3_alt_port,
-                      http3_alt_port
-                    )
-                    .as_bytes(),
-                  ),
+                  Some(value) => {
+                    let header_value_old = String::from_utf8_lossy(value.as_bytes());
+                    let header_value_new =
+                      format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+                    if header_value_old != header_value_new {
+                      HeaderValue::from_bytes(
+                        format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                      )
+                    } else {
+                      HeaderValue::from_bytes(header_value_old.as_bytes())
+                    }
+                  }
                   None => HeaderValue::from_bytes(
                     format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
                   ),
@@ -386,15 +390,19 @@ async fn request_handler_wrapped(
         let (mut response_parts, response_body) = response.into_parts();
         if let Some(http3_alt_port) = http3_alt_port {
           if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-            Some(value) => HeaderValue::from_bytes(
-              format!(
-                "{}, h3=\":{}\", h3-29=\":{}\"",
-                String::from_utf8_lossy(value.as_bytes()),
-                http3_alt_port,
-                http3_alt_port
-              )
-              .as_bytes(),
-            ),
+            Some(value) => {
+              let header_value_old = String::from_utf8_lossy(value.as_bytes());
+              let header_value_new =
+                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+              if header_value_old != header_value_new {
+                HeaderValue::from_bytes(
+                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                )
+              } else {
+                HeaderValue::from_bytes(header_value_old.as_bytes())
+              }
+            }
             None => HeaderValue::from_bytes(
               format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
             ),
@@ -474,15 +482,19 @@ async fn request_handler_wrapped(
       let (mut response_parts, response_body) = response.into_parts();
       if let Some(http3_alt_port) = http3_alt_port {
         if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-          Some(value) => HeaderValue::from_bytes(
-            format!(
-              "{}, h3=\":{}\", h3-29=\":{}\"",
-              String::from_utf8_lossy(value.as_bytes()),
-              http3_alt_port,
-              http3_alt_port
-            )
-            .as_bytes(),
-          ),
+          Some(value) => {
+            let header_value_old = String::from_utf8_lossy(value.as_bytes());
+            let header_value_new =
+              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+            if header_value_old != header_value_new {
+              HeaderValue::from_bytes(
+                format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+              )
+            } else {
+              HeaderValue::from_bytes(header_value_old.as_bytes())
+            }
+          }
           None => HeaderValue::from_bytes(
             format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
           ),
@@ -563,15 +575,19 @@ async fn request_handler_wrapped(
       }
       if let Some(http3_alt_port) = http3_alt_port {
         if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-          Some(value) => HeaderValue::from_bytes(
-            format!(
-              "{}, h3=\":{}\", h3-29=\":{}\"",
-              String::from_utf8_lossy(value.as_bytes()),
-              http3_alt_port,
-              http3_alt_port
-            )
-            .as_bytes(),
-          ),
+          Some(value) => {
+            let header_value_old = String::from_utf8_lossy(value.as_bytes());
+            let header_value_new =
+              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+            if header_value_old != header_value_new {
+              HeaderValue::from_bytes(
+                format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+              )
+            } else {
+              HeaderValue::from_bytes(header_value_old.as_bytes())
+            }
+          }
           None => HeaderValue::from_bytes(
             format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
           ),
@@ -664,15 +680,19 @@ async fn request_handler_wrapped(
           }
           if let Some(http3_alt_port) = http3_alt_port {
             if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-              Some(value) => HeaderValue::from_bytes(
-                format!(
-                  "{}, h3=\":{}\", h3-29=\":{}\"",
-                  String::from_utf8_lossy(value.as_bytes()),
-                  http3_alt_port,
-                  http3_alt_port
-                )
-                .as_bytes(),
-              ),
+              Some(value) => {
+                let header_value_old = String::from_utf8_lossy(value.as_bytes());
+                let header_value_new =
+                  format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+                if header_value_old != header_value_new {
+                  HeaderValue::from_bytes(
+                    format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                  )
+                } else {
+                  HeaderValue::from_bytes(header_value_old.as_bytes())
+                }
+              }
               None => HeaderValue::from_bytes(
                 format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
               ),
@@ -747,15 +767,19 @@ async fn request_handler_wrapped(
         }
         if let Some(http3_alt_port) = http3_alt_port {
           if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-            Some(value) => HeaderValue::from_bytes(
-              format!(
-                "{}, h3=\":{}\", h3-29=\":{}\"",
-                String::from_utf8_lossy(value.as_bytes()),
-                http3_alt_port,
-                http3_alt_port
-              )
-              .as_bytes(),
-            ),
+            Some(value) => {
+              let header_value_old = String::from_utf8_lossy(value.as_bytes());
+              let header_value_new =
+                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+              if header_value_old != header_value_new {
+                HeaderValue::from_bytes(
+                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                )
+              } else {
+                HeaderValue::from_bytes(header_value_old.as_bytes())
+              }
+            }
             None => HeaderValue::from_bytes(
               format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
             ),
@@ -833,15 +857,19 @@ async fn request_handler_wrapped(
     }
     if let Some(http3_alt_port) = http3_alt_port {
       if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-        Some(value) => HeaderValue::from_bytes(
-          format!(
-            "{}, h3=\":{}\", h3-29=\":{}\"",
-            String::from_utf8_lossy(value.as_bytes()),
-            http3_alt_port,
-            http3_alt_port
-          )
-          .as_bytes(),
-        ),
+        Some(value) => {
+          let header_value_old = String::from_utf8_lossy(value.as_bytes());
+          let header_value_new =
+            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+          if header_value_old != header_value_new {
+            HeaderValue::from_bytes(
+              format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+            )
+          } else {
+            HeaderValue::from_bytes(header_value_old.as_bytes())
+          }
+        }
         None => HeaderValue::from_bytes(
           format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
         ),
@@ -898,15 +926,19 @@ async fn request_handler_wrapped(
         }
         if let Some(http3_alt_port) = http3_alt_port {
           if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-            Some(value) => HeaderValue::from_bytes(
-              format!(
-                "{}, h3=\":{}\", h3-29=\":{}\"",
-                String::from_utf8_lossy(value.as_bytes()),
-                http3_alt_port,
-                http3_alt_port
-              )
-              .as_bytes(),
-            ),
+            Some(value) => {
+              let header_value_old = String::from_utf8_lossy(value.as_bytes());
+              let header_value_new =
+                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+              if header_value_old != header_value_new {
+                HeaderValue::from_bytes(
+                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                )
+              } else {
+                HeaderValue::from_bytes(header_value_old.as_bytes())
+              }
+            }
             None => HeaderValue::from_bytes(
               format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
             ),
@@ -1052,15 +1084,19 @@ async fn request_handler_wrapped(
         }
         if let Some(http3_alt_port) = http3_alt_port {
           if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-            Some(value) => HeaderValue::from_bytes(
-              format!(
-                "{}, h3=\":{}\", h3-29=\":{}\"",
-                String::from_utf8_lossy(value.as_bytes()),
-                http3_alt_port,
-                http3_alt_port
-              )
-              .as_bytes(),
-            ),
+            Some(value) => {
+              let header_value_old = String::from_utf8_lossy(value.as_bytes());
+              let header_value_new =
+                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+              if header_value_old != header_value_new {
+                HeaderValue::from_bytes(
+                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                )
+              } else {
+                HeaderValue::from_bytes(header_value_old.as_bytes())
+              }
+            }
             None => HeaderValue::from_bytes(
               format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
             ),
@@ -1124,15 +1160,19 @@ async fn request_handler_wrapped(
         }
         if let Some(http3_alt_port) = http3_alt_port {
           if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-            Some(value) => HeaderValue::from_bytes(
-              format!(
-                "{}, h3=\":{}\", h3-29=\":{}\"",
-                String::from_utf8_lossy(value.as_bytes()),
-                http3_alt_port,
-                http3_alt_port
-              )
-              .as_bytes(),
-            ),
+            Some(value) => {
+              let header_value_old = String::from_utf8_lossy(value.as_bytes());
+              let header_value_new =
+                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+              if header_value_old != header_value_new {
+                HeaderValue::from_bytes(
+                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                )
+              } else {
+                HeaderValue::from_bytes(header_value_old.as_bytes())
+              }
+            }
             None => HeaderValue::from_bytes(
               format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
             ),
@@ -1197,15 +1237,19 @@ async fn request_handler_wrapped(
       }
       if let Some(http3_alt_port) = http3_alt_port {
         if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-          Some(value) => HeaderValue::from_bytes(
-            format!(
-              "{}, h3=\":{}\", h3-29=\":{}\"",
-              String::from_utf8_lossy(value.as_bytes()),
-              http3_alt_port,
-              http3_alt_port
-            )
-            .as_bytes(),
-          ),
+          Some(value) => {
+            let header_value_old = String::from_utf8_lossy(value.as_bytes());
+            let header_value_new =
+              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+            if header_value_old != header_value_new {
+              HeaderValue::from_bytes(
+                format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+              )
+            } else {
+              HeaderValue::from_bytes(header_value_old.as_bytes())
+            }
+          }
           None => HeaderValue::from_bytes(
             format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
           ),
@@ -1296,15 +1340,19 @@ async fn request_handler_wrapped(
             }
             if let Some(http3_alt_port) = http3_alt_port {
               if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-                Some(value) => HeaderValue::from_bytes(
-                  format!(
-                    "{}, h3=\":{}\", h3-29=\":{}\"",
-                    String::from_utf8_lossy(value.as_bytes()),
-                    http3_alt_port,
-                    http3_alt_port
-                  )
-                  .as_bytes(),
-                ),
+                Some(value) => {
+                  let header_value_old = String::from_utf8_lossy(value.as_bytes());
+                  let header_value_new =
+                    format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+                  if header_value_old != header_value_new {
+                    HeaderValue::from_bytes(
+                      format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                    )
+                  } else {
+                    HeaderValue::from_bytes(header_value_old.as_bytes())
+                  }
+                }
                 None => HeaderValue::from_bytes(
                   format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
                 ),
@@ -1388,15 +1436,19 @@ async fn request_handler_wrapped(
         }
         if let Some(http3_alt_port) = http3_alt_port {
           if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-            Some(value) => HeaderValue::from_bytes(
-              format!(
-                "{}, h3=\":{}\", h3-29=\":{}\"",
-                String::from_utf8_lossy(value.as_bytes()),
-                http3_alt_port,
-                http3_alt_port
-              )
-              .as_bytes(),
-            ),
+            Some(value) => {
+              let header_value_old = String::from_utf8_lossy(value.as_bytes());
+              let header_value_new =
+                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+              if header_value_old != header_value_new {
+                HeaderValue::from_bytes(
+                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                )
+              } else {
+                HeaderValue::from_bytes(header_value_old.as_bytes())
+              }
+            }
             None => HeaderValue::from_bytes(
               format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
             ),
@@ -1471,15 +1523,19 @@ async fn request_handler_wrapped(
               }
               if let Some(http3_alt_port) = http3_alt_port {
                 if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-                  Some(value) => HeaderValue::from_bytes(
-                    format!(
-                      "{}, h3=\":{}\", h3-29=\":{}\"",
-                      String::from_utf8_lossy(value.as_bytes()),
-                      http3_alt_port,
-                      http3_alt_port
-                    )
-                    .as_bytes(),
-                  ),
+                  Some(value) => {
+                    let header_value_old = String::from_utf8_lossy(value.as_bytes());
+                    let header_value_new =
+                      format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+                    if header_value_old != header_value_new {
+                      HeaderValue::from_bytes(
+                        format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                      )
+                    } else {
+                      HeaderValue::from_bytes(header_value_old.as_bytes())
+                    }
+                  }
                   None => HeaderValue::from_bytes(
                     format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
                   ),
@@ -1566,15 +1622,19 @@ async fn request_handler_wrapped(
                     }
                     if let Some(http3_alt_port) = http3_alt_port {
                       if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-                        Some(value) => HeaderValue::from_bytes(
-                          format!(
-                            "{}, h3=\":{}\", h3-29=\":{}\"",
-                            String::from_utf8_lossy(value.as_bytes()),
-                            http3_alt_port,
-                            http3_alt_port
-                          )
-                          .as_bytes(),
-                        ),
+                        Some(value) => {
+                          let header_value_old = String::from_utf8_lossy(value.as_bytes());
+                          let header_value_new =
+                            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+                          if header_value_old != header_value_new {
+                            HeaderValue::from_bytes(
+                              format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                            )
+                          } else {
+                            HeaderValue::from_bytes(header_value_old.as_bytes())
+                          }
+                        }
                         None => HeaderValue::from_bytes(
                           format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
                             .as_bytes(),
@@ -1643,15 +1703,19 @@ async fn request_handler_wrapped(
                 }
                 if let Some(http3_alt_port) = http3_alt_port {
                   if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-                    Some(value) => HeaderValue::from_bytes(
-                      format!(
-                        "{}, h3=\":{}\", h3-29=\":{}\"",
-                        String::from_utf8_lossy(value.as_bytes()),
-                        http3_alt_port,
-                        http3_alt_port
-                      )
-                      .as_bytes(),
-                    ),
+                    Some(value) => {
+                      let header_value_old = String::from_utf8_lossy(value.as_bytes());
+                      let header_value_new =
+                        format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+                      if header_value_old != header_value_new {
+                        HeaderValue::from_bytes(
+                          format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                        )
+                      } else {
+                        HeaderValue::from_bytes(header_value_old.as_bytes())
+                      }
+                    }
                     None => HeaderValue::from_bytes(
                       format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
                         .as_bytes(),
@@ -1741,15 +1805,19 @@ async fn request_handler_wrapped(
                       if let Some(http3_alt_port) = http3_alt_port {
                         if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC)
                         {
-                          Some(value) => HeaderValue::from_bytes(
-                            format!(
-                              "{}, h3=\":{}\", h3-29=\":{}\"",
-                              String::from_utf8_lossy(value.as_bytes()),
-                              http3_alt_port,
-                              http3_alt_port
-                            )
-                            .as_bytes(),
-                          ),
+                          Some(value) => {
+                            let header_value_old = String::from_utf8_lossy(value.as_bytes());
+                            let header_value_new =
+                              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+                            if header_value_old != header_value_new {
+                              HeaderValue::from_bytes(
+                                format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                              )
+                            } else {
+                              HeaderValue::from_bytes(header_value_old.as_bytes())
+                            }
+                          }
                           None => HeaderValue::from_bytes(
                             format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
                               .as_bytes(),
@@ -1831,15 +1899,19 @@ async fn request_handler_wrapped(
           }
           if let Some(http3_alt_port) = http3_alt_port {
             if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-              Some(value) => HeaderValue::from_bytes(
-                format!(
-                  "{}, h3=\":{}\", h3-29=\":{}\"",
-                  String::from_utf8_lossy(value.as_bytes()),
-                  http3_alt_port,
-                  http3_alt_port
-                )
-                .as_bytes(),
-              ),
+              Some(value) => {
+                let header_value_old = String::from_utf8_lossy(value.as_bytes());
+                let header_value_new =
+                  format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+                if header_value_old != header_value_new {
+                  HeaderValue::from_bytes(
+                    format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                  )
+                } else {
+                  HeaderValue::from_bytes(header_value_old.as_bytes())
+                }
+              }
               None => HeaderValue::from_bytes(
                 format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
               ),
@@ -1926,15 +1998,19 @@ async fn request_handler_wrapped(
                 }
                 if let Some(http3_alt_port) = http3_alt_port {
                   if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-                    Some(value) => HeaderValue::from_bytes(
-                      format!(
-                        "{}, h3=\":{}\", h3-29=\":{}\"",
-                        String::from_utf8_lossy(value.as_bytes()),
-                        http3_alt_port,
-                        http3_alt_port
-                      )
-                      .as_bytes(),
-                    ),
+                    Some(value) => {
+                      let header_value_old = String::from_utf8_lossy(value.as_bytes());
+                      let header_value_new =
+                        format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+                      if header_value_old != header_value_new {
+                        HeaderValue::from_bytes(
+                          format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                        )
+                      } else {
+                        HeaderValue::from_bytes(header_value_old.as_bytes())
+                      }
+                    }
                     None => HeaderValue::from_bytes(
                       format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
                         .as_bytes(),
@@ -2014,15 +2090,19 @@ async fn request_handler_wrapped(
     }
     if let Some(http3_alt_port) = http3_alt_port {
       if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-        Some(value) => HeaderValue::from_bytes(
-          format!(
-            "{}, h3=\":{}\", h3-29=\":{}\"",
-            String::from_utf8_lossy(value.as_bytes()),
-            http3_alt_port,
-            http3_alt_port
-          )
-          .as_bytes(),
-        ),
+        Some(value) => {
+          let header_value_old = String::from_utf8_lossy(value.as_bytes());
+          let header_value_new =
+            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+          if header_value_old != header_value_new {
+            HeaderValue::from_bytes(
+              format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+            )
+          } else {
+            HeaderValue::from_bytes(header_value_old.as_bytes())
+          }
+        }
         None => HeaderValue::from_bytes(
           format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
         ),
@@ -2106,15 +2186,19 @@ async fn request_handler_wrapped(
           }
           if let Some(http3_alt_port) = http3_alt_port {
             if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-              Some(value) => HeaderValue::from_bytes(
-                format!(
-                  "{}, h3=\":{}\", h3-29=\":{}\"",
-                  String::from_utf8_lossy(value.as_bytes()),
-                  http3_alt_port,
-                  http3_alt_port
-                )
-                .as_bytes(),
-              ),
+              Some(value) => {
+                let header_value_old = String::from_utf8_lossy(value.as_bytes());
+                let header_value_new =
+                  format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+                if header_value_old != header_value_new {
+                  HeaderValue::from_bytes(
+                    format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                  )
+                } else {
+                  HeaderValue::from_bytes(header_value_old.as_bytes())
+                }
+              }
               None => HeaderValue::from_bytes(
                 format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
               ),
