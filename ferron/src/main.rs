@@ -20,6 +20,10 @@ mod ferron_common;
 #[path = "util"]
 mod ferron_util {
   pub mod anti_xss;
+  #[cfg(feature = "asgi")]
+  pub mod asgi_messages;
+  #[cfg(feature = "asgi")]
+  pub mod asgi_structs;
   #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
   pub mod cgi_response;
   pub mod combine_config;
@@ -44,6 +48,8 @@ mod ferron_util {
   #[cfg(any(feature = "rproxy", feature = "fauth"))]
   pub mod no_server_verifier;
   pub mod non_standard_code_structs;
+  #[cfg(all(unix, feature = "wsgid"))]
+  pub mod preforked_process_pool;
   #[cfg(feature = "fcgi")]
   pub mod read_to_end_move;
   pub mod sizify;
@@ -54,6 +60,24 @@ mod ferron_util {
   pub mod url_rewrite_structs;
   pub mod url_sanitizer;
   pub mod validate_config;
+  #[cfg(feature = "wsgi")]
+  pub mod wsgi_error_stream;
+  #[cfg(feature = "wsgi")]
+  pub mod wsgi_input_stream;
+  #[cfg(any(feature = "wsgi", feature = "wsgid"))]
+  pub mod wsgi_load_application;
+  #[cfg(feature = "wsgi")]
+  pub mod wsgi_structs;
+  #[cfg(feature = "wsgid")]
+  pub mod wsgid_body_reader;
+  #[cfg(feature = "wsgid")]
+  pub mod wsgid_error_stream;
+  #[cfg(feature = "wsgid")]
+  pub mod wsgid_input_stream;
+  #[cfg(feature = "wsgid")]
+  pub mod wsgid_message_structs;
+  #[cfg(feature = "wsgid")]
+  pub mod wsgid_structs;
 }
 
 // Import project modules from "modules" directory
@@ -72,6 +96,8 @@ mod ferron_modules {
 // Import optional project modules from "modules" directory
 #[path = "optional_modules"]
 mod ferron_optional_modules {
+  #[cfg(feature = "asgi")]
+  pub mod asgi;
   #[cfg(feature = "cache")]
   pub mod cache;
   #[cfg(feature = "cgi")]
@@ -88,6 +114,10 @@ mod ferron_optional_modules {
   pub mod rproxy;
   #[cfg(feature = "scgi")]
   pub mod scgi;
+  #[cfg(feature = "wsgi")]
+  pub mod wsgi;
+  #[cfg(feature = "wsgid")]
+  pub mod wsgid;
 }
 
 // Standard library imports
@@ -272,6 +302,60 @@ fn before_starting_server(
       "example" => {
         external_modules.push(
           match ferron_optional_modules::example::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
+
+        modules_optional_builtin.push(module_name.clone());
+      }
+      #[cfg(feature = "wsgi")]
+      "wsgi" => {
+        external_modules.push(
+          match ferron_optional_modules::wsgi::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
+
+        modules_optional_builtin.push(module_name.clone());
+      }
+      #[cfg(feature = "wsgid")]
+      "wsgid" => {
+        external_modules.push(
+          match ferron_optional_modules::wsgid::server_module_init(&yaml_config) {
+            Ok(module) => module,
+            Err(err) => {
+              module_error = Some(anyhow::anyhow!(
+                "Cannot initialize optional built-in module \"{}\": {}",
+                module_name,
+                err
+              ));
+              break;
+            }
+          },
+        );
+
+        modules_optional_builtin.push(module_name.clone());
+      }
+      #[cfg(feature = "asgi")]
+      "asgi" => {
+        external_modules.push(
+          match ferron_optional_modules::asgi::server_module_init(&yaml_config) {
             Ok(module) => module,
             Err(err) => {
               module_error = Some(anyhow::anyhow!(

@@ -1044,6 +1044,72 @@ pub fn validate_config(
           }
         }
       }
+      #[cfg(feature = "wsgi")]
+      "wsgi" => {
+        if used_properties.contains("wsgiApplicationPath")
+          && config["wsgiApplicationPath"].as_str().is_none()
+        {
+          Err(anyhow::anyhow!("Invalid path to the WSGI application"))?
+        }
+
+        if used_properties.contains("wsgiPath") && config["wsgiPath"].as_str().is_none() {
+          Err(anyhow::anyhow!("Invalid WSGI request base path"))?
+        }
+
+        if used_properties.contains("wsgiClearModuleImportPath") {
+          if !is_global {
+            Err(anyhow::anyhow!(
+              "WSGI Python module import path clearing option is not allowed in host configuration"
+            ))?
+          }
+          if config["wsgiClearModuleImportPath"].as_bool().is_none() {
+            Err(anyhow::anyhow!(
+              "Invalid WSGI Python module import path clearing option value"
+            ))?
+          }
+        }
+      }
+      #[cfg(feature = "wsgid")]
+      "wsgid" => {
+        if used_properties.contains("wsgidApplicationPath")
+          && config["wsgidApplicationPath"].as_str().is_none()
+        {
+          Err(anyhow::anyhow!(
+            "Invalid path to the WSGI (with pre-forked process pool) application"
+          ))?
+        }
+
+        if used_properties.contains("wsgidPath") && config["wsgidPath"].as_str().is_none() {
+          Err(anyhow::anyhow!(
+            "Invalid WSGI (with pre-forked process pool) request base path"
+          ))?
+        }
+      }
+      #[cfg(feature = "asgi")]
+      "asgi" => {
+        if used_properties.contains("asgiApplicationPath")
+          && config["asgiApplicationPath"].as_str().is_none()
+        {
+          Err(anyhow::anyhow!("Invalid path to the ASGI application"))?
+        }
+
+        if used_properties.contains("asgiPath") && config["asgiPath"].as_str().is_none() {
+          Err(anyhow::anyhow!("Invalid ASGI request base path"))?
+        }
+
+        if used_properties.contains("asgiClearModuleImportPath") {
+          if !is_global {
+            Err(anyhow::anyhow!(
+              "ASGI Python module import path clearing option is not allowed in host configuration"
+            ))?
+          }
+          if config["asgiClearModuleImportPath"].as_bool().is_none() {
+            Err(anyhow::anyhow!(
+              "Invalid ASGI Python module import path clearing option value"
+            ))?
+          }
+        }
+      }
       _ => (),
     }
   }
