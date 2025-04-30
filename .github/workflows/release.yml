@@ -75,8 +75,9 @@ jobs:
         with:
           targets: "${{ matrix.target }}"
  
-      # - name: Setup cache
-      #   uses: Swatinem/rust-cache@v2
+      - name: Setup cache
+        if: matrix.command != 'cross'
+        uses: Swatinem/rust-cache@v2
 
       - name: Determine Ferron version
         shell: bash
@@ -149,8 +150,8 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # - name: Setup cache
-      #   uses: Swatinem/rust-cache@v2
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Generate the Rust crate documentation
         run: "cargo doc --verbose --locked --release"
