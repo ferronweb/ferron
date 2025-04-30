@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
+use std::time::SystemTime;
 use std::{env, thread};
 
 use crate::ferron_request_handler::request_handler;
@@ -137,7 +138,7 @@ async fn accept_quic_connection(
                 let handlers_vec_clone = handlers_vec
                   .clone()
                   .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
-                let response = match request_handler(
+                let mut response = match request_handler(
                   request,
                   remote_address,
                   local_address,
@@ -162,6 +163,9 @@ async fn accept_quic_connection(
                     return;
                   }
                 };
+                if let Ok(http_date) = httpdate::fmt_http_date(SystemTime::now()).try_into() {
+                  response.headers_mut().insert(http::header::DATE, http_date);
+                }
                 let (response_parts, mut response_body) = response.into_parts();
                 if let Err(err) = send
                   .send_response(Response::from_parts(response_parts, ()))

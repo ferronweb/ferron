@@ -866,6 +866,7 @@ dependencies = [
  "http",
  "http-body-util",
  "httparse",
+ "httpdate",
  "hyper",
  "hyper-tungstenite",
  "hyper-util",
