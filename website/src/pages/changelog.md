@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.1.2
+
+**Released in April 30, 2025**
+
+- Fixed a bug with server indicating alternative HTTP/3 service in a "Alt-Svc" header even if HTTP/3 is disabled
+
 ## Ferron 1.1.1
 
 **Released in April 29, 2025**
