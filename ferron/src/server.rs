@@ -164,7 +164,10 @@ async fn accept_quic_connection(
                   }
                 };
                 if let Ok(http_date) = httpdate::fmt_http_date(SystemTime::now()).try_into() {
-                  response.headers_mut().insert(http::header::DATE, http_date);
+                  response
+                    .headers_mut()
+                    .entry(http::header::DATE)
+                    .or_insert(http_date);
                 }
                 let (response_parts, mut response_body) = response.into_parts();
                 if let Err(err) = send
