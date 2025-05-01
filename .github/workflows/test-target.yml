@@ -13,73 +13,56 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: x86_64-unknown-linux-gnu
+          - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
             command: cross
-          - name: x86_64-unknown-linux-musl
+          - target: x86_64-unknown-linux-musl
             runner: ubuntu-latest
-            target: x86_64-unknown-linux-musl
             command: cross
-          - name: i686-unknown-linux-gnu
+          - target: i686-unknown-linux-gnu
             runner: ubuntu-latest
-            target: i686-unknown-linux-gnu
             command: cross
-          - name: i686-unknown-linux-musl
+          - target: i686-unknown-linux-musl
             runner: ubuntu-latest
-            target: i686-unknown-linux-musl
             command: cross
-          - name: aarch64-unknown-linux-gnu
+          - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
             command: cross
-          - name: aarch64-unknown-linux-musl
+          - target: aarch64-unknown-linux-musl
             runner: ubuntu-latest
-            target: aarch64-unknown-linux-musl
             command: cross
-          - name: armv7-unknown-linux-gnueabihf
+          - target: armv7-unknown-linux-gnueabihf
             runner: ubuntu-latest
-            target: armv7-unknown-linux-gnueabihf
             command: cross
-          - name: armv7-unknown-linux-musleabihf
+          - target: armv7-unknown-linux-musleabihf
             runner: ubuntu-latest
-            target: armv7-unknown-linux-musleabihf
             command: cross
-          - name: riscv64gc-unknown-linux-gnu
+          - target: riscv64gc-unknown-linux-gnu
             runner: ubuntu-latest
-            target: riscv64gc-unknown-linux-gnu
             command: cross
-          - name: loongarch64-unknown-linux-gnu
+          - target: loongarch64-unknown-linux-gnu
             runner: ubuntu-latest
-            target: riscv64gc-unknown-linux-gnu
             command: cross
-          - name: s390x-unknown-linux-gnu
+          - target: s390x-unknown-linux-gnu
             runner: ubuntu-latest
-            target: s390x-unknown-linux-gnu
             command: cross
-          - name: x86_64-unknown-freebsd
+          - target: x86_64-unknown-freebsd
             runner: ubuntu-latest
-            target: x86_64-unknown-freebsd
             command: cross
-          - name: x86_64-pc-windows-msvc
+          - target: x86_64-pc-windows-msvc
             runner: windows-latest
-            target: x86_64-pc-windows-msvc
             command: cargo
-          - name: i686-pc-windows-msvc
+          - target: i686-pc-windows-msvc
             runner: windows-latest
-            target: i686-pc-windows-msvc
             command: cargo
-          - name: aarch64-pc-windows-msvc
+          - target: aarch64-pc-windows-msvc
             runner: windows-latest
-            target: aarch64-pc-windows-msvc
             command: cargo
-          - name: x86_64-apple-darwin
+          - target: x86_64-apple-darwin
             runner: macos-latest
-            target: x86_64-apple-darwin
             command: cargo
-          - name: aarch64-apple-darwin
+          - target: aarch64-apple-darwin
             runner: macos-latest
-            target: aarch64-apple-darwin
             command: cargo
  
     # The steps to run for each matrix item
