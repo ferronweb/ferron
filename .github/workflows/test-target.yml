@@ -49,17 +49,9 @@ jobs:
             runner: ubuntu-latest
             target: riscv64gc-unknown-linux-gnu
             command: cross
-          - name: riscv64gc-unknown-linux-musl
-            runner: ubuntu-latest
-            target: riscv64gc-unknown-linux-musl
-            command: cross
           - name: loongarch64-unknown-linux-gnu
             runner: ubuntu-latest
             target: riscv64gc-unknown-linux-gnu
-            command: cross
-          - name: loongarch64-unknown-linux-musl
-            runner: ubuntu-latest
-            target: riscv64gc-unknown-linux-musl
             command: cross
           - name: s390x-unknown-linux-gnu
             runner: ubuntu-latest
