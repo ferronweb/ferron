@@ -22,7 +22,7 @@ COPY ferron-docker.yaml /etc/ferron.yaml
 
 # Copy the web root contents
 RUN mkdir -p /var/www/ferron
-COPY wwwroot/* /var/www/ferron
+COPY wwwroot/* /var/www/ferron/
 
 # Create a directory where Ferron logs are stored
 RUN mkdir -p /var/log/ferron
