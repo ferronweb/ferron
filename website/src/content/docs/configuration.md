@@ -166,7 +166,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
     - **scode** (_u16_)
       - Status code. This setting specifies the HTTP status code for which the custom error page will be used. Default: None
     - **path** (_String_)
-      - Path to the error page. This setting specifies the file path to the custom error page. Default: None
+      - Path to the error page. This setting specifies the absolute file path to the custom error page. Default: None
 - **enableETag** (_bool_)
   - Option to enable ETag generation. When set to `true`, the server will generate ETag headers for responses, which can be used for caching purposes. Default: `true`
 - **enableCompression** (_bool_)
