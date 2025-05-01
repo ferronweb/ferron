@@ -6,10 +6,11 @@ on:
 
 jobs:
   release:
-    # Set the job to run on the platform specified by the matrix below
     runs-on: ${{ matrix.runner }}
  
-    # Define the build matrix for cross-compilation
+    permissions:
+      contents: write
+
     strategy:
       fail-fast: false
       matrix:
@@ -62,8 +63,7 @@ jobs:
           - target: aarch64-apple-darwin
             runner: macos-latest
             command: cargo
- 
-    # The steps to run for each matrix item
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -138,6 +138,14 @@ jobs:
 
           # The "move-ferron-archive" is a custom command that moves the ZIP archive to be served by the download server
           ssh ferron-servers "sudo move-ferron-archive ${{ env.FERRON_VERSION }} ${{ matrix.target }}"
+
+      - name: Release Ferron to GitHub
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: "ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip"
+          tag: "${{ env.FERRON_VERSION }}"
+          commit: "main"
 
   docs:
     runs-on: ubuntu-latest
