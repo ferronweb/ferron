@@ -1,8 +1,8 @@
 <p align="center">
   <a href="https://www.ferronweb.org" target="_blank">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="logo-dark.png">
-      <img alt="Ferron logo" src="logo.png" width="256">
+      <source media="(prefers-color-scheme: dark)" srcset="wwwroot/img/logo-dark.png">
+      <img alt="Ferron logo" src="wwwroot/img/logo.png" width="256">
     </picture>
   </a>
 </p>
