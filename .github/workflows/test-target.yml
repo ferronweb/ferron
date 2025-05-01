@@ -40,9 +40,6 @@ jobs:
           - target: riscv64gc-unknown-linux-gnu
             runner: ubuntu-latest
             command: cross
-          - target: loongarch64-unknown-linux-gnu
-            runner: ubuntu-latest
-            command: cross
           - target: s390x-unknown-linux-gnu
             runner: ubuntu-latest
             command: cross
