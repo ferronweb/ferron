@@ -118,7 +118,7 @@ jobs:
         uses: thedoctor0/zip-release@0.7.5
         with:
           type: "zip"
-          filename: "../ferron.zip"
+          filename: "../ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip"
           directory: "release"
 
       - name: Set up SSH
@@ -134,7 +134,7 @@ jobs:
         shell: bash
         run: |
           ssh ferron-servers "mkdir -p ferron/${{ env.FERRON_VERSION }} || true"
-          scp ferron.zip ferron-servers:ferron/${{ env.FERRON_VERSION }}/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip
+          scp ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip ferron-servers:ferron/${{ env.FERRON_VERSION }}/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip
 
           # The "move-ferron-archive" is a custom command that moves the ZIP archive to be served by the download server
           ssh ferron-servers "sudo move-ferron-archive ${{ env.FERRON_VERSION }} ${{ matrix.target }}"
