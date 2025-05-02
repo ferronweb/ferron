@@ -27,3 +27,28 @@ nix-shell -p ferron
 This command installs `ferron` command, which runs a web server, and the `ferron-passwd` command, which is a password generation utility for Ferron web server.
 
 You can view this Ferron package on [Nixpkgs](https://search.nixos.org/packages?channel=unstable&show=ferron&from=0&size=50&sort=relevance&type=packages&query=ferron).
+
+## `yay` (from AUR; Arch Linux)
+
+To install Ferron from AUR (Arch User Repository), you can run the command below:
+
+```bash
+yay -S ferronweb
+```
+
+This command installs `ferron` command, which runs a web server, and the `ferron-passwd` command, which is a password generation utility for Ferron web server.
+
+For all `yay` prompts, press "Enter" to use the defaults.
+
+If you haven't installed the `yay` command, you can install it using the commands below:
+
+```bash
+sudo pacman -Sy # Update the package database
+sudo pacman -S pacman # Update `pacman` to fix potential dependency errors
+sudo pacman -S git base-devel # Install packages required for `yay`
+git clone https://aur.archlinux.org/yay-bin.git
+cd yay-bin
+makepkg -Cf && makepkg -si # Clean build the `yay` package, then install the package and its dependencies
+```
+
+You can view this Ferron package on [AUR](https://aur.archlinux.org/packages/ferronweb).
