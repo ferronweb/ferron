@@ -28,47 +28,68 @@ pub fn apply_env_vars_to_config(yaml_config: &mut Yaml) {
     }
   }
 
-  // HTTP/2 settings
-  if let Some(http2_hash) = create_or_get_hash(global_hash, "http2Settings") {
-    if let Ok(val) = env::var("FERRON_HTTP2_INITIAL_WINDOW_SIZE") {
-      if let Ok(size) = val.parse::<i64>() {
-        http2_hash.insert(
-          Yaml::String("initialWindowSize".into()),
-          Yaml::Integer(size),
-        );
-      }
+  // HTTP/2 settings - only add if at least one HTTP/2 variable is set
+  let http2_initial_window = env::var("FERRON_HTTP2_INITIAL_WINDOW_SIZE")
+    .ok()
+    .and_then(|val| val.parse::<i64>().ok());
+  let http2_max_frame = env::var("FERRON_HTTP2_MAX_FRAME_SIZE")
+    .ok()
+    .and_then(|val| val.parse::<i64>().ok());
+  let http2_max_streams = env::var("FERRON_HTTP2_MAX_CONCURRENT_STREAMS")
+    .ok()
+    .and_then(|val| val.parse::<i64>().ok());
+  let http2_max_header = env::var("FERRON_HTTP2_MAX_HEADER_LIST_SIZE")
+    .ok()
+    .and_then(|val| val.parse::<i64>().ok());
+  let http2_enable_connect = env::var("FERRON_HTTP2_ENABLE_CONNECT_PROTOCOL")
+    .ok()
+    .map(|val| matches!(val.to_ascii_lowercase().as_str(), "1" | "true" | "yes"));
+
+  // Only create the http2Settings hash if at least one setting is present
+  if http2_initial_window.is_some()
+    || http2_max_frame.is_some()
+    || http2_max_streams.is_some()
+    || http2_max_header.is_some()
+    || http2_enable_connect.is_some()
+  {
+    let mut http2_hash = yaml_rust2::yaml::Hash::new();
+
+    // Add settings if they exist
+    if let Some(size) = http2_initial_window {
+      http2_hash.insert(
+        Yaml::String("initialWindowSize".into()),
+        Yaml::Integer(size),
+      );
     }
 
-    if let Ok(val) = env::var("FERRON_HTTP2_MAX_FRAME_SIZE") {
-      if let Ok(size) = val.parse::<i64>() {
-        http2_hash.insert(Yaml::String("maxFrameSize".into()), Yaml::Integer(size));
-      }
+    if let Some(size) = http2_max_frame {
+      http2_hash.insert(Yaml::String("maxFrameSize".into()), Yaml::Integer(size));
     }
 
-    if let Ok(val) = env::var("FERRON_HTTP2_MAX_CONCURRENT_STREAMS") {
-      if let Ok(streams) = val.parse::<i64>() {
-        http2_hash.insert(
-          Yaml::String("maxConcurrentStreams".into()),
-          Yaml::Integer(streams),
-        );
-      }
+    if let Some(streams) = http2_max_streams {
+      http2_hash.insert(
+        Yaml::String("maxConcurrentStreams".into()),
+        Yaml::Integer(streams),
+      );
     }
 
-    if let Ok(val) = env::var("FERRON_HTTP2_MAX_HEADER_LIST_SIZE") {
-      if let Ok(size) = val.parse::<i64>() {
-        http2_hash.insert(
-          Yaml::String("maxHeaderListSize".into()),
-          Yaml::Integer(size),
-        );
-      }
+    if let Some(size) = http2_max_header {
+      http2_hash.insert(
+        Yaml::String("maxHeaderListSize".into()),
+        Yaml::Integer(size),
+      );
     }
 
-    if let Ok(val) = env::var("FERRON_HTTP2_ENABLE_CONNECT_PROTOCOL") {
-      let enable = matches!(val.to_ascii_lowercase().as_str(), "1" | "true" | "yes");
+    if let Some(enable) = http2_enable_connect {
       http2_hash.insert(
         Yaml::String("enableConnectProtocol".into()),
         Yaml::Boolean(enable),
       );
+    }
+
+    // Only add the http2Settings to global if we have settings
+    if !http2_hash.is_empty() {
+      global_hash.insert(Yaml::String("http2Settings".into()), Yaml::Hash(http2_hash));
     }
   }
 
