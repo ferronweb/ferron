@@ -43,6 +43,7 @@ mod ferron_util {
   pub mod ip_match;
   pub mod load_config;
   pub mod load_tls;
+  pub mod env_config;
   pub mod match_hostname;
   pub mod match_location;
   #[cfg(any(feature = "rproxy", feature = "fauth"))]
