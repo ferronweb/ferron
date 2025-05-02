@@ -268,23 +268,6 @@ pub fn apply_env_vars_to_config(yaml_config: &mut Yaml) {
   }
 }
 
-/// Helper function to create or get a hash map for complex settings
-fn create_or_get_hash<'a>(
-  parent_hash: &'a mut yaml_rust2::yaml::Hash,
-  key: &str,
-) -> Option<&'a mut yaml_rust2::yaml::Hash> {
-  let key_yaml = Yaml::String(key.to_string());
-
-  if !parent_hash.contains_key(&key_yaml) {
-    parent_hash.insert(key_yaml.clone(), Yaml::Hash(yaml_rust2::yaml::Hash::new()));
-  }
-
-  match parent_hash.get_mut(&key_yaml) {
-    Some(Yaml::Hash(ref mut hash)) => Some(hash),
-    _ => None,
-  }
-}
-
 /// Return messages describing which env vars starting with FERRON_ are set (for logging).
 pub fn log_env_var_overrides() -> Vec<String> {
   env::vars()
