@@ -253,40 +253,40 @@ pub fn validate_config(
     }
   }
 
-  if used_properties.contains("http2Options") {
+  if used_properties.contains("http2Settings") {
     if !is_global {
       Err(anyhow::anyhow!(
         "HTTP/2 configuration is not allowed in host configuration"
       ))?
     }
-    if config["http2Options"].as_hash().is_some() {
-      if let Some(initial_window_size) = config["http2Options"]["initialWindowSize"].as_i64() {
+    if config["http2Settings"].as_hash().is_some() {
+      if let Some(initial_window_size) = config["http2Settings"]["initialWindowSize"].as_i64() {
         if !(0..=2_147_483_647).contains(&initial_window_size) {
           Err(anyhow::anyhow!("Invalid HTTP/2 initial window size"))?
         }
       }
 
-      if let Some(max_frame_size) = config["http2Options"]["maxFrameSize"].as_i64() {
+      if let Some(max_frame_size) = config["http2Settings"]["maxFrameSize"].as_i64() {
         if !(16_384..=16_777_215).contains(&max_frame_size) {
           Err(anyhow::anyhow!("Invalid HTTP/2 max frame size"))?
         }
       }
 
-      if let Some(max_concurrent_streams) = config["http2Options"]["maxConcurrentStreams"].as_i64()
+      if let Some(max_concurrent_streams) = config["http2Settings"]["maxConcurrentStreams"].as_i64()
       {
         if max_concurrent_streams < 0 {
           Err(anyhow::anyhow!("Invalid HTTP/2 max concurrent streams"))?
         }
       }
 
-      if let Some(max_header_list_size) = config["http2Options"]["maxHeaderListSize"].as_i64() {
+      if let Some(max_header_list_size) = config["http2Settings"]["maxHeaderListSize"].as_i64() {
         if max_header_list_size < 0 {
           Err(anyhow::anyhow!("Invalid HTTP/2 max header list size"))?
         }
       }
 
-      if !config["http2Options"]["enableConnectProtocol"].is_badvalue()
-        && config["http2Options"]["enableConnectProtocol"]
+      if !config["http2Settings"]["enableConnectProtocol"].is_badvalue()
+        && config["http2Settings"]["enableConnectProtocol"]
           .as_bool()
           .is_none()
       {
