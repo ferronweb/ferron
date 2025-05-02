@@ -8,17 +8,22 @@ Ferron (along with modules) is currently available for GNU/Linux, Windows Server
 
 ## Ferron 1.1.2
 
-- [32-bit GNU/Linux](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-i686-unknown-linux-gnu.zip)
-- [32-bit Windows](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-i686-pc-windows-msvc.zip)
-- [64-bit FreeBSD](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-x86_64-unknown-freebsd.zip)
+### Most common platforms
+
 - [64-bit GNU/Linux](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-x86_64-unknown-linux-gnu.zip)
 - [64-bit Linux (musl libc)](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-x86_64-unknown-linux-musl.zip)
 - [64-bit Windows](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-x86_64-pc-windows-msvc.zip)
 - [ARM64 GNU/Linux](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-aarch64-unknown-linux-gnu.zip)
-- [ARM64 Windows](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-aarch64-pc-windows-msvc.zip)
-- [ARMv7 hardfloat GNU/Linux](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-armv7-unknown-linux-gnueabihf.zip)
 - [macOS (on Apple Silicon)](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-aarch64-apple-darwin.zip)
 - [macOS (on Intel CPUs)](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-x86_64-apple-darwin.zip)
+
+### Other platforms
+
+- [32-bit GNU/Linux](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-i686-unknown-linux-gnu.zip)
+- [32-bit Windows](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-i686-pc-windows-msvc.zip)
+- [64-bit FreeBSD](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-x86_64-unknown-freebsd.zip)
+- [ARM64 Windows](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-aarch64-pc-windows-msvc.zip)
+- [ARMv7 hardfloat GNU/Linux](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-armv7-unknown-linux-gnueabihf.zip)
 - [RISC-V GNU/Linux](https://downloads.ferronweb.org/1.1.2/ferron-1.1.2-riscv64gc-unknown-linux-gnu.zip)
 
 Older versions of Ferron can be found at the [Ferron download server](https://downloads.ferronweb.org/).
