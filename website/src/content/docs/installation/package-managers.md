@@ -36,7 +36,7 @@ To install Ferron from AUR (Arch User Repository), you can run the command below
 yay -S ferronweb
 ```
 
-This command installs `ferron` command, which runs a web server, and the `ferron-passwd` command, which is a password generation utility for Ferron web server.
+This command installs `ferron` command, which runs a web server, and the `ferron-passwd` command, which is a password generation utility for Ferron web server. This command also installs a `systemd` service, which can be started using `sudo systemctl start ferron`.
 
 For all `yay` prompts, press "Enter" to use the defaults.
 
