@@ -891,6 +891,7 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
     &mut self,
     websocket: HyperWebsocket,
     uri: &hyper::Uri,
+    headers: &hyper::HeaderMap,
     config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
@@ -991,6 +992,7 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
           return execute_asgi_websocket(
             websocket,
             uri,
+            headers,
             socket_data,
             error_logger,
             wwwroot,
@@ -1253,6 +1255,7 @@ async fn execute_asgi(
 async fn execute_asgi_websocket(
   websocket: HyperWebsocket,
   uri: &hyper::Uri,
+  _headers: &hyper::HeaderMap,
   socket_data: &SocketData,
   error_logger: &ErrorLogger,
   wwwroot: &Path,

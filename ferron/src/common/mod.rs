@@ -560,6 +560,7 @@ pub trait ServerModuleHandlers {
     &mut self,
     websocket: HyperWebsocket,
     uri: &hyper::Uri,
+    headers: &hyper::HeaderMap,
     config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,

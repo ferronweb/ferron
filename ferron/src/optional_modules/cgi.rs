@@ -381,6 +381,7 @@ impl ServerModuleHandlers for CgiModuleHandlers {
     &mut self,
     _websocket: HyperWebsocket,
     _uri: &hyper::Uri,
+    _headers: &hyper::HeaderMap,
     _config: &ServerConfig,
     _socket_data: &SocketData,
     _error_logger: &ErrorLogger,

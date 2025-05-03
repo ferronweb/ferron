@@ -443,6 +443,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
     &mut self,
     websocket: HyperWebsocket,
     uri: &hyper::Uri,
+    _headers: &hyper::HeaderMap,
     config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,

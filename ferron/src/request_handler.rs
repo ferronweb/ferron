@@ -1276,6 +1276,7 @@ async fn request_handler_wrapped(
         let client_ip = socket_data.remote_addr.ip();
         let custom_headers_yaml = combined_config["customHeaders"].clone();
         let request_uri = request.uri().to_owned();
+        let request_headers = request.headers().to_owned();
 
         let (original_response, websocket) = match hyper_tungstenite::upgrade(request, None) {
           Ok(data) => data,
@@ -1373,6 +1374,7 @@ async fn request_handler_wrapped(
             .websocket_request_handler(
               websocket,
               &request_uri,
+              &request_headers,
               &combined_config,
               &socket_data,
               &error_logger,
