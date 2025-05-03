@@ -51,6 +51,11 @@ export default [
     label: "Server configuration properties"
   },
   {
+    href: "/docs/environment-overrides",
+    target: "_self",
+    label: "Environment overrides"
+  },
+  {
     href: "/docs/modules",
     target: "_self",
     label: "Server modules"

@@ -4,6 +4,16 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.2.0
+
+**Released in May 3, 2025**
+
+- Added support for environment variable overrides
+- Fixed the "http2Settings" configuration property logged an unused by Ferron when it's configured
+- The server now adds a date to HTTP/3 responses
+- The server now sends the original request headers to the WebSocket backend server, when Ferron is configured as a reverse proxy
+- The server now sends the original request headers to the ASGI application, when the server is connected via WebSocket protocol
+
 ## Ferron 1.1.2
 
 **Released in April 30, 2025**
