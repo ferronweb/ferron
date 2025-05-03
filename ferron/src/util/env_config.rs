@@ -130,6 +130,11 @@ pub fn apply_env_vars_to_config(yaml_config: &mut Yaml) {
     global_hash.insert(Yaml::String("enableHTTP2".into()), Yaml::Boolean(enable));
   }
 
+  if let Ok(v) = env::var("FERRON_ENABLE_HTTP3") {
+    let enable = matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes");
+    global_hash.insert(Yaml::String("enableHTTP3".into()), Yaml::Boolean(enable));
+  }
+
   if let Ok(v) = env::var("FERRON_DISABLE_NON_ENCRYPTED_SERVER") {
     let enable = matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes");
     global_hash.insert(
