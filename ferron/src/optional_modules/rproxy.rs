@@ -502,7 +502,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
         } else {
           Some(Scheme::from_str("ws")?)
         };
-        match proxy_request_url_parts.path_and_query {
+        match uri.path_and_query() {
           Some(path_and_query) => {
             let path_and_query_string = match path_and_query.query() {
               Some(query) => {
