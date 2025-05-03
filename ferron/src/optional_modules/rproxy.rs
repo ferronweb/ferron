@@ -542,17 +542,26 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
         let mut proxy_request_builder = ClientRequestBuilder::new(proxy_request_url);
         for (header_name, header_value) in headers {
           let header_name_str = header_name.as_str();
-          if !header_name_str.starts_with("sec-websocket-") {
+          if header_name == SEC_WEBSOCKET_PROTOCOL {
+            for subprotocol in String::from_utf8_lossy(header_value.as_bytes()).split(",") {
+              proxy_request_builder = proxy_request_builder.with_sub_protocol(subprotocol.trim());
+            }
+          } else if !header_name_str.starts_with("sec-websocket-")
+            && header_name_str != "x-forwarded-for"
+          {
             proxy_request_builder = proxy_request_builder.with_header(
               header_name_str,
               String::from_utf8_lossy(header_value.as_bytes()),
             );
-          } else if header_name == SEC_WEBSOCKET_PROTOCOL {
-            for subprotocol in String::from_utf8_lossy(header_value.as_bytes()).split(",") {
-              proxy_request_builder = proxy_request_builder.with_sub_protocol(subprotocol.trim());
-            }
           }
         }
+
+        // Add X-Forwarded-For header
+        proxy_request_builder = proxy_request_builder.with_header(
+          "x-forwarded-for",
+          socket_data.remote_addr.ip().to_canonical().to_string(),
+        );
+
         let proxy_request_constructed = proxy_request_builder.into_client_request()?;
 
         let client_bi_stream = websocket.await?;
