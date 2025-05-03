@@ -11,6 +11,7 @@ use crate::ferron_common::{
 use crate::ferron_common::{HyperResponse, WithRuntime};
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
+use http::header::SEC_WEBSOCKET_PROTOCOL;
 use http::uri::{PathAndQuery, Scheme};
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
@@ -27,6 +28,8 @@ use tokio::net::TcpStream;
 use tokio::runtime::Handle;
 use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::ClientRequestBuilder;
 use tokio_tungstenite::Connector;
 
 use crate::ferron_util::no_server_verifier::NoServerVerifier;
@@ -443,7 +446,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
     &mut self,
     websocket: HyperWebsocket,
     uri: &hyper::Uri,
-    _headers: &hyper::HeaderMap,
+    headers: &hyper::HeaderMap,
     config: &ServerConfig,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
@@ -536,10 +539,26 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           ))
         };
 
+        let mut proxy_request_builder = ClientRequestBuilder::new(proxy_request_url);
+        for (header_name, header_value) in headers {
+          let header_name_str = header_name.as_str();
+          if !header_name_str.starts_with("sec-websocket-") {
+            proxy_request_builder = proxy_request_builder.with_header(
+              header_name_str,
+              String::from_utf8_lossy(header_value.as_bytes()),
+            );
+          } else if header_name == SEC_WEBSOCKET_PROTOCOL {
+            for subprotocol in String::from_utf8_lossy(header_value.as_bytes()).split(",") {
+              proxy_request_builder = proxy_request_builder.with_sub_protocol(subprotocol.trim());
+            }
+          }
+        }
+        let proxy_request_constructed = proxy_request_builder.into_client_request()?;
+
         let client_bi_stream = websocket.await?;
 
         let (proxy_bi_stream, _) = match tokio_tungstenite::connect_async_tls_with_config(
-          proxy_request_url,
+          proxy_request_constructed,
           None,
           true,
           Some(connector),
