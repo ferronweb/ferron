@@ -4,12 +4,12 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use std::{env, thread};
 
+use crate::ferron_common::{LogMessage, ServerModule, ServerModuleHandlers};
 use crate::ferron_request_handler::request_handler;
+use crate::ferron_util::env_config;
 use crate::ferron_util::load_tls::{load_certs, load_private_key};
 use crate::ferron_util::sni::CustomSniResolver;
 use crate::ferron_util::validate_config::{prepare_config_for_validation, validate_config};
-
-use crate::ferron_common::{LogMessage, ServerModule, ServerModuleHandlers};
 use async_channel::Sender;
 use chrono::prelude::*;
 use futures_util::StreamExt;
@@ -1498,6 +1498,13 @@ pub fn start_server(
     .build()?;
 
   let (logger, receive_log) = async_channel::bounded::<LogMessage>(10000);
+
+  // Log env overrides once at startup
+  for msg in env_config::log_env_var_overrides() {
+    logger
+      .send_blocking(LogMessage::new(msg, false))
+      .unwrap_or_default();
+  }
 
   let log_filename = yaml_config["global"]["logFilePath"]
     .as_str()

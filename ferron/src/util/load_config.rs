@@ -5,9 +5,14 @@ use std::{collections::HashSet, error::Error};
 
 use glob::glob;
 use yaml_rust2::{Yaml, YamlLoader};
+// Import env_config for environment variable overrides
+use crate::ferron_util::env_config;
 
 pub fn load_config(path: PathBuf) -> Result<Yaml, Box<dyn Error + Send + Sync>> {
-  load_config_inner(path, &mut HashSet::new())
+  let mut yaml_config = load_config_inner(path, &mut HashSet::new())?;
+  // Apply FERRON_ environment variable overrides
+  env_config::apply_env_vars_to_config(&mut yaml_config);
+  Ok(yaml_config)
 }
 
 fn load_config_inner(
