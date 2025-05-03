@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use http::{request::Parts, Uri};
+use http::{request::Parts, HeaderMap, Uri};
 use pyo3::{prelude::*, types::PyDict};
 
 use crate::ferron_common::{ErrorLogger, SocketData};
@@ -34,6 +34,7 @@ pub struct AsgiHttpInitData {
 
 pub struct AsgiWebsocketInitData {
   pub uri: Uri,
+  pub headers: HeaderMap,
   pub socket_data: SocketData,
   #[allow(dead_code)]
   pub error_logger: ErrorLogger,

@@ -210,8 +210,15 @@ async fn asgi_application_fn(
             ),
           )?;
         }
-        // Ferron doesn't send original request headers (before WebSocket upgrade) to WebSocket request handlers
-        scope.set_item("headers", PyList::empty(py))?;
+        let headers = PyList::empty(py);
+        for (header_name, header_value) in websocket_init_data.headers.iter() {
+          let header_name = header_name.as_str().as_bytes();
+          let header_value = header_value.as_bytes();
+          if !header_name.is_empty() && header_name[0] != b':' {
+            headers.append(PyTuple::new(py, [header_name, header_value].into_iter())?)?;
+          }
+        }
+        scope.set_item("headers", headers)?;
         scope.set_item(
           "client",
           (
@@ -1255,7 +1262,7 @@ async fn execute_asgi(
 async fn execute_asgi_websocket(
   websocket: HyperWebsocket,
   uri: &hyper::Uri,
-  _headers: &hyper::HeaderMap,
+  headers: &hyper::HeaderMap,
   socket_data: &SocketData,
   error_logger: &ErrorLogger,
   wwwroot: &Path,
@@ -1269,6 +1276,7 @@ async fn execute_asgi_websocket(
     .send(IncomingAsgiMessage::Init(AsgiInitData::Websocket(
       AsgiWebsocketInitData {
         uri: uri.to_owned(),
+        headers: headers.to_owned(),
         socket_data: SocketData {
           remote_addr: socket_data.remote_addr,
           local_addr: socket_data.local_addr,
