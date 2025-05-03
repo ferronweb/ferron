@@ -1499,13 +1499,6 @@ pub fn start_server(
 
   let (logger, receive_log) = async_channel::bounded::<LogMessage>(10000);
 
-  // Log env overrides once at startup
-  for msg in env_config::log_env_var_overrides() {
-    logger
-      .send_blocking(LogMessage::new(msg, false))
-      .unwrap_or_default();
-  }
-
   let log_filename = yaml_config["global"]["logFilePath"]
     .as_str()
     .map(String::from);
@@ -1598,6 +1591,13 @@ pub fn start_server(
       }
     }
   });
+
+  // Log env overrides once at startup
+  for msg in env_config::log_env_var_overrides() {
+    logger
+      .send_blocking(LogMessage::new(msg, true))
+      .unwrap_or_default();
+  }
 
   // Run the server event loop
   let result = server_runtime.block_on(async {
