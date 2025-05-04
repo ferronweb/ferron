@@ -260,6 +260,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ env.DOCKER_TAGS }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
