@@ -874,6 +874,14 @@ pub fn validate_config(
             "Invalid proxy certificate verification disabling option value"
           ))?
         }
+
+        if used_properties.contains("proxyInterceptErrors")
+          && config["proxyInterceptErrors"].as_bool().is_none()
+        {
+          Err(anyhow::anyhow!(
+            "Invalid reverse proxy error interception option value"
+          ))?
+        }
       }
       #[cfg(feature = "cache")]
       "cache" => {

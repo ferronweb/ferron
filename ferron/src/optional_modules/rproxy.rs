@@ -135,6 +135,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
       let disable_certificate_verification = config["disableProxyCertificateVerification"]
         .as_bool()
         .unwrap_or(false);
+      let proxy_intercept_errors = config["proxyInterceptErrors"].as_bool().unwrap_or(false);
       if let Some(proxy_to) = determine_proxy_to(
         config,
         socket_data.encrypted,
@@ -262,7 +263,13 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
 
             if let Some(sender) = sender_option {
               if !sender.is_closed() {
-                let result = http_proxy_kept_alive(sender, proxy_request, error_logger).await;
+                let result = http_proxy_kept_alive(
+                  sender,
+                  proxy_request,
+                  error_logger,
+                  proxy_intercept_errors,
+                )
+                .await;
                 drop(rwlock_write);
                 return result;
               } else {
@@ -353,6 +360,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
             error_logger,
             proxy_to,
             failed_backends_option_borrowed,
+            proxy_intercept_errors,
           )
           .await
         } else {
@@ -393,6 +401,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
             error_logger,
             proxy_to,
             failed_backends_option_borrowed,
+            proxy_intercept_errors,
           )
           .await
         }
@@ -729,6 +738,7 @@ async fn determine_proxy_to(
   proxy_to
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn http_proxy(
   connections: &RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>,
   connect_addr: String,
@@ -737,6 +747,7 @@ async fn http_proxy(
   error_logger: &ErrorLogger,
   proxy_to: String,
   failed_backends: Option<&tokio::sync::RwLock<TtlCache<std::string::String, u64>>>,
+  proxy_intercept_errors: bool,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let io = TokioIo::new(stream);
 
@@ -768,7 +779,7 @@ async fn http_proxy(
     tokio::select! {
       biased;
 
-       proxy_response = &mut send_request => {
+      proxy_response = &mut send_request => {
         let proxy_response = match proxy_response {
           Ok(response) => response,
           Err(err) => {
@@ -777,15 +788,25 @@ async fn http_proxy(
           }
         };
 
-        response = ResponseData::builder_without_request()
-                  .response(proxy_response.map(|b| {
-                    b.map_err(|e| std::io::Error::other(e.to_string()))
-                      .boxed()
-                  }))
-                  .parallel_fn(async move {
-                    pinned_conn.await.unwrap_or_default();
-                  })
-                  .build();
+        let status_code = proxy_response.status();
+        response = if proxy_intercept_errors && status_code.as_u16() >= 400 {
+          ResponseData::builder_without_request()
+          .status(status_code)
+          .parallel_fn(async move {
+            pinned_conn.await.unwrap_or_default();
+          })
+          .build()
+        } else {
+          ResponseData::builder_without_request()
+          .response(proxy_response.map(|b| {
+            b.map_err(|e| std::io::Error::other(e.to_string()))
+              .boxed()
+          }))
+          .parallel_fn(async move {
+            pinned_conn.await.unwrap_or_default();
+          })
+          .build()
+        };
 
         break;
       },
@@ -811,6 +832,7 @@ async fn http_proxy_kept_alive(
   sender: &mut SendRequest<BoxBody<Bytes, std::io::Error>>,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
+  proxy_intercept_errors: bool,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let proxy_response = match sender.send_request(proxy_request).await {
     Ok(response) => response,
@@ -824,9 +846,16 @@ async fn http_proxy_kept_alive(
     }
   };
 
-  let response = ResponseData::builder_without_request()
-    .response(proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed()))
-    .build();
+  let status_code = proxy_response.status();
+  let response = if proxy_intercept_errors && status_code.as_u16() >= 400 {
+    ResponseData::builder_without_request()
+      .status(status_code)
+      .build()
+  } else {
+    ResponseData::builder_without_request()
+      .response(proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed()))
+      .build()
+  };
 
   Ok(response)
 }
