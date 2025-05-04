@@ -15,9 +15,7 @@ use crate::ferron_common::{
 };
 use crate::ferron_common::{HyperResponse, WithRuntime};
 use crate::ferron_res::server_software::SERVER_SOFTWARE;
-use crate::ferron_util::ip_match::ip_match;
-use crate::ferron_util::match_hostname::match_hostname;
-use crate::ferron_util::match_location::match_location;
+use crate::ferron_util::obtain_config_struct::ObtainConfigStruct;
 use crate::ferron_util::preforked_process_pool::{
   read_ipc_message, read_ipc_message_async, write_ipc_message, write_ipc_message_async,
   PreforkedProcessPool,
@@ -29,7 +27,6 @@ use crate::ferron_util::wsgid_input_stream::WsgidInputStream;
 use crate::ferron_util::wsgid_message_structs::{
   ProcessPoolToServerMessage, ServerToProcessPoolMessage,
 };
-use crate::ferron_util::wsgid_structs::{WsgidApplicationLocationWrap, WsgidApplicationWrap};
 use async_trait::async_trait;
 use futures_util::{StreamExt, TryStreamExt};
 use hashlink::LinkedHashMap;
@@ -47,6 +44,11 @@ use pyo3::types::{PyBool, PyCFunction, PyDict, PyIterator, PyString, PyTuple};
 use tokio::fs;
 use tokio::runtime::Handle;
 use tokio::sync::Mutex;
+
+struct WsgidApplicationData {
+  wsgi_process_pool: Option<Arc<PreforkedProcessPool>>,
+  wsgi_path: Option<String>,
+}
 
 struct ResponseHead {
   status: u16,
@@ -343,84 +345,35 @@ fn init_wsgi_process_pool(
 pub fn server_module_init(
   config: &ServerConfig,
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
-  let mut global_wsgi_process_pool = None;
-  let mut host_wsgi_process_pools = Vec::new();
-  if let Some(wsgi_process_pool_path) = config["global"]["wsgidApplicationPath"].as_str() {
-    global_wsgi_process_pool = Some(Arc::new(init_wsgi_process_pool(PathBuf::from_str(
-      wsgi_process_pool_path,
-    )?)?));
-  }
-  let global_wsgi_path = config["global"]["wsgidPath"]
-    .as_str()
-    .map(|s| s.to_string());
-
-  if let Some(hosts) = config["hosts"].as_vec() {
-    for host_yaml in hosts.iter() {
-      let domain = host_yaml["domain"].as_str().map(String::from);
-      let ip = host_yaml["ip"].as_str().map(String::from);
-      let mut locations = Vec::new();
-      if let Some(locations_yaml) = host_yaml["locations"].as_vec() {
-        for location_yaml in locations_yaml.iter() {
-          if let Some(path_str) = location_yaml["path"].as_str() {
-            let path = String::from(path_str);
-            if let Some(wsgi_process_pool_path) = location_yaml["wsgidApplicationPath"].as_str() {
-              locations.push(WsgidApplicationLocationWrap::new(
-                path,
-                Arc::new(init_wsgi_process_pool(PathBuf::from_str(
-                  wsgi_process_pool_path,
-                )?)?),
-                location_yaml["wsgidPath"].as_str().map(|s| s.to_string()),
-              ));
-            }
-          }
-        }
-      }
-      if let Some(wsgi_process_pool_path) = host_yaml["wsgidApplicationPath"].as_str() {
-        host_wsgi_process_pools.push(WsgidApplicationWrap::new(
-          domain,
-          ip,
+  Ok(Box::new(WsgidModule::new(ObtainConfigStruct::new(
+    config,
+    |config| {
+      let wsgi_process_pool =
+        if let Some(wsgi_application_path) = config["global"]["wsgidApplicationPath"].as_str() {
           Some(Arc::new(init_wsgi_process_pool(PathBuf::from_str(
-            wsgi_process_pool_path,
-          )?)?)),
-          host_yaml["wsgiPath"].as_str().map(|s| s.to_string()),
-          locations,
-        ));
-      } else if !locations.is_empty() {
-        host_wsgi_process_pools.push(WsgidApplicationWrap::new(
-          domain,
-          ip,
-          None,
-          host_yaml["wsgiPath"].as_str().map(|s| s.to_string()),
-          locations,
-        ));
-      }
-    }
-  }
-
-  Ok(Box::new(WsgidModule::new(
-    global_wsgi_process_pool,
-    global_wsgi_path,
-    Arc::new(host_wsgi_process_pools),
-  )))
+            wsgi_application_path,
+          )?)?))
+        } else {
+          None
+        };
+      let wsgi_path = config["global"]["wsgidPath"]
+        .as_str()
+        .map(|s| s.to_string());
+      Ok(Some(Arc::new(WsgidApplicationData {
+        wsgi_process_pool,
+        wsgi_path,
+      })))
+    },
+  )?)))
 }
 
 struct WsgidModule {
-  global_wsgi_process_pool: Option<Arc<PreforkedProcessPool>>,
-  global_wsgi_path: Option<String>,
-  host_wsgi_process_pools: Arc<Vec<WsgidApplicationWrap>>,
+  wsgi_process_pools: ObtainConfigStruct<Arc<WsgidApplicationData>>,
 }
 
 impl WsgidModule {
-  fn new(
-    global_wsgi_process_pool: Option<Arc<PreforkedProcessPool>>,
-    global_wsgi_path: Option<String>,
-    host_wsgi_process_pools: Arc<Vec<WsgidApplicationWrap>>,
-  ) -> Self {
-    Self {
-      global_wsgi_process_pool,
-      global_wsgi_path,
-      host_wsgi_process_pools,
-    }
+  fn new(wsgi_process_pools: ObtainConfigStruct<Arc<WsgidApplicationData>>) -> Self {
+    Self { wsgi_process_pools }
   }
 }
 
@@ -428,18 +381,14 @@ impl ServerModule for WsgidModule {
   fn get_handlers(&self, handle: Handle) -> Box<dyn ServerModuleHandlers + Send> {
     Box::new(WsgidModuleHandlers {
       handle,
-      global_wsgi_process_pool: self.global_wsgi_process_pool.clone(),
-      global_wsgi_path: self.global_wsgi_path.clone(),
-      host_wsgi_process_pools: self.host_wsgi_process_pools.clone(),
+      wsgi_process_pools: self.wsgi_process_pools.clone(),
     })
   }
 }
 
 struct WsgidModuleHandlers {
   handle: Handle,
-  global_wsgi_process_pool: Option<Arc<PreforkedProcessPool>>,
-  global_wsgi_path: Option<String>,
-  host_wsgi_process_pools: Arc<Vec<WsgidApplicationWrap>>,
+  wsgi_process_pools: ObtainConfigStruct<Arc<WsgidApplicationData>>,
 }
 
 #[async_trait]
@@ -453,45 +402,20 @@ impl ServerModuleHandlers for WsgidModuleHandlers {
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       let hyper_request = request.get_hyper_request();
+      let wsgi_data = self.wsgi_process_pools.obtain(
+        match hyper_request.headers().get(header::HOST) {
+          Some(value) => value.to_str().ok(),
+          None => None,
+        },
+        socket_data.remote_addr.ip(),
+        request
+          .get_original_url()
+          .unwrap_or(request.get_hyper_request().uri())
+          .path(),
+      );
 
-      // Use .take() instead of .clone(), since the values in Options will only be used once.
-      let mut wsgi_process_pool = self.global_wsgi_process_pool.take();
-      let mut wsgi_path = self.global_wsgi_path.take();
-
-      // Should have used a HashMap instead of iterating over an array for better performance...
-      for host_wsgi_process_pool_wrap in self.host_wsgi_process_pools.iter() {
-        if match_hostname(
-          match &host_wsgi_process_pool_wrap.domain {
-            Some(value) => Some(value as &str),
-            None => None,
-          },
-          match hyper_request.headers().get(header::HOST) {
-            Some(value) => value.to_str().ok(),
-            None => None,
-          },
-        ) && match &host_wsgi_process_pool_wrap.ip {
-          Some(value) => ip_match(value as &str, socket_data.remote_addr.ip()),
-          None => true,
-        } {
-          wsgi_process_pool = host_wsgi_process_pool_wrap.wsgi_process_pool.clone();
-          wsgi_path = host_wsgi_process_pool_wrap.wsgi_path.clone();
-          if let Ok(path_decoded) = urlencoding::decode(
-            request
-              .get_original_url()
-              .unwrap_or(request.get_hyper_request().uri())
-              .path(),
-          ) {
-            for location_wrap in host_wsgi_process_pool_wrap.locations.iter() {
-              if match_location(&location_wrap.path, &path_decoded) {
-                wsgi_process_pool = Some(location_wrap.wsgi_process_pool.clone());
-                wsgi_path = location_wrap.wsgi_path.clone();
-                break;
-              }
-            }
-          }
-          break;
-        }
-      }
+      let wsgi_process_pool = wsgi_data.clone().and_then(|x| x.wsgi_process_pool.clone());
+      let wsgi_path = wsgi_data.clone().and_then(|x| x.wsgi_path.clone());
 
       let request_path = hyper_request.uri().path();
       let mut request_path_bytes = request_path.bytes();

@@ -22,8 +22,6 @@ mod ferron_util {
   pub mod anti_xss;
   #[cfg(feature = "asgi")]
   pub mod asgi_messages;
-  #[cfg(feature = "asgi")]
-  pub mod asgi_structs;
   #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
   pub mod cgi_response;
   pub mod combine_config;
@@ -48,7 +46,9 @@ mod ferron_util {
   pub mod match_location;
   #[cfg(any(feature = "rproxy", feature = "fauth"))]
   pub mod no_server_verifier;
-  pub mod non_standard_code_structs;
+  #[cfg(any(feature = "wsgi", feature = "wsgid", feature = "asgi"))]
+  pub mod obtain_config_struct;
+  pub mod obtain_config_struct_vec;
   #[cfg(all(unix, feature = "wsgid"))]
   pub mod preforked_process_pool;
   #[cfg(feature = "fcgi")]
@@ -58,7 +58,6 @@ mod ferron_util {
   #[cfg(feature = "fcgi")]
   pub mod split_stream_by_map;
   pub mod ttl_cache;
-  pub mod url_rewrite_structs;
   pub mod url_sanitizer;
   pub mod validate_config;
   #[cfg(feature = "wsgi")]
@@ -67,8 +66,6 @@ mod ferron_util {
   pub mod wsgi_input_stream;
   #[cfg(any(feature = "wsgi", feature = "wsgid"))]
   pub mod wsgi_load_application;
-  #[cfg(feature = "wsgi")]
-  pub mod wsgi_structs;
   #[cfg(feature = "wsgid")]
   pub mod wsgid_body_reader;
   #[cfg(feature = "wsgid")]
@@ -77,8 +74,6 @@ mod ferron_util {
   pub mod wsgid_input_stream;
   #[cfg(feature = "wsgid")]
   pub mod wsgid_message_structs;
-  #[cfg(feature = "wsgid")]
-  pub mod wsgid_structs;
 }
 
 // Import project modules from "modules" directory

@@ -1,13 +1,7 @@
 use std::error::Error;
 use std::path::Path;
-use std::sync::Arc;
 
-use crate::ferron_util::ip_match::ip_match;
-use crate::ferron_util::match_hostname::match_hostname;
-use crate::ferron_util::match_location::match_location;
-use crate::ferron_util::url_rewrite_structs::{
-  UrlRewriteMapEntry, UrlRewriteMapLocationWrap, UrlRewriteMapWrap,
-};
+use crate::ferron_util::obtain_config_struct_vec::ObtainConfigStructVec;
 
 use crate::ferron_common::{
   ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
@@ -15,12 +9,41 @@ use crate::ferron_common::{
 };
 use crate::ferron_common::{HyperUpgraded, WithRuntime};
 use async_trait::async_trait;
-use fancy_regex::RegexBuilder;
+use fancy_regex::{Regex, RegexBuilder};
 use hyper::{header, Request, StatusCode};
 use hyper_tungstenite::HyperWebsocket;
 use tokio::fs;
 use tokio::runtime::Handle;
 use yaml_rust2::Yaml;
+
+struct UrlRewriteMapEntry {
+  regex: Regex,
+  replacement: String,
+  is_not_directory: bool,
+  is_not_file: bool,
+  last: bool,
+  allow_double_slashes: bool,
+}
+
+impl UrlRewriteMapEntry {
+  fn new(
+    regex: Regex,
+    replacement: String,
+    is_not_directory: bool,
+    is_not_file: bool,
+    last: bool,
+    allow_double_slashes: bool,
+  ) -> Self {
+    Self {
+      regex,
+      replacement,
+      is_not_directory,
+      is_not_file,
+      last,
+      allow_double_slashes,
+    }
+  }
+}
 
 fn url_rewrite_config_init(rewrite_map: &[Yaml]) -> Result<Vec<UrlRewriteMapEntry>, anyhow::Error> {
   let rewrite_map_iter = rewrite_map.iter();
@@ -70,78 +93,38 @@ fn url_rewrite_config_init(rewrite_map: &[Yaml]) -> Result<Vec<UrlRewriteMapEntr
 pub fn server_module_init(
   config: &ServerConfig,
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
-  let mut global_url_rewrite_map = Vec::new();
-  let mut host_url_rewrite_maps = Vec::new();
-  if let Some(rewrite_map_yaml) = config["global"]["rewriteMap"].as_vec() {
-    global_url_rewrite_map = url_rewrite_config_init(rewrite_map_yaml)?;
-  }
-
-  if let Some(hosts) = config["hosts"].as_vec() {
-    for host_yaml in hosts.iter() {
-      let domain = host_yaml["domain"].as_str().map(String::from);
-      let ip = host_yaml["ip"].as_str().map(String::from);
-      let mut locations = Vec::new();
-      if let Some(locations_yaml) = host_yaml["locations"].as_vec() {
-        for location_yaml in locations_yaml.iter() {
-          if let Some(path_str) = location_yaml["path"].as_str() {
-            let path = String::from(path_str);
-            if let Some(rewrite_map_yaml) = location_yaml["rewriteMap"].as_vec() {
-              locations.push(UrlRewriteMapLocationWrap::new(
-                path,
-                url_rewrite_config_init(rewrite_map_yaml)?,
-              ));
-            }
-          }
-        }
+  Ok(Box::new(UrlRewriteModule::new(ObtainConfigStructVec::new(
+    config,
+    |config| {
+      if let Some(rewrite_map_yaml) = config["rewriteMap"].as_vec() {
+        Ok(url_rewrite_config_init(rewrite_map_yaml)?)
+      } else {
+        Ok(vec![])
       }
-      if let Some(rewrite_map_yaml) = host_yaml["rewriteMap"].as_vec() {
-        host_url_rewrite_maps.push(UrlRewriteMapWrap::new(
-          domain,
-          ip,
-          url_rewrite_config_init(rewrite_map_yaml)?,
-          locations,
-        ));
-      } else if !locations.is_empty() {
-        host_url_rewrite_maps.push(UrlRewriteMapWrap::new(domain, ip, Vec::new(), locations));
-      }
-    }
-  }
-
-  Ok(Box::new(UrlRewriteModule::new(
-    Arc::new(global_url_rewrite_map),
-    Arc::new(host_url_rewrite_maps),
-  )))
+    },
+  )?)))
 }
 
 struct UrlRewriteModule {
-  global_url_rewrite_map: Arc<Vec<UrlRewriteMapEntry>>,
-  host_url_rewrite_maps: Arc<Vec<UrlRewriteMapWrap>>,
+  url_rewrite_maps: ObtainConfigStructVec<UrlRewriteMapEntry>,
 }
 
 impl UrlRewriteModule {
-  fn new(
-    global_url_rewrite_map: Arc<Vec<UrlRewriteMapEntry>>,
-    host_url_rewrite_maps: Arc<Vec<UrlRewriteMapWrap>>,
-  ) -> Self {
-    Self {
-      global_url_rewrite_map,
-      host_url_rewrite_maps,
-    }
+  fn new(url_rewrite_maps: ObtainConfigStructVec<UrlRewriteMapEntry>) -> Self {
+    Self { url_rewrite_maps }
   }
 }
 
 impl ServerModule for UrlRewriteModule {
   fn get_handlers(&self, handle: Handle) -> Box<dyn ServerModuleHandlers + Send> {
     Box::new(UrlRewriteModuleHandlers {
-      global_url_rewrite_map: self.global_url_rewrite_map.clone(),
-      host_url_rewrite_maps: self.host_url_rewrite_maps.clone(),
+      url_rewrite_maps: self.url_rewrite_maps.clone(),
       handle,
     })
   }
 }
 struct UrlRewriteModuleHandlers {
-  global_url_rewrite_map: Arc<Vec<UrlRewriteMapEntry>>,
-  host_url_rewrite_maps: Arc<Vec<UrlRewriteMapWrap>>,
+  url_rewrite_maps: ObtainConfigStructVec<UrlRewriteMapEntry>,
   handle: Handle,
 }
 
@@ -156,48 +139,17 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       let hyper_request = request.get_hyper_request();
-      let global_url_rewrite_map = self.global_url_rewrite_map.iter();
-      let empty_vector = Vec::new();
-      let another_empty_vector = Vec::new();
-      let mut host_url_rewrite_map = empty_vector.iter();
-      let mut location_url_rewrite_map = another_empty_vector.iter();
-
-      // Should have used a HashMap instead of iterating over an array for better performance...
-      for host_url_rewrite_map_wrap in self.host_url_rewrite_maps.iter() {
-        if match_hostname(
-          match &host_url_rewrite_map_wrap.domain {
-            Some(value) => Some(value as &str),
-            None => None,
-          },
-          match hyper_request.headers().get(header::HOST) {
-            Some(value) => value.to_str().ok(),
-            None => None,
-          },
-        ) && match &host_url_rewrite_map_wrap.ip {
-          Some(value) => ip_match(value as &str, socket_data.remote_addr.ip()),
-          None => true,
-        } {
-          host_url_rewrite_map = host_url_rewrite_map_wrap.rewrite_map.iter();
-          if let Ok(path_decoded) = urlencoding::decode(
-            request
-              .get_original_url()
-              .unwrap_or(request.get_hyper_request().uri())
-              .path(),
-          ) {
-            for location_wrap in host_url_rewrite_map_wrap.locations.iter() {
-              if match_location(&location_wrap.path, &path_decoded) {
-                location_url_rewrite_map = location_wrap.rewrite_map.iter();
-                break;
-              }
-            }
-          }
-          break;
-        }
-      }
-
-      let combined_url_rewrite_map = global_url_rewrite_map
-        .chain(host_url_rewrite_map)
-        .chain(location_url_rewrite_map);
+      let combined_url_rewrite_map = self.url_rewrite_maps.obtain(
+        match hyper_request.headers().get(header::HOST) {
+          Some(value) => value.to_str().ok(),
+          None => None,
+        },
+        socket_data.remote_addr.ip(),
+        request
+          .get_original_url()
+          .unwrap_or(request.get_hyper_request().uri())
+          .path(),
+      );
 
       let original_url = format!(
         "{}{}",

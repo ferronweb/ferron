@@ -17,13 +17,10 @@ use crate::ferron_common::{
 };
 use crate::ferron_common::{HyperResponse, WithRuntime};
 use crate::ferron_res::server_software::SERVER_SOFTWARE;
-use crate::ferron_util::ip_match::ip_match;
-use crate::ferron_util::match_hostname::match_hostname;
-use crate::ferron_util::match_location::match_location;
+use crate::ferron_util::obtain_config_struct::ObtainConfigStruct;
 use crate::ferron_util::wsgi_error_stream::WsgiErrorStream;
 use crate::ferron_util::wsgi_input_stream::WsgiInputStream;
 use crate::ferron_util::wsgi_load_application::load_wsgi_application;
-use crate::ferron_util::wsgi_structs::{WsgiApplicationLocationWrap, WsgiApplicationWrap};
 use async_trait::async_trait;
 use futures_util::{StreamExt, TryStreamExt};
 use hashlink::LinkedHashMap;
@@ -42,91 +39,46 @@ use tokio::runtime::Handle;
 use tokio::sync::Mutex;
 use tokio_util::io::StreamReader;
 
+struct WsgiApplicationData {
+  wsgi_application: Option<Arc<Py<PyAny>>>,
+  wsgi_path: Option<String>,
+}
+
 pub fn server_module_init(
   config: &ServerConfig,
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
-  let mut global_wsgi_application = None;
-  let mut host_wsgi_applications = Vec::new();
   let clear_sys_path = config["global"]["wsgiClearModuleImportPath"]
     .as_bool()
     .unwrap_or(false);
-  if let Some(wsgi_application_path) = config["global"]["wsgiApplicationPath"].as_str() {
-    global_wsgi_application = Some(Arc::new(load_wsgi_application(
-      PathBuf::from_str(wsgi_application_path)?.as_path(),
-      clear_sys_path,
-    )?));
-  }
-  let global_wsgi_path = config["global"]["wsgiPath"].as_str().map(|s| s.to_string());
 
-  if let Some(hosts) = config["hosts"].as_vec() {
-    for host_yaml in hosts.iter() {
-      let domain = host_yaml["domain"].as_str().map(String::from);
-      let ip = host_yaml["ip"].as_str().map(String::from);
-      let mut locations = Vec::new();
-      if let Some(locations_yaml) = host_yaml["locations"].as_vec() {
-        for location_yaml in locations_yaml.iter() {
-          if let Some(path_str) = location_yaml["path"].as_str() {
-            let path = String::from(path_str);
-            if let Some(wsgi_application_path) = location_yaml["wsgiApplicationPath"].as_str() {
-              locations.push(WsgiApplicationLocationWrap::new(
-                path,
-                Arc::new(load_wsgi_application(
-                  PathBuf::from_str(wsgi_application_path)?.as_path(),
-                  clear_sys_path,
-                )?),
-                location_yaml["wsgiPath"].as_str().map(|s| s.to_string()),
-              ));
-            }
-          }
-        }
-      }
-      if let Some(wsgi_application_path) = host_yaml["wsgiApplicationPath"].as_str() {
-        host_wsgi_applications.push(WsgiApplicationWrap::new(
-          domain,
-          ip,
+  Ok(Box::new(WsgiModule::new(ObtainConfigStruct::new(
+    config,
+    |config| {
+      let wsgi_application =
+        if let Some(wsgi_application_path) = config["global"]["wsgiApplicationPath"].as_str() {
           Some(Arc::new(load_wsgi_application(
             PathBuf::from_str(wsgi_application_path)?.as_path(),
             clear_sys_path,
-          )?)),
-          host_yaml["wsgiPath"].as_str().map(|s| s.to_string()),
-          locations,
-        ));
-      } else if !locations.is_empty() {
-        host_wsgi_applications.push(WsgiApplicationWrap::new(
-          domain,
-          ip,
-          None,
-          host_yaml["wsgiPath"].as_str().map(|s| s.to_string()),
-          locations,
-        ));
-      }
-    }
-  }
-
-  Ok(Box::new(WsgiModule::new(
-    global_wsgi_application,
-    global_wsgi_path,
-    Arc::new(host_wsgi_applications),
-  )))
+          )?))
+        } else {
+          None
+        };
+      let wsgi_path = config["global"]["wsgiPath"].as_str().map(|s| s.to_string());
+      Ok(Some(Arc::new(WsgiApplicationData {
+        wsgi_application,
+        wsgi_path,
+      })))
+    },
+  )?)))
 }
 
 struct WsgiModule {
-  global_wsgi_application: Option<Arc<Py<PyAny>>>,
-  global_wsgi_path: Option<String>,
-  host_wsgi_applications: Arc<Vec<WsgiApplicationWrap>>,
+  wsgi_applications: ObtainConfigStruct<Arc<WsgiApplicationData>>,
 }
 
 impl WsgiModule {
-  fn new(
-    global_wsgi_application: Option<Arc<Py<PyAny>>>,
-    global_wsgi_path: Option<String>,
-    host_wsgi_applications: Arc<Vec<WsgiApplicationWrap>>,
-  ) -> Self {
-    Self {
-      global_wsgi_application,
-      global_wsgi_path,
-      host_wsgi_applications,
-    }
+  fn new(wsgi_applications: ObtainConfigStruct<Arc<WsgiApplicationData>>) -> Self {
+    Self { wsgi_applications }
   }
 }
 
@@ -134,18 +86,14 @@ impl ServerModule for WsgiModule {
   fn get_handlers(&self, handle: Handle) -> Box<dyn ServerModuleHandlers + Send> {
     Box::new(WsgiModuleHandlers {
       handle,
-      global_wsgi_application: self.global_wsgi_application.clone(),
-      global_wsgi_path: self.global_wsgi_path.clone(),
-      host_wsgi_applications: self.host_wsgi_applications.clone(),
+      wsgi_applications: self.wsgi_applications.clone(),
     })
   }
 }
 
 struct WsgiModuleHandlers {
   handle: Handle,
-  global_wsgi_application: Option<Arc<Py<PyAny>>>,
-  global_wsgi_path: Option<String>,
-  host_wsgi_applications: Arc<Vec<WsgiApplicationWrap>>,
+  wsgi_applications: ObtainConfigStruct<Arc<WsgiApplicationData>>,
 }
 
 #[async_trait]
@@ -159,45 +107,20 @@ impl ServerModuleHandlers for WsgiModuleHandlers {
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       let hyper_request = request.get_hyper_request();
+      let wsgi_data = self.wsgi_applications.obtain(
+        match hyper_request.headers().get(header::HOST) {
+          Some(value) => value.to_str().ok(),
+          None => None,
+        },
+        socket_data.remote_addr.ip(),
+        request
+          .get_original_url()
+          .unwrap_or(request.get_hyper_request().uri())
+          .path(),
+      );
 
-      // Use .take() instead of .clone(), since the values in Options will only be used once.
-      let mut wsgi_application = self.global_wsgi_application.take();
-      let mut wsgi_path = self.global_wsgi_path.take();
-
-      // Should have used a HashMap instead of iterating over an array for better performance...
-      for host_wsgi_application_wrap in self.host_wsgi_applications.iter() {
-        if match_hostname(
-          match &host_wsgi_application_wrap.domain {
-            Some(value) => Some(value as &str),
-            None => None,
-          },
-          match hyper_request.headers().get(header::HOST) {
-            Some(value) => value.to_str().ok(),
-            None => None,
-          },
-        ) && match &host_wsgi_application_wrap.ip {
-          Some(value) => ip_match(value as &str, socket_data.remote_addr.ip()),
-          None => true,
-        } {
-          wsgi_application = host_wsgi_application_wrap.wsgi_application.clone();
-          wsgi_path = host_wsgi_application_wrap.wsgi_path.clone();
-          if let Ok(path_decoded) = urlencoding::decode(
-            request
-              .get_original_url()
-              .unwrap_or(request.get_hyper_request().uri())
-              .path(),
-          ) {
-            for location_wrap in host_wsgi_application_wrap.locations.iter() {
-              if match_location(&location_wrap.path, &path_decoded) {
-                wsgi_application = Some(location_wrap.wsgi_application.clone());
-                wsgi_path = location_wrap.wsgi_path.clone();
-                break;
-              }
-            }
-          }
-          break;
-        }
-      }
+      let wsgi_application = wsgi_data.clone().and_then(|x| x.wsgi_application.clone());
+      let wsgi_path = wsgi_data.clone().and_then(|x| x.wsgi_path.clone());
 
       let request_path = hyper_request.uri().path();
       let mut request_path_bytes = request_path.bytes();

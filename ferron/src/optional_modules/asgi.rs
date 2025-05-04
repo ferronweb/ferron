@@ -20,10 +20,7 @@ use crate::ferron_util::asgi_messages::{
   AsgiInitData, AsgiWebsocketClose, AsgiWebsocketInitData, AsgiWebsocketMessage,
   IncomingAsgiMessage, IncomingAsgiMessageInner, OutgoingAsgiMessage, OutgoingAsgiMessageInner,
 };
-use crate::ferron_util::asgi_structs::{AsgiApplicationLocationWrap, AsgiApplicationWrap};
-use crate::ferron_util::ip_match::ip_match;
-use crate::ferron_util::match_hostname::match_hostname;
-use crate::ferron_util::match_location::match_location;
+use crate::ferron_util::obtain_config_struct::ObtainConfigStruct;
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
@@ -45,6 +42,11 @@ use tokio_util::sync::CancellationToken;
 type AsgiChannelResult =
   Result<(Sender<IncomingAsgiMessage>, Receiver<OutgoingAsgiMessage>), anyhow::Error>;
 type AsgiEventLoopCommunication = Vec<(Sender<()>, Receiver<AsgiChannelResult>)>;
+
+struct AsgiApplicationData {
+  asgi_application_id: Option<usize>,
+  asgi_path: Option<String>,
+}
 
 async fn asgi_application_fn(
   asgi_application: Arc<Py<PyAny>>,
@@ -547,74 +549,29 @@ pub fn load_asgi_application(
 pub fn server_module_init(
   config: &ServerConfig,
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
-  let mut asgi_applications = Vec::new();
-  let mut global_asgi_application_id = None;
-  let mut host_asgi_application_ids = Vec::new();
   let clear_sys_path = config["global"]["asgiClearModuleImportPath"]
     .as_bool()
     .unwrap_or(false);
-  if let Some(asgi_application_path) = config["global"]["asgiApplicationPath"].as_str() {
-    let asgi_application_id = asgi_applications.len();
-    asgi_applications.push(Arc::new(load_asgi_application(
-      PathBuf::from_str(asgi_application_path)?.as_path(),
-      clear_sys_path,
-    )?));
-    global_asgi_application_id = Some(asgi_application_id);
-  }
-  let global_asgi_path = config["global"]["asgiPath"].as_str().map(|s| s.to_string());
 
-  if let Some(hosts) = config["hosts"].as_vec() {
-    for host_yaml in hosts.iter() {
-      let domain = host_yaml["domain"].as_str().map(String::from);
-      let ip = host_yaml["ip"].as_str().map(String::from);
-      let mut locations = Vec::new();
-      if let Some(locations_yaml) = host_yaml["locations"].as_vec() {
-        for location_yaml in locations_yaml.iter() {
-          if let Some(path_str) = location_yaml["path"].as_str() {
-            let path = String::from(path_str);
-            if let Some(asgi_application_path) = location_yaml["asgiApplicationPath"].as_str() {
-              let asgi_application_id = asgi_applications.len();
-              asgi_applications.push(Arc::new(load_asgi_application(
-                PathBuf::from_str(asgi_application_path)?.as_path(),
-                clear_sys_path,
-              )?));
-
-              locations.push(AsgiApplicationLocationWrap::new(
-                path,
-                asgi_application_id,
-                asgi_application_path.to_string(),
-                location_yaml["asgiPath"].as_str().map(|s| s.to_string()),
-              ));
-            }
-          }
-        }
-      }
-      if let Some(asgi_application_path) = host_yaml["asgiApplicationPath"].as_str() {
+  let mut asgi_applications = Vec::new();
+  let asgi_application_ids = ObtainConfigStruct::new(config, |config| {
+    let asgi_application_id =
+      if let Some(asgi_application_path) = config["global"]["asgiApplicationPath"].as_str() {
         let asgi_application_id = asgi_applications.len();
         asgi_applications.push(Arc::new(load_asgi_application(
           PathBuf::from_str(asgi_application_path)?.as_path(),
           clear_sys_path,
         )?));
-        host_asgi_application_ids.push(AsgiApplicationWrap::new(
-          domain,
-          ip,
-          Some(asgi_application_id),
-          Some(asgi_application_path.to_string()),
-          host_yaml["asgiPath"].as_str().map(|s| s.to_string()),
-          locations,
-        ));
-      } else if !locations.is_empty() {
-        host_asgi_application_ids.push(AsgiApplicationWrap::new(
-          domain,
-          ip,
-          None,
-          None,
-          host_yaml["asgiPath"].as_str().map(|s| s.to_string()),
-          locations,
-        ));
-      }
-    }
-  }
+        Some(asgi_application_id)
+      } else {
+        None
+      };
+    let asgi_path = config["global"]["asgiPath"].as_str().map(|s| s.to_string());
+    Ok(Some(Arc::new(AsgiApplicationData {
+      asgi_application_id,
+      asgi_path,
+    })))
+  })?;
 
   let cancel_token: CancellationToken = CancellationToken::new();
   let cancel_token_thread = cancel_token.clone();
@@ -655,9 +612,7 @@ pub fn server_module_init(
   ));
 
   Ok(Box::new(AsgiModule::new(
-    global_asgi_application_id,
-    global_asgi_path,
-    Arc::new(host_asgi_application_ids),
+    asgi_application_ids,
     cancel_token,
     asgi_event_loop_communication,
     runtime,
@@ -665,9 +620,7 @@ pub fn server_module_init(
 }
 
 struct AsgiModule {
-  global_asgi_application_id: Option<usize>,
-  global_asgi_path: Option<String>,
-  host_asgi_application_ids: Arc<Vec<AsgiApplicationWrap>>,
+  asgi_application_ids: ObtainConfigStruct<Arc<AsgiApplicationData>>,
   cancel_token: CancellationToken,
   asgi_event_loop_communication: AsgiEventLoopCommunication,
   #[allow(dead_code)]
@@ -676,17 +629,13 @@ struct AsgiModule {
 
 impl AsgiModule {
   fn new(
-    global_asgi_application_id: Option<usize>,
-    global_asgi_path: Option<String>,
-    host_asgi_application_ids: Arc<Vec<AsgiApplicationWrap>>,
+    asgi_application_ids: ObtainConfigStruct<Arc<AsgiApplicationData>>,
     cancel_token: CancellationToken,
     asgi_event_loop_communication: AsgiEventLoopCommunication,
     runtime: Runtime,
   ) -> Self {
     AsgiModule {
-      global_asgi_application_id,
-      global_asgi_path,
-      host_asgi_application_ids,
+      asgi_application_ids,
       cancel_token,
       asgi_event_loop_communication,
       runtime,
@@ -697,9 +646,7 @@ impl AsgiModule {
 impl ServerModule for AsgiModule {
   fn get_handlers(&self, handle: Handle) -> Box<dyn ServerModuleHandlers + Send> {
     Box::new(AsgiModuleHandlers {
-      global_asgi_application_id: self.global_asgi_application_id,
-      global_asgi_path: self.global_asgi_path.clone(),
-      host_asgi_application_ids: self.host_asgi_application_ids.clone(),
+      asgi_application_ids: self.asgi_application_ids.clone(),
       asgi_event_loop_communication: self.asgi_event_loop_communication.clone(),
       handle,
     })
@@ -713,9 +660,7 @@ impl Drop for AsgiModule {
 }
 
 struct AsgiModuleHandlers {
-  global_asgi_application_id: Option<usize>,
-  global_asgi_path: Option<String>,
-  host_asgi_application_ids: Arc<Vec<AsgiApplicationWrap>>,
+  asgi_application_ids: ObtainConfigStruct<Arc<AsgiApplicationData>>,
   asgi_event_loop_communication: AsgiEventLoopCommunication,
   handle: Handle,
 }
@@ -732,44 +677,20 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
     WithRuntime::new(self.handle.clone(), async move {
       let hyper_request = request.get_hyper_request();
 
-      // Use .take() instead of .clone(), since the values in Options will only be used once.
-      let mut asgi_application_id = self.global_asgi_application_id.take();
-      let mut asgi_path = self.global_asgi_path.take();
+      let asgi_data = self.asgi_application_ids.obtain(
+        match hyper_request.headers().get(header::HOST) {
+          Some(value) => value.to_str().ok(),
+          None => None,
+        },
+        socket_data.remote_addr.ip(),
+        request
+          .get_original_url()
+          .unwrap_or(request.get_hyper_request().uri())
+          .path(),
+      );
 
-      // Should have used a HashMap instead of iterating over an array for better performance...
-      for host_asgi_application_wrap in self.host_asgi_application_ids.iter() {
-        if match_hostname(
-          match &host_asgi_application_wrap.domain {
-            Some(value) => Some(value as &str),
-            None => None,
-          },
-          match hyper_request.headers().get(header::HOST) {
-            Some(value) => value.to_str().ok(),
-            None => None,
-          },
-        ) && match &host_asgi_application_wrap.ip {
-          Some(value) => ip_match(value as &str, socket_data.remote_addr.ip()),
-          None => true,
-        } {
-          asgi_application_id = host_asgi_application_wrap.asgi_application_id;
-          asgi_path = host_asgi_application_wrap.asgi_path.clone();
-          if let Ok(path_decoded) = urlencoding::decode(
-            request
-              .get_original_url()
-              .unwrap_or(request.get_hyper_request().uri())
-              .path(),
-          ) {
-            for location_wrap in host_asgi_application_wrap.locations.iter() {
-              if match_location(&location_wrap.path, &path_decoded) {
-                asgi_application_id = Some(location_wrap.asgi_application_id);
-                asgi_path = location_wrap.asgi_path.clone();
-                break;
-              }
-            }
-          }
-          break;
-        }
-      }
+      let asgi_application_id = asgi_data.clone().and_then(|x| x.asgi_application_id);
+      let asgi_path = asgi_data.clone().and_then(|x| x.asgi_path.clone());
 
       let request_path = hyper_request.uri().path();
       let mut request_path_bytes = request_path.bytes();
@@ -904,40 +825,17 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
     error_logger: &ErrorLogger,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
-      // Use .take() instead of .clone(), since the values in Options will only be used once.
-      let mut asgi_application_id = self.global_asgi_application_id.take();
-      let mut asgi_path = self.global_asgi_path.take();
+      let asgi_data = self.asgi_application_ids.obtain(
+        match headers.get(header::HOST) {
+          Some(value) => value.to_str().ok(),
+          None => None,
+        },
+        socket_data.remote_addr.ip(),
+        uri.path(),
+      );
 
-      // Should have used a HashMap instead of iterating over an array for better performance...
-      for host_asgi_application_wrap in self.host_asgi_application_ids.iter() {
-        // Workaround for Ferron not providing the domain name for WebSocket connections
-        let config_test_domain = host_asgi_application_wrap
-          .domain
-          .as_ref()
-          .map(|value| value as &str);
-        let obtained_domain = config["domain"].as_str();
-        if config_test_domain == obtained_domain
-          && config["asgiApplicationPath"].as_str()
-            == host_asgi_application_wrap.asgi_application_path.as_deref()
-          && match &host_asgi_application_wrap.ip {
-            Some(value) => ip_match(value as &str, socket_data.remote_addr.ip()),
-            None => true,
-          }
-        {
-          asgi_application_id = host_asgi_application_wrap.asgi_application_id;
-          asgi_path = host_asgi_application_wrap.asgi_path.clone();
-          if let Ok(path_decoded) = urlencoding::decode(uri.path()) {
-            for location_wrap in host_asgi_application_wrap.locations.iter() {
-              if match_location(&location_wrap.path, &path_decoded) {
-                asgi_application_id = Some(location_wrap.asgi_application_id);
-                asgi_path = location_wrap.asgi_path.clone();
-                break;
-              }
-            }
-          }
-          break;
-        }
-      }
+      let asgi_application_id = asgi_data.clone().and_then(|x| x.asgi_application_id);
+      let asgi_path = asgi_data.clone().and_then(|x| x.asgi_path.clone());
 
       let request_path = uri.path();
       let mut request_path_bytes = request_path.bytes();

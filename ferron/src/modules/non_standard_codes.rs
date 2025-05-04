@@ -3,12 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::ferron_util::ip_blocklist::IpBlockList;
-use crate::ferron_util::ip_match::ip_match;
-use crate::ferron_util::match_hostname::match_hostname;
-use crate::ferron_util::match_location::match_location;
-use crate::ferron_util::non_standard_code_structs::{
-  NonStandardCode, NonStandardCodesLocationWrap, NonStandardCodesWrap,
-};
+use crate::ferron_util::obtain_config_struct_vec::ObtainConfigStructVec;
 use crate::ferron_util::ttl_cache::TtlCache;
 
 use crate::ferron_common::{
@@ -18,7 +13,7 @@ use crate::ferron_common::{
 use crate::ferron_common::{HyperUpgraded, WithRuntime};
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine};
-use fancy_regex::RegexBuilder;
+use fancy_regex::{Regex, RegexBuilder};
 use http_body_util::{BodyExt, Empty};
 use hyper::header::HeaderValue;
 use hyper::{header, HeaderMap, Response, StatusCode};
@@ -27,6 +22,43 @@ use password_auth::verify_password;
 use tokio::runtime::Handle;
 use tokio::sync::RwLock;
 use yaml_rust2::Yaml;
+
+#[allow(dead_code)]
+struct NonStandardCode {
+  status_code: u16,
+  url: Option<String>,
+  regex: Option<Regex>,
+  location: Option<String>,
+  realm: Option<String>,
+  disable_brute_force_protection: bool,
+  user_list: Option<Vec<String>>,
+  users: Option<IpBlockList>,
+}
+
+impl NonStandardCode {
+  #[allow(clippy::too_many_arguments)]
+  fn new(
+    status_code: u16,
+    url: Option<String>,
+    regex: Option<Regex>,
+    location: Option<String>,
+    realm: Option<String>,
+    disable_brute_force_protection: bool,
+    user_list: Option<Vec<String>>,
+    users: Option<IpBlockList>,
+  ) -> Self {
+    Self {
+      status_code,
+      url,
+      regex,
+      location,
+      realm,
+      disable_brute_force_protection,
+      user_list,
+      users,
+    }
+  }
+}
 
 fn non_standard_codes_config_init(
   non_standard_codes_list: &[Yaml],
@@ -121,70 +153,30 @@ fn non_standard_codes_config_init(
 pub fn server_module_init(
   config: &ServerConfig,
 ) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
-  let mut global_non_standard_codes_list = Vec::new();
-  let mut host_non_standard_codes_lists = Vec::new();
-  if let Some(non_standard_codes_list_yaml) = config["global"]["nonStandardCodes"].as_vec() {
-    global_non_standard_codes_list = non_standard_codes_config_init(non_standard_codes_list_yaml)?;
-  }
-
-  if let Some(hosts) = config["hosts"].as_vec() {
-    for host_yaml in hosts.iter() {
-      let domain = host_yaml["domain"].as_str().map(String::from);
-      let ip = host_yaml["ip"].as_str().map(String::from);
-      let mut locations = Vec::new();
-      if let Some(locations_yaml) = host_yaml["locations"].as_vec() {
-        for location_yaml in locations_yaml.iter() {
-          if let Some(path_str) = location_yaml["path"].as_str() {
-            let path = String::from(path_str);
-            if let Some(non_standard_codes_list_yaml) = location_yaml["nonStandardCodes"].as_vec() {
-              locations.push(NonStandardCodesLocationWrap::new(
-                path,
-                non_standard_codes_config_init(non_standard_codes_list_yaml)?,
-              ));
-            }
-          }
-        }
-      }
-      if let Some(non_standard_codes_list_yaml) = host_yaml["nonStandardCodes"].as_vec() {
-        host_non_standard_codes_lists.push(NonStandardCodesWrap::new(
-          domain,
-          ip,
-          non_standard_codes_config_init(non_standard_codes_list_yaml)?,
-          locations,
-        ));
-      } else if !locations.is_empty() {
-        host_non_standard_codes_lists.push(NonStandardCodesWrap::new(
-          domain,
-          ip,
-          Vec::new(),
-          locations,
-        ));
-      }
-    }
-  }
-
   Ok(Box::new(NonStandardCodesModule::new(
-    Arc::new(global_non_standard_codes_list),
-    Arc::new(host_non_standard_codes_lists),
+    ObtainConfigStructVec::new(config, |config| {
+      if let Some(non_standard_codes_yaml) = config["nonStandardCodes"].as_vec() {
+        Ok(non_standard_codes_config_init(non_standard_codes_yaml)?)
+      } else {
+        Ok(vec![])
+      }
+    })?,
     Arc::new(RwLock::new(TtlCache::new(Duration::new(300, 0)))),
   )))
 }
 
 struct NonStandardCodesModule {
-  global_non_standard_codes_list: Arc<Vec<NonStandardCode>>,
-  host_non_standard_codes_lists: Arc<Vec<NonStandardCodesWrap>>,
+  non_standard_codes_list: ObtainConfigStructVec<NonStandardCode>,
   brute_force_db: Arc<RwLock<TtlCache<String, u8>>>,
 }
 
 impl NonStandardCodesModule {
   fn new(
-    global_non_standard_codes_list: Arc<Vec<NonStandardCode>>,
-    host_non_standard_codes_lists: Arc<Vec<NonStandardCodesWrap>>,
+    non_standard_codes_list: ObtainConfigStructVec<NonStandardCode>,
     brute_force_db: Arc<RwLock<TtlCache<String, u8>>>,
   ) -> Self {
     Self {
-      global_non_standard_codes_list,
-      host_non_standard_codes_lists,
+      non_standard_codes_list,
       brute_force_db,
     }
   }
@@ -193,8 +185,7 @@ impl NonStandardCodesModule {
 impl ServerModule for NonStandardCodesModule {
   fn get_handlers(&self, handle: Handle) -> Box<dyn ServerModuleHandlers + Send> {
     Box::new(NonStandardCodesModuleHandlers {
-      global_non_standard_codes_list: self.global_non_standard_codes_list.clone(),
-      host_non_standard_codes_lists: self.host_non_standard_codes_lists.clone(),
+      non_standard_codes_list: self.non_standard_codes_list.clone(),
       brute_force_db: self.brute_force_db.clone(),
       handle,
     })
@@ -216,8 +207,7 @@ fn parse_basic_auth(auth_str: &str) -> Option<(String, String)> {
 }
 
 struct NonStandardCodesModuleHandlers {
-  global_non_standard_codes_list: Arc<Vec<NonStandardCode>>,
-  host_non_standard_codes_lists: Arc<Vec<NonStandardCodesWrap>>,
+  non_standard_codes_list: ObtainConfigStructVec<NonStandardCode>,
   brute_force_db: Arc<RwLock<TtlCache<String, u8>>>,
   handle: Handle,
 }
@@ -233,49 +223,17 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       let hyper_request = request.get_hyper_request();
-      let global_non_standard_codes_list = self.global_non_standard_codes_list.iter();
-      let empty_vector = Vec::new();
-      let another_empty_vector = Vec::new();
-      let mut host_non_standard_codes_list = empty_vector.iter();
-      let mut location_non_standard_codes_list = another_empty_vector.iter();
-
-      // Should have used a HashMap instead of iterating over an array for better performance...
-      for host_non_standard_codes_list_wrap in self.host_non_standard_codes_lists.iter() {
-        if match_hostname(
-          match &host_non_standard_codes_list_wrap.domain {
-            Some(value) => Some(value as &str),
-            None => None,
-          },
-          match hyper_request.headers().get(header::HOST) {
-            Some(value) => value.to_str().ok(),
-            None => None,
-          },
-        ) && match &host_non_standard_codes_list_wrap.ip {
-          Some(value) => ip_match(value as &str, socket_data.remote_addr.ip()),
-          None => true,
-        } {
-          host_non_standard_codes_list =
-            host_non_standard_codes_list_wrap.non_standard_codes.iter();
-          if let Ok(path_decoded) = urlencoding::decode(
-            request
-              .get_original_url()
-              .unwrap_or(request.get_hyper_request().uri())
-              .path(),
-          ) {
-            for location_wrap in host_non_standard_codes_list_wrap.locations.iter() {
-              if match_location(&location_wrap.path, &path_decoded) {
-                location_non_standard_codes_list = location_wrap.non_standard_codes.iter();
-                break;
-              }
-            }
-          }
-          break;
-        }
-      }
-
-      let combined_non_standard_codes_list = global_non_standard_codes_list
-        .chain(host_non_standard_codes_list)
-        .chain(location_non_standard_codes_list);
+      let combined_non_standard_codes_list = self.non_standard_codes_list.obtain(
+        match hyper_request.headers().get(header::HOST) {
+          Some(value) => value.to_str().ok(),
+          None => None,
+        },
+        socket_data.remote_addr.ip(),
+        request
+          .get_original_url()
+          .unwrap_or(request.get_hyper_request().uri())
+          .path(),
+      );
 
       let request_url = format!(
         "{}{}",
