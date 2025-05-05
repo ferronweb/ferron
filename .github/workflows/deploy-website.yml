@@ -1,8 +1,11 @@
-name: Deploy
+name: Deploy website
 
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'website/**'
+      - '.github/workflows/deploy-website.yml'
   workflow_dispatch:
 
 jobs:
@@ -19,17 +22,25 @@ jobs:
           node-version: latest
 
       - name: Install dependencies
-        run: "npm ci || npm install"
+        shell: bash
+        run: |
+          pushd website
+          npm ci || npm install
+          popd
 
       - name: Build the website
-        run: npm run build
+        shell: bash
+        run: |
+          pushd website
+          npm run build
+          popd
 
       - name: Create the website ZIP archive
         uses: thedoctor0/zip-release@0.7.5
         with:
           type: "zip"
-          filename: "../ferron-website.zip"
-          directory: "dist"
+          filename: "../../ferron-website.zip"
+          directory: "website/dist"
       
       - name: Set up SSH
         uses: LuisEnMarroquin/setup-ssh-action@v2.0.5
