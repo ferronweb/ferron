@@ -37,10 +37,12 @@ use tokio::fs;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::runtime::Handle;
+use tokio::signal;
 use tokio::sync::Mutex;
 use tokio::time;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::LazyConfigAcceptor;
+use tokio_util::sync::CancellationToken;
 use yaml_rust2::Yaml;
 
 // Enum for maybe TLS stream
@@ -1610,42 +1612,50 @@ pub fn start_server(
       first_startup,
     );
 
+    let (continue_tx, continue_rx) = async_channel::unbounded::<bool>();
+    let cancel_token = CancellationToken::new();
+
     #[cfg(unix)]
     {
-      use tokio::signal;
-
-      match signal::unix::signal(signal::unix::SignalKind::hangup()) {
-        Ok(mut signal) => {
+      let cancel_token_clone = cancel_token.clone();
+      let continue_tx_clone = continue_tx.clone();
+      tokio::spawn(async move {
+        if let Ok(mut signal) = signal::unix::signal(signal::unix::SignalKind::hangup()) {
           tokio::select! {
-            result = event_loop_future => {
-              // Sleep the Tokio runtime to ensure error logs are saved
-              time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-              result.map(|_| false)
-            },
-            _ = signal.recv() => Ok(true)
+            _ = signal.recv() => {
+              continue_tx_clone.send(true).await.unwrap_or_default();
+            }
+            _ = cancel_token_clone.cancelled() => {}
           }
         }
-        Err(_) => {
-          let result = event_loop_future.await;
+      });
+    }
 
-          // Sleep the Tokio runtime to ensure error logs are saved
-          time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-          result.map(|_| false)
+    let cancel_token_clone = cancel_token.clone();
+    tokio::spawn(async move {
+      tokio::select! {
+        result = signal::ctrl_c() => {
+          if result.is_ok() {
+            continue_tx.send(false).await.unwrap_or_default();
+          }
         }
+        _ = cancel_token_clone.cancelled() => {}
       }
-    }
+    });
 
-    #[cfg(not(unix))]
-    {
-      let result = event_loop_future.await;
+    let result = tokio::select! {
+      result = event_loop_future => {
+        // Sleep the Tokio runtime to ensure error logs are saved
+        time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-      // Sleep the Tokio runtime to ensure error logs are saved
-      time::sleep(tokio::time::Duration::from_millis(100)).await;
+        result.map(|_| false)
+      },
+      continue_running = continue_rx.recv() => Ok(continue_running?)
+    };
 
-      result.map(|_| false)
-    }
+    cancel_token.cancel();
+
+    result
   });
 
   // Wait 10 seconds or until all tasks are complete
