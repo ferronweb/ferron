@@ -259,10 +259,10 @@ global:
   loadModules:
     - "rproxy"
   sni:
-    "example.com": 
+    "example.com":
       cert: "/etc/ssl/certs/example-com.crt"
       key: "/etc/ssl/private/example-com.key"
-    "*.example.com": 
+    "*.example.com":
       cert: "/etc/ssl/certs/example-com.crt"
       key: "/etc/ssl/private/example-com.key"
 

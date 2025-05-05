@@ -28,6 +28,7 @@ The following modules are built into Ferron, but are disabled by default:
 The _asgi_ module runs ASGI applications on a single worker process. Due to Python's GIL (Global Interpreter Lock), the performance might be lower than what it would be run on multiple worker processes.
 
 This module expects the ASGI application to have `application` as the ASGI callback. If you're using some other callback name, you can create the file below (assuming that the callback name is `app` and the main application Python file is `app.py`):
+
 ```python
 from app import app
 
@@ -89,6 +90,7 @@ The following request headers are provided to the backend server:
 The _wsgi_ module runs WSGI applications on a single worker process. Due to Python's GIL (Global Interpreter Lock), the performance might be lower than what it would be run on multiple worker processes. If you are using Unix or a Unix-like system, it's recommended to use the _wsgid_ module instead.
 
 This module expects the WSGI application to have `application` as the WSGI callback. If you're using some other callback name, you can create the file below (assuming that the callback name is `app` and the main application Python file is `app.py`):
+
 ```python
 from app import app
 
@@ -102,6 +104,7 @@ This module requires that Ferron links to the Python library.
 The _wsgid_ module runs WSGI applications on a pre-forked process pool. This module can be enabled only on Unix and a Unix-like systems. Additionaly, it's recommended to stop the processes in the process pool in addition to the main process, as the server will not automatically stop the processes in the process pool (except on Linux systems, where the processes in the process pool are automatically stopped when the server is stopped).
 
 This module expects the WSGI application to have `application` as the WSGI callback. If you're using some other callback name, you can create the file below (assuming that the callback name is `app` and the main application Python file is `app.py`):
+
 ```python
 from app import app
 

@@ -15,7 +15,7 @@ You can use the configuration below for websites built on WordPress:
 ```yaml
 global:
   loadModules:
-   - fcgi
+    - fcgi
   logFilePath: /var/log/ferron/access.log # Replace with the path to the access log
   errorLogFilePath: /var/log/ferron/error.log # Replace with the path to the error log
 
@@ -94,7 +94,7 @@ You can use the configuration below for websites powered by YaBB:
 ```yaml
 global:
   loadModules:
-   - cgi
+    - cgi
   logFilePath: /var/log/ferron/access.log # Replace with the path to the access log
   errorLogFilePath: /var/log/ferron/error.log # Replace with the path to the error log
 

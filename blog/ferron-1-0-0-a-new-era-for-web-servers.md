@@ -26,4 +26,4 @@ To begin using Ferron, visit our [official documentation](https://www.ferronweb.
 
 We invite developers and enthusiasts to join the Ferron community. Your feedback and contributions are invaluable as we continue to improve and expand Ferron's capabilities. You can visit our [GitHub repository](https://github.com/ferronweb/ferron), [X (Twitter) profile](https://x.com/ferron_web), or [Threads profile](https://www.threads.net/@ferronweb).
 
-Experience the power and safety of Ferron today. 
+Experience the power and safety of Ferron today.

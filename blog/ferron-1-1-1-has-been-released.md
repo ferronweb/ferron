@@ -13,7 +13,7 @@ We are excited to introduce Ferron 1.1.1, a maintenance release that addresses i
 
 Fixed an issue that caused an infinite loop when fetching the request body from the HTTP/3 client. This resolves potential hangs and improves overall reliability in data handling.
 
-### Removed duplicate entries in Alt-Svc Header 
+### Removed duplicate entries in Alt-Svc Header
 
 Fixed a bug where duplicate alternative services were being added to the `Alt-Svc` header when using the `cache` module. This improves compatibility with clients and reduces unnecessary header bloat.
 

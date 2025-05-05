@@ -4,6 +4,8 @@ on:
   push:
     branches: [ "main" ]
     paths:
+      - 'blog/**'
+      - 'docs/**'
       - 'website/**'
       - '.github/workflows/deploy-website.yml'
   workflow_dispatch:

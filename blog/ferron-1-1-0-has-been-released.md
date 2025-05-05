@@ -25,4 +25,4 @@ Ferron 1.1.0 introduces support for both WSGI and ASGI applications, enabling gr
 
 We appreciate all the feedback and contributions from our community. Your support helps us improve Ferron with each release. Thank you for being a part of this journey!
 
-*The Ferron Team*
+_The Ferron Team_

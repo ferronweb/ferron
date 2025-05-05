@@ -10,6 +10,7 @@ We are excited to introduce Ferron 1.0.0-beta9, where we have fixed a bug relate
 ## Key improvements and fixes
 
 ### Improved CGI execution handling
+
 The server now uses the directory containing the executed CGI program as the working directory for the CGI program. This change fixes issues where certain CGI applications, such as YaBB, would fail to start.
 
 ## Thank you!
