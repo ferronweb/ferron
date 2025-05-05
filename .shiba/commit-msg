@@ -1,0 +1,6 @@
+#!/bin/bash
+if [ -d website/node_modules ]; then
+  cd website
+  npx --no -- commitlint --edit "$1" || exit $?
+  cd ..
+fi
