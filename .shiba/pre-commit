@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 if [ -d website/node_modules ]; then
   cd website
   npx lint-staged || exit $?
@@ -6,7 +6,12 @@ if [ -d website/node_modules ]; then
 fi
 
 for rust_file in $(git diff --name-only --cached | grep ".*\.rs$"); do
-  cargo clippy $rust_file --fix --all-targets --allow-staged || exit $?
   rustfmt $rust_file || exit $?
+  git add $rust_file
+done
+
+cargo clippy --fix --all-targets --allow-staged --allow-dirty || exit $?
+
+for rust_file in $(comm -12 <(git diff --name-only --cached | sort) <(git diff --name-only | sort) | grep ".*\.rs$"); do
   git add $rust_file
 done
