@@ -40,6 +40,14 @@ This module requires that Ferron links to the Python library.
 
 The _cache_ module is a simple in-memory cache module for Ferron that works with "Cache-Control" and "Vary" headers. The cache is shared across all threads.
 
+It's recommended to load this module before modules that can be used to handle application data to ensure that the response from that module is cached. For example:
+
+- to cache CGI responses, specify to load the _cache_ module before _cgi_ module
+- to cache FastCGI responses, specify to load _cache_ module before _fcgi_ module
+- to cache proxied responses, specify to load _cache_ module before _rproxy_ module
+- to cache responses from the ASGI application, specify to load _cache_ module before _asgi_ module
+- to cache responses from the WSGI application, specify to load _cache_ module before _wsgi_ or _wsgid_ module
+
 ### _cgi_ module
 
 To run PHP scripts with this module, you may need to adjust the PHP configuration file, typically located at `/etc/php/<php version>/cgi/php.ini`, by setting the `cgi.force_redirect` property to 0. If you don't make this change, PHP-CGI will show a warning indicating that the PHP-CGI binary was compiled with `force-cgi-redirect` enabled. It is advisable to use directories outside of _cgi-bin_ for user uploads and downloads to prevent the _cgi_ module from mistakenly treating uploaded scripts with shebangs and ELF binary files as CGI applications, which could lead to issues such as malware infections, remote code execution vulnerabilities, or 500 Internal Server Errors.
