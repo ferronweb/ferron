@@ -5,7 +5,7 @@ on:
     branches: [ "develop" ]
     paths:
       - 'website/**'
-      - '.github/workflows/deploy-website.yml'
+      - '.github/workflows/deploy-website-temp.yml'
   workflow_dispatch:
 
 jobs:
