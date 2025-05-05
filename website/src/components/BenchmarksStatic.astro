@@ -24,7 +24,7 @@ import "../styles/apexcharts-fix.css";
 
 <script>
   async function loadBenchmarkChart() {
-    let ApexCharts = await import("apexcharts");
+    let ApexCharts = (await import("apexcharts")).default;
 
     const options = {
       series: [
