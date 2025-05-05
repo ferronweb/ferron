@@ -2,7 +2,17 @@ name: Release
 
 on:
   push:
-    tags: [ "*" ]
+    branches: [ "main" ]
+    paths:
+      - '.dockerignore'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'Dockerfile'
+      - 'Dockerfile.*'
+      - 'ferron*.yaml'
+      - 'ferron/**'
+      - 'ferron-passwd/**'
+      - '.github/workflows/release.yml'
 
 jobs:
   release:
