@@ -61,7 +61,7 @@ httpdate = "1.0.3"
 
 [dev-dependencies]
 tokio-test = "0.4.4"
-rusty-hook = { workspace = true }
+shiba = { workspace = true }
 
 [features]
 default = ["cache", "cgi", "fauth", "fcgi", "fproxy", "rproxy", "scgi"]

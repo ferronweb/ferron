@@ -1,0 +1,12 @@
+#!/bin/sh
+if [ -d website/node_modules ]; then
+  cd website
+  npx lint-staged || exit $?
+  cd ..
+fi
+
+for rust_file in $(git diff --name-only --cached | grep ".*\.rs$"); do
+  cargo clippy $rust_file --fix --all-targets --allow-staged || exit $?
+  rustfmt $rust_file || exit $?
+  git add $rust_file
+done

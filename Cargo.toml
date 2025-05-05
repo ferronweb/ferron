@@ -8,7 +8,7 @@ resolver = "2"
 [workspace.dependencies]
 yaml-rust2 = "0.10.0"
 password-auth = { version = "1.0.0", features = ["argon2", "pbkdf2", "scrypt"] }
-rusty-hook = "0.11.2"
+shiba = "0.1.1"
 mimalloc = "0.1.45"
 
 [profile.release]
