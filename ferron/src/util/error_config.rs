@@ -17,6 +17,7 @@ pub fn combine_error_config(config: &Yaml, status_code: u16) -> Option<Yaml> {
     if let Some(error_config_hash) = error_config.as_hash() {
       if let Some(config_hash) = config.as_hash() {
         let mut merged = config_hash.clone();
+        while merged.remove(&Yaml::from_str("errorConfig")).is_some() {}
         for (key, value) in error_config_hash {
           if let Some(key) = key.as_str() {
             if key != "errorConfig" && key != "scode" {
