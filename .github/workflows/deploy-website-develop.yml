@@ -1,4 +1,4 @@
-name: Deploy website (staging)
+name: Deploy website ("develop" branch)
 
 on:
   push:
@@ -7,13 +7,13 @@ on:
       - 'blog/**'
       - 'docs/**'
       - 'website/**'
-      - '.github/workflows/deploy-website-staging.yml'
+      - '.github/workflows/deploy-website-develop.yml'
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ferron-website-staging
+    environment: ferron-website-develop
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -45,7 +45,7 @@ jobs:
         uses: thedoctor0/zip-release@0.7.5
         with:
           type: "zip"
-          filename: "../../ferron-website-staging.zip"
+          filename: "../../ferron-website-develop.zip"
           directory: "website/dist"
       
       - name: Set up SSH
@@ -60,7 +60,7 @@ jobs:
       - name: Deploy the website
         shell: bash
         run: |
-          scp ferron-website-staging.zip ferron-servers:.
+          scp ferron-website-develop.zip ferron-servers:.
 
-          # The "deploy-ferron-website-staging" is a custom command that deploys the Ferron website
-          ssh ferron-servers "sudo deploy-ferron-website-staging ferron-website-staging.zip && rm ferron-website-staging.zip"
+          # The "deploy-ferron-website-develop" is a custom command that deploys the Ferron website
+          ssh ferron-servers "sudo deploy-ferron-website-develop ferron-website-develop.zip && rm ferron-website-develop.zip"
