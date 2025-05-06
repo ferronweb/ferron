@@ -72,6 +72,7 @@ pub struct RequestData {
   hyper_request: HyperRequest,
   auth_user: Option<String>,
   original_url: Option<Uri>,
+  error_status_code: Option<StatusCode>,
 }
 
 impl RequestData {
@@ -81,6 +82,8 @@ impl RequestData {
   ///
   /// - `hyper_request`: The original Hyper `Request` object.
   /// - `auth_user`: An optional string representing the authenticated user.
+  /// - `original_url`: An optional string representing the original request URL before rewriting.
+  /// - `status_code`: An optional object representing the error status code.
   ///
   /// # Returns
   ///
@@ -89,11 +92,13 @@ impl RequestData {
     hyper_request: HyperRequest,
     auth_user: Option<String>,
     original_url: Option<Uri>,
+    error_status_code: Option<StatusCode>,
   ) -> Self {
     Self {
       hyper_request,
       auth_user,
       original_url,
+      error_status_code,
     }
   }
 
@@ -139,6 +144,27 @@ impl RequestData {
     }
   }
 
+  /// Sets the original response status code for the request.
+  ///
+  /// # Parameters
+  ///
+  /// - `original_url`: An `Uri` object representing the original request URL before rewriting.
+  pub fn set_error_status_code(&mut self, error_status_code: StatusCode) {
+    self.error_status_code = Some(error_status_code);
+  }
+
+  /// Retrieves the original response status code associated with the request, if any.
+  ///
+  /// # Returns
+  ///
+  /// An `Option` containing an original response status code, or `None` if not set.
+  pub fn get_error_status_code(&self) -> Option<&StatusCode> {
+    match &self.error_status_code {
+      Some(error_status_code) => Some(error_status_code),
+      None => None,
+    }
+  }
+
   /// Provides a reference to the underlying Hyper `Request` object.
   ///
   /// # Returns
@@ -161,9 +187,21 @@ impl RequestData {
   ///
   /// # Returns
   ///
-  /// A tuple containing the `HyperRequest` object, an optional authenticated user string, and an optional `Uri` object representing the original request URL before rewriting.
-  pub fn into_parts(self) -> (HyperRequest, Option<String>, Option<Uri>) {
-    (self.hyper_request, self.auth_user, self.original_url)
+  /// A tuple containing the `HyperRequest` object, an optional authenticated user string, an optional `Uri` object representing the original request URL before rewriting, and an optional `StatusCode` object representing the error status code.
+  pub fn into_parts(
+    self,
+  ) -> (
+    HyperRequest,
+    Option<String>,
+    Option<Uri>,
+    Option<StatusCode>,
+  ) {
+    (
+      self.hyper_request,
+      self.auth_user,
+      self.original_url,
+      self.error_status_code,
+    )
   }
 }
 
@@ -261,7 +299,7 @@ impl ResponseData {
   ///
   /// A `ResponseDataBuilder` initialized with the provided request data.
   pub fn builder(request: RequestData) -> ResponseDataBuilder {
-    let (request, auth_user, original_url) = request.into_parts();
+    let (request, auth_user, original_url, _) = request.into_parts();
 
     ResponseDataBuilder {
       request: Some(request),

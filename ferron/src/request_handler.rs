@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use crate::ferron_res::server_software::SERVER_SOFTWARE;
 use crate::ferron_util::combine_config::combine_config;
+use crate::ferron_util::error_config::combine_error_config;
 use crate::ferron_util::error_pages::generate_default_error_page;
 use crate::ferron_util::url_sanitizer::sanitize_url;
 
@@ -420,7 +421,7 @@ async fn request_handler_wrapped(
   };
 
   // Combine the server configuration
-  let combined_config = match combine_config(
+  let mut combined_config = match combine_config(
     config,
     match is_proxy_request || is_connect_proxy_request {
       false => match request.headers().get(header::HOST) {
@@ -1265,12 +1266,28 @@ async fn request_handler_wrapped(
     }
   } else {
     let is_websocket_request = is_upgrade_request(&request);
-    let mut request_data = RequestData::new(request, None, None);
+    let (request_parts, request_body) = request.into_parts();
+    let request_parts_cloned = if combined_config["errorConfig"].is_array() {
+      let mut request_parts_cloned = request_parts.clone();
+      request_parts_cloned
+        .headers
+        .insert(header::CONTENT_LENGTH, HeaderValue::from_static("0"));
+      Some(request_parts_cloned)
+    } else {
+      // If the error configuration is not specified, don't clone the request parts to improve performance
+      None
+    };
+    let request = Request::from_parts(request_parts, request_body);
+    let mut request_data = RequestData::new(request, None, None, None);
     let mut latest_auth_data = None;
+    let mut error_status_code = None;
     let mut executed_handlers = Vec::new();
-    for mut handlers in handlers_vec {
+    let mut handlers_iter: Box<
+      dyn Iterator<Item = Box<dyn ServerModuleHandlers + Send + 'static>> + Send,
+    > = Box::new(handlers_vec.into_iter());
+    while let Some(mut handlers) = handlers_iter.next() {
       if is_websocket_request && handlers.does_websocket_requests(&combined_config, &socket_data) {
-        let (request, _, _) = request_data.into_parts();
+        let (request, _, _, _) = request_data.into_parts();
 
         // Variables moved to before "tokio::spawn" to avoid issues with moved values
         let client_ip = socket_data.remote_addr.ip();
@@ -1284,6 +1301,7 @@ async fn request_handler_wrapped(
             error_logger
               .log(&format!("Error while upgrading WebSocket request: {}", err))
               .await;
+
             let response = Response::builder()
               .status(StatusCode::INTERNAL_SERVER_ERROR)
               .body(
@@ -1683,6 +1701,29 @@ async fn request_handler_wrapped(
             }
             None => match status {
               Some(status) => {
+                let request = if let Some(request) = request_option {
+                  Some(request)
+                } else {
+                  request_parts_cloned.clone().map(|request_parts_cloned| {
+                    Request::from_parts(
+                      request_parts_cloned,
+                      Empty::new().map_err(|e| match e {}).boxed(),
+                    )
+                  })
+                };
+                if let Some(request) = request {
+                  if let Some(combined_error_config) =
+                    combine_error_config(&combined_config, status.as_u16())
+                  {
+                    combined_config = combined_error_config;
+                    error_status_code = Some(status);
+                    handlers_iter = Box::new(executed_handlers.into_iter().chain(handlers_iter));
+                    executed_handlers = Vec::new();
+                    request_data =
+                      RequestData::new(request, auth_data, original_url, error_status_code);
+                    continue;
+                  }
+                }
                 let response = generate_error_response(status, &combined_config, &headers).await;
                 let (mut response_parts, response_body) = response.into_parts();
                 if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
@@ -1865,7 +1906,8 @@ async fn request_handler_wrapped(
               }
               None => match request_option {
                 Some(request) => {
-                  request_data = RequestData::new(request, auth_data, original_url);
+                  request_data =
+                    RequestData::new(request, auth_data, original_url, error_status_code);
                   continue;
                 }
                 None => {

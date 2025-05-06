@@ -52,6 +52,7 @@ pub fn validate_config(
   config: ServerConfig,
   is_global: bool,
   is_location: bool,
+  is_error_config: bool,
   modules_optional_builtin: &[String],
 ) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
   let mut used_properties = UsedProperties::new(&config);
@@ -76,25 +77,49 @@ pub fn validate_config(
     }
   }
 
-  if domain_badvalue && ip_badvalue && !is_global && !is_location {
+  if domain_badvalue && ip_badvalue && !is_global && !is_location && !is_error_config {
     Err(anyhow::anyhow!(
       "A host must either have IP address or domain name specified"
     ))?;
   }
 
-  if used_properties.contains("path") {
-    if !is_location {
+  if used_properties.contains("scode") {
+    if !is_error_config {
       Err(anyhow::anyhow!(
-        "Location path configuration is only allowed in location configuration"
+        "Status code configuration is only allowed in error configuration"
       ))?;
     }
-    if config["path"].as_str().is_none() {
-      Err(anyhow::anyhow!("Invalid location path"))?;
+    if config["scode"].as_i64().is_none() {
+      Err(anyhow::anyhow!("Invalid status code"))?;
     }
   }
 
-  if used_properties.contains("locations") && is_location {
-    Err(anyhow::anyhow!("Nested locations are not allowed"))?;
+  if used_properties.contains("locations") {
+    if is_location {
+      Err(anyhow::anyhow!("Nested locations are not allowed"))?;
+    } else if is_error_config {
+      Err(anyhow::anyhow!(
+        "The location configuration is not allowed in the error configuration"
+      ))?;
+    } else if is_global {
+      Err(anyhow::anyhow!(
+        "The location configuration is not allowed in the global configuration"
+      ))?;
+    }
+  }
+
+  if used_properties.contains("errorConfig") {
+    if is_error_config {
+      Err(anyhow::anyhow!("Nested error configuration is not allowed"))?;
+    } else if is_location {
+      Err(anyhow::anyhow!(
+        "The error configuration is not allowed in the location configuration"
+      ))?;
+    } else if is_global {
+      Err(anyhow::anyhow!(
+        "The error configuration is not allowed in the global configuration"
+      ))?;
+    }
   }
 
   if used_properties.contains("loadModules") {
@@ -1127,7 +1152,7 @@ pub fn validate_config(
 
 pub fn prepare_config_for_validation(
   config: &Yaml,
-) -> Result<impl Iterator<Item = (Yaml, bool, bool)>, Box<dyn Error + Send + Sync>> {
+) -> Result<impl Iterator<Item = (Yaml, bool, bool, bool)>, Box<dyn Error + Send + Sync>> {
   let mut vector = Vec::new();
   if let Some(global_config) = config["global"].as_hash() {
     let global_config_yaml = Yaml::Hash(global_config.clone());
@@ -1136,12 +1161,20 @@ pub fn prepare_config_for_validation(
 
   let mut vector2 = Vec::new();
   let mut vector3 = Vec::new();
+  let mut vector4 = Vec::new();
   if !config["hosts"].is_badvalue() {
     if let Some(hosts) = config["hosts"].as_vec() {
       for host in hosts.iter() {
+        if !host["errorConfig"].is_badvalue() {
+          if let Some(error_configs) = host["errorConfig"].as_vec() {
+            vector3.append(&mut error_configs.clone());
+          } else {
+            return Err(anyhow::anyhow!("Invalid location configuration").into());
+          }
+        }
         if !host["locations"].is_badvalue() {
           if let Some(locations) = host["locations"].as_vec() {
-            vector3.append(&mut locations.clone());
+            vector4.append(&mut locations.clone());
           } else {
             return Err(anyhow::anyhow!("Invalid location configuration").into());
           }
@@ -1155,9 +1188,10 @@ pub fn prepare_config_for_validation(
 
   let iter = vector
     .into_iter()
-    .map(|item| (item, true, false))
-    .chain(vector2.into_iter().map(|item| (item, false, false)))
-    .chain(vector3.into_iter().map(|item| (item, false, true)));
+    .map(|item| (item, true, false, false))
+    .chain(vector2.into_iter().map(|item| (item, false, false, false)))
+    .chain(vector3.into_iter().map(|item| (item, false, true, false)))
+    .chain(vector4.into_iter().map(|item| (item, false, false, true)));
 
   Ok(iter)
 }

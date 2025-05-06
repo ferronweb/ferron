@@ -617,11 +617,12 @@ async fn server_event_loop(
     }
   };
 
-  for (config_to_validate, is_global, is_location) in prepared_config {
+  for (config_to_validate, is_global, is_location, is_error_config) in prepared_config {
     match validate_config(
       config_to_validate,
       is_global,
       is_location,
+      is_error_config,
       &modules_optional_builtin,
     ) {
       Ok(unused_properties) => {

@@ -28,6 +28,7 @@ mod ferron_util {
   #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
   pub mod copy_move;
   pub mod env_config;
+  pub mod error_config;
   pub mod error_pages;
   #[cfg(feature = "fcgi")]
   pub mod fcgi_decoder;

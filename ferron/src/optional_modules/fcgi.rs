@@ -605,7 +605,7 @@ async fn execute_fastcgi_with_environment_variables(
     environment_variables.insert("CONTENT_LENGTH".to_string(), "0".to_string());
   }
 
-  let (hyper_request, _, _) = request.into_parts();
+  let (hyper_request, _, _, _) = request.into_parts();
 
   execute_fastcgi(
     hyper_request,

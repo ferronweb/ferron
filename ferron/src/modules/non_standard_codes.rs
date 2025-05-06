@@ -233,6 +233,7 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
           .get_original_url()
           .unwrap_or(request.get_hyper_request().uri())
           .path(),
+        request.get_error_status_code().map(|x| x.as_u16()),
       );
 
       let request_url = format!(
@@ -430,8 +431,16 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
       }
 
       if auth_user.is_some() {
-        let (hyper_request, _, original_url) = request.into_parts();
-        Ok(ResponseData::builder(RequestData::new(hyper_request, auth_user, original_url)).build())
+        let (hyper_request, _, original_url, error_status_code) = request.into_parts();
+        Ok(
+          ResponseData::builder(RequestData::new(
+            hyper_request,
+            auth_user,
+            original_url,
+            error_status_code,
+          ))
+          .build(),
+        )
       } else {
         Ok(ResponseData::builder(request).build())
       }

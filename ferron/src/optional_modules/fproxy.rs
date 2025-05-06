@@ -62,7 +62,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       // Code taken from reverse proxy module
-      let (hyper_request, _auth_user, _original_url) = request.into_parts();
+      let (hyper_request, _, _, _) = request.into_parts();
       let (mut hyper_request_parts, request_body) = hyper_request.into_parts();
 
       match hyper_request_parts.uri.scheme_str() {

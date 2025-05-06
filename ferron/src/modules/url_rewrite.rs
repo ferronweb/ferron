@@ -149,6 +149,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
           .get_original_url()
           .unwrap_or(request.get_hyper_request().uri())
           .path(),
+        request.get_error_status_code().map(|x| x.as_u16()),
       );
 
       let original_url = format!(
@@ -232,14 +233,19 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
             ))
             .await;
         }
-        let (hyper_request, auth_user, _) = request.into_parts();
+        let (hyper_request, auth_user, _, error_status_code) = request.into_parts();
         let (mut parts, body) = hyper_request.into_parts();
         let original_url = parts.uri.clone();
         let mut url_parts = parts.uri.into_parts();
         url_parts.path_and_query = Some(rewritten_url.parse()?);
         parts.uri = hyper::Uri::from_parts(url_parts)?;
         let hyper_request = Request::from_parts(parts, body);
-        let request = RequestData::new(hyper_request, auth_user, Some(original_url));
+        let request = RequestData::new(
+          hyper_request,
+          auth_user,
+          Some(original_url),
+          error_status_code,
+        );
         Ok(ResponseData::builder(request).build())
       }
     })

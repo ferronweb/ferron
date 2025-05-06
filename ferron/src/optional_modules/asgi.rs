@@ -932,7 +932,7 @@ async fn execute_asgi(
   asgi_tx: Sender<IncomingAsgiMessage>,
   asgi_rx: Receiver<OutgoingAsgiMessage>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  let (hyper_request, _, original_request_uri) = request.into_parts();
+  let (hyper_request, _, original_request_uri, _) = request.into_parts();
   let (hyper_request_parts, request_body) = hyper_request.into_parts();
   asgi_tx
     .send(IncomingAsgiMessage::Init(AsgiInitData::Http(
