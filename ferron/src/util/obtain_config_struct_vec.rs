@@ -27,7 +27,7 @@ struct ObtainConfigStructVecLocation<T> {
 }
 
 struct ObtainConfigStructVecErrorConfig<T> {
-  scode: u16,
+  scode: Option<u16>,
   data: Vec<T>,
 }
 
@@ -47,13 +47,11 @@ impl<T> ObtainConfigStructVec<T> {
         let mut locations = Vec::new();
         if let Some(error_configs_yaml) = host_yaml["errorConfig"].as_vec() {
           for error_config_yaml in error_configs_yaml.iter() {
-            if let Some(scode_i64) = error_config_yaml["scode"].as_i64() {
-              let scode = scode_i64 as u16;
-              error_configs.push(ObtainConfigStructVecErrorConfig {
-                scode,
-                data: execute_fn(error_config_yaml)?,
-              });
-            }
+            let scode = error_config_yaml["scode"].as_i64().map(|s| s as u16);
+            error_configs.push(ObtainConfigStructVecErrorConfig {
+              scode,
+              data: execute_fn(error_config_yaml)?,
+            });
           }
         }
         if let Some(locations_yaml) = host_yaml["locations"].as_vec() {
@@ -116,7 +114,7 @@ where
         let mut error_config_used = false;
         if let Some(status_code) = status_code {
           for location in host.error_configs.iter() {
-            if location.scode == status_code {
+            if location.scode.is_none() || location.scode == Some(status_code) {
               error_config_or_location_data_iter = Box::new(location.data.iter());
               error_config_used = true;
               break;
