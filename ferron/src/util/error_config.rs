@@ -3,7 +3,8 @@ use yaml_rust2::Yaml;
 fn get_error_config(config: &Yaml, status_code: u16) -> Option<Yaml> {
   if let Some(error_configs) = config["errorConfig"].as_vec() {
     for error_config in error_configs {
-      if error_config["scode"].as_i64() == Some(status_code as i64) {
+      let configured_status_code = error_config["scode"].as_i64();
+      if configured_status_code.is_none() || configured_status_code == Some(status_code as i64) {
         return Some(error_config.to_owned());
       }
     }
@@ -91,6 +92,18 @@ mod tests {
         "#,
     );
     assert_eq!(combine_error_config(&yaml, 404), None);
+  }
+
+  #[test]
+  fn test_catch_all_error_config() {
+    let yaml = load_yaml(
+      r#"
+            errorConfig:
+              - message: "An error occurred"
+        "#,
+    );
+    let result = combine_error_config(&yaml, 500).unwrap();
+    assert_eq!(result["message"].as_str().unwrap(), "An error occurred");
   }
 
   #[test]
