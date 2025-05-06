@@ -412,6 +412,7 @@ impl ServerModuleHandlers for WsgidModuleHandlers {
           .get_original_url()
           .unwrap_or(request.get_hyper_request().uri())
           .path(),
+        request.get_error_status_code().map(|x| x.as_u16()),
       );
 
       let wsgi_process_pool = wsgi_data.clone().and_then(|x| x.wsgi_process_pool.clone());

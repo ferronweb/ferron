@@ -687,6 +687,7 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
           .get_original_url()
           .unwrap_or(request.get_hyper_request().uri())
           .path(),
+        request.get_error_status_code().map(|x| x.as_u16()),
       );
 
       let asgi_application_id = asgi_data.clone().and_then(|x| x.asgi_application_id);
@@ -832,6 +833,7 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
         },
         socket_data.remote_addr.ip(),
         uri.path(),
+        None,
       );
 
       let asgi_application_id = asgi_data.clone().and_then(|x| x.asgi_application_id);

@@ -117,6 +117,7 @@ impl ServerModuleHandlers for WsgiModuleHandlers {
           .get_original_url()
           .unwrap_or(request.get_hyper_request().uri())
           .path(),
+        request.get_error_status_code().map(|x| x.as_u16()),
       );
 
       let wsgi_application = wsgi_data.clone().and_then(|x| x.wsgi_application.clone());
