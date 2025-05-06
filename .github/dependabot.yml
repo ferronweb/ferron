@@ -13,3 +13,4 @@ updates:
     directory: "/website" # Location of package manifests
     schedule:
       interval: "weekly"
+    target-branch: "main"

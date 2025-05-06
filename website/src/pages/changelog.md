@@ -4,6 +4,13 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.3.0
+
+**Released in May 6, 2025**
+
+- Added support for configurable error handling that uses a regular request handler
+- Added support for intercepting error responses from backend servers
+
 ## Ferron 1.2.0
 
 **Released in May 3, 2025**
@@ -31,7 +38,7 @@ description: Stay updated on Ferron web server improvements with a change log, f
 
 **Released in April 29, 2025**
 
-- Added experimental support for HTTP/3 
+- Added experimental support for HTTP/3
 - Added support for HTTP-01 ACME challenge for automatic TLS
 - Added support for WSGI and ASGI (not enabled by default, you must compile Ferron yourself to use these features)
 

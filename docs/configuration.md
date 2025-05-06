@@ -89,13 +89,20 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
 
 - **locations** (_Array&lt;Object&gt;_)
   - The list of locations specified for a specific host. The sub-properties of this property will be merged in combined server configuration. The URLs will not be rewritten. To rewrite the URLs, configure the URL rewrite map in location configuration. Default: None
+- **errorConfig** (_Array&lt;Object&gt;_; Ferron 1.3.0 and newer)
+  - The list of error configurations specified for a specific host. The sub-properties of this property will be merged in combined server configuration. If used, the request body might be missing from the request processed by the request handlers with error configuration used. Default: None
 
 ## Location configuration properties
 
 - **path** (_String_)
   - The path specified for a location. The location is matched against URL-decoded request URL. If it is the same, or the decoded request URL are levels above the specified path, the location configuration will be used. Default: None
 
-## Global, host & location configuration properties
+## Error configuration properties
+
+- **scode** (_u16_; Ferron 1.3.0 and newer)
+  - The status code specified for the error configuration. If specified, the error configuration will be used if the original error status code matches the specified one. If not specified, the error configuration will be applied for all original error status codes. Default: None
+
+## Global, host, error & location configuration properties
 
 - **domain** (_String_)
   - The domain name of a host. This setting specifies the domain name associated with the host. Default: None
@@ -219,6 +226,8 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - Path to the file containing the ASGI application. The ASGI application must have an `application` ASGI callback. Default: None
 - **asgiPath** (_String_; _asgi_ module; Ferron 1.1.0 and newer)
   - Base URL, which ASGI handler will handle the request if the request URL begins with it. Default: `"/"`
+- **proxyInterceptErrors** (_bool_; _rproxy_ module; Ferron 1.3.0 and newer)
+  - Option to enable interception of backend error responses. If set to `true`, the server will call a default error handler with the same status code as the backend error response. Default: `false`
 
 ## Server configuration includes
 
@@ -304,6 +313,10 @@ hosts:
       - scode: 401
         url: "/restricted.html"
     proxyTo: "http://backend-service:5000"
+    # Uncomment to enable error configuration
+    # errorConfig:
+    #   - scode: 404
+    #     proxyTo: "http://backend-fallback:5000"
 # # Uncomment to enable configuration file includes
 #include:
 #  - /etc/ferron.d/**/*.yaml
