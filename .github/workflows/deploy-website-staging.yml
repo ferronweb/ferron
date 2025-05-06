@@ -38,7 +38,7 @@ jobs:
           pushd website
           npm run build
           echo "User-agent: *" > dist/robots.txt
-          echo "Disallow:" >> dist/robots.txt
+          echo "Disallow: /" >> dist/robots.txt
           popd
 
       - name: Create the website ZIP archive
