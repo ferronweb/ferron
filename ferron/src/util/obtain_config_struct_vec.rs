@@ -113,9 +113,9 @@ where
         host_data_iter = Box::new(host.data.iter());
         let mut error_config_used = false;
         if let Some(status_code) = status_code {
-          for location in host.error_configs.iter() {
-            if location.scode.is_none() || location.scode == Some(status_code) {
-              error_config_or_location_data_iter = Box::new(location.data.iter());
+          for error_config in host.error_configs.iter() {
+            if error_config.scode.is_none() || error_config.scode == Some(status_code) {
+              error_config_or_location_data_iter = Box::new(error_config.data.iter());
               error_config_used = true;
               break;
             }
