@@ -12,6 +12,7 @@ on:
       - 'ferron*.yaml'
       - 'ferron/**'
       - 'ferron-passwd/**'
+      - 'wwwroot/**'
       - '.github/workflows/release.yml'
 
 jobs:
