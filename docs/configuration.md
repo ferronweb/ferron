@@ -278,7 +278,6 @@ global:
 hosts:
   - domain: "example.com"
     serverAdministratorEmail: "admin@example.com"
-    wwwredirect: true
     customHeaders:
       X-Frame-Options: "DENY"
       X-Content-Type-Options: "nosniff"
