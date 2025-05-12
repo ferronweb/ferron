@@ -7,7 +7,7 @@ edition = "2021"
 ProductName = "Ferron password utility"
 
 [dependencies]
-clap = { version = "4.5.28", features = ["derive"] }
+clap = { version = "4.5.38", features = ["derive"] }
 password-auth.workspace = true
 rpassword = "7.4.0"
 yaml-rust2.workspace = true
