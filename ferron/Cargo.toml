@@ -15,7 +15,7 @@ tokio-util = { version = "0.7.13", features = ["io"] }
 rustls = { version = "0.23.24", default-features = false, features = ["tls12", "std", "ring"] }
 rustls-acme = { version = "0.13.0", default-features = false, features = ["tls12", "ring"] }
 tokio-rustls = { version = "0.26.1", default-features = false, features = ["tls12", "ring"] }
-rustls-pki-types = "1.11.0"
+rustls-pki-types = "1.12.0"
 rustls-pemfile = "2.2.0"
 yaml-rust2 = { workspace = true }
 anyhow = "1.0.98"
