@@ -28,7 +28,7 @@
     "astro-seo": "^0.8.4",
     "autoprefixer": "^10.4.20",
     "date-fns": "^4.1.0",
-    "lucide-astro": "^0.507.0",
+    "lucide-astro": "^0.509.0",
     "lucide-react": "^0.507.0",
     "postcss-media-minmax": "^5.0.0",
     "postcss-nesting": "^13.0.1",
