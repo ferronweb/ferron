@@ -46,8 +46,9 @@ use tokio_util::sync::CancellationToken;
 use yaml_rust2::Yaml;
 
 // Enum for maybe TLS stream
+#[allow(clippy::large_enum_variant)]
 enum MaybeTlsStream {
-  Tls(Box<TlsStream<TcpStream>>),
+  Tls(TlsStream<TcpStream>),
   Plain(TcpStream),
 }
 
@@ -384,7 +385,7 @@ async fn accept_connection(
         }
       };
 
-      MaybeTlsStream::Tls(Box::new(tls_stream))
+      MaybeTlsStream::Tls(tls_stream)
     } else {
       MaybeTlsStream::Plain(stream)
     };
