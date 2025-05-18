@@ -47,7 +47,7 @@ use yaml_rust2::Yaml;
 
 // Enum for maybe TLS stream
 enum MaybeTlsStream {
-  Tls(TlsStream<TcpStream>),
+  Tls(Box<TlsStream<TcpStream>>),
   Plain(TcpStream),
 }
 
@@ -384,7 +384,7 @@ async fn accept_connection(
         }
       };
 
-      MaybeTlsStream::Tls(tls_stream)
+      MaybeTlsStream::Tls(Box::new(tls_stream))
     } else {
       MaybeTlsStream::Plain(stream)
     };
