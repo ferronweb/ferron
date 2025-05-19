@@ -24,3 +24,17 @@ Thumbs.db
 # Temporary files used by the editor
 *.swp
 *.swo
+
+# Dockerfiles
+Dockerfile*
+
+# Hidden directories
+.*/
+
+# Documentation
+*.md
+
+# Configuration
+*.yaml
+# except
+!ferron-docker.yaml
