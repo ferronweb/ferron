@@ -129,7 +129,7 @@ jobs:
           cp -a wwwroot release
 
       - name: Create a release ZIP archive
-        uses: thedoctor0/zip-release@0.7.5
+        uses: thedoctor0/zip-release@0.7.6
         with:
           type: "zip"
           filename: "../ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip"
@@ -180,7 +180,7 @@ jobs:
         run: "cargo doc --verbose --locked --release"
 
       - name: Create the documentation ZIP archive
-        uses: thedoctor0/zip-release@0.7.5
+        uses: thedoctor0/zip-release@0.7.6
         with:
           type: "zip"
           filename: "../../ferron-rustdocs.zip"
