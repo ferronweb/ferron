@@ -88,11 +88,3 @@ If you need to remove the Ferron container:
 ```sh
 docker rm -f myferron
 ```
-
-### Entering the command shell
-
-If you need to manage the Ferron container:
-
-```sh
-docker exec -u root -it myferron bash
-```
