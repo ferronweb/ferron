@@ -714,9 +714,7 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
           true => format!("{}/", request_path),
           false => request_path.to_string(),
         };
-        if let Some(stripped_request_path) =
-          request_path_with_slashes.strip_prefix(canonical_asgi_path)
-        {
+        if request_path_with_slashes.starts_with(canonical_asgi_path) {
           let wwwroot_yaml = &config["wwwroot"];
           let wwwroot = wwwroot_yaml.as_str().unwrap_or("/nonexistent");
 
@@ -748,9 +746,6 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
 
           let joined_pathbuf = wwwroot.join(decoded_relative_path);
           let execute_pathbuf = joined_pathbuf;
-          let execute_path_info = stripped_request_path
-            .strip_prefix("/")
-            .map(|s| s.to_string());
 
           let (tx, rx) = {
             let (tx, rx) = &self.asgi_event_loop_communication[asgi_application_id];
@@ -764,8 +759,6 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
             error_logger,
             wwwroot,
             execute_pathbuf,
-            execute_path_info,
-            config["serverAdministratorEmail"].as_str(),
             tx,
             rx,
           )
@@ -856,9 +849,7 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
           true => format!("{}/", request_path),
           false => request_path.to_string(),
         };
-        if let Some(stripped_request_path) =
-          request_path_with_slashes.strip_prefix(canonical_asgi_path)
-        {
+        if request_path_with_slashes.starts_with(canonical_asgi_path) {
           let wwwroot_yaml = &config["wwwroot"];
           let wwwroot = wwwroot_yaml.as_str().unwrap_or("/nonexistent");
 
@@ -886,9 +877,6 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
 
           let joined_pathbuf = wwwroot.join(decoded_relative_path);
           let execute_pathbuf = joined_pathbuf;
-          let execute_path_info = stripped_request_path
-            .strip_prefix("/")
-            .map(|s| s.to_string());
 
           let (tx, rx) = {
             let (tx, rx) = &self.asgi_event_loop_communication[asgi_application_id];
@@ -904,8 +892,6 @@ impl ServerModuleHandlers for AsgiModuleHandlers {
             error_logger,
             wwwroot,
             execute_pathbuf,
-            execute_path_info,
-            config["serverAdministratorEmail"].as_str(),
             tx,
             rx,
           )
@@ -929,8 +915,6 @@ async fn execute_asgi(
   error_logger: &ErrorLogger,
   wwwroot: &Path,
   execute_pathbuf: PathBuf,
-  _path_info: Option<String>,
-  _server_administrator_email: Option<&str>,
   asgi_tx: Sender<IncomingAsgiMessage>,
   asgi_rx: Receiver<OutgoingAsgiMessage>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
@@ -1167,8 +1151,6 @@ async fn execute_asgi_websocket(
   error_logger: &ErrorLogger,
   wwwroot: &Path,
   execute_pathbuf: PathBuf,
-  _path_info: Option<String>,
-  _server_administrator_email: Option<&str>,
   asgi_tx: Sender<IncomingAsgiMessage>,
   asgi_rx: Receiver<OutgoingAsgiMessage>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
