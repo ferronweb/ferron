@@ -1153,45 +1153,57 @@ pub fn validate_config(
 pub fn prepare_config_for_validation(
   config: &Yaml,
 ) -> Result<impl Iterator<Item = (Yaml, bool, bool, bool)>, Box<dyn Error + Send + Sync>> {
-  let mut vector = Vec::new();
+  let mut global_vector = Vec::new();
   if let Some(global_config) = config["global"].as_hash() {
     let global_config_yaml = Yaml::Hash(global_config.clone());
-    vector.push(global_config_yaml);
+    global_vector.push(global_config_yaml);
   }
 
-  let mut vector2 = Vec::new();
-  let mut vector3 = Vec::new();
-  let mut vector4 = Vec::new();
+  let mut host_vector = Vec::new();
+  let mut error_config_vector = Vec::new();
+  let mut location_vector = Vec::new();
   if !config["hosts"].is_badvalue() {
     if let Some(hosts) = config["hosts"].as_vec() {
       for host in hosts.iter() {
         if !host["errorConfig"].is_badvalue() {
           if let Some(error_configs) = host["errorConfig"].as_vec() {
-            vector3.append(&mut error_configs.clone());
+            error_config_vector.append(&mut error_configs.clone());
           } else {
             return Err(anyhow::anyhow!("Invalid location configuration").into());
           }
         }
         if !host["locations"].is_badvalue() {
           if let Some(locations) = host["locations"].as_vec() {
-            vector4.append(&mut locations.clone());
+            location_vector.append(&mut locations.clone());
           } else {
             return Err(anyhow::anyhow!("Invalid location configuration").into());
           }
         }
       }
-      vector2 = hosts.clone();
+      host_vector = hosts.clone();
     } else {
       return Err(anyhow::anyhow!("Invalid virtual host configuration").into());
     }
   }
 
-  let iter = vector
+  let iter = global_vector
     .into_iter()
     .map(|item| (item, true, false, false))
-    .chain(vector2.into_iter().map(|item| (item, false, false, false)))
-    .chain(vector3.into_iter().map(|item| (item, false, true, false)))
-    .chain(vector4.into_iter().map(|item| (item, false, false, true)));
+    .chain(
+      host_vector
+        .into_iter()
+        .map(|item| (item, false, false, false)),
+    )
+    .chain(
+      location_vector
+        .into_iter()
+        .map(|item| (item, false, true, false)),
+    )
+    .chain(
+      error_config_vector
+        .into_iter()
+        .map(|item| (item, false, false, true)),
+    );
 
   Ok(iter)
 }
