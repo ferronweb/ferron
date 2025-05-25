@@ -259,7 +259,7 @@ pub fn incoming_struct_to_asgi_event(incoming: IncomingAsgiMessageInner) -> PyRe
         event.set_item("type", "lifespan.shutdown")?;
       }
       IncomingAsgiMessageInner::HttpRequest(http_request) => {
-        event.set_item("type", "lifespan.shutdown")?;
+        event.set_item("type", "http.request")?;
         event.set_item("body", http_request.body)?;
         event.set_item("more_body", http_request.more_body)?;
       }
