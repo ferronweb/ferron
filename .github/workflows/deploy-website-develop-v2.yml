@@ -1,4 +1,4 @@
-name: Deploy website ("develop" branch)
+name: Deploy website ("develop" branch; Ferron 2.x)
 
 on:
   push:
