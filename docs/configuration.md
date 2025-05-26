@@ -208,7 +208,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - Base URL, which web server will send requests to for forwarded authentication. HTTP and HTTPS URLs are supported. Default: None
 - **forwardedAuthCopyHeaders** (_Array&lt;String&gt;_; _fauth_ module)
   - A list of response headers that will be copied from the forwarded authentication server response to the original request. Default: None
-- **enableLoadBalancerHealthCheck** (_u32_; _rproxy_ module)
+- **enableLoadBalancerHealthCheck** (_bool_; _rproxy_ module)
   - Option to enable passive health checks for the load balancer. If the connection by the load balancer fails, the load balancer notes the failed connection, and if there are too many of them, the load balancer temporarily marks the backend server as "bad" and will not choose the backend server. Default: `false`
 - **loadBalancerHealthCheckMaximumFails** (_u32_; _rproxy_ module)
   - Maximum reported failed connections, before a backend server is marked as "bad" and not chosen by the load balancer. Default: `3`
