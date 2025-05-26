@@ -4,47 +4,44 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::ferron_res::server_software::SERVER_SOFTWARE;
-use crate::ferron_util::combine_config::combine_config;
-use crate::ferron_util::error_config::combine_error_config;
-use crate::ferron_util::error_pages::generate_default_error_page;
-use crate::ferron_util::url_sanitizer::sanitize_url;
-
-use crate::ferron_common::{
-  ErrorLogger, LogMessage, RequestData, ServerModuleHandlers, SocketData,
-};
 use async_channel::Sender;
-use chrono::prelude::*;
-use futures_util::TryStreamExt;
-use http::header::CONTENT_TYPE;
+use chrono::{DateTime, Local};
+use futures_util::stream::TryStreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use hyper::body::{Body, Bytes, Frame};
-use hyper::header::{self, HeaderName, HeaderValue};
-use hyper::{HeaderMap, Method, Request, Response, StatusCode};
-use hyper_tungstenite::is_upgrade_request;
+use hyper::header::{HeaderName, HeaderValue};
+use hyper::{header, HeaderMap, Method, Request, Response, StatusCode};
+use monoio::time::timeout;
 use rustls_acme::ResolvesServerCertAcme;
-use tokio::fs;
-use tokio::io::BufReader;
-use tokio::time::timeout;
-use tokio_util::io::ReaderStream;
-use yaml_rust2::Yaml;
 
+use crate::config::{ServerConfiguration, ServerConfigurations};
+use crate::get_value;
+use crate::logging::{ErrorLogger, LogMessage};
+use crate::modules::{ModuleHandlers, RequestData, SocketData};
+use crate::util::{
+  generate_default_error_page, get_entries, get_entry, sanitize_url, MonoioFileStream,
+  SERVER_SOFTWARE,
+};
+
+/// Generates an error response
 async fn generate_error_response(
   status_code: StatusCode,
-  config: &Yaml,
+  config: &ServerConfiguration,
   headers: &Option<HeaderMap>,
 ) -> Response<BoxBody<Bytes, std::io::Error>> {
-  let bare_body =
-    generate_default_error_page(status_code, config["serverAdministratorEmail"].as_str());
+  let bare_body = generate_default_error_page(
+    status_code,
+    get_value!("server_administrator_email", config).and_then(|v| v.as_str()),
+  );
   let mut content_length: Option<u64> = bare_body.len().try_into().ok();
   let mut response_body = Full::new(Bytes::from(bare_body))
     .map_err(|e| match e {})
     .boxed();
 
-  if let Some(error_pages) = config["errorPages"].as_vec() {
-    for error_page_yaml in error_pages {
-      if let Some(page_status_code) = error_page_yaml["scode"].as_i64() {
+  if let Some(error_pages) = get_entries!("error_page", config) {
+    for error_page in &error_pages.inner {
+      if let Some(page_status_code) = error_page.values.first().and_then(|v| v.as_i128()) {
         let page_status_code = match StatusCode::from_u16(match page_status_code.try_into() {
           Ok(status_code) => status_code,
           Err(_) => continue,
@@ -55,23 +52,35 @@ async fn generate_error_response(
         if status_code != page_status_code {
           continue;
         }
-        if let Some(page_path) = error_page_yaml["path"].as_str() {
-          let file = fs::File::open(page_path).await;
+        if let Some(page_path) = error_page.values.get(1).and_then(|v| v.as_str()) {
+          let file = monoio::fs::File::open(page_path).await;
 
           let file = match file {
             Ok(file) => file,
             Err(_) => continue,
           };
 
-          content_length = match file.metadata().await {
+          // Monoio's `File` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
+          #[cfg(unix)]
+          let metadata = file.metadata().await;
+          #[cfg(windows)]
+          let metadata = {
+            let page_path = page_path.to_owned();
+            monoio::spawn_blocking(move || std::fs::metadata(page_path))
+              .await
+              .unwrap_or(Err(std::io::Error::other(
+                "Can't spawn a blocking task to obtain the file metadata",
+              )))
+          };
+
+          content_length = match metadata {
             Ok(metadata) => Some(metadata.len()),
             Err(_) => None,
           };
 
-          // Use BufReader for better performance.
-          let reader_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
+          let file_stream = MonoioFileStream::new(file, None, None);
 
-          let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
+          let stream_body = StreamBody::new(file_stream.map_ok(Frame::data));
           let boxed_body = stream_body.boxed();
 
           response_body = boxed_body;
@@ -101,6 +110,7 @@ async fn generate_error_response(
   response_builder.body(response_body).unwrap_or_default()
 }
 
+/// Sends a log message formatted according to the Combined Log Format
 #[allow(clippy::too_many_arguments)]
 async fn log_combined(
   logger: &Sender<LogMessage>,
@@ -155,27 +165,203 @@ async fn log_combined(
     .unwrap_or_default();
 }
 
+/// Helper function to add custom headers to response
+fn add_custom_headers(
+  response_parts: &mut hyper::http::response::Parts,
+  configuration: &ServerConfiguration,
+  path: &str,
+) {
+  if let Some(custom_headers) = get_entries!("header", configuration) {
+    for custom_header in custom_headers.inner.iter().rev() {
+      if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+        if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+          if !response_parts.headers.contains_key(header_name) {
+            if let Ok(header_value) = HeaderValue::from_str(&header_value.replace("{path}", path)) {
+              if let Ok(header_name) = HeaderName::from_str(header_name) {
+                response_parts.headers.insert(header_name, header_value);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// Helper function to add HTTP/3 Alt-Svc header
+fn add_http3_alt_svc_header(
+  response_parts: &mut hyper::http::response::Parts,
+  http3_alt_port: Option<u16>,
+) {
+  if let Some(http3_alt_port) = http3_alt_port {
+    if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+      Some(value) => {
+        let header_value_old = String::from_utf8_lossy(value.as_bytes());
+        let header_value_new = format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+
+        if header_value_old != header_value_new {
+          HeaderValue::from_bytes(format!("{}, {}", header_value_old, header_value_new).as_bytes())
+        } else {
+          HeaderValue::from_bytes(header_value_old.as_bytes())
+        }
+      }
+      None => HeaderValue::from_bytes(
+        format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+      ),
+    } {
+      response_parts.headers.insert(header::ALT_SVC, header_value);
+    }
+  }
+}
+
+/// Helper function to add server header
+fn add_server_header(response_parts: &mut hyper::http::response::Parts) {
+  response_parts
+    .headers
+    .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+}
+
+/// Helper function to extract content length for logging
+fn extract_content_length(response: &Response<BoxBody<Bytes, std::io::Error>>) -> Option<u64> {
+  match response.headers().get(header::CONTENT_LENGTH) {
+    Some(header_value) => match header_value.to_str() {
+      Ok(header_value) => match header_value.parse::<u64>() {
+        Ok(content_length) => Some(content_length),
+        Err(_) => response.body().size_hint().exact(),
+      },
+      Err(_) => response.body().size_hint().exact(),
+    },
+    None => response.body().size_hint().exact(),
+  }
+}
+
+/// Helper function to apply all response headers and log if needed
+#[allow(clippy::too_many_arguments)]
+async fn finalize_response_and_log(
+  response: Response<BoxBody<Bytes, std::io::Error>>,
+  configuration: &ServerConfiguration,
+  http3_alt_port: Option<u16>,
+  path: &str,
+  logger: &Sender<LogMessage>,
+  log_enabled: bool,
+  socket_data: &SocketData,
+  latest_auth_data: Option<String>,
+  log_method: String,
+  log_request_path: String,
+  log_protocol: String,
+  log_referrer: Option<String>,
+  log_user_agent: Option<String>,
+) -> Response<BoxBody<Bytes, std::io::Error>> {
+  let (mut response_parts, response_body) = response.into_parts();
+
+  add_custom_headers(&mut response_parts, configuration, path);
+  add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
+  add_server_header(&mut response_parts);
+
+  let response = Response::from_parts(response_parts, response_body);
+
+  if log_enabled {
+    log_combined(
+      logger,
+      socket_data.remote_addr.ip(),
+      latest_auth_data,
+      log_method,
+      log_request_path,
+      log_protocol,
+      response.status().as_u16(),
+      extract_content_length(&response),
+      log_referrer,
+      log_user_agent,
+    )
+    .await;
+  }
+
+  response
+}
+
+/// Helper function to execute response modifying handlers
+#[allow(clippy::too_many_arguments)]
+async fn execute_response_modifying_handlers(
+  mut response: Response<BoxBody<Bytes, std::io::Error>>,
+  mut executed_handlers: Vec<Box<dyn ModuleHandlers>>,
+  configuration: &ServerConfiguration,
+  http3_alt_port: Option<u16>,
+  path: &str,
+  logger: &Sender<LogMessage>,
+  error_log_enabled: bool,
+  log_enabled: bool,
+  socket_data: &SocketData,
+  latest_auth_data: Option<String>,
+  log_method: String,
+  log_request_path: String,
+  log_protocol: String,
+  log_referrer: Option<String>,
+  log_user_agent: Option<String>,
+) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Response<BoxBody<Bytes, std::io::Error>>> {
+  while let Some(mut executed_handler) = executed_handlers.pop() {
+    let response_status = executed_handler.response_modifying_handler(response).await;
+    response = match response_status {
+      Ok(response) => response,
+      Err(err) => {
+        if error_log_enabled {
+          logger
+            .send(LogMessage::new(
+              format!("Unexpected error while serving a request: {}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+        }
+
+        let error_response =
+          generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, configuration, &None).await;
+
+        let final_response = finalize_response_and_log(
+          error_response,
+          configuration,
+          http3_alt_port,
+          path,
+          logger,
+          log_enabled,
+          socket_data,
+          latest_auth_data,
+          log_method,
+          log_request_path,
+          log_protocol,
+          log_referrer,
+          log_user_agent,
+        )
+        .await;
+
+        return Err(final_response);
+      }
+    };
+  }
+  Ok(response)
+}
+
+/// The HTTP request handler
 #[allow(clippy::too_many_arguments)]
 async fn request_handler_wrapped(
   mut request: Request<BoxBody<Bytes, std::io::Error>>,
-  remote_address: SocketAddr,
-  local_address: SocketAddr,
+  client_address: SocketAddr,
+  server_address: SocketAddr,
   encrypted: bool,
-  config: Arc<Yaml>,
+  configurations: Arc<ServerConfigurations>,
   logger: Sender<LogMessage>,
-  handlers_vec: Vec<Box<dyn ServerModuleHandlers + Send>>,
-  acme_http01_resolver_option: Option<Arc<ResolvesServerCertAcme>>,
   http3_alt_port: Option<u16>,
+  acme_http_01_resolvers: Arc<Vec<Arc<ResolvesServerCertAcme>>>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
+  // Global configuration
+  let global_configuration = configurations.find_global_configuration();
+
+  // Collect request data for logging
   let is_proxy_request = match request.version() {
     hyper::Version::HTTP_2 | hyper::Version::HTTP_3 => {
       request.method() == hyper::Method::CONNECT && request.uri().host().is_some()
     }
     _ => request.uri().host().is_some(),
   };
-  let is_connect_proxy_request = request.method() == hyper::Method::CONNECT;
-
-  // Collect request data for logging
   let log_method = String::from(request.method().as_str());
   let log_request_path = match is_proxy_request {
     true => request.uri().to_string(),
@@ -210,12 +396,16 @@ async fn request_handler_wrapped(
     },
     None => None,
   };
-  let log_enabled = config["global"]["logFilePath"].as_str().is_some();
-  let error_log_enabled = config["global"]["errorLogFilePath"].as_str().is_some();
+  let log_enabled = !global_configuration
+    .as_deref()
+    .and_then(|c| get_value!("log", c))
+    .is_none_or(|v| v.is_null());
+  let error_log_enabled = !global_configuration
+    .as_deref()
+    .and_then(|c| get_value!("error_log", c))
+    .is_none_or(|v| v.is_null());
 
-  // Construct SocketData
-  let mut socket_data = SocketData::new(remote_address, local_address, encrypted);
-
+  // Normalize HTTP/2 and HTTP/3 request objects
   match request.version() {
     hyper::Version::HTTP_2 | hyper::Version::HTTP_3 => {
       // Set "Host" request header for HTTP/2 and HTTP/3 connections
@@ -251,6 +441,14 @@ async fn request_handler_wrapped(
     _ => (),
   }
 
+  // Construct socket data
+  let mut socket_data = SocketData {
+    remote_addr: client_address,
+    local_addr: server_address,
+    encrypted,
+  };
+
+  // Sanitize "Host" header
   let host_header_option = request.headers().get(header::HOST);
   if let Some(header_data) = host_header_option {
     match header_data.to_str() {
@@ -420,20 +618,27 @@ async fn request_handler_wrapped(
     }
   };
 
-  // Combine the server configuration
-  let mut combined_config = match combine_config(
-    config,
-    match is_proxy_request || is_connect_proxy_request {
-      false => match request.headers().get(header::HOST) {
-        Some(value) => value.to_str().ok(),
-        None => None,
-      },
-      true => None,
-    },
-    local_address.ip(),
+  // Find the server configuration
+  let mut configuration = match configurations.find_configuration(
     request.uri().path(),
+    match request.headers().get(header::HOST) {
+      Some(value) => value.to_str().ok().map(|h| {
+        if let Some((left, right)) = h.rsplit_once(':') {
+          if right.parse::<u16>().is_ok() {
+            left
+          } else {
+            h
+          }
+        } else {
+          h
+        }
+      }),
+      None => None,
+    },
+    socket_data.local_addr.ip(),
+    socket_data.local_addr.port(),
   ) {
-    Some(config) => config,
+    Some(configuration) => configuration,
     None => {
       if error_log_enabled {
         logger
@@ -511,12 +716,13 @@ async fn request_handler_wrapped(
     }
   };
 
+  // Sanitize the URL
   let url_pathname = request.uri().path();
   let sanitized_url_pathname = match sanitize_url(
     url_pathname,
-    combined_config["allowDoubleSlashes"]
-      .as_bool()
-      .unwrap_or_default(),
+    get_value!("allow_double_slashes", configuration)
+      .and_then(|v| v.as_bool())
+      .unwrap_or(false),
   ) {
     Ok(sanitized_url) => sanitized_url,
     Err(err) => {
@@ -529,78 +735,26 @@ async fn request_handler_wrapped(
           .await
           .unwrap_or_default();
       }
-      let response =
-        generate_error_response(StatusCode::BAD_REQUEST, &combined_config, &None).await;
-      if log_enabled {
-        log_combined(
+      let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
+
+      return Ok(
+        finalize_response_and_log(
+          response,
+          &configuration,
+          http3_alt_port,
+          url_pathname,
           &logger,
-          socket_data.remote_addr.ip(),
+          log_enabled,
+          &socket_data,
           None,
           log_method,
           log_request_path,
           log_protocol,
-          response.status().as_u16(),
-          match response.headers().get(header::CONTENT_LENGTH) {
-            Some(header_value) => match header_value.to_str() {
-              Ok(header_value) => match header_value.parse::<u64>() {
-                Ok(content_length) => Some(content_length),
-                Err(_) => response.body().size_hint().exact(),
-              },
-              Err(_) => response.body().size_hint().exact(),
-            },
-            None => response.body().size_hint().exact(),
-          },
           log_referrer,
           log_user_agent,
         )
-        .await;
-      }
-      let (mut response_parts, response_body) = response.into_parts();
-      if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-        let custom_headers_hash_iter = custom_headers_hash.iter();
-        for (header_name, header_value) in custom_headers_hash_iter {
-          if let Some(header_name) = header_name.as_str() {
-            if let Some(header_value) = header_value.as_str() {
-              if !response_parts.headers.contains_key(header_name) {
-                if let Ok(header_value) =
-                  HeaderValue::from_str(&header_value.replace("{path}", url_pathname))
-                {
-                  if let Ok(header_name) = HeaderName::from_str(header_name) {
-                    response_parts.headers.insert(header_name, header_value);
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-      if let Some(http3_alt_port) = http3_alt_port {
-        if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-          Some(value) => {
-            let header_value_old = String::from_utf8_lossy(value.as_bytes());
-            let header_value_new =
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-            if header_value_old != header_value_new {
-              HeaderValue::from_bytes(
-                format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-              )
-            } else {
-              HeaderValue::from_bytes(header_value_old.as_bytes())
-            }
-          }
-          None => HeaderValue::from_bytes(
-            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-          ),
-        } {
-          response_parts.headers.insert(header::ALT_SVC, header_value);
-        }
-      }
-      response_parts
-        .headers
-        .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-      return Ok(Response::from_parts(response_parts, response_body));
+        .await,
+      );
     }
   };
 
@@ -635,77 +789,26 @@ async fn request_handler_wrapped(
               .unwrap_or_default();
           }
           let response =
-            generate_error_response(StatusCode::BAD_REQUEST, &combined_config, &None).await;
-          if log_enabled {
-            log_combined(
+            generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
+
+          return Ok(
+            finalize_response_and_log(
+              response,
+              &configuration,
+              http3_alt_port,
+              &sanitized_url_pathname,
               &logger,
-              socket_data.remote_addr.ip(),
+              log_enabled,
+              &socket_data,
               None,
               log_method,
               log_request_path,
               log_protocol,
-              response.status().as_u16(),
-              match response.headers().get(header::CONTENT_LENGTH) {
-                Some(header_value) => match header_value.to_str() {
-                  Ok(header_value) => match header_value.parse::<u64>() {
-                    Ok(content_length) => Some(content_length),
-                    Err(_) => response.body().size_hint().exact(),
-                  },
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                None => response.body().size_hint().exact(),
-              },
               log_referrer,
               log_user_agent,
             )
-            .await;
-          }
-          let (mut response_parts, response_body) = response.into_parts();
-          if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-            let custom_headers_hash_iter = custom_headers_hash.iter();
-            for (header_name, header_value) in custom_headers_hash_iter {
-              if let Some(header_name) = header_name.as_str() {
-                if let Some(header_value) = header_value.as_str() {
-                  if !response_parts.headers.contains_key(header_name) {
-                    if let Ok(header_value) = HeaderValue::from_str(
-                      &header_value.replace("{path}", &sanitized_url_pathname),
-                    ) {
-                      if let Ok(header_name) = HeaderName::from_str(header_name) {
-                        response_parts.headers.insert(header_name, header_value);
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-          if let Some(http3_alt_port) = http3_alt_port {
-            if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-              Some(value) => {
-                let header_value_old = String::from_utf8_lossy(value.as_bytes());
-                let header_value_new =
-                  format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-                if header_value_old != header_value_new {
-                  HeaderValue::from_bytes(
-                    format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-                  )
-                } else {
-                  HeaderValue::from_bytes(header_value_old.as_bytes())
-                }
-              }
-              None => HeaderValue::from_bytes(
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-              ),
-            } {
-              response_parts.headers.insert(header::ALT_SVC, header_value);
-            }
-          }
-          response_parts
-            .headers
-            .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-          return Ok(Response::from_parts(response_parts, response_body));
+            .await,
+          );
         }
       },
     );
@@ -722,77 +825,26 @@ async fn request_handler_wrapped(
             .unwrap_or_default();
         }
         let response =
-          generate_error_response(StatusCode::BAD_REQUEST, &combined_config, &None).await;
-        if log_enabled {
-          log_combined(
+          generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
+
+        return Ok(
+          finalize_response_and_log(
+            response,
+            &configuration,
+            http3_alt_port,
+            &sanitized_url_pathname,
             &logger,
-            socket_data.remote_addr.ip(),
+            log_enabled,
+            &socket_data,
             None,
             log_method,
             log_request_path,
             log_protocol,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                Err(_) => response.body().size_hint().exact(),
-              },
-              None => response.body().size_hint().exact(),
-            },
             log_referrer,
             log_user_agent,
           )
-          .await;
-        }
-        let (mut response_parts, response_body) = response.into_parts();
-        if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-          let custom_headers_hash_iter = custom_headers_hash.iter();
-          for (header_name, header_value) in custom_headers_hash_iter {
-            if let Some(header_name) = header_name.as_str() {
-              if let Some(header_value) = header_value.as_str() {
-                if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) =
-                    HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
-                  {
-                    if let Ok(header_name) = HeaderName::from_str(header_name) {
-                      response_parts.headers.insert(header_name, header_value);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        if let Some(http3_alt_port) = http3_alt_port {
-          if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-            Some(value) => {
-              let header_value_old = String::from_utf8_lossy(value.as_bytes());
-              let header_value_new =
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-              if header_value_old != header_value_new {
-                HeaderValue::from_bytes(
-                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-                )
-              } else {
-                HeaderValue::from_bytes(header_value_old.as_bytes())
-              }
-            }
-            None => HeaderValue::from_bytes(
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-            ),
-          } {
-            response_parts.headers.insert(header::ALT_SVC, header_value);
-          }
-        }
-        response_parts
-          .headers
-          .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-        return Ok(Response::from_parts(response_parts, response_body));
+          .await,
+        );
       }
     };
     request = Request::from_parts(parts, body);
@@ -810,1193 +862,168 @@ async fn request_handler_wrapped(
         if let Ok(header_value) = HeaderValue::from_str("GET, POST, HEAD, OPTIONS") {
           header_map.insert(header::ALLOW, header_value);
         };
-        generate_error_response(StatusCode::BAD_REQUEST, &combined_config, &Some(header_map)).await
+        generate_error_response(StatusCode::BAD_REQUEST, &configuration, &Some(header_map)).await
       }
     };
-    if log_enabled {
-      log_combined(
+    return Ok(
+      finalize_response_and_log(
+        response,
+        &configuration,
+        http3_alt_port,
+        &sanitized_url_pathname,
         &logger,
-        socket_data.remote_addr.ip(),
+        log_enabled,
+        &socket_data,
         None,
         log_method,
         log_request_path,
         log_protocol,
-        response.status().as_u16(),
-        match response.headers().get(header::CONTENT_LENGTH) {
-          Some(header_value) => match header_value.to_str() {
-            Ok(header_value) => match header_value.parse::<u64>() {
-              Ok(content_length) => Some(content_length),
-              Err(_) => response.body().size_hint().exact(),
-            },
-            Err(_) => response.body().size_hint().exact(),
-          },
-          None => response.body().size_hint().exact(),
-        },
         log_referrer,
         log_user_agent,
       )
-      .await;
-    }
-    let (mut response_parts, response_body) = response.into_parts();
-    if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-      let custom_headers_hash_iter = custom_headers_hash.iter();
-      for (header_name, header_value) in custom_headers_hash_iter {
-        if let Some(header_name) = header_name.as_str() {
-          if let Some(header_value) = header_value.as_str() {
-            if !response_parts.headers.contains_key(header_name) {
-              if let Ok(header_value) =
-                HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
-              {
-                if let Ok(header_name) = HeaderName::from_str(header_name) {
-                  response_parts.headers.insert(header_name, header_value);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    if let Some(http3_alt_port) = http3_alt_port {
-      if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-        Some(value) => {
-          let header_value_old = String::from_utf8_lossy(value.as_bytes());
-          let header_value_new =
-            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-          if header_value_old != header_value_new {
-            HeaderValue::from_bytes(
-              format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-            )
-          } else {
-            HeaderValue::from_bytes(header_value_old.as_bytes())
-          }
-        }
-        None => HeaderValue::from_bytes(
-          format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-        ),
-      } {
-        response_parts.headers.insert(header::ALT_SVC, header_value);
-      }
-    }
-    response_parts
-      .headers
-      .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-    return Ok(Response::from_parts(response_parts, response_body));
+      .await,
+    );
   }
 
   // HTTP-01 ACME challenge for automatic TLS
-  if let Some(acme_http01_resolver) = acme_http01_resolver_option {
+  if !acme_http_01_resolvers.is_empty() {
     if let Some(challenge_token) = request
       .uri()
       .path()
       .strip_prefix("/.well-known/acme-challenge/")
     {
-      if let Some(acme_response) = acme_http01_resolver.get_http_01_key_auth(challenge_token) {
-        let response = Response::builder()
-          .status(StatusCode::OK)
-          .header(
-            CONTENT_TYPE,
-            HeaderValue::from_static("application/octet-stream"),
-          )
-          .body(
-            Full::new(Bytes::from(acme_response))
-              .map_err(|e| match e {})
-              .boxed(),
-          )
-          .unwrap_or_default();
+      for acme_http01_resolver in &*acme_http_01_resolvers {
+        if let Some(acme_response) = acme_http01_resolver.get_http_01_key_auth(challenge_token) {
+          let response = Response::builder()
+            .status(StatusCode::OK)
+            .header(
+              header::CONTENT_TYPE,
+              HeaderValue::from_static("application/octet-stream"),
+            )
+            .body(
+              Full::new(Bytes::from(acme_response))
+                .map_err(|e| match e {})
+                .boxed(),
+            )
+            .unwrap_or_default();
 
-        let (mut response_parts, response_body) = response.into_parts();
-        if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-          let custom_headers_hash_iter = custom_headers_hash.iter();
-          for (header_name, header_value) in custom_headers_hash_iter {
-            if let Some(header_name) = header_name.as_str() {
-              if let Some(header_value) = header_value.as_str() {
-                if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) =
-                    HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
-                  {
-                    if let Ok(header_name) = HeaderName::from_str(header_name) {
-                      response_parts.headers.insert(header_name, header_value);
-                    }
-                  }
-                }
-              }
-            }
-          }
+          return Ok(
+            finalize_response_and_log(
+              response,
+              &configuration,
+              http3_alt_port,
+              &sanitized_url_pathname,
+              &logger,
+              log_enabled,
+              &socket_data,
+              None,
+              log_method,
+              log_request_path,
+              log_protocol,
+              log_referrer,
+              log_user_agent,
+            )
+            .await,
+          );
         }
-        if let Some(http3_alt_port) = http3_alt_port {
-          if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-            Some(value) => {
-              let header_value_old = String::from_utf8_lossy(value.as_bytes());
-              let header_value_new =
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-              if header_value_old != header_value_new {
-                HeaderValue::from_bytes(
-                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-                )
-              } else {
-                HeaderValue::from_bytes(header_value_old.as_bytes())
-              }
-            }
-            None => HeaderValue::from_bytes(
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-            ),
-          } {
-            response_parts.headers.insert(header::ALT_SVC, header_value);
-          }
-        }
-        response_parts
-          .headers
-          .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-        let response = Response::from_parts(response_parts, response_body);
-
-        if log_enabled {
-          log_combined(
-            &logger,
-            socket_data.remote_addr.ip(),
-            None,
-            log_method,
-            log_request_path,
-            log_protocol,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                Err(_) => response.body().size_hint().exact(),
-              },
-              None => response.body().size_hint().exact(),
-            },
-            log_referrer,
-            log_user_agent,
-          )
-          .await;
-        }
-        return Ok(response);
       }
     }
   };
 
+  // Create an error logger
   let cloned_logger = logger.clone();
   let error_logger = match error_log_enabled {
     true => ErrorLogger::new(cloned_logger),
     false => ErrorLogger::without_logger(),
   };
 
-  if is_connect_proxy_request {
-    let mut connect_proxy_handlers = None;
-    for mut handlers in handlers_vec {
-      if handlers.does_connect_proxy_requests() {
-        connect_proxy_handlers = Some(handlers);
-        break;
-      }
-    }
+  // Obtain module handlers
+  let mut module_handlers = Vec::new();
+  for module in &configuration.modules {
+    module_handlers.push(module.get_module_handlers());
+  }
 
-    if let Some(mut connect_proxy_handlers) = connect_proxy_handlers {
-      if let Some(connect_address) = request.uri().authority().map(|auth| auth.to_string()) {
-        // Variables moved to before "tokio::spawn" to avoid issues with moved values
-        let client_ip = socket_data.remote_addr.ip();
-        let custom_headers_yaml = combined_config["customHeaders"].clone();
-
-        tokio::spawn(async move {
-          match hyper::upgrade::on(request).await {
-            Ok(upgraded_request) => {
-              let result = connect_proxy_handlers
-                .connect_proxy_request_handler(
-                  upgraded_request,
-                  &connect_address,
-                  &combined_config,
-                  &socket_data,
-                  &error_logger,
-                )
-                .await;
-              match result {
-                Ok(_) => (),
-                Err(err) => {
-                  error_logger
-                    .log(&format!("Unexpected error for CONNECT request: {}", err))
-                    .await;
-                }
-              }
-            }
-            Err(err) => {
-              error_logger
-                .log(&format!(
-                  "Error while upgrading HTTP CONNECT request: {}",
-                  err
-                ))
-                .await
-            }
-          }
-        });
-
-        let response = Response::builder()
-          .body(Empty::new().map_err(|e| match e {}).boxed())
-          .unwrap_or_default();
-
-        if log_enabled {
-          log_combined(
-            &logger,
-            client_ip,
-            None,
-            log_method,
-            log_request_path,
-            log_protocol,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                Err(_) => response.body().size_hint().exact(),
-              },
-              None => response.body().size_hint().exact(),
-            },
-            log_referrer,
-            log_user_agent,
-          )
-          .await;
-        }
-
-        let (mut response_parts, response_body) = response.into_parts();
-        if let Some(custom_headers_hash) = custom_headers_yaml.as_hash() {
-          let custom_headers_hash_iter = custom_headers_hash.iter();
-          for (header_name, header_value) in custom_headers_hash_iter {
-            if let Some(header_name) = header_name.as_str() {
-              if let Some(header_value) = header_value.as_str() {
-                if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) =
-                    HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
-                  {
-                    if let Ok(header_name) = HeaderName::from_str(header_name) {
-                      response_parts.headers.insert(header_name, header_value);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        if let Some(http3_alt_port) = http3_alt_port {
-          if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-            Some(value) => {
-              let header_value_old = String::from_utf8_lossy(value.as_bytes());
-              let header_value_new =
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-              if header_value_old != header_value_new {
-                HeaderValue::from_bytes(
-                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-                )
-              } else {
-                HeaderValue::from_bytes(header_value_old.as_bytes())
-              }
-            }
-            None => HeaderValue::from_bytes(
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-            ),
-          } {
-            response_parts.headers.insert(header::ALT_SVC, header_value);
-          }
-        }
-        response_parts
-          .headers
-          .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-        Ok(Response::from_parts(response_parts, response_body))
-      } else {
-        let response = Response::builder()
-          .status(StatusCode::BAD_REQUEST)
-          .body(Empty::new().map_err(|e| match e {}).boxed())
-          .unwrap_or_default();
-
-        if log_enabled {
-          log_combined(
-            &logger,
-            socket_data.remote_addr.ip(),
-            None,
-            log_method,
-            log_request_path,
-            log_protocol,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                Err(_) => response.body().size_hint().exact(),
-              },
-              None => response.body().size_hint().exact(),
-            },
-            log_referrer,
-            log_user_agent,
-          )
-          .await;
-        }
-        let (mut response_parts, response_body) = response.into_parts();
-        if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-          let custom_headers_hash_iter = custom_headers_hash.iter();
-          for (header_name, header_value) in custom_headers_hash_iter {
-            if let Some(header_name) = header_name.as_str() {
-              if let Some(header_value) = header_value.as_str() {
-                if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) =
-                    HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
-                  {
-                    if let Ok(header_name) = HeaderName::from_str(header_name) {
-                      response_parts.headers.insert(header_name, header_value);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        if let Some(http3_alt_port) = http3_alt_port {
-          if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-            Some(value) => {
-              let header_value_old = String::from_utf8_lossy(value.as_bytes());
-              let header_value_new =
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-              if header_value_old != header_value_new {
-                HeaderValue::from_bytes(
-                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-                )
-              } else {
-                HeaderValue::from_bytes(header_value_old.as_bytes())
-              }
-            }
-            None => HeaderValue::from_bytes(
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-            ),
-          } {
-            response_parts.headers.insert(header::ALT_SVC, header_value);
-          }
-        }
-        response_parts
-          .headers
-          .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-        Ok(Response::from_parts(response_parts, response_body))
-      }
-    } else {
-      let response = Response::builder()
-        .status(StatusCode::NOT_IMPLEMENTED)
-        .body(Empty::new().map_err(|e| match e {}).boxed())
-        .unwrap_or_default();
-
-      if log_enabled {
-        log_combined(
-          &logger,
-          socket_data.remote_addr.ip(),
-          None,
-          log_method,
-          log_request_path,
-          log_protocol,
-          response.status().as_u16(),
-          match response.headers().get(header::CONTENT_LENGTH) {
-            Some(header_value) => match header_value.to_str() {
-              Ok(header_value) => match header_value.parse::<u64>() {
-                Ok(content_length) => Some(content_length),
-                Err(_) => response.body().size_hint().exact(),
-              },
-              Err(_) => response.body().size_hint().exact(),
-            },
-            None => response.body().size_hint().exact(),
-          },
-          log_referrer,
-          log_user_agent,
-        )
-        .await;
-      }
-      let (mut response_parts, response_body) = response.into_parts();
-      if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-        let custom_headers_hash_iter = custom_headers_hash.iter();
-        for (header_name, header_value) in custom_headers_hash_iter {
-          if let Some(header_name) = header_name.as_str() {
-            if let Some(header_value) = header_value.as_str() {
-              if !response_parts.headers.contains_key(header_name) {
-                if let Ok(header_value) =
-                  HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
-                {
-                  if let Ok(header_name) = HeaderName::from_str(header_name) {
-                    response_parts.headers.insert(header_name, header_value);
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-      if let Some(http3_alt_port) = http3_alt_port {
-        if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-          Some(value) => {
-            let header_value_old = String::from_utf8_lossy(value.as_bytes());
-            let header_value_new =
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-            if header_value_old != header_value_new {
-              HeaderValue::from_bytes(
-                format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-              )
-            } else {
-              HeaderValue::from_bytes(header_value_old.as_bytes())
-            }
-          }
-          None => HeaderValue::from_bytes(
-            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-          ),
-        } {
-          response_parts.headers.insert(header::ALT_SVC, header_value);
-        }
-      }
-      response_parts
-        .headers
-        .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-      Ok(Response::from_parts(response_parts, response_body))
-    }
+  // Execute modules!
+  request.extensions_mut().insert(RequestData {
+    auth_user: None,
+    original_url: None,
+    error_status_code: None,
+  });
+  let mut executed_handlers = Vec::new();
+  let (request_parts, request_body) = request.into_parts();
+  let request_parts_cloned = if configurations.inner.iter().rev().any(|c| {
+    c.filters.hostname == configuration.filters.hostname
+      && c.filters.ip == configuration.filters.ip
+      && c.filters.port == configuration.filters.port
+      && (c.filters.location_prefix.is_none()
+        || c.filters.location_prefix == configuration.filters.location_prefix)
+      && c.filters.error_handler_status.is_some()
+  }) {
+    let mut request_parts_cloned = request_parts.clone();
+    request_parts_cloned
+      .headers
+      .insert(header::CONTENT_LENGTH, HeaderValue::from_static("0"));
+    Some(request_parts_cloned)
   } else {
-    let is_websocket_request = is_upgrade_request(&request);
-    let (request_parts, request_body) = request.into_parts();
-    let request_parts_cloned = if combined_config["errorConfig"].is_array() {
-      let mut request_parts_cloned = request_parts.clone();
-      request_parts_cloned
-        .headers
-        .insert(header::CONTENT_LENGTH, HeaderValue::from_static("0"));
-      Some(request_parts_cloned)
-    } else {
-      // If the error configuration is not specified, don't clone the request parts to improve performance
-      None
-    };
-    let request = Request::from_parts(request_parts, request_body);
-    let mut request_data = RequestData::new(request, None, None, None);
-    let mut latest_auth_data = None;
-    let mut error_status_code = None;
-    let mut executed_handlers = Vec::new();
-    let mut handlers_iter: Box<
-      dyn Iterator<Item = Box<dyn ServerModuleHandlers + Send + 'static>> + Send,
-    > = Box::new(handlers_vec.into_iter());
-    while let Some(mut handlers) = handlers_iter.next() {
-      if is_websocket_request && handlers.does_websocket_requests(&combined_config, &socket_data) {
-        let (request, _, _, _) = request_data.into_parts();
+    // If the error configuration is not specified, don't clone the request parts to improve performance
+    None
+  };
+  let mut request = Request::from_parts(request_parts, request_body);
+  let mut latest_auth_data = None;
+  let mut handlers_iter: Box<dyn Iterator<Item = Box<dyn ModuleHandlers>>> =
+    Box::new(module_handlers.into_iter());
+  while let Some(mut handlers) = handlers_iter.next() {
+    let response_result = handlers
+      .request_handler(request, &configuration, &socket_data, &error_logger)
+      .await;
 
-        // Variables moved to before "tokio::spawn" to avoid issues with moved values
-        let client_ip = socket_data.remote_addr.ip();
-        let custom_headers_yaml = combined_config["customHeaders"].clone();
-        let request_uri = request.uri().to_owned();
-        let request_headers = request.headers().to_owned();
-
-        let (original_response, websocket) = match hyper_tungstenite::upgrade(request, None) {
-          Ok(data) => data,
-          Err(err) => {
-            error_logger
-              .log(&format!("Error while upgrading WebSocket request: {}", err))
-              .await;
-
-            let response = Response::builder()
-              .status(StatusCode::INTERNAL_SERVER_ERROR)
-              .body(
-                Full::new(Bytes::from(generate_default_error_page(
-                  StatusCode::INTERNAL_SERVER_ERROR,
-                  None,
-                )))
-                .map_err(|e| match e {})
-                .boxed(),
-              )
-              .unwrap_or_default();
-
-            if log_enabled {
-              log_combined(
-                &logger,
-                socket_data.remote_addr.ip(),
-                None,
-                log_method,
-                log_request_path,
-                log_protocol,
-                response.status().as_u16(),
-                match response.headers().get(header::CONTENT_LENGTH) {
-                  Some(header_value) => match header_value.to_str() {
-                    Ok(header_value) => match header_value.parse::<u64>() {
-                      Ok(content_length) => Some(content_length),
-                      Err(_) => response.body().size_hint().exact(),
-                    },
-                    Err(_) => response.body().size_hint().exact(),
-                  },
-                  None => response.body().size_hint().exact(),
-                },
-                log_referrer,
-                log_user_agent,
-              )
-              .await;
-            }
-            let (mut response_parts, response_body) = response.into_parts();
-            if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-              let custom_headers_hash_iter = custom_headers_hash.iter();
-              for (header_name, header_value) in custom_headers_hash_iter {
-                if let Some(header_name) = header_name.as_str() {
-                  if let Some(header_value) = header_value.as_str() {
-                    if !response_parts.headers.contains_key(header_name) {
-                      if let Ok(header_value) = HeaderValue::from_str(
-                        &header_value.replace("{path}", &sanitized_url_pathname),
-                      ) {
-                        if let Ok(header_name) = HeaderName::from_str(header_name) {
-                          response_parts.headers.insert(header_name, header_value);
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            if let Some(http3_alt_port) = http3_alt_port {
-              if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-                Some(value) => {
-                  let header_value_old = String::from_utf8_lossy(value.as_bytes());
-                  let header_value_new =
-                    format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-                  if header_value_old != header_value_new {
-                    HeaderValue::from_bytes(
-                      format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-                    )
-                  } else {
-                    HeaderValue::from_bytes(header_value_old.as_bytes())
-                  }
-                }
-                None => HeaderValue::from_bytes(
-                  format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-                ),
-              } {
-                response_parts.headers.insert(header::ALT_SVC, header_value);
-              }
-            }
-            response_parts
-              .headers
-              .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-            return Ok(Response::from_parts(response_parts, response_body));
-          }
+    executed_handlers.push(handlers);
+    match response_result {
+      Ok(response) => {
+        let status = response.response_status;
+        let headers = response.response_headers;
+        let new_remote_address = response.new_remote_address;
+        let request_option = response.request;
+        let response = response.response;
+        let request_extensions = request_option
+          .as_ref()
+          .and_then(|r| r.extensions().get::<RequestData>());
+        if let Some(request_extensions) = request_extensions {
+          latest_auth_data = request_extensions.auth_user.clone();
+        }
+        if let Some(new_remote_address) = new_remote_address {
+          socket_data.remote_addr = new_remote_address;
         };
 
-        tokio::spawn(async move {
-          let result = handlers
-            .websocket_request_handler(
-              websocket,
-              &request_uri,
-              &request_headers,
-              &combined_config,
+        match response {
+          Some(response) => {
+            let (mut response_parts, response_body) = response.into_parts();
+            add_custom_headers(&mut response_parts, &configuration, &sanitized_url_pathname);
+            add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
+            add_server_header(&mut response_parts);
+
+            let response = Response::from_parts(response_parts, response_body);
+
+            match execute_response_modifying_handlers(
+              response,
+              executed_handlers,
+              &configuration,
+              http3_alt_port,
+              &sanitized_url_pathname,
+              &logger,
+              error_log_enabled,
+              log_enabled,
               &socket_data,
-              &error_logger,
+              latest_auth_data.clone(),
+              log_method.clone(),
+              log_request_path.clone(),
+              log_protocol.clone(),
+              log_referrer.clone(),
+              log_user_agent.clone(),
             )
-            .await;
-          match result {
-            Ok(_) => (),
-            Err(err) => {
-              error_logger
-                .log(&format!("Unexpected error for WebSocket request: {}", err))
-                .await;
-            }
-          }
-        });
-
-        let response = original_response.map(|body| body.map_err(|err| match err {}).boxed());
-
-        if log_enabled {
-          log_combined(
-            &logger,
-            client_ip,
-            None,
-            log_method,
-            log_request_path,
-            log_protocol,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                Err(_) => response.body().size_hint().exact(),
-              },
-              None => response.body().size_hint().exact(),
-            },
-            log_referrer,
-            log_user_agent,
-          )
-          .await;
-        }
-
-        let (mut response_parts, response_body) = response.into_parts();
-        if let Some(custom_headers_hash) = custom_headers_yaml.as_hash() {
-          let custom_headers_hash_iter = custom_headers_hash.iter();
-          for (header_name, header_value) in custom_headers_hash_iter {
-            if let Some(header_name) = header_name.as_str() {
-              if let Some(header_value) = header_value.as_str() {
-                if !response_parts.headers.contains_key(header_name) {
-                  if let Ok(header_value) =
-                    HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
-                  {
-                    if let Ok(header_name) = HeaderName::from_str(header_name) {
-                      response_parts.headers.insert(header_name, header_value);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        if let Some(http3_alt_port) = http3_alt_port {
-          if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-            Some(value) => {
-              let header_value_old = String::from_utf8_lossy(value.as_bytes());
-              let header_value_new =
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-              if header_value_old != header_value_new {
-                HeaderValue::from_bytes(
-                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-                )
-              } else {
-                HeaderValue::from_bytes(header_value_old.as_bytes())
-              }
-            }
-            None => HeaderValue::from_bytes(
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-            ),
-          } {
-            response_parts.headers.insert(header::ALT_SVC, header_value);
-          }
-        }
-        response_parts
-          .headers
-          .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-        return Ok(Response::from_parts(response_parts, response_body));
-      }
-
-      let response_result = match is_proxy_request {
-        true => {
-          handlers
-            .proxy_request_handler(request_data, &combined_config, &socket_data, &error_logger)
             .await
-        }
-        false => {
-          handlers
-            .request_handler(request_data, &combined_config, &socket_data, &error_logger)
-            .await
-        }
-      };
-
-      executed_handlers.push(handlers);
-      match response_result {
-        Ok(response) => {
-          let (
-            request_option,
-            auth_data,
-            original_url,
-            response,
-            status,
-            headers,
-            new_remote_address,
-            parallel_fn,
-          ) = response.into_parts();
-          latest_auth_data = auth_data.clone();
-          if let Some(new_remote_address) = new_remote_address {
-            socket_data.remote_addr = new_remote_address;
-          };
-          if let Some(parallel_fn) = parallel_fn {
-            // Spawn the function in the web server's Tokio runtime.
-            // We have implemented parallel_fn parameter in the ResponseData
-            // because tokio::spawn doesn't work on dynamic libraries,
-            // see https://github.com/tokio-rs/tokio/issues/6927
-            tokio::spawn(parallel_fn);
-          }
-          match response {
-            Some(response) => {
-              let (mut response_parts, response_body) = response.into_parts();
-              if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-                let custom_headers_hash_iter = custom_headers_hash.iter();
-                for (header_name, header_value) in custom_headers_hash_iter {
-                  if let Some(header_name) = header_name.as_str() {
-                    if let Some(header_value) = header_value.as_str() {
-                      if !response_parts.headers.contains_key(header_name) {
-                        if let Ok(header_value) = HeaderValue::from_str(
-                          &header_value.replace("{path}", &sanitized_url_pathname),
-                        ) {
-                          if let Ok(header_name) = HeaderName::from_str(header_name) {
-                            response_parts.headers.insert(header_name, header_value);
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-              if let Some(http3_alt_port) = http3_alt_port {
-                if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-                  Some(value) => {
-                    let header_value_old = String::from_utf8_lossy(value.as_bytes());
-                    let header_value_new =
-                      format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-                    if header_value_old != header_value_new {
-                      HeaderValue::from_bytes(
-                        format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-                      )
-                    } else {
-                      HeaderValue::from_bytes(header_value_old.as_bytes())
-                    }
-                  }
-                  None => HeaderValue::from_bytes(
-                    format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-                  ),
-                } {
-                  response_parts.headers.insert(header::ALT_SVC, header_value);
-                }
-              }
-              response_parts
-                .headers
-                .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-              let mut response = Response::from_parts(response_parts, response_body);
-
-              while let Some(mut executed_handler) = executed_handlers.pop() {
-                let response_status = match is_proxy_request {
-                  true => {
-                    executed_handler
-                      .proxy_response_modifying_handler(response)
-                      .await
-                  }
-                  false => executed_handler.response_modifying_handler(response).await,
-                };
-                response = match response_status {
-                  Ok(response) => response,
-                  Err(err) => {
-                    if error_log_enabled {
-                      logger
-                        .send(LogMessage::new(
-                          format!("Unexpected error while serving a request: {}", err),
-                          true,
-                        ))
-                        .await
-                        .unwrap_or_default();
-                    }
-
-                    let response = generate_error_response(
-                      StatusCode::INTERNAL_SERVER_ERROR,
-                      &combined_config,
-                      &headers,
-                    )
-                    .await;
-                    if log_enabled {
-                      log_combined(
-                        &logger,
-                        socket_data.remote_addr.ip(),
-                        auth_data,
-                        log_method,
-                        log_request_path,
-                        log_protocol,
-                        response.status().as_u16(),
-                        match response.headers().get(header::CONTENT_LENGTH) {
-                          Some(header_value) => match header_value.to_str() {
-                            Ok(header_value) => match header_value.parse::<u64>() {
-                              Ok(content_length) => Some(content_length),
-                              Err(_) => response.body().size_hint().exact(),
-                            },
-                            Err(_) => response.body().size_hint().exact(),
-                          },
-                          None => response.body().size_hint().exact(),
-                        },
-                        log_referrer,
-                        log_user_agent,
-                      )
-                      .await;
-                    }
-                    let (mut response_parts, response_body) = response.into_parts();
-                    if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-                      let custom_headers_hash_iter = custom_headers_hash.iter();
-                      for (header_name, header_value) in custom_headers_hash_iter {
-                        if let Some(header_name) = header_name.as_str() {
-                          if let Some(header_value) = header_value.as_str() {
-                            if !response_parts.headers.contains_key(header_name) {
-                              if let Ok(header_value) = HeaderValue::from_str(
-                                &header_value.replace("{path}", &sanitized_url_pathname),
-                              ) {
-                                if let Ok(header_name) = HeaderName::from_str(header_name) {
-                                  response_parts.headers.insert(header_name, header_value);
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                    if let Some(http3_alt_port) = http3_alt_port {
-                      if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-                        Some(value) => {
-                          let header_value_old = String::from_utf8_lossy(value.as_bytes());
-                          let header_value_new =
-                            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-                          if header_value_old != header_value_new {
-                            HeaderValue::from_bytes(
-                              format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-                            )
-                          } else {
-                            HeaderValue::from_bytes(header_value_old.as_bytes())
-                          }
-                        }
-                        None => HeaderValue::from_bytes(
-                          format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
-                            .as_bytes(),
-                        ),
-                      } {
-                        response_parts.headers.insert(header::ALT_SVC, header_value);
-                      }
-                    }
-                    response_parts
-                      .headers
-                      .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-                    return Ok(Response::from_parts(response_parts, response_body));
-                  }
-                };
-              }
-
-              if log_enabled {
-                log_combined(
-                  &logger,
-                  socket_data.remote_addr.ip(),
-                  auth_data,
-                  log_method,
-                  log_request_path,
-                  log_protocol,
-                  response.status().as_u16(),
-                  match response.headers().get(header::CONTENT_LENGTH) {
-                    Some(header_value) => match header_value.to_str() {
-                      Ok(header_value) => match header_value.parse::<u64>() {
-                        Ok(content_length) => Some(content_length),
-                        Err(_) => response.body().size_hint().exact(),
-                      },
-                      Err(_) => response.body().size_hint().exact(),
-                    },
-                    None => response.body().size_hint().exact(),
-                  },
-                  log_referrer,
-                  log_user_agent,
-                )
-                .await;
-              }
-
-              return Ok(response);
-            }
-            None => match status {
-              Some(status) => {
-                let request = if let Some(request) = request_option {
-                  Some(request)
-                } else {
-                  request_parts_cloned.clone().map(|request_parts_cloned| {
-                    Request::from_parts(
-                      request_parts_cloned,
-                      Empty::new().map_err(|e| match e {}).boxed(),
-                    )
-                  })
-                };
-                if let Some(request) = request {
-                  if let Some(combined_error_config) =
-                    combine_error_config(&combined_config, status.as_u16())
-                  {
-                    combined_config = combined_error_config;
-                    error_status_code = Some(status);
-                    handlers_iter = Box::new(executed_handlers.into_iter().chain(handlers_iter));
-                    executed_handlers = Vec::new();
-                    request_data =
-                      RequestData::new(request, auth_data, original_url, error_status_code);
-                    continue;
-                  }
-                }
-                let response = generate_error_response(status, &combined_config, &headers).await;
-                let (mut response_parts, response_body) = response.into_parts();
-                if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-                  let custom_headers_hash_iter = custom_headers_hash.iter();
-                  for (header_name, header_value) in custom_headers_hash_iter {
-                    if let Some(header_name) = header_name.as_str() {
-                      if let Some(header_value) = header_value.as_str() {
-                        if !response_parts.headers.contains_key(header_name) {
-                          if let Ok(header_value) = HeaderValue::from_str(
-                            &header_value.replace("{path}", &sanitized_url_pathname),
-                          ) {
-                            if let Ok(header_name) = HeaderName::from_str(header_name) {
-                              response_parts.headers.insert(header_name, header_value);
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-                if let Some(http3_alt_port) = http3_alt_port {
-                  if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-                    Some(value) => {
-                      let header_value_old = String::from_utf8_lossy(value.as_bytes());
-                      let header_value_new =
-                        format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-                      if header_value_old != header_value_new {
-                        HeaderValue::from_bytes(
-                          format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-                        )
-                      } else {
-                        HeaderValue::from_bytes(header_value_old.as_bytes())
-                      }
-                    }
-                    None => HeaderValue::from_bytes(
-                      format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
-                        .as_bytes(),
-                    ),
-                  } {
-                    response_parts.headers.insert(header::ALT_SVC, header_value);
-                  }
-                }
-                response_parts
-                  .headers
-                  .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-                let mut response = Response::from_parts(response_parts, response_body);
-
-                while let Some(mut executed_handler) = executed_handlers.pop() {
-                  let response_status = match is_proxy_request {
-                    true => {
-                      executed_handler
-                        .proxy_response_modifying_handler(response)
-                        .await
-                    }
-                    false => executed_handler.response_modifying_handler(response).await,
-                  };
-                  response = match response_status {
-                    Ok(response) => response,
-                    Err(err) => {
-                      if error_log_enabled {
-                        logger
-                          .send(LogMessage::new(
-                            format!("Unexpected error while serving a request: {}", err),
-                            true,
-                          ))
-                          .await
-                          .unwrap_or_default();
-                      }
-
-                      let response = generate_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        &combined_config,
-                        &headers,
-                      )
-                      .await;
-                      if log_enabled {
-                        log_combined(
-                          &logger,
-                          socket_data.remote_addr.ip(),
-                          auth_data,
-                          log_method,
-                          log_request_path,
-                          log_protocol,
-                          response.status().as_u16(),
-                          match response.headers().get(header::CONTENT_LENGTH) {
-                            Some(header_value) => match header_value.to_str() {
-                              Ok(header_value) => match header_value.parse::<u64>() {
-                                Ok(content_length) => Some(content_length),
-                                Err(_) => response.body().size_hint().exact(),
-                              },
-                              Err(_) => response.body().size_hint().exact(),
-                            },
-                            None => response.body().size_hint().exact(),
-                          },
-                          log_referrer,
-                          log_user_agent,
-                        )
-                        .await;
-                      }
-                      let (mut response_parts, response_body) = response.into_parts();
-                      if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash()
-                      {
-                        let custom_headers_hash_iter = custom_headers_hash.iter();
-                        for (header_name, header_value) in custom_headers_hash_iter {
-                          if let Some(header_name) = header_name.as_str() {
-                            if let Some(header_value) = header_value.as_str() {
-                              if !response_parts.headers.contains_key(header_name) {
-                                if let Ok(header_value) = HeaderValue::from_str(
-                                  &header_value.replace("{path}", &sanitized_url_pathname),
-                                ) {
-                                  if let Ok(header_name) = HeaderName::from_str(header_name) {
-                                    response_parts.headers.insert(header_name, header_value);
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                      if let Some(http3_alt_port) = http3_alt_port {
-                        if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC)
-                        {
-                          Some(value) => {
-                            let header_value_old = String::from_utf8_lossy(value.as_bytes());
-                            let header_value_new =
-                              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-                            if header_value_old != header_value_new {
-                              HeaderValue::from_bytes(
-                                format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-                              )
-                            } else {
-                              HeaderValue::from_bytes(header_value_old.as_bytes())
-                            }
-                          }
-                          None => HeaderValue::from_bytes(
-                            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
-                              .as_bytes(),
-                          ),
-                        } {
-                          response_parts.headers.insert(header::ALT_SVC, header_value);
-                        }
-                      }
-                      response_parts
-                        .headers
-                        .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-                      return Ok(Response::from_parts(response_parts, response_body));
-                    }
-                  };
-                }
-
-                if log_enabled {
-                  log_combined(
-                    &logger,
-                    socket_data.remote_addr.ip(),
-                    auth_data,
-                    log_method,
-                    log_request_path,
-                    log_protocol,
-                    response.status().as_u16(),
-                    match response.headers().get(header::CONTENT_LENGTH) {
-                      Some(header_value) => match header_value.to_str() {
-                        Ok(header_value) => match header_value.parse::<u64>() {
-                          Ok(content_length) => Some(content_length),
-                          Err(_) => response.body().size_hint().exact(),
-                        },
-                        Err(_) => response.body().size_hint().exact(),
-                      },
-                      None => response.body().size_hint().exact(),
-                    },
-                    log_referrer,
-                    log_user_agent,
-                  )
-                  .await;
-                }
-                return Ok(response);
-              }
-              None => match request_option {
-                Some(request) => {
-                  request_data =
-                    RequestData::new(request, auth_data, original_url, error_status_code);
-                  continue;
-                }
-                None => {
-                  break;
-                }
-              },
-            },
-          }
-        }
-        Err(err) => {
-          let response =
-            generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &combined_config, &None)
-              .await;
-
-          let (mut response_parts, response_body) = response.into_parts();
-          if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-            let custom_headers_hash_iter = custom_headers_hash.iter();
-            for (header_name, header_value) in custom_headers_hash_iter {
-              if let Some(header_name) = header_name.as_str() {
-                if let Some(header_value) = header_value.as_str() {
-                  if !response_parts.headers.contains_key(header_name) {
-                    if let Ok(header_value) = HeaderValue::from_str(
-                      &header_value.replace("{path}", &sanitized_url_pathname),
-                    ) {
-                      if let Ok(header_name) = HeaderName::from_str(header_name) {
-                        response_parts.headers.insert(header_name, header_value);
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-          if let Some(http3_alt_port) = http3_alt_port {
-            if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-              Some(value) => {
-                let header_value_old = String::from_utf8_lossy(value.as_bytes());
-                let header_value_new =
-                  format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-                if header_value_old != header_value_new {
-                  HeaderValue::from_bytes(
-                    format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-                  )
-                } else {
-                  HeaderValue::from_bytes(header_value_old.as_bytes())
-                }
-              }
-              None => HeaderValue::from_bytes(
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-              ),
-            } {
-              response_parts.headers.insert(header::ALT_SVC, header_value);
-            }
-          }
-          response_parts
-            .headers
-            .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-          let mut response = Response::from_parts(response_parts, response_body);
-
-          while let Some(mut executed_handler) = executed_handlers.pop() {
-            let response_status = match is_proxy_request {
-              true => {
-                executed_handler
-                  .proxy_response_modifying_handler(response)
-                  .await
-              }
-              false => executed_handler.response_modifying_handler(response).await,
-            };
-            response = match response_status {
-              Ok(response) => response,
-              Err(err) => {
-                if error_log_enabled {
-                  logger
-                    .send(LogMessage::new(
-                      format!("Unexpected error while serving a request: {}", err),
-                      true,
-                    ))
-                    .await
-                    .unwrap_or_default();
-                }
-
-                let response = generate_error_response(
-                  StatusCode::INTERNAL_SERVER_ERROR,
-                  &combined_config,
-                  &None,
-                )
-                .await;
+            {
+              Ok(response) => {
                 if log_enabled {
                   log_combined(
                     &logger,
@@ -2006,329 +1033,256 @@ async fn request_handler_wrapped(
                     log_request_path,
                     log_protocol,
                     response.status().as_u16(),
-                    match response.headers().get(header::CONTENT_LENGTH) {
-                      Some(header_value) => match header_value.to_str() {
-                        Ok(header_value) => match header_value.parse::<u64>() {
-                          Ok(content_length) => Some(content_length),
-                          Err(_) => response.body().size_hint().exact(),
-                        },
-                        Err(_) => response.body().size_hint().exact(),
-                      },
-                      None => response.body().size_hint().exact(),
-                    },
+                    extract_content_length(&response),
                     log_referrer,
                     log_user_agent,
                   )
                   .await;
                 }
-                let (mut response_parts, response_body) = response.into_parts();
-                if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-                  let custom_headers_hash_iter = custom_headers_hash.iter();
-                  for (header_name, header_value) in custom_headers_hash_iter {
-                    if let Some(header_name) = header_name.as_str() {
-                      if let Some(header_value) = header_value.as_str() {
-                        if !response_parts.headers.contains_key(header_name) {
-                          if let Ok(header_value) = HeaderValue::from_str(
-                            &header_value.replace("{path}", &sanitized_url_pathname),
-                          ) {
-                            if let Ok(header_name) = HeaderName::from_str(header_name) {
-                              response_parts.headers.insert(header_name, header_value);
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-                if let Some(http3_alt_port) = http3_alt_port {
-                  if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-                    Some(value) => {
-                      let header_value_old = String::from_utf8_lossy(value.as_bytes());
-                      let header_value_new =
-                        format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-                      if header_value_old != header_value_new {
-                        HeaderValue::from_bytes(
-                          format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-                        )
-                      } else {
-                        HeaderValue::from_bytes(header_value_old.as_bytes())
-                      }
-                    }
-                    None => HeaderValue::from_bytes(
-                      format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
-                        .as_bytes(),
-                    ),
-                  } {
-                    response_parts.headers.insert(header::ALT_SVC, header_value);
-                  }
-                }
-                response_parts
-                  .headers
-                  .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-                return Ok(Response::from_parts(response_parts, response_body));
+                return Ok(response);
               }
-            };
-          }
-
-          if error_log_enabled {
-            logger
-              .send(LogMessage::new(
-                format!("Unexpected error while serving a request: {}", err),
-                true,
-              ))
-              .await
-              .unwrap_or_default();
-          }
-
-          if log_enabled {
-            log_combined(
-              &logger,
-              socket_data.remote_addr.ip(),
-              latest_auth_data,
-              log_method,
-              log_request_path,
-              log_protocol,
-              response.status().as_u16(),
-              match response.headers().get(header::CONTENT_LENGTH) {
-                Some(header_value) => match header_value.to_str() {
-                  Ok(header_value) => match header_value.parse::<u64>() {
-                    Ok(content_length) => Some(content_length),
-                    Err(_) => response.body().size_hint().exact(),
-                  },
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                None => response.body().size_hint().exact(),
-              },
-              log_referrer,
-              log_user_agent,
-            )
-            .await;
-          }
-          return Ok(response);
-        }
-      }
-    }
-
-    let response = generate_error_response(StatusCode::NOT_FOUND, &combined_config, &None).await;
-
-    let (mut response_parts, response_body) = response.into_parts();
-    if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-      let custom_headers_hash_iter = custom_headers_hash.iter();
-      for (header_name, header_value) in custom_headers_hash_iter {
-        if let Some(header_name) = header_name.as_str() {
-          if let Some(header_value) = header_value.as_str() {
-            if !response_parts.headers.contains_key(header_name) {
-              if let Ok(header_value) =
-                HeaderValue::from_str(&header_value.replace("{path}", &sanitized_url_pathname))
-              {
-                if let Ok(header_name) = HeaderName::from_str(header_name) {
-                  response_parts.headers.insert(header_name, header_value);
-                }
+              Err(error_response) => {
+                return Ok(error_response);
               }
             }
           }
-        }
-      }
-    }
-    if let Some(http3_alt_port) = http3_alt_port {
-      if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-        Some(value) => {
-          let header_value_old = String::from_utf8_lossy(value.as_bytes());
-          let header_value_new =
-            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-          if header_value_old != header_value_new {
-            HeaderValue::from_bytes(
-              format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-            )
-          } else {
-            HeaderValue::from_bytes(header_value_old.as_bytes())
-          }
-        }
-        None => HeaderValue::from_bytes(
-          format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-        ),
-      } {
-        response_parts.headers.insert(header::ALT_SVC, header_value);
-      }
-    }
-    response_parts
-      .headers
-      .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-    let mut response = Response::from_parts(response_parts, response_body);
-
-    while let Some(mut executed_handler) = executed_handlers.pop() {
-      let response_status = match is_proxy_request {
-        true => {
-          executed_handler
-            .proxy_response_modifying_handler(response)
-            .await
-        }
-        false => executed_handler.response_modifying_handler(response).await,
-      };
-      response = match response_status {
-        Ok(response) => response,
-        Err(err) => {
-          if error_log_enabled {
-            logger
-              .send(LogMessage::new(
-                format!("Unexpected error while serving a request: {}", err),
-                true,
-              ))
-              .await
-              .unwrap_or_default();
-          }
-
-          let response =
-            generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &combined_config, &None)
-              .await;
-          if log_enabled {
-            log_combined(
-              &logger,
-              socket_data.remote_addr.ip(),
-              latest_auth_data,
-              log_method,
-              log_request_path,
-              log_protocol,
-              response.status().as_u16(),
-              match response.headers().get(header::CONTENT_LENGTH) {
-                Some(header_value) => match header_value.to_str() {
-                  Ok(header_value) => match header_value.parse::<u64>() {
-                    Ok(content_length) => Some(content_length),
-                    Err(_) => response.body().size_hint().exact(),
-                  },
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                None => response.body().size_hint().exact(),
-              },
-              log_referrer,
-              log_user_agent,
-            )
-            .await;
-          }
-          let (mut response_parts, response_body) = response.into_parts();
-          if let Some(custom_headers_hash) = combined_config["customHeaders"].as_hash() {
-            let custom_headers_hash_iter = custom_headers_hash.iter();
-            for (header_name, header_value) in custom_headers_hash_iter {
-              if let Some(header_name) = header_name.as_str() {
-                if let Some(header_value) = header_value.as_str() {
-                  if !response_parts.headers.contains_key(header_name) {
-                    if let Ok(header_value) = HeaderValue::from_str(
-                      &header_value.replace("{path}", &sanitized_url_pathname),
-                    ) {
-                      if let Ok(header_name) = HeaderName::from_str(header_name) {
-                        response_parts.headers.insert(header_name, header_value);
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-          if let Some(http3_alt_port) = http3_alt_port {
-            if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
-              Some(value) => {
-                let header_value_old = String::from_utf8_lossy(value.as_bytes());
-                let header_value_new =
-                  format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
-
-                if header_value_old != header_value_new {
-                  HeaderValue::from_bytes(
-                    format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+          None => match status {
+            Some(status) => {
+              let request_option = if let Some(request) = request_option {
+                Some(request)
+              } else {
+                request_parts_cloned.clone().map(|request_parts_cloned| {
+                  Request::from_parts(
+                    request_parts_cloned,
+                    Empty::new().map_err(|e| match e {}).boxed(),
                   )
-                } else {
-                  HeaderValue::from_bytes(header_value_old.as_bytes())
+                })
+              };
+              if let Some(request_cloned) = request_option {
+                if let Some(error_configuration) =
+                  configurations.find_error_configuration(&configuration.filters, status.as_u16())
+                {
+                  configuration = error_configuration;
+                  handlers_iter = Box::new(executed_handlers.into_iter().chain(handlers_iter));
+                  executed_handlers = Vec::new();
+                  request = request_cloned;
+                  continue;
                 }
               }
-              None => HeaderValue::from_bytes(
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
-              ),
-            } {
-              response_parts.headers.insert(header::ALT_SVC, header_value);
+              let response = generate_error_response(status, &configuration, &headers).await;
+              let (mut response_parts, response_body) = response.into_parts();
+              add_custom_headers(&mut response_parts, &configuration, &sanitized_url_pathname);
+              add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
+              add_server_header(&mut response_parts);
+
+              let response = Response::from_parts(response_parts, response_body);
+
+              match execute_response_modifying_handlers(
+                response,
+                executed_handlers,
+                &configuration,
+                http3_alt_port,
+                &sanitized_url_pathname,
+                &logger,
+                error_log_enabled,
+                log_enabled,
+                &socket_data,
+                latest_auth_data.clone(),
+                log_method.clone(),
+                log_request_path.clone(),
+                log_protocol.clone(),
+                log_referrer.clone(),
+                log_user_agent.clone(),
+              )
+              .await
+              {
+                Ok(response) => {
+                  if log_enabled {
+                    log_combined(
+                      &logger,
+                      socket_data.remote_addr.ip(),
+                      latest_auth_data,
+                      log_method,
+                      log_request_path,
+                      log_protocol,
+                      response.status().as_u16(),
+                      extract_content_length(&response),
+                      log_referrer,
+                      log_user_agent,
+                    )
+                    .await;
+                  }
+                  return Ok(response);
+                }
+                Err(error_response) => {
+                  return Ok(error_response);
+                }
+              }
             }
-          }
-          response_parts
-            .headers
-            .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
-
-          return Ok(Response::from_parts(response_parts, response_body));
-        }
-      };
-    }
-
-    if log_enabled {
-      log_combined(
-        &logger,
-        socket_data.remote_addr.ip(),
-        latest_auth_data,
-        log_method,
-        log_request_path,
-        log_protocol,
-        response.status().as_u16(),
-        match response.headers().get(header::CONTENT_LENGTH) {
-          Some(header_value) => match header_value.to_str() {
-            Ok(header_value) => match header_value.parse::<u64>() {
-              Ok(content_length) => Some(content_length),
-              Err(_) => response.body().size_hint().exact(),
+            None => match request_option {
+              Some(request_obtained) => {
+                request = request_obtained;
+                continue;
+              }
+              None => {
+                break;
+              }
             },
-            Err(_) => response.body().size_hint().exact(),
           },
-          None => response.body().size_hint().exact(),
-        },
-        log_referrer,
-        log_user_agent,
-      )
-      .await;
+        }
+      }
+      Err(err) => {
+        let response =
+          generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &configuration, &None).await;
+
+        let (mut response_parts, response_body) = response.into_parts();
+        add_custom_headers(&mut response_parts, &configuration, &sanitized_url_pathname);
+        add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
+        add_server_header(&mut response_parts);
+
+        let response = Response::from_parts(response_parts, response_body);
+
+        if error_log_enabled {
+          logger
+            .send(LogMessage::new(
+              format!("Unexpected error while serving a request: {}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+        }
+
+        match execute_response_modifying_handlers(
+          response,
+          executed_handlers,
+          &configuration,
+          http3_alt_port,
+          &sanitized_url_pathname,
+          &logger,
+          error_log_enabled,
+          log_enabled,
+          &socket_data,
+          latest_auth_data.clone(),
+          log_method.clone(),
+          log_request_path.clone(),
+          log_protocol.clone(),
+          log_referrer.clone(),
+          log_user_agent.clone(),
+        )
+        .await
+        {
+          Ok(response) => {
+            if log_enabled {
+              log_combined(
+                &logger,
+                socket_data.remote_addr.ip(),
+                latest_auth_data,
+                log_method,
+                log_request_path,
+                log_protocol,
+                response.status().as_u16(),
+                extract_content_length(&response),
+                log_referrer,
+                log_user_agent,
+              )
+              .await;
+            }
+            return Ok(response);
+          }
+          Err(error_response) => {
+            return Ok(error_response);
+          }
+        }
+      }
     }
-    Ok(response)
+  }
+
+  let response = generate_error_response(StatusCode::NOT_FOUND, &configuration, &None).await;
+
+  let (mut response_parts, response_body) = response.into_parts();
+  add_custom_headers(&mut response_parts, &configuration, &sanitized_url_pathname);
+  add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
+  add_server_header(&mut response_parts);
+
+  let response = Response::from_parts(response_parts, response_body);
+
+  match execute_response_modifying_handlers(
+    response,
+    executed_handlers,
+    &configuration,
+    http3_alt_port,
+    &sanitized_url_pathname,
+    &logger,
+    error_log_enabled,
+    log_enabled,
+    &socket_data,
+    latest_auth_data.clone(),
+    log_method.clone(),
+    log_request_path.clone(),
+    log_protocol.clone(),
+    log_referrer.clone(),
+    log_user_agent.clone(),
+  )
+  .await
+  {
+    Ok(response) => {
+      if log_enabled {
+        log_combined(
+          &logger,
+          socket_data.remote_addr.ip(),
+          latest_auth_data,
+          log_method,
+          log_request_path,
+          log_protocol,
+          response.status().as_u16(),
+          extract_content_length(&response),
+          log_referrer,
+          log_user_agent,
+        )
+        .await;
+      }
+      Ok(response)
+    }
+    Err(error_response) => Ok(error_response),
   }
 }
 
+/// The HTTP request handler, with timeout
 #[allow(clippy::too_many_arguments)]
 pub async fn request_handler(
   request: Request<BoxBody<Bytes, std::io::Error>>,
-  remote_address: SocketAddr,
-  local_address: SocketAddr,
+  client_address: SocketAddr,
+  server_address: SocketAddr,
   encrypted: bool,
-  config: Arc<Yaml>,
+  configurations: Arc<ServerConfigurations>,
   logger: Sender<LogMessage>,
-  handlers_vec: Vec<Box<dyn ServerModuleHandlers + Send>>,
-  acme_http01_resolver_option: Option<Arc<ResolvesServerCertAcme>>,
   http3_alt_port: Option<u16>,
+  acme_http_01_resolvers: Arc<Vec<Arc<ResolvesServerCertAcme>>>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
-  let timeout_yaml = &config["global"]["timeout"];
-  if timeout_yaml.is_null() {
-    request_handler_wrapped(
-      request,
-      remote_address,
-      local_address,
-      encrypted,
-      config,
-      logger,
-      handlers_vec,
-      acme_http01_resolver_option,
-      http3_alt_port,
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!(e))
+  let global_configuration = configurations.find_global_configuration();
+  let timeout_from_config = global_configuration
+    .as_deref()
+    .and_then(|c| get_entry!("timeout", c))
+    .and_then(|e| e.values.last());
+  let request_handler_future = request_handler_wrapped(
+    request,
+    client_address,
+    server_address,
+    encrypted,
+    configurations,
+    logger,
+    http3_alt_port,
+    acme_http_01_resolvers,
+  );
+  if timeout_from_config.is_some_and(|v| v.is_null()) {
+    request_handler_future.await.map_err(|e| anyhow::anyhow!(e))
   } else {
-    let timeout_millis = timeout_yaml.as_i64().unwrap_or(300000) as u64;
+    let timeout_millis = timeout_from_config
+      .and_then(|v| v.as_i128())
+      .unwrap_or(300000) as u64;
     match timeout(
       Duration::from_millis(timeout_millis),
-      request_handler_wrapped(
-        request,
-        remote_address,
-        local_address,
-        encrypted,
-        config,
-        logger,
-        handlers_vec,
-        acme_http01_resolver_option,
-        http3_alt_port,
-      ),
+      request_handler_future,
     )
     .await
     {

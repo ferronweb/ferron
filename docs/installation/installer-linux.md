@@ -23,11 +23,12 @@ By default, Ferron serves content from the `/var/www/ferron` directory. Open a w
 Ferron installed via the installer for GNU/Linux has following file structure:
 
 - _/usr/sbin/ferron_ - Ferron web server
-- _/usr/sbin/ferron-passwd_ - Ferron user management tool
+- _/usr/sbin/ferron-passwd_ - Ferron user password generation tool
+- _/usr/sbin/ferron-yaml2kdl_ - Ferron configuration conversion tool
 - _/var/log/ferron/access.log_ - Ferron access log in Combined Log Format
 - _/var/log/ferron/error.log_ - Ferron error log
 - _/var/www/ferron_ - Ferron's web root
-- _/etc/ferron.yaml_ - Ferron configuration
+- _/etc/ferron.kdl_ - Ferron configuration
 
 ## Updating Ferron
 

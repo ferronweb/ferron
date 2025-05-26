@@ -1,0 +1,32 @@
+[target.x86_64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:edge"
+
+[target.x86_64-unknown-linux-musl]
+image = "ghcr.io/dorianniemiecsvrjs/cross-x86_64-unknown-linux-musl:latest"
+
+[target.i686-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/i686-unknown-linux-gnu:edge"
+
+[target.i686-unknown-linux-musl]
+image = "ghcr.io/dorianniemiecsvrjs/cross-i686-unknown-linux-musl:latest"
+
+[target.aarch64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge"
+
+[target.aarch64-unknown-linux-musl]
+image = "ghcr.io/dorianniemiecsvrjs/cross-aarch64-unknown-linux-musl:latest"
+
+[target.armv7-unknown-linux-gnueabihf]
+image = "ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:edge"
+
+[target.armv7-unknown-linux-musleabihf]
+image = "ghcr.io/dorianniemiecsvrjs/cross-armv7-unknown-linux-musleabihf:latest"
+
+[target.riscv64gc-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/riscv64gc-unknown-linux-gnu:edge"
+
+[target.s390x-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/s390x-unknown-linux-gnu:edge"
+
+[target.powerpc64le-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/powerpc64le-unknown-linux-gnu:edge"

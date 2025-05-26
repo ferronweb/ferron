@@ -27,9 +27,9 @@ Obtain the latest Ferron ZIP archive suitable for your operating system from the
 After extraction, you should see the following files and directories:
 
 - `ferron` or `ferron.exe` - the main Ferron web server executable.
-- `ferron-passwd` or `ferron-passwd.exe` - a tool for generating user entries with hashed passwords for the server's configuration.
-- `libferron_mod_*.so` or `ferron_mod_*.dll` - dynamically linked modules that can be optionally loaded by Ferron.
-- `ferron.yaml` - an example configuration file for Ferron.
+- `ferron-passwd` or `ferron-passwd.exe` - a tool for generating hashed passwords for the server's configuration.
+- `ferron-yaml2kdl` or `ferron-yaml2kdl.exe` - a tool for converting the Ferron 1.x YAML configuration to Ferron 2.x KDL configuration.=
+- `ferron.kdl` - an example configuration file for Ferron.
 - `wwwroot/` - the webroot directory containing the default `index.html` file.
 
 ### 4. Configure Ferron

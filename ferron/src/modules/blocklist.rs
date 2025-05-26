@@ -1,136 +1,120 @@
+use std::collections::HashSet;
 use std::error::Error;
+use std::net::IpAddr;
 use std::sync::Arc;
 
-use crate::ferron_common::{
-  ErrorLogger, HyperResponse, RequestData, ResponseData, ServerConfig, ServerModule,
-  ServerModuleHandlers, SocketData,
-};
-use crate::ferron_common::{HyperUpgraded, WithRuntime};
 use async_trait::async_trait;
-use hyper::StatusCode;
-use hyper_tungstenite::HyperWebsocket;
-use tokio::runtime::Handle;
+use bytes::Bytes;
+use http_body_util::combinators::BoxBody;
+use hyper::{Request, StatusCode};
 
-use crate::ferron_util::ip_blocklist::IpBlockList;
+use crate::config::ServerConfiguration;
+use crate::logging::ErrorLogger;
+use crate::util::{get_entries_for_validation, get_values, IpBlockList, ModuleCache};
 
-struct BlockListModule {
+use super::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
+
+/// A blocklist module loader
+pub struct BlocklistModuleLoader {
+  cache: ModuleCache<BlocklistModule>,
+}
+
+impl BlocklistModuleLoader {
+  /// Creates a new module loader
+  pub fn new() -> Self {
+    Self {
+      cache: ModuleCache::new(vec![]),
+    }
+  }
+}
+
+impl ModuleLoader for BlocklistModuleLoader {
+  fn load_module(
+    &mut self,
+    config: &ServerConfiguration,
+    global_config: Option<&ServerConfiguration>,
+  ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
+    Ok(self.cache.get_or(config, move |_| {
+      let mut blocklist_str_vec = Vec::new();
+      for blocked_ip_config in global_config.map_or(vec![], |c| get_values!("block", c)) {
+        if let Some(blocked_ip) = blocked_ip_config.as_str() {
+          blocklist_str_vec.push(blocked_ip);
+        }
+      }
+
+      let mut blocklist = IpBlockList::new();
+      blocklist.load_from_vec(blocklist_str_vec);
+
+      Ok(Arc::new(BlocklistModule {
+        blocklist: Arc::new(blocklist),
+      }))
+    })?)
+  }
+
+  fn get_requirements(&self) -> Vec<&'static str> {
+    vec!["block"]
+  }
+
+  fn validate_configuration(
+    &self,
+    config: &ServerConfiguration,
+    used_properties: &mut HashSet<String>,
+  ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    if let Some(entries) = get_entries_for_validation!("block", config, used_properties) {
+      for entry in &entries.inner {
+        for value in &entry.values {
+          if !value.is_string() {
+            Err(anyhow::anyhow!("Invalid blocked IP address"))?
+          } else if let Some(value) = value.as_str() {
+            if value.parse::<IpAddr>().is_err() {
+              Err(anyhow::anyhow!("Invalid blocked IP address"))?
+            }
+          }
+        }
+      }
+    }
+
+    Ok(())
+  }
+}
+
+/// A blocklist module
+struct BlocklistModule {
   blocklist: Arc<IpBlockList>,
 }
 
-pub fn server_module_init(
-  config: &ServerConfig,
-) -> Result<Box<dyn ServerModule + Send + Sync>, Box<dyn Error + Send + Sync>> {
-  let blocklist_vec = match config["global"]["blocklist"].as_vec() {
-    Some(blocklist_vec) => blocklist_vec,
-    None => &Vec::new(),
-  };
-
-  let mut blocklist_str_vec = Vec::new();
-  for blocked_yaml in blocklist_vec.iter() {
-    if let Some(blocked) = blocked_yaml.as_str() {
-      blocklist_str_vec.push(blocked);
-    }
-  }
-
-  let mut blocklist = IpBlockList::new();
-  blocklist.load_from_vec(blocklist_str_vec);
-
-  Ok(Box::new(BlockListModule::new(Arc::new(blocklist))))
-}
-
-impl BlockListModule {
-  fn new(blocklist: Arc<IpBlockList>) -> Self {
-    Self { blocklist }
-  }
-}
-
-impl ServerModule for BlockListModule {
-  fn get_handlers(&self, handle: Handle) -> Box<dyn ServerModuleHandlers + Send> {
-    Box::new(BlockListModuleHandlers {
+impl Module for BlocklistModule {
+  fn get_module_handlers(&self) -> Box<dyn ModuleHandlers> {
+    Box::new(BlocklistModuleHandlers {
       blocklist: self.blocklist.clone(),
-      handle,
     })
   }
 }
-struct BlockListModuleHandlers {
+
+/// Handlers for the blocklist module
+struct BlocklistModuleHandlers {
   blocklist: Arc<IpBlockList>,
-  handle: Handle,
 }
 
-#[async_trait]
-impl ServerModuleHandlers for BlockListModuleHandlers {
+#[async_trait(?Send)]
+impl ModuleHandlers for BlocklistModuleHandlers {
   async fn request_handler(
     &mut self,
-    request: RequestData,
-    _config: &ServerConfig,
+    request: Request<BoxBody<Bytes, std::io::Error>>,
+    _config: &ServerConfiguration,
     socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-    WithRuntime::new(self.handle.clone(), async move {
-      if self.blocklist.is_blocked(socket_data.remote_addr.ip()) {
-        return Ok(
-          ResponseData::builder(request)
-            .status(StatusCode::FORBIDDEN)
-            .build(),
-        );
-      }
-      Ok(ResponseData::builder(request).build())
+    Ok(ResponseData {
+      request: Some(request),
+      response: None,
+      response_status: if self.blocklist.is_blocked(socket_data.remote_addr.ip()) {
+        Some(StatusCode::FORBIDDEN)
+      } else {
+        None
+      },
+      response_headers: None,
+      new_remote_address: None,
     })
-    .await
-  }
-
-  async fn proxy_request_handler(
-    &mut self,
-    request: RequestData,
-    _config: &ServerConfig,
-    _socket_data: &SocketData,
-    _error_logger: &ErrorLogger,
-  ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-    Ok(ResponseData::builder(request).build())
-  }
-
-  async fn response_modifying_handler(
-    &mut self,
-    response: HyperResponse,
-  ) -> Result<HyperResponse, Box<dyn Error + Send + Sync>> {
-    Ok(response)
-  }
-
-  async fn proxy_response_modifying_handler(
-    &mut self,
-    response: HyperResponse,
-  ) -> Result<HyperResponse, Box<dyn Error + Send + Sync>> {
-    Ok(response)
-  }
-
-  async fn connect_proxy_request_handler(
-    &mut self,
-    _upgraded_request: HyperUpgraded,
-    _connect_address: &str,
-    _config: &ServerConfig,
-    _socket_data: &SocketData,
-    _error_logger: &ErrorLogger,
-  ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    Ok(())
-  }
-
-  fn does_connect_proxy_requests(&mut self) -> bool {
-    false
-  }
-
-  async fn websocket_request_handler(
-    &mut self,
-    _websocket: HyperWebsocket,
-    _uri: &hyper::Uri,
-    _headers: &hyper::HeaderMap,
-    _config: &ServerConfig,
-    _socket_data: &SocketData,
-    _error_logger: &ErrorLogger,
-  ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    Ok(())
-  }
-
-  fn does_websocket_requests(&mut self, _config: &ServerConfig, _socket_data: &SocketData) -> bool {
-    false
   }
 }

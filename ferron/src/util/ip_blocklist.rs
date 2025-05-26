@@ -1,19 +1,20 @@
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv6Addr};
 
+/// The IP blocklist
 pub struct IpBlockList {
   blocked_ips: HashSet<IpAddr>,
 }
 
 impl IpBlockList {
-  // Create a new empty block list
+  /// Creates a new empty block list
   pub fn new() -> Self {
     Self {
       blocked_ips: HashSet::new(),
     }
   }
 
-  // Load the block list from a vector of IP address strings
+  /// Loads the block list from a vector of IP address strings
   pub fn load_from_vec(&mut self, ip_list: Vec<&str>) {
     for ip_str in ip_list {
       match ip_str {
@@ -31,7 +32,7 @@ impl IpBlockList {
     }
   }
 
-  // Check if an IP address is blocked
+  /// Checks if an IP address is blocked
   pub fn is_blocked(&self, ip: IpAddr) -> bool {
     self.blocked_ips.contains(&ip.to_canonical())
   }

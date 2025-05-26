@@ -31,7 +31,8 @@
 Ferron consists of multiple components:
 
 - **`ferron`**: The main web server.
-- **`ferron-passwd`**: A tool for generating user entries with hashed passwords, which can be copied into the web server's configuration file.
+- **`ferron-passwd`**: A tool for generating hashed passwords, which can be copied into the web server's configuration file.
+- **`ferron-yaml2kdl`**: A tool for attempting to convert the Ferron 1.x YAML configuration to Ferron 2.x KDL configuration.
 
 ## Building Ferron from source
 

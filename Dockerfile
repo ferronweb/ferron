@@ -13,7 +13,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
     cargo build --release && \
     # Copy executables out of the cache
-    mkdir .dist && cp target/release/ferron target/release/ferron-passwd .dist
+    mkdir .dist && cp target/release/ferron target/release/ferron-passwd target/release/ferron-yaml2kdl .dist
 
 # Use a Distroless base image for the final image
 FROM gcr.io/distroless/cc-debian12:nonroot
@@ -25,7 +25,7 @@ COPY --from=builder /usr/src/ferron/.dist /usr/sbin
 USER nobody
 
 # Copy the web server configuration
-COPY --chown=nobody ferron-docker.yaml /etc/ferron.yaml
+COPY --chown=nobody ferron-docker.kdl /etc/ferron.kdl
 
 # Copy the web root contents
 COPY --chown=nobody wwwroot /var/www/ferron/
@@ -37,4 +37,4 @@ WORKDIR /var/log/ferron
 EXPOSE 80
 
 # Set the command to run the binary
-CMD ["/usr/sbin/ferron", "-c", "/etc/ferron.yaml"]
+CMD ["/usr/sbin/ferron", "-c", "/etc/ferron.kdl"]

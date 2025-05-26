@@ -3,12 +3,14 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{self, AsyncRead, ReadBuf};
 
+/// A future that reads an `AsyncRead` to the end
 pub struct ReadToEndFuture<R> {
   reader: R,
   buffer: Vec<u8>,
 }
 
 impl<R> ReadToEndFuture<R> {
+  /// Create a new reading future
   pub fn new(reader: R) -> Self {
     Self {
       reader,

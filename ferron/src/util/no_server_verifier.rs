@@ -3,6 +3,7 @@ use rustls::DigitallySignedStruct;
 use rustls::SignatureScheme::{self, *};
 use rustls_pki_types::{CertificateDer, ServerName, UnixTime};
 
+/// A server certificate verifier that always returns a successful verification.
 #[derive(Debug)]
 pub struct NoServerVerifier;
 

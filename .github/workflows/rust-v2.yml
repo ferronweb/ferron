@@ -1,0 +1,51 @@
+name: Rust
+
+on:
+  push:
+    branches: ["develop-2.x"]
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "ferron/**"
+      - "ferron-passwd/**"
+      - ".github/workflows/rust-v2.yml"
+  pull_request:
+    branches: ["develop-2.x"]
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "ferron/**"
+      - "ferron-passwd/**"
+      - ".github/workflows/rust-v2.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop-2.x
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --workspace --verbose
+
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop-2.x
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+      - name: clippy
+        run: cargo clippy --workspace -- -D warnings

@@ -1,15 +1,17 @@
 [workspace]
-members = [
-    "ferron",
-    "ferron-passwd",
-]
+members = ["ferron", "ferron-passwd", "ferron-yaml2kdl-core", "ferron-yaml2kdl"]
 resolver = "2"
 
 [workspace.dependencies]
-yaml-rust2 = "0.10.0"
-password-auth = { version = "1.0.0", features = ["argon2", "pbkdf2", "scrypt"] }
+kdl = "6.3.4"
+mimalloc = "0.1.46"
+password-auth = { version = "1.0.0", features = ["pbkdf2", "argon2", "scrypt"] }
 shiba = "0.1.1"
-mimalloc = "0.1.45"
+
+[patch.crates-io]
+monoio = { git = "https://github.com/DorianNiemiecSVRJS/monoio.git" }                       # This is needed for the web server to be able to accept more than one connection on Windows
+cache_control = { git = "https://github.com/DorianNiemiecSVRJS/rust-cache-control.git" }    # This is a fork of "cache-control" crate, with a bugfix related to "s-maxage" directive
+libc = { git = "https://github.com/DorianNiemiecSVRJS/rust-libc.git", branch = "libc-0.2" } # This is needed for the web server to be able to be compiled for musl libc targets
 
 [profile.release]
 strip = true

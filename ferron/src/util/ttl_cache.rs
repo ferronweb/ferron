@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+/// A TTL cache
 pub struct TtlCache<K, V> {
   cache: HashMap<K, (V, Instant)>,
   ttl: Duration,
@@ -11,6 +12,7 @@ where
   K: std::cmp::Eq + std::hash::Hash + Clone,
   V: Clone,
 {
+  /// Creates a new TTL cache with specific lifetime
   pub fn new(ttl: Duration) -> Self {
     Self {
       cache: HashMap::new(),
@@ -18,10 +20,12 @@ where
     }
   }
 
+  /// Inserts a value into the TTL cache
   pub fn insert(&mut self, key: K, value: V) {
     self.cache.insert(key, (value, Instant::now()));
   }
 
+  /// Obtains a value from the TTL cache
   pub fn get(&self, key: &K) -> Option<V> {
     self.cache.get(key).and_then(|(value, timestamp)| {
       if timestamp.elapsed() < self.ttl {
@@ -32,11 +36,13 @@ where
     })
   }
 
+  /// Removes a value from the TTL cache
   #[allow(dead_code)]
   pub fn remove(&mut self, key: &K) -> Option<V> {
     self.cache.remove(key).map(|(value, _)| value)
   }
 
+  /// Cleans up the TTL cache
   pub fn cleanup(&mut self) {
     self
       .cache

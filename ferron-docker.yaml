@@ -1,4 +1,0 @@
-global:
-  wwwroot: /var/www/ferron
-  logFilePath: /var/log/ferron/access.log
-  errorLogFilePath: /var/log/ferron/error.log

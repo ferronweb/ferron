@@ -1,5 +1,6 @@
-use crate::ferron_util::anti_xss::anti_xss;
+use super::anti_xss;
 
+/// Generates a default error page
 pub fn generate_default_error_page(
   status_code: hyper::StatusCode,
   server_administrator_email: Option<&str>,

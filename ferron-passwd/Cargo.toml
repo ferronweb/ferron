@@ -1,6 +1,6 @@
 [package]
 name = "ferron-passwd"
-version = "1.3.1"
+version = "2.0.0-beta.1"
 edition = "2021"
 
 [package.metadata.winresource]
@@ -8,9 +8,8 @@ ProductName = "Ferron password utility"
 
 [dependencies]
 clap = { version = "4.5.28", features = ["derive"] }
-password-auth.workspace = true
+password-auth = { workspace = true }
 rpassword = "7.4.0"
-yaml-rust2.workspace = true
 mimalloc = { workspace = true }
 
 [dev-dependencies]

@@ -14,6 +14,8 @@
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
 //
+
+/// Converts the file size into a human-readable one
 pub fn sizify(bytes: u64, add_i: bool) -> String {
   if bytes == 0 {
     return "0".to_string();

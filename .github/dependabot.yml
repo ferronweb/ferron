@@ -5,20 +5,36 @@
 
 version: 2
 updates:
+  # Ferron 1.x
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    target-branch: "develop"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+    target-branch: "develop"
   - package-ecosystem: "cargo"
-    directory: "/" # Location of package manifests
+    directory: "/"
     schedule:
       interval: "weekly"
+    target-branch: "develop"
   - package-ecosystem: "npm"
-    directory: "/website" # Location of package manifests
+    directory: "/website"
     schedule:
       interval: "weekly"
     target-branch: "main"
+
+  # Ferron 2.x
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop-2.x"
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop-2.x"

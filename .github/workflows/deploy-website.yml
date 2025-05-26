@@ -2,12 +2,12 @@ name: Deploy website
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
     paths:
-      - 'blog/**'
-      - 'docs/**'
-      - 'website/**'
-      - '.github/workflows/deploy-website.yml'
+      - "blog/**"
+      - "docs/**"
+      - "website/**"
+      - ".github/workflows/deploy-website.yml"
   workflow_dispatch:
 
 jobs:
@@ -45,7 +45,7 @@ jobs:
           type: "zip"
           filename: "../../ferron-website.zip"
           directory: "website/dist"
-      
+
       - name: Set up SSH
         uses: LuisEnMarroquin/setup-ssh-action@v2.0.5
         with:

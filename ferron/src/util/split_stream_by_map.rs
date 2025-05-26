@@ -16,7 +16,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Poll, Waker};
 
-pub use futures_util::future::Either;
+use futures_util::future::Either;
 use futures_util::stream::Stream;
 use pin_project_lite::pin_project;
 use tokio::sync::Mutex;

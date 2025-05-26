@@ -1,3 +1,4 @@
+/// Matches the request location against a configured location
 pub fn match_location(path: &str, req_path: &str) -> bool {
   let mut path_without_trailing_slashes = path;
   while path_without_trailing_slashes.ends_with("/") {

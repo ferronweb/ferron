@@ -25,6 +25,7 @@ where
   }
 }
 
+/// An I/O copier
 pub struct Copier<R, W> {
   reader: R,
   writer: W,
@@ -36,6 +37,8 @@ where
   R: AsyncRead + Unpin,
   W: AsyncWrite + Unpin,
 {
+  /// Creates a new copier
+  #[allow(dead_code)]
   pub fn new(reader: R, writer: W) -> Self {
     Self {
       reader,
@@ -44,6 +47,8 @@ where
     }
   }
 
+  /// Creates a new copier that allows writing zero-size packets
+  #[allow(dead_code)]
   pub fn with_zero_packet_writing(reader: R, writer: W) -> Self {
     Self {
       reader,
@@ -52,6 +57,7 @@ where
     }
   }
 
+  /// Copy data
   pub async fn copy(mut self) -> Result<u64, tokio::io::Error> {
     let copied_size = tokio::io::copy(&mut self.reader, &mut self.writer).await?;
     if self.zero_packet {

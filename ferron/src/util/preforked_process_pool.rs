@@ -1,30 +1,167 @@
+//! A preforked process pool implementation for efficient IPC communication.
+//!
+//! This module provides a process pool that forks worker processes upfront and communicates
+//! with them via unnamed pipes. It's designed for scenarios where you need to distribute
+//! work across multiple processes while maintaining low-latency communication.
+
 use std::error::Error;
 use std::io::{Read, Write};
-use std::os::fd::OwnedFd;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::sync::Arc;
 
+use async_io::{Async, IoSafe};
 use interprocess::os::unix::unnamed_pipe::UnnamedPipeExt;
-use interprocess::unnamed_pipe::tokio::{Recver as TokioRecver, Sender as TokioSender};
 use interprocess::unnamed_pipe::{Recver, Sender};
 use nix::sys::signal::{SigSet, SigmaskHow};
 use nix::unistd::{ForkResult, Pid};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 use tokio_util::bytes::BufMut;
+use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
+/// A wrapper around `interprocess::unnamed_pipe::Sender` that implements additional traits
+/// required for async I/O operations.
+///
+/// This wrapper enables the sender to be used with `async_io::Async` by implementing
+/// the necessary traits like `Write`, `AsFd`, and `IoSafe`.
+pub struct SenderWrapped {
+  inner: Sender,
+}
+
+impl Write for SenderWrapped {
+  fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+    self.inner.write(buf)
+  }
+
+  fn write_vectored(&mut self, bufs: &[std::io::IoSlice<'_>]) -> std::io::Result<usize> {
+    self.inner.write_vectored(bufs)
+  }
+
+  fn flush(&mut self) -> std::io::Result<()> {
+    self.inner.flush()
+  }
+}
+
+impl AsFd for SenderWrapped {
+  fn as_fd(&self) -> BorrowedFd<'_> {
+    self.inner.as_fd()
+  }
+}
+
+// Safety: it's possible to convert `interprocess::unnamed_pipe::Sender` to `OwnedFd`
+unsafe impl IoSafe for SenderWrapped {}
+
+/// A wrapper around `interprocess::unnamed_pipe::Recver` that implements additional traits
+/// required for async I/O operations.
+///
+/// This wrapper enables the receiver to be used with `async_io::Async` by implementing
+/// the necessary traits like `Read`, `AsFd`, and `IoSafe`.
+pub struct RecverWrapped {
+  inner: Recver,
+}
+
+impl Read for RecverWrapped {
+  fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+    self.inner.read(buf)
+  }
+
+  fn read_vectored(&mut self, bufs: &mut [std::io::IoSliceMut<'_>]) -> std::io::Result<usize> {
+    self.inner.read_vectored(bufs)
+  }
+}
+
+impl AsFd for RecverWrapped {
+  fn as_fd(&self) -> BorrowedFd<'_> {
+    self.inner.as_fd()
+  }
+}
+
+// Safety: it's possible to convert `interprocess::unnamed_pipe::Recver` to `OwnedFd`
+unsafe impl IoSafe for RecverWrapped {}
+
+/// A pool of preforked worker processes with bidirectional IPC communication.
+///
+/// This structure manages a collection of worker processes that are forked during
+/// initialization. Each worker process communicates with the parent through unnamed
+/// pipes, allowing for efficient task distribution and result collection.
+///
+/// # Safety
+///
+/// This implementation uses `fork()` which has inherent safety considerations in
+/// multi-threaded environments. The pool should be created before spawning any
+/// additional threads.
+///
+/// # Examples
+///
+/// ```no_run
+/// use ferron::util::preforked_process_pool::*;
+/// use interprocess::unnamed_pipe::{Sender, Recver};
+///
+/// fn worker_function(mut tx: Sender, mut rx: Recver) {
+///     // Worker process logic here
+///     while let Ok(message) = read_ipc_message(&mut rx) {
+///         // Process message and send response
+///         let _ = write_ipc_message(&mut tx, &message);
+///     }
+/// }
+///
+/// #[tokio::main]
+/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let pool = unsafe { PreforkedProcessPool::new(4, worker_function)? };
+///     let process = pool.obtain_process().await?;
+///     // Use the process for communication
+///     Ok(())
+/// }
+/// ```
 #[allow(clippy::type_complexity)]
 pub struct PreforkedProcessPool {
   inner: Vec<(
-    Arc<RwLock<Option<Result<Arc<Mutex<(TokioSender, TokioRecver)>>, std::io::Error>>>>,
+    Arc<Mutex<(Compat<Async<SenderWrapped>>, Compat<Async<RecverWrapped>>)>>,
     Pid,
-    Arc<Mutex<Option<(OwnedFd, OwnedFd)>>>,
   )>,
-  async_ipc_initialized: Arc<RwLock<AtomicBool>>,
 }
 
 impl PreforkedProcessPool {
-  // This function is `unsafe`, due to forking function in `nix` crate also being `unsafe`.
+  /// Creates a new preforked process pool with the specified number of worker processes.
+  ///
+  /// # Arguments
+  ///
+  /// * `num_processes` - The number of worker processes to fork
+  /// * `pool_fn` - The function that each worker process will execute. This function
+  ///   receives a sender and receiver for IPC communication with the parent process.
+  ///
+  /// # Returns
+  ///
+  /// Returns a `PreforkedProcessPool` on success, or an error if process forking or
+  /// pipe creation fails.
+  ///
+  /// # Safety
+  ///
+  /// This function is unsafe because it uses `fork()`, which can have undefined behavior
+  /// in multi-threaded programs. It should be called before spawning any threads.
+  /// Additionally, the function blocks all signals in child processes and sets up
+  /// process death signals on Linux systems.
+  ///
+  /// # Errors
+  ///
+  /// * Returns an error if pipe creation fails
+  /// * Returns an error if the fork operation fails
+  /// * Returns an error if async I/O setup fails
+  ///
+  /// # Examples
+  ///
+  /// ```no_run
+  /// # use ferron::util::preforked_process_pool::*;
+  /// # use interprocess::unnamed_pipe::{Sender, Recver};
+  /// fn echo_worker(mut tx: Sender, mut rx: Recver) {
+  ///     while let Ok(msg) = read_ipc_message(&mut rx) {
+  ///         let _ = write_ipc_message(&mut tx, &msg);
+  ///     }
+  /// }
+  ///
+  /// let pool = unsafe { PreforkedProcessPool::new(2, echo_worker) }?;
+  /// # Ok::<(), Box<dyn std::error::Error>>(())
+  /// ```
   pub unsafe fn new(
     num_processes: usize,
     pool_fn: impl Fn(Sender, Recver),
@@ -48,9 +185,17 @@ impl PreforkedProcessPool {
       match nix::unistd::fork() {
         Ok(ForkResult::Parent { child }) => {
           processes.push((
-            Arc::new(RwLock::new(None)),
+            Arc::new(Mutex::new((
+              Async::new_nonblocking(SenderWrapped {
+                inner: tx_parent_fd.into(),
+              })?
+              .compat_write(),
+              Async::new_nonblocking(RecverWrapped {
+                inner: rx_parent_fd.into(),
+              })?
+              .compat(),
+            ))),
             child,
-            Arc::new(Mutex::new(Some((tx_parent_fd, rx_parent_fd)))),
           ));
         }
         Ok(ForkResult::Child) => {
@@ -74,58 +219,54 @@ impl PreforkedProcessPool {
         }
       }
     }
-    Ok(Self {
-      inner: processes,
-      async_ipc_initialized: Arc::new(RwLock::new(AtomicBool::new(false))),
-    })
+    Ok(Self { inner: processes })
   }
 
-  pub async fn init_async_ipc(&self) {
-    if !self
-      .async_ipc_initialized
-      .read()
-      .await
-      .load(Ordering::Relaxed)
-    {
-      for inner_process in &self.inner {
-        let fds_option = inner_process.2.lock().await.take();
-        if let Some((tx_fd, rx_fd)) = fds_option {
-          let ipc_io_result = match tx_fd.try_into() {
-            Ok(tx) => match rx_fd.try_into() {
-              Ok(rx) => Ok(Arc::new(Mutex::new((tx, rx)))),
-              Err(err) => Err(err),
-            },
-            Err(err) => Err(err),
-          };
-
-          inner_process.0.write().await.replace(ipc_io_result);
-        }
-      }
-
-      self
-        .async_ipc_initialized
-        .write()
-        .await
-        .store(true, Ordering::Relaxed);
-    }
-  }
-
+  /// Obtains a worker process from the pool for communication.
+  ///
+  /// This method implements a load-balancing strategy by selecting the process
+  /// with the fewest active references. For pools with more than one process,
+  /// it randomly selects two processes and returns the one with fewer references.
+  ///
+  /// # Returns
+  ///
+  /// Returns an `Arc<Mutex<...>>` containing the communication channels (sender and receiver)
+  /// for the selected worker process.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if the process pool is empty (contains no worker processes).
+  ///
+  /// # Examples
+  ///
+  /// ```no_run
+  /// # use ferron::util::preforked_process_pool::*;
+  /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+  /// # let pool = unsafe { PreforkedProcessPool::new(2, |_,_| {}) }?;
+  /// let process = pool.obtain_process().await?;
+  /// let mut channels = process.lock().await;
+  /// let (tx, rx) = &mut *channels;
+  ///
+  /// // Send a message to the worker
+  /// write_ipc_message_async(tx, b"Hello, worker!").await?;
+  ///
+  /// // Read the response
+  /// let response = read_ipc_message_async(rx).await?;
+  /// # Ok(())
+  /// # }
+  /// ```
   pub async fn obtain_process(
     &self,
-  ) -> Result<Arc<Mutex<(TokioSender, TokioRecver)>>, Box<dyn Error + Send + Sync>> {
+  ) -> Result<
+    Arc<Mutex<(Compat<Async<SenderWrapped>>, Compat<Async<RecverWrapped>>)>>,
+    Box<dyn Error + Send + Sync>,
+  > {
     if self.inner.is_empty() {
       Err(anyhow::anyhow!(
         "The process pool doesn't have any processes"
       ))?
     } else if self.inner.len() == 1 {
-      let process_option = self.inner[0].0.read().await;
-      let process = match process_option.as_ref() {
-        Some(arc_mutex_result) => arc_mutex_result
-          .as_ref()
-          .map_err(|e| std::io::Error::new(e.kind(), e.to_string()))?,
-        None => Err(anyhow::anyhow!("Asynchronous IPC not initialized yet"))?,
-      };
-      Ok(process.clone())
+      Ok(self.inner[0].0.clone())
     } else {
       let first_random_choice = rand::random_range(0..self.inner.len());
       let second_random_choice_reduced = rand::random_range(0..self.inner.len() - 1);
@@ -134,20 +275,8 @@ impl PreforkedProcessPool {
       } else {
         second_random_choice_reduced + 1
       };
-      let first_random_process_option = self.inner[first_random_choice].0.read().await;
-      let second_random_process_option = self.inner[second_random_choice].0.read().await;
-      let first_random_process = match first_random_process_option.as_ref() {
-        Some(arc_mutex_result) => arc_mutex_result
-          .as_ref()
-          .map_err(|e| std::io::Error::new(e.kind(), e.to_string()))?,
-        None => Err(anyhow::anyhow!("Asynchronous IPC not initialized yet"))?,
-      };
-      let second_random_process = match second_random_process_option.as_ref() {
-        Some(arc_mutex_result) => arc_mutex_result
-          .as_ref()
-          .map_err(|e| std::io::Error::new(e.kind(), e.to_string()))?,
-        None => Err(anyhow::anyhow!("Asynchronous IPC not initialized yet"))?,
-      };
+      let first_random_process = &self.inner[first_random_choice].0;
+      let second_random_process = &self.inner[second_random_choice].0;
       let first_random_process_reference = Arc::strong_count(first_random_process);
       let second_random_process_reference = Arc::strong_count(second_random_process);
       if first_random_process_reference < second_random_process_reference {
@@ -156,13 +285,6 @@ impl PreforkedProcessPool {
         Ok(second_random_process.clone())
       }
     }
-  }
-
-  pub async fn obtain_process_with_init_async_ipc(
-    &self,
-  ) -> Result<Arc<Mutex<(TokioSender, TokioRecver)>>, Box<dyn Error + Send + Sync>> {
-    self.init_async_ipc().await;
-    self.obtain_process().await
   }
 }
 
@@ -175,6 +297,38 @@ impl Drop for PreforkedProcessPool {
   }
 }
 
+/// Reads a message from an IPC receiver in synchronous mode.
+///
+/// This function reads a message that was sent using the protocol established by
+/// `write_ipc_message`. It first reads a 4-byte big-endian message size, then
+/// reads the message content of that size.
+///
+/// # Arguments
+///
+/// * `rx` - A mutable reference to the receiver
+///
+/// # Returns
+///
+/// Returns the message content as a `Vec<u8>` on success, or an I/O error if
+/// reading fails.
+///
+/// # Protocol
+///
+/// The message protocol consists of:
+/// 1. 4 bytes: message length as big-endian u32
+/// 2. N bytes: message content
+///
+/// # Examples
+///
+/// ```no_run
+/// # use ferron::util::preforked_process_pool::*;
+/// # use interprocess::unnamed_pipe::Recver;
+/// # fn example(mut rx: Recver) -> Result<(), std::io::Error> {
+/// let message = read_ipc_message(&mut rx)?;
+/// println!("Received: {:?}", String::from_utf8_lossy(&message));
+/// # Ok(())
+/// # }
+/// ```
 pub fn read_ipc_message(rx: &mut Recver) -> Result<Vec<u8>, std::io::Error> {
   let mut message_size_buffer = [0u8; 4];
   rx.read_exact(&mut message_size_buffer)?;
@@ -185,7 +339,34 @@ pub fn read_ipc_message(rx: &mut Recver) -> Result<Vec<u8>, std::io::Error> {
   Ok(buffer)
 }
 
-pub async fn read_ipc_message_async(rx: &mut TokioRecver) -> Result<Vec<u8>, std::io::Error> {
+/// Reads a message from an IPC receiver in asynchronous mode.
+///
+/// This is the async version of `read_ipc_message`. It reads a message using the
+/// same protocol but operates asynchronously, making it suitable for use in
+/// async contexts without blocking.
+///
+/// # Arguments
+///
+/// * `rx` - A mutable reference to the async-compatible receiver
+///
+/// # Returns
+///
+/// Returns the message content as a `Vec<u8>` on success, or an I/O error if
+/// reading fails.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use ferron::util::preforked_process_pool::*;
+/// # async fn example(rx: &mut tokio_util::compat::Compat<async_io::Async<RecverWrapped>>) -> Result<(), std::io::Error> {
+/// let message = read_ipc_message_async(rx).await?;
+/// println!("Received: {:?}", String::from_utf8_lossy(&message));
+/// # Ok(())
+/// # }
+/// ```
+pub async fn read_ipc_message_async(
+  rx: &mut Compat<Async<RecverWrapped>>,
+) -> Result<Vec<u8>, std::io::Error> {
   let mut message_size_buffer = [0u8; 4];
   rx.read_exact(&mut message_size_buffer).await?;
   let message_size = u32::from_be_bytes(message_size_buffer);
@@ -195,6 +376,38 @@ pub async fn read_ipc_message_async(rx: &mut TokioRecver) -> Result<Vec<u8>, std
   Ok(buffer)
 }
 
+/// Writes a message to an IPC sender in synchronous mode.
+///
+/// This function writes a message using a length-prefixed protocol. It first
+/// writes the message length as a 4-byte big-endian integer, followed by the
+/// message content.
+///
+/// # Arguments
+///
+/// * `tx` - A mutable reference to the sender
+/// * `message` - The message content to send
+///
+/// # Returns
+///
+/// Returns `Ok(())` on success, or an I/O error if writing fails.
+///
+/// # Protocol
+///
+/// The message protocol consists of:
+/// 1. 4 bytes: message length as big-endian u32
+/// 2. N bytes: message content
+///
+/// # Examples
+///
+/// ```no_run
+/// # use ferron::util::preforked_process_pool::*;
+/// # use interprocess::unnamed_pipe::Sender;
+/// # fn example(mut tx: Sender) -> Result<(), std::io::Error> {
+/// let message = b"Hello, parent process!";
+/// write_ipc_message(&mut tx, message)?;
+/// # Ok(())
+/// # }
+/// ```
 pub fn write_ipc_message(tx: &mut Sender, message: &[u8]) -> Result<(), std::io::Error> {
   let mut packet = Vec::new();
   packet.put_slice(&(message.len() as u32).to_be_bytes());
@@ -203,8 +416,33 @@ pub fn write_ipc_message(tx: &mut Sender, message: &[u8]) -> Result<(), std::io:
   Ok(())
 }
 
+/// Writes a message to an IPC sender in asynchronous mode.
+///
+/// This is the async version of `write_ipc_message`. It writes a message using
+/// the same length-prefixed protocol but operates asynchronously, making it
+/// suitable for use in async contexts without blocking.
+///
+/// # Arguments
+///
+/// * `tx` - A mutable reference to the async-compatible sender
+/// * `message` - The message content to send
+///
+/// # Returns
+///
+/// Returns `Ok(())` on success, or an I/O error if writing fails.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use ferron::util::preforked_process_pool::*;
+/// # async fn example(tx: &mut tokio_util::compat::Compat<async_io::Async<SenderWrapped>>) -> Result<(), std::io::Error> {
+/// let message = b"Hello, worker process!";
+/// write_ipc_message_async(tx, message).await?;
+/// # Ok(())
+/// # }
+/// ```
 pub async fn write_ipc_message_async(
-  tx: &mut TokioSender,
+  tx: &mut Compat<Async<SenderWrapped>>,
   message: &[u8],
 ) -> Result<(), std::io::Error> {
   let mut packet = Vec::new();
@@ -236,7 +474,7 @@ mod tests {
   #[tokio::test]
   async fn test_obtain_process_and_communication() {
     let pool = unsafe { PreforkedProcessPool::new(1, dummy_pool_fn) }.unwrap();
-    let proc = pool.obtain_process_with_init_async_ipc().await.unwrap();
+    let proc = pool.obtain_process().await.unwrap();
     let mut proc = proc.lock().await;
     let (tx, rx) = &mut *proc;
 
@@ -254,9 +492,9 @@ mod tests {
   async fn test_obtain_process_balancing() {
     let pool = unsafe { PreforkedProcessPool::new(3, dummy_pool_fn) }.unwrap();
 
-    let _p1 = pool.obtain_process_with_init_async_ipc().await.unwrap();
-    let _p2 = pool.obtain_process_with_init_async_ipc().await.unwrap();
-    let _p3 = pool.obtain_process_with_init_async_ipc().await.unwrap();
+    let _p1 = pool.obtain_process().await.unwrap();
+    let _p2 = pool.obtain_process().await.unwrap();
+    let _p3 = pool.obtain_process().await.unwrap();
 
     // This ensures reference counts differ
     let chosen = pool.obtain_process().await;
@@ -265,11 +503,8 @@ mod tests {
 
   #[tokio::test]
   async fn test_obtain_process_empty_pool() {
-    let empty_pool = PreforkedProcessPool {
-      inner: Vec::new(),
-      async_ipc_initialized: Arc::new(RwLock::new(AtomicBool::new(false))),
-    };
-    let result = empty_pool.obtain_process_with_init_async_ipc().await;
+    let empty_pool = PreforkedProcessPool { inner: Vec::new() };
+    let result = empty_pool.obtain_process().await;
     assert!(result.is_err());
   }
 }

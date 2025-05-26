@@ -1,4 +1,4 @@
-// Hostname matching function from SVR.JS rewritten from JavaScript to Rust
+/// Matches the request hostname against a configured hostname
 pub fn match_hostname(hostname: Option<&str>, req_hostname: Option<&str>) -> bool {
   if hostname.is_none() || hostname == Some("*") {
     return true;

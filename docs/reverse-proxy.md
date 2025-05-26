@@ -4,12 +4,11 @@ title: Reverse proxy functionality
 
 Configuring Ferron as a reverse proxy is straightforward - you just need to enable the "rproxy" module, and specify the backend server URL in "proxyTo" configuration property (or "secureProxyTo" for HTTPS connections). To configure Ferron as a reverse proxy, you can use the configuration below:
 
-```yaml
-# Example global configuration with reverse proxy
-global:
-  loadModules:
-    - rproxy
-  proxyTo: http://localhost:3000/ # Replace "http://localhost:3000" with the backend server URL
+```kdl
+// Example global configuration with reverse proxy
+* {
+    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+}
 ```
 
 ## Example: Ferron multiplexing to several backend servers
@@ -24,26 +23,30 @@ Below are assumptions made for this example:
 
 You can configure Ferron like this:
 
-```yaml
-global:
-  secure: true
-  cert: /path/to/certificate.crt # Replace "/path/to/certificate.crt" to the path to the TLS certificate
-  key: /path/to/private.key # Replace "/path/to/private.key" to the path to the private key
-  loadModules:
-    - rproxy
+```kdl
+* {
+    tls "/path/to/certificate.crt" "/path/to/private.key"
+}
 
-hosts:
-  - domain: example.com
-    locations:
-      - path: /agenda
-        proxyTo: http://calender.example.net:5000
-        # It proxies /agenda/example to http://calender.example.net:5000/agenda/example
-      - path: "/" # Catch-all path
-        proxyTo: http://localhost:3000/
-  - domain: foo.example.com
-    proxyTo: https://saas.foo.net
-  - domain: bar.example.com
-    proxyTo: http://backend.example.net:4000
+example.com {
+    location "/agenda" {
+        // It proxies /agenda/example to http://calender.example.net:5000/agenda/example
+        proxy "http://calender.example.net:5000"
+    }
+
+    location "/" {
+        // Catch-all path
+        proxy "http://localhost:3000/"
+    }
+}
+
+foo.example.com {
+    proxy "https://saas.foo.net"
+}
+
+bar.example.com {
+    proxy "http://backend.example.net:4000"
+}
 ```
 
 For `http://calender.example.net:5000/agenda/example`, you will probably have to either configure the calendar service to strip 'agenda/' or configure URL rewriting in Ferron.

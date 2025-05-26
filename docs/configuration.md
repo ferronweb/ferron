@@ -1,8 +1,8 @@
 ---
-title: Server configuration properties
+title: Server configuration (legacy)
 ---
 
-Ferron can be configured in the `ferron.yaml` file. Below is the description of configuration properties for this server.
+Ferron can be also configured in the Ferron 1.x-compatible `ferron.yaml` file. Below is the description of configuration properties for this server.
 
 ## Global-only configuration properties
 

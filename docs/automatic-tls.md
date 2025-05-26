@@ -2,7 +2,7 @@
 title: Automatic TLS
 ---
 
-Ferron supports automatic TLS via Let's Encrypt, and TLS-ALPN-01 and HTTP-01 (Ferron 1.1.0 and newer) ACME challenges. The domain names for the certificate will be extracted from the host configuration (wildcard domains are ignored, since TLS-ALPN-01 ACME challenge doesn't support them). The automatic TLS will work when the HTTPS port is set to `443`.
+Ferron supports automatic TLS via Let's Encrypt, and TLS-ALPN-01 and HTTP-01 (Ferron 1.1.0 and newer) ACME challenges. The domain names for the certificate will be extracted from the host configuration (wildcard domains are ignored, since TLS-ALPN-01 nor HTTP-01 ACME challenges doesn't support them).
 
 The automatic TLS functionality is used to obtain TLS certificates automatically, without needing to manually import TLS certificates or use an external tool to obtain TLS certificates, like Certbot. This makes the process of obtaining TLS certificate more convenient and efficient.
 
@@ -10,16 +10,16 @@ Ferron supports both production and staging Let's Encrypt directories. The stagi
 
 Below is the example Ferron configuration that enables automatic TLS using production Let's Encrypt directory:
 
-```yaml
-global:
-  secure: true
-  enableHTTP2: true # Enable HTTP/2 for improved performance
-  enableAutomaticTLS: true
-  automaticTLSContactEmail: "someone@example.com" # Replace "someone@example.com" with actual email address
-  automaticTLSContactCacheDirectory: "/path/to/letsencrypt-cache" # Replace "/path/to/letsencrypt-cache" with actual cache directory. Optional property, but recommended
-  automaticTLSLetsEncryptProduction: true
+```kdl
+* {
+    auto_tls
+    auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
+    auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory. Optional property, but recommended
+    auto_tls_letsencrypt_production
+}
 
-hosts:
-  - domain: "example.com" # Replace "example.com" with your website's domain name
-    wwwroot: "/var/www/html"
+// Replace "example.com" with your website's domain name
+example.com {
+    root "/var/www/html"
+}
 ```

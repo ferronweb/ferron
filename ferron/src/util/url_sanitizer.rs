@@ -1,5 +1,5 @@
 // Copyright (c) 2018-2025 SVR.JS
-// Portions of this file are derived from SVR.JS (https://git.svrjs.org/svrjs/svrjs).
+// Portions of this file are derived from SVR.JS (https://github.com/svr-js/svrjs).
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -14,6 +14,7 @@
 use anyhow::{anyhow, Result};
 use std::str;
 
+/// Sanitizes the URL
 pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String> {
   if resource == "*" || resource.is_empty() {
     return Ok(resource.to_string());

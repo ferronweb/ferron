@@ -23,11 +23,12 @@ By default, Ferron serves content from the `%SystemDrive%\ferron\wwwroot` direct
 Ferron installed via the installer for Windows Server has following file structure:
 
 - _%SystemDrive%\ferron\ferron.exe_ - Ferron web server
-- _%SystemDrive%\ferron\ferron-passwd.exe_ - Ferron user management tool
+- _%SystemDrive%\ferron\ferron-passwd.exe_ - Ferron user password generation tool
+- _%SystemDrive%\ferron\ferron-yaml2kdl.exe_ - Ferron configuration conversion tool
 - _%SystemDrive%\ferron\log\access.log_ - Ferron access log in Combined Log Format
 - _%SystemDrive%\ferron\log\error.log_ - Ferron error log
 - _%SystemDrive%\ferron\wwwroot_ - Ferron's web root
-- _%SystemDrive%\ferron\ferron.yaml_ - Ferron configuration
+- _%SystemDrive%\ferron\ferron.kdl_ - Ferron configuration
 
 ## Managing the Ferron service
 
