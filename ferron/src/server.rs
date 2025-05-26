@@ -46,6 +46,7 @@ use tokio_util::sync::CancellationToken;
 use yaml_rust2::Yaml;
 
 // Enum for maybe TLS stream
+#[allow(clippy::large_enum_variant)]
 enum MaybeTlsStream {
   Tls(TlsStream<TcpStream>),
   Plain(TcpStream),
@@ -95,7 +96,19 @@ async fn accept_quic_connection(
                   .iter()
                   .map(|module| module.get_handlers(Handle::current()));
 
-                let (request, stream) = resolver;
+                let (request, stream) = match resolver.resolve_request().await {
+                  Ok(resolved) => resolved,
+                  Err(err) => {
+                    logger_clone
+                      .send(LogMessage::new(
+                        format!("Error serving HTTP/3 connection: {}", err),
+                        true,
+                      ))
+                      .await
+                      .unwrap_or_default();
+                    return;
+                  }
+                };
                 let (mut send, receive) = stream.split();
                 let request_body_stream = futures_util::stream::unfold(
                   (receive, false),

@@ -4,6 +4,13 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.3.1
+
+**Released in May 26, 2025**
+
+- Fixed "http.request" ASGI event with the incorrect assigned "lifespan.shutdown" type
+- Fixed incorrect configuration validation of error and location configurations
+
 ## Ferron 1.3.0
 
 **Released in May 6, 2025**

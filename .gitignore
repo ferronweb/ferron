@@ -19,3 +19,6 @@ Thumbs.db
 # Temporary files used by the editor
 *.swp
 *.swo
+
+# Editor-specific files
+/.idea

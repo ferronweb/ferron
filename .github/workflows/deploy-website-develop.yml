@@ -16,7 +16,7 @@ jobs:
     environment: ferron-website-develop
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: develop
 
@@ -42,7 +42,7 @@ jobs:
           popd
 
       - name: Create the website ZIP archive
-        uses: thedoctor0/zip-release@0.7.5
+        uses: thedoctor0/zip-release@0.7.6
         with:
           type: "zip"
           filename: "../../ferron-website-develop.zip"
