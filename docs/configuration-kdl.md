@@ -225,7 +225,7 @@ Below is the example Ferron web server configuration:
     h2_enable_connect_protocol
 
     // Logging
-    log "/var/www/ferron/access.log"
+    log "/var/log/ferron/access.log"
     error_log "/var/log/ferron/error.log"
 
     // Blocklist
