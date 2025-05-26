@@ -35,6 +35,6 @@ Dockerfile*
 *.md
 
 # Configuration
-/*.yaml
+/*.kdl
 # except
-!/ferron-docker.yaml
+!/ferron-docker.kdl
