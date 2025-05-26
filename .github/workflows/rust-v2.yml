@@ -1,4 +1,4 @@
-name: Rust
+name: Rust (Ferron 2.x)
 
 on:
   push:
