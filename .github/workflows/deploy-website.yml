@@ -40,7 +40,7 @@ jobs:
           popd
 
       - name: Create the website ZIP archive
-        uses: thedoctor0/zip-release@0.7.5
+        uses: thedoctor0/zip-release@0.7.6
         with:
           type: "zip"
           filename: "../../ferron-website.zip"
