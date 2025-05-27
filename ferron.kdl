@@ -1,4 +1,7 @@
 * {
+  default_http_port 8080
   default_https_port #null
+  log "access.log"
+  error_log "error.log"
   root "wwwroot"
 }
