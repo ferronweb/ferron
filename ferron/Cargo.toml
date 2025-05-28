@@ -123,6 +123,7 @@ dirs = "6.0.0"
 mimalloc = { workspace = true }
 memchr = { version = "2.7.4", optional = true }
 itertools = { version = "0.14.0", optional = true }
+smallvec = { version = "1.15.0", features = ["write"] }
 
 [dev-dependencies]
 tokio-test = "0.4.4"

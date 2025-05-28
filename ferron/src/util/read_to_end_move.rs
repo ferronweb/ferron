@@ -1,12 +1,16 @@
+use smallvec::SmallVec;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{self, AsyncRead, ReadBuf};
 
+/// Constant defining the stack capacity of the buffer
+const BUFFER_STACK_CAPACITY: usize = 8192;
+
 /// A future that reads an `AsyncRead` to the end
 pub struct ReadToEndFuture<R> {
   reader: R,
-  buffer: Vec<u8>,
+  buffer: SmallVec<[u8; BUFFER_STACK_CAPACITY]>,
 }
 
 impl<R> ReadToEndFuture<R> {
@@ -14,7 +18,7 @@ impl<R> ReadToEndFuture<R> {
   pub fn new(reader: R) -> Self {
     Self {
       reader,
-      buffer: Vec::new(),
+      buffer: SmallVec::new(),
     }
   }
 }
@@ -34,7 +38,7 @@ where
         Poll::Ready(Ok(())) => {
           let n = read_buf.filled().len();
           if n == 0 {
-            return Poll::Ready(Ok(self.buffer.clone()));
+            return Poll::Ready(Ok(self.buffer.to_vec()));
           }
           self.buffer.extend_from_slice(read_buf.filled());
           read_buf.clear();

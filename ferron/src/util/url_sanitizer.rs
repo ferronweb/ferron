@@ -12,7 +12,7 @@
 // copies or substantial portions of the Software.
 //
 use anyhow::{anyhow, Result};
-use std::str;
+use smallvec::SmallVec;
 
 /// Sanitizes the URL
 pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String> {
@@ -20,28 +20,27 @@ pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String
     return Ok(resource.to_string());
   }
 
-  let mut sanitized = String::with_capacity(resource.len());
+  // Remove null bytes directly without allocating a new string unless needed
+  let sanitized: Vec<u8> = resource
+    .as_bytes()
+    .iter()
+    .cloned()
+    .filter(|&b| b != 0)
+    .collect();
 
-  // Remove null bytes and handle initial sanitization
-  for &ch in resource.as_bytes() {
-    if ch != b'\0' {
-      sanitized.push(ch as char);
-    }
-  }
-
-  // Check for malformed URL encoding (invalid percent encoding)
-  let bytes = sanitized.as_bytes();
+  // Check for malformed percent encoding
   let mut i = 0;
-  while i < bytes.len() {
-    if bytes[i] == b'%' {
-      if i + 2 >= bytes.len() {
+  while i < sanitized.len() {
+    if sanitized[i] == b'%' {
+      if i + 2 >= sanitized.len() {
         return Err(anyhow!("URI malformed"));
       }
-      let hex = &bytes[i + 1..i + 3];
-      if !hex[0].is_ascii_hexdigit() || !hex[1].is_ascii_hexdigit() {
+      let hi = sanitized[i + 1];
+      let lo = sanitized[i + 2];
+      if !hi.is_ascii_hexdigit() || !lo.is_ascii_hexdigit() {
         return Err(anyhow!("URI malformed"));
       }
-      let value = u8::from_str_radix(str::from_utf8(hex)?, 16)?;
+      let value = hex_to_byte(hi, lo)?;
       if value == 0xc0 || value == 0xc1 || value >= 0xfe {
         return Err(anyhow!("URI malformed"));
       }
@@ -49,38 +48,34 @@ pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String
     i += 1;
   }
 
-  // Decode percent-encoded characters while preserving safe ones
+  // Decode percent-encoded characters with allowed safe chars
   let mut decoded = String::with_capacity(sanitized.len());
-  let bytes = sanitized.as_bytes();
   let mut i = 0;
-  while i < bytes.len() {
-    if bytes[i] == b'%' && i + 2 < bytes.len() {
-      let hex = &bytes[i + 1..i + 3];
-      if let Ok(value) = u8::from_str_radix(str::from_utf8(hex)?, 16) {
-        if value != 0 {
-          let decoded_char = value as char;
-          if decoded_char.is_ascii_alphanumeric()
-                        || "!$&'()*+,-./0123456789:;=@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]_abcdefghijklmnopqrstuvwxyz~"
-                            .contains(decoded_char)
-                    {
-                        decoded.push(decoded_char);
-                    } else {
-                        decoded.push('%');
-                        decoded.push(hex[0] as char);
-                        decoded.push(hex[1] as char);
-                    }
-          i += 2;
+  while i < sanitized.len() {
+    if sanitized[i] == b'%' && i + 2 < sanitized.len() {
+      let val = hex_to_byte(sanitized[i + 1], sanitized[i + 2])?;
+      if val != 0 {
+        let ch = val as char;
+        if ch.is_ascii_alphanumeric()
+          || matches!(ch, '!' | '$' | '&' | '\'' | '(' | ')' | '*' | '+' | ',' | '-' | '.' | '/'
+                        | '0'..='9' | ':' | ';' | '=' | '@' | 'A'..='Z' | '[' | '\\' | ']' | '_' | 'a'..='z' | '~')
+        {
+          decoded.push(ch);
         } else {
-          i += 3;
-          continue;
+          decoded.push('%');
+          decoded.push(sanitized[i + 1] as char);
+          decoded.push(sanitized[i + 2] as char);
         }
+        i += 3;
+        continue;
       } else {
-        decoded.push('%');
+        i += 3;
+        continue;
       }
     } else {
-      decoded.push(bytes[i] as char);
+      decoded.push(sanitized[i] as char);
+      i += 1;
     }
-    i += 1;
   }
 
   // Encode unsafe characters
@@ -88,25 +83,23 @@ pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String
   for ch in decoded.chars() {
     match ch {
       '<' | '>' | '^' | '`' | '{' | '|' | '}' => {
-        encoded.push_str(&format!("%{:02X}", ch as u8));
+        encoded.push('%');
+        encoded.push_str(&format!("{:02X}", ch as u8));
       }
       _ => encoded.push(ch),
     }
   }
 
-  // Ensure the resource starts with a slash
+  // Ensure starts with '/'
   if !encoded.starts_with('/') {
     encoded.insert(0, '/');
   }
 
-  // Convert backslashes to slashes and handle duplicate slashes
+  // Normalize slashes
   let mut final_resource = String::with_capacity(encoded.len());
   let mut last_was_slash = false;
   for ch in encoded.chars() {
-    if ch == '\\' {
-      final_resource.push('/');
-      last_was_slash = true;
-    } else if ch == '/' {
+    if ch == '\\' || ch == '/' {
       if !allow_double_slashes && last_was_slash {
         continue;
       }
@@ -118,31 +111,25 @@ pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String
     }
   }
 
-  // Normalize path segments (remove ".", "..", trailing dots)
-  let mut segments: Vec<&str> = Vec::new();
-  for mut part in final_resource.split('/') {
+  // Normalize path segments
+  let mut segments: SmallVec<[&str; 16]> = SmallVec::new();
+  for part in final_resource.split('/') {
     match part {
+      "" if allow_double_slashes => segments.push(""),
       "." => continue,
       ".." => {
-        segments.pop(); // Go up one directory
-      }
-      "" => {
-        if allow_double_slashes {
-          segments.push("");
-        }
+        segments.pop();
       }
       _ => {
-        while part.ends_with('.') {
-          part = &part[..part.len() - 1];
-        }
-        if !part.is_empty() {
-          segments.push(part);
+        let trimmed = part.trim_end_matches('.');
+        if !trimmed.is_empty() {
+          segments.push(trimmed);
         }
       }
     }
   }
 
-  final_resource = if allow_double_slashes {
+  let mut final_path = if allow_double_slashes {
     segments.join("/")
   } else if !segments.is_empty() && final_resource.ends_with('/') {
     format!("/{}/", segments.join("/"))
@@ -150,17 +137,33 @@ pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String
     format!("/{}", segments.join("/"))
   };
 
-  // Remove any remaining "/../" sequences
-  while final_resource.contains("/../") {
-    final_resource = final_resource.replacen("/../", "", 1);
+  // Remove remaining '/../' sequences
+  while final_path.contains("/../") {
+    final_path = final_path.replace("/../", "");
   }
 
-  // Ensure result is not empty
-  if final_resource.is_empty() {
-    final_resource.push('/');
+  // Ensure non-empty result
+  if final_path.is_empty() {
+    final_path.push('/');
   }
 
-  Ok(final_resource)
+  Ok(final_path)
+}
+
+#[inline(always)]
+fn hex_to_byte(hi: u8, lo: u8) -> Result<u8> {
+  fn val(c: u8) -> Option<u8> {
+    match c {
+      b'0'..=b'9' => Some(c - b'0'),
+      b'a'..=b'f' => Some(10 + (c - b'a')),
+      b'A'..=b'F' => Some(10 + (c - b'A')),
+      _ => None,
+    }
+  }
+  match (val(hi), val(lo)) {
+    (Some(h), Some(l)) => Ok(h << 4 | l),
+    _ => Err(anyhow!("Invalid hex")),
+  }
 }
 
 // Path sanitizer tests taken from SVR.JS web server

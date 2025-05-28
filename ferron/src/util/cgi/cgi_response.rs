@@ -1,4 +1,5 @@
 use memchr::memmem::Finder;
+use smallvec::SmallVec;
 use std::io::Error;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -13,7 +14,7 @@ where
   R: AsyncRead + Unpin,
 {
   stream: R,
-  response_buf: Vec<u8>,
+  response_buf: SmallVec<[u8; RESPONSE_BUFFER_CAPACITY]>,
   response_head_length: Option<usize>,
 }
 
@@ -25,7 +26,7 @@ where
   pub fn new(stream: R) -> Self {
     Self {
       stream,
-      response_buf: Vec::with_capacity(RESPONSE_BUFFER_CAPACITY),
+      response_buf: SmallVec::with_capacity(RESPONSE_BUFFER_CAPACITY),
       response_head_length: None,
     }
   }

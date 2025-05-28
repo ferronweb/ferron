@@ -963,6 +963,7 @@ dependencies = [
  "serde_bytes",
  "sha2",
  "shiba",
+ "smallvec",
  "socket2",
  "tokio",
  "tokio-rustls",

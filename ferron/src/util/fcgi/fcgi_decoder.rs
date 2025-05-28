@@ -1,4 +1,5 @@
 use hyper::body::{Buf, Bytes};
+use smallvec::{SmallVec, ToSmallVec};
 use tokio_util::bytes::BytesMut;
 use tokio_util::codec::Decoder;
 
@@ -20,7 +21,7 @@ enum FcgiDecodeState {
 
 /// Encoder that decodes from FastCGI records
 pub struct FcgiDecoder {
-  header: Vec<u8>,
+  header: SmallVec<[u8; 8]>,
   content_length: u16,
   padding_length: u8,
   state: FcgiDecodeState,
@@ -30,7 +31,7 @@ impl FcgiDecoder {
   /// Creates a new FastCGI decoder
   pub fn new() -> Self {
     Self {
-      header: Vec::new(),
+      header: SmallVec::new(),
       content_length: 0,
       padding_length: 0,
       state: FcgiDecodeState::ReadingHead,
@@ -48,7 +49,7 @@ impl Decoder for FcgiDecoder {
         FcgiDecodeState::ReadingHead => {
           if src.len() >= 8 {
             let header = &src[..8];
-            self.header = header.to_vec();
+            self.header = header.to_smallvec();
             src.advance(8);
             self.content_length = u16::from_be_bytes(
               self.header[4..6]
