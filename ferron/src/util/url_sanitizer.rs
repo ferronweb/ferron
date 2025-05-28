@@ -14,156 +14,199 @@
 use anyhow::{anyhow, Result};
 use smallvec::SmallVec;
 
+// Lookup table for safe characters that don't need encoding
+static SAFE_CHARS: [bool; 256] = {
+    let mut table = [false; 256];
+    let safe_bytes = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!$&'()*+,-./:;=@[]_~";
+    let mut i = 0;
+    while i < safe_bytes.len() {
+        table[safe_bytes[i] as usize] = true;
+        i += 1;
+    }
+    table
+};
+
+// Hex lookup table for faster encoding
+static HEX_CHARS: [u8; 16] = *b"0123456789ABCDEF";
+
 /// Sanitizes the URL
 pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String> {
-  if resource == "*" || resource.is_empty() {
-    return Ok(resource.to_string());
-  }
-
-  // Remove null bytes directly without allocating a new string unless needed
-  let sanitized: Vec<u8> = resource
-    .as_bytes()
-    .iter()
-    .cloned()
-    .filter(|&b| b != 0)
-    .collect();
-
-  // Check for malformed percent encoding
-  let mut i = 0;
-  while i < sanitized.len() {
-    if sanitized[i] == b'%' {
-      if i + 2 >= sanitized.len() {
-        return Err(anyhow!("URI malformed"));
-      }
-      let hi = sanitized[i + 1];
-      let lo = sanitized[i + 2];
-      if !hi.is_ascii_hexdigit() || !lo.is_ascii_hexdigit() {
-        return Err(anyhow!("URI malformed"));
-      }
-      let value = hex_to_byte(hi, lo)?;
-      if value == 0xc0 || value == 0xc1 || value >= 0xfe {
-        return Err(anyhow!("URI malformed"));
-      }
+    if resource == "*" || resource.is_empty() {
+        return Ok(resource.to_string());
     }
-    i += 1;
-  }
 
-  // Decode percent-encoded characters with allowed safe chars
-  let mut decoded = String::with_capacity(sanitized.len());
-  let mut i = 0;
-  while i < sanitized.len() {
-    if sanitized[i] == b'%' && i + 2 < sanitized.len() {
-      let val = hex_to_byte(sanitized[i + 1], sanitized[i + 2])?;
-      if val != 0 {
-        let ch = val as char;
-        if ch.is_ascii_alphanumeric()
-          || matches!(ch, '!' | '$' | '&' | '\'' | '(' | ')' | '*' | '+' | ',' | '-' | '.' | '/'
-                        | '0'..='9' | ':' | ';' | '=' | '@' | 'A'..='Z' | '[' | '\\' | ']' | '_' | 'a'..='z' | '~')
-        {
-          decoded.push(ch);
+    let bytes = resource.as_bytes();
+    let mut result = SmallVec::<[u8; 256]>::with_capacity(bytes.len() * 2);
+    
+    // Combined pass: remove nulls, validate percent encoding, decode/encode in one go
+    let mut i = 0;
+    while i < bytes.len() {
+        let byte = bytes[i];
+        
+        // Skip null bytes
+        if byte == 0 {
+            i += 1;
+            continue;
+        }
+        
+        if byte == b'%' {
+            // Validate percent encoding
+            if i + 2 >= bytes.len() {
+                return Err(anyhow!("URI malformed"));
+            }
+            
+            let hi = bytes[i + 1];
+            let lo = bytes[i + 2];
+            
+            if !hi.is_ascii_hexdigit() || !lo.is_ascii_hexdigit() {
+                return Err(anyhow!("URI malformed"));
+            }
+            
+            let value = hex_to_byte_fast(hi, lo)?;
+            if value == 0xc0 || value == 0xc1 || value >= 0xfe {
+                return Err(anyhow!("URI malformed"));
+            }
+            
+            // Decode if safe, otherwise keep encoded
+            if value == 0 {
+                // Skip null bytes even when percent-encoded
+                i += 3;
+                continue;
+            } else if SAFE_CHARS[value as usize] {
+                result.push(value);
+            } else {
+                result.push(b'%');
+                result.push(hi);
+                result.push(lo);
+            }
+            i += 3;
         } else {
-          decoded.push('%');
-          decoded.push(sanitized[i + 1] as char);
-          decoded.push(sanitized[i + 2] as char);
+            // Handle special characters that need encoding
+            match byte {
+                b'<' | b'>' | b'^' | b'`' | b'{' | b'|' | b'}' => {
+                    result.push(b'%');
+                    result.push(HEX_CHARS[(byte >> 4) as usize]);
+                    result.push(HEX_CHARS[(byte & 0xF) as usize]);
+                }
+                _ => result.push(byte),
+            }
+            i += 1;
         }
-        i += 3;
-        continue;
-      } else {
-        i += 3;
-        continue;
-      }
-    } else {
-      decoded.push(sanitized[i] as char);
-      i += 1;
     }
-  }
-
-  // Encode unsafe characters
-  let mut encoded = String::with_capacity(decoded.len());
-  for ch in decoded.chars() {
-    match ch {
-      '<' | '>' | '^' | '`' | '{' | '|' | '}' => {
-        encoded.push('%');
-        encoded.push_str(&format!("{:02X}", ch as u8));
-      }
-      _ => encoded.push(ch),
+    
+    // Ensure starts with '/'
+    if result.is_empty() || result[0] != b'/' {
+        result.insert(0, b'/');
     }
-  }
-
-  // Ensure starts with '/'
-  if !encoded.starts_with('/') {
-    encoded.insert(0, '/');
-  }
-
-  // Normalize slashes
-  let mut final_resource = String::with_capacity(encoded.len());
-  let mut last_was_slash = false;
-  for ch in encoded.chars() {
-    if ch == '\\' || ch == '/' {
-      if !allow_double_slashes && last_was_slash {
-        continue;
-      }
-      final_resource.push('/');
-      last_was_slash = true;
-    } else {
-      final_resource.push(ch);
-      last_was_slash = false;
-    }
-  }
-
-  // Normalize path segments
-  let mut segments: SmallVec<[&str; 16]> = SmallVec::new();
-  for part in final_resource.split('/') {
-    match part {
-      "" if allow_double_slashes => segments.push(""),
-      "." => continue,
-      ".." => {
-        segments.pop();
-      }
-      _ => {
-        let trimmed = part.trim_end_matches('.');
-        if !trimmed.is_empty() {
-          segments.push(trimmed);
+    
+    // Normalize slashes and build segments in one pass
+    let mut segments = SmallVec::<[SmallVec<[u8; 32]>; 16]>::new();
+    let mut current_segment = SmallVec::<[u8; 32]>::new();
+    let mut last_was_slash = true; // Start with true since we ensured it starts with '/'
+    
+    i = 1; // Skip the initial '/'
+    while i < result.len() {
+        let byte = result[i];
+        
+        if byte == b'\\' || byte == b'/' {
+            if !current_segment.is_empty() {
+                // Trim trailing dots, but preserve "." and ".." for navigation
+                if current_segment.as_slice() != b"." && current_segment.as_slice() != b".." {
+                    while let Some(&b'.') = current_segment.last() {
+                        current_segment.pop();
+                    }
+                }
+                
+                if !current_segment.is_empty() {
+                    segments.push(current_segment);
+                    current_segment = SmallVec::new();
+                }
+            }
+            
+            if allow_double_slashes && last_was_slash {
+                // Add empty segment for double slash
+                segments.push(SmallVec::new());
+            }
+            last_was_slash = true;
+        } else {
+            current_segment.push(byte);
+            last_was_slash = false;
         }
-      }
+        i += 1;
     }
-  }
-
-  let mut final_path = if allow_double_slashes {
-    segments.join("/")
-  } else if !segments.is_empty() && final_resource.ends_with('/') {
-    format!("/{}/", segments.join("/"))
-  } else {
-    format!("/{}", segments.join("/"))
-  };
-
-  // Remove remaining '/../' sequences
-  while final_path.contains("/../") {
-    final_path = final_path.replace("/../", "");
-  }
-
-  // Ensure non-empty result
-  if final_path.is_empty() {
-    final_path.push('/');
-  }
-
-  Ok(final_path)
+    
+    // Handle final segment
+    if !current_segment.is_empty() {
+        // Trim trailing dots, but preserve "." and ".." for navigation
+        if current_segment.as_slice() != b"." && current_segment.as_slice() != b".." {
+            while let Some(&b'.') = current_segment.last() {
+                current_segment.pop();
+            }
+        }
+        if !current_segment.is_empty() {
+            segments.push(current_segment);
+        }
+    }
+    
+    // Process segments for . and .. navigation
+    let mut final_segments = SmallVec::<[SmallVec<[u8; 32]>; 16]>::new();
+    for segment in segments {
+        if segment.is_empty() && allow_double_slashes {
+            final_segments.push(segment);
+        } else if segment.as_slice() == b"." {
+            // Skip current directory
+            continue;
+        } else if segment.as_slice() == b".." {
+            // Parent directory - remove last segment
+            final_segments.pop();
+        } else if !segment.is_empty() {
+            final_segments.push(segment);
+        }
+    }
+    
+    // Build final result
+    let mut final_result = SmallVec::<[u8; 256]>::with_capacity(result.len());
+    final_result.push(b'/');
+    
+    let preserve_trailing_slash = !result.is_empty() && 
+        (result[result.len() - 1] == b'/' || result[result.len() - 1] == b'\\');
+    
+    for (idx, segment) in final_segments.iter().enumerate() {
+        if idx > 0 {
+            final_result.push(b'/');
+        } else if allow_double_slashes && segment.is_empty() {
+            final_result.push(b'/');
+        }
+        final_result.extend_from_slice(segment);
+    }
+    
+    // Add trailing slash if it was originally present and we're not at the root directory
+    // or if we are at root but the original path was just "/"
+    if preserve_trailing_slash && (!final_segments.is_empty() || 
+        (final_segments.is_empty() && result.len() == 1)) {
+        final_result.push(b'/');
+    }
+    
+    // Convert to string
+    String::from_utf8(final_result.into_vec())
+        .map_err(|_| anyhow!("Invalid UTF-8 in result"))
 }
 
 #[inline(always)]
-fn hex_to_byte(hi: u8, lo: u8) -> Result<u8> {
-  fn val(c: u8) -> Option<u8> {
-    match c {
-      b'0'..=b'9' => Some(c - b'0'),
-      b'a'..=b'f' => Some(10 + (c - b'a')),
-      b'A'..=b'F' => Some(10 + (c - b'A')),
-      _ => None,
+fn hex_to_byte_fast(hi: u8, lo: u8) -> Result<u8> {
+    #[inline(always)]
+    fn hex_val(c: u8) -> Option<u8> {
+        match c {
+            b'0'..=b'9' => Some(c - b'0'),
+            b'a'..=b'f' => Some(10 + (c - b'a')),
+            b'A'..=b'F' => Some(10 + (c - b'A')),
+            _ => None,
+        }
     }
-  }
-  match (val(hi), val(lo)) {
-    (Some(h), Some(l)) => Ok(h << 4 | l),
-    _ => Err(anyhow!("Invalid hex")),
-  }
+    match (hex_val(hi), hex_val(lo)) {
+        (Some(h), Some(l)) => Ok(h << 4 | l),
+        _ => Err(anyhow!("Invalid hex")),
+    }
 }
 
 // Path sanitizer tests taken from SVR.JS web server
