@@ -27,8 +27,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: develop-2.x
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --verbose
@@ -39,8 +37,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: develop-2.x
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
