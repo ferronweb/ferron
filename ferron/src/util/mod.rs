@@ -34,6 +34,8 @@ pub mod wsgi;
 #[cfg(feature = "wsgid")]
 pub mod wsgid;
 
+pub mod atomic_cache;
+
 pub use anti_xss::*;
 pub(crate) use config_macros::*;
 #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
