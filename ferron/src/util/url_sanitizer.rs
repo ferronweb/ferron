@@ -173,9 +173,7 @@ pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String
     !result.is_empty() && (result[result.len() - 1] == b'/' || result[result.len() - 1] == b'\\');
 
   for (idx, segment) in final_segments.iter().enumerate() {
-    if idx > 0 {
-      final_result.push(b'/');
-    } else if allow_double_slashes && segment.is_empty() {
+    if idx > 0 || (allow_double_slashes && segment.is_empty()) {
       final_result.push(b'/');
     }
     final_result.extend_from_slice(segment);
