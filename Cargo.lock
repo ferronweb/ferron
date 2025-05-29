@@ -2126,9 +2126,9 @@ dependencies = [
 
 [[package]]
 name = "ocsp-stapler"
-version = "0.4.5"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65b66402187deedd364531a44e5a0cec4abb971016a24b71a0c5fc254b13b6ae"
+checksum = "523fca70ede07701c075a7bdd13fb772baea6d37963f26fe326bfec695f4990f"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -2726,7 +2726,6 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
- "quinn",
  "rustls",
  "rustls-pki-types",
  "serde",
