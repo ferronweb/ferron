@@ -1,6 +1,8 @@
 mod anti_xss;
 #[cfg(feature = "asgi")]
 pub mod asgi;
+#[cfg(feature = "cache")]
+mod atomic_cache;
 #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
 pub mod cgi;
 mod config_macros;
@@ -34,9 +36,9 @@ pub mod wsgi;
 #[cfg(feature = "wsgid")]
 pub mod wsgid;
 
-pub mod atomic_cache;
-
 pub use anti_xss::*;
+#[cfg(feature = "cache")]
+pub use atomic_cache::*;
 pub(crate) use config_macros::*;
 #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
 pub use copy_move::*;

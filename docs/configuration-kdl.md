@@ -91,8 +91,8 @@ include /etc/ferron.d/**/*.kdl
   - This directive specifies the maximum time (in milliseconds) for server to process the request, after which the server resets the connection. If set as `timeout #null`, the timeout is disabled. It's not recommended to disable the timeout, as this might leave the server vulnerable to Slow HTTP attacks. Default: `timeout 300000`
 - `block <blocked_ip: string> [<blocked_ip: string> ...]`
   - This directive specifies IP addresses to be blocked. This directive can be specified multiple times. Default: none
-- `cache_max_entries <cache_max_entries: integer|null>` (_cache_ module)
-  - This directive specifies the maximum number of entries that can be stored in the HTTP cache. If set as `cache_max_entries #null`, the cache can theoretically store an unlimited number of entries. The cache keys for entries depend on the request method, the rewritten request URL, the "Host" header value, and varying request headers. Default: `cache_max_entries #null`
+- `cache_max_entries <cache_max_entries: integer>` (_cache_ module)
+  - This directive specifies the maximum number of entries that can be stored in the HTTP cache. If the number isn't a power of two, the next power of two will be used. The cache keys for entries depend on the request method, the rewritten request URL, the "Host" header value, and varying request headers. Default: `cache_max_entries 128`
 - `lb_health_check_window <lb_health_check_window: integer>` (_rproxy_ module)
   - This directive specifies the window size (in milliseconds) for load balancer health checks. Default: `lb_health_check_window 5000`
 - `listen_ip <listen_ip: string>`

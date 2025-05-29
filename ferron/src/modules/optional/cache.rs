@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::hash::RandomState;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,7 +7,6 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use cache_control::{Cachability, CacheControl};
 use futures_util::stream::{StreamExt, TryStreamExt};
-use hashlink::LinkedHashMap;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full, StreamBody};
 use hyper::body::Frame;
@@ -21,32 +19,18 @@ use tokio::sync::RwLock;
 use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
 use crate::util::get_entries_for_validation;
+use crate::util::AtomicGenericCache;
 use crate::{config::ServerConfiguration, util::ModuleCache};
 use crate::{get_entry, get_value, get_values};
 
 const CACHE_HEADER_NAME: &str = "X-Ferron-Cache";
 const DEFAULT_MAX_AGE: u64 = 300;
+const DEFAULT_MAX_CACHE_ENTRIES: usize = 128;
 
 /// A cache module loader
 #[allow(clippy::type_complexity)]
 pub struct CacheModuleLoader {
   module_cache: ModuleCache<CacheModule>,
-  cache: Arc<
-    RwLock<
-      LinkedHashMap<
-        String,
-        (
-          StatusCode,
-          HeaderMap,
-          Vec<u8>,
-          Instant,
-          Option<CacheControl>,
-        ),
-        RandomState,
-      >,
-    >,
-  >,
-  vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
 }
 
 impl CacheModuleLoader {
@@ -54,8 +38,6 @@ impl CacheModuleLoader {
   pub fn new() -> Self {
     Self {
       module_cache: ModuleCache::new(vec![]),
-      cache: Arc::new(RwLock::new(LinkedHashMap::with_hasher(RandomState::new()))),
-      vary_cache: Arc::new(RwLock::new(HashMap::new())),
     }
   }
 }
@@ -68,13 +50,15 @@ impl ModuleLoader for CacheModuleLoader {
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
     Ok(self.module_cache.get_or(config, |_| {
       Ok(Arc::new(CacheModule {
-        cache: self.cache.clone(),
-        vary_cache: self.vary_cache.clone(),
-        maximum_cache_entries: global_config
-          .and_then(|c| get_entry!("cache_max_entries", c))
-          .and_then(|e| e.values.first())
-          .and_then(|v| v.as_i128())
-          .map(|v| v as usize),
+        cache: AtomicGenericCache::new(
+          global_config
+            .and_then(|c| get_entry!("cache_max_entries", c))
+            .and_then(|e| e.values.first())
+            .and_then(|v| v.as_i128())
+            .map(|v| v as usize)
+            .unwrap_or(DEFAULT_MAX_CACHE_ENTRIES),
+        ),
+        vary_cache: Arc::new(RwLock::new(HashMap::new())),
       }))
     })?)
   }
@@ -107,7 +91,7 @@ impl ModuleLoader for CacheModuleLoader {
           Err(anyhow::anyhow!(
             "The `cache_max_entries` configuration property must have exactly one value"
           ))?
-        } else if (!entry.values[0].is_integer() && !entry.values[0].is_null())
+        } else if (!entry.values[0].is_integer())
           || entry.values[0].as_i128().is_some_and(|v| v < 0)
         {
           Err(anyhow::anyhow!(
@@ -166,22 +150,17 @@ impl ModuleLoader for CacheModuleLoader {
 #[allow(clippy::type_complexity)]
 struct CacheModule {
   cache: Arc<
-    RwLock<
-      LinkedHashMap<
-        String,
-        (
-          StatusCode,
-          HeaderMap,
-          Vec<u8>,
-          Instant,
-          Option<CacheControl>,
-        ),
-        RandomState,
-      >,
+    AtomicGenericCache<
+      Option<(
+        StatusCode,
+        HeaderMap,
+        Vec<u8>,
+        Instant,
+        Option<Arc<CacheControl>>,
+      )>,
     >,
   >,
   vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
-  maximum_cache_entries: Option<usize>,
 }
 
 impl Module for CacheModule {
@@ -189,7 +168,6 @@ impl Module for CacheModule {
     Box::new(CacheModuleHandlers {
       cache: self.cache.clone(),
       vary_cache: self.vary_cache.clone(),
-      maximum_cache_entries: self.maximum_cache_entries,
       cache_vary_headers_configured: Vec::new(),
       cache_ignore_headers_configured: Vec::new(),
       maximum_cached_response_size: None,
@@ -206,22 +184,17 @@ impl Module for CacheModule {
 #[allow(clippy::type_complexity)]
 struct CacheModuleHandlers {
   cache: Arc<
-    RwLock<
-      LinkedHashMap<
-        String,
-        (
-          StatusCode,
-          HeaderMap,
-          Vec<u8>,
-          Instant,
-          Option<CacheControl>,
-        ),
-        RandomState,
-      >,
+    AtomicGenericCache<
+      Option<(
+        StatusCode,
+        HeaderMap,
+        Vec<u8>,
+        Instant,
+        Option<Arc<CacheControl>>,
+      )>,
     >,
   >,
   vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
-  maximum_cache_entries: Option<usize>,
   cache_vary_headers_configured: Vec<String>,
   cache_ignore_headers_configured: Vec<String>,
   maximum_cached_response_size: Option<u64>,
@@ -333,12 +306,9 @@ impl ModuleHandlers for CacheModuleHandlers {
             .join("\n")
         );
 
-        drop(rwlock_read);
+        let cached_entry_option = self.cache.get(&cache_key_with_vary);
 
-        let rwlock_read = self.cache.read().await;
-        let cached_entry_option = rwlock_read.get(&cache_key_with_vary);
-
-        if let Some((status_code, headers, body, timestamp, response_cache_control)) =
+        if let Some(Some((status_code, headers, body, timestamp, response_cache_control))) =
           cached_entry_option
         {
           let max_age = match response_cache_control {
@@ -373,12 +343,8 @@ impl ModuleHandlers for CacheModuleHandlers {
               response_headers: None,
               new_remote_address: None,
             });
-          } else {
-            drop(rwlock_read);
           }
         }
-      } else {
-        drop(rwlock_read);
       }
     }
 
@@ -509,38 +475,33 @@ impl ModuleHandlers for CacheModuleHandlers {
               while written_headers.remove(header).is_some() {}
             }
 
-            let mut rwlock_write = self.cache.write().await;
-            rwlock_write.retain(|_, (_, _, _, timestamp, response_cache_control)| {
-              let max_age = match response_cache_control {
-                Some(response_cache_control) => match response_cache_control.s_max_age {
-                  Some(s_max_age) => Some(s_max_age),
-                  None => response_cache_control.max_age,
-                },
-                None => None,
-              };
+            self.cache.retain(|value, _, _| {
+              if let Some((_, _, _, timestamp, response_cache_control)) = value {
+                let max_age = match response_cache_control {
+                  Some(response_cache_control) => match response_cache_control.s_max_age {
+                    Some(s_max_age) => Some(s_max_age),
+                    None => response_cache_control.max_age,
+                  },
+                  None => None,
+                };
 
-              timestamp.elapsed() <= max_age.unwrap_or(Duration::from_secs(DEFAULT_MAX_AGE))
+                timestamp.elapsed() <= max_age.unwrap_or(Duration::from_secs(DEFAULT_MAX_AGE))
+              } else {
+                false
+              }
             });
 
-            if let Some(maximum_cache_entries) = self.maximum_cache_entries {
-              // Remove a value at the front of the list
-              while !rwlock_write.is_empty() && rwlock_write.len() >= maximum_cache_entries {
-                rwlock_write.pop_front();
-              }
-            }
-
             // This inserts a value at the back of the list
-            rwlock_write.insert(
+            self.cache.insert(
               cache_key_with_vary,
-              (
+              Some((
                 response_parts.status,
                 written_headers,
                 response_body_buffer.clone(),
                 Instant::now(),
-                response_cache_control,
-              ),
+                response_cache_control.map(Arc::new),
+              )),
             );
-            drop(rwlock_write);
           }
 
           let cached_stream =

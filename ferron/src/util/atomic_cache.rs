@@ -116,6 +116,7 @@ where
   capacity_mask: usize,
 }
 
+#[allow(dead_code)]
 impl<T> AtomicGenericCache<T>
 where
   T: Clone + Send + Sync + Default + 'static,
@@ -496,6 +497,7 @@ where
 }
 
 // Type safety and convenience
+#[allow(dead_code)]
 pub trait CacheableValue: Copy + Send + Sync + Default + 'static {
   fn is_lock_free() -> bool {
     std::mem::size_of::<Self>() <= 8 && std::mem::align_of::<Self>() <= 8
@@ -982,7 +984,7 @@ mod tests {
   #[test]
   fn test_deterministic_behavior_same_input() {
     // Test that same operations produce consistent results
-    for run in 0..3 {
+    for _ in 0..3 {
       let cache = create_cache::<u64>(100);
 
       // Same sequence of operations
