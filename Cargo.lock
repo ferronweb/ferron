@@ -923,6 +923,7 @@ dependencies = [
  "clap",
  "dirs",
  "fancy-regex",
+ "fastrand",
  "ferron-yaml2kdl-core",
  "futures-executor",
  "futures-util",
