@@ -459,6 +459,7 @@ where
   ///     }
   /// }
   /// ```
+  #[allow(clippy::type_complexity)]
   pub fn force_insert(
     &self,
     key: K,
@@ -736,7 +737,7 @@ where
   /// This is a bulk operation that looks up all provided keys.
   ///
   /// # Arguments
-  /// * `keys` - Vector of keys to look up
+  /// * `keys` - A slice of keys to look up
   ///
   /// # Returns
   /// Vector of values in the same order as keys. Missing keys result in None entries.
@@ -751,7 +752,7 @@ where
   /// let values = cache.get_all_by_keys(keys);
   /// // values will be [Some("value1"), None, Some("value3")]
   /// ```
-  pub fn get_all_by_keys(&self, keys: &Vec<K>) -> Vec<Option<T>> {
+  pub fn get_all_by_keys(&self, keys: &[K]) -> Vec<Option<T>> {
     keys.iter().map(|key| self.get(key)).collect()
   }
 
@@ -779,7 +780,7 @@ where
   /// Checks if the cache contains any of the specified keys.
   ///
   /// # Arguments
-  /// * `keys` - Vector of keys to check
+  /// * `keys` - A slice of keys to check
   ///
   /// # Returns
   /// `true` if any of the keys exist, `false` if none exist
@@ -792,14 +793,14 @@ where
   /// let keys = vec!["key1", "key2", "key3"];
   /// assert!(cache.contains_any_key(keys));
   /// ```
-  pub fn contains_any_key(&self, keys: &Vec<K>) -> bool {
+  pub fn contains_any_key(&self, keys: &[K]) -> bool {
     keys.iter().any(|key| self.contains_key(key))
   }
 
   /// Checks if the cache contains all of the specified keys.
   ///
   /// # Arguments
-  /// * `keys` - Vector of keys to check
+  /// * `keys` - A slice of keys to check
   ///
   /// # Returns
   /// `true` if all keys exist, `false` if any key is missing
@@ -813,7 +814,7 @@ where
   /// let keys = vec!["key1", "key2"];
   /// assert!(cache.contains_all_keys(keys));
   /// ```
-  pub fn contains_all_keys(&self, keys: &Vec<K>) -> bool {
+  pub fn contains_all_keys(&self, keys: &[K]) -> bool {
     keys.iter().all(|key| self.contains_key(key))
   }
 
@@ -862,7 +863,7 @@ where
   /// This is a bulk operation that attempts to remove all provided keys.
   ///
   /// # Arguments
-  /// * `keys` - Vector of keys to remove
+  /// * `keys` - A slice of keys to remove
   ///
   /// # Returns
   /// Vector of removed values in the same order as keys. Missing keys result in None entries.
@@ -877,7 +878,7 @@ where
   /// let removed_values = cache.remove_all(keys);
   /// // removed_values will be [Some("value1"), None, Some("value3")]
   /// ```
-  pub fn remove_all(&self, keys: &Vec<K>) -> Vec<Option<T>> {
+  pub fn remove_all(&self, keys: &[K]) -> Vec<Option<T>> {
     keys.iter().map(|key| self.remove(key)).collect()
   }
 
@@ -933,7 +934,7 @@ where
   /// let removed_values = cache.remove_existing(keys);
   /// // removed_values will be ["value1", "value3"]
   /// ```
-  pub fn remove_existing(&self, keys: &Vec<K>) -> Vec<T> {
+  pub fn remove_existing(&self, keys: &[K]) -> Vec<T> {
     keys.iter().filter_map(|key| self.remove(key)).collect()
   }
 
@@ -1198,8 +1199,7 @@ where
   /// Entries that don't match the predicate are marked as tombstones.
   ///
   /// # Arguments
-  /// * `predicate` - Function that takes (value, timestamp_nanos, sequence) and returns bool.
-  ///                 Timestamp is in UTC nanoseconds since Unix epoch.
+  /// * `predicate` - Function that takes (value, timestamp_nanos, sequence) and returns bool. Timestamp is in UTC nanoseconds since Unix epoch.
   ///
   /// # Returns
   /// Number of entries that were removed
