@@ -51,6 +51,7 @@ impl ModuleLoader for CacheModuleLoader {
     Ok(self.module_cache.get_or(config, |_| {
       Ok(Arc::new(CacheModule {
         cache: AtomicGenericCache::new(
+          1024,
           global_config
             .and_then(|c| get_entry!("cache_max_entries", c))
             .and_then(|e| e.values.first())
@@ -151,6 +152,7 @@ impl ModuleLoader for CacheModuleLoader {
 struct CacheModule {
   cache: Arc<
     AtomicGenericCache<
+      String,
       Option<(
         StatusCode,
         HeaderMap,
@@ -185,6 +187,7 @@ impl Module for CacheModule {
 struct CacheModuleHandlers {
   cache: Arc<
     AtomicGenericCache<
+      String,
       Option<(
         StatusCode,
         HeaderMap,
@@ -492,7 +495,7 @@ impl ModuleHandlers for CacheModuleHandlers {
             });
 
             // This inserts a value at the back of the list
-            self.cache.insert(
+            _ = self.cache.insert(
               cache_key_with_vary,
               Some((
                 response_parts.status,
