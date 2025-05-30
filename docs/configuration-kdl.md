@@ -100,9 +100,13 @@ include /etc/ferron.d/**/*.kdl
 - `io_uring [enable_io_uring: bool]`
   - This directive specifies whenever `io_uring` is enabled. This directive has no effect for systems that don't support `io_uring`. Default: `io_uring #true`
 - `wsgi_clear_imports [wsgi_clear_imports: bool]` (_wsgi_ module)
-  - This directive specified whenever to enable Python module import path clearing. Setting this option as `wsgi_clear_imports #true` improves the compatiblity with setups involving multiple WSGI applications, however module imports inside functions must not be used in the WSGI application. Default: `wsgi_clear_imports #false`
+  - This directive specifies whenever to enable Python module import path clearing. Setting this option as `wsgi_clear_imports #true` improves the compatiblity with setups involving multiple WSGI applications, however module imports inside functions must not be used in the WSGI application. Default: `wsgi_clear_imports #false`
 - `asgi_clear_imports [asgi_clear_imports: bool]` (_asgi_ module)
-  - This directive specified whenever to enable Python module import path clearing. Setting this option as `asgi_clear_imports #true` improves the compatiblity with setups involving multiple ASGI applications, however module imports inside functions must not be used in the ASGI application. Default: `asgi_clear_imports #false`
+  - This directive specifies whenever to enable Python module import path clearing. Setting this option as `asgi_clear_imports #true` improves the compatiblity with setups involving multiple ASGI applications, however module imports inside functions must not be used in the ASGI application. Default: `asgi_clear_imports #false`
+- `tcp_send_buffer <tcp_send_buffer: integer>`
+  - This directive specifies the send buffer size in bytes for TCP listeners. Default: none
+- `tcp_recv_buffer <tcp_recv_buffer: integer>`
+  - This directive specifies the receive buffer size in bytes for TCP listeners. Default: none
 
 ## Global and virtual host directives
 

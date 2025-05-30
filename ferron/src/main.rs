@@ -920,6 +920,16 @@ fn before_starting_server(
       ))?
     }
 
+    let tcp_send_buffer_size = global_configuration
+      .as_deref()
+      .and_then(|c| get_value!("tcp_send_buffer", c))
+      .and_then(|v| v.as_i128())
+      .map(|v| v as usize);
+    let tcp_recv_buffer_size = global_configuration
+      .as_deref()
+      .and_then(|c| get_value!("tcp_recv_buffer", c))
+      .and_then(|v| v.as_i128())
+      .map(|v| v as usize);
     for (socket_address, encrypted) in listened_socket_addresses {
       if let std::collections::hash_map::Entry::Vacant(e) = tcp_listeners.entry(socket_address) {
         // Create a TCP listener
@@ -930,6 +940,7 @@ fn before_starting_server(
           enable_uring,
           logging_tx.clone(),
           first_startup,
+          (tcp_send_buffer_size, tcp_recv_buffer_size),
         )?);
       }
     }

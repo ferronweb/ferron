@@ -512,6 +512,32 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
+    if let Some(entries) = get_entries_for_validation!("tcp_send_buffer", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `tcp_send_buffer` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_integer() || entry.values[0].as_i128().is_some_and(|v| v < 0)
+        {
+          Err(anyhow::anyhow!("Invalid TCP listener send buffer size"))?
+        }
+      }
+    };
+
+    if let Some(entries) = get_entries_for_validation!("tcp_recv_buffer", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `tcp_recv_buffer` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_integer() || entry.values[0].as_i128().is_some_and(|v| v < 0)
+        {
+          Err(anyhow::anyhow!("Invalid TCP listener receive buffer size"))?
+        }
+      }
+    };
+
     Ok(())
   }
 }

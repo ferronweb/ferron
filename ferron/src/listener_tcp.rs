@@ -16,6 +16,7 @@ pub fn create_tcp_listener(
   enable_uring: bool,
   logging_tx: Sender<LogMessage>,
   first_startup: bool,
+  tcp_buffer_sizes: (Option<usize>, Option<usize>),
 ) -> Result<Sender<()>, Box<dyn Error + Send + Sync>> {
   let (shutdown_tx, shutdown_rx) = async_channel::unbounded();
   let (listen_error_tx, listen_error_rx) = async_channel::unbounded();
@@ -35,7 +36,7 @@ pub fn create_tcp_listener(
                     .unwrap();
                 rt.block_on(async move {
           monoio::select! {
-          result = tcp_listener_fn(address, encrypted, tx, &listen_error_tx, logging_tx, first_startup) => {
+          result = tcp_listener_fn(address, encrypted, tx, &listen_error_tx, logging_tx, first_startup, tcp_buffer_sizes) => {
               if let Some(error) = result.err() {
                   listen_error_tx.send(Some(error)).await.unwrap_or_default();
               }
@@ -52,7 +53,7 @@ pub fn create_tcp_listener(
                     .unwrap();
                 rt.block_on(async move {
           monoio::select! {
-          result = tcp_listener_fn(address, encrypted, tx, &listen_error_tx, logging_tx, first_startup) => {
+          result = tcp_listener_fn(address, encrypted, tx, &listen_error_tx, logging_tx, first_startup, tcp_buffer_sizes) => {
               if let Some(error) = result.err() {
                   listen_error_tx.send(Some(error)).await.unwrap_or_default();
               }
@@ -80,11 +81,18 @@ async fn tcp_listener_fn(
   listen_error_tx: &Sender<Option<Box<dyn Error + Send + Sync>>>,
   logging_tx: Sender<LogMessage>,
   first_startup: bool,
+  tcp_buffer_sizes: (Option<usize>, Option<usize>),
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
-  let listener_opts = ListenerOpts::new()
+  let mut listener_opts = ListenerOpts::new()
     .reuse_addr(false)
     .reuse_port(false)
     .backlog(-1);
+  if let Some(tcp_send_buffer_size) = tcp_buffer_sizes.0 {
+    listener_opts = listener_opts.send_buf_size(tcp_send_buffer_size);
+  }
+  if let Some(tcp_recv_buffer_size) = tcp_buffer_sizes.1 {
+    listener_opts = listener_opts.recv_buf_size(tcp_recv_buffer_size);
+  }
   let mut listener_result;
   let mut tries: u64 = 0;
   loop {
