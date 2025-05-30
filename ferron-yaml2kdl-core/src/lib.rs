@@ -1070,7 +1070,7 @@ pub fn obtain_global_configuration(
               kdl_global_children_nodes.push(kdl_property);
             } else if value.is_null() {
               let mut kdl_property = KdlNode::new("cache_max_entries");
-              kdl_property.push(KdlValue::Integer(128));
+              kdl_property.push(KdlValue::Null);
               kdl_global_children_nodes.push(kdl_property);
             }
           }

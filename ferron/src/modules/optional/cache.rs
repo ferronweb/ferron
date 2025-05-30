@@ -25,7 +25,6 @@ use crate::{get_entry, get_value, get_values};
 
 const CACHE_HEADER_NAME: &str = "X-Ferron-Cache";
 const DEFAULT_MAX_AGE: u64 = 300;
-const DEFAULT_MAX_CACHE_ENTRIES: usize = 128;
 
 /// A cache module loader
 #[allow(clippy::type_complexity)]
@@ -49,15 +48,15 @@ impl ModuleLoader for CacheModuleLoader {
     global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
     Ok(self.module_cache.get_or(config, |_| {
+      let maximum_cache_entries = global_config
+        .and_then(|c| get_entry!("cache_max_entries", c))
+        .and_then(|e| e.values.first())
+        .and_then(|v| v.as_i128())
+        .map(|v| v as usize);
       Ok(Arc::new(CacheModule {
         cache: AtomicGenericCache::new(
-          1024,
-          global_config
-            .and_then(|c| get_entry!("cache_max_entries", c))
-            .and_then(|e| e.values.first())
-            .and_then(|v| v.as_i128())
-            .map(|v| v as usize)
-            .unwrap_or(DEFAULT_MAX_CACHE_ENTRIES),
+          maximum_cache_entries.map_or(1024, |e| e.min(1024)),
+          maximum_cache_entries.unwrap_or(0),
         ),
         vary_cache: Arc::new(RwLock::new(HashMap::new())),
       }))
@@ -92,7 +91,7 @@ impl ModuleLoader for CacheModuleLoader {
           Err(anyhow::anyhow!(
             "The `cache_max_entries` configuration property must have exactly one value"
           ))?
-        } else if (!entry.values[0].is_integer())
+        } else if (!entry.values[0].is_integer() && !entry.values[0].is_null())
           || entry.values[0].as_i128().is_some_and(|v| v < 0)
         {
           Err(anyhow::anyhow!(
@@ -494,17 +493,19 @@ impl ModuleHandlers for CacheModuleHandlers {
               }
             });
 
-            // This inserts a value at the back of the list
-            _ = self.cache.insert(
-              cache_key_with_vary,
-              Some((
-                response_parts.status,
-                written_headers,
-                response_body_buffer.clone(),
-                Instant::now(),
-                response_cache_control.map(Arc::new),
-              )),
-            );
+            self
+              .cache
+              .force_insert(
+                cache_key_with_vary,
+                Some((
+                  response_parts.status,
+                  written_headers,
+                  response_body_buffer.clone(),
+                  Instant::now(),
+                  response_cache_control.map(Arc::new),
+                )),
+              )
+              .unwrap_or_default();
           }
 
           let cached_stream =
