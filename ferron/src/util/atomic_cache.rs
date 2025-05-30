@@ -1321,7 +1321,7 @@ where
   /// * `capacity` - Desired capacity for the new cache
   ///
   /// # Returns
-  /// Arc<AtomicGenericCache<T>> populated with the HashMap entries
+  /// `Arc<AtomicGenericCache<T>>` populated with the HashMap entries
   ///
   /// # Examples
   /// ```
@@ -1373,7 +1373,7 @@ where
   /// * `capacity` - Desired capacity for the new cache
   ///
   /// # Returns
-  /// Arc<AtomicGenericCache<T>> populated with the HashMap entries
+  /// `Arc<AtomicGenericCache<T>>` populated with the HashMap entries
   ///
   /// # Examples
   /// ```
