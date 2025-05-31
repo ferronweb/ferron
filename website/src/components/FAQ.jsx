@@ -13,7 +13,7 @@ function FAQ() {
       </h2>
       {questions.map((question) => (
         <div className="border-b-2 border-border px-3" key={question.key}>
-          <h3 className="font-inter">
+          <h3 className="font-public-sans">
             <button
               className="py-2 md:py-3 w-full flex flex-row bg-inherit text-lg md:text-xl text-inherit"
               onClick={(e) => {

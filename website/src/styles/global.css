@@ -6,7 +6,7 @@ html,
 body {
   margin: 0;
   width: 100%;
-  font-family: Inter;
+  font-family: "Public Sans";
   background-color: hsla(var(--background), 1);
   color: hsla(var(--foreground), 1);
 }
@@ -90,8 +90,8 @@ h6 {
   transition: none !important;
 }
 
-.font-inter {
-  font-family: Inter;
+.font-public-sans {
+  font-family: "Public Sans";
 }
 
 .font-rajdhani {

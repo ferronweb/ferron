@@ -14,7 +14,7 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
     ssr: {
-      noExternal: ["@fontsource/inter", "@fontsource/rajdhani"]
+      noExternal: ["@fontsource/ibm-plex-sans", "@fontsource/rajdhani"]
     },
     build: {
       assetsInlineLimit: 0,
