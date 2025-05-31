@@ -1,7 +1,8 @@
 ---
 import { getCollection, render } from "astro:content";
 import MainLayout from "../../layouts/MainLayout.astro";
-import { ArrowLeft } from "lucide-astro";
+import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
+import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import { format } from "date-fns";
 
 export async function getStaticPaths() {
@@ -29,7 +30,8 @@ const { Content } = await render(Astro.props.post);
         href="/blog"
         class="group text-primary transition-all flex items-center justify-center mx-0 px-2 hover:bg-accent hover:text-accent-foreground h-11 rounded-lg"
       >
-        <ArrowLeft
+        <FontAwesomeIcon
+          icon={faArrowLeft}
           class="mr-2 w-5 h-5 group-hover:translate-x-1 transition-all align-top"
         />
         <span class="align-middle">Back</span>

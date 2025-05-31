@@ -1,0 +1,20 @@
+---
+import { icon, type IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import "@fortawesome/fontawesome-svg-core/styles.css";
+
+interface Props {
+  icon: IconDefinition;
+  class?: string;
+  fixedWidth?: boolean;
+}
+
+let classes = [...new Set(Astro.props.class?.split(" "))];
+
+if (Astro.props.fixedWidth) classes.unshift("fa-fw");
+
+const iconHtml = icon(Astro.props.icon, {
+  classes
+}).html;
+---
+
+<Fragment set:html={iconHtml} />

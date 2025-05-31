@@ -3,7 +3,12 @@ import { getCollection } from "astro:content";
 import MainLayout from "../../../layouts/MainLayout.astro";
 import type { GetStaticPaths } from "astro";
 import { format } from "date-fns";
-import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-astro";
+import FontAwesomeIcon from "../../../components/FontAwesomeIcon.astro";
+import {
+  faChevronLeft,
+  faChevronRight,
+  faExternalLink
+} from "@fortawesome/free-solid-svg-icons";
 
 // prettier-ignore
 export const getStaticPaths = (async function ({ paginate }) {
@@ -89,7 +94,7 @@ if (begPage < 1) {
                         {post.data.title}
                       </h2>
                       <div class="text-sm text-muted-foreground opacity-0 group-hover:opacity-100 duration-300">
-                        <ExternalLink />
+                        <FontAwesomeIcon icon={faExternalLink} />
                       </div>
                     </div>
                     <p class="text-sm text-muted-foreground grow">
@@ -118,7 +123,7 @@ if (begPage < 1) {
                       class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-10 w-10"
                       href={`/blog/page/${currentPage - 1}`}
                     >
-                      <ChevronLeft />
+                      <FontAwesomeIcon icon={faChevronLeft} />
                     </a>
                   </li>
                 )}
@@ -140,7 +145,7 @@ if (begPage < 1) {
                       class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-10 w-10"
                       href={`/blog/page/${currentPage + 1}`}
                     >
-                      <ChevronRight />
+                      <FontAwesomeIcon icon={faChevronRight} />
                     </a>
                   </li>
                 )}

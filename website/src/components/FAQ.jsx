@@ -1,5 +1,6 @@
 import { questions } from "../config";
-import { Plus } from "lucide-react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlus } from "@fortawesome/free-solid-svg-icons";
 import { useRef, useState } from "react";
 
 function FAQ() {
@@ -26,7 +27,8 @@ function FAQ() {
               <span className="grow w-full text-start">
                 {question.question}
               </span>
-              <Plus
+              <FontAwesomeIcon
+                icon={faPlus}
                 className={`${selectedAccordion == question.key ? "rotate-45" : ""} cursor-pointer duration-300 transition-transform self-center`}
               />
             </button>

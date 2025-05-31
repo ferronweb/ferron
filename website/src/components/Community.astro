@@ -1,5 +1,6 @@
 ---
-import { Star } from "lucide-astro";
+import FontAwesomeIcon from "./FontAwesomeIcon.astro";
+import { faStar } from "@fortawesome/free-solid-svg-icons";
 ---
 
 <section class="mx-auto px-3 py-16 max-w-screen-xl">
@@ -12,9 +13,10 @@ import { Star } from "lucide-astro";
     growing community!
   </p>
   <p class="text-center text-xl md:text-2xl my-5 font-bold">
-    <Star class="inline-block align-middle h-6 w-6 mr-2" /><span
-      class="align-middle">1,000+ stars on GitHub and counting!</span
-    >
+    <FontAwesomeIcon
+      icon={faStar}
+      class="inline-block align-middle h-6 w-6 mr-2"
+    /><span class="align-middle">1,000+ stars on GitHub and counting!</span>
   </p>
   <div class="flex flex-col md:flex-row md:flex-wrap max-w-screen-lg mx-auto">
     <div class="p-6 w-full md:w-1/2 text-center">
