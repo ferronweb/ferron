@@ -35,6 +35,7 @@
 //! }
 //! ```
 
+use std::cell::UnsafeCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -61,13 +62,28 @@ where
   key_hash: AtomicU64,
   /// Inline storage for small values (≤8 bytes, ≤8 byte alignment)
   value_storage: AtomicU64,
-  /// Fallback storage for larger values using RwLock
-  value_fallback: Option<std::sync::RwLock<T>>,
+  /// Fallback storage for larger values using UnsafeCell
+  value_fallback: Option<Arc<UnsafeCell<T>>>,
   /// UTC timestamp in nanoseconds when the entry was last modified
   timestamp_nanos: AtomicU64,
   /// Monotonic sequence number for ordering operations
   sequence: AtomicU64,
   phantom_key_type: std::marker::PhantomData<K>,
+}
+
+unsafe impl<K, T> Sync for AtomicEntry<K, T>
+where
+  K: Hash + Eq + Send + Sync + 'static,
+  T: Sync + 'static,
+  T: Clone + Send + Sync + 'static,
+{
+}
+unsafe impl<K, T> Send for AtomicEntry<K, T>
+where
+  K: Hash + Eq + Send + Sync + 'static,
+  T: Send + 'static,
+  T: Clone + Send + Sync + 'static,
+{
 }
 
 /// Entry states for atomic state machine
@@ -131,7 +147,7 @@ where
       key_hash: AtomicU64::new(0),
       value_storage: AtomicU64::new(0),
       value_fallback: if use_fallback {
-        Some(std::sync::RwLock::new(T::default()))
+        Some(Arc::new(UnsafeCell::new(T::default())))
       } else {
         None
       },
@@ -166,11 +182,11 @@ where
       self.value_storage.store(raw_value, Ordering::Relaxed);
 
       return Ok(());
-    } else if let Some(ref lock) = self.value_fallback {
-      if let Ok(mut value_lock) = lock.write() {
-        *value_lock = value;
-        return Ok(());
+    } else if let Some(ref cell) = self.value_fallback {
+      unsafe {
+        *cell.get() = value;
       }
+      return Ok(());
     }
 
     Err(std::io::Error::other("Unsupported type size or alignment"))
@@ -194,8 +210,8 @@ where
         );
         result.assume_init()
       }
-    } else if let Some(ref lock) = self.value_fallback {
-      lock.read().unwrap().clone()
+    } else if let Some(ref cell) = self.value_fallback {
+      unsafe { (*cell.get()).clone() }
     } else {
       T::default()
     }
@@ -207,7 +223,7 @@ where
   /// The current state (STATE_EMPTY, STATE_RESERVED, etc.)
   #[inline]
   fn get_state(&self) -> u32 {
-    unpack_state(self.state_version.load(Ordering::Acquire))
+    unpack_state(self.state_version.load(Ordering::Relaxed))
   }
 
   /// Gets the current version of the entry.
@@ -218,7 +234,7 @@ where
   /// The current version number
   #[inline]
   fn get_version(&self) -> u32 {
-    unpack_version(self.state_version.load(Ordering::Acquire))
+    unpack_version(self.state_version.load(Ordering::Relaxed))
   }
 
   /// Atomically compares and exchanges the state, incrementing the version.
@@ -296,6 +312,21 @@ where
   /// Bit mask for fast modulo operations (capacity - 1)
   capacity_mask: usize,
   max_capacity: usize,
+}
+
+unsafe impl<K, T> Sync for AtomicGenericCache<K, T>
+where
+  K: Hash + Eq + Send + Sync + 'static,
+  T: Sync + 'static,
+  T: Clone + Send + Sync + 'static,
+{
+}
+unsafe impl<K, T> Send for AtomicGenericCache<K, T>
+where
+  K: Hash + Eq + Send + Sync + 'static,
+  T: Send + 'static,
+  T: Clone + Send + Sync + 'static,
+{
 }
 
 #[allow(dead_code)]
@@ -459,7 +490,6 @@ where
   ///     }
   /// }
   /// ```
-  #[allow(clippy::type_complexity)]
   pub fn force_insert(
     &self,
     key: K,
@@ -737,7 +767,7 @@ where
   /// This is a bulk operation that looks up all provided keys.
   ///
   /// # Arguments
-  /// * `keys` - A slice of keys to look up
+  /// * `keys` - Vector of keys to look up
   ///
   /// # Returns
   /// Vector of values in the same order as keys. Missing keys result in None entries.
@@ -752,7 +782,7 @@ where
   /// let values = cache.get_all_by_keys(keys);
   /// // values will be [Some("value1"), None, Some("value3")]
   /// ```
-  pub fn get_all_by_keys(&self, keys: &[K]) -> Vec<Option<T>> {
+  pub fn get_all_by_keys(&self, keys: &Vec<K>) -> Vec<Option<T>> {
     keys.iter().map(|key| self.get(key)).collect()
   }
 
@@ -780,7 +810,7 @@ where
   /// Checks if the cache contains any of the specified keys.
   ///
   /// # Arguments
-  /// * `keys` - A slice of keys to check
+  /// * `keys` - Vector of keys to check
   ///
   /// # Returns
   /// `true` if any of the keys exist, `false` if none exist
@@ -793,14 +823,14 @@ where
   /// let keys = vec!["key1", "key2", "key3"];
   /// assert!(cache.contains_any_key(keys));
   /// ```
-  pub fn contains_any_key(&self, keys: &[K]) -> bool {
+  pub fn contains_any_key(&self, keys: &Vec<K>) -> bool {
     keys.iter().any(|key| self.contains_key(key))
   }
 
   /// Checks if the cache contains all of the specified keys.
   ///
   /// # Arguments
-  /// * `keys` - A slice of keys to check
+  /// * `keys` - Vector of keys to check
   ///
   /// # Returns
   /// `true` if all keys exist, `false` if any key is missing
@@ -814,7 +844,7 @@ where
   /// let keys = vec!["key1", "key2"];
   /// assert!(cache.contains_all_keys(keys));
   /// ```
-  pub fn contains_all_keys(&self, keys: &[K]) -> bool {
+  pub fn contains_all_keys(&self, keys: &Vec<K>) -> bool {
     keys.iter().all(|key| self.contains_key(key))
   }
 
@@ -863,7 +893,7 @@ where
   /// This is a bulk operation that attempts to remove all provided keys.
   ///
   /// # Arguments
-  /// * `keys` - A slice of keys to remove
+  /// * `keys` - Vector of keys to remove
   ///
   /// # Returns
   /// Vector of removed values in the same order as keys. Missing keys result in None entries.
@@ -878,7 +908,7 @@ where
   /// let removed_values = cache.remove_all(keys);
   /// // removed_values will be [Some("value1"), None, Some("value3")]
   /// ```
-  pub fn remove_all(&self, keys: &[K]) -> Vec<Option<T>> {
+  pub fn remove_all(&self, keys: &Vec<K>) -> Vec<Option<T>> {
     keys.iter().map(|key| self.remove(key)).collect()
   }
 
@@ -934,7 +964,7 @@ where
   /// let removed_values = cache.remove_existing(keys);
   /// // removed_values will be ["value1", "value3"]
   /// ```
-  pub fn remove_existing(&self, keys: &[K]) -> Vec<T> {
+  pub fn remove_existing(&self, keys: &Vec<K>) -> Vec<T> {
     keys.iter().filter_map(|key| self.remove(key)).collect()
   }
 
@@ -1199,7 +1229,8 @@ where
   /// Entries that don't match the predicate are marked as tombstones.
   ///
   /// # Arguments
-  /// * `predicate` - Function that takes (value, timestamp_nanos, sequence) and returns bool. Timestamp is in UTC nanoseconds since Unix epoch.
+  /// * `predicate` - Function that takes (value, timestamp_nanos, sequence) and returns bool.
+  ///                 Timestamp is in UTC nanoseconds since Unix epoch.
   ///
   /// # Returns
   /// Number of entries that were removed
@@ -1321,7 +1352,7 @@ where
   /// * `capacity` - Desired capacity for the new cache
   ///
   /// # Returns
-  /// `Arc<AtomicGenericCache<T>>` populated with the HashMap entries
+  /// Arc<AtomicGenericCache<T>> populated with the HashMap entries
   ///
   /// # Examples
   /// ```
@@ -1373,7 +1404,7 @@ where
   /// * `capacity` - Desired capacity for the new cache
   ///
   /// # Returns
-  /// `Arc<AtomicGenericCache<T>>` populated with the HashMap entries
+  /// Arc<AtomicGenericCache<T>> populated with the HashMap entries
   ///
   /// # Examples
   /// ```
@@ -1497,6 +1528,9 @@ mod tests {
     value: u32,
   }
 
+  unsafe impl Sync for TestEntry {}
+  unsafe impl Send for TestEntry {}
+
   #[test]
   fn test_large_value_fallback() {
     #[derive(Copy, Clone, Debug, Default, PartialEq)]
@@ -1527,6 +1561,49 @@ mod tests {
             cache
               .insert(format!("key:{}:{}", thread_id, i), entry)
               .unwrap();
+            cache.get(&format!("key:{}:{}", thread_id, i));
+          }
+        })
+      })
+      .collect();
+
+    for handle in handles {
+      handle.join().unwrap();
+    }
+
+    assert!(true);
+  }
+
+  #[test]
+  fn test_concurrent_stress_2() {
+    let cache = create_cache::<String, TestEntry>(1000);
+
+    let handles: Vec<_> = (0..50)
+      .map(|thread_id| {
+        let cache = Arc::clone(&cache);
+        thread::spawn(move || {
+          for i in 0..1_000 {
+            let entry = TestEntry {
+              id: (thread_id * 1000 + i) as u32,
+              value: (thread_id * 1000 + i) as u32,
+            };
+            cache
+              .insert(format!("key:{}:{}", thread_id, i), entry)
+              .unwrap();
+          }
+        })
+      })
+      .collect();
+
+    for handle in handles {
+      handle.join().unwrap();
+    }
+
+    let handles: Vec<_> = (0..50)
+      .map(|thread_id| {
+        let cache = Arc::clone(&cache);
+        thread::spawn(move || {
+          for i in 0..1_000 {
             cache.get(&format!("key:{}:{}", thread_id, i));
           }
         })
