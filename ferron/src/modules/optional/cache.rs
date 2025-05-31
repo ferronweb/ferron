@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,7 +14,6 @@ use hyper::header::{self, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
 use itertools::Itertools;
 use monoio::time::Instant;
-use tokio::sync::RwLock;
 
 use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
@@ -58,7 +57,7 @@ impl ModuleLoader for CacheModuleLoader {
           maximum_cache_entries.map_or(1024, |e| e.min(1024)),
           maximum_cache_entries.unwrap_or(0),
         ),
-        vary_cache: Arc::new(RwLock::new(HashMap::new())),
+        vary_cache: Arc::new(papaya::HashMap::new()),
       }))
     })?)
   }
@@ -161,7 +160,7 @@ struct CacheModule {
       )>,
     >,
   >,
-  vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+  vary_cache: Arc<papaya::HashMap<String, Vec<String>>>,
 }
 
 impl Module for CacheModule {
@@ -196,7 +195,7 @@ struct CacheModuleHandlers {
       )>,
     >,
   >,
-  vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+  vary_cache: Arc<papaya::HashMap<String, Vec<String>>>,
   cache_vary_headers_configured: Vec<String>,
   cache_ignore_headers_configured: Vec<String>,
   maximum_cached_response_size: Option<u64>,
@@ -286,8 +285,8 @@ impl ModuleHandlers for CacheModuleHandlers {
     }
 
     if !no_cache {
-      let rwlock_read = self.vary_cache.read().await;
-      let processed_vary = rwlock_read.get(&cache_key);
+      let vary_cache_guard = self.vary_cache.pin_owned();
+      let processed_vary = vary_cache_guard.get(&cache_key);
       if let Some(processed_vary) = processed_vary {
         let cache_key_with_vary = format!(
           "{}\n{}",
@@ -468,9 +467,8 @@ impl ModuleHandlers for CacheModuleHandlers {
                 .join("\n")
             );
 
-            let mut rwlock_write = self.vary_cache.write().await;
-            rwlock_write.insert(cache_key.clone(), processed_vary);
-            drop(rwlock_write);
+            let vary_cache_guard = self.vary_cache.pin_owned();
+            vary_cache_guard.insert(cache_key.clone(), processed_vary);
 
             let mut written_headers = response_parts.headers.clone();
             for header in self.cache_ignore_headers_configured.iter() {
