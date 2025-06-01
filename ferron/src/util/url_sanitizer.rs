@@ -181,9 +181,15 @@ pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String
 
   // Add trailing slash if it was originally present and we're not at the root directory
   // or if we are at root but the original path was just "/"
-  if preserve_trailing_slash
-    && (!final_segments.is_empty() || (final_segments.is_empty() && result.len() == 1))
-  {
+  // if preserve_trailing_slash
+  //   && (!final_segments.is_empty() || (final_segments.is_empty() && result.len() == 1))
+  // {
+  //   final_result.push(b'/');
+  // }
+
+  // Add trailing slash if it was originally present and we have segments,
+  // but don't add it if we're just dealing with the root "/"
+  if preserve_trailing_slash && !final_segments.is_empty() {
     final_result.push(b'/');
   }
 
@@ -213,6 +219,12 @@ fn hex_to_byte_fast(hi: u8, lo: u8) -> Result<u8> {
 mod tests {
   use super::*;
   use anyhow::Result;
+
+  #[test]
+  fn should_not_change_slash() -> Result<()> {
+    assert_eq!(sanitize_url("/", false)?, "/");
+    Ok(())
+  }
 
   #[test]
   fn should_return_asterisk_for_asterisk() -> Result<()> {
