@@ -32,3 +32,9 @@ Ferron (along with modules) is currently available for GNU/Linux, Windows Server
 - [RISC-V GNU/Linux](https://downloads.ferronweb.org/1.3.1/ferron-1.3.1-riscv64gc-unknown-linux-gnu.zip)
 
 Older versions of Ferron can be found at the [Ferron download server](https://downloads.ferronweb.org/).
+
+## Note for Windows
+
+Possibly due to Ferron on Windows not being digitally signed, Microsoft Defender SmartScreen may warn you against running the Ferron executable.
+
+If you don't trust the pre-built Ferron executables, you can always either verify the checksums (you can [download the checksums](https://downloads.ferronweb.org/1.3.1/ferron-1.3.1.sha256sum)), or compile Ferron yourself (from [our repository](https://github.com/ferronweb/ferron)).
