@@ -126,7 +126,7 @@ mimalloc = { workspace = true }
 memchr = { version = "2.7.4", optional = true }
 itertools = { version = "0.14.0", optional = true }
 smallvec = { version = "1.15.0", features = ["write"] }
-papaya = "0.2.1"
+papaya = { version = "0.2.1", optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4.4"
@@ -148,7 +148,7 @@ default = [
     "static",
 ]
 asgi = ["pyo3", "pyo3-async-runtimes", "tokio-tungstenite", "hyper-tungstenite"]
-cache = ["cache_control", "itertools"]
+cache = ["cache_control", "itertools", "papaya"]
 cgi = ["async-process", "httparse", "memchr"]
 example = []
 fauth = ["rand", "rustls-platform-verifier"]
