@@ -12,16 +12,21 @@ use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use hyper::body::{Body, Bytes, Frame};
 use hyper::header::{HeaderName, HeaderValue};
 use hyper::{header, HeaderMap, Method, Request, Response, StatusCode};
-use monoio::time::timeout;
 use rustls_acme::ResolvesServerCertAcme;
+#[cfg(feature = "runtime-tokio")]
+use tokio::io::BufReader;
+#[cfg(feature = "runtime-tokio")]
+use tokio_util::io::ReaderStream;
 
 use crate::config::{ServerConfiguration, ServerConfigurations};
 use crate::get_value;
 use crate::logging::{ErrorLogger, LogMessage};
 use crate::modules::{ModuleHandlers, RequestData, SocketData};
+use crate::runtime::timeout;
+#[cfg(feature = "runtime-monoio")]
+use crate::util::MonoioFileStream;
 use crate::util::{
-  generate_default_error_page, get_entries, get_entry, sanitize_url, MonoioFileStream,
-  SERVER_SOFTWARE,
+  generate_default_error_page, get_entries, get_entry, sanitize_url, SERVER_SOFTWARE,
 };
 
 /// Generates an error response
@@ -53,7 +58,10 @@ async fn generate_error_response(
           continue;
         }
         if let Some(page_path) = error_page.values.get(1).and_then(|v| v.as_str()) {
+          #[cfg(feature = "runtime-monoio")]
           let file = monoio::fs::File::open(page_path).await;
+          #[cfg(feature = "runtime-tokio")]
+          let file = tokio::fs::File::open(page_path).await;
 
           let file = match file {
             Ok(file) => file,
@@ -61,9 +69,9 @@ async fn generate_error_response(
           };
 
           // Monoio's `File` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-          #[cfg(unix)]
+          #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
           let metadata = file.metadata().await;
-          #[cfg(windows)]
+          #[cfg(all(feature = "runtime-monoio", windows))]
           let metadata = {
             let page_path = page_path.to_owned();
             monoio::spawn_blocking(move || std::fs::metadata(page_path))
@@ -78,7 +86,10 @@ async fn generate_error_response(
             Err(_) => None,
           };
 
+          #[cfg(feature = "runtime-monoio")]
           let file_stream = MonoioFileStream::new(file, None, None);
+          #[cfg(feature = "runtime-tokio")]
+          let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
           let stream_body = StreamBody::new(file_stream.map_ok(Frame::data));
           let boxed_body = stream_body.boxed();

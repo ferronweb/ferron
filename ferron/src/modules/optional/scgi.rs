@@ -13,18 +13,26 @@ use http_body_util::{BodyExt, StreamBody};
 use httparse::EMPTY_HEADER;
 use hyper::body::Frame;
 use hyper::{header, Request, Response, StatusCode};
+#[cfg(feature = "runtime-monoio")]
 use monoio::io::IntoPollIo;
+#[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+#[cfg(feature = "runtime-tokio")]
+use tokio::net::TcpStream;
+#[cfg(feature = "runtime-tokio")]
+use tokio_util::io::ReaderStream;
 use tokio_util::io::StreamReader;
 
 use crate::config::ServerConfiguration;
 use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use crate::util::cgi::CgiResponse;
+#[cfg(feature = "runtime-monoio")]
+use crate::util::SendReadStream;
 use crate::util::{
   get_entries, get_entries_for_validation, get_entry, get_value, Copier, ModuleCache,
-  SendReadStream, SERVER_SOFTWARE,
+  SERVER_SOFTWARE,
 };
 
 /// A SCGI module loader
@@ -144,7 +152,8 @@ impl ModuleHandlers for ScgiModuleHandlers {
       let wwwroot_pathbuf = match wwwroot_unknown.as_path().is_absolute() {
         true => wwwroot_unknown,
         false => {
-          let canonialize_result = {
+          #[cfg(feature = "runtime-monoio")]
+          let canonicalize_result = {
             let wwwroot_unknown = wwwroot_unknown.clone();
             monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot_unknown))
               .await
@@ -152,7 +161,10 @@ impl ModuleHandlers for ScgiModuleHandlers {
                 "Can't spawn a blocking task to obtain the canonical webroot path",
               )))
           };
-          match canonialize_result {
+          #[cfg(feature = "runtime-tokio")]
+          let canonicalize_result = tokio::fs::canonicalize(&wwwroot_unknown).await;
+
+          match canonicalize_result {
             Ok(pathbuf) => pathbuf,
             Err(_) => wwwroot_unknown,
           }
@@ -549,7 +561,7 @@ async fn execute_scgi(
 
   let mut cgi_response = CgiResponse::new(stdout);
 
-  monoio::spawn(Copier::new(cgi_stdin_reader, stdin).copy());
+  crate::runtime::spawn(Copier::new(cgi_stdin_reader, stdin).copy());
 
   let mut headers = [EMPTY_HEADER; 128];
 
@@ -598,7 +610,10 @@ async fn execute_scgi(
 
   response_builder = response_builder.status(status_code);
 
+  #[cfg(feature = "runtime-monoio")]
   let reader_stream = SendReadStream::new(cgi_response);
+  #[cfg(feature = "runtime-tokio")]
+  let reader_stream = ReaderStream::new(cgi_response);
   let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
   let boxed_body = stream_body.boxed();
 
@@ -613,6 +628,7 @@ async fn execute_scgi(
   })
 }
 
+#[cfg(feature = "runtime-monoio")]
 async fn connect_tcp(
   addr: &str,
 ) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
@@ -623,8 +639,25 @@ async fn connect_tcp(
   Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
 }
 
+#[cfg(feature = "runtime-tokio")]
+async fn connect_tcp(
+  addr: &str,
+) -> Result<
+  (
+    Box<dyn AsyncRead + Send + Sync + Unpin>,
+    Box<dyn AsyncWrite + Send + Sync + Unpin>,
+  ),
+  std::io::Error,
+> {
+  let socket = TcpStream::connect(addr).await?;
+  socket.set_nodelay(true)?;
+
+  let (socket_reader_set, socket_writer_set) = tokio::io::split(socket);
+  Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
+}
+
 #[allow(dead_code)]
-#[cfg(unix)]
+#[cfg(all(feature = "runtime-monoio", unix))]
 async fn connect_unix(
   path: &str,
 ) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
@@ -637,10 +670,46 @@ async fn connect_unix(
 }
 
 #[allow(dead_code)]
-#[cfg(not(unix))]
+#[cfg(all(feature = "runtime-tokio", unix))]
+async fn connect_unix(
+  path: &str,
+) -> Result<
+  (
+    Box<dyn AsyncRead + Send + Sync + Unpin>,
+    Box<dyn AsyncWrite + Send + Sync + Unpin>,
+  ),
+  std::io::Error,
+> {
+  use tokio::net::UnixStream;
+
+  let socket = UnixStream::connect(path).await?;
+
+  let (socket_reader_set, socket_writer_set) = tokio::io::split(socket);
+  Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
+}
+
+#[allow(dead_code)]
+#[cfg(all(feature = "runtime-monoio", not(unix)))]
 async fn connect_unix(
   _path: &str,
 ) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
+  Err(std::io::Error::new(
+    std::io::ErrorKind::Unsupported,
+    "Unix sockets are not supports on non-Unix platforms.",
+  ))
+}
+
+#[allow(dead_code)]
+#[cfg(all(feature = "runtime-tokio", not(unix)))]
+async fn connect_unix(
+  _path: &str,
+) -> Result<
+  (
+    Box<dyn AsyncRead + Send + Sync + Unpin>,
+    Box<dyn AsyncWrite + Send + Sync + Unpin>,
+  ),
+  std::io::Error,
+> {
   Err(std::io::Error::new(
     std::io::ErrorKind::Unsupported,
     "Unix sockets are not supports on non-Unix platforms.",

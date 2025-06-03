@@ -5,6 +5,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(feature = "runtime-monoio")]
 use async_process::Command;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -15,9 +16,15 @@ use http_body_util::{BodyExt, StreamBody};
 use httparse::EMPTY_HEADER;
 use hyper::body::Frame;
 use hyper::{header, Request, Response, StatusCode};
+#[cfg(feature = "runtime-monoio")]
 use monoio::fs;
+#[cfg(feature = "runtime-tokio")]
+use tokio::fs;
 use tokio::io::AsyncReadExt;
+#[cfg(feature = "runtime-tokio")]
+use tokio::process::Command;
 use tokio::sync::RwLock;
+#[cfg(feature = "runtime-monoio")]
 use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 use tokio_util::io::{ReaderStream, StreamReader};
 
@@ -214,7 +221,8 @@ impl ModuleHandlers for CgiModuleHandlers {
       let wwwroot_pathbuf = match wwwroot_unknown.as_path().is_absolute() {
         true => wwwroot_unknown,
         false => {
-          let canonialize_result = {
+          #[cfg(feature = "runtime-monoio")]
+          let canonicalize_result = {
             let wwwroot_unknown = wwwroot_unknown.clone();
             monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot_unknown))
               .await
@@ -222,7 +230,10 @@ impl ModuleHandlers for CgiModuleHandlers {
                 "Can't spawn a blocking task to obtain the canonical webroot path",
               )))
           };
-          match canonialize_result {
+          #[cfg(feature = "runtime-tokio")]
+          let canonicalize_result = fs::canonicalize(&wwwroot_unknown).await;
+
+          match canonicalize_result {
             Ok(pathbuf) => pathbuf,
             Err(_) => wwwroot_unknown,
           }
@@ -261,12 +272,17 @@ impl ModuleHandlers for CgiModuleHandlers {
           let mut execute_path_info: Option<String> = None;
 
           // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-          #[cfg(unix)]
+          #[cfg(feature = "runtime-tokio")]
+          let metadata = {
+            use tokio::fs;
+            fs::metadata(&joined_pathbuf).await
+          };
+          #[cfg(all(feature = "runtime-monoio", unix))]
           let metadata = {
             use monoio::fs;
             fs::metadata(&joined_pathbuf).await
           };
-          #[cfg(windows)]
+          #[cfg(all(feature = "runtime-monoio", windows))]
           let metadata = {
             let joined_pathbuf = joined_pathbuf.clone();
             monoio::spawn_blocking(move || std::fs::metadata(joined_pathbuf))
@@ -305,12 +321,17 @@ impl ModuleHandlers for CgiModuleHandlers {
                 for index in indexes {
                   let temp_joined_pathbuf = joined_pathbuf.join(index);
                   // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-                  #[cfg(unix)]
+                  #[cfg(feature = "runtime-tokio")]
+                  let temp_metadata = {
+                    use tokio::fs;
+                    fs::metadata(&temp_joined_pathbuf).await
+                  };
+                  #[cfg(all(feature = "runtime-monoio", unix))]
                   let temp_metadata = {
                     use monoio::fs;
                     fs::metadata(&temp_joined_pathbuf).await
                   };
-                  #[cfg(windows)]
+                  #[cfg(all(feature = "runtime-monoio", windows))]
                   let temp_metadata = {
                     let temp_joined_pathbuf = temp_joined_pathbuf.clone();
                     monoio::spawn_blocking(move || std::fs::metadata(temp_joined_pathbuf))
@@ -358,12 +379,17 @@ impl ModuleHandlers for CgiModuleHandlers {
                     break;
                   }
                   // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-                  #[cfg(unix)]
+                  #[cfg(feature = "runtime-tokio")]
+                  let temp_metadata = {
+                    use tokio::fs;
+                    fs::metadata(&temp_pathbuf).await
+                  };
+                  #[cfg(all(feature = "runtime-monoio", unix))]
                   let temp_metadata = {
                     use monoio::fs;
                     fs::metadata(&temp_pathbuf).await
                   };
-                  #[cfg(windows)]
+                  #[cfg(all(feature = "runtime-monoio", windows))]
                   let temp_metadata = {
                     let temp_pathbuf = temp_pathbuf.clone();
                     monoio::spawn_blocking(move || std::fs::metadata(temp_pathbuf))
@@ -372,6 +398,7 @@ impl ModuleHandlers for CgiModuleHandlers {
                         "Can't spawn a blocking task to obtain the file metadata",
                       )))
                   };
+
                   match temp_metadata {
                     Ok(metadata) => {
                       if metadata.is_file() {
@@ -767,23 +794,43 @@ async fn execute_cgi(
 
   let cgi_stdin_reader = StreamReader::new(body.into_data_stream().map_err(std::io::Error::other));
 
+  #[cfg(feature = "runtime-monoio")]
   let stdin = match child.stdin.take() {
     Some(stdin) => stdin.compat_write(),
     None => Err(anyhow::anyhow!(
       "The CGI process doesn't have standard input"
     ))?,
   };
+  #[cfg(feature = "runtime-monoio")]
   let stdout = match child.stdout.take() {
     Some(stdout) => stdout.compat(),
     None => Err(anyhow::anyhow!(
       "The CGI process doesn't have standard output"
     ))?,
   };
+  #[cfg(feature = "runtime-monoio")]
   let stderr = child.stderr.take().map(|x| x.compat());
+
+  #[cfg(feature = "runtime-tokio")]
+  let stdin = match child.stdin.take() {
+    Some(stdin) => stdin,
+    None => Err(anyhow::anyhow!(
+      "The CGI process doesn't have standard input"
+    ))?,
+  };
+  #[cfg(feature = "runtime-tokio")]
+  let stdout = match child.stdout.take() {
+    Some(stdout) => stdout,
+    None => Err(anyhow::anyhow!(
+      "The CGI process doesn't have standard output"
+    ))?,
+  };
+  #[cfg(feature = "runtime-tokio")]
+  let stderr = child.stderr.take();
 
   let mut cgi_response = CgiResponse::new(stdout);
 
-  monoio::spawn(Copier::new(cgi_stdin_reader, stdin).copy());
+  crate::runtime::spawn(Copier::new(cgi_stdin_reader, stdin).copy());
 
   let mut headers = [EMPTY_HEADER; 128];
 
@@ -838,7 +885,12 @@ async fn execute_cgi(
 
   let response = response_builder.body(boxed_body)?;
 
-  if let Some(exit_code) = child.try_status()? {
+  #[cfg(feature = "runtime-monoio")]
+  let exit_code_option = child.try_status()?;
+  #[cfg(feature = "runtime-tokio")]
+  let exit_code_option = child.try_wait()?;
+
+  if let Some(exit_code) = exit_code_option {
     if !exit_code.success() {
       if let Some(mut stderr) = stderr {
         let mut stderr_string = String::new();
@@ -865,7 +917,7 @@ async fn execute_cgi(
 
   let error_logger = error_logger.clone();
 
-  monoio::spawn(async move {
+  crate::runtime::spawn(async move {
     if let Some(mut stderr) = stderr {
       let mut stderr_string = String::new();
       stderr
@@ -911,7 +963,7 @@ async fn get_executable(
 }
 
 #[allow(dead_code)]
-#[cfg(not(unix))]
+#[cfg(all(feature = "runtime-monoio", not(unix)))]
 async fn get_executable(
   execute_pathbuf: &PathBuf,
 ) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
@@ -952,6 +1004,52 @@ async fn get_executable(
         }
       }
       let shebang_line = String::from_utf8_lossy(&shebang_line_bytes);
+
+      let mut command_begin: Vec<String> = (&shebang_line[2..])
+        .replace("\r", "")
+        .replace("\n", "")
+        .split(" ")
+        .map(|s| s.to_owned())
+        .collect();
+      command_begin.push(execute_pathbuf.to_string_lossy().to_string());
+      Ok(command_begin)
+    }
+    _ => {
+      // It's not executable
+      Err(anyhow::anyhow!("The CGI program is not executable"))?
+    }
+  }
+}
+
+#[allow(dead_code)]
+#[cfg(all(feature = "runtime-tokio", not(unix)))]
+async fn get_executable(
+  execute_pathbuf: &PathBuf,
+) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
+  use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
+
+  let mut magic_signature_buffer = [0u8; 2];
+  let mut open_file = fs::File::open(&execute_pathbuf).await?;
+  if open_file
+    .read_exact(&mut magic_signature_buffer)
+    .await
+    .is_err()
+  {
+    Err(anyhow::anyhow!("Failed to read the CGI program signature"))?
+  }
+
+  match &magic_signature_buffer {
+    b"PE" => {
+      // Windows executables
+      let executable_params_vector = vec![execute_pathbuf.to_string_lossy().to_string()];
+      Ok(executable_params_vector)
+    }
+    b"#!" => {
+      // Scripts with a shebang line
+      open_file.rewind().await?;
+      let mut buffered_file = BufReader::new(open_file);
+      let mut shebang_line = String::new();
+      buffered_file.read_line(&mut shebang_line).await?;
 
       let mut command_begin: Vec<String> = (&shebang_line[2..])
         .replace("\r", "")

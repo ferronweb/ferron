@@ -189,15 +189,19 @@ impl ModuleHandlers for WsgiModuleHandlers {
       let wwwroot_pathbuf = match wwwroot_unknown.as_path().is_absolute() {
         true => wwwroot_unknown,
         false => {
-          let canonialize_result = {
+          #[cfg(feature = "runtime-monoio")]
+          let canonicalize_result = {
             let wwwroot_unknown = wwwroot_unknown.clone();
-            monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot_unknown))
+            monoio::runtime::spawn_blocking(move || std::fs::canonicalize(wwwroot_unknown))
               .await
               .unwrap_or(Err(std::io::Error::other(
                 "Can't spawn a blocking task to obtain the canonical webroot path",
               )))
           };
-          match canonialize_result {
+          #[cfg(feature = "runtime-tokio")]
+          let canonicalize_result = tokio::fs::canonicalize(&wwwroot_unknown).await;
+
+          match canonicalize_result {
             Ok(pathbuf) => pathbuf,
             Err(_) => wwwroot_unknown,
           }
@@ -500,7 +504,7 @@ async fn execute_wsgi(
   let wsgi_head = Arc::new(Mutex::new(ResponseHead::new()));
   let wsgi_head_clone = wsgi_head.clone();
   let error_logger_owned = error_logger.to_owned();
-  let body_iterator = monoio::spawn_blocking(move || {
+  let body_iterator = crate::runtime::spawn_blocking(move || {
     Python::with_gil(move |py| -> PyResult<Py<PyIterator>> {
       let start_response = PyCFunction::new_closure(
         py,
@@ -623,7 +627,7 @@ async fn execute_wsgi(
       let wsgi_head_clone = wsgi_head_clone.clone();
       Box::pin(async move {
         let body_iterator_arc_clone = body_iterator_arc.clone();
-        let blocking_thread_result = monoio::spawn_blocking(move || {
+        let blocking_thread_result = crate::runtime::spawn_blocking(move || {
           Python::with_gil(|py| -> PyResult<Option<Bytes>> {
             let mut body_iterator_bound = body_iterator_arc_clone.bind(py).clone();
             if let Some(body_chunk) = body_iterator_bound.next() {

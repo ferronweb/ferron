@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::Write;
+#[cfg(feature = "runtime-monoio")]
 use std::fs::ReadDir;
+#[cfg(feature = "runtime-tokio")]
+use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -19,17 +22,23 @@ use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use hyper::body::{Bytes, Frame};
 use hyper::header::{self, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
+#[cfg(feature = "runtime-monoio")]
 use monoio::fs;
 use sha2::{Digest, Sha256};
+#[cfg(feature = "runtime-tokio")]
+use tokio::fs::{self, ReadDir};
+#[cfg(feature = "runtime-tokio")]
+use tokio::io::{AsyncReadExt, AsyncSeekExt, BufReader};
 use tokio::sync::RwLock;
 use tokio_util::io::{ReaderStream, StreamReader};
 
 use crate::config::ServerConfiguration;
 use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
+#[cfg(feature = "runtime-monoio")]
+use crate::util::MonoioFileStream;
 use crate::util::{
-  anti_xss, get_entries_for_validation, get_entry, get_value, sizify, ModuleCache,
-  MonoioFileStream, TtlCache,
+  anti_xss, get_entries_for_validation, get_entry, get_value, sizify, ModuleCache, TtlCache,
 };
 
 const COMPRESSED_STREAM_READER_BUFFER_SIZE: usize = 16384;
@@ -62,6 +71,7 @@ pub async fn generate_directory_listing(
   let min_table_rows_length = table_rows.len();
 
   // Create a vector containing entries, then sort them by file name.
+  #[cfg(feature = "runtime-monoio")]
   let mut entries = monoio::spawn_blocking(move || {
     let mut entries = Vec::new();
     for entry in directory {
@@ -73,6 +83,15 @@ pub async fn generate_directory_listing(
   .unwrap_or(Err(std::io::Error::other(
     "Can't spawn a blocking task to obtain the files in a directory",
   )))?;
+  #[cfg(feature = "runtime-tokio")]
+  let mut entries = {
+    let mut entries = Vec::new();
+    let mut directory = directory;
+    while let Some(entry) = directory.next_entry().await? {
+      entries.push(entry);
+    }
+    entries
+  };
 
   entries.sort_by_cached_key(|entry| entry.file_name().to_string_lossy().to_string());
 
@@ -84,9 +103,9 @@ pub async fn generate_directory_listing(
     }
 
     // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-    #[cfg(unix)]
+    #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
     let metadata_obt = fs::metadata(entry.path()).await;
-    #[cfg(windows)]
+    #[cfg(all(feature = "runtime-monoio", windows))]
     let metadata_obt = {
       let entry_pathbuf = entry.path().clone();
       monoio::spawn_blocking(move || std::fs::metadata(entry_pathbuf))
@@ -454,9 +473,9 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
       // Get file metadata (platform-specific implementation)
       // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-      #[cfg(unix)]
+      #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
       let metadata_obt = fs::metadata(&joined_pathbuf).await;
-      #[cfg(windows)]
+      #[cfg(all(feature = "runtime-monoio", windows))]
       let metadata_obt = {
         let joined_pathbuf = joined_pathbuf.clone();
         monoio::spawn_blocking(move || std::fs::metadata(joined_pathbuf))
@@ -477,9 +496,9 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 let temp_joined_pathbuf = joined_pathbuf.join(index);
 
                 // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-                #[cfg(unix)]
+                #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
                 let metadata_obt = fs::metadata(&temp_joined_pathbuf).await;
-                #[cfg(windows)]
+                #[cfg(all(feature = "runtime-monoio", windows))]
                 let metadata_obt = {
                   let temp_joined_pathbuf = temp_joined_pathbuf.clone();
                   monoio::spawn_blocking(move || std::fs::metadata(temp_joined_pathbuf))
@@ -704,7 +723,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 Some(etag) => etag,
                 None => {
                   let etag_cache_key_clone = etag_cache_key.clone();
-                  let etag = monoio::spawn_blocking(move || {
+                  let etag = crate::runtime::spawn_blocking(move || {
                     let mut hasher = Sha256::new();
                     hasher.update(etag_cache_key_clone);
                     hasher
@@ -946,12 +965,27 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     };
 
                     // Construct a boxed body
-                    let monoio_file_stream = MonoioFileStream::new(
+                    #[cfg(feature = "runtime-monoio")]
+                    let file_stream = MonoioFileStream::new(
                       file,
                       Some(range_begin as usize),
                       Some(range_end as usize + 1),
                     );
-                    let stream_body = StreamBody::new(monoio_file_stream.map_ok(Frame::data));
+                    #[cfg(feature = "runtime-tokio")]
+                    let file_stream = {
+                      let mut file = file;
+
+                      // Seek and limit the file reader
+                      file.seek(SeekFrom::Start(range_begin)).await?;
+                      let file_limited = file.take(content_length);
+
+                      // Use BufReader for better performance.
+                      let file_bufreader = BufReader::with_capacity(12800, file_limited);
+
+                      // Create a reader stream
+                      ReaderStream::new(file_bufreader)
+                    };
+                    let stream_body = StreamBody::new(file_stream.map_ok(Frame::data));
                     let boxed_body = stream_body.boxed();
 
                     response_builder.body(boxed_body)?
@@ -1116,12 +1150,15 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   };
 
                   // Create a file stream.
-                  let monoio_file_stream = MonoioFileStream::new(file, None, None);
+                  #[cfg(feature = "runtime-monoio")]
+                  let file_stream = MonoioFileStream::new(file, None, None);
+                  #[cfg(feature = "runtime-tokio")]
+                  let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
                   // Create the appropriate response body based on compression method
                   let boxed_body = if use_brotli {
                     // Wrap the stream as a `AsyncRead`
-                    let file_bufreader = StreamReader::new(monoio_file_stream);
+                    let file_bufreader = StreamReader::new(file_stream);
 
                     // Use Brotli compression with moderate quality (4) for good compression/speed balance
                     let reader_stream = ReaderStream::with_capacity(
@@ -1132,7 +1169,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     stream_body.boxed()
                   } else if use_zstd {
                     // Wrap the stream as a `AsyncRead`
-                    let file_bufreader = StreamReader::new(monoio_file_stream);
+                    let file_bufreader = StreamReader::new(file_stream);
 
                     // Limit the Zstandard window size to 128K (2^17 bytes) to support many HTTP clients
                     let reader_stream = ReaderStream::with_capacity(
@@ -1147,7 +1184,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     stream_body.boxed()
                   } else if use_deflate {
                     // Wrap the stream as a `AsyncRead`
-                    let file_bufreader = StreamReader::new(monoio_file_stream);
+                    let file_bufreader = StreamReader::new(file_stream);
 
                     let reader_stream = ReaderStream::with_capacity(
                       DeflateEncoder::new(file_bufreader),
@@ -1157,7 +1194,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     stream_body.boxed()
                   } else if use_gzip {
                     // Wrap the stream as a `AsyncRead`
-                    let file_bufreader = StreamReader::new(monoio_file_stream);
+                    let file_bufreader = StreamReader::new(file_stream);
 
                     let reader_stream = ReaderStream::with_capacity(
                       GzipEncoder::new(file_bufreader),
@@ -1166,7 +1203,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
                     stream_body.boxed()
                   } else {
-                    let stream_body = StreamBody::new(monoio_file_stream.map_ok(Frame::data));
+                    let stream_body = StreamBody::new(file_stream.map_ok(Frame::data));
                     stream_body.boxed()
                   };
 
@@ -1192,36 +1229,40 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
             {
               // Look for a description file in the directory
               let joined_maindesc_pathbuf = joined_pathbuf.join(".maindesc");
-              // Read the directory contents (using blocking task on Windows)
-              let directory =
-                match monoio::spawn_blocking(move || std::fs::read_dir(joined_pathbuf))
+              // Read the directory contents (using blocking task on Windows and with Monoio)
+              #[cfg(feature = "runtime-monoio")]
+              let directory_result =
+                monoio::spawn_blocking(move || std::fs::read_dir(joined_pathbuf))
                   .await
                   .unwrap_or(Err(std::io::Error::other(
                     "Can't spawn a blocking task to read the directory",
-                  ))) {
-                  Ok(directory) => directory,
-                  Err(err) => match err.kind() {
-                    std::io::ErrorKind::NotFound => {
-                      return Ok(ResponseData {
-                        request: Some(request),
-                        response: None,
-                        response_status: Some(StatusCode::NOT_FOUND),
-                        response_headers: None,
-                        new_remote_address: None,
-                      });
-                    }
-                    std::io::ErrorKind::PermissionDenied => {
-                      return Ok(ResponseData {
-                        request: Some(request),
-                        response: None,
-                        response_status: Some(StatusCode::FORBIDDEN),
-                        response_headers: None,
-                        new_remote_address: None,
-                      });
-                    }
-                    _ => Err(err)?,
-                  },
-                };
+                  )));
+              #[cfg(feature = "runtime-tokio")]
+              let directory_result = fs::read_dir(joined_pathbuf).await;
+              let directory = match directory_result {
+                Ok(directory) => directory,
+                Err(err) => match err.kind() {
+                  std::io::ErrorKind::NotFound => {
+                    return Ok(ResponseData {
+                      request: Some(request),
+                      response: None,
+                      response_status: Some(StatusCode::NOT_FOUND),
+                      response_headers: None,
+                      new_remote_address: None,
+                    });
+                  }
+                  std::io::ErrorKind::PermissionDenied => {
+                    return Ok(ResponseData {
+                      request: Some(request),
+                      response: None,
+                      response_status: Some(StatusCode::FORBIDDEN),
+                      response_headers: None,
+                      new_remote_address: None,
+                    });
+                  }
+                  _ => Err(err)?,
+                },
+              };
 
               let description = (fs::read(joined_maindesc_pathbuf).await)
                 .ok()

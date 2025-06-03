@@ -6,26 +6,35 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use bytes::Bytes;
+#[cfg(feature = "runtime-monoio")]
 use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::client::conn::http1::SendRequest;
 use hyper::{header, Request, Response, StatusCode, Uri};
+#[cfg(feature = "runtime-tokio")]
+use hyper_util::rt::TokioIo;
+#[cfg(feature = "runtime-monoio")]
 use monoio::io::IntoPollIo;
+#[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
+#[cfg(feature = "runtime-monoio")]
 use monoio_compat::hyper::MonoioIo;
 use rustls_pki_types::ServerName;
 use rustls_platform_verifier::BuilderVerifierExt;
 use tokio::io::{AsyncRead, AsyncWrite};
+#[cfg(feature = "runtime-tokio")]
+use tokio::net::TcpStream;
 use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
+#[cfg(feature = "runtime-monoio")]
 use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
 
 use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
-use crate::util::{
-  get_entries, get_entries_for_validation, get_value, NoServerVerifier, SendRwStream, TtlCache,
-};
+#[cfg(feature = "runtime-monoio")]
+use crate::util::SendRwStream;
+use crate::util::{get_entries, get_entries_for_validation, get_value, NoServerVerifier, TtlCache};
 use crate::{config::ServerConfiguration, util::ModuleCache};
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
@@ -473,8 +482,9 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         None
       };
 
-      let stream_poll = match stream.into_poll_io() {
-        Ok(stream_poll) => stream_poll,
+      #[cfg(feature = "runtime-monoio")]
+      let stream = match stream.into_poll_io() {
+        Ok(stream) => stream,
         Err(err) => {
           if enable_health_check {
             let mut failed_backends_write = self.failed_backends.write().await;
@@ -494,11 +504,16 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
       };
 
       if !encrypted {
-        let send_rw_stream = SendRwStream::new(stream_poll);
-        let (sink, stream) = send_rw_stream.split();
-        let reader = StreamReader::new(stream);
-        let writer = SinkWriter::new(CopyToBytes::new(sink));
-        let rw = tokio::io::join(reader, writer);
+        #[cfg(feature = "runtime-monoio")]
+        let rw = {
+          let send_rw_stream = SendRwStream::new(stream);
+          let (sink, stream) = send_rw_stream.split();
+          let reader = StreamReader::new(stream);
+          let writer = SinkWriter::new(CopyToBytes::new(sink));
+          tokio::io::join(reader, writer)
+        };
+        #[cfg(feature = "runtime-tokio")]
+        let rw = stream;
 
         http_proxy(
           connections,
@@ -523,7 +538,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         let connector = TlsConnector::from(Arc::new(tls_client_config));
         let domain = ServerName::try_from(host)?.to_owned();
 
-        let tls_stream = match connector.connect(domain, stream_poll).await {
+        let tls_stream = match connector.connect(domain, stream).await {
           Ok(stream) => stream,
           Err(err) => {
             if enable_health_check {
@@ -543,11 +558,16 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           }
         };
 
-        let send_rw_stream = SendRwStream::new(tls_stream);
-        let (sink, stream) = send_rw_stream.split();
-        let reader = StreamReader::new(stream);
-        let writer = SinkWriter::new(CopyToBytes::new(sink));
-        let rw = tokio::io::join(reader, writer);
+        #[cfg(feature = "runtime-monoio")]
+        let rw = {
+          let send_rw_stream = SendRwStream::new(tls_stream);
+          let (sink, stream) = send_rw_stream.split();
+          let reader = StreamReader::new(stream);
+          let writer = SinkWriter::new(CopyToBytes::new(sink));
+          tokio::io::join(reader, writer)
+        };
+        #[cfg(feature = "runtime-tokio")]
+        let rw = tls_stream;
 
         http_proxy(
           connections,
@@ -682,8 +702,11 @@ async fn http_proxy(
   failed_backends: Option<&tokio::sync::RwLock<TtlCache<std::string::String, u64>>>,
   proxy_intercept_errors: bool,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  // Convert the async stream to a Monoio-compatible I/O type
+  // Convert the async stream to a Monoio- or Tokio-compatible I/O type
+  #[cfg(feature = "runtime-monoio")]
   let io = MonoioIo::new(stream);
+  #[cfg(feature = "runtime-tokio")]
+  let io = TokioIo::new(stream);
 
   // Establish an HTTP/1.1 connection to the backend server
   let (mut sender, conn) = match hyper::client::conn::http1::handshake(io).await {
@@ -711,7 +734,7 @@ async fn http_proxy(
 
   // Enable HTTP protocol upgrades (e.g., WebSockets) and spawn a task to drive the connection
   let conn_with_upgrades = conn.with_upgrades();
-  monoio::spawn(async move {
+  crate::runtime::spawn(async move {
     conn_with_upgrades.await.unwrap_or_default();
   });
 
@@ -743,16 +766,24 @@ async fn http_proxy(
       Ok(upgraded_backend) => {
         // Needed to wrap in monoio::spawn call, since otherwise HTTP upgrades wouldn't work...
         let error_logger = error_logger.clone();
-        monoio::spawn(async move {
+        crate::runtime::spawn(async move {
           // Try to upgrade the client connection
           match hyper::upgrade::on(proxy_request_cloned).await {
             Ok(upgraded_proxy) => {
               // Successfully upgraded both connections
-              // Now create Monoio-compatible I/O types
+              // Now create Monoio- or Tokio-compatible I/O types
+              #[cfg(feature = "runtime-monoio")]
               let mut upgraded_backend = MonoioIo::new(upgraded_backend);
+              #[cfg(feature = "runtime-tokio")]
+              let mut upgraded_backend = TokioIo::new(upgraded_backend);
+
+              #[cfg(feature = "runtime-monoio")]
               let mut upgraded_proxy = MonoioIo::new(upgraded_proxy);
+              #[cfg(feature = "runtime-tokio")]
+              let mut upgraded_proxy = TokioIo::new(upgraded_proxy);
+
               // Spawn a task to copy data bidirectionally between client and backend
-              monoio::spawn(async move {
+              crate::runtime::spawn(async move {
                 tokio::io::copy_bidirectional(&mut upgraded_backend, &mut upgraded_proxy)
                   .await
                   .unwrap_or_default();
@@ -860,16 +891,24 @@ async fn http_proxy_kept_alive(
       Ok(upgraded_backend) => {
         // Needed to wrap in monoio::spawn call, since otherwise HTTP upgrades wouldn't work...
         let error_logger = error_logger.clone();
-        monoio::spawn(async move {
+        crate::runtime::spawn(async move {
           // Try to upgrade the client connection
           match hyper::upgrade::on(proxy_request_cloned).await {
             Ok(upgraded_proxy) => {
               // Successfully upgraded both connections
-              // Now create Monoio-compatible I/O types
+              // Now create Monoio- or Tokio-compatible I/O types
+              #[cfg(feature = "runtime-monoio")]
               let mut upgraded_backend = MonoioIo::new(upgraded_backend);
+              #[cfg(feature = "runtime-tokio")]
+              let mut upgraded_backend = TokioIo::new(upgraded_backend);
+
+              #[cfg(feature = "runtime-monoio")]
               let mut upgraded_proxy = MonoioIo::new(upgraded_proxy);
+              #[cfg(feature = "runtime-tokio")]
+              let mut upgraded_proxy = TokioIo::new(upgraded_proxy);
+
               // Spawn a task to copy data bidirectionally between client and backend
-              monoio::spawn(async move {
+              crate::runtime::spawn(async move {
                 tokio::io::copy_bidirectional(&mut upgraded_backend, &mut upgraded_proxy)
                   .await
                   .unwrap_or_default();

@@ -5,26 +5,35 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use bytes::Bytes;
+#[cfg(feature = "runtime-monoio")]
 use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
 use hyper::client::conn::http1::SendRequest;
 use hyper::{header, header::HeaderName, Method, Request, StatusCode, Uri};
+#[cfg(feature = "runtime-tokio")]
+use hyper_util::rt::TokioIo;
+#[cfg(feature = "runtime-monoio")]
 use monoio::io::IntoPollIo;
+#[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
+#[cfg(feature = "runtime-monoio")]
 use monoio_compat::hyper::MonoioIo;
 use rustls_pki_types::ServerName;
 use rustls_platform_verifier::BuilderVerifierExt;
 use tokio::io::{AsyncRead, AsyncWrite};
+#[cfg(feature = "runtime-tokio")]
+use tokio::net::TcpStream;
 use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
+#[cfg(feature = "runtime-monoio")]
 use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
 
 use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
-use crate::util::{
-  get_entries_for_validation, get_entry, get_value, get_values, NoServerVerifier, SendRwStream,
-};
+#[cfg(feature = "runtime-monoio")]
+use crate::util::SendRwStream;
+use crate::util::{get_entries_for_validation, get_entry, get_value, get_values, NoServerVerifier};
 use crate::{config::ServerConfiguration, util::ModuleCache};
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
@@ -369,8 +378,9 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
         }
       };
 
-      let stream_poll = match stream.into_poll_io() {
-        Ok(stream_poll) => stream_poll,
+      #[cfg(feature = "runtime-monoio")]
+      let stream = match stream.into_poll_io() {
+        Ok(stream) => stream,
         Err(err) => {
           error_logger.log(&format!("Bad gateway: {}", err)).await;
           return Ok(ResponseData {
@@ -384,11 +394,16 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
       };
 
       if !encrypted {
-        let send_rw_stream = SendRwStream::new(stream_poll);
-        let (sink, stream) = send_rw_stream.split();
-        let reader = StreamReader::new(stream);
-        let writer = SinkWriter::new(CopyToBytes::new(sink));
-        let rw = tokio::io::join(reader, writer);
+        #[cfg(feature = "runtime-monoio")]
+        let rw = {
+          let send_rw_stream = SendRwStream::new(stream);
+          let (sink, stream) = send_rw_stream.split();
+          let reader = StreamReader::new(stream);
+          let writer = SinkWriter::new(CopyToBytes::new(sink));
+          tokio::io::join(reader, writer)
+        };
+        #[cfg(feature = "runtime-tokio")]
+        let rw = stream;
 
         http_forwarded_auth(
           connections,
@@ -412,7 +427,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
         let connector = TlsConnector::from(Arc::new(tls_client_config));
         let domain = ServerName::try_from(host)?.to_owned();
 
-        let tls_stream = match connector.connect(domain, stream_poll).await {
+        let tls_stream = match connector.connect(domain, stream).await {
           Ok(stream) => stream,
           Err(err) => {
             error_logger.log(&format!("Bad gateway: {}", err)).await;
@@ -426,11 +441,16 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           }
         };
 
-        let send_rw_stream = SendRwStream::new(tls_stream);
-        let (sink, stream) = send_rw_stream.split();
-        let reader = StreamReader::new(stream);
-        let writer = SinkWriter::new(CopyToBytes::new(sink));
-        let rw = tokio::io::join(reader, writer);
+        #[cfg(feature = "runtime-monoio")]
+        let rw = {
+          let send_rw_stream = SendRwStream::new(tls_stream);
+          let (sink, stream) = send_rw_stream.split();
+          let reader = StreamReader::new(stream);
+          let writer = SinkWriter::new(CopyToBytes::new(sink));
+          tokio::io::join(reader, writer)
+        };
+        #[cfg(feature = "runtime-tokio")]
+        let rw = tls_stream;
 
         http_forwarded_auth(
           connections,
@@ -465,7 +485,10 @@ async fn http_forwarded_auth(
   mut original_request: Request<BoxBody<Bytes, std::io::Error>>,
   forwarded_auth_copy_headers: Vec<String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
+  #[cfg(feature = "runtime-monoio")]
   let io = MonoioIo::new(stream);
+  #[cfg(feature = "runtime-tokio")]
+  let io = TokioIo::new(stream);
 
   let (mut sender, conn) = match hyper::client::conn::http1::handshake(io).await {
     Ok(data) => data,
@@ -481,7 +504,7 @@ async fn http_forwarded_auth(
     }
   };
 
-  monoio::spawn(async move {
+  crate::runtime::spawn(async move {
     conn.await.unwrap_or_default();
   });
 

@@ -719,15 +719,19 @@ impl ModuleHandlers for AsgiModuleHandlers {
       let wwwroot_pathbuf = match wwwroot_unknown.as_path().is_absolute() {
         true => wwwroot_unknown,
         false => {
-          let canonialize_result = {
+          #[cfg(feature = "runtime-monoio")]
+          let canonicalize_result = {
             let wwwroot_unknown = wwwroot_unknown.clone();
-            monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot_unknown))
+            monoio::runtime::spawn_blocking(move || std::fs::canonicalize(wwwroot_unknown))
               .await
               .unwrap_or(Err(std::io::Error::other(
                 "Can't spawn a blocking task to obtain the canonical webroot path",
               )))
           };
-          match canonialize_result {
+          #[cfg(feature = "runtime-tokio")]
+          let canonicalize_result = tokio::fs::canonicalize(&wwwroot_unknown).await;
+
+          match canonicalize_result {
             Ok(pathbuf) => pathbuf,
             Err(_) => wwwroot_unknown,
           }
@@ -828,7 +832,7 @@ async fn execute_asgi(
   let mut request_body_stream = request_body.into_data_stream();
   let asgi_tx_clone = asgi_tx.clone();
 
-  monoio::spawn(async move {
+  crate::runtime::spawn(async move {
     loop {
       match request_body_stream.next().await {
         Some(Ok(data)) => asgi_tx_clone
@@ -1077,7 +1081,7 @@ async fn execute_asgi_websocket(
           hyper_tungstenite::upgrade(Request::from_parts(request_parts, ()), None)?;
 
         let error_logger = error_logger.clone();
-        monoio::spawn(async move {
+        crate::runtime::spawn(async move {
           let client_bi_stream = match websocket.await {
             Ok(stream) => stream,
             Err(err) => {
@@ -1099,7 +1103,7 @@ async fn execute_asgi_websocket(
           let asgi_tx_clone = asgi_tx.clone();
           let (ping, pong) = async_channel::unbounded();
 
-          monoio::spawn(async move {
+          crate::runtime::spawn(async move {
             while let Some(websocket_frame) = client_stream.next().await {
               match websocket_frame {
                 Err(_) => {
@@ -1177,7 +1181,7 @@ async fn execute_asgi_websocket(
           let client_sink_mutex = Arc::new(Mutex::new(client_sink));
           let client_sink_mutex_cloned = client_sink_mutex.clone();
 
-          monoio::spawn(async move {
+          crate::runtime::spawn(async move {
             while let Ok(message) = pong.recv().await {
               if client_sink_mutex_cloned
                 .lock()
@@ -1260,7 +1264,7 @@ async fn execute_asgi_websocket(
             Ok::<_, Box<dyn Error + Send + Sync>>(())
           };
 
-          monoio::spawn(async move {
+          crate::runtime::spawn(async move {
             if let Err(err) = websocket_future.await {
               error_logger
                 .log(&format!(

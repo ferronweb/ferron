@@ -13,7 +13,10 @@ use hyper::body::Frame;
 use hyper::header::{self, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
 use itertools::Itertools;
+#[cfg(feature = "runtime-monoio")]
 use monoio::time::Instant;
+#[cfg(feature = "runtime-tokio")]
+use tokio::time::Instant;
 
 use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};

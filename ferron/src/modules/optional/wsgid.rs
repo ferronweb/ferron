@@ -463,15 +463,19 @@ impl ModuleHandlers for WsgidModuleHandlers {
       let wwwroot_pathbuf = match wwwroot_unknown.as_path().is_absolute() {
         true => wwwroot_unknown,
         false => {
-          let canonialize_result = {
+          #[cfg(feature = "runtime-monoio")]
+          let canonicalize_result = {
             let wwwroot_unknown = wwwroot_unknown.clone();
-            monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot_unknown))
+            monoio::runtime::spawn_blocking(move || std::fs::canonicalize(wwwroot_unknown))
               .await
               .unwrap_or(Err(std::io::Error::other(
                 "Can't spawn a blocking task to obtain the canonical webroot path",
               )))
           };
-          match canonialize_result {
+          #[cfg(feature = "runtime-tokio")]
+          let canonicalize_result = tokio::fs::canonicalize(&wwwroot_unknown).await;
+
+          match canonicalize_result {
             Ok(pathbuf) => pathbuf,
             Err(_) => wwwroot_unknown,
           }
@@ -836,94 +840,96 @@ async fn execute_wsgi(
   let wsgi_head_clone = wsgi_head.clone();
   let error_logger_arc = Arc::new(error_logger.clone());
   let body_stream_mutex = Arc::new(Mutex::new(body_stream));
-  let mut response_stream = futures_util::stream::unfold(ipc_mutex, move |ipc_mutex| {
-    let wsgi_head_clone = wsgi_head_clone.clone();
-    let error_logger_arc_clone = error_logger_arc.clone();
-    let body_stream_mutex_clone = body_stream_mutex.clone();
-    Box::pin(async move {
-      let ipc_mutex_borrowed = &ipc_mutex;
-      let chunk_result: Result<Option<Bytes>, Box<dyn Error + Send + Sync>> = async {
-        let (tx, rx) = &mut *ipc_mutex_borrowed.lock().await;
-        write_ipc_message_async(
-          tx,
-          &postcard::to_allocvec(&ServerToProcessPoolMessage {
-            application_id: Some(application_id),
-            environment_variables: None,
-            body_chunk: None,
-            body_error_message: None,
-            requests_body_chunk: true,
-          })?,
-        )
-        .await?;
+  let mut response_stream =
+    futures_util::stream::unfold(ipc_mutex, move |ipc_mutex: Arc<Mutex<_>>| {
+      let wsgi_head_clone = wsgi_head_clone.clone();
+      let error_logger_arc_clone = error_logger_arc.clone();
+      let body_stream_mutex_clone = body_stream_mutex.clone();
+      Box::pin(async move {
+        let ipc_mutex_borrowed = &ipc_mutex;
+        let chunk_result: Result<Option<Bytes>, Box<dyn Error + Send + Sync>> = async {
+          let (tx, rx) = &mut *ipc_mutex_borrowed.lock().await;
+          write_ipc_message_async(
+            tx,
+            &postcard::to_allocvec(&ServerToProcessPoolMessage {
+              application_id: Some(application_id),
+              environment_variables: None,
+              body_chunk: None,
+              body_error_message: None,
+              requests_body_chunk: true,
+            })?,
+          )
+          .await?;
 
-        loop {
-          let received_message =
-            postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message_async(rx).await?)?;
+          loop {
+            let received_message = postcard::from_bytes::<ProcessPoolToServerMessage>(
+              &read_ipc_message_async(rx).await?,
+            )?;
 
-          if let Some(error_message) = received_message.error_message {
-            Err(anyhow::anyhow!(error_message))?
-          } else if let Some(body_chunk) = received_message.body_chunk {
-            if let Some(status_code) = received_message.status_code {
-              let mut wsgi_head_locked = wsgi_head_clone.lock().await;
-              wsgi_head_locked.status = StatusCode::from_u16(status_code)?;
-              if let Some(headers) = received_message.headers {
-                let mut header_map = HeaderMap::new();
-                for (key, value) in headers {
-                  for value in value {
-                    header_map.append(
-                      HeaderName::from_str(&key)?,
-                      HeaderValue::from_bytes(value.as_bytes())?,
-                    );
+            if let Some(error_message) = received_message.error_message {
+              Err(anyhow::anyhow!(error_message))?
+            } else if let Some(body_chunk) = received_message.body_chunk {
+              if let Some(status_code) = received_message.status_code {
+                let mut wsgi_head_locked = wsgi_head_clone.lock().await;
+                wsgi_head_locked.status = StatusCode::from_u16(status_code)?;
+                if let Some(headers) = received_message.headers {
+                  let mut header_map = HeaderMap::new();
+                  for (key, value) in headers {
+                    for value in value {
+                      header_map.append(
+                        HeaderName::from_str(&key)?,
+                        HeaderValue::from_bytes(value.as_bytes())?,
+                      );
+                    }
                   }
+                  wsgi_head_locked.headers = Some(header_map);
                 }
-                wsgi_head_locked.headers = Some(header_map);
               }
+              return Ok(Some(Bytes::from(body_chunk)));
+            } else if let Some(error_log_line) = received_message.error_log_line {
+              error_logger_arc_clone.log(&error_log_line).await;
+            } else if received_message.requests_body_chunk {
+              let body_chunk;
+              let body_error_message;
+              match body_stream_mutex_clone.lock().await.next().await {
+                None => {
+                  body_chunk = None;
+                  body_error_message = None;
+                }
+                Some(Err(err)) => {
+                  body_chunk = None;
+                  body_error_message = Some(err.to_string());
+                }
+                Some(Ok(chunk)) => {
+                  body_chunk = Some(chunk.to_vec());
+                  body_error_message = None;
+                }
+              };
+              write_ipc_message_async(
+                tx,
+                &postcard::to_allocvec(&ServerToProcessPoolMessage {
+                  application_id: None,
+                  environment_variables: None,
+                  body_chunk,
+                  body_error_message,
+                  requests_body_chunk: false,
+                })?,
+              )
+              .await?;
+            } else {
+              return Ok(None);
             }
-            return Ok(Some(Bytes::from(body_chunk)));
-          } else if let Some(error_log_line) = received_message.error_log_line {
-            error_logger_arc_clone.log(&error_log_line).await;
-          } else if received_message.requests_body_chunk {
-            let body_chunk;
-            let body_error_message;
-            match body_stream_mutex_clone.lock().await.next().await {
-              None => {
-                body_chunk = None;
-                body_error_message = None;
-              }
-              Some(Err(err)) => {
-                body_chunk = None;
-                body_error_message = Some(err.to_string());
-              }
-              Some(Ok(chunk)) => {
-                body_chunk = Some(chunk.to_vec());
-                body_error_message = None;
-              }
-            };
-            write_ipc_message_async(
-              tx,
-              &postcard::to_allocvec(&ServerToProcessPoolMessage {
-                application_id: None,
-                environment_variables: None,
-                body_chunk,
-                body_error_message,
-                requests_body_chunk: false,
-              })?,
-            )
-            .await?;
-          } else {
-            return Ok(None);
           }
         }
-      }
-      .await;
+        .await;
 
-      match chunk_result {
-        Err(error) => Some((Err(std::io::Error::other(error.to_string())), ipc_mutex)),
-        Ok(None) => None,
-        Ok(Some(chunk)) => Some((Ok(chunk), ipc_mutex)),
-      }
-    })
-  });
+        match chunk_result {
+          Err(error) => Some((Err(std::io::Error::other(error.to_string())), ipc_mutex)),
+          Ok(None) => None,
+          Ok(Some(chunk)) => Some((Ok(chunk), ipc_mutex)),
+        }
+      })
+    });
 
   let first_chunk = response_stream.next().await;
   let response_body = if let Some(Err(first_chunk_error)) = first_chunk {

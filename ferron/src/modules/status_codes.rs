@@ -420,7 +420,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
                         let password_cloned = password.clone();
                         let password_hash_db_cloned = password_hash_db.to_string();
                         // Offload verifying the hash into a separate blocking thread.
-                        let password_valid = monoio::spawn_blocking(move || {
+                        let password_valid = crate::runtime::spawn_blocking(move || {
                           verify_password(password_cloned, &password_hash_db_cloned).is_ok()
                         })
                         .await

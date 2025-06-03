@@ -937,6 +937,7 @@ dependencies = [
  "human-panic",
  "hyper",
  "hyper-tungstenite",
+ "hyper-util",
  "interprocess",
  "itertools 0.14.0",
  "kdl",

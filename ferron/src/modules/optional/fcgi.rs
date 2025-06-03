@@ -15,9 +15,13 @@ use http_body_util::{BodyExt, StreamBody};
 use httparse::EMPTY_HEADER;
 use hyper::body::Frame;
 use hyper::{header, Request, Response, StatusCode};
+#[cfg(feature = "runtime-monoio")]
 use monoio::io::IntoPollIo;
+#[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+#[cfg(feature = "runtime-tokio")]
+use tokio::net::TcpStream;
 use tokio::sync::RwLock;
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio_util::io::{ReaderStream, SinkWriter, StreamReader};
@@ -254,7 +258,8 @@ impl ModuleHandlers for FcgiModuleHandlers {
           let wwwroot_pathbuf = match wwwroot_unknown.as_path().is_absolute() {
             true => wwwroot_unknown,
             false => {
-              let canonialize_result = {
+              #[cfg(feature = "runtime-monoio")]
+              let canonicalize_result = {
                 let wwwroot_unknown = wwwroot_unknown.clone();
                 monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot_unknown))
                   .await
@@ -262,7 +267,10 @@ impl ModuleHandlers for FcgiModuleHandlers {
                     "Can't spawn a blocking task to obtain the canonical webroot path",
                   )))
               };
-              match canonialize_result {
+              #[cfg(feature = "runtime-tokio")]
+              let canonicalize_result = tokio::fs::canonicalize(&wwwroot_unknown).await;
+
+              match canonicalize_result {
                 Ok(pathbuf) => pathbuf,
                 Err(_) => wwwroot_unknown,
               }
@@ -319,7 +327,8 @@ impl ModuleHandlers for FcgiModuleHandlers {
           let wwwroot_pathbuf = match wwwroot_unknown.as_path().is_absolute() {
             true => wwwroot_unknown,
             false => {
-              let canonialize_result = {
+              #[cfg(feature = "runtime-monoio")]
+              let canonicalize_result = {
                 let wwwroot_unknown = wwwroot_unknown.clone();
                 monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot_unknown))
                   .await
@@ -327,7 +336,10 @@ impl ModuleHandlers for FcgiModuleHandlers {
                     "Can't spawn a blocking task to obtain the canonical webroot path",
                   )))
               };
-              match canonialize_result {
+              #[cfg(feature = "runtime-tokio")]
+              let canonicalize_result = tokio::fs::canonicalize(&wwwroot_unknown).await;
+
+              match canonicalize_result {
                 Ok(pathbuf) => pathbuf,
                 Err(_) => wwwroot_unknown,
               }
@@ -367,12 +379,17 @@ impl ModuleHandlers for FcgiModuleHandlers {
               let mut execute_path_info: Option<String> = None;
 
               // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-              #[cfg(unix)]
+              #[cfg(feature = "runtime-tokio")]
+              let metadata = {
+                use tokio::fs;
+                fs::metadata(&joined_pathbuf).await
+              };
+              #[cfg(all(feature = "runtime-monoio", unix))]
               let metadata = {
                 use monoio::fs;
                 fs::metadata(&joined_pathbuf).await
               };
-              #[cfg(windows)]
+              #[cfg(all(feature = "runtime-monoio", windows))]
               let metadata = {
                 let joined_pathbuf = joined_pathbuf.clone();
                 monoio::spawn_blocking(move || std::fs::metadata(joined_pathbuf))
@@ -398,12 +415,17 @@ impl ModuleHandlers for FcgiModuleHandlers {
                     for index in indexes {
                       let temp_joined_pathbuf = joined_pathbuf.join(index);
                       // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-                      #[cfg(unix)]
+                      #[cfg(feature = "runtime-tokio")]
+                      let temp_metadata = {
+                        use tokio::fs;
+                        fs::metadata(&temp_joined_pathbuf).await
+                      };
+                      #[cfg(all(feature = "runtime-monoio", unix))]
                       let temp_metadata = {
                         use monoio::fs;
                         fs::metadata(&temp_joined_pathbuf).await
                       };
-                      #[cfg(windows)]
+                      #[cfg(all(feature = "runtime-monoio", windows))]
                       let temp_metadata = {
                         let temp_joined_pathbuf = temp_joined_pathbuf.clone();
                         monoio::spawn_blocking(move || std::fs::metadata(temp_joined_pathbuf))
@@ -439,12 +461,17 @@ impl ModuleHandlers for FcgiModuleHandlers {
                       if !temp_pathbuf.pop() {
                         break;
                       } // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-                      #[cfg(unix)]
+                      #[cfg(feature = "runtime-tokio")]
+                      let temp_metadata = {
+                        use tokio::fs;
+                        fs::metadata(&temp_pathbuf).await
+                      };
+                      #[cfg(all(feature = "runtime-monoio", unix))]
                       let temp_metadata = {
                         use monoio::fs;
                         fs::metadata(&temp_pathbuf).await
                       };
-                      #[cfg(windows)]
+                      #[cfg(all(feature = "runtime-monoio", windows))]
                       let temp_metadata = {
                         let temp_pathbuf = temp_pathbuf.clone();
                         monoio::spawn_blocking(move || std::fs::metadata(temp_pathbuf))
@@ -453,6 +480,7 @@ impl ModuleHandlers for FcgiModuleHandlers {
                             "Can't spawn a blocking task to obtain the file metadata",
                           )))
                       };
+
                       match temp_metadata {
                         Ok(metadata) => {
                           if metadata.is_file() {
@@ -893,7 +921,7 @@ async fn execute_fastcgi(
 
   let mut cgi_response = CgiResponse::new(stdout);
 
-  monoio::spawn(Copier::with_zero_packet_writing(cgi_stdin_reader, stdin).copy());
+  crate::runtime::spawn(Copier::with_zero_packet_writing(cgi_stdin_reader, stdin).copy());
 
   let stderr_read_future = ReadToEndFuture::new(stderr);
   let mut stderr_read_future_pinned = Box::pin(stderr_read_future);
@@ -905,7 +933,7 @@ async fn execute_fastcgi(
     let stdout_parse_future = cgi_response.get_head();
     let mut stdout_parse_future_pinned = Box::pin(stdout_parse_future);
 
-    monoio::select! {
+    crate::runtime::select! {
         biased;
 
         result = &mut stdout_parse_future_pinned => {
@@ -971,7 +999,7 @@ async fn execute_fastcgi(
 
   let mut reader_stream = ReaderStream::new(cgi_response);
   let (reader_stream_tx, reader_stream_rx) = async_channel::bounded(MAX_RESPONSE_CHANNEL_CAPACITY);
-  monoio::spawn(async move {
+  crate::runtime::spawn(async move {
     while let Some(chunk) = reader_stream.next().await {
       reader_stream_tx.send(chunk).await.unwrap_or_default();
     }
@@ -983,7 +1011,7 @@ async fn execute_fastcgi(
   let response = response_builder.body(boxed_body)?;
 
   let error_logger_clone = error_logger.clone();
-  monoio::spawn(async move {
+  crate::runtime::spawn(async move {
     let stderr_vec = stderr_read_future_pinned.await.unwrap_or(vec![]);
     let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
     if !stderr_string.is_empty() {
@@ -1002,6 +1030,7 @@ async fn execute_fastcgi(
   })
 }
 
+#[cfg(feature = "runtime-monoio")]
 async fn connect_tcp(
   addr: &str,
 ) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
@@ -1012,8 +1041,25 @@ async fn connect_tcp(
   Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
 }
 
+#[cfg(feature = "runtime-tokio")]
+async fn connect_tcp(
+  addr: &str,
+) -> Result<
+  (
+    Box<dyn AsyncRead + Send + Sync + Unpin>,
+    Box<dyn AsyncWrite + Send + Sync + Unpin>,
+  ),
+  std::io::Error,
+> {
+  let socket = TcpStream::connect(addr).await?;
+  socket.set_nodelay(true)?;
+
+  let (socket_reader_set, socket_writer_set) = tokio::io::split(socket);
+  Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
+}
+
 #[allow(dead_code)]
-#[cfg(unix)]
+#[cfg(all(feature = "runtime-monoio", unix))]
 async fn connect_unix(
   path: &str,
 ) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
@@ -1026,10 +1072,46 @@ async fn connect_unix(
 }
 
 #[allow(dead_code)]
-#[cfg(not(unix))]
+#[cfg(all(feature = "runtime-tokio", unix))]
+async fn connect_unix(
+  path: &str,
+) -> Result<
+  (
+    Box<dyn AsyncRead + Send + Sync + Unpin>,
+    Box<dyn AsyncWrite + Send + Sync + Unpin>,
+  ),
+  std::io::Error,
+> {
+  use tokio::net::UnixStream;
+
+  let socket = UnixStream::connect(path).await?;
+
+  let (socket_reader_set, socket_writer_set) = tokio::io::split(socket);
+  Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
+}
+
+#[allow(dead_code)]
+#[cfg(all(feature = "runtime-monoio", not(unix)))]
 async fn connect_unix(
   _path: &str,
 ) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
+  Err(std::io::Error::new(
+    std::io::ErrorKind::Unsupported,
+    "Unix sockets are not supports on non-Unix platforms.",
+  ))
+}
+
+#[allow(dead_code)]
+#[cfg(all(feature = "runtime-tokio", not(unix)))]
+async fn connect_unix(
+  _path: &str,
+) -> Result<
+  (
+    Box<dyn AsyncRead + Send + Sync + Unpin>,
+    Box<dyn AsyncWrite + Send + Sync + Unpin>,
+  ),
+  std::io::Error,
+> {
   Err(std::io::Error::new(
     std::io::ErrorKind::Unsupported,
     "Unix sockets are not supports on non-Unix platforms.",

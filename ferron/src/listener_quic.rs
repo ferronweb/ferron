@@ -13,26 +13,36 @@
 //
 
 use std::error::Error;
+#[cfg(feature = "runtime-monoio")]
 use std::fmt::{Debug, Formatter};
+#[cfg(feature = "runtime-monoio")]
 use std::future::Future;
+#[cfg(feature = "runtime-monoio")]
 use std::io;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+#[cfg(feature = "runtime-monoio")]
 use std::pin::Pin;
 use std::sync::Arc;
+#[cfg(feature = "runtime-monoio")]
 use std::task::{ready, Context, Poll};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(feature = "runtime-monoio")]
+use std::time::Instant;
 
 use async_channel::{Receiver, Sender};
+#[cfg(feature = "runtime-monoio")]
 use async_io::Async;
-use monoio::utils::detect_uring;
+#[cfg(feature = "runtime-monoio")]
 use pin_project_lite::pin_project;
 use quinn::crypto::rustls::QuicServerConfig;
+#[cfg(feature = "runtime-monoio")]
 use quinn::{udp, AsyncTimer, AsyncUdpSocket, Runtime, UdpPoller};
 use rustls::ServerConfig;
 
 use crate::listener_handler_communication::{Connection, ConnectionData};
 use crate::logging::LogMessage;
 
+#[cfg(feature = "runtime-monoio")]
 pin_project_lite::pin_project! {
     /// Helper adapting a function `MakeFut` that constructs a single-use future `Fut` into a
     /// [`UdpPoller`] that may be reused indefinitely
@@ -43,6 +53,7 @@ pin_project_lite::pin_project! {
     }
 }
 
+#[cfg(feature = "runtime-monoio")]
 impl<MakeFut, Fut> UdpPollHelper<MakeFut, Fut> {
   /// Construct a [`UdpPoller`] that calls `make_fut` to get the future to poll, storing it until
   /// it yields [`Poll::Ready`], then creating a new one on the next
@@ -55,6 +66,7 @@ impl<MakeFut, Fut> UdpPollHelper<MakeFut, Fut> {
   }
 }
 
+#[cfg(feature = "runtime-monoio")]
 impl<MakeFut, Fut> UdpPoller for UdpPollHelper<MakeFut, Fut>
 where
   MakeFut: Fn() -> Fut + Send + Sync + 'static,
@@ -79,6 +91,7 @@ where
   }
 }
 
+#[cfg(feature = "runtime-monoio")]
 impl<MakeFut, Fut> Debug for UdpPollHelper<MakeFut, Fut> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     f.debug_struct("UdpPollHelper").finish_non_exhaustive()
@@ -87,8 +100,10 @@ impl<MakeFut, Fut> Debug for UdpPollHelper<MakeFut, Fut> {
 
 /// A runtime for Quinn that utilizes Monoio and async_io
 #[derive(Debug)]
+#[cfg(feature = "runtime-monoio")]
 struct MonoioAsyncioRuntime;
 
+#[cfg(feature = "runtime-monoio")]
 impl Runtime for MonoioAsyncioRuntime {
   fn new_timer(&self, t: Instant) -> Pin<Box<dyn AsyncTimer>> {
     Box::pin(Timer {
@@ -105,6 +120,7 @@ impl Runtime for MonoioAsyncioRuntime {
   }
 }
 
+#[cfg(feature = "runtime-monoio")]
 pin_project! {
     struct Timer {
         #[pin]
@@ -112,6 +128,7 @@ pin_project! {
     }
 }
 
+#[cfg(feature = "runtime-monoio")]
 impl AsyncTimer for Timer {
   fn reset(mut self: Pin<&mut Self>, t: Instant) {
     self.inner.set_at(t)
@@ -122,18 +139,21 @@ impl AsyncTimer for Timer {
   }
 }
 
+#[cfg(feature = "runtime-monoio")]
 impl Debug for Timer {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     self.inner.fmt(f)
   }
 }
 
+#[cfg(feature = "runtime-monoio")]
 #[derive(Debug)]
 struct UdpSocket {
   io: Async<std::net::UdpSocket>,
   inner: udp::UdpSocketState,
 }
 
+#[cfg(feature = "runtime-monoio")]
 impl UdpSocket {
   fn new(sock: std::net::UdpSocket) -> io::Result<Self> {
     Ok(Self {
@@ -143,6 +163,7 @@ impl UdpSocket {
   }
 }
 
+#[cfg(feature = "runtime-monoio")]
 impl AsyncUdpSocket for UdpSocket {
   fn create_io_poller(self: Arc<Self>) -> Pin<Box<dyn UdpPoller>> {
     Box::pin(UdpPollHelper::new(move || {
@@ -202,18 +223,8 @@ pub fn create_quic_listener(
   std::thread::Builder::new()
     .name(format!("QUIC listener for {}", address))
     .spawn(move || {
-      if enable_uring && detect_uring() {
-        #[cfg(target_os = "linux")]
-        let mut rt = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
-          .enable_all()
-          .build()
-          .unwrap();
-        #[cfg(not(target_os = "linux"))]
-        let mut rt = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
-          .enable_all()
-          .build()
-          .unwrap();
-        rt.block_on(async move {
+      crate::runtime::new_runtime(
+        async move {
           if let Err(error) = quic_listener_fn(
             address,
             tls_config,
@@ -228,29 +239,10 @@ pub fn create_quic_listener(
           {
             listen_error_tx.send(Some(error)).await.unwrap_or_default();
           }
-        });
-      } else {
-        let mut rt = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
-          .enable_all()
-          .build()
-          .unwrap();
-        rt.block_on(async move {
-          if let Err(error) = quic_listener_fn(
-            address,
-            tls_config,
-            tx,
-            &listen_error_tx,
-            logging_tx,
-            first_startup,
-            shutdown_rx,
-            rustls_config_rx,
-          )
-          .await
-          {
-            listen_error_tx.send(Some(error)).await.unwrap_or_default();
-          }
-        });
-      }
+        },
+        enable_uring,
+      )
+      .unwrap();
     })?;
 
   if let Some(error) = listen_error_rx.recv_blocking()? {
@@ -302,7 +294,7 @@ async fn quic_listener_fn(
     if shutdown_rx.try_recv().is_ok() {
       break;
     }
-    monoio::time::sleep(duration).await;
+    crate::runtime::sleep(duration).await;
   }
   let udp_socket = match udp_socket_result {
     Ok(socket) => socket,
@@ -315,7 +307,14 @@ async fn quic_listener_fn(
     quinn::EndpointConfig::default(),
     Some(server_config),
     udp_socket,
-    Arc::new(MonoioAsyncioRuntime),
+    {
+      #[cfg(feature = "runtime-monoio")]
+      let runtime = Arc::new(MonoioAsyncioRuntime);
+      #[cfg(feature = "runtime-tokio")]
+      let runtime = Arc::new(quinn::TokioRuntime);
+
+      runtime
+    },
   ) {
     Ok(endpoint) => endpoint,
     Err(err) => Err(anyhow::anyhow!(format!(
@@ -335,7 +334,7 @@ async fn quic_listener_fn(
       }
     };
 
-    let new_conn = monoio::select! {
+    let new_conn = crate::runtime::select! {
       result = endpoint.accept() => {
           match result {
               Some(conn) => conn,
@@ -377,7 +376,7 @@ async fn quic_listener_fn(
       server_address: local_address,
     };
     let quic_tx = tx.clone();
-    monoio::spawn(async move {
+    crate::runtime::spawn(async move {
       quic_tx.send(quic_data).await.unwrap_or_default();
     });
   }

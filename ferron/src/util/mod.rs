@@ -15,6 +15,7 @@ mod ip_blocklist;
 mod match_hostname;
 mod match_location;
 mod module_cache;
+#[cfg(feature = "runtime-monoio")]
 mod monoio_file_stream;
 #[cfg(any(feature = "fauth", feature = "rproxy"))]
 mod no_server_verifier;
@@ -22,8 +23,9 @@ mod no_server_verifier;
 mod preforked_process_pool;
 #[cfg(feature = "fcgi")]
 mod read_to_end_move;
-#[cfg(feature = "scgi")]
+#[cfg(all(feature = "scgi", feature = "runtime-monoio"))]
 mod send_read_stream;
+#[cfg(feature = "runtime-monoio")]
 mod send_rw_stream;
 #[cfg(feature = "static")]
 mod sizify;
@@ -47,6 +49,7 @@ pub use ip_blocklist::*;
 pub use match_hostname::*;
 pub use match_location::*;
 pub use module_cache::*;
+#[cfg(feature = "runtime-monoio")]
 pub use monoio_file_stream::*;
 #[cfg(any(feature = "fauth", feature = "rproxy"))]
 pub use no_server_verifier::*;
@@ -54,8 +57,9 @@ pub use no_server_verifier::*;
 pub use preforked_process_pool::*;
 #[cfg(feature = "fcgi")]
 pub use read_to_end_move::*;
-#[cfg(feature = "scgi")]
+#[cfg(all(feature = "scgi", feature = "runtime-monoio"))]
 pub use send_read_stream::*;
+#[cfg(feature = "runtime-monoio")]
 pub use send_rw_stream::*;
 #[cfg(feature = "static")]
 pub use sizify::*;

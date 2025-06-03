@@ -197,13 +197,19 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
               let joined_pathbuf = path.join(decoded_relative_path);
 
               // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-              #[cfg(unix)]
+              #[cfg(feature = "runtime-tokio")]
+              let metadata = {
+                use tokio::fs;
+                fs::metadata(&joined_pathbuf).await
+              };
+              #[cfg(all(feature = "runtime-monoio", unix))]
               let metadata = {
                 use monoio::fs;
-                fs::metadata(joined_pathbuf).await
+                fs::metadata(&joined_pathbuf).await
               };
-              #[cfg(windows)]
+              #[cfg(all(feature = "runtime-monoio", windows))]
               let metadata = {
+                let joined_pathbuf = joined_pathbuf.clone();
                 monoio::spawn_blocking(move || std::fs::metadata(joined_pathbuf))
                   .await
                   .unwrap_or(Err(std::io::Error::other(

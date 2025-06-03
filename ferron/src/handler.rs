@@ -6,22 +6,30 @@ use std::time::{Duration, SystemTime};
 
 use async_channel::{Receiver, Sender};
 use bytes::{Buf, Bytes};
+#[cfg(feature = "runtime-monoio")]
 use futures_util::StreamExt;
 use http_body_util::{BodyExt, StreamBody};
 use hyper::body::{Frame, Incoming};
 use hyper::service::service_fn;
 use hyper::{Request, Response};
-use monoio::blocking::{BlockingTask, ThreadPool};
+#[cfg(feature = "runtime-tokio")]
+use hyper_util::rt::{TokioIo, TokioTimer};
+#[cfg(feature = "runtime-monoio")]
 use monoio::io::IntoPollIo;
+#[cfg(feature = "runtime-monoio")]
 use monoio::net::tcp::stream_poll::TcpStreamPoll;
+#[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
-use monoio::utils::detect_uring;
+#[cfg(feature = "runtime-monoio")]
 use monoio_compat::hyper::{MonoioExecutor, MonoioIo, MonoioTimer};
 use rustls::server::Acceptor;
 use rustls::ServerConfig;
 use rustls_acme::{is_tls_alpn_challenge, ResolvesServerCertAcme};
+#[cfg(feature = "runtime-tokio")]
+use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::LazyConfigAcceptor;
+#[cfg(feature = "runtime-monoio")]
 use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
 
 use crate::config::ServerConfigurations;
@@ -29,7 +37,25 @@ use crate::get_value;
 use crate::listener_handler_communication::ConnectionData;
 use crate::logging::LogMessage;
 use crate::request_handler::request_handler;
+#[cfg(feature = "runtime-monoio")]
 use crate::util::SendRwStream;
+
+// Tokio local executor
+#[cfg(feature = "runtime-tokio")]
+#[derive(Clone, Copy, Debug)]
+pub struct TokioLocalExecutor;
+
+#[cfg(feature = "runtime-tokio")]
+impl<F> hyper::rt::Executor<F> for TokioLocalExecutor
+where
+  F: std::future::Future + 'static,
+  F::Output: 'static,
+{
+  #[inline]
+  fn execute(&self, fut: F) {
+    tokio::task::spawn_local(fut);
+  }
+}
 
 /// Creates a HTTP request handler
 #[allow(clippy::too_many_arguments)]
@@ -48,20 +74,8 @@ pub fn create_http_handler(
   std::thread::Builder::new()
     .name("Request handler".to_string())
     .spawn(move || {
-      if enable_uring && detect_uring() {
-        #[cfg(target_os = "linux")]
-        let mut rt = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
-          .enable_all()
-          .attach_thread_pool(Box::new(BlockingThreadPool))
-          .build()
-          .unwrap();
-        #[cfg(not(target_os = "linux"))]
-        let mut rt = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
-          .enable_all()
-          .attach_thread_pool(Box::new(BlockingThreadPool))
-          .build()
-          .unwrap();
-        rt.block_on(async move {
+      crate::runtime::new_runtime(
+        async move {
           if let Some(error) = http_handler_fn(
             configurations,
             rx,
@@ -78,32 +92,10 @@ pub fn create_http_handler(
           {
             handler_init_tx.send(Some(error)).await.unwrap_or_default();
           }
-        });
-      } else {
-        let mut rt = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
-          .enable_all()
-          .attach_thread_pool(Box::new(BlockingThreadPool))
-          .build()
-          .unwrap();
-        rt.block_on(async move {
-          if let Some(error) = http_handler_fn(
-            configurations,
-            rx,
-            &handler_init_tx,
-            logging_tx,
-            shutdown_rx,
-            tls_configs,
-            http3_enabled,
-            acme_tls_alpn_01_configs,
-            acme_http_01_resolvers,
-          )
-          .await
-          .err()
-          {
-            handler_init_tx.send(Some(error)).await.unwrap_or_default();
-          }
-        });
-      }
+        },
+        enable_uring,
+      )
+      .unwrap();
     })?;
 
   if let Some(error) = listen_error_rx.recv_blocking()? {
@@ -132,7 +124,7 @@ async fn http_handler_fn(
   let connections_references = Arc::new(());
 
   loop {
-    let conn_data = monoio::select! {
+    let conn_data = crate::runtime::select! {
         result = rx.recv() => {
             if let Ok(recv_data) = result {
                 recv_data
@@ -166,9 +158,10 @@ async fn http_handler_fn(
     let acme_http_01_resolvers = acme_http_01_resolvers.clone();
     let logging_tx = logging_tx.clone();
     let connections_references_cloned = connections_references.clone();
-    monoio::spawn(async move {
+    crate::runtime::spawn(async move {
       match conn_data.connection {
         crate::listener_handler_communication::Connection::Tcp(tcp_stream) => {
+          #[cfg(feature = "runtime-monoio")]
           let tcp_stream = match TcpStream::from_std(tcp_stream) {
             Ok(stream) => stream,
             Err(err) => {
@@ -213,7 +206,7 @@ async fn http_handler_fn(
   }
 
   while Arc::weak_count(&connections_references) > 0 {
-    monoio::time::sleep(Duration::from_millis(100)).await;
+    crate::runtime::sleep(Duration::from_millis(100)).await;
   }
 
   Ok(())
@@ -221,12 +214,23 @@ async fn http_handler_fn(
 
 /// Enum for maybe TLS stream
 #[allow(clippy::large_enum_variant)]
+#[cfg(feature = "runtime-monoio")]
 enum MaybeTlsStream {
   /// TLS stream
   Tls(TlsStream<TcpStreamPoll>),
 
   /// Plain TCP stream
   Plain(TcpStreamPoll),
+}
+
+#[allow(clippy::large_enum_variant)]
+#[cfg(feature = "runtime-tokio")]
+enum MaybeTlsStream {
+  /// TLS stream
+  Tls(TlsStream<TcpStream>),
+
+  /// Plain TCP stream
+  Plain(TcpStream),
 }
 
 /// HTTP/1.x and HTTP/2 handler function
@@ -244,6 +248,7 @@ async fn http_tcp_handler_fn(
   acme_http_01_resolvers: Arc<Vec<Arc<ResolvesServerCertAcme>>>,
 ) {
   let _connection_reference = Arc::downgrade(&connection_reference);
+  #[cfg(feature = "runtime-monoio")]
   let tcp_stream = match tcp_stream.into_poll_io() {
     Ok(stream) => stream,
     Err(err) => {
@@ -314,16 +319,31 @@ async fn http_tcp_handler_fn(
     let alpn_protocol = tls_stream.get_ref().1.alpn_protocol();
     let is_http2 = alpn_protocol == Some("h2".as_bytes());
 
-    let send_rw_stream = SendRwStream::new(tls_stream);
-    let (sink, stream) = send_rw_stream.split();
-    let reader = StreamReader::new(stream);
-    let writer = SinkWriter::new(CopyToBytes::new(sink));
-    let rw = tokio::io::join(reader, writer);
-    let io = MonoioIo::new(rw);
+    #[cfg(feature = "runtime-monoio")]
+    let io = {
+      let send_rw_stream = SendRwStream::new(tls_stream);
+      let (sink, stream) = send_rw_stream.split();
+      let reader = StreamReader::new(stream);
+      let writer = SinkWriter::new(CopyToBytes::new(sink));
+      let rw = tokio::io::join(reader, writer);
+      MonoioIo::new(rw)
+    };
+    #[cfg(feature = "runtime-tokio")]
+    let io = TokioIo::new(tls_stream);
 
     if is_http2 {
-      let mut http2_builder = hyper::server::conn::http2::Builder::new(MonoioExecutor);
-      http2_builder.timer(MonoioTimer);
+      #[cfg(feature = "runtime-monoio")]
+      let mut http2_builder = {
+        let mut http2_builder = hyper::server::conn::http2::Builder::new(MonoioExecutor);
+        http2_builder.timer(MonoioTimer);
+        http2_builder
+      };
+      #[cfg(feature = "runtime-tokio")]
+      let mut http2_builder = {
+        let mut http2_builder = hyper::server::conn::http2::Builder::new(TokioLocalExecutor);
+        http2_builder.timer(TokioTimer::new());
+        http2_builder
+      };
 
       let global_configuration = configurations.find_global_configuration();
 
@@ -404,10 +424,24 @@ async fn http_tcp_handler_fn(
           .unwrap_or_default();
       }
     } else {
-      let mut http1_builder = hyper::server::conn::http1::Builder::new();
+      #[cfg(feature = "runtime-monoio")]
+      let http1_builder = {
+        let mut http1_builder = hyper::server::conn::http1::Builder::new();
 
-      // The timer is neccessary for the header timeout to work to mitigate Slowloris.
-      http1_builder.timer(MonoioTimer);
+        // The timer is neccessary for the header timeout to work to mitigate Slowloris.
+        http1_builder.timer(MonoioTimer);
+
+        http1_builder
+      };
+      #[cfg(feature = "runtime-tokio")]
+      let http1_builder = {
+        let mut http1_builder = hyper::server::conn::http1::Builder::new();
+
+        // The timer is neccessary for the header timeout to work to mitigate Slowloris.
+        http1_builder.timer(TokioTimer::new());
+
+        http1_builder
+      };
 
       let logging_tx_clone = logging_tx.clone();
       if let Err(err) = http1_builder
@@ -450,18 +484,37 @@ async fn http_tcp_handler_fn(
       }
     }
   } else if let MaybeTlsStream::Plain(stream) = maybe_tls_stream {
-    // Some pesky code...
-    let send_rw_stream = SendRwStream::new(stream);
-    let (sink, stream) = send_rw_stream.split();
-    let reader = StreamReader::new(stream);
-    let writer = SinkWriter::new(CopyToBytes::new(sink));
-    let rw = tokio::io::join(reader, writer);
-    let io = MonoioIo::new(rw);
+    #[cfg(feature = "runtime-monoio")]
+    let io = {
+      // Some pesky code...
+      let send_rw_stream = SendRwStream::new(stream);
+      let (sink, stream) = send_rw_stream.split();
+      let reader = StreamReader::new(stream);
+      let writer = SinkWriter::new(CopyToBytes::new(sink));
+      let rw = tokio::io::join(reader, writer);
+      MonoioIo::new(rw)
+    };
+    #[cfg(feature = "runtime-tokio")]
+    let io = TokioIo::new(stream);
 
-    let mut http1_builder = hyper::server::conn::http1::Builder::new();
+    #[cfg(feature = "runtime-monoio")]
+    let http1_builder = {
+      let mut http1_builder = hyper::server::conn::http1::Builder::new();
 
-    // The timer is neccessary for the header timeout to work to mitigate Slowloris.
-    http1_builder.timer(MonoioTimer);
+      // The timer is neccessary for the header timeout to work to mitigate Slowloris.
+      http1_builder.timer(MonoioTimer);
+
+      http1_builder
+    };
+    #[cfg(feature = "runtime-tokio")]
+    let http1_builder = {
+      let mut http1_builder = hyper::server::conn::http1::Builder::new();
+
+      // The timer is neccessary for the header timeout to work to mitigate Slowloris.
+      http1_builder.timer(TokioTimer::new());
+
+      http1_builder
+    };
 
     let logging_tx_clone = logging_tx.clone();
     if let Err(err) = http1_builder
@@ -489,30 +542,6 @@ async fn http_tcp_handler_fn(
             },
             acme_http_01_resolvers.clone(),
           )
-          /*let config = config.clone();
-          let logger = logging_tx.clone();
-          let handlers_vec_clone = handlers_vec
-            .clone()
-            .collect::<Vec<Box<dyn ServerModuleHandlers + Send>>>();
-          let acme_http01_resolver_option_clone = acme_http01_resolver_option.clone();
-          let (request_parts, request_body) = request.into_parts();
-          let request = Request::from_parts(
-            request_parts,
-            request_body
-              .map_err(|e| std::io::Error::other(e.to_string()))
-              .boxed(),
-          );
-          request_handler(
-            request,
-            remote_address,
-            local_address,
-            false,
-            config,
-            logger,
-            handlers_vec_clone,
-            acme_http01_resolver_option_clone,
-            http3_enabled,
-          )*/
         }),
       )
       .with_upgrades()
@@ -562,7 +591,7 @@ async fn http_quic_handler_fn(
             let configurations = configurations.clone();
             let logging_tx = logging_tx.clone();
             let connection_reference = Arc::downgrade(&connection_reference);
-            monoio::spawn(async move {
+            crate::runtime::spawn(async move {
               let _connection_reference = connection_reference;
               let (request, stream) = match resolver.resolve_request().await {
                 Ok(resolved) => resolved,
@@ -764,15 +793,5 @@ async fn http_quic_handler_fn(
         .await
         .unwrap_or_default();
     }
-  }
-}
-
-/// A blocking thread pool for Monoio, implemented using `blocking` crate
-struct BlockingThreadPool;
-
-impl ThreadPool for BlockingThreadPool {
-  #[inline]
-  fn schedule_task(&self, task: BlockingTask) {
-    blocking::unblock(move || task.run()).detach();
   }
 }

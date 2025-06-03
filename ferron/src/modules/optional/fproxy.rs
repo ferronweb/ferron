@@ -8,10 +8,17 @@ use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
 use hyper::{header, Request, Response, StatusCode, Uri};
+#[cfg(feature = "runtime-tokio")]
+use hyper_util::rt::TokioIo;
+#[cfg(feature = "runtime-monoio")]
 use monoio::io::IntoPollIo;
+#[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
+#[cfg(feature = "runtime-monoio")]
 use monoio_compat::hyper::MonoioIo;
 use tokio::io::{AsyncRead, AsyncWrite};
+#[cfg(feature = "runtime-tokio")]
+use tokio::net::TcpStream;
 
 use crate::config::ServerConfiguration;
 use crate::logging::ErrorLogger;
@@ -103,7 +110,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
     if is_connect_proxy_request {
       if let Some(connect_address) = request.uri().authority().map(|auth| auth.to_string()) {
         let error_logger = error_logger.clone();
-        monoio::spawn(async move {
+        crate::runtime::spawn(async move {
           match hyper::upgrade::on(request).await {
             Ok(upgraded_request) => {
               let stream = match TcpStream::connect(connect_address).await {
@@ -127,7 +134,8 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
                   return;
                 }
               };
-              let mut stream_poll = match stream.into_poll_io() {
+              #[cfg(feature = "runtime-monoio")]
+              let mut stream = match stream.into_poll_io() {
                 Ok(stream) => stream,
                 Err(err) => {
                   error_logger
@@ -139,10 +147,15 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
                   return;
                 }
               };
+              #[cfg(feature = "runtime-tokio")]
+              let mut stream = stream;
 
+              #[cfg(feature = "runtime-monoio")]
               let mut upgraded = MonoioIo::new(upgraded_request);
+              #[cfg(feature = "runtime-tokio")]
+              let mut upgraded = TokioIo::new(upgraded_request);
 
-              tokio::io::copy_bidirectional(&mut upgraded, &mut stream_poll)
+              tokio::io::copy_bidirectional(&mut upgraded, &mut stream)
                 .await
                 .unwrap_or_default();
             }
@@ -266,8 +279,9 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
         }
       };
 
-      let stream_poll = match stream.into_poll_io() {
-        Ok(stream_poll) => stream_poll,
+      #[cfg(feature = "runtime-monoio")]
+      let stream = match stream.into_poll_io() {
+        Ok(stream) => stream,
         Err(err) => {
           error_logger.log(&format!("Bad gateway: {}", err)).await;
           return Ok(ResponseData {
@@ -298,7 +312,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
 
       let proxy_request = Request::from_parts(request_parts, request_body);
 
-      http_proxy(stream_poll, proxy_request, error_logger).await
+      http_proxy(stream, proxy_request, error_logger).await
     } else {
       Ok(ResponseData {
         request: Some(request),
@@ -316,7 +330,10 @@ async fn http_proxy(
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
+  #[cfg(feature = "runtime-monoio")]
   let io = MonoioIo::new(stream);
+  #[cfg(feature = "runtime-tokio")]
+  let io = TokioIo::new(stream);
 
   let (mut sender, conn) = match hyper::client::conn::http1::handshake(io).await {
     Ok(data) => data,
@@ -332,7 +349,7 @@ async fn http_proxy(
     }
   };
 
-  monoio::spawn(async move {
+  crate::runtime::spawn(async move {
     conn.await.unwrap_or_default();
   });
 

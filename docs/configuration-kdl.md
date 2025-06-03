@@ -98,7 +98,7 @@ include /etc/ferron.d/**/*.kdl
 - `listen_ip <listen_ip: string>`
   - This directive specifies the IP address to listen. Default: `listen_ip "::1"`
 - `io_uring [enable_io_uring: bool]`
-  - This directive specifies whenever `io_uring` is enabled. This directive has no effect for systems that don't support `io_uring`. Default: `io_uring #true`
+  - This directive specifies whenever `io_uring` is enabled. This directive has no effect for systems that don't support `io_uring` and for web server builds that use Tokio instead of Monoio. Default: `io_uring #true`
 - `wsgi_clear_imports [wsgi_clear_imports: bool]` (_wsgi_ module)
   - This directive specifies whenever to enable Python module import path clearing. Setting this option as `wsgi_clear_imports #true` improves the compatiblity with setups involving multiple WSGI applications, however module imports inside functions must not be used in the WSGI application. Default: `wsgi_clear_imports #false`
 - `asgi_clear_imports [asgi_clear_imports: bool]` (_asgi_ module)
