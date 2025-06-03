@@ -36,30 +36,34 @@ impl ModuleLoader for CoreModuleLoader {
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or::<_, anyhow::Error>(config, move |_| {
-      Ok(Arc::new(CoreModule {
-        default_http_port: global_config
-          .and_then(|c| get_entry!("default_http_port", c))
-          .and_then(|e| e.values.first())
-          .map_or(Some(80), |v| {
-            if v.is_null() {
-              None
-            } else {
-              Some(v.as_i128().unwrap_or(80) as u16)
-            }
-          }),
-        default_https_port: global_config
-          .and_then(|c| get_entry!("default_https_port", c))
-          .and_then(|e| e.values.first())
-          .map_or(Some(443), |v| {
-            if v.is_null() {
-              None
-            } else {
-              Some(v.as_i128().unwrap_or(443) as u16)
-            }
-          }),
-      }))
-    })?)
+    Ok(
+      self
+        .cache
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |_| {
+          Ok(Arc::new(CoreModule {
+            default_http_port: global_config
+              .and_then(|c| get_entry!("default_http_port", c))
+              .and_then(|e| e.values.first())
+              .map_or(Some(80), |v| {
+                if v.is_null() {
+                  None
+                } else {
+                  Some(v.as_i128().unwrap_or(80) as u16)
+                }
+              }),
+            default_https_port: global_config
+              .and_then(|c| get_entry!("default_https_port", c))
+              .and_then(|e| e.values.first())
+              .map_or(Some(443), |v| {
+                if v.is_null() {
+                  None
+                } else {
+                  Some(v.as_i128().unwrap_or(443) as u16)
+                }
+              }),
+          }))
+        })?,
+    )
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {

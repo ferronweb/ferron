@@ -310,25 +310,29 @@ impl ModuleLoader for CacheModuleLoader {
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.module_cache.get_or::<_, anyhow::Error>(config, |_| {
-      let maximum_cache_entries = global_config
-        .and_then(|c| get_entry!("cache_max_entries", c))
-        .and_then(|e| e.values.first())
-        .and_then(|v| v.as_i128())
-        .map(|v| v as usize);
+    Ok(
+      self
+        .module_cache
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
+          let maximum_cache_entries = global_config
+            .and_then(|c| get_entry!("cache_max_entries", c))
+            .and_then(|e| e.values.first())
+            .and_then(|v| v.as_i128())
+            .map(|v| v as usize);
 
-      // Use optimized cache size calculation
-      let cache_size = maximum_cache_entries.map_or(2048, |e| e.min(8192).max(512));
-      let max_entries = maximum_cache_entries.unwrap_or(0);
+          // Use optimized cache size calculation
+          let cache_size = maximum_cache_entries.map_or(2048, |e| e.min(8192).max(512));
+          let max_entries = maximum_cache_entries.unwrap_or(0);
 
-      Ok(Arc::new(MemCacheModule {
-        cache: AtomicGenericCache::new(cache_size, max_entries),
-        vary_cache: Arc::new(papaya::HashMap::with_capacity_and_hasher(
-          cache_size / 4,
-          RandomState::new(),
-        )),
-      }))
-    })?)
+          Ok(Arc::new(MemCacheModule {
+            cache: AtomicGenericCache::new(cache_size, max_entries),
+            vary_cache: Arc::new(papaya::HashMap::with_capacity_and_hasher(
+              cache_size / 4,
+              RandomState::new(),
+            )),
+          }))
+        })?,
+    )
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {

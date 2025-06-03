@@ -58,7 +58,7 @@ impl ModuleLoader for WsgiModuleLoader {
     Ok(
       self
         .cache
-        .get_or::<_, anyhow::Error>(config, move |config| {
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |config| {
           let clear_sys_path = global_config
             .and_then(|c| get_value!("wsgi_clear_imports", c))
             .and_then(|v| v.as_bool())

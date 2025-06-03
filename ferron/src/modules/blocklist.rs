@@ -34,21 +34,25 @@ impl ModuleLoader for BlocklistModuleLoader {
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or::<_, anyhow::Error>(config, move |_| {
-      let mut blocklist_str_vec = Vec::new();
-      for blocked_ip_config in global_config.map_or(vec![], |c| get_values!("block", c)) {
-        if let Some(blocked_ip) = blocked_ip_config.as_str() {
-          blocklist_str_vec.push(blocked_ip);
-        }
-      }
+    Ok(
+      self
+        .cache
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |_| {
+          let mut blocklist_str_vec = Vec::new();
+          for blocked_ip_config in global_config.map_or(vec![], |c| get_values!("block", c)) {
+            if let Some(blocked_ip) = blocked_ip_config.as_str() {
+              blocklist_str_vec.push(blocked_ip);
+            }
+          }
 
-      let mut blocklist = IpBlockList::new();
-      blocklist.load_from_vec(blocklist_str_vec);
+          let mut blocklist = IpBlockList::new();
+          blocklist.load_from_vec(blocklist_str_vec);
 
-      Ok(Arc::new(BlocklistModule {
-        blocklist: Arc::new(blocklist),
-      }))
-    })?)
+          Ok(Arc::new(BlocklistModule {
+            blocklist: Arc::new(blocklist),
+          }))
+        })?,
+    )
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {

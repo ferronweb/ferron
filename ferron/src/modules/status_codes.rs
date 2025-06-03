@@ -53,103 +53,107 @@ impl ModuleLoader for StatusCodesModuleLoader {
     config: &ServerConfiguration,
     _global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or::<_, anyhow::Error>(config, |_| {
-      let mut non_standard_codes_list = Vec::new();
-      if let Some(non_standard_code_config_entries) = get_entries!("status", config) {
-        for non_standard_code_config_entry in &non_standard_code_config_entries.inner {
-          let status_code: u16 = match non_standard_code_config_entry
-            .values
-            .first()
-            .and_then(|v| v.as_i128())
-          {
-            Some(scode) => scode.try_into()?,
-            None => Err(anyhow::anyhow!(
-              "Non-standard codes must include a status code"
-            ))?,
-          };
-          let regex = match non_standard_code_config_entry
-            .props
-            .get("regex")
-            .and_then(|v| v.as_str())
-          {
-            Some(regex_str) => match RegexBuilder::new(regex_str)
-              .case_insensitive(cfg!(windows))
-              .build()
-            {
-              Ok(regex) => Some(regex),
-              Err(err) => Err(anyhow::anyhow!(
-                "Invalid non-standard code regular expression: {}",
-                err.to_string()
-              ))?,
-            },
-            None => None,
-          };
-          let url = non_standard_code_config_entry
-            .props
-            .get("url")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-          if regex.is_none() && url.is_none() {
-            Err(anyhow::anyhow!(
-              "Non-standard codes must either include URL or a matching regular expression"
-            ))?
-          }
-          let location = non_standard_code_config_entry
-            .props
-            .get("location")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-          let realm = non_standard_code_config_entry
-            .props
-            .get("realm")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-          let disable_brute_force_protection = !non_standard_code_config_entry
-            .props
-            .get("brute_protection")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true);
-          let user_list = non_standard_code_config_entry
-            .props
-            .get("users")
-            .and_then(|v| v.as_str())
-            .map(|userlist| {
-              userlist
-                .split(",")
-                .map(|s| s.to_string())
-                .collect::<Vec<_>>()
-            });
-          let users = match non_standard_code_config_entry
-            .props
-            .get("allowed")
-            .and_then(|v| v.as_str())
-          {
-            Some(userlist) => {
-              let users_str_vec = userlist.split(",").collect::<Vec<_>>();
+    Ok(
+      self
+        .cache
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
+          let mut non_standard_codes_list = Vec::new();
+          if let Some(non_standard_code_config_entries) = get_entries!("status", config) {
+            for non_standard_code_config_entry in &non_standard_code_config_entries.inner {
+              let status_code: u16 = match non_standard_code_config_entry
+                .values
+                .first()
+                .and_then(|v| v.as_i128())
+              {
+                Some(scode) => scode.try_into()?,
+                None => Err(anyhow::anyhow!(
+                  "Non-standard codes must include a status code"
+                ))?,
+              };
+              let regex = match non_standard_code_config_entry
+                .props
+                .get("regex")
+                .and_then(|v| v.as_str())
+              {
+                Some(regex_str) => match RegexBuilder::new(regex_str)
+                  .case_insensitive(cfg!(windows))
+                  .build()
+                {
+                  Ok(regex) => Some(regex),
+                  Err(err) => Err(anyhow::anyhow!(
+                    "Invalid non-standard code regular expression: {}",
+                    err.to_string()
+                  ))?,
+                },
+                None => None,
+              };
+              let url = non_standard_code_config_entry
+                .props
+                .get("url")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+              if regex.is_none() && url.is_none() {
+                Err(anyhow::anyhow!(
+                  "Non-standard codes must either include URL or a matching regular expression"
+                ))?
+              }
+              let location = non_standard_code_config_entry
+                .props
+                .get("location")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+              let realm = non_standard_code_config_entry
+                .props
+                .get("realm")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+              let disable_brute_force_protection = !non_standard_code_config_entry
+                .props
+                .get("brute_protection")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+              let user_list = non_standard_code_config_entry
+                .props
+                .get("users")
+                .and_then(|v| v.as_str())
+                .map(|userlist| {
+                  userlist
+                    .split(",")
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                });
+              let users = match non_standard_code_config_entry
+                .props
+                .get("allowed")
+                .and_then(|v| v.as_str())
+              {
+                Some(userlist) => {
+                  let users_str_vec = userlist.split(",").collect::<Vec<_>>();
 
-              let mut users_init = IpBlockList::new();
-              users_init.load_from_vec(users_str_vec);
-              Some(users_init)
+                  let mut users_init = IpBlockList::new();
+                  users_init.load_from_vec(users_str_vec);
+                  Some(users_init)
+                }
+                None => None,
+              };
+              non_standard_codes_list.push(NonStandardCode {
+                status_code,
+                url,
+                regex,
+                location,
+                realm,
+                disable_brute_force_protection,
+                user_list,
+                users,
+              });
             }
-            None => None,
-          };
-          non_standard_codes_list.push(NonStandardCode {
-            status_code,
-            url,
-            regex,
-            location,
-            realm,
-            disable_brute_force_protection,
-            user_list,
-            users,
-          });
-        }
-      }
-      Ok(Arc::new(StatusCodesModule {
-        non_standard_codes_list: Arc::new(non_standard_codes_list),
-        brute_force_db: self.brute_force_db.clone(),
-      }))
-    })?)
+          }
+          Ok(Arc::new(StatusCodesModule {
+            non_standard_codes_list: Arc::new(non_standard_codes_list),
+            brute_force_db: self.brute_force_db.clone(),
+          }))
+        })?,
+    )
   }
 
   fn validate_configuration(

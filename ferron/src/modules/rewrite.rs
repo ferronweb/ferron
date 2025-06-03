@@ -48,63 +48,67 @@ impl ModuleLoader for RewriteModuleLoader {
     config: &ServerConfiguration,
     _global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or::<_, anyhow::Error>(config, |_| {
-      let mut rewrite_rules = Vec::new();
-      if let Some(rewrite_config_entries) = get_entries!("rewrite", config) {
-        for rewrite_config_entry in &rewrite_config_entries.inner {
-          let regex_str = match rewrite_config_entry.values.first().and_then(|v| v.as_str()) {
-            Some(regex_str) => regex_str,
-            None => Err(anyhow::anyhow!("Invalid URL rewrite regular expression"))?,
-          };
-          let regex = match RegexBuilder::new(regex_str)
-            .case_insensitive(cfg!(windows))
-            .build()
-          {
-            Ok(regex) => regex,
-            Err(err) => Err(anyhow::anyhow!(
-              "Invalid URL rewrite regular expression: {}",
-              err.to_string()
-            ))?,
-          };
-          let replacement = match rewrite_config_entry.values.get(1).and_then(|v| v.as_str()) {
-            Some(replacement) => String::from(replacement),
-            None => Err(anyhow::anyhow!("Invalid URL rewrite replacement"))?,
-          };
-          let is_not_directory = !rewrite_config_entry
-            .props
-            .get("directory")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true);
-          let is_not_file = !rewrite_config_entry
-            .props
-            .get("file")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true);
-          let last = rewrite_config_entry
-            .props
-            .get("last")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-          let allow_double_slashes = rewrite_config_entry
-            .props
-            .get("allow_double_slashes")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-          rewrite_rules.push(UrlRewriteRule {
-            regex,
-            replacement,
-            is_not_directory,
-            is_not_file,
-            last,
-            allow_double_slashes,
-          });
-        }
-      }
-      Ok(Arc::new(RewriteModule {
-        rewrite_rules: Arc::new(rewrite_rules),
-        metadata_cache: self.metadata_cache.clone(),
-      }))
-    })?)
+    Ok(
+      self
+        .cache
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
+          let mut rewrite_rules = Vec::new();
+          if let Some(rewrite_config_entries) = get_entries!("rewrite", config) {
+            for rewrite_config_entry in &rewrite_config_entries.inner {
+              let regex_str = match rewrite_config_entry.values.first().and_then(|v| v.as_str()) {
+                Some(regex_str) => regex_str,
+                None => Err(anyhow::anyhow!("Invalid URL rewrite regular expression"))?,
+              };
+              let regex = match RegexBuilder::new(regex_str)
+                .case_insensitive(cfg!(windows))
+                .build()
+              {
+                Ok(regex) => regex,
+                Err(err) => Err(anyhow::anyhow!(
+                  "Invalid URL rewrite regular expression: {}",
+                  err.to_string()
+                ))?,
+              };
+              let replacement = match rewrite_config_entry.values.get(1).and_then(|v| v.as_str()) {
+                Some(replacement) => String::from(replacement),
+                None => Err(anyhow::anyhow!("Invalid URL rewrite replacement"))?,
+              };
+              let is_not_directory = !rewrite_config_entry
+                .props
+                .get("directory")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+              let is_not_file = !rewrite_config_entry
+                .props
+                .get("file")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+              let last = rewrite_config_entry
+                .props
+                .get("last")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+              let allow_double_slashes = rewrite_config_entry
+                .props
+                .get("allow_double_slashes")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+              rewrite_rules.push(UrlRewriteRule {
+                regex,
+                replacement,
+                is_not_directory,
+                is_not_file,
+                last,
+                allow_double_slashes,
+              });
+            }
+          }
+          Ok(Arc::new(RewriteModule {
+            rewrite_rules: Arc::new(rewrite_rules),
+            metadata_cache: self.metadata_cache.clone(),
+          }))
+        })?,
+    )
   }
 
   fn validate_configuration(

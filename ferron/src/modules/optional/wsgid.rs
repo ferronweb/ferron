@@ -355,7 +355,7 @@ impl ModuleLoader for WsgidModuleLoader {
     Ok(
       self
         .cache
-        .get_or::<_, anyhow::Error>(config, move |config| {
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |config| {
           if let Some(wsgi_application_path) = get_value!("wsgid", config).and_then(|v| v.as_str())
           {
             Ok(Arc::new(WsgidModule {

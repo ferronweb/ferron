@@ -57,7 +57,9 @@ impl ModuleLoader for ExampleModuleLoader {
     Ok(
       self
         .cache
-        .get_or::<_, anyhow::Error>(config, move |_| Ok(Arc::new(ExampleModule)))?,
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |_| {
+          Ok(Arc::new(ExampleModule))
+        })?,
     )
   }
 
