@@ -95,9 +95,15 @@ pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String
     }
   }
 
-  // Ensure starts with '/'
+  // Ensure starts with '/' - but handle double slashes properly
   if result.is_empty() || result[0] != b'/' {
     result.insert(0, b'/');
+  } else if allow_double_slashes && bytes.len() >= 2 && bytes[0] == b'/' && bytes[1] == b'/' {
+    // If the original input started with // and we allow double slashes,
+    // ensure we preserve that (the processing above might have normalized it)
+    if result.len() >= 2 && result[0] == b'/' && result[1] != b'/' {
+      result.insert(1, b'/');
+    }
   }
 
   // Normalize slashes and build segments in one pass
@@ -105,7 +111,12 @@ pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String
   let mut current_segment = SmallVec::<[u8; 32]>::new();
   let mut last_was_slash = true; // Start with true since we ensured it starts with '/'
 
-  i = 1; // Skip the initial '/'
+  i = if allow_double_slashes && result.len() >= 2 && result[0] == b'/' && result[1] == b'/' {
+    2 // Skip both leading slashes for UNC paths
+  } else {
+    1 // Skip single leading slash
+  };
+
   while i < result.len() {
     let byte = result[i];
 
@@ -167,7 +178,14 @@ pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String
 
   // Build final result
   let mut final_result = SmallVec::<[u8; 256]>::with_capacity(result.len());
-  final_result.push(b'/');
+
+  // Handle UNC paths (//server/share) when double slashes are allowed
+  if allow_double_slashes && bytes.len() >= 2 && bytes[0] == b'/' && bytes[1] == b'/' {
+    final_result.push(b'/');
+    final_result.push(b'/');
+  } else {
+    final_result.push(b'/');
+  }
 
   let preserve_trailing_slash =
     !result.is_empty() && (result[result.len() - 1] == b'/' || result[result.len() - 1] == b'\\');
@@ -178,14 +196,6 @@ pub fn sanitize_url(resource: &str, allow_double_slashes: bool) -> Result<String
     }
     final_result.extend_from_slice(segment);
   }
-
-  // Add trailing slash if it was originally present and we're not at the root directory
-  // or if we are at root but the original path was just "/"
-  // if preserve_trailing_slash
-  //   && (!final_segments.is_empty() || (final_segments.is_empty() && result.len() == 1))
-  // {
-  //   final_result.push(b'/');
-  // }
 
   // Add trailing slash if it was originally present and we have segments,
   // but don't add it if we're just dealing with the root "/"
@@ -353,6 +363,225 @@ mod tests {
   ) -> Result<()> {
     assert_eq!(sanitize_url("/%5f", false)?, "/_");
     assert_eq!(sanitize_url("/%5F", false)?, "/_");
+    Ok(())
+  }
+
+  // Edge cases for percent encoding
+  #[test]
+  fn should_handle_incomplete_percent_encoding() {
+    assert!(sanitize_url("/test%2", false).is_err());
+    assert!(sanitize_url("/test%", false).is_err());
+    assert!(sanitize_url("/test%G", false).is_err());
+    assert!(sanitize_url("/test%2G", false).is_err());
+  }
+
+  #[test]
+  fn should_handle_invalid_utf8_bytes() {
+    // These are invalid UTF-8 sequences that should be rejected
+    assert!(sanitize_url("/test%C0%80", false).is_err()); // Overlong encoding
+    assert!(sanitize_url("/test%C1%BF", false).is_err()); // Overlong encoding
+    assert!(sanitize_url("/test%FE%FF", false).is_err()); // Invalid bytes
+    assert!(sanitize_url("/test%FF%FE", false).is_err()); // Invalid bytes
+  }
+
+  // Complex path navigation tests
+  #[test]
+  fn should_handle_complex_relative_paths() -> Result<()> {
+    assert_eq!(sanitize_url("/a/b/c/../../d", false)?, "/a/d");
+    assert_eq!(sanitize_url("/a/./b/../c/./d/..", false)?, "/a/c");
+    assert_eq!(sanitize_url("/a/b/c/../../../..", false)?, "/");
+    assert_eq!(sanitize_url("./../../a/b/c", false)?, "/a/b/c");
+    Ok(())
+  }
+
+  #[test]
+  fn should_handle_dots_in_filenames() -> Result<()> {
+    assert_eq!(sanitize_url("/file.txt", false)?, "/file.txt");
+    assert_eq!(sanitize_url("/file.backup.txt", false)?, "/file.backup.txt");
+    assert_eq!(sanitize_url("/hidden/.config", false)?, "/hidden/.config");
+    assert_eq!(sanitize_url("/.htaccess", false)?, "/.htaccess");
+    Ok(())
+  }
+
+  #[test]
+  fn should_preserve_double_slashes_when_allowed() -> Result<()> {
+    assert_eq!(sanitize_url("//server/share", true)?, "//server/share");
+    assert_eq!(sanitize_url("/path//to///file", true)?, "/path//to///file");
+    assert_eq!(sanitize_url("test///path", true)?, "/test///path");
+    Ok(())
+  }
+
+  // Trailing slash preservation tests
+  #[test]
+  fn should_handle_trailing_slashes_correctly() -> Result<()> {
+    assert_eq!(sanitize_url("/test/", false)?, "/test/");
+    assert_eq!(sanitize_url("/test/path/", false)?, "/test/path/");
+    assert_eq!(sanitize_url("/test\\", false)?, "/test/");
+    assert_eq!(sanitize_url("/test/./", false)?, "/test/");
+    assert_eq!(sanitize_url("/test/../", false)?, "/");
+    Ok(())
+  }
+
+  #[test]
+  fn should_not_add_trailing_slash_to_root() -> Result<()> {
+    assert_eq!(sanitize_url("/", false)?, "/");
+    assert_eq!(sanitize_url("//", false)?, "/");
+    assert_eq!(sanitize_url("///", false)?, "/");
+    Ok(())
+  }
+
+  // Unicode and special character tests
+  #[test]
+  fn should_handle_unicode_characters() -> Result<()> {
+    assert_eq!(sanitize_url("/测试", false)?, "/测试");
+    assert_eq!(sanitize_url("/тест", false)?, "/тест");
+    assert_eq!(sanitize_url("/🚀", false)?, "/🚀");
+    assert_eq!(sanitize_url("/café", false)?, "/café");
+    Ok(())
+  }
+
+  #[test]
+  fn should_encode_all_required_special_characters() -> Result<()> {
+    assert_eq!(sanitize_url("/test<script>", false)?, "/test%3Cscript%3E");
+    assert_eq!(sanitize_url("/test{json}", false)?, "/test%7Bjson%7D");
+    assert_eq!(sanitize_url("/test|pipe", false)?, "/test%7Cpipe");
+    assert_eq!(sanitize_url("/test^caret", false)?, "/test%5Ecaret");
+    assert_eq!(sanitize_url("/test`backtick", false)?, "/test%60backtick");
+    Ok(())
+  }
+
+  // Whitespace and control character tests
+  #[test]
+  fn should_handle_whitespace_characters() -> Result<()> {
+    assert_eq!(sanitize_url("/test path", false)?, "/test path");
+    assert_eq!(sanitize_url("/test\tpath", false)?, "/test\tpath");
+    assert_eq!(sanitize_url("/test\npath", false)?, "/test\npath");
+    assert_eq!(sanitize_url("/test\rpath", false)?, "/test\rpath");
+    Ok(())
+  }
+
+  #[test]
+  fn should_handle_encoded_whitespace() -> Result<()> {
+    assert_eq!(sanitize_url("/test%20path", false)?, "/test%20path");
+    assert_eq!(sanitize_url("/test%09path", false)?, "/test%09path"); // Tab
+    assert_eq!(sanitize_url("/test%0Apath", false)?, "/test%0Apath"); // LF
+    assert_eq!(sanitize_url("/test%0Dpath", false)?, "/test%0Dpath"); // CR
+    Ok(())
+  }
+
+  // Query parameters and fragments (if they should be handled)
+  #[test]
+  fn should_handle_query_and_fragment_characters() -> Result<()> {
+    assert_eq!(
+      sanitize_url("/path?query=value", false)?,
+      "/path?query=value"
+    );
+    assert_eq!(sanitize_url("/path#fragment", false)?, "/path#fragment");
+    assert_eq!(
+      sanitize_url("/path?q=1&b=2#frag", false)?,
+      "/path?q=1&b=2#frag"
+    );
+    Ok(())
+  }
+
+  // Very long paths
+  #[test]
+  fn should_handle_long_paths() -> Result<()> {
+    let long_segment = "a".repeat(1000);
+    let long_path = format!("/{}", long_segment);
+    assert_eq!(sanitize_url(&long_path, false)?, long_path);
+    Ok(())
+  }
+
+  // Mixed separators
+  #[test]
+  fn should_handle_mixed_separators() -> Result<()> {
+    assert_eq!(
+      sanitize_url("/test\\path/to\\file", false)?,
+      "/test/path/to/file"
+    );
+    assert_eq!(
+      sanitize_url("\\test/path\\to/file\\", false)?,
+      "/test/path/to/file/"
+    );
+    Ok(())
+  }
+
+  // Empty segments
+  #[test]
+  fn should_handle_empty_segments() -> Result<()> {
+    assert_eq!(sanitize_url("/a//b", false)?, "/a/b");
+    assert_eq!(sanitize_url("/a///b", false)?, "/a/b");
+    assert_eq!(sanitize_url("///a///b///", false)?, "/a/b/");
+    Ok(())
+  }
+
+  // Case sensitivity
+  #[test]
+  fn should_preserve_case() -> Result<()> {
+    assert_eq!(sanitize_url("/TeSt/PaTh", false)?, "/TeSt/PaTh");
+    assert_eq!(sanitize_url("/TEST/path", false)?, "/TEST/path");
+    Ok(())
+  }
+
+  // Boundary conditions for hex values
+  #[test]
+  fn should_handle_hex_boundary_values() -> Result<()> {
+    assert_eq!(sanitize_url("/test%00", false)?, "/test"); // Null byte - should be removed
+    assert_eq!(sanitize_url("/test%01", false)?, "/test%01"); // Control char - should stay encoded
+    assert_eq!(sanitize_url("/test%7F", false)?, "/test%7F"); // DEL - should stay encoded
+    assert_eq!(sanitize_url("/test%80", false)?, "/test%80"); // High bit set - should stay encoded
+    Ok(())
+  }
+
+  // Real-world examples
+  #[test]
+  fn should_handle_realistic_paths() -> Result<()> {
+    assert_eq!(
+      sanitize_url("/api/v1/users/123", false)?,
+      "/api/v1/users/123"
+    );
+    assert_eq!(
+      sanitize_url("/static/css/main.css", false)?,
+      "/static/css/main.css"
+    );
+    assert_eq!(
+      sanitize_url("/uploads/2023/12/image.jpg", false)?,
+      "/uploads/2023/12/image.jpg"
+    );
+    assert_eq!(sanitize_url("/docs/README.md", false)?, "/docs/README.md");
+    Ok(())
+  }
+
+  // Security-related tests
+  #[test]
+  fn should_prevent_directory_traversal_attacks() -> Result<()> {
+    assert_eq!(sanitize_url("/../../../etc/passwd", false)?, "/etc/passwd");
+    assert_eq!(
+      sanitize_url("/app/../../../etc/passwd", false)?,
+      "/etc/passwd"
+    );
+    assert_eq!(
+      sanitize_url("/safe/path/../../../../../../etc/passwd", false)?,
+      "/etc/passwd"
+    );
+    Ok(())
+  }
+
+  // Test interaction between features
+  #[test]
+  fn should_handle_complex_combinations() -> Result<()> {
+    // Null bytes + encoding + navigation + special chars
+    assert_eq!(
+      sanitize_url("/test%00/../path%3C%3E%7C", false)?,
+      "/path%3C%3E%7C"
+    );
+
+    // Backslashes + dots + encoding
+    assert_eq!(
+      sanitize_url("test\\..\\path%21\\file.txt", false)?,
+      "/path!/file.txt"
+    );
     Ok(())
   }
 }
