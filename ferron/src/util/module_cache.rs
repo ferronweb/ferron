@@ -137,6 +137,86 @@ mod test {
   use super::*;
 
   #[test]
+  fn module_loading_test() {
+    let module = 1;
+
+    let cache = ModuleCache::new(vec!["property"]);
+
+    let mut config_entries = HashMap::new();
+    config_entries.insert(
+      "property".to_string(),
+      ServerConfigurationEntries {
+        inner: vec![ServerConfigurationEntry {
+          values: vec![ServerConfigurationValue::String("something".to_string())],
+          props: HashMap::new(),
+        }],
+      },
+    );
+    let config = ServerConfiguration {
+      entries: config_entries,
+      filters: ServerConfigurationFilters {
+        hostname: None,
+        ip: None,
+        port: None,
+        location_prefix: None,
+        error_handler_status: None,
+      },
+      modules: vec![],
+    };
+
+    let mut config2_entries = HashMap::new();
+    config2_entries.insert(
+      "property".to_string(),
+      ServerConfigurationEntries {
+        inner: vec![ServerConfigurationEntry {
+          values: vec![ServerConfigurationValue::String("something".to_string())],
+          props: HashMap::new(),
+        }],
+      },
+    );
+    config2_entries.insert(
+      "ignore".to_string(),
+      ServerConfigurationEntries {
+        inner: vec![ServerConfigurationEntry {
+          values: vec![ServerConfigurationValue::String(
+            "something else".to_string(),
+          )],
+          props: HashMap::new(),
+        }],
+      },
+    );
+    let config2 = ServerConfiguration {
+      entries: config2_entries,
+      filters: ServerConfigurationFilters {
+        hostname: None,
+        ip: None,
+        port: Some(80),
+        location_prefix: None,
+        error_handler_status: None,
+      },
+      modules: vec![],
+    };
+
+    assert_eq!(
+      cache
+        .get_or::<_, Box<dyn std::error::Error + Send + Sync>>(&config, |_config| Ok(Arc::new(
+          module
+        )))
+        .unwrap(),
+      Arc::new(module)
+    );
+
+    assert_eq!(
+      cache
+        .get_or::<_, Box<dyn std::error::Error + Send + Sync>>(&config2, |_config| Ok(Arc::new(
+          module
+        )))
+        .unwrap(),
+      Arc::new(module)
+    );
+  }
+
+  #[test]
   fn should_cache_the_module() {
     let module = 1;
 
