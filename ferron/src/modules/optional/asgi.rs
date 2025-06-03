@@ -553,7 +553,7 @@ impl ModuleLoader for AsgiModuleLoader {
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, |config| {
+    Ok(self.cache.get_or::<_, anyhow::Error>(config, |config| {
       let clear_sys_path = global_config
         .and_then(|c| get_value!("asgi_clear_imports", c))
         .and_then(|v| v.as_bool())

@@ -58,7 +58,7 @@ impl ModuleLoader for ScgiModuleLoader {
     Ok(
       self
         .cache
-        .get_or(config, move |_| Ok(Arc::new(ScgiModule)))?,
+        .get_or::<_, anyhow::Error>(config, move |_| Ok(Arc::new(ScgiModule)))?,
     )
   }
 

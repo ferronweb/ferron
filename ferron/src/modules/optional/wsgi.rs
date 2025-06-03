@@ -55,27 +55,31 @@ impl ModuleLoader for WsgiModuleLoader {
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, move |config| {
-      let clear_sys_path = global_config
-        .and_then(|c| get_value!("wsgi_clear_imports", c))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-      if let Some(wsgi_application_path) = get_value!("wsgi", config).and_then(|v| v.as_str()) {
-        Ok(Arc::new(WsgiModule {
-          wsgi_application: Some(Arc::new(
-            load_wsgi_application(
-              PathBuf::from_str(wsgi_application_path)?.as_path(),
-              clear_sys_path,
-            )
-            .map_err(|e| anyhow::anyhow!("Cannot load a WSGI application: {}", e))?,
-          )),
-        }))
-      } else {
-        Ok(Arc::new(WsgiModule {
-          wsgi_application: None,
-        }))
-      }
-    })?)
+    Ok(
+      self
+        .cache
+        .get_or::<_, anyhow::Error>(config, move |config| {
+          let clear_sys_path = global_config
+            .and_then(|c| get_value!("wsgi_clear_imports", c))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+          if let Some(wsgi_application_path) = get_value!("wsgi", config).and_then(|v| v.as_str()) {
+            Ok(Arc::new(WsgiModule {
+              wsgi_application: Some(Arc::new(
+                load_wsgi_application(
+                  PathBuf::from_str(wsgi_application_path)?.as_path(),
+                  clear_sys_path,
+                )
+                .map_err(|e| anyhow::anyhow!("Cannot load a WSGI application: {}", e))?,
+              )),
+            }))
+          } else {
+            Ok(Arc::new(WsgiModule {
+              wsgi_application: None,
+            }))
+          }
+        })?,
+    )
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {

@@ -48,7 +48,7 @@ impl ModuleLoader for ForwardProxyModuleLoader {
     Ok(
       self
         .cache
-        .get_or(config, move |_| Ok(Arc::new(ForwardProxyModule)))?,
+        .get_or::<_, anyhow::Error>(config, move |_| Ok(Arc::new(ForwardProxyModule)))?,
     )
   }
 

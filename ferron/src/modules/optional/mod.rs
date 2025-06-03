@@ -10,7 +10,7 @@ pub mod fauth;
 pub mod fcgi;
 #[cfg(feature = "fproxy")]
 pub mod fproxy;
-#[cfg(feature = "cache")]
+#[cfg(feature = "memcache")]
 pub mod memcache;
 #[cfg(feature = "rproxy")]
 pub mod rproxy;

@@ -64,7 +64,7 @@ impl ModuleLoader for FcgiModuleLoader {
     config: &ServerConfiguration,
     _global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, |_| {
+    Ok(self.cache.get_or::<_, anyhow::Error>(config, |_| {
       Ok(Arc::new(FcgiModule {
         path_cache: self.path_cache.clone(),
       }))

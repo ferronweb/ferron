@@ -259,7 +259,7 @@ impl ModuleLoader for StaticFileServingModuleLoader {
     config: &ServerConfiguration,
     _global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, |_| {
+    Ok(self.cache.get_or::<_, anyhow::Error>(config, |_| {
       Ok(Arc::new(StaticFileServingModule {
         pathbuf_cache: self.pathbuf_cache.clone(),
         etag_cache: self.etag_cache.clone(),

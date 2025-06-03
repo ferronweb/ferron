@@ -144,12 +144,18 @@ winresource = "0.1.19"
 
 [features]
 default = [
-    "cache",
+    "memcache",
+    "cgi",
+    "fauth",
+    "fcgi",
+    "fproxy",
     "rproxy",
-    "runtime-tokio",
+    "runtime-monoio",
+    "scgi",
+    "static"
 ]
 asgi = ["pyo3", "pyo3-async-runtimes", "tokio-tungstenite", "hyper-tungstenite"]
-cache = ["cache_control", "itertools", "papaya"]
+memcache = ["cache_control", "itertools", "papaya"]
 cgi = ["async-process", "httparse", "memchr"]
 example = []
 fauth = ["rand", "rustls-platform-verifier"]
