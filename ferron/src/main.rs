@@ -1024,7 +1024,7 @@ fn obtain_module_loaders() -> Vec<Box<dyn ModuleLoader + Send + Sync>> {
   #[cfg(feature = "fauth")]
   register_module_loader!(modules::optional::fauth::ForwardedAuthenticationModuleLoader::new());
   #[cfg(feature = "cache")]
-  register_module_loader!(modules::optional::cache::CacheModuleLoader::new());
+  register_module_loader!(modules::optional::memcache::CacheModuleLoader::new());
   #[cfg(feature = "rproxy")]
   register_module_loader!(modules::optional::rproxy::ReverseProxyModuleLoader::new());
   #[cfg(feature = "example")]

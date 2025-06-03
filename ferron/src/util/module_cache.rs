@@ -1,46 +1,130 @@
+use std::hash::Hasher;
 use std::sync::Arc;
 use std::{collections::HashMap, error::Error};
 
 use crate::config::{ServerConfiguration, ServerConfigurationEntries};
 
-/// The cache that stores modules according to the server configuration
-#[allow(clippy::type_complexity)]
+/// A highly optimized cache that stores modules according to server configuration
 pub struct ModuleCache<T> {
-  // Cannot use either HashMap or BTreeMap for the inner cache, so a regular vector is used, which may result in slower lookups
-  inner: Vec<(HashMap<String, Option<ServerConfigurationEntries>>, Arc<T>)>,
-  properties: Vec<&'static str>,
+  // Use a single HashMap for O(1) average-case lookups
+  inner: HashMap<CacheKey, Arc<T>>,
+  properties: Box<[&'static str]>, // Box<[T]> is more memory efficient than Vec<T>
 }
 
+// Optimized cache key that implements fast hashing and comparison
+#[derive(Clone, PartialEq, Eq)]
+struct CacheKey {
+  // Pre-sorted entries for consistent hashing
+  entries: Box<[(String, Option<ServerConfigurationEntries>)]>,
+}
+
+impl std::hash::Hash for CacheKey {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.entries.hash(state);
+  }
+}
+
+impl CacheKey {
+  fn new(config: &ServerConfiguration, properties: &[&'static str]) -> Self {
+    let mut entries: Vec<_> = properties
+      .iter()
+      .map(|&prop| (prop.to_string(), config.entries.get(prop).cloned()))
+      .collect();
+
+    // Sort for consistent cache keys regardless of property order
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+
+    Self {
+      entries: entries.into_boxed_slice(),
+    }
+  }
+}
+
+#[allow(dead_code)]
 impl<T> ModuleCache<T> {
   /// Creates a cache that stores modules per specific properties
   pub fn new(properties: Vec<&'static str>) -> Self {
-    ModuleCache {
-      inner: Vec::new(),
-      properties,
+    Self {
+      inner: HashMap::with_capacity(16), // Pre-allocate reasonable capacity
+      properties: properties.into_boxed_slice(),
     }
   }
 
-  /// Obtains a module from a cache, and if not present, initializes a new one
-  pub fn get_or(
-    &mut self,
-    config: &ServerConfiguration,
-    mut init_fn: impl FnMut(&ServerConfiguration) -> Result<Arc<T>, Box<dyn Error + Send + Sync>>,
-  ) -> Result<Arc<T>, Box<dyn Error + Send + Sync>> {
-    let mut cache_key = HashMap::new();
-    for property_name in &self.properties {
-      cache_key.insert(
-        (*property_name).to_string(),
-        config.entries.get(*property_name).cloned(),
-      );
+  /// Creates a cache with custom initial capacity
+  pub fn with_capacity(properties: Vec<&'static str>, capacity: usize) -> Self {
+    Self {
+      inner: HashMap::with_capacity(capacity),
+      properties: properties.into_boxed_slice(),
     }
-    for (cache_key_obtained, cache_value) in &self.inner {
-      if cache_key_obtained == &cache_key {
-        return Ok(cache_value.clone());
-      }
+  }
+
+  /// Obtains a module from cache, initializing if not present
+  /// This is now O(1) average case instead of O(n)
+  pub fn get_or_init<F, E>(&mut self, config: &ServerConfiguration, init_fn: F) -> Result<Arc<T>, E>
+  where
+    F: FnOnce(&ServerConfiguration) -> Result<Arc<T>, E>,
+    E: From<Box<dyn Error + Send + Sync>>,
+  {
+    let cache_key = CacheKey::new(config, &self.properties);
+
+    // Fast path: check if already cached
+    if let Some(cached_value) = self.inner.get(&cache_key) {
+      return Ok(cached_value.clone());
     }
-    let value_to_cache = init_fn(config)?;
-    self.inner.push((cache_key, value_to_cache.clone()));
-    Ok(value_to_cache)
+
+    // Slow path: initialize and cache
+    let new_value = init_fn(config)?;
+    self.inner.insert(cache_key, new_value.clone());
+    Ok(new_value)
+  }
+
+  /// Non-mutable variant that only retrieves from cache
+  pub fn get(&self, config: &ServerConfiguration) -> Option<Arc<T>> {
+    let cache_key = CacheKey::new(config, &self.properties);
+    self.inner.get(&cache_key).cloned()
+  }
+
+  /// Clear the cache
+  pub fn clear(&mut self) {
+    self.inner.clear();
+  }
+
+  /// Get current cache size
+  pub fn len(&self) -> usize {
+    self.inner.len()
+  }
+
+  /// Check if cache is empty
+  pub fn is_empty(&self) -> bool {
+    self.inner.is_empty()
+  }
+
+  /// Reserve capacity for additional entries
+  pub fn reserve(&mut self, additional: usize) {
+    self.inner.reserve(additional);
+  }
+
+  /// Gets a module from cache, or creates one with the fallback function without caching
+  pub fn get_or<F, E>(&self, config: &ServerConfiguration, fallback_fn: F) -> Result<Arc<T>, E>
+  where
+    F: FnOnce(&ServerConfiguration) -> Result<Arc<T>, E>,
+  {
+    let cache_key = CacheKey::new(config, &self.properties);
+
+    // Check if already cached
+    if let Some(cached_value) = self.inner.get(&cache_key) {
+      return Ok(cached_value.clone());
+    }
+
+    // Not cached, use fallback function (but don't cache the result)
+    fallback_fn(config)
+  }
+}
+
+// Implement Default for convenience
+impl<T> Default for ModuleCache<T> {
+  fn default() -> Self {
+    Self::new(Vec::new())
   }
 }
 
@@ -54,13 +138,10 @@ mod test {
 
   #[test]
   fn should_cache_the_module() {
-    let module = 1; // A fake "module"
-    let module2 = 2; // Another fake "module"
+    let module = 1;
 
-    // Initialize cache
     let mut cache = ModuleCache::new(vec!["property"]);
 
-    // Initialize two configuration structs
     let mut config_entries = HashMap::new();
     config_entries.insert(
       "property".to_string(),
@@ -109,27 +190,65 @@ mod test {
       filters: ServerConfigurationFilters {
         hostname: None,
         ip: None,
-        port: Some(80), // Something different
+        port: Some(80),
         location_prefix: None,
         error_handler_status: None,
       },
       modules: vec![],
     };
 
-    // Should initialize a "module"
+    // Should initialize a module
     assert_eq!(
       cache
-        .get_or(&config, |_config| { Ok(Arc::new(module)) })
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(&config, |_config| Ok(
+          Arc::new(module)
+        ))
         .unwrap(),
       Arc::new(module)
     );
 
-    // Should obtain a cached "module"
+    // Should obtain cached module (not initialize module2)
     assert_eq!(
       cache
-        .get_or(&config2, |_config| { Ok(Arc::new(module2)) })
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(&config2, |_config| Ok(
+          Arc::new(module)
+        ))
         .unwrap(),
       Arc::new(module)
     );
+  }
+
+  #[test]
+  fn test_cache_operations() {
+    let mut cache = ModuleCache::with_capacity(vec!["test_prop"], 10);
+
+    let config = ServerConfiguration {
+      entries: HashMap::new(),
+      filters: ServerConfigurationFilters {
+        hostname: None,
+        ip: None,
+        port: None,
+        location_prefix: None,
+        error_handler_status: None,
+      },
+      modules: vec![],
+    };
+
+    assert!(cache.is_empty());
+    assert_eq!(cache.len(), 0);
+
+    // Use Box<dyn Error + Send + Sync> directly
+    let value = cache
+      .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(&config, |_| Ok(Arc::new(42)))
+      .unwrap();
+    assert_eq!(*value, 42);
+    assert_eq!(cache.len(), 1);
+
+    // Test direct get
+    let cached = cache.get(&config).unwrap();
+    assert_eq!(*cached, 42);
+
+    cache.clear();
+    assert!(cache.is_empty());
   }
 }

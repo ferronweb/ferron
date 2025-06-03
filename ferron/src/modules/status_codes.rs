@@ -53,7 +53,7 @@ impl ModuleLoader for StatusCodesModuleLoader {
     config: &ServerConfiguration,
     _global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, |_| {
+    Ok(self.cache.get_or::<_, anyhow::Error>(config, |_| {
       let mut non_standard_codes_list = Vec::new();
       if let Some(non_standard_code_config_entries) = get_entries!("status", config) {
         for non_standard_code_config_entry in &non_standard_code_config_entries.inner {

@@ -67,7 +67,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, |_| {
+    Ok(self.cache.get_or::<_, anyhow::Error>(config, |_| {
       Ok(Arc::new(ReverseProxyModule {
         connections: self.connections.clone(),
         failed_backends: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(

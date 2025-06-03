@@ -2,6 +2,7 @@ pub mod adapters;
 pub mod processing;
 
 use std::fmt::{Debug, Formatter};
+use std::hash::Hasher;
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::{cmp::Ordering, collections::HashMap};
@@ -189,7 +190,7 @@ impl PartialOrd for ServerConfigurationFilters {
 }
 
 /// A specific list of Ferron server configuration entries
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ServerConfigurationEntries {
   /// Vector of configuration entries
   pub inner: Vec<ServerConfigurationEntry>,
@@ -221,13 +222,32 @@ impl ServerConfigurationEntries {
 }
 
 /// A specific Ferron server configuration entry
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServerConfigurationEntry {
   /// Values for the entry
   pub values: Vec<ServerConfigurationValue>,
 
   /// Props for the entry
   pub props: HashMap<String, ServerConfigurationValue>,
+}
+
+impl std::hash::Hash for ServerConfigurationEntry {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    // Hash the values vector
+    self.values.hash(state);
+
+    // For HashMap, we need to hash in a deterministic order
+    // since HashMap iteration order is not guaranteed
+    let mut props_vec: Vec<_> = self.props.iter().collect();
+    props_vec.sort_by(|a, b| a.0.cmp(b.0)); // Sort by key
+
+    // Hash the length first, then each key-value pair
+    props_vec.len().hash(state);
+    for (key, value) in props_vec {
+      key.hash(state);
+      value.hash(state);
+    }
+  }
 }
 
 /// A specific Ferron server configuration value
@@ -247,6 +267,38 @@ pub enum ServerConfigurationValue {
 
   /// The null value
   Null,
+}
+
+impl std::hash::Hash for ServerConfigurationValue {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    match self {
+      Self::String(s) => {
+        0u8.hash(state);
+        s.hash(state);
+      }
+      Self::Integer(i) => {
+        1u8.hash(state);
+        i.hash(state);
+      }
+      Self::Float(f) => {
+        2u8.hash(state);
+        // Convert to bits for consistent hashing
+        // Handle NaN by using a consistent bit pattern
+        if f.is_nan() {
+          f64::NAN.to_bits().hash(state);
+        } else {
+          f.to_bits().hash(state);
+        }
+      }
+      Self::Bool(b) => {
+        3u8.hash(state);
+        b.hash(state);
+      }
+      Self::Null => {
+        4u8.hash(state);
+      }
+    }
+  }
 }
 
 impl ServerConfigurationValue {

@@ -34,7 +34,7 @@ impl ModuleLoader for BlocklistModuleLoader {
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, move |_| {
+    Ok(self.cache.get_or::<_, anyhow::Error>(config, move |_| {
       let mut blocklist_str_vec = Vec::new();
       for blocked_ip_config in global_config.map_or(vec![], |c| get_values!("block", c)) {
         if let Some(blocked_ip) = blocked_ip_config.as_str() {

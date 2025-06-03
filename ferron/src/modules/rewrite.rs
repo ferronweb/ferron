@@ -48,7 +48,7 @@ impl ModuleLoader for RewriteModuleLoader {
     config: &ServerConfiguration,
     _global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, |_| {
+    Ok(self.cache.get_or::<_, anyhow::Error>(config, |_| {
       let mut rewrite_rules = Vec::new();
       if let Some(rewrite_config_entries) = get_entries!("rewrite", config) {
         for rewrite_config_entry in &rewrite_config_entries.inner {

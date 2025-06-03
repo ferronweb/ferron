@@ -39,7 +39,7 @@ impl ModuleLoader for TrailingSlashRedirectsModuleLoader {
     config: &ServerConfiguration,
     _global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, |_| {
+    Ok(self.cache.get_or::<_, anyhow::Error>(config, |_| {
       Ok(Arc::new(TrailingSlashRedirectsModule {
         cache: self.trailing_slashes_cache.clone(),
       }))
