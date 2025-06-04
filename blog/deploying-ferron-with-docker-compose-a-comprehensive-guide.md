@@ -26,7 +26,7 @@ version: "3.8"
 
 services:
   web:
-    image: ferronserver/ferron
+    image: ferronserver/ferron:1
     container_name: ferron_static_website
     ports:
       - "80:80"
@@ -86,7 +86,7 @@ services:
       - my-network
 
   proxy:
-    image: ferronserver/ferron
+    image: ferronserver/ferron:1
     container_name: ferron_reverse_proxy
     ports:
       - "80:80" # Expose Ferron on port 80
@@ -197,7 +197,7 @@ version: "3.8"
 
 services:
   web:
-    image: ferronserver/ferron
+    image: ferronserver/ferron:1
     container_name: ferron_php_server
     ports:
       - "80:80" # Expose Ferron on port 80
@@ -265,3 +265,4 @@ You have now set up a web server that can run PHP scripts with Ferron and Docker
 In conclusion, combining Ferron with Docker Compose offers a powerful and flexible solution for deploying web servers and applications. Whether you're setting up a simple static web server, a reverse proxy for a Node.js application, or a PHP web server, Docker Compose simplifies the process by providing isolated environments, streamlined deployment, and scalability. By following the configurations outlined in this post, you can efficiently manage and deploy various web services, ensuring robust performance and ease of maintenance. Embrace the benefits of containerization and enhance your web infrastructure with Ferron and Docker Compose.
 
 _We have updated this post to remove configuration that exposes the ports of the web applications not meant to be exposed for security reasons._
+_We have also updated this post to pin Ferron version to 1.x._
