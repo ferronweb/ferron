@@ -292,7 +292,7 @@ fn build_cache_key(
 /// A cache module loader with optimized initialization
 #[allow(clippy::type_complexity)]
 pub struct CacheModuleLoader {
-  module_cache: ModuleCache<MemCacheModule>,
+  module_cache: ModuleCache<CacheModule>,
 }
 
 impl CacheModuleLoader {
@@ -324,7 +324,7 @@ impl ModuleLoader for CacheModuleLoader {
           let cache_size = maximum_cache_entries.map_or(2048, |e| e.min(8192).max(512));
           let max_entries = maximum_cache_entries.unwrap_or(0);
 
-          Ok(Arc::new(MemCacheModule {
+          Ok(Arc::new(CacheModule {
             cache: AtomicGenericCache::new(cache_size, max_entries),
             vary_cache: Arc::new(papaya::HashMap::with_capacity_and_hasher(
               cache_size / 4,
@@ -422,12 +422,12 @@ impl ModuleLoader for CacheModuleLoader {
 
 /// A cache module with optimized data structures
 #[allow(clippy::type_complexity)]
-struct MemCacheModule {
+struct CacheModule {
   cache: Arc<AtomicGenericCache<String, Option<CacheEntry>>>,
   vary_cache: Arc<papaya::HashMap<String, Vec<String>, RandomState>>,
 }
 
-impl Module for MemCacheModule {
+impl Module for CacheModule {
   fn get_module_handlers(&self) -> Box<dyn ModuleHandlers> {
     Box::new(CacheModuleHandlers {
       cache: self.cache.clone(),
