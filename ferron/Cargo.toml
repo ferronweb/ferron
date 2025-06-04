@@ -158,6 +158,17 @@ default = [
     "scgi",
     "static",
 ]
+default-tokio = [
+    "cache",
+    "cgi",
+    "fauth",
+    "fcgi",
+    "fproxy",
+    "rproxy",
+    "runtime-tokio",
+    "scgi",
+    "static",
+]
 asgi = ["pyo3", "pyo3-async-runtimes", "tokio-tungstenite", "hyper-tungstenite"]
 cache = ["cache_control", "itertools", "papaya", "ahash"]
 cgi = ["async-process", "httparse", "memchr"]
