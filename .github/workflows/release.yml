@@ -2,23 +2,23 @@ name: Release
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
     paths:
-      - '.dockerignore'
-      - 'Cargo.lock'
-      - 'Cargo.toml'
-      - 'Dockerfile'
-      - 'Dockerfile.*'
-      - 'ferron*.yaml'
-      - 'ferron/**'
-      - 'ferron-passwd/**'
-      - 'wwwroot/**'
-      - '.github/workflows/release.yml'
+      - ".dockerignore"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "Dockerfile"
+      - "Dockerfile.*"
+      - "ferron*.yaml"
+      - "ferron/**"
+      - "ferron-passwd/**"
+      - "wwwroot/**"
+      - ".github/workflows/release.yml"
 
 jobs:
   release:
     runs-on: ${{ matrix.runner }}
- 
+
     permissions:
       contents: write
 
@@ -84,12 +84,12 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
- 
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: "${{ matrix.target }}"
- 
+
       - name: Setup cache
         if: matrix.command != 'cross'
         uses: Swatinem/rust-cache@v2
@@ -185,7 +185,7 @@ jobs:
           type: "zip"
           filename: "../../ferron-rustdocs.zip"
           directory: "target/doc"
-      
+
       - name: Set up SSH
         uses: LuisEnMarroquin/setup-ssh-action@v2.0.5
         with:
@@ -205,7 +205,7 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
-    
+
     permissions:
       packages: write
       contents: read
@@ -254,10 +254,11 @@ jobs:
         shell: bash
         run: |
           TAG_TYPE=${{ matrix.group }}
+          FERRON_MAJOR_VERSION=$(echo "$FERRON_VERSION" | cut -d '.' -f 1)
           if [ "$TAG_TYPE" = "latest" ] || [ "$TAG_TYPE" = "" ]; then
-            echo "DOCKER_TAGS=ferronserver/ferron:$FERRON_VERSION,ferronserver/ferron:latest" >> $GITHUB_ENV
+            echo "DOCKER_TAGS=ferronserver/ferron:$FERRON_VERSION,ferronserver/ferron:$FERRON_MAJOR_VERSION,ferronserver/ferron:latest" >> $GITHUB_ENV
           else
-            echo "DOCKER_TAGS=ferronserver/ferron:$FERRON_VERSION-$TAG_TYPE,ferronserver/ferron:$TAG_TYPE" >> $GITHUB_ENV
+            echo "DOCKER_TAGS=ferronserver/ferron:$FERRON_VERSION-$TAG_TYPE,ferronserver/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE,ferronserver/ferron:$TAG_TYPE" >> $GITHUB_ENV
           fi
 
       - name: Set up Docker Buildx
