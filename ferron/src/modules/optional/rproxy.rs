@@ -67,17 +67,21 @@ impl ModuleLoader for ReverseProxyModuleLoader {
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, |_| {
-      Ok(Arc::new(ReverseProxyModule {
-        connections: self.connections.clone(),
-        failed_backends: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(
-          global_config
-            .and_then(|c| get_value!("lb_health_check_window", c))
-            .and_then(|v| v.as_i128())
-            .unwrap_or(5000) as u64,
-        )))),
-      }))
-    })?)
+    Ok(
+      self
+        .cache
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
+          Ok(Arc::new(ReverseProxyModule {
+            connections: self.connections.clone(),
+            failed_backends: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(
+              global_config
+                .and_then(|c| get_value!("lb_health_check_window", c))
+                .and_then(|v| v.as_i128())
+                .unwrap_or(5000) as u64,
+            )))),
+          }))
+        })?,
+    )
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {

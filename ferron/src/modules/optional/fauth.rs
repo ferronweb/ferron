@@ -66,11 +66,15 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
     config: &ServerConfiguration,
     _global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, |_| {
-      Ok(Arc::new(ForwardedAuthenticationModule {
-        connections: self.connections.clone(),
-      }))
-    })?)
+    Ok(
+      self
+        .cache
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
+          Ok(Arc::new(ForwardedAuthenticationModule {
+            connections: self.connections.clone(),
+          }))
+        })?,
+    )
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {

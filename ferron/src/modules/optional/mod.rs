@@ -1,7 +1,5 @@
 #[cfg(feature = "asgi")]
 pub mod asgi;
-#[cfg(feature = "cache")]
-pub mod cache;
 #[cfg(feature = "cgi")]
 pub mod cgi;
 #[cfg(feature = "example")]
@@ -12,6 +10,8 @@ pub mod fauth;
 pub mod fcgi;
 #[cfg(feature = "fproxy")]
 pub mod fproxy;
+#[cfg(feature = "memcache")]
+pub mod memcache;
 #[cfg(feature = "rproxy")]
 pub mod rproxy;
 #[cfg(feature = "scgi")]

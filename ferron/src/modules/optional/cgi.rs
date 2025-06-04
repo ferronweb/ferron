@@ -60,11 +60,15 @@ impl ModuleLoader for CgiModuleLoader {
     config: &ServerConfiguration,
     _global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, |_| {
-      Ok(Arc::new(CgiModule {
-        path_cache: self.path_cache.clone(),
-      }))
-    })?)
+    Ok(
+      self
+        .cache
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
+          Ok(Arc::new(CgiModule {
+            path_cache: self.path_cache.clone(),
+          }))
+        })?,
+    )
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {
@@ -1005,7 +1009,7 @@ async fn get_executable(
       }
       let shebang_line = String::from_utf8_lossy(&shebang_line_bytes);
 
-      let mut command_begin: Vec<String> = (&shebang_line[2..])
+      let mut command_begin: Vec<String> = shebang_line[2..]
         .replace("\r", "")
         .replace("\n", "")
         .split(" ")

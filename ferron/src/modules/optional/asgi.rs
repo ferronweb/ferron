@@ -553,69 +553,73 @@ impl ModuleLoader for AsgiModuleLoader {
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, |config| {
-      let clear_sys_path = global_config
-        .and_then(|c| get_value!("asgi_clear_imports", c))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-      if let Some(asgi_application_path) = get_value!("asgi", config).and_then(|v| v.as_str()) {
-        let runtime: &Runtime = if let Some(runtime) = self.tokio_runtime.as_ref() {
-          runtime
-        } else {
-          let available_parallelism = thread::available_parallelism()?.get();
+    Ok(
+      self
+        .cache
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |config| {
+          let clear_sys_path = global_config
+            .and_then(|c| get_value!("asgi_clear_imports", c))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+          if let Some(asgi_application_path) = get_value!("asgi", config).and_then(|v| v.as_str()) {
+            let runtime: &Runtime = if let Some(runtime) = self.tokio_runtime.as_ref() {
+              runtime
+            } else {
+              let available_parallelism = thread::available_parallelism()?.get();
 
-          // Initialize a single-threaded (due to Python's GIL) Tokio runtime to be used as an intermediary event loop for asynchronous Python
-          let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
-          runtime_builder
-            .worker_threads(1)
-            .enable_all()
-            .thread_name("python-async-pool");
-          pyo3_async_runtimes::tokio::init(runtime_builder);
+              // Initialize a single-threaded (due to Python's GIL) Tokio runtime to be used as an intermediary event loop for asynchronous Python
+              let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
+              runtime_builder
+                .worker_threads(1)
+                .enable_all()
+                .thread_name("python-async-pool");
+              pyo3_async_runtimes::tokio::init(runtime_builder);
 
-          // Create a Tokio runtime for ASGI
-          let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(match available_parallelism / 2 {
-              0 => 1,
-              non_zero => non_zero,
-            })
-            .enable_all()
-            .thread_name("asgi-pool")
-            .build()?;
+              // Create a Tokio runtime for ASGI
+              let runtime = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(match available_parallelism / 2 {
+                  0 => 1,
+                  non_zero => non_zero,
+                })
+                .enable_all()
+                .thread_name("asgi-pool")
+                .build()?;
 
-          self.tokio_runtime = Some(runtime);
-          self
-            .tokio_runtime
-            .as_ref()
-            .ok_or(anyhow::anyhow!("Tokio runtime initialization failed"))?
-        };
+              self.tokio_runtime = Some(runtime);
+              self
+                .tokio_runtime
+                .as_ref()
+                .ok_or(anyhow::anyhow!("Tokio runtime initialization failed"))?
+            };
 
-        let asgi_application = Arc::new(load_asgi_application(
-          PathBuf::from_str(asgi_application_path)?.as_path(),
-          clear_sys_path,
-        )?);
+            let asgi_application = Arc::new(load_asgi_application(
+              PathBuf::from_str(asgi_application_path)?.as_path(),
+              clear_sys_path,
+            )?);
 
-        let (tx, rx_thread) = async_channel::unbounded::<()>();
-        let (tx_thread, rx) = async_channel::unbounded::<AsgiChannelResult>();
+            let (tx, rx_thread) = async_channel::unbounded::<()>();
+            let (tx_thread, rx) = async_channel::unbounded::<AsgiChannelResult>();
 
-        let cancel_token: CancellationToken = CancellationToken::new();
-        let cancel_token_thread = cancel_token.clone();
-        runtime.spawn(asgi_init_event_loop_fn(
-          cancel_token_thread,
-          asgi_application,
-          (tx_thread, rx_thread),
-        ));
+            let cancel_token: CancellationToken = CancellationToken::new();
+            let cancel_token_thread = cancel_token.clone();
+            runtime.spawn(asgi_init_event_loop_fn(
+              cancel_token_thread,
+              asgi_application,
+              (tx_thread, rx_thread),
+            ));
 
-        Ok(Arc::new(AsgiModule {
-          asgi_application_communication: Some(Arc::new((tx, rx))),
-          cancel_token: Some(cancel_token),
-        }))
-      } else {
-        Ok(Arc::new(AsgiModule {
-          asgi_application_communication: None,
-          cancel_token: None,
-        }))
-      }
-    })?)
+            Ok(Arc::new(AsgiModule {
+              asgi_application_communication: Some(Arc::new((tx, rx))),
+              cancel_token: Some(cancel_token),
+            }))
+          } else {
+            Ok(Arc::new(AsgiModule {
+              asgi_application_communication: None,
+              cancel_token: None,
+            }))
+          }
+        })?,
+    )
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {

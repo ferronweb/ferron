@@ -48,7 +48,9 @@ impl ModuleLoader for ForwardProxyModuleLoader {
     Ok(
       self
         .cache
-        .get_or(config, move |_| Ok(Arc::new(ForwardProxyModule)))?,
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |_| {
+          Ok(Arc::new(ForwardProxyModule))
+        })?,
     )
   }
 

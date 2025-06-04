@@ -352,20 +352,25 @@ impl ModuleLoader for WsgidModuleLoader {
     config: &ServerConfiguration,
     _global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    Ok(self.cache.get_or(config, move |config| {
-      if let Some(wsgi_application_path) = get_value!("wsgid", config).and_then(|v| v.as_str()) {
-        Ok(Arc::new(WsgidModule {
-          wsgi_process_pool: Some(Arc::new(
-            init_wsgi_process_pool(PathBuf::from_str(wsgi_application_path)?)
-              .map_err(|e| anyhow::anyhow!("Cannot initialize a WSGI process pool: {}", e))?,
-          )),
-        }))
-      } else {
-        Ok(Arc::new(WsgidModule {
-          wsgi_process_pool: None,
-        }))
-      }
-    })?)
+    Ok(
+      self
+        .cache
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |config| {
+          if let Some(wsgi_application_path) = get_value!("wsgid", config).and_then(|v| v.as_str())
+          {
+            Ok(Arc::new(WsgidModule {
+              wsgi_process_pool: Some(Arc::new(
+                init_wsgi_process_pool(PathBuf::from_str(wsgi_application_path)?)
+                  .map_err(|e| anyhow::anyhow!("Cannot initialize a WSGI process pool: {}", e))?,
+              )),
+            }))
+          } else {
+            Ok(Arc::new(WsgidModule {
+              wsgi_process_pool: None,
+            }))
+          }
+        })?,
+    )
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {
