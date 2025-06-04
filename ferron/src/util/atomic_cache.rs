@@ -35,7 +35,6 @@
 //! }
 //! ```
 
-use std::cell::UnsafeCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -62,28 +61,13 @@ where
   key_hash: AtomicU64,
   /// Inline storage for small values (≤8 bytes, ≤8 byte alignment)
   value_storage: AtomicU64,
-  /// Fallback storage for larger values using UnsafeCell
-  value_fallback: Option<Arc<UnsafeCell<T>>>,
+  /// Fallback storage for larger values using RwLock
+  value_fallback: Option<std::sync::RwLock<T>>,
   /// UTC timestamp in nanoseconds when the entry was last modified
   timestamp_nanos: AtomicU64,
   /// Monotonic sequence number for ordering operations
   sequence: AtomicU64,
   phantom_key_type: std::marker::PhantomData<K>,
-}
-
-unsafe impl<K, T> Sync for AtomicEntry<K, T>
-where
-  K: Hash + Eq + Send + Sync + 'static,
-  T: Sync + 'static,
-  T: Clone + Send + Sync + 'static,
-{
-}
-unsafe impl<K, T> Send for AtomicEntry<K, T>
-where
-  K: Hash + Eq + Send + Sync + 'static,
-  T: Send + 'static,
-  T: Clone + Send + Sync + 'static,
-{
 }
 
 /// Entry states for atomic state machine
@@ -147,7 +131,7 @@ where
       key_hash: AtomicU64::new(0),
       value_storage: AtomicU64::new(0),
       value_fallback: if use_fallback {
-        Some(Arc::new(UnsafeCell::new(T::default())))
+        Some(std::sync::RwLock::new(T::default()))
       } else {
         None
       },
@@ -182,11 +166,11 @@ where
       self.value_storage.store(raw_value, Ordering::Relaxed);
 
       return Ok(());
-    } else if let Some(ref cell) = self.value_fallback {
-      // If simple "unsafe { *cell.get() = value; }" is used or the "_unused" value discarded,
-      // Ferron would have segementation faults when the cache is benchmarked with Monoio without `io_uring` on GNU/Linux
-      let _unused = std::mem::replace(unsafe { &mut *cell.get() }, value);
-      return Ok(());
+    } else if let Some(ref lock) = self.value_fallback {
+      if let Ok(mut value_lock) = lock.write() {
+        *value_lock = value;
+        return Ok(());
+      }
     }
 
     Err(std::io::Error::other("Unsupported type size or alignment"))
@@ -210,8 +194,9 @@ where
         );
         result.assume_init()
       }
-    } else if let Some(ref cell) = self.value_fallback {
-      unsafe { (*cell.get()).clone() }
+    } else if let Some(ref lock) = self.value_fallback {
+      // This may block the event loop, but at least it's better than segmentation fault when using `UnsafeCell`.
+      lock.read().unwrap().clone()
     } else {
       T::default()
     }
@@ -223,7 +208,7 @@ where
   /// The current state (STATE_EMPTY, STATE_RESERVED, etc.)
   #[inline]
   fn get_state(&self) -> u32 {
-    unpack_state(self.state_version.load(Ordering::Relaxed))
+    unpack_state(self.state_version.load(Ordering::Acquire))
   }
 
   /// Gets the current version of the entry.
@@ -234,7 +219,7 @@ where
   /// The current version number
   #[inline]
   fn get_version(&self) -> u32 {
-    unpack_version(self.state_version.load(Ordering::Relaxed))
+    unpack_version(self.state_version.load(Ordering::Acquire))
   }
 
   /// Atomically compares and exchanges the state, incrementing the version.
@@ -312,21 +297,6 @@ where
   /// Bit mask for fast modulo operations (capacity - 1)
   capacity_mask: usize,
   max_capacity: usize,
-}
-
-unsafe impl<K, T> Sync for AtomicGenericCache<K, T>
-where
-  K: Hash + Eq + Send + Sync + 'static,
-  T: Sync + 'static,
-  T: Clone + Send + Sync + 'static,
-{
-}
-unsafe impl<K, T> Send for AtomicGenericCache<K, T>
-where
-  K: Hash + Eq + Send + Sync + 'static,
-  T: Send + 'static,
-  T: Clone + Send + Sync + 'static,
-{
 }
 
 #[allow(dead_code)]
@@ -950,7 +920,7 @@ where
   /// the values that were actually found and removed.
   ///
   /// # Arguments
-  /// * `keys` - A slice of keys to remove
+  /// * `keys` - Vector of keys to remove
   ///
   /// # Returns
   /// Vector containing only the values that were successfully removed
