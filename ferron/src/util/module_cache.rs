@@ -219,6 +219,7 @@ mod test {
   #[test]
   fn should_cache_the_module() {
     let module = 1;
+    let module2 = 2;
 
     let mut cache = ModuleCache::new(vec!["property"]);
 
@@ -291,7 +292,7 @@ mod test {
     assert_eq!(
       cache
         .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(&config2, |_config| Ok(
-          Arc::new(module)
+          Arc::new(module2)
         ))
         .unwrap(),
       Arc::new(module)
