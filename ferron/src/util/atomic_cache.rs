@@ -2846,4 +2846,30 @@ mod tests {
 
     assert_eq!(cache.len(), 512);
   }
+
+  #[tokio::test]
+  async fn test_tokio_deadlock() {
+    let cache = create_cache::<String, LargeTestStruct>(1000);
+
+    let handles: Vec<_> = (0..8)
+      .map(|thread_id| {
+        let cache = Arc::clone(&cache);
+        tokio::spawn(async move {
+          for i in 0..1000 {
+            let entry = LargeTestStruct::new(i);
+            cache
+              .insert(format!("key:{}:{}", thread_id, i), entry)
+              .unwrap();
+            cache.get(&format!("key:{}:{}", thread_id, i));
+          }
+        })
+      })
+      .collect();
+
+    for handle in handles {
+      handle.await.unwrap();
+    }
+
+    assert!(true);
+  }
 }
