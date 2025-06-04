@@ -58,7 +58,7 @@ jobs:
       - name: Deploy the website
         shell: bash
         run: |
-          scp ferron2-website-develop.zip ferron-servers:.
+          scp ferron2-website.zip ferron-servers:.
 
           # The "deploy-ferron2-website" is a custom command that deploys the Ferron website
           ssh ferron-servers "sudo deploy-ferron2-website ferron2-website.zip && rm ferron2-website.zip"
