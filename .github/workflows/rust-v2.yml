@@ -8,6 +8,8 @@ on:
       - "Cargo.toml"
       - "ferron/**"
       - "ferron-passwd/**"
+      - "ferron-yaml2kdl/**"
+      - "ferron-yaml2kdl-core/**"
       - ".github/workflows/rust-v2.yml"
   pull_request:
     branches: ["develop-2.x"]
@@ -16,6 +18,8 @@ on:
       - "Cargo.toml"
       - "ferron/**"
       - "ferron-passwd/**"
+      - "ferron-yaml2kdl/**"
+      - "ferron-yaml2kdl-core/**"
       - ".github/workflows/rust-v2.yml"
 
 env:

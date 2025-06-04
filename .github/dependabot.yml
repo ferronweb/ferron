@@ -28,6 +28,11 @@ updates:
     target-branch: "main"
 
   # Ferron 2.x
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop-2.x"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -38,3 +43,8 @@ updates:
     schedule:
       interval: "weekly"
     target-branch: "develop-2.x"
+  - package-ecosystem: "npm"
+    directory: "/website"
+    schedule:
+      interval: "weekly"
+    target-branch: "2.x"
