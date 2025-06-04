@@ -2860,7 +2860,10 @@ mod tests {
             cache
               .insert(format!("key:{}:{}", thread_id, i), entry)
               .unwrap();
-            cache.get(&format!("key:{}:{}", thread_id, i));
+            for i in 0..25 {
+              // Get the cached value 25 times
+              cache.get(&format!("key:{}:{}", thread_id, i));
+            }
           }
         })
       })
