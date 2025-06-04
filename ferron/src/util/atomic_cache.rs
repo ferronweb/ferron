@@ -183,9 +183,9 @@ where
 
       return Ok(());
     } else if let Some(ref cell) = self.value_fallback {
-      unsafe {
-        *cell.get() = value;
-      }
+      // If simple "unsafe { *cell.get() = value; }" is used or the "_unused" value discarded,
+      // Ferron would have segementation faults when the cache is benchmarked with Monoio without `io_uring` on GNU/Linux
+      let _unused = std::mem::replace(unsafe { &mut *cell.get() }, value);
       return Ok(());
     }
 
