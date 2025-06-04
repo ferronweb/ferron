@@ -3,7 +3,7 @@ macro_rules! get_entries_for_validation {
   ($name:literal, $config:expr, $used:expr) => {{
     $config.entries.get($name).and_then(|value| {
       $used.insert($name.to_string());
-      value.get_value().map(|_| value)
+      value.get_value().map(|_| value.clone())
     })
   }};
 }
@@ -16,9 +16,15 @@ macro_rules! get_values_for_validation {
       .get($name)
       .and_then(|value| {
         $used.insert($name.to_string());
-        value.get_value().map(|_| value)
+        value.get_value().map(|_| value.clone())
       })
-      .map_or(Vec::new(), |value| value.get_values())
+      .map_or(Vec::new(), |value| {
+        value
+          .get_values()
+          .into_iter()
+          .map(|v| v.clone())
+          .collect::<Vec<_>>()
+      })
   }};
 }
 
@@ -28,7 +34,7 @@ macro_rules! get_entries {
     $config
       .entries
       .get($name)
-      .and_then(|value| value.get_value().map(|_| value))
+      .and_then(|value| value.get_value().map(|_| value.clone()))
   }};
 }
 
@@ -38,8 +44,8 @@ macro_rules! get_entry {
     $config
       .entries
       .get($name)
-      .and_then(|value| value.get_value().map(|_| value))
-      .and_then(|value| value.get_entry())
+      .and_then(|value| value.get_value().map(|_| value.clone()))
+      .and_then(|value| value.get_entry().cloned())
   }};
 }
 
@@ -49,8 +55,8 @@ macro_rules! get_value {
     $config
       .entries
       .get($name)
-      .and_then(|value| value.get_value().map(|_| value))
-      .and_then(|value| value.get_value())
+      .and_then(|value| value.get_value().map(|_| value.clone()))
+      .and_then(|value| value.get_value().cloned())
   }};
 }
 
@@ -60,8 +66,10 @@ macro_rules! get_values {
     $config
       .entries
       .get($name)
-      .and_then(|value| value.get_value().map(|_| value))
-      .map_or(Vec::new(), |value| value.get_values())
+      .and_then(|value| value.get_value().map(|_| value.clone()))
+      .map_or(Vec::new(), |value| {
+        value.get_values().into_iter().map(|v| v.clone()).collect()
+      })
   }};
 }
 

@@ -15,9 +15,9 @@ impl IpBlockList {
   }
 
   /// Loads the block list from a vector of IP address strings
-  pub fn load_from_vec(&mut self, ip_list: Vec<&str>) {
+  pub fn load_from_vec(&mut self, ip_list: Vec<String>) {
     for ip_str in ip_list {
-      match ip_str {
+      match ip_str.as_str() {
         "localhost" => {
           self
             .blocked_ips
@@ -45,7 +45,7 @@ mod tests {
   #[test]
   fn test_ip_block_list() {
     let mut block_list = IpBlockList::new();
-    block_list.load_from_vec(vec!["192.168.1.1", "10.0.0.1"]);
+    block_list.load_from_vec(vec!["192.168.1.1".into(), "10.0.0.1".into()]);
 
     assert!(block_list.is_blocked("192.168.1.1".parse().unwrap()));
     assert!(block_list.is_blocked("10.0.0.1".parse().unwrap()));

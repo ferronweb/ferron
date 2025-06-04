@@ -316,7 +316,10 @@ impl ModuleLoader for CacheModuleLoader {
         .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
           let maximum_cache_entries = global_config
             .and_then(|c| get_entry!("cache_max_entries", c))
-            .and_then(|e| e.values.first())
+            .and_then(|e| {
+              let first = e.values.first();
+              first.cloned()
+            })
             .and_then(|v| v.as_i128())
             .map(|v| v as usize);
 

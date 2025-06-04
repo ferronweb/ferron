@@ -43,7 +43,10 @@ impl ModuleLoader for CoreModuleLoader {
           Ok(Arc::new(CoreModule {
             default_http_port: global_config
               .and_then(|c| get_entry!("default_http_port", c))
-              .and_then(|e| e.values.first())
+              .and_then(|e| {
+                let first = e.values.first();
+                first.cloned()
+              })
               .map_or(Some(80), |v| {
                 if v.is_null() {
                   None
@@ -53,7 +56,10 @@ impl ModuleLoader for CoreModuleLoader {
               }),
             default_https_port: global_config
               .and_then(|c| get_entry!("default_https_port", c))
-              .and_then(|e| e.values.first())
+              .and_then(|e| {
+                let first = e.values.first();
+                first.cloned()
+              })
               .map_or(Some(443), |v| {
                 if v.is_null() {
                   None
@@ -587,9 +593,9 @@ impl ModuleHandlers for CoreModuleHandlers {
     if !is_proxy_request {
       // Remove the location prefix using an undocumented configuration property
       if let Some(path) =
-        get_value!("UNDOCUMENTED_REMOVE_PATH_PREFIX", config).and_then(|v| v.as_str())
+        get_value!("UNDOCUMENTED_REMOVE_PATH_PREFIX", config).and_then(|v| v.to_string())
       {
-        let mut path_without_trailing_slashes = path;
+        let mut path_without_trailing_slashes = path.as_str();
         while path_without_trailing_slashes.ends_with("/") {
           path_without_trailing_slashes =
             &path_without_trailing_slashes[..(path_without_trailing_slashes.len() - 1)];

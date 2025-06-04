@@ -38,10 +38,10 @@ impl ModuleLoader for BlocklistModuleLoader {
       self
         .cache
         .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |_| {
-          let mut blocklist_str_vec = Vec::new();
+          let mut blocklist_str_vec: Vec<String> = Vec::new();
           for blocked_ip_config in global_config.map_or(vec![], |c| get_values!("block", c)) {
             if let Some(blocked_ip) = blocked_ip_config.as_str() {
-              blocklist_str_vec.push(blocked_ip);
+              blocklist_str_vec.push(blocked_ip.into());
             }
           }
 
@@ -56,7 +56,8 @@ impl ModuleLoader for BlocklistModuleLoader {
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {
-    vec!["block"]
+    const REQ: [&str; 1] = ["block"];
+    REQ.to_vec()
   }
 
   fn validate_configuration(

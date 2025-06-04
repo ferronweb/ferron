@@ -111,8 +111,11 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
       .unwrap_or(false)
     {
       if let Some(wwwroot) = get_entry!("root", config)
-        .and_then(|e| e.values.first())
-        .and_then(|v| v.as_str())
+        .and_then(|e| {
+          let first = e.values.first();
+          first.cloned()
+        })
+        .and_then(|v| v.to_string())
       {
         let request_path = request.uri().path();
         let request_query = request.uri().query();
@@ -179,7 +182,7 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
             } else {
               drop(read_rwlock);
 
-              let path = Path::new(wwwroot);
+              let path = Path::new(&wwwroot);
               let mut relative_path = &request_path[1..];
               while relative_path.as_bytes().first().copied() == Some(b'/') {
                 relative_path = &relative_path[1..];

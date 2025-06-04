@@ -1,10 +1,10 @@
 use std::{
-  collections::HashMap,
   error::Error,
   net::{IpAddr, SocketAddr},
   path::Path,
 };
 
+use dashmap::DashMap;
 use ferron_yaml2kdl_core::convert_yaml_to_kdl;
 use kdl::{KdlDocument, KdlNode, KdlValue};
 
@@ -17,7 +17,8 @@ use super::ConfigurationAdapter;
 
 fn kdl_node_to_configuration_entry(kdl_node: &KdlNode) -> ServerConfigurationEntry {
   let mut values = Vec::new();
-  let mut props = HashMap::new();
+  let props: papaya::HashMap<String, ServerConfigurationValue, ahash::RandomState> =
+    papaya::HashMap::default();
   for kdl_entry in kdl_node.iter() {
     let value = match kdl_entry.value().to_owned() {
       KdlValue::String(value) => ServerConfigurationValue::String(value),
@@ -27,7 +28,7 @@ fn kdl_node_to_configuration_entry(kdl_node: &KdlNode) -> ServerConfigurationEnt
       KdlValue::Null => ServerConfigurationValue::Null,
     };
     if let Some(prop_name) = kdl_entry.name() {
-      props.insert(prop_name.value().to_string(), value);
+      props.pin().insert(prop_name.value().to_string(), value);
     } else {
       values.push(value);
     }
@@ -116,13 +117,17 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
           (Some(global_name.to_string()), None, None)
         };
 
-        let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
+        let configuration_entries: DashMap<String, ServerConfigurationEntries, ahash::RandomState> =
+          DashMap::default();
         for kdl_node in children.nodes() {
           let kdl_node_name = kdl_node.name().value();
           let children = kdl_node.children();
           if kdl_node_name == "location" {
-            let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
-              HashMap::new();
+            let configuration_entries: DashMap<
+              String,
+              ServerConfigurationEntries,
+              ahash::RandomState,
+            > = DashMap::default();
             if let Some(children) = children {
               if let Some(location) = kdl_node.entry(0) {
                 if let Some(location_str) = location.value().as_string() {
@@ -130,15 +135,20 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                     let kdl_node_name = kdl_node.name().value();
                     let children = kdl_node.children();
                     if kdl_node_name == "error_config" {
-                      let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
-                        HashMap::new();
+                      let configuration_entries: DashMap<
+                        String,
+                        ServerConfigurationEntries,
+                        ahash::RandomState,
+                      > = DashMap::default();
                       if let Some(children) = children {
                         if let Some(error_status_code) = kdl_node.entry(0) {
                           if let Some(error_status_code) = error_status_code.value().as_integer() {
                             for kdl_node in children.nodes() {
                               let kdl_node_name = kdl_node.name().value();
                               let value = kdl_node_to_configuration_entry(kdl_node);
-                              if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
+                              if let Some(mut entries) =
+                                configuration_entries.get_mut(kdl_node_name)
+                              {
                                 entries.inner.push(value);
                               } else {
                                 configuration_entries.insert(
@@ -167,7 +177,8 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                           for kdl_node in children.nodes() {
                             let kdl_node_name = kdl_node.name().value();
                             let value = kdl_node_to_configuration_entry(kdl_node);
-                            if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
+                            if let Some(mut entries) = configuration_entries.get_mut(kdl_node_name)
+                            {
                               entries.inner.push(value);
                             } else {
                               configuration_entries.insert(
@@ -195,7 +206,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                       }
                     } else {
                       let value = kdl_node_to_configuration_entry(kdl_node);
-                      if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
+                      if let Some(mut entries) = configuration_entries.get_mut(kdl_node_name) {
                         entries.inner.push(value);
                       } else {
                         configuration_entries.insert(
@@ -215,7 +226,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                       ServerConfigurationEntries {
                         inner: vec![ServerConfigurationEntry {
                           values: vec![ServerConfigurationValue::String(location_str.to_string())],
-                          props: HashMap::new(),
+                          props: papaya::HashMap::default(),
                         }],
                       },
                     );
@@ -243,15 +254,18 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
               ))?
             }
           } else if kdl_node_name == "error_config" {
-            let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
-              HashMap::new();
+            let configuration_entries: DashMap<
+              String,
+              ServerConfigurationEntries,
+              ahash::RandomState,
+            > = DashMap::default();
             if let Some(children) = children {
               if let Some(error_status_code) = kdl_node.entry(0) {
                 if let Some(error_status_code) = error_status_code.value().as_integer() {
                   for kdl_node in children.nodes() {
                     let kdl_node_name = kdl_node.name().value();
                     let value = kdl_node_to_configuration_entry(kdl_node);
-                    if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
+                    if let Some(mut entries) = configuration_entries.get_mut(kdl_node_name) {
                       entries.inner.push(value);
                     } else {
                       configuration_entries.insert(
@@ -280,7 +294,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                 for kdl_node in children.nodes() {
                   let kdl_node_name = kdl_node.name().value();
                   let value = kdl_node_to_configuration_entry(kdl_node);
-                  if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
+                  if let Some(mut entries) = configuration_entries.get_mut(kdl_node_name) {
                     entries.inner.push(value);
                   } else {
                     configuration_entries.insert(
@@ -308,7 +322,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
             }
           } else {
             let value = kdl_node_to_configuration_entry(kdl_node);
-            if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
+            if let Some(mut entries) = configuration_entries.get_mut(kdl_node_name) {
               entries.inner.push(value);
             } else {
               configuration_entries.insert(

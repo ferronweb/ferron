@@ -72,6 +72,7 @@ impl ModuleLoader for StatusCodesModuleLoader {
               };
               let regex = match non_standard_code_config_entry
                 .props
+                .pin_owned()
                 .get("regex")
                 .and_then(|v| v.as_str())
               {
@@ -89,6 +90,7 @@ impl ModuleLoader for StatusCodesModuleLoader {
               };
               let url = non_standard_code_config_entry
                 .props
+                .pin_owned()
                 .get("url")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
@@ -99,21 +101,25 @@ impl ModuleLoader for StatusCodesModuleLoader {
               }
               let location = non_standard_code_config_entry
                 .props
+                .pin_owned()
                 .get("location")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
               let realm = non_standard_code_config_entry
                 .props
+                .pin_owned()
                 .get("realm")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
               let disable_brute_force_protection = !non_standard_code_config_entry
                 .props
+                .pin_owned()
                 .get("brute_protection")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true);
               let user_list = non_standard_code_config_entry
                 .props
+                .pin_owned()
                 .get("users")
                 .and_then(|v| v.as_str())
                 .map(|userlist| {
@@ -124,11 +130,15 @@ impl ModuleLoader for StatusCodesModuleLoader {
                 });
               let users = match non_standard_code_config_entry
                 .props
+                .pin_owned()
                 .get("allowed")
                 .and_then(|v| v.as_str())
               {
                 Some(userlist) => {
-                  let users_str_vec = userlist.split(",").collect::<Vec<_>>();
+                  let users_str_vec = userlist
+                    .split(",")
+                    .map(|f| f.into())
+                    .collect::<Vec<String>>();
 
                   let mut users_init = IpBlockList::new();
                   users_init.load_from_vec(users_str_vec);
@@ -169,40 +179,69 @@ impl ModuleLoader for StatusCodesModuleLoader {
           ))?
         } else if !entry.values[0].is_integer() {
           Err(anyhow::anyhow!("The custom status code must be a string"))?
-        } else if !entry.props.contains_key("url") && !entry.props.contains_key("regex") {
+        } else if !entry.props.pin_owned().contains_key("url")
+          && !entry.props.pin_owned().contains_key("regex")
+        {
           Err(anyhow::anyhow!(
             "Non-standard codes must either include URL or a matching regular expression"
           ))?
-        } else if !entry.props.get("url").is_none_or(|v| v.is_string()) {
+        } else if !entry
+          .props
+          .pin_owned()
+          .get("url")
+          .is_none_or(|v| v.is_string())
+        {
           Err(anyhow::anyhow!(
             "The custom status code URL must be a string"
           ))?
-        } else if !entry.props.get("regex").is_none_or(|v| v.is_string()) {
+        } else if !entry
+          .props
+          .pin_owned()
+          .get("regex")
+          .is_none_or(|v| v.is_string())
+        {
           Err(anyhow::anyhow!(
             "The custom status code regular expression must be a string"
           ))?
-        } else if !entry.props.get("location").is_none_or(|v| v.is_string()) {
+        } else if !entry
+          .props
+          .pin_owned()
+          .get("location")
+          .is_none_or(|v| v.is_string())
+        {
           Err(anyhow::anyhow!(
             "The custom status code redirect destination must be a string"
           ))?
-        } else if !entry.props.get("realm").is_none_or(|v| v.is_string()) {
+        } else if !entry
+          .props
+          .pin_owned()
+          .get("realm")
+          .is_none_or(|v| v.is_string())
+        {
           Err(anyhow::anyhow!(
             "The custom status code HTTP authentication realm must be a string"
           ))?
         } else if !entry
           .props
+          .pin_owned()
           .get("brute_protection")
           .is_none_or(|v| v.is_bool())
         {
           Err(anyhow::anyhow!(
                         "The custom status code HTTP authentication brute-force protection realm must be boolean"
                     ))?
-        } else if !entry.props.get("users").is_none_or(|v| v.is_string()) {
+        } else if !entry
+          .props
+          .pin_owned()
+          .get("users")
+          .is_none_or(|v| v.is_string())
+        {
           Err(anyhow::anyhow!(
             "The custom status code HTTP authentication allowed users list must be a string"
           ))?
         } else if !entry
           .props
+          .pin_owned()
           .get("brute_protection")
           .is_none_or(|v| v.is_string())
         {

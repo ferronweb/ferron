@@ -130,8 +130,11 @@ impl ModuleHandlers for ScgiModuleHandlers {
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     if let Some(scgi_to) = get_entry!("scgi", config)
-      .and_then(|e| e.values.first())
-      .and_then(|v| v.as_str())
+      .and_then(|e| {
+        let first = e.values.first();
+        first.cloned()
+      })
+      .and_then(|v| v.to_string())
     {
       let request_path = request.uri().path();
       let mut request_path_bytes = request_path.bytes();
@@ -146,9 +149,12 @@ impl ModuleHandlers for ScgiModuleHandlers {
       }
 
       let wwwroot = get_entry!("root", config)
-        .and_then(|e| e.values.first())
-        .and_then(|v| v.as_str())
-        .unwrap_or("/nonexistent");
+        .and_then(|e| {
+          let first = e.values.first();
+          first.cloned()
+        })
+        .and_then(|v| v.to_string())
+        .unwrap_or("/nonexistent".into());
 
       let wwwroot_unknown = PathBuf::from(wwwroot);
       let wwwroot_pathbuf = match wwwroot_unknown.as_path().is_absolute() {
@@ -216,8 +222,8 @@ impl ModuleHandlers for ScgiModuleHandlers {
         wwwroot,
         execute_pathbuf,
         execute_path_info,
-        get_value!("server_administrator_email", config).and_then(|v| v.as_str()),
-        scgi_to,
+        get_value!("server_administrator_email", config).and_then(|v| v.to_string()),
+        &scgi_to,
         additional_environment_variables,
       )
       .await;
@@ -241,7 +247,7 @@ async fn execute_scgi_with_environment_variables(
   wwwroot: &Path,
   execute_pathbuf: PathBuf,
   path_info: Option<String>,
-  server_administrator_email: Option<&str>,
+  server_administrator_email: Option<String>,
   scgi_to: &str,
   additional_environment_variables: HashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {

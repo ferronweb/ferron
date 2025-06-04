@@ -180,7 +180,7 @@ impl ModuleHandlers for CgiModuleHandlers {
     let mut cgi_script_exts = Vec::new();
 
     let cgi_script_exts_config = get_entries!("cgi_extension", config);
-    if let Some(cgi_script_exts_obtained) = cgi_script_exts_config {
+    if let Some(cgi_script_exts_obtained) = cgi_script_exts_config.as_ref() {
       for cgi_script_ext_config in cgi_script_exts_obtained.inner.iter() {
         if let Some(cgi_script_ext) = cgi_script_ext_config
           .values
@@ -193,8 +193,11 @@ impl ModuleHandlers for CgiModuleHandlers {
     }
 
     if let Some(wwwroot) = get_entry!("root", config)
-      .and_then(|e| e.values.first())
-      .and_then(|v| v.as_str())
+      .and_then(|e| {
+        let first = e.values.first();
+        first.cloned()
+      })
+      .and_then(|v| v.to_string())
     {
       let request_path = request.uri().path();
       let mut request_path_bytes = request_path.bytes();
@@ -525,7 +528,7 @@ impl ModuleHandlers for CgiModuleHandlers {
           wwwroot,
           execute_pathbuf,
           execute_path_info,
-          get_value!("server_administrator_email", config).and_then(|v| v.as_str()),
+          get_value!("server_administrator_email", config).and_then(|v| v.to_string()),
           cgi_interpreters,
           additional_environment_variables,
         )
@@ -551,7 +554,7 @@ async fn execute_cgi_with_environment_variables(
   wwwroot: &Path,
   execute_pathbuf: PathBuf,
   path_info: Option<String>,
-  server_administrator_email: Option<&str>,
+  server_administrator_email: Option<String>,
   cgi_interpreters: HashMap<String, Vec<String>>,
   additional_environment_variables: HashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {

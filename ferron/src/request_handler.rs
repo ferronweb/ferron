@@ -37,7 +37,7 @@ async fn generate_error_response(
 ) -> Response<BoxBody<Bytes, std::io::Error>> {
   let bare_body = generate_default_error_page(
     status_code,
-    get_value!("server_administrator_email", config).and_then(|v| v.as_str()),
+    get_value!("server_administrator_email", config).and_then(|v| v.to_string()),
   );
   let mut content_length: Option<u64> = bare_body.len().try_into().ok();
   let mut response_body = Full::new(Bytes::from(bare_body))
@@ -1274,7 +1274,10 @@ pub async fn request_handler(
   let timeout_from_config = global_configuration
     .as_deref()
     .and_then(|c| get_entry!("timeout", c))
-    .and_then(|e| e.values.last());
+    .and_then(|e| {
+      let last = e.values.last();
+      last.cloned()
+    });
   let request_handler_future = request_handler_wrapped(
     request,
     client_address,
@@ -1285,7 +1288,7 @@ pub async fn request_handler(
     http3_alt_port,
     acme_http_01_resolvers,
   );
-  if timeout_from_config.is_some_and(|v| v.is_null()) {
+  if timeout_from_config.as_ref().is_some_and(|v| v.is_null()) {
     request_handler_future.await.map_err(|e| anyhow::anyhow!(e))
   } else {
     let timeout_millis = timeout_from_config

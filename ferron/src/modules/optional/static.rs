@@ -399,8 +399,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
     // Get the web root directory from configuration
     if let Some(wwwroot) = get_entry!("root", config)
-      .and_then(|e| e.values.first())
-      .and_then(|v| v.as_str())
+      .and_then(|e| {
+        let first = e.values.first();
+        first.cloned()
+      })
+      .and_then(|v| v.to_string())
     {
       // Extract and validate the request path
       let request_path = request.uri().path();
@@ -448,7 +451,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
         Some(joined_pathbuf) => joined_pathbuf,
         // Otherwise, construct the file path
         None => {
-          let path = Path::new(wwwroot);
+          let path = Path::new(&wwwroot);
           // Strip leading slash and normalize path
           let mut relative_path = &request_path[1..];
           while relative_path.as_bytes().first().copied() == Some(b'/') {

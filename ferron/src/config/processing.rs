@@ -1,7 +1,6 @@
-use std::{
-  collections::{HashMap, HashSet},
-  error::Error,
-};
+use std::{collections::HashSet, error::Error};
+
+use dashmap::DashMap;
 
 use crate::modules::ModuleLoader;
 
@@ -40,13 +39,13 @@ pub fn merge_duplicates(
           == server_configuration.filters.error_handler_status
       {
         // Clone the entries from the matching configuration
-        let mut cloned_hashmap = server_configuration_source.entries.clone();
+        let cloned_hashmap = server_configuration_source.entries.clone();
         let moved_hashmap_iterator = server_configuration.entries.into_iter();
 
         // Merge entries from both configurations
         for (property_name, mut property) in moved_hashmap_iterator {
           match cloned_hashmap.get_mut(&property_name) {
-            Some(obtained_property) => {
+            Some(mut obtained_property) => {
               // If property exists in both configurations, combine their values
               obtained_property.inner.append(&mut property.inner);
             }
@@ -106,7 +105,7 @@ pub fn remove_and_add_global_configuration(
     new_server_configurations.insert(
       0,
       ServerConfiguration {
-        entries: HashMap::new(),
+        entries: DashMap::with_hasher(ahash::RandomState::new()),
         filters: ServerConfigurationFilters {
           hostname: None,
           ip: None,
@@ -224,13 +223,13 @@ pub fn premerge_configuration(
       // Track which properties have been processed in this layer
       let mut properties_in_layer = HashSet::new();
       // Clone parent configuration's entries
-      let mut cloned_hashmap = server_configurations[layer_index].entries.clone();
+      let cloned_hashmap = server_configurations[layer_index].entries.clone();
       // Iterate through child configuration's entries
       let moved_hashmap_iterator = configuration_entries.into_iter();
       // Merge child entries with parent entries
       for (property_name, mut property) in moved_hashmap_iterator {
         match cloned_hashmap.get_mut(&property_name) {
-          Some(obtained_property) => {
+          Some(mut obtained_property) => {
             if properties_in_layer.contains(&property_name) {
               // If property was already processed in this layer, append values
               obtained_property.inner.append(&mut property.inner);
@@ -306,7 +305,7 @@ pub fn load_modules(
         if server_configuration
           .entries
           .get(requirement)
-          .and_then(|e| e.get_value())
+          .and_then(|e| e.get_value().cloned())
           .is_some_and(|v| !v.is_null() && v.as_bool().unwrap_or(true))
         {
           requirements_met = true;
@@ -343,9 +342,13 @@ pub fn load_modules(
     }
 
     // Track unused properties (except for undocumented ones)
-    for property in server_configuration.entries.keys() {
-      if !property.starts_with("UNDOCUMENTED_") && !used_properties.contains(property) {
-        unused_properties.insert(property.to_string());
+    for property in server_configuration
+      .entries
+      .iter()
+      .map(|entry| entry.key().clone())
+    {
+      if !property.starts_with("UNDOCUMENTED_") && !used_properties.contains(&property) {
+        unused_properties.insert(property);
       }
     }
 
@@ -368,7 +371,7 @@ mod tests {
   use crate::config::*;
 
   use super::*;
-  use std::collections::HashMap;
+
   use std::net::{IpAddr, Ipv4Addr};
 
   fn make_filters(
@@ -391,7 +394,7 @@ mod tests {
     ServerConfigurationEntries {
       inner: vec![ServerConfigurationEntry {
         values,
-        props: HashMap::new(),
+        props: papaya::HashMap::with_hasher(ahash::RandomState::new()),
       }],
     }
   }
@@ -402,7 +405,7 @@ mod tests {
   ) -> (String, ServerConfigurationEntries) {
     let entry = ServerConfigurationEntry {
       values: vec![value],
-      props: HashMap::new(),
+      props: papaya::HashMap::with_hasher(ahash::RandomState::new()),
     };
     (
       key.to_string(),
@@ -449,13 +452,13 @@ mod tests {
       Some(ErrorHandlerStatus::Status(404)),
     );
 
-    let mut config1_entries = HashMap::new();
+    let config1_entries = DashMap::with_hasher(ahash::RandomState::new());
     config1_entries.insert(
       "route".to_string(),
       make_entry(vec![ServerConfigurationValue::String("v1".to_string())]),
     );
 
-    let mut config2_entries = HashMap::new();
+    let config2_entries = DashMap::with_hasher(ahash::RandomState::new());
     config2_entries.insert(
       "route".to_string(),
       make_entry(vec![ServerConfigurationValue::String("v2".to_string())]),
@@ -507,13 +510,13 @@ mod tests {
       None,
     );
 
-    let mut config1_entries = HashMap::new();
+    let config1_entries = DashMap::with_hasher(ahash::RandomState::new());
     config1_entries.insert(
       "route".to_string(),
       make_entry(vec![ServerConfigurationValue::String("v1".to_string())]),
     );
 
-    let mut config2_entries = HashMap::new();
+    let config2_entries = DashMap::with_hasher(ahash::RandomState::new());
     config2_entries.insert(
       "route".to_string(),
       make_entry(vec![ServerConfigurationValue::String("v2".to_string())]),
@@ -553,13 +556,13 @@ mod tests {
       None,
     );
 
-    let mut config1_entries = HashMap::new();
+    let config1_entries = DashMap::with_hasher(ahash::RandomState::new());
     config1_entries.insert(
       "route1".to_string(),
       make_entry(vec![ServerConfigurationValue::String("r1".to_string())]),
     );
 
-    let mut config2_entries = HashMap::new();
+    let config2_entries = DashMap::with_hasher(ahash::RandomState::new());
     config2_entries.insert(
       "route2".to_string(),
       make_entry(vec![ServerConfigurationValue::String("r2".to_string())]),
@@ -650,7 +653,7 @@ mod tests {
     let merged = premerge_configuration(vec![base, specific]);
     assert_eq!(merged.len(), 2);
 
-    let entries = &merged[1].entries["shared"].inner;
+    let entries = &merged[1].entries.get("shared").unwrap().inner;
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].values[0].as_str(), Some("specific"));
   }
@@ -684,7 +687,7 @@ mod tests {
     let merged = premerge_configuration(vec![base, specific]);
     assert_eq!(merged.len(), 2);
 
-    let entries = &merged[1].entries["eh"].inner;
+    let entries = &merged[1].entries.get("eh").unwrap().inner;
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].values[0].as_str(), Some("specific"));
   }
@@ -730,7 +733,7 @@ mod tests {
     let merged = premerge_configuration(configs);
     assert_eq!(merged.len(), 3);
 
-    let entries = &merged[2].entries["a"].inner;
+    let entries = &merged[2].entries.get("a").unwrap().inner;
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].values[0].as_str(), Some("v3"));
   }

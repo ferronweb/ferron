@@ -75,21 +75,25 @@ impl ModuleLoader for RewriteModuleLoader {
               };
               let is_not_directory = !rewrite_config_entry
                 .props
+                .pin_owned()
                 .get("directory")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true);
               let is_not_file = !rewrite_config_entry
                 .props
+                .pin_owned()
                 .get("file")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true);
               let last = rewrite_config_entry
                 .props
+                .pin_owned()
                 .get("last")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
               let allow_double_slashes = rewrite_config_entry
                 .props
+                .pin_owned()
                 .get("allow_double_slashes")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
@@ -130,20 +134,36 @@ impl ModuleLoader for RewriteModuleLoader {
           Err(anyhow::anyhow!(
             "The URL rewrite replacement must be a string"
           ))?
-        } else if !entry.props.get("directory").is_none_or(|v| v.is_bool()) {
+        } else if !entry
+          .props
+          .pin_owned()
+          .get("directory")
+          .is_none_or(|v| v.is_bool())
+        {
           Err(anyhow::anyhow!(
             "The URL rewrite disabling when it's a directory option must be boolean"
           ))?
-        } else if !entry.props.get("file").is_none_or(|v| v.is_bool()) {
+        } else if !entry
+          .props
+          .pin_owned()
+          .get("file")
+          .is_none_or(|v| v.is_bool())
+        {
           Err(anyhow::anyhow!(
             "The URL rewrite disabling when it's a file option must be boolean"
           ))?
-        } else if !entry.props.get("last").is_none_or(|v| v.is_bool()) {
+        } else if !entry
+          .props
+          .pin_owned()
+          .get("last")
+          .is_none_or(|v| v.is_bool())
+        {
           Err(anyhow::anyhow!(
             "The URL rewrite last rule option must be boolean"
           ))?
         } else if !entry
           .props
+          .pin_owned()
           .get("allow_double_slashes")
           .is_none_or(|v| v.is_bool())
         {
@@ -225,10 +245,13 @@ impl ModuleHandlers for RewriteModuleHandlers {
       // Check if it's a file or a directory according to the rewrite map configuration
       if url_rewrite_map_entry.is_not_directory || url_rewrite_map_entry.is_not_file {
         if let Some(wwwroot) = get_entry!("root", config)
-          .and_then(|e| e.values.first())
-          .and_then(|v| v.as_str())
+          .and_then(|e| {
+            let first = e.values.first();
+            first.cloned()
+          })
+          .and_then(|v| v.to_string())
         {
-          let path = Path::new(wwwroot);
+          let path = Path::new(&wwwroot);
           let mut relative_path = &rewritten_url[1..];
           while relative_path.as_bytes().first().copied() == Some(b'/') {
             relative_path = &relative_path[1..];

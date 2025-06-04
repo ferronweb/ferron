@@ -1,13 +1,13 @@
+use std::error::Error;
 use std::hash::Hasher;
 use std::sync::Arc;
-use std::{collections::HashMap, error::Error};
 
 use crate::config::{ServerConfiguration, ServerConfigurationEntries};
 
 /// A highly optimized cache that stores modules according to server configuration
 pub struct ModuleCache<T> {
   // Use a single HashMap for O(1) average-case lookups
-  inner: HashMap<CacheKey, Arc<T>>,
+  inner: papaya::HashMap<CacheKey, Arc<T>, ahash::RandomState>,
   properties: Box<[&'static str]>, // Box<[T]> is more memory efficient than Vec<T>
 }
 
@@ -28,7 +28,12 @@ impl CacheKey {
   fn new(config: &ServerConfiguration, properties: &[&'static str]) -> Self {
     let mut entries: Vec<_> = properties
       .iter()
-      .map(|&prop| (prop.to_string(), config.entries.get(prop).cloned()))
+      .map(|&prop| {
+        (
+          prop.to_string(),
+          config.entries.get(prop).map(|entries| entries.clone()),
+        )
+      })
       .collect();
 
     // Sort for consistent cache keys regardless of property order
@@ -45,7 +50,7 @@ impl<T> ModuleCache<T> {
   /// Creates a cache that stores modules per specific properties
   pub fn new(properties: Vec<&'static str>) -> Self {
     Self {
-      inner: HashMap::with_capacity(16), // Pre-allocate reasonable capacity
+      inner: papaya::HashMap::with_capacity_and_hasher(16, ahash::RandomState::new()), // Pre-allocate reasonable capacity
       properties: properties.into_boxed_slice(),
     }
   }
@@ -53,7 +58,7 @@ impl<T> ModuleCache<T> {
   /// Creates a cache with custom initial capacity
   pub fn with_capacity(properties: Vec<&'static str>, capacity: usize) -> Self {
     Self {
-      inner: HashMap::with_capacity(capacity),
+      inner: papaya::HashMap::with_capacity_and_hasher(capacity, ahash::RandomState::new()),
       properties: properties.into_boxed_slice(),
     }
   }
@@ -68,25 +73,25 @@ impl<T> ModuleCache<T> {
     let cache_key = CacheKey::new(config, &self.properties);
 
     // Fast path: check if already cached
-    if let Some(cached_value) = self.inner.get(&cache_key) {
+    if let Some(cached_value) = self.inner.pin().get(&cache_key) {
       return Ok(cached_value.clone());
     }
 
     // Slow path: initialize and cache
     let new_value = init_fn(config)?;
-    self.inner.insert(cache_key, new_value.clone());
+    self.inner.pin().insert(cache_key, new_value.clone());
     Ok(new_value)
   }
 
   /// Non-mutable variant that only retrieves from cache
   pub fn get(&self, config: &ServerConfiguration) -> Option<Arc<T>> {
     let cache_key = CacheKey::new(config, &self.properties);
-    self.inner.get(&cache_key).cloned()
+    self.inner.pin().get(&cache_key).cloned()
   }
 
   /// Clear the cache
   pub fn clear(&mut self) {
-    self.inner.clear();
+    self.inner.pin().clear();
   }
 
   /// Get current cache size
@@ -101,7 +106,7 @@ impl<T> ModuleCache<T> {
 
   /// Reserve capacity for additional entries
   pub fn reserve(&mut self, additional: usize) {
-    self.inner.reserve(additional);
+    self.inner.pin().reserve(additional);
   }
 
   /// Gets a module from cache, or creates one with the fallback function without caching
@@ -112,7 +117,7 @@ impl<T> ModuleCache<T> {
     let cache_key = CacheKey::new(config, &self.properties);
 
     // Check if already cached
-    if let Some(cached_value) = self.inner.get(&cache_key) {
+    if let Some(cached_value) = self.inner.pin().get(&cache_key) {
       return Ok(cached_value.clone());
     }
 
@@ -130,6 +135,8 @@ impl<T> Default for ModuleCache<T> {
 
 #[cfg(test)]
 mod test {
+  use dashmap::DashMap;
+
   use crate::config::{
     ServerConfigurationEntry, ServerConfigurationFilters, ServerConfigurationValue,
   };
@@ -142,13 +149,13 @@ mod test {
 
     let cache = ModuleCache::new(vec!["property"]);
 
-    let mut config_entries = HashMap::new();
+    let config_entries = DashMap::with_hasher(ahash::RandomState::new());
     config_entries.insert(
       "property".to_string(),
       ServerConfigurationEntries {
         inner: vec![ServerConfigurationEntry {
           values: vec![ServerConfigurationValue::String("something".to_string())],
-          props: HashMap::new(),
+          props: papaya::HashMap::default(),
         }],
       },
     );
@@ -164,13 +171,13 @@ mod test {
       modules: vec![],
     };
 
-    let mut config2_entries = HashMap::new();
+    let config2_entries = DashMap::with_hasher(ahash::RandomState::new());
     config2_entries.insert(
       "property".to_string(),
       ServerConfigurationEntries {
         inner: vec![ServerConfigurationEntry {
           values: vec![ServerConfigurationValue::String("something".to_string())],
-          props: HashMap::new(),
+          props: papaya::HashMap::with_hasher(ahash::RandomState::new()),
         }],
       },
     );
@@ -181,10 +188,11 @@ mod test {
           values: vec![ServerConfigurationValue::String(
             "something else".to_string(),
           )],
-          props: HashMap::new(),
+          props: papaya::HashMap::with_hasher(ahash::RandomState::new()),
         }],
       },
     );
+
     let config2 = ServerConfiguration {
       entries: config2_entries,
       filters: ServerConfigurationFilters {
@@ -222,13 +230,13 @@ mod test {
 
     let mut cache = ModuleCache::new(vec!["property"]);
 
-    let mut config_entries = HashMap::new();
+    let config_entries = DashMap::with_hasher(ahash::RandomState::new());
     config_entries.insert(
       "property".to_string(),
       ServerConfigurationEntries {
         inner: vec![ServerConfigurationEntry {
           values: vec![ServerConfigurationValue::String("something".to_string())],
-          props: HashMap::new(),
+          props: papaya::HashMap::default(),
         }],
       },
     );
@@ -244,13 +252,13 @@ mod test {
       modules: vec![],
     };
 
-    let mut config2_entries = HashMap::new();
+    let config2_entries = DashMap::with_hasher(ahash::RandomState::new());
     config2_entries.insert(
       "property".to_string(),
       ServerConfigurationEntries {
         inner: vec![ServerConfigurationEntry {
           values: vec![ServerConfigurationValue::String("something".to_string())],
-          props: HashMap::new(),
+          props: papaya::HashMap::default(),
         }],
       },
     );
@@ -261,7 +269,7 @@ mod test {
           values: vec![ServerConfigurationValue::String(
             "something else".to_string(),
           )],
-          props: HashMap::new(),
+          props: papaya::HashMap::default(),
         }],
       },
     );
@@ -303,7 +311,7 @@ mod test {
     let mut cache = ModuleCache::with_capacity(vec!["test_prop"], 10);
 
     let config = ServerConfiguration {
-      entries: HashMap::new(),
+      entries: DashMap::with_hasher(ahash::RandomState::new()),
       filters: ServerConfigurationFilters {
         hostname: None,
         ip: None,

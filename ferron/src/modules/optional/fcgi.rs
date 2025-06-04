@@ -1,3 +1,4 @@
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
@@ -94,7 +95,7 @@ impl ModuleLoader for FcgiModuleLoader {
           Err(anyhow::anyhow!(
             "The FastCGI server base URL must be a string"
           ))?
-        } else if !entry.props.get("pass").is_none_or(|v| v.is_bool()) {
+        } else if !entry.props.pin().get("pass").is_none_or(|v| v.is_bool()) {
           Err(anyhow::anyhow!(
             "The FastCGI passing option must be boolean"
           ))?
@@ -187,20 +188,34 @@ impl ModuleHandlers for FcgiModuleHandlers {
     let fastcgi_php_entry = get_entry!("fcgi_php", config);
 
     let mut fastcgi_to = fastcgi_entry
-      .and_then(|e| e.values.first())
-      .and_then(|v| v.as_str());
+      .as_ref()
+      .and_then(|e| {
+        let first = e.values.first();
+        first.cloned()
+      })
+      .and_then(|v| v.to_string());
+
     let mut fastcgi_pass = fastcgi_entry
-      .and_then(|e| e.props.get("pass"))
+      .as_ref()
+      .and_then(|e| {
+        let pinned = e.props.pin_owned();
+        pinned.get("pass").cloned()
+      })
       .and_then(|v| v.as_bool())
       .unwrap_or(true);
 
     if fastcgi_to.is_none() {
       fastcgi_to = fastcgi_php_entry
-        .and_then(|e| e.values.first())
-        .and_then(|v| v.as_str());
+        .as_ref()
+        .and_then(|e| {
+          let first = e.values.first();
+          first.cloned()
+        })
+        .and_then(|v| v.to_string());
       fastcgi_pass = false;
     }
-    let is_php = fastcgi_entry.is_none() && fastcgi_php_entry.is_some();
+
+    let is_php = fastcgi_entry.as_ref().is_none() && fastcgi_php_entry.as_ref().is_some();
 
     if let Some(fastcgi_to) = fastcgi_to {
       let mut fastcgi_script_exts = Vec::new();
@@ -208,8 +223,11 @@ impl ModuleHandlers for FcgiModuleHandlers {
       if is_php {
         fastcgi_script_exts.push(".php");
       } else {
-        let fcgi_script_exts_config = get_entries!("fcgi_extension", config);
-        if let Some(fcgi_script_exts_obtained) = fcgi_script_exts_config {
+        let fcgi_script_exts_config = UnsafeCell::new(get_entries!("fcgi_extension", config));
+
+        let fcgi_script_exts_config_cell = unsafe { &*fcgi_script_exts_config.get() };
+
+        if let Some(fcgi_script_exts_obtained) = fcgi_script_exts_config_cell {
           for fcgi_script_ext_config in fcgi_script_exts_obtained.inner.iter() {
             if let Some(fcgi_script_ext) = fcgi_script_ext_config
               .values
@@ -254,9 +272,12 @@ impl ModuleHandlers for FcgiModuleHandlers {
           request_path_with_slashes.strip_prefix(canonical_fastcgi_path)
         {
           let wwwroot = get_entry!("root", config)
-            .and_then(|e| e.values.first())
-            .and_then(|v| v.as_str())
-            .unwrap_or("/nonexistent");
+            .and_then(|e| {
+              let first = e.values.first();
+              first.cloned()
+            })
+            .and_then(|v| v.to_string())
+            .unwrap_or("/nonexistent".into());
 
           let wwwroot_unknown = PathBuf::from(wwwroot);
           let wwwroot_pathbuf = match wwwroot_unknown.as_path().is_absolute() {
@@ -311,8 +332,11 @@ impl ModuleHandlers for FcgiModuleHandlers {
 
       if execute_pathbuf.is_none() {
         if let Some(wwwroot) = get_entry!("root", config)
-          .and_then(|e| e.values.first())
-          .and_then(|v| v.as_str())
+          .and_then(|e| {
+            let first = e.values.first();
+            first.cloned()
+          })
+          .and_then(|v| v.to_string())
         {
           let cache_key = format!(
             "{}{}{}",
@@ -578,8 +602,8 @@ impl ModuleHandlers for FcgiModuleHandlers {
             wwwroot_detected.as_path(),
             execute_pathbuf,
             execute_path_info,
-            get_value!("server_administrator_email", config).and_then(|v| v.as_str()),
-            fastcgi_to,
+            get_value!("server_administrator_email", config).and_then(|v| v.to_string()),
+            &fastcgi_to,
             additional_environment_variables,
           )
           .await;
@@ -605,7 +629,7 @@ async fn execute_fastcgi_with_environment_variables(
   wwwroot: &Path,
   execute_pathbuf: PathBuf,
   path_info: Option<String>,
-  server_administrator_email: Option<&str>,
+  server_administrator_email: Option<String>,
   fastcgi_to: &str,
   additional_environment_variables: HashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {

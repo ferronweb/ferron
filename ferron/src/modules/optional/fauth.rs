@@ -169,8 +169,11 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
       .filter_map(|v| v.as_str().map(|v| v.to_string()))
       .collect::<Vec<_>>();
     if let Some(auth_to) = get_entry!("auth_to", config)
-      .and_then(|e| e.values.first())
-      .and_then(|v| v.as_str())
+      .and_then(|e| {
+        let first = e.values.first();
+        first.cloned()
+      })
+      .and_then(|v| v.to_string())
     {
       let (request_parts, request_body) = request.into_parts();
 

@@ -1,11 +1,13 @@
 pub mod adapters;
 pub mod processing;
 
+use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hasher;
 use std::net::IpAddr;
 use std::sync::Arc;
-use std::{cmp::Ordering, collections::HashMap};
+
+use dashmap::DashMap;
 
 use crate::modules::Module;
 use crate::util::{match_hostname, match_location};
@@ -97,7 +99,7 @@ impl ServerConfigurations {
 #[derive(Clone)]
 pub struct ServerConfiguration {
   /// Entries for the configuration
-  pub entries: HashMap<String, ServerConfigurationEntries>,
+  pub entries: DashMap<String, ServerConfigurationEntries, ahash::RandomState>,
 
   /// Configuration filters
   pub filters: ServerConfigurationFilters,
@@ -228,7 +230,7 @@ pub struct ServerConfigurationEntry {
   pub values: Vec<ServerConfigurationValue>,
 
   /// Props for the entry
-  pub props: HashMap<String, ServerConfigurationValue>,
+  pub props: papaya::HashMap<String, ServerConfigurationValue, ahash::RandomState>,
 }
 
 impl std::hash::Hash for ServerConfigurationEntry {
@@ -236,9 +238,11 @@ impl std::hash::Hash for ServerConfigurationEntry {
     // Hash the values vector
     self.values.hash(state);
 
+    let pinned_map = self.props.pin();
+
     // For HashMap, we need to hash in a deterministic order
     // since HashMap iteration order is not guaranteed
-    let mut props_vec: Vec<_> = self.props.iter().collect();
+    let mut props_vec: smallvec::SmallVec<[_; 32]> = pinned_map.iter().collect();
     props_vec.sort_by(|a, b| a.0.cmp(b.0)); // Sort by key
 
     // Hash the length first, then each key-value pair
@@ -333,6 +337,15 @@ impl ServerConfigurationValue {
     use ServerConfigurationValue::*;
     match self {
       String(s) => Some(s),
+      _ => None,
+    }
+  }
+
+  /// Extracts a `&str` from the value
+  pub fn to_string(&self) -> Option<String> {
+    use ServerConfigurationValue::*;
+    match self {
+      String(s) => Some(s.into()),
       _ => None,
     }
   }

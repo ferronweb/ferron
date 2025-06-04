@@ -3,7 +3,7 @@ use super::anti_xss;
 /// Generates a default error page
 pub fn generate_default_error_page(
   status_code: hyper::StatusCode,
-  server_administrator_email: Option<&str>,
+  server_administrator_email: Option<String>,
 ) -> String {
   let status_code_name = match status_code.canonical_reason() {
     Some(reason) => format!("{} {}", status_code.as_u16(), reason),

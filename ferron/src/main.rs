@@ -123,14 +123,12 @@ fn configure_logging(
     .find_global_configuration()
     .as_deref()
     .and_then(|c| get_value!("error_log", c))
-    .and_then(|v| v.as_str())
-    .map(String::from);
+    .and_then(|v| v.to_string());
   let log_filename = server_configurations
     .find_global_configuration()
     .as_deref()
     .and_then(|c| get_value!("log", c))
-    .and_then(|v| v.as_str())
-    .map(String::from);
+    .and_then(|v| v.to_string());
 
   // Spawn logging task in the secondary asynchronous runtime
   let logging_rx = logging_rx.clone();
@@ -312,7 +310,7 @@ fn before_starting_server(
     let mut crypto_provider = default_provider();
 
     // Configure cipher suites
-    let cipher_suite: Vec<&config::ServerConfigurationValue> = global_configuration
+    let cipher_suite: Vec<config::ServerConfigurationValue> = global_configuration
       .as_deref()
       .map_or(vec![], |c| get_values!("tls_cipher_suite", c));
     if !cipher_suite.is_empty() {
@@ -385,11 +383,11 @@ fn before_starting_server(
     let min_tls_version_option = global_configuration
       .as_deref()
       .and_then(|c| get_value!("tls_min_version", c))
-      .and_then(|v| v.as_str());
+      .and_then(|v| v.to_string());
     let max_tls_version_option = global_configuration
       .as_deref()
       .and_then(|c| get_value!("tls_max_version", c))
-      .and_then(|v| v.as_str());
+      .and_then(|v| v.to_string());
 
     let tls_config_builder_wants_verifier =
       if min_tls_version_option.is_none() && max_tls_version_option.is_none() {
@@ -454,15 +452,18 @@ fn before_starting_server(
       .map(|e| {
         e.values
           .iter()
-          .filter_map(|v| v.as_str())
+          .filter_map(|v| v.to_string())
           .collect::<Vec<_>>()
       })
-      .unwrap_or(vec!["h1", "h2"]);
+      .unwrap_or(vec!["h1".into(), "h2".into()]);
 
     let default_http_port = global_configuration
       .as_deref()
       .and_then(|c| get_entry!("default_http_port", c))
-      .and_then(|e| e.values.first())
+      .and_then(|e| {
+        let first = e.values.first();
+        first.cloned()
+      })
       .map_or(Some(80), |v| {
         if v.is_null() {
           None
@@ -473,7 +474,10 @@ fn before_starting_server(
     let default_https_port = global_configuration
       .as_deref()
       .and_then(|c| get_entry!("default_https_port", c))
-      .and_then(|e| e.values.first())
+      .and_then(|e| {
+        let first = e.values.first();
+        first.cloned()
+      })
       .map_or(Some(443), |v| {
         if v.is_null() {
           None
@@ -614,8 +618,8 @@ fn before_starting_server(
           if let Some(sni_hostname) = sni_hostname {
             let is_wildcard_domain = sni_hostname.starts_with("*.");
             let challenge_type_str = get_value!("auto_tls_challenge", server_configuration)
-              .and_then(|v| v.as_str())
-              .unwrap_or("tls-alpn-01");
+              .and_then(|v| v.to_string())
+              .unwrap_or("tls-alpn-01".into());
             let challenge_type = match &*challenge_type_str.to_uppercase() {
               "HTTP-01" => {
                 if is_wildcard_domain {
@@ -653,23 +657,23 @@ fn before_starting_server(
             let mut acme_config =
               AcmeConfig::new(vec![&sni_hostname]).challenge_type(challenge_type);
             if let Some(acme_contact) =
-              get_value!("auto_tls_contact", server_configuration).and_then(|v| v.as_str())
+              get_value!("auto_tls_contact", server_configuration).and_then(|v| v.to_string())
             {
               acme_config = acme_config.contact_push(format!("mailto:{}", acme_contact));
             }
             let acme_cache =
               if let Some(acme_cache_path) = get_value!("auto_tls_cache", server_configuration)
-                .map_or(acme_default_directory.as_deref(), |v| {
+                .map_or(acme_default_directory.clone(), |v| {
                   if v.is_null() {
                     None
-                  } else if let Some(v) = v.as_str() {
+                  } else if let Some(v) = v.to_string() {
                     Some(v)
                   } else {
-                    acme_default_directory.as_deref()
+                    acme_default_directory.clone()
                   }
                 })
               {
-                let mut pathbuf = match PathBuf::from_str(acme_cache_path) {
+                let mut pathbuf = match PathBuf::from_str(&acme_cache_path) {
                   Ok(pathbuf) => pathbuf,
                   Err(_) => Err(anyhow::anyhow!("Invalid ACME cache path"))?,
                 };
@@ -754,7 +758,7 @@ fn before_starting_server(
     }
 
     // If HTTP/1.1 isn't enabled, don't listen to non-encrypted ports
-    if !protocols.contains(&"h1") {
+    if !protocols.contains(&"h1".into()) {
       nonencrypted_ports.clear();
     }
 
@@ -791,7 +795,7 @@ fn before_starting_server(
       let mut tls_config = tls_config_builder_wants_server_cert
         .clone()
         .with_cert_resolver(resolver);
-      if protocols.contains(&"h3") {
+      if protocols.contains(&"h3".into()) {
         // TLS configuration used for QUIC listene
         let mut quic_tls_config = tls_config.clone();
         quic_tls_config.max_early_data_size = u32::MAX;
@@ -799,11 +803,11 @@ fn before_starting_server(
         quic_tls_config.alpn_protocols.insert(0, b"h3".to_vec());
         quic_tls_configs.insert(tls_port, Arc::new(quic_tls_config));
       }
-      if protocols.contains(&"h1") {
+      if protocols.contains(&"h1".into()) {
         tls_config.alpn_protocols.insert(0, b"http/1.0".to_vec());
         tls_config.alpn_protocols.insert(0, b"http/1.1".to_vec());
       }
-      if protocols.contains(&"h2") {
+      if protocols.contains(&"h2".into()) {
         tls_config.alpn_protocols.insert(0, b"h2".to_vec());
       }
       tls_configs.insert(tls_port, Arc::new(tls_config));
@@ -829,7 +833,7 @@ fn before_starting_server(
     let listen_ip_addr = match global_configuration
       .as_deref()
       .and_then(|c| get_value!("listen_ip", c))
-      .and_then(|v| v.as_str())
+      .and_then(|v| v.to_string())
       .map_or(Ok(IpAddr::V6(Ipv6Addr::UNSPECIFIED)), |a| a.parse())
     {
       Ok(addr) => addr,
