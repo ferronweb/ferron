@@ -208,7 +208,7 @@ where
   /// The current state (STATE_EMPTY, STATE_RESERVED, etc.)
   #[inline]
   fn get_state(&self) -> u32 {
-    unpack_state(self.state_version.load(Ordering::Acquire))
+    unpack_state(self.state_version.load(Ordering::Relaxed))
   }
 
   /// Gets the current version of the entry.
@@ -219,7 +219,7 @@ where
   /// The current version number
   #[inline]
   fn get_version(&self) -> u32 {
-    unpack_version(self.state_version.load(Ordering::Acquire))
+    unpack_version(self.state_version.load(Ordering::Relaxed))
   }
 
   /// Atomically compares and exchanges the state, incrementing the version.
@@ -920,7 +920,7 @@ where
   /// the values that were actually found and removed.
   ///
   /// # Arguments
-  /// * `keys` - Vector of keys to remove
+  /// * `keys` - A slice of keys to remove
   ///
   /// # Returns
   /// Vector containing only the values that were successfully removed
