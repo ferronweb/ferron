@@ -158,15 +158,13 @@ jobs:
           # The "move-ferron2-archive" is a custom command that moves the ZIP archive to be served by the download server
           ssh ferron-servers "sudo move-ferron2-archive ${{ env.FERRON_VERSION }} ${{ matrix.target }}"
 
-      - name: Release Ferron to GitHub
-        uses: ncipollo/release-action@v1
-        with:
-          allowUpdates: true
-          artifacts: "ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip"
-          tag: "${{ env.FERRON_VERSION }}"
-          commit: "main"
-          prerelease: true # TODO: remove this once Ferron 2.0.0 goes stable
-
+      # - name: Release Ferron to GitHub
+      #   uses: ncipollo/release-action@v1
+      #   with:
+      #     allowUpdates: true
+      #     artifacts: "ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip"
+      #     tag: "${{ env.FERRON_VERSION }}"
+      #     commit: "main"
 
   # docs:
   #   runs-on: ubuntu-latest
