@@ -136,7 +136,7 @@ smallvec = { version = "1.15.0", features = [
     "const_generics",
 ] }
 papaya = { version = "0.2.1", optional = true }
-ahash = "0.8.12"
+ahash = { version = "0.8.12", optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4.4"
@@ -159,7 +159,7 @@ default = [
     "static",
 ]
 asgi = ["pyo3", "pyo3-async-runtimes", "tokio-tungstenite", "hyper-tungstenite"]
-cache = ["cache_control", "itertools", "papaya"]
+cache = ["cache_control", "itertools", "papaya", "ahash"]
 cgi = ["async-process", "httparse", "memchr"]
 example = []
 fauth = ["rand", "rustls-platform-verifier"]
