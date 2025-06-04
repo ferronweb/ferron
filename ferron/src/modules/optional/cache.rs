@@ -321,7 +321,7 @@ impl ModuleLoader for CacheModuleLoader {
             .map(|v| v as usize);
 
           // Use optimized cache size calculation
-          let cache_size = maximum_cache_entries.map_or(2048, |e| e.min(8192).max(512));
+          let cache_size = maximum_cache_entries.map_or(2048, |e| e.clamp(512, 8192));
           let max_entries = maximum_cache_entries.unwrap_or(0);
 
           Ok(Arc::new(CacheModule {
