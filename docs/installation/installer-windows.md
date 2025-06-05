@@ -9,7 +9,7 @@ title: Installation via installer (Windows Server)
 To install Ferron web server, run the following command:
 
 ```batch
-powershell -c "irm https://downloads.ferronweb.org/install.ps1 | iex"
+powershell -c "irm https://downloads.ferronweb.org/install-v2.ps1 | iex"
 ```
 
 You will be prompted to choose the installation type.
