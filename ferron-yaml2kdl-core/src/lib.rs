@@ -271,7 +271,7 @@ pub fn obtain_host_configuration(
         "users" => {
           if let Some(value) = value.as_vec() {
             for value in value {
-              if let Some(user) = value["user"].as_str() {
+              if let Some(user) = value["name"].as_str() {
                 if let Some(pass) = value["pass"].as_str() {
                   let mut kdl_property = KdlNode::new("user");
                   kdl_property.push(KdlValue::String(user.to_string()));
