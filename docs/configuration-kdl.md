@@ -154,7 +154,7 @@ include /etc/ferron.d/**/*.kdl
 - `etag [enable_etag: bool]` (_static_ module)
   - This directive specifies whenever the ETag header is enabled. Default: `etag #true`
 - `compressed [enable_compression: bool]`]` (_static_ module)
-  - This directive specifies whenever the HTTP compression is enabled. Default: `compressed #true`
+  - This directive specifies whenever the HTTP compression for static files is enabled. Default: `compressed #true`
 - `directory_listing [enable_directory_listing: bool]`]` (_static_ module)
   - This directive specifies whenever the directory listings are enabled. Default: `directory_listing #false`
 - `cache [enable_cache: bool]` (_cache_ module)
