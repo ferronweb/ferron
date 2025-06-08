@@ -609,33 +609,38 @@ async fn http_quic_handler_fn(
               let (mut send, receive) = stream.split();
               let request_body_stream = futures_util::stream::unfold(
                 (receive, false),
-                async move |(mut receive, mut is_body_finished)| loop {
-                  if !is_body_finished {
-                    match receive.recv_data().await {
-                      Ok(Some(mut data)) => {
-                        return Some((
-                          Ok(Frame::data(data.copy_to_bytes(data.remaining()))),
-                          (receive, false),
-                        ))
+                |(mut receive, mut is_body_finished)| async move {
+                  loop {
+                    if !is_body_finished {
+                      match receive.recv_data().await {
+                        Ok(Some(mut data)) => {
+                          return Some((
+                            Ok(Frame::data(data.copy_to_bytes(data.remaining()))),
+                            (receive, false),
+                          ))
+                        }
+                        Ok(None) => is_body_finished = true,
+                        Err(err) => {
+                          return Some((
+                            Err(std::io::Error::other(err.to_string())),
+                            (receive, false),
+                          ))
+                        }
                       }
-                      Ok(None) => is_body_finished = true,
-                      Err(err) => {
-                        return Some((
-                          Err(std::io::Error::other(err.to_string())),
-                          (receive, false),
-                        ))
-                      }
-                    }
-                  } else {
-                    match receive.recv_trailers().await {
-                      Ok(Some(trailers)) => {
-                        return Some((Ok(Frame::trailers(trailers)), (receive, true)))
-                      }
-                      Ok(None) => {
-                        return None;
-                      }
-                      Err(err) => {
-                        return Some((Err(std::io::Error::other(err.to_string())), (receive, true)))
+                    } else {
+                      match receive.recv_trailers().await {
+                        Ok(Some(trailers)) => {
+                          return Some((Ok(Frame::trailers(trailers)), (receive, true)))
+                        }
+                        Ok(None) => {
+                          return None;
+                        }
+                        Err(err) => {
+                          return Some((
+                            Err(std::io::Error::other(err.to_string())),
+                            (receive, true),
+                          ))
+                        }
                       }
                     }
                   }
