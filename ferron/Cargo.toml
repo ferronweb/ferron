@@ -153,6 +153,7 @@ default = [
     "fauth",
     "fcgi",
     "fproxy",
+    "replace",
     "rproxy",
     "runtime-monoio",
     "scgi",
@@ -164,6 +165,7 @@ default-tokio = [
     "fauth",
     "fcgi",
     "fproxy",
+    "replace",
     "rproxy",
     "runtime-tokio",
     "scgi",
@@ -176,6 +178,7 @@ example = []
 fauth = ["rand", "rustls-platform-verifier"]
 fcgi = ["tokio-util/codec", "httparse", "memchr"]
 fproxy = []
+replace = ["memchr"]
 rproxy = ["rand", "rustls-platform-verifier"]
 runtime-monoio = ["monoio", "monoio-compat", "blocking"]
 runtime-tokio = ["tokio/full", "quinn/runtime-tokio", "hyper-util"]

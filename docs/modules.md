@@ -11,8 +11,10 @@ The following modules are built into Ferron and are enabled by default:
 - _fauth_ - this module enables authentication forwarded to the authentication server.
 - _fcgi_ - this module enables the support for connecting to FastCGI servers.
 - _fproxy_ - this module enables forward proxy functionality.
+- _replace_ - this module enables replacement of strings in response bodies.
 - _rproxy_ - this module enables reverse proxy functionality.
 - _scgi_ - this module enables the support for connecting to SCGI servers.
+- _static_ - this module enables static file serving.
 
 The following modules are built into Ferron, but are disabled by default:
 
@@ -66,6 +68,10 @@ If you are using PHP-FPM only for Ferron, you can set the `listen.owner` and `li
 ### _fproxy_ module
 
 If you are using the _fproxy_ module, then hosts on the local network and local host are also accessible from the proxy. You may block these using a firewall, if you don’t want these hosts to be accessible from the proxy.
+
+### _replace_ module
+
+If you're using this module with static file serving, it's recommended to disable static file compression using `compressed #false`, otherwise the replacement wouldn't work.
 
 ### _rproxy_ module
 

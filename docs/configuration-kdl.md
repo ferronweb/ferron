@@ -211,6 +211,14 @@ include /etc/ferron.d/**/*.kdl
   - This directive specifies whenever WSGI with pre-forked process pool is enabled and the path to the WSGI application. The WSGI application must have an `application` entry point. Default: `wsgi #null`
 - `asgi <asgi_application_path: string|null>` (_asgi_ module)
   - This directive specifies whenever ASGI is enabled and the path to the ASGI application. The WSGI application must have an `application` entry point. Default: `wsgi #null`
+- `replace <searched_string: string> <replaced_string: string>` (_replace_ module; Ferron UNRELEASED or newer)
+  - This directive specifies the string to be replaced in a response body, and a replacement string. Default: none
+- `replace_once [replace_once: bool]` (_replace_ module; Ferron UNRELEASED or newer)
+  - This directive specifies whenever to replace the string in a response body only once. Default: `replace_once #true`
+- `replace_last_modified [preserve_last_modified: bool]` (_replace_ module; Ferron UNRELEASED or newer)
+  - This directive specifies whenever to preserve the "Last-Modified" header in the response. Default: `replace_last_modified #false`
+- `replace_filter_types <filter_type: string> [<filter_type: string> ...]` (_replace_ module; Ferron UNRELEASED or newer)
+  - This directive specifies the response MIME type filters. The filter can be either a specific MIME type (like `text/html`) or a wildcard (`*`) specifying that responses with all MIME types are processed for replacement. This directive can be specified multiple times. Default: `replace_filter_types "text/html"`
 
 ## Example configuration
 

@@ -12,6 +12,8 @@ pub mod fauth;
 pub mod fcgi;
 #[cfg(feature = "fproxy")]
 pub mod fproxy;
+#[cfg(feature = "replace")]
+pub mod replace;
 #[cfg(feature = "rproxy")]
 pub mod rproxy;
 #[cfg(feature = "scgi")]
