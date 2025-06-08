@@ -19,6 +19,10 @@ export const headerLinks = {
   github: {
     href: "https://github.com/ferronweb/ferron",
     target: "_blank"
+  },
+  matrix: {
+    href: "https://matrix.to/#/#ferronweb:matrix.org",
+    target: "_blank"
   }
 };
 
