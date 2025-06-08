@@ -38,9 +38,6 @@ impl ModuleLoader for ReplaceModuleLoader {
       self
         .cache
         .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |config| {
-          let replace_once = get_value!("replace_once", config)
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true);
           let replacers = Arc::new(
             get_entries!("replace", config)
               .map_or(vec![].as_ref(), |e| &e.inner)
@@ -51,7 +48,10 @@ impl ModuleLoader for ReplaceModuleLoader {
                     return Some(BodyReplacer::new(
                       searched.as_bytes(),
                       replacement.as_bytes(),
-                      replace_once,
+                      e.props
+                        .get("once")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true),
                     ));
                   }
                 }
@@ -88,6 +88,10 @@ impl ModuleLoader for ReplaceModuleLoader {
           Err(anyhow::anyhow!(
             "The replacement string for a body must be a string"
           ))?
+        } else if !entry.props.get("once").is_none_or(|v| v.is_bool()) {
+          Err(anyhow::anyhow!(
+            "Invalid once body replacement enabling option"
+          ))?
         }
       }
     }
@@ -102,20 +106,6 @@ impl ModuleLoader for ReplaceModuleLoader {
           ))?
         } else if !entry.values[0].is_bool() {
           Err(anyhow::anyhow!("Invalid \"Last-Modified\" header preserving during the body replacement enabling option"))?
-        }
-      }
-    }
-
-    if let Some(entries) = get_entries_for_validation!("replace_once", config, used_properties) {
-      for entry in &entries.inner {
-        if entry.values.len() != 1 {
-          Err(anyhow::anyhow!(
-            "The `replace_once` configuration property must have exactly one value"
-          ))?
-        } else if !entry.values[0].is_bool() {
-          Err(anyhow::anyhow!(
-            "Invalid once body replacement enabling option"
-          ))?
         }
       }
     }
