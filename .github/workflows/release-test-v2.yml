@@ -116,20 +116,6 @@ jobs:
             exit 1
           fi
 
-      - name: Setup GCC
-        if: matrix.runner == 'ubuntu-latest'
-        id: install_gcc
-        uses: rlalik/setup-cpp-compiler@master
-        with:
-          compiler: gcc
-
-      - name: Configure Cargo (or Cross) to use installed GCC
-        if: matrix.runner == 'ubuntu-latest'
-        shell: bash
-        run: |
-          echo "CC=${{ steps.install_gcc.outputs.cc }}" >> $GITHUB_ENV
-          echo "CXX=${{ steps.install_gcc.outputs.cxx }}" >> $GITHUB_ENV
-
       - name: Setup NASM
         if: matrix.runner == 'windows-latest'
         uses: ilammy/setup-nasm@v1
