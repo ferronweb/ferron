@@ -17,7 +17,7 @@ rustls = { version = "0.23.24", default-features = false, features = [
     "std",
     "ring",
 ] }
-rustls-acme = { version = "0.13.0", default-features = false, features = [
+rustls-acme = { version = "0.14.0", default-features = false, features = [
     "tls12",
     "ring",
 ] }
