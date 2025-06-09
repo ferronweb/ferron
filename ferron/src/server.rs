@@ -1143,7 +1143,13 @@ async fn server_event_loop(
       if let Some(host) = host_yaml.as_hash() {
         if let Some(domain_yaml) = host.get(&Yaml::from_str("domain")) {
           if let Some(domain) = domain_yaml.as_str() {
-            if !domain.contains("*") {
+            // check if we even want auto-TLS for this domain
+            let want_auto_tls = host
+              .get(&Yaml::from_str("enableAutomaticTLS"))
+              .and_then(|enable| enable.as_bool())
+              .unwrap_or(true);
+
+            if want_auto_tls && !domain.contains("*") {
               acme_domains.push(domain);
             }
           }
