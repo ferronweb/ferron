@@ -222,9 +222,17 @@ fn parse_range_header(range_str: &str, default_end: u64) -> Option<(u64, u64)> {
 }
 
 /// Extracts inner ETag
-fn extract_etag_inner(input: &str) -> Option<String> {
-  // Remove the surrounding double quotes
-  let trimmed = input.trim_matches('"');
+fn extract_etag_inner(input: &str, weak: bool) -> Option<String> {
+  // Remove the surrounding double quotes and preceding "W/"
+  let weak_might_removed = if weak {
+    match input.strip_prefix("W/") {
+      Some(stripped) => stripped,
+      None => input,
+    }
+  } else {
+    input
+  };
+  let trimmed = weak_might_removed.trim_matches('"');
 
   // Split the string at the hyphen and take the first part
   let parts: Vec<&str> = trimmed.split('-').collect();
@@ -232,6 +240,15 @@ fn extract_etag_inner(input: &str) -> Option<String> {
     None
   } else {
     Some(parts[0].to_string())
+  }
+}
+
+/// Converts strong ETag to weak one, if it's not a weak one
+fn etag_strong_to_weak(input: &str) -> String {
+  if input.starts_with("W/") {
+    input.to_string()
+  } else {
+    format!("W/{}", input)
   }
 }
 
@@ -762,7 +779,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               if let Some(if_none_match_value) = request.headers().get(header::IF_NONE_MATCH) {
                 match if_none_match_value.to_str() {
                   Ok(if_none_match) => {
-                    if let Some(etag_extracted) = extract_etag_inner(if_none_match) {
+                    if let Some(etag_extracted) = extract_etag_inner(if_none_match, true) {
                       // Client's cached version matches our current version
                       if etag_extracted == etag {
                         let etag_original = if_none_match.to_string();
@@ -771,7 +788,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                           response: Some(
                             Response::builder()
                               .status(StatusCode::NOT_MODIFIED)
-                              .header(header::ETAG, etag_original)
+                              .header(header::ETAG, etag_strong_to_weak(&etag_original))
                               .header(header::VARY, vary)
                               .body(Empty::new().map_err(|e| match e {}).boxed())?,
                           ),
@@ -805,7 +822,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   Ok(if_match) => {
                     // "*" means any version is acceptable
                     if if_match != "*" {
-                      if let Some(etag_extracted) = extract_etag_inner(if_match) {
+                      if let Some(etag_extracted) = extract_etag_inner(if_match, true) {
                         // Client's version doesn't match our current version
                         if etag_extracted != etag {
                           let mut header_map = HeaderMap::new();
@@ -928,7 +945,8 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   );
 
                 if let Some(etag) = etag_option {
-                  response_builder = response_builder.header(header::ETAG, etag);
+                  response_builder =
+                    response_builder.header(header::ETAG, format!("W/\"{}\"", etag));
                 }
 
                 if let Some(content_type) = content_type_option {
@@ -1082,19 +1100,20 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               if let Some(etag) = etag_option {
                 if use_brotli {
                   response_builder =
-                    response_builder.header(header::ETAG, format!("\"{}-br\"", etag));
+                    response_builder.header(header::ETAG, format!("W/\"{}-br\"", etag));
                 } else if use_zstd {
                   response_builder =
-                    response_builder.header(header::ETAG, format!("\"{}-zstd\"", etag));
+                    response_builder.header(header::ETAG, format!("W/\"{}-zstd\"", etag));
                 } else if use_deflate {
                   response_builder =
-                    response_builder.header(header::ETAG, format!("\"{}-deflate\"", etag));
+                    response_builder.header(header::ETAG, format!("W/\"{}-deflate\"", etag));
                 } else if use_gzip {
                   response_builder =
-                    response_builder.header(header::ETAG, format!("\"{}-gzip\"", etag));
+                    response_builder.header(header::ETAG, format!("W/\"{}-gzip\"", etag));
                 } else {
                   // Uncompressed content
-                  response_builder = response_builder.header(header::ETAG, format!("\"{}\"", etag));
+                  response_builder =
+                    response_builder.header(header::ETAG, format!("W/\"{}\"", etag));
                 }
               }
 
