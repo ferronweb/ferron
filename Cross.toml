@@ -1,3 +1,10 @@
+# Pre-build configuration (for bindgen to work)
+[build]
+pre-build = [
+    "apt-get update && (apt-get install --assume-yes --no-install-recommends libclang-10-dev clang-10 || apt-get install --assume-yes --no-install-recommends libclang-3.9-dev clang-3.9)",                                                                    # Install Clang headers
+    "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable && . $HOME/.cargo/env && cargo install --force --locked bindgen-cli && mv $HOME/.cargo/bin/bindgen /usr/bin && rm -rf $HOME/.cargo", # Install bindgen-cli
+]
+
 # GNU/Linux targets (Cross "edge" images)
 [target.x86_64-unknown-linux-gnu]
 image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:edge"
@@ -32,3 +39,13 @@ image = "ghcr.io/dorianniemiecsvrjs/cross-aarch64-unknown-linux-musl:latest"
 
 [target.armv7-unknown-linux-musleabihf]
 image = "ghcr.io/dorianniemiecsvrjs/cross-armv7-unknown-linux-musleabihf:latest"
+
+# FreeBSD target (Cross "edge" image)
+[target.x86_64-unknown-freebsd]
+image = "ghcr.io/cross-rs/x86_64-unknown-freebsd:edge"
+
+# FreeBSD target environment variables (for bindgen to work)
+[target.x86_64-unknown-freebsd.env]
+passthrough = [
+    "BINDGEN_EXTRA_CLANG_ARGS_x86_64_unknown_freebsd=--sysroot=/usr/local/x86_64-unknown-freebsd13 -idirafter/usr/local/x86_64-unknown-freebsd13/include",
+]

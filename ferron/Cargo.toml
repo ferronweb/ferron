@@ -19,8 +19,8 @@ h3 = "0.0.8"
 h3-quinn = "0.0.10"
 quinn = { version = "0.11.8", default-features = false, features = [
     "platform-verifier",
-    "ring",
-    "rustls-ring",
+    "aws-lc-rs",
+    "rustls-aws-lc-rs",
 ] }
 http-body-util = "0.1.3"
 httparse = { version = "1.10.1", optional = true }
@@ -31,22 +31,22 @@ socket2 = "0.5.9"
 rustls = { version = "0.23.27", default-features = false, features = [
     "tls12",
     "std",
-    "ring",
+    "aws-lc-rs",
 ] }
 tokio-rustls = { version = "0.26.2", default-features = false, features = [
     "tls12",
-    "ring",
+    "aws-lc-rs",
 ] }
 rustls-acme = { version = "0.13.0", default-features = false, features = [
     "tls12",
-    "ring",
+    "aws-lc-rs",
 ] }
 rustls-native-certs = "0.8.1"
 rustls-pemfile = "2.2.0"
 rustls-pki-types = "1.12.0"
 rustls-platform-verifier = { version = "0.5.3", optional = true }
 ocsp-stapler = { version = "0.4.7", default-features = false, features = [
-    "ring",
+    "aws-lc-rs",
 ] }
 password-auth = { workspace = true }
 sha2 = "0.10.9"

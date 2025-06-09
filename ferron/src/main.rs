@@ -37,9 +37,9 @@ use listener_tcp::create_tcp_listener;
 use logging::LogMessage;
 use mimalloc::MiMalloc;
 use modules::ModuleLoader;
-use rustls::crypto::ring::cipher_suite::*;
-use rustls::crypto::ring::default_provider;
-use rustls::crypto::ring::kx_group::*;
+use rustls::crypto::aws_lc_rs::cipher_suite::*;
+use rustls::crypto::aws_lc_rs::default_provider;
+use rustls::crypto::aws_lc_rs::kx_group::*;
 use rustls::server::{ResolvesServerCert, WebPkiClientVerifier};
 use rustls::sign::CertifiedKey;
 use rustls::version::{TLS12, TLS13};
@@ -358,6 +358,8 @@ fn before_starting_server(
             "secp256r1" => SECP256R1,
             "secp384r1" => SECP384R1,
             "x25519" => X25519,
+            "x25519mklem768" => X25519MLKEM768,
+            "mklem768" => MLKEM768,
             _ => Err(anyhow::anyhow!(format!(
               "The \"{}\" ECDH curve is not supported",
               ecdh_curve
