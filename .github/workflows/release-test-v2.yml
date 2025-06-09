@@ -123,6 +123,10 @@ jobs:
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall --no-confirm cross --force
 
+      - name: Setup NASM
+        if: matrix.runner == 'windows-latest'
+        uses: ilammy/setup-nasm@v1
+
       - name: Build binaries
         run: "${{ matrix.command }} build --verbose --locked --release --target ${{ matrix.target }} ${{ matrix.options }}"
 
