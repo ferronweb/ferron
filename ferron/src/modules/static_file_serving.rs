@@ -561,7 +561,8 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                     );
 
                   if let Some(etag) = etag_option {
-                    response_builder = response_builder.header(header::ETAG, etag);
+                    response_builder =
+                      response_builder.header(header::ETAG, format!("\"{}\"", etag));
                   }
 
                   if let Some(content_type) = content_type_option {
