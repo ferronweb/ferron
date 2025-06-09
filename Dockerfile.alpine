@@ -1,5 +1,5 @@
 # Use the official Rust image as a build stage
-FROM rust:alpine as builder
+FROM rust:alpine AS builder
 
 # Set the working directory
 WORKDIR /usr/src/ferron
