@@ -1,49 +1,55 @@
 ---
 import {
-  faDove,
   faBolt,
   faShieldHalved,
-  faScrewdriverWrench,
   faLock,
-  faServer
+  faServer,
+  faCog,
+  faGlobe
 } from "@fortawesome/free-solid-svg-icons";
 import Benefit from "./Benefit.astro";
 ---
 
-<section class="mx-auto px-3 py-16 md:py-24 max-w-screen-xl">
-  <h2 class="text-center font-bold text-4xl md:text-5xl hyphens-auto mb-2">
-    Why Ferron?
-  </h2>
-  <div class="flex flex-col md:flex-row md:flex-wrap">
-    <Benefit
-      icon={faDove}
-      title="Free as in freedom"
-      description="You don't need to worry about issues related to proprietary software, such as backdoors or licensing issues. Ferron is licensed under a permissive MIT license, and you can contribute to its development via a Git repository."
-    />
-    <Benefit
-      icon={faBolt}
-      title="Fast"
-      description="Ferron is throughly optimized for web server performance. According to our own benchmarks, it performs similarly to a popular Caddy web server. You can also enable caching in Ferron for even higher performance."
-    />
-    <Benefit
-      icon={faShieldHalved}
-      title="Memory-safe"
-      description="Ferron is written in Rust, a programming language designed for memory safety. This ensures that Ferron has lower risk of memory safety bugs compared to popular web servers written in C or C++."
-    />
-    <Benefit
-      icon={faScrewdriverWrench}
-      title="Easy to configure"
-      description="Get up and running fast with straightforward configuration options that save you time and let you focus on what matters. You also don't need to worry much about securing your web server, since Ferron enables secure configuration by default."
-    />
-    <Benefit
-      icon={faLock}
-      title="Automatic TLS"
-      description="You don't have to worry about manually managing TLS certificates; Ferron offers automatic TLS for public websites via Let's Encrypt, and can automatically obtain certificates for you. In some cases, you don't even need to configure it at all!"
-    />
-    <Benefit
-      icon={faServer}
-      title="Cross-platform"
-      description="Ferron can be run across multiple operating systems, including GNU/Linux, Windows Server, macOS, and FreeBSD. This means you can deploy Ferron on your preferred platform without compatibility concerns."
-    />
+<section id="features" class="py-20 relative">
+  <div class="container">
+    <div class="text-center mb-16">
+      <h2 class="text-3xl md:text-4xl font-bold mb-4">Why Choose Ferron?</h2>
+      <p class="text-muted-foreground text-lg max-w-2xl mx-auto">
+        Designed with modern web hosting needs in mind, Ferron combines speed,
+        security, and ease of use in one powerful package.
+      </p>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <Benefit
+        icon={faBolt}
+        title="Lightning Fast"
+        description="Optimized for speed with efficient memory management and high concurrency support."
+      />
+      <Benefit
+        icon={faShieldHalved}
+        title="Memory Safe"
+        description="Built with memory safety as a priority, eliminating common security vulnerabilities."
+      />
+      <Benefit
+        icon={faLock}
+        title="Automatic TLS"
+        description="Seamless SSL/TLS certificate acquisition and renewal with Let's Encrypt integration."
+      />
+      <Benefit
+        icon={faCog}
+        title="Easy Configuration"
+        description="Simple, intuitive configuration with sensible defaults and comprehensive documentation."
+      />
+      <Benefit
+        icon={faServer}
+        title="Powerful Reverse Proxy"
+        description="Advanced reverse proxy capabilities with support for load balancing and passive health checks."
+      />
+      <Benefit
+        icon={faGlobe}
+        title="API-Friendly"
+        description="Built-in support for modern API patterns including WebSockets."
+      />
+    </div>
   </div>
 </section>

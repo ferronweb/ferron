@@ -1,8 +1,9 @@
 ---
-import "@fontsource/public-sans";
-import "@fontsource/public-sans/700.css";
-import "@fontsource/rajdhani";
-import "@fontsource/rajdhani/700.css";
+import "@fontsource/ibm-plex-sans";
+import "@fontsource/ibm-plex-sans/500.css";
+import "@fontsource/ibm-plex-sans/700.css";
+import "@fontsource/ibm-plex-mono";
+import "@fontsource/ibm-plex-mono/700.css";
 import "../styles/global.css";
 import { SEO } from "astro-seo";
 import { ClientRouter } from "astro:transitions";
@@ -17,13 +18,13 @@ import { ClientRouter } from "astro:transitions";
     <SEO
       title={Astro.props.title
         ? `${Astro.props.title} - Ferron`
-        : "Ferron - a fast, memory-safe web server written in Rust"}
+        : "Ferron - a fast, modern web server"}
       description={Astro.props.description}
       openGraph={{
         basic: {
           title: Astro.props.title
             ? `${Astro.props.title} - Ferron`
-            : "Ferron - a fast, memory-safe web server written in Rust",
+            : "Ferron - a fast, modern web server",
           type: "website",
           image: `${Astro.url.origin}${Astro.props.image || "/opengraph.png"}`
         },
@@ -36,7 +37,7 @@ import { ClientRouter } from "astro:transitions";
         site: "@ferron_web",
         title: Astro.props.title
           ? `${Astro.props.title} - Ferron`
-          : "Ferron - a fast, memory-safe web server written in Rust",
+          : "Ferron - a fast, modern web server",
         image: `${Astro.url.origin}${Astro.props.image || "/opengraph.png"}`,
         description: Astro.props.description
       }}

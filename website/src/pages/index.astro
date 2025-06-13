@@ -1,25 +1,20 @@
 ---
-import BenchmarksStatic from "../components/BenchmarksStatic.astro";
-import BenchmarksProxy from "../components/BenchmarksProxy.astro";
-import Benefits from "../components/Benefits.astro";
-import FAQ from "../components/FAQ";
-import Hero from "../components/Hero.astro";
 import MainLayout from "../layouts/MainLayout.astro";
+import Benefits from "../components/Benefits.astro";
+import Benchmarks from "../components/Benchmarks.astro";
+import Installation from "../components/Installation.astro";
+import Hero from "../components/Hero.astro";
 import Testimonials from "../components/Testimonials.astro";
-import Community from "../components/Community.astro";
-
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+import BottomCTA from "../components/BottomCTA.astro";
 ---
 
 <MainLayout
-  description="Host your websites with Ferron - a fast, memory-safe web server written in Rust. Supports both static and dynamic content (including PHP)."
+  description="Ferron is a high-performance web server with built-in TLS certificate management. Designed for speed, security and ease of configuration."
 >
   <Hero />
   <Benefits />
-  <BenchmarksStatic />
-  <BenchmarksProxy />
-  <Community />
+  <Benchmarks />
+  <Installation />
   <Testimonials />
-  <FAQ client:load />
+  <BottomCTA />
 </MainLayout>

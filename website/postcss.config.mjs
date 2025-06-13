@@ -1,14 +1,13 @@
 // From https://gist.github.com/alexanderbuhler/2386befd7b6b3be3695667cb5cb5e709 and transformed from CommonJS to ES modules
 
-import postcss from 'postcss';
-import valueParser from 'postcss-value-parser';
-import postcssPrefixSelector from 'postcss-prefix-selector';
-import postcssCascadeLayers from '@csstools/postcss-cascade-layers';
-import postcssMediaMinmax from 'postcss-media-minmax';
-import postcssOklabFunction from '@csstools/postcss-oklab-function';
-import postcssColorMixFunction from '@csstools/postcss-color-mix-function';
-import postcssNesting from 'postcss-nesting';
-import autoprefixer from 'autoprefixer';
+import postcss from "postcss";
+import valueParser from "postcss-value-parser";
+import postcssCascadeLayers from "@csstools/postcss-cascade-layers";
+import postcssMediaMinmax from "postcss-media-minmax";
+import postcssOklabFunction from "@csstools/postcss-oklab-function";
+import postcssColorMixFunction from "@csstools/postcss-color-mix-function";
+import postcssNesting from "postcss-nesting";
+import autoprefixer from "autoprefixer";
 
 /*
     This plugin polyfills @property definitions with regular CSS variables
@@ -16,17 +15,17 @@ import autoprefixer from 'autoprefixer';
 */
 const propertyInjectPlugin = () => {
   return {
-    postcssPlugin: 'postcss-property-polyfill',
+    postcssPlugin: "postcss-property-polyfill",
     Once(root) {
       const fallbackRules = [];
 
       // 1. Collect initial-value props from @property at-rules
-      root.walkAtRules('property', (rule) => {
+      root.walkAtRules("property", (rule) => {
         const declarations = {};
         let varName = null;
 
         rule.walkDecls((decl) => {
-          if (decl.prop === 'initial-value') {
+          if (decl.prop === "initial-value") {
             varName = rule.params.trim();
             declarations[varName] = decl.value;
           }
@@ -41,7 +40,7 @@ const propertyInjectPlugin = () => {
       if (fallbackRules.length > 0) {
         // check for paint() because its browser support aligns with @property at-rule
         const fallbackCSS = `@supports not (background: paint(something)) {
-                    :root { ${fallbackRules.join(' ')} }
+                    :root { ${fallbackRules.join(" ")} }
                 }`;
 
         const sourceFile = root.source?.input?.file || root.source?.input?.from;
@@ -50,7 +49,7 @@ const propertyInjectPlugin = () => {
         // Insert after last @import (or prepend if none found)
         let lastImportIndex = -1;
         root.nodes.forEach((node, i) => {
-          if (node.type === 'atrule' && node.name === 'import') {
+          if (node.type === "atrule" && node.name === "import") {
             lastImportIndex = i;
           }
         });
@@ -66,11 +65,14 @@ const propertyInjectPlugin = () => {
       root.walkDecls((decl) => {
         if (!decl.value) return;
 
-        decl.value = decl.value.replaceAll(/\bto\s+(left|right)\s+in\s+[\w-]+/g, (_, direction) => {
-          return `to ${direction}`;
-        });
+        decl.value = decl.value.replaceAll(
+          /\bto\s+(left|right)\s+in\s+[\w-]+/g,
+          (_, direction) => {
+            return `to ${direction}`;
+          }
+        );
       });
-    },
+    }
   };
 };
 
@@ -82,7 +84,7 @@ propertyInjectPlugin.postcss = true;
 */
 const colorMixVarResolverPlugin = () => {
   return {
-    postcssPlugin: 'postcss-color-mix-var-resolver',
+    postcssPlugin: "postcss-color-mix-var-resolver",
 
     Once(root) {
       const cssVariables = {};
@@ -92,13 +94,13 @@ const colorMixVarResolverPlugin = () => {
         if (!rule.selectors) return;
 
         const isRootOrHost = rule.selectors.some(
-          sel => sel.includes(':root') || sel.includes(':host'),
+          (sel) => sel.includes(":root") || sel.includes(":host")
         );
 
         if (isRootOrHost) {
           // Collect all --var declarations in this rule
           rule.walkDecls((decl) => {
-            if (decl.prop.startsWith('--')) {
+            if (decl.prop.startsWith("--")) {
               cssVariables[decl.prop] = decl.value.trim();
             }
           });
@@ -108,23 +110,32 @@ const colorMixVarResolverPlugin = () => {
       // 2. Parse each declaration's value and replace var(...) in color-mix(...)
       root.walkDecls((decl) => {
         const originalValue = decl.value;
-        if (!originalValue || !originalValue.includes('color-mix(')) return;
+        if (!originalValue || !originalValue.includes("color-mix(")) return;
 
         const parsed = valueParser(originalValue);
         let modified = false;
 
         parsed.walk((node) => {
-          if (node.type === 'function' && node.value === 'color-mix') {
+          if (node.type === "function" && node.value === "color-mix") {
             node.nodes.forEach((childNode) => {
-              if (childNode.type === 'function' && childNode.value === 'var' && childNode.nodes.length > 0) {
+              if (
+                childNode.type === "function" &&
+                childNode.value === "var" &&
+                childNode.nodes.length > 0
+              ) {
                 const varName = childNode.nodes[0]?.value;
                 if (!varName) return;
 
-                const resolvedVarName = cssVariables[varName] === undefined ? 'black' : cssVariables[varName]; // fall back to black if var is undefined
+                const resolvedVarName =
+                  cssVariables[varName] === undefined
+                    ? "black"
+                    : cssVariables[varName]; // fall back to black if var is undefined
                 // add whitespace because it might just be a part of a color notation e.g. #fff 10%
-                const resolved = `${resolvedVarName} ` || `var(${varName})`;
+                const resolved = resolvedVarName
+                  ? `${resolvedVarName} `
+                  : `var(${varName})`;
 
-                childNode.type = 'word';
+                childNode.type = "word";
                 childNode.value = resolved;
                 childNode.nodes = [];
                 modified = true;
@@ -138,7 +149,7 @@ const colorMixVarResolverPlugin = () => {
           decl.value = newValue;
         }
       });
-    },
+    }
   };
 };
 
@@ -149,18 +160,18 @@ colorMixVarResolverPlugin.postcss = true;
 */
 const transformShortcutPlugin = () => {
   return {
-    postcssPlugin: 'postcss-transform-shortcut',
+    postcssPlugin: "postcss-transform-shortcut",
 
     Once(root) {
       const defaults = {
-        rotate: [0, 0, 1, '0deg'],
+        rotate: [0, 0, 1, "0deg"],
         scale: [1, 1, 1],
-        translate: [0, 0, 0],
+        translate: [0, 0, 0]
       };
 
       const fallbackAtRule = postcss.atRule({
-        name: 'supports',
-        params: 'not (translate: 0)', // or e.g. 'not (translate: 1px)'
+        name: "supports",
+        params: "not (translate: 0)" // or e.g. 'not (translate: 1px)'
       });
 
       root.walkRules((rule) => {
@@ -173,11 +184,11 @@ const transformShortcutPlugin = () => {
 
             const newValues = [...defaults[decl.prop]];
             // add whitespaces for minified vars
-            const value = decl.value.replaceAll(/\)\s*var\(/g, ') var(');
+            const value = decl.value.replaceAll(/\)\s*var\(/g, ") var(");
             const userValues = postcss.list.space(value);
 
             // special case: rotate w/ single angle only
-            if (decl.prop === 'rotate' && userValues.length === 1) {
+            if (decl.prop === "rotate" && userValues.length === 1) {
               newValues.splice(-1, 1, ...userValues);
             } else {
               // for scale/translate, or rotate with multiple params
@@ -185,7 +196,7 @@ const transformShortcutPlugin = () => {
             }
 
             // e.g. "translate3d(10px,20px,0)"
-            transformFunctions.push(`${decl.prop}3d(${newValues.join(',')})`);
+            transformFunctions.push(`${decl.prop}3d(${newValues.join(",")})`);
           }
         });
 
@@ -194,8 +205,8 @@ const transformShortcutPlugin = () => {
           const fallbackRule = postcss.rule({ selector: rule.selector });
 
           fallbackRule.append({
-            prop: 'transform',
-            value: transformFunctions.join(' '),
+            prop: "transform",
+            value: transformFunctions.join(" ")
           });
 
           fallbackAtRule.append(fallbackRule);
@@ -205,7 +216,7 @@ const transformShortcutPlugin = () => {
       if (fallbackAtRule.nodes && fallbackAtRule.nodes.length > 0) {
         root.append(fallbackAtRule);
       }
-    },
+    }
   };
 };
 
@@ -217,16 +228,16 @@ transformShortcutPlugin.postcss = true;
  */
 const addSpaceForEmptyVarFallback = () => {
   return {
-    postcssPlugin: 'postcss-add-space-for-empty-var-fallback',
+    postcssPlugin: "postcss-add-space-for-empty-var-fallback",
 
     /**
-   * We do our edits in `OnceExit`, meaning we process each decl after
-   * the AST is fully built and won't get re-visited or re-triggered
-   * in the same pass.
-   */
+     * We do our edits in `OnceExit`, meaning we process each decl after
+     * the AST is fully built and won't get re-visited or re-triggered
+     * in the same pass.
+     */
     OnceExit(root) {
       root.walkDecls((decl) => {
-        if (!decl.value || !decl.value.includes('var(')) {
+        if (!decl.value || !decl.value.includes("var(")) {
           return;
         }
 
@@ -235,10 +246,10 @@ const addSpaceForEmptyVarFallback = () => {
 
         parsed.walk((node) => {
           // Only consider var(...) function calls
-          if (node.type === 'function' && node.value === 'var') {
+          if (node.type === "function" && node.value === "var") {
             // Look for the `div` node with value "," that separates property & fallback
             const commaIndex = node.nodes.findIndex(
-              n => n.type === 'div' && n.value === ',',
+              (n) => n.type === "div" && n.value === ","
             );
 
             // If no comma is found, no fallback segment
@@ -246,14 +257,17 @@ const addSpaceForEmptyVarFallback = () => {
 
             // Gather any fallback text
             const fallbackNodes = node.nodes.slice(commaIndex + 1);
-            const fallbackText = fallbackNodes.map(n => n.value).join('').trim();
+            const fallbackText = fallbackNodes
+              .map((n) => n.value)
+              .join("")
+              .trim();
 
             // If there's no fallback text => `var(--something,)` => we insert a space
-            if (fallbackText === '') {
+            if (fallbackText === "") {
               const commaNode = node.nodes[commaIndex];
               // If the comma node is literally "," with no space, change it to ", "
-              if (commaNode.value === ',') {
-                commaNode.value = ', ';
+              if (commaNode.value === ",") {
+                commaNode.value = ", ";
                 changed = true;
               }
             }
@@ -264,7 +278,7 @@ const addSpaceForEmptyVarFallback = () => {
           decl.value = parsed.toString();
         }
       });
-    },
+    }
   };
 };
 
@@ -272,21 +286,6 @@ addSpaceForEmptyVarFallback.postcss = true;
 
 const config = {
   plugins: [
-    postcssPrefixSelector({
-      // Fix for the polyfill conflicting with asciinema player
-      includeFiles: ["asciinema-player/dist/bundle/asciinema-player.css"],
-      transform(_prefix, selector, prefixedSelector, _filePath, _rule) {
-        if (selector.indexOf("body:not(#\\#)") !== -1) {
-          return selector;
-        }
-
-        if (prefixedSelector.match(/\.ap-hud/) && prefixedSelector.match(/\.ap-control-bar[^ ]*$/)) {
-          return `body:not(#\\#):not(#\\#):not(#\\#) ${selector}`;
-        }
-
-        return `body:not(#\\#):not(#\\#) ${selector}`;
-      },
-    }),
     postcssCascadeLayers,
     propertyInjectPlugin(),
     colorMixVarResolverPlugin(),
@@ -296,8 +295,8 @@ const config = {
     postcssOklabFunction,
     postcssColorMixFunction,
     postcssNesting,
-    autoprefixer,
-  ],
+    autoprefixer
+  ]
 };
 
 export default config;

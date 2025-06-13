@@ -14,13 +14,12 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
     ssr: {
-      noExternal: ["@fontsource/ibm-plex-sans", "@fontsource/rajdhani"]
+      noExternal: ["@fontsource/ibm-plex-sans"]
     },
     build: {
       assetsInlineLimit: 0,
       chunkSizeWarningLimit: 600
-    },
-    optimizeDeps: { include: ["asciinema-player"] }
+    }
   },
   integrations: [react(), sitemap()],
   markdown: {

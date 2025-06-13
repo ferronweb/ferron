@@ -2,98 +2,100 @@
 @plugin "@tailwindcss/typography";
 @config "../../tailwind.config.js";
 
+html {
+  scroll-behavior: smooth;
+}
+
 html,
 body {
   margin: 0;
   width: 100%;
-  font-family: "Public Sans";
+  font-family: "IBM Plex Sans";
   background-color: hsla(var(--background), 1);
   color: hsla(var(--foreground), 1);
 }
 
+code,
+pre {
+  font-family: "IBM Plex Mono";
+}
+
+* {
+  border-color: hsla(var(--border), 1);
+}
+
 :root {
-  --background: 0, 0%, 100%;
-  --foreground: 222.2, 47.4%, 11.2%;
-
-  --muted: 210, 40%, 96.1%;
-  --muted-foreground: 215.4, 16.3%, 46.9%;
-
-  --popover: 0, 0%, 100%;
-  --popover-foreground: 222.2, 47.4%, 11.2%;
-
-  --border: 214.3, 31.8%, 91.4%;
-  --input: 214.3, 31.8%, 91.4%;
-
-  --card: 0, 0%, 100%;
-  --card-foreground: 222.2, 47.4%, 11.2%;
-
-  --primary: 16, 100%, 50%;
-  --primary-foreground: 0, 0%, 100%;
-
-  --secondary: 16, 75%, 87.5%;
-  --secondary-foreground: 222.2, 47.4%, 11.2%;
-
-  --accent: 16, 66.7%, 92.1%;
-  --accent-foreground: 222.2, 47.4%, 11.2%;
-
-  --destructive: 0, 100%, 50%;
-  --destructive-foreground: 210, 40%, 98%;
-
-  --ring: 215, 20.2%, 65.1%;
-
+  --background: 220, 20%, 10%;
+  --foreground: 0, 0%, 95%;
+  --card: 220, 20%, 13%;
+  --card-foreground: 0, 0%, 95%;
+  --popover: 220, 20%, 13%;
+  --popover-foreground: 0, 0%, 95%;
+  --primary: 24, 90%, 55%;
+  --primary-foreground: 0, 0%, 98%;
+  --secondary: 220, 15%, 16%;
+  --secondary-foreground: 0, 0%, 98%;
+  --muted: 220, 20%, 18%;
+  --muted-foreground: 0, 0%, 75%;
+  --accent: 24, 90%, 45%;
+  --accent-foreground: 0, 0%, 98%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0, 0%, 98%;
+  --border: 220, 15%, 20%;
+  --input: 220, 15%, 20%;
+  --ring: 24, 90%, 55%;
   --radius: 0.5rem;
+  --chart-1: 24, 90%, 55%;
+  --chart-2: 30, 80%, 50%;
+  --chart-3: 220, 70%, 50%;
+  --chart-4: 200, 80%, 50%;
+  --chart-5: 180, 70%, 45%;
 }
 
-.dark {
-  --background: 20, 14.3%, 4.1%;
-  --foreground: 213, 31%, 91%;
+@layer utilities {
+  .container {
+    margin-inline: auto;
+    padding-inline: 2rem;
+  }
 
-  --muted: 223, 47%, 11%;
-  --muted-foreground: 215.4, 16.3%, 56.9%;
+  .card-hover {
+    transition-property: all;
+    transition-timing-function: var(
+      --tw-ease,
+      var(--default-transition-timing-function)
+    );
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+    --tw-duration: 0.3s;
+    transition-duration: 0.3s;
+    animation-duration: 0.3s;
+  }
 
-  --accent: 16, 66.7%, 12.5%;
-  --accent-foreground: 213, 31%, 91%;
+  @media (hover: hover) {
+    .card-hover:hover {
+      --tw-translate-y: -4px;
+      translate: var(--tw-translate-x) var(--tw-translate-y);
+      --tw-shadow:
+        0 20px 25px -5px var(--tw-shadow-color, #0000001a),
+        0 8px 10px -6px var(--tw-shadow-color, #0000001a);
+      box-shadow:
+        var(--tw-inset-shadow), var(--tw-inset-ring-shadow),
+        var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+      --tw-shadow-color: color-mix(
+        in srgb,
+        hsl(var(--primary)) 10%,
+        transparent
+      );
+    }
 
-  --popover: 20, 14.3%, 4.1%;
-  --popover-foreground: 215, 20.2%, 65.1%;
-
-  --border: 216, 34%, 17%;
-  --input: 216, 34%, 17%;
-
-  --card: 20, 14.3%, 4.1%;
-  --card-foreground: 213, 31%, 91%;
-
-  --primary: 16, 100%, 50%;
-  --primary-foreground: 0, 0%, 100%;
-
-  --secondary: 16, 75%, 20%;
-  --secondary-foreground: 213, 31%, 91%;
-
-  --destructive: 0, 63%, 31%;
-  --destructive-foreground: 210, 40%, 98%;
-
-  --ring: 216, 34%, 17%;
-
-  --radius: 0.5rem;
-}
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  font-family: Rajdhani;
-}
-
-.disable-css-transitions * {
-  transition: none !important;
-}
-
-.font-public-sans {
-  font-family: "Public Sans";
-}
-
-.font-rajdhani {
-  font-family: Rajdhani;
+    @supports (color: color-mix(in lab, red, red)) {
+      .card-hover:hover {
+        --tw-shadow-color: color-mix(
+          in oklab,
+          color-mix(in oklab, hsla(var(--primary), 1) 10%, transparent)
+            var(--tw-shadow-alpha),
+          transparent
+        );
+      }
+    }
+  }
 }

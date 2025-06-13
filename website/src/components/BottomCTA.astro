@@ -1,0 +1,50 @@
+---
+import { faDownload } from "@fortawesome/free-solid-svg-icons";
+import FontAwesomeIcon from "./FontAwesomeIcon.astro";
+---
+
+<section class="py-20">
+  <div class="container">
+    <div
+      class="bg-gradient-to-r from-primary/20 to-accent/20 rounded-xl p-8 md:p-12 relative overflow-hidden border border-primary/20"
+    >
+      <!-- Decorative elements -->
+      <div
+        class="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 filter blur-3xl"
+      >
+      </div>
+      <div
+        class="absolute bottom-0 left-0 w-64 h-64 bg-accent/10 rounded-full translate-y-1/2 -translate-x-1/2 filter blur-3xl"
+      >
+      </div>
+      <div
+        class="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-8"
+      >
+        <div>
+          <h2 class="text-2xl md:text-3xl font-bold mb-4">
+            Ready to supercharge your web infrastructure?
+          </h2>
+          <p class="text-muted-foreground max-w-2xl mb-0">
+            Join thousands of companies using Ferron to deliver content faster,
+            more securely, and with less overhead.
+          </p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-4">
+          <a
+            href="#install"
+            class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 rounded-md px-8"
+          >
+            <FontAwesomeIcon icon={faDownload} class="mr-2 h-5 w-5" />
+            Get Started Now
+            <a
+              href="/docs"
+              class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-10 rounded-md px-8"
+            >
+              Read Documentation
+            </a>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

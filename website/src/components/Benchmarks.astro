@@ -1,0 +1,72 @@
+---
+import Benchmark from "./Benchmark";
+---
+
+<section id="benchmarks" class="py-20 bg-secondary/30">
+  <div class="container">
+    <div class="text-center mb-16">
+      <h2 class="text-3xl md:text-4xl font-bold mb-4">Unmatched Performance</h2>
+      <p class="text-muted-foreground text-lg max-w-2xl mx-auto">
+        Ferron consistently outperforms other popular web servers in benchmark
+        tests across different workloads.
+      </p>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {
+        /* TODO: perform benchmarks and compare the results against competing web servers */
+      }
+      <Benchmark
+        title="Static File Serving"
+        description="Requests per second when serving static files (higher is better)"
+        data={/*[
+          {
+            name: "1KB Files",
+            ferron: 125000,
+            competitor1: 98000,
+            competitor2: 78000,
+            competitor3: 89000
+          },
+          {
+            name: "100KB Files",
+            ferron: 62000,
+            competitor1: 45000,
+            competitor2: 34000,
+            competitor3: 41000
+          },
+          {
+            name: "1MB Files",
+            ferron: 12000,
+            competitor1: 8500,
+            competitor2: 6200,
+            competitor3: 7800
+          }
+          ]*/ []}
+        unit={"req/s"}
+        higherIsBetter={false}
+        competitor1={"lighttpd"}
+        competitor2={"Apache httpd"}
+        competitor3={"Caddy"}
+        client:load
+      />
+      <Benchmark
+        title="Reverse Proxy Performance"
+        description="Requests per second when proxying to backend services (higher is better)"
+        data={/*[
+          {
+            name: "REST API",
+            ferron: 125000,
+            competitor1: 98000,
+            competitor2: 78000,
+            competitor3: 89000
+          }
+          ]*/ []}
+        unit={"req/s"}
+        higherIsBetter={false}
+        competitor1={"Traefik"}
+        competitor2={"Apache httpd"}
+        competitor3={"Caddy"}
+        client:load
+      />
+    </div>
+  </div>
+</section>

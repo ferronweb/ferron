@@ -1,152 +1,193 @@
 ---
-import FontAwesomeIcon from "../components/FontAwesomeIcon.astro";
+import FontAwesomeIcon from "./FontAwesomeIcon.astro";
 import Logo from "./Logo.astro";
-import { headerLinks } from "../config.js";
-import { faMoon, faBars, faSun, faX } from "@fortawesome/free-solid-svg-icons";
+import {
+  faBook,
+  faComments,
+  faFileText,
+  faX
+} from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 
-const pathname = Astro.url.pathname;
+const githubLink = "https://github.com/ferronweb/ferron";
+const chatLink = "https://matrix.to/#/#ferronweb:matrix.org";
 const docLinks = Astro.props.docLinks;
 ---
 
-<header
-  class="w-full border-b border-b-border sticky top-0 bg-background z-40 block h-12"
->
-  <div class="flex flex-row h-full px-2 py-2 mx-auto max-w-screen-xl">
-    <a href="/" class="mx-1.5">
-      <span class="sr-only">Ferron logo</span>
-      <Logo width={105} height={35} class="inline h-8 w-auto" />
-    </a>
-    <nav class="grow text-sm">
-      <ul class="hidden md:flex h-full mx-2.5 list-none">
-        {
-          headerLinks.nav.map((navLink) => (
-            <li class="flex">
-              <a
-                href={navLink.href}
-                target={navLink.target}
-                class={`inline-block self-center ${pathname == navLink.href || (navLink.href != "/" && pathname.indexOf(navLink.href + "/") == 0) ? "bg-accent" : ""} text-inherit px-2 py-1.5 mx-1 rounded-sm hover:bg-accent/60 transition-colors`}
-              >
-                {navLink.label}
-              </a>
-            </li>
-          ))
-        }
-      </ul>
-    </nav>
-    <span class="self-center whitespace-nowrap">
-      <a
-        href={headerLinks.matrix.href}
-        target={headerLinks.matrix.target}
-        class="hidden md:inline-block align-middle h-8 w-8 mx-0.5 p-1 bg-inherit text-inherit hover:bg-accent/60 rounded-md transition-colors"
-      >
-        <span class="sr-only">Matrix</span>
-        <svg viewBox="0 0 27.9 32" class="align-top w-6 h-6">
-          <g fill="currentColor">
-            <path
-              d="M27.005 31.205V.705h-2.19v-.732h3.04v32h-3.04v-.732zM8.135 10.405v1.54h.044a4.486 4.486 0 0 1 1.49-1.37c.58-.323 1.25-.485 1.99-.485.72 0 1.38.14 1.97.42.595.279 1.05.771 1.36 1.48.338-.5.796-.941 1.38-1.32.58-.383 1.27-.574 2.06-.574.602 0 1.16.074 1.67.22.514.148.954.383 1.32.707.366.323.653.746.859 1.27.205.522.308 1.15.308 1.89v7.63h-3.13v-6.46c0-.383-.015-.743-.044-1.08a2.302 2.302 0 0 0-.242-.882 1.47 1.47 0 0 0-.584-.596c-.257-.146-.606-.22-1.05-.22-.44 0-.796.085-1.07.253-.272.17-.485.39-.639.662a2.649 2.649 0 0 0-.308.927 7.075 7.075 0 0 0-.078 1.05v6.35h-3.13v-6.4c0-.338-.007-.673-.021-1a2.826 2.826 0 0 0-.188-.916 1.408 1.408 0 0 0-.55-.673c-.258-.168-.636-.253-1.14-.253a2.334 2.334 0 0 0-.584.1 1.95 1.95 0 0 0-.705.374c-.228.184-.422.449-.584.794-.161.346-.242.798-.242 1.36v6.62h-3.13v-11.4zM.841.737v30.5h2.19v.732h-3.04v-32h3.03v.732z"
-            ></path>
-          </g>
-        </svg>
-      </a><a
-        href={headerLinks.github.href}
-        target={headerLinks.github.target}
-        class="hidden md:inline-block align-middle h-8 w-8 mx-0.5 p-1 bg-inherit text-inherit hover:bg-accent/60 rounded-md transition-colors"
-      >
-        <span class="sr-only">GitHub</span>
-        <FontAwesomeIcon icon={faGithub} class="align-top w-6 h-6" />
-      </a><button
-        data-theme-selector
-        class="inline-block align-middle h-8 w-8 mx-0.5 p-1 bg-inherit text-inherit hover:bg-accent/60 rounded-md transition-colors cursor-pointer"
-      >
-        <span class="sr-only">Toggle theme</span>
-        <FontAwesomeIcon
-          icon={faMoon}
-          class="hidden dark:inline align-top w-6 h-6"
-        />
-        <FontAwesomeIcon
-          icon={faSun}
-          class="inline dark:hidden align-top w-6 h-6"
-        />
-      </button><button
-        data-header-menu-toggle
-        class="inline-block md:hidden align-middle h-8 w-8 mx-0.5 p-1 bg-inherit text-inherit hover:bg-accent/60 rounded-md transition-colors"
-      >
-        <span class="sr-only">Toggle menu</span>
-        <FontAwesomeIcon icon={faBars} class="align-top w-6 h-6" />
-      </button>
-    </span>
-  </div>
-  <nav
-    data-header-menu
-    class="block md:hidden bg-background w-full h-full p-2 overflow-auto z-50 fixed top-0 left-full transition-[left] shrink-0 duration-1000"
+<header class="sticky top-0 z-50 w-full border-b">
+  <div
+    class="bg-background/95 supports-[backdrop-filter]:bg-background/60 backdrop-blur"
   >
-    <div class="flex flex-row">
-      <div class="grow mx-1.5">
-        <Logo
-          width={105}
-          height={35}
-          className="inline h-8 w-auto self-center"
-        />
+    <div
+      class="container max-md:!px-4 flex h-16 items-center justify-between space-x-0"
+    >
+      <div class="flex gap-6 md:gap-10">
+        <a
+          href="/"
+          class="flex items-center space-x-2"
+          aria-label="Ferron logo"
+        >
+          <Logo class="h-8 w-auto" />
+        </a>
       </div>
-      <button data-header-menu-close class="inline-block md:hidden self-center">
-        <span class="sr-only">Close</span>
-        <FontAwesomeIcon
-          icon={faX}
-          class="inline-block w-8 h-8 py-1 rounded-sm bg-background text-foreground hover:bg-accent/60 hover:text-accent-foreground transition-colors"
-        />
+      <div class="flex-1 items-center justify-end space-x-2 hidden md:flex">
+        <nav class="flex items-center space-x-1">
+          <a
+            href="/#features"
+            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2"
+          >
+            Features
+          </a>
+          <a
+            href="/#benchmarks"
+            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2"
+          >
+            Benchmarks
+          </a>
+          <a
+            href="/#install"
+            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2"
+          >
+            Install
+          </a>
+          <a
+            href="/blog"
+            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2 flex items-center gap-1"
+          >
+            <FontAwesomeIcon icon={faFileText} class="!h-4 w-4" />
+            Blog
+          </a>
+          <a
+            href="/docs"
+            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2 flex items-center gap-1"
+          >
+            <FontAwesomeIcon icon={faBook} class="!h-4 w-4" />
+            Docs
+          </a>
+          <div class="ml-2 flex items-center gap-1">
+            <a
+              href={githubLink}
+              target="_blank"
+              rel="noreferrer"
+              class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 w-9"
+              aria-label="GitHub"
+            >
+              <FontAwesomeIcon icon={faGithub} class="w-5 !h-5" />
+            </a>
+            <a
+              href={chatLink}
+              target="_blank"
+              rel="noreferrer"
+              class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 w-9"
+              aria-label="Chat"
+            >
+              <FontAwesomeIcon icon={faComments} class="w-5 !h-5" />
+            </a>
+          </div>
+        </nav>
+      </div>
+      <!-- Mobile Menu Button -->
+      <div class="flex md:hidden">
+        <button
+          type="button"
+          class="inline-flex items-center justify-center rounded-md p-2 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none cursor-pointer"
+          aria-controls="mobile-menu"
+          aria-expanded="false"
+          data-mobile-menu-button
+        >
+          <span class="sr-only">Open main menu</span>
+          <svg
+            class="block h-6 w-6"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+  <!-- Mobile Menu -->
+  <div
+    class="md:hidden py-4 bg-background w-full h-full overflow-auto z-60 fixed top-0 left-full transition-[left] shrink-0 duration-1000"
+    data-mobile-menu
+  >
+    <div class="flex flex-row justify-between px-4 md:gap-10">
+      <a href="/" class="flex items-center space-x-2" aria-label="Ferron logo">
+        <Logo class="h-8 w-auto" />
+      </a>
+      <button
+        type="button"
+        class="inline-flex items-center justify-center rounded-md p-2 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none cursor-pointer"
+        aria-controls="close-mobile-menu"
+        aria-expanded="false"
+        data-mobile-menu-close-button
+      >
+        <span class="sr-only">Close main menu</span>
+        <FontAwesomeIcon icon={faX} class="self-center w-5 !h-5" />
       </button>
     </div>
-    <ul
-      class={`flex ${docLinks ? "flex-row overflow-x-auto" : "flex-col"} my-3 list-none`}
+    <div
+      class={`${docLinks ? "whitespace-nowrap overflow-x-auto flex items-center" : "space-y-1"} px-2 pt-2 pb-3`}
     >
-      {
-        headerLinks.nav.map((navLink) => (
-          <li class={`${docLinks ? "inline" : "block my-1 text-center"}`}>
-            <a
-              href={navLink.href}
-              target={navLink.target}
-              class={`inline-block align-middle ${pathname == navLink.href || (navLink.href != "/" && pathname.indexOf(navLink.href + "/") == 0) ? "bg-accent" : ""} text-inherit px-2 py-1 mx-1 rounded-sm hover:bg-accent/60 transition-colors`}
-            >
-              {navLink.label}
-            </a>
-          </li>
-        ))
-      }
-      <li
-        class={`${Astro.props.docLinks ? "inline" : "block my-1 text-center"}`}
+      <a
+        href="/#features"
+        class={`${docLinks ? "inline-block" : "block"} px-3 py-2 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
       >
-        <a
-          href={headerLinks.github.href}
-          target={headerLinks.github.target}
-          class="whitespace-nowrap inline-block align-middle text-inherit px-2 py-1 h-8 mx-1 rounded-sm hover:bg-accent/60 transition-colors"
-        >
-          <FontAwesomeIcon
-            icon={faGithub}
-            class="inline mr-2 align-top w-6 h-6"
-          />
-          <span class="align-middle">GitHub</span>
-        </a>
-      </li>
-      <li
-        class={`${Astro.props.docLinks ? "inline" : "block my-1 text-center"}`}
+        Features
+      </a>
+      <a
+        href="/#benchmarks"
+        class={`${docLinks ? "inline-block" : "block"} px-3 py-2 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
       >
+        Benchmarks
+      </a>
+      <a
+        href="/#install"
+        class={`${docLinks ? "inline-block" : "block"} px-3 py-2 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
+      >
+        Install
+      </a>
+      <a
+        href="/blog"
+        class={`${docLinks ? "inline-block" : "block"} px-3 py-2 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
+      >
+        Blog
+      </a>
+      <a
+        href="/docs"
+        class={`${docLinks ? "inline-block" : "block"} px-3 py-2 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
+      >
+        Docs
+      </a>
+      <div class=`${docLinks ? "inline-flex" : "flex mt-4"} space-x-2 px-3`>
         <a
-          href={headerLinks.matrix.href}
-          target={headerLinks.matrix.target}
-          class="whitespace-nowrap inline-block align-middle text-inherit px-2 py-1 h-8 mx-1 rounded-sm hover:bg-accent/60 transition-colors"
+          href={githubLink}
+          target="_blank"
+          rel="noreferrer"
+          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 w-9"
+          aria-label="GitHub"
         >
-          <svg viewBox="0 0 27.9 32" class="inline mr-2 align-top w-6 h-6">
-            <g fill="currentColor">
-              <path
-                d="M27.005 31.205V.705h-2.19v-.732h3.04v32h-3.04v-.732zM8.135 10.405v1.54h.044a4.486 4.486 0 0 1 1.49-1.37c.58-.323 1.25-.485 1.99-.485.72 0 1.38.14 1.97.42.595.279 1.05.771 1.36 1.48.338-.5.796-.941 1.38-1.32.58-.383 1.27-.574 2.06-.574.602 0 1.16.074 1.67.22.514.148.954.383 1.32.707.366.323.653.746.859 1.27.205.522.308 1.15.308 1.89v7.63h-3.13v-6.46c0-.383-.015-.743-.044-1.08a2.302 2.302 0 0 0-.242-.882 1.47 1.47 0 0 0-.584-.596c-.257-.146-.606-.22-1.05-.22-.44 0-.796.085-1.07.253-.272.17-.485.39-.639.662a2.649 2.649 0 0 0-.308.927 7.075 7.075 0 0 0-.078 1.05v6.35h-3.13v-6.4c0-.338-.007-.673-.021-1a2.826 2.826 0 0 0-.188-.916 1.408 1.408 0 0 0-.55-.673c-.258-.168-.636-.253-1.14-.253a2.334 2.334 0 0 0-.584.1 1.95 1.95 0 0 0-.705.374c-.228.184-.422.449-.584.794-.161.346-.242.798-.242 1.36v6.62h-3.13v-11.4zM.841.737v30.5h2.19v.732h-3.04v-32h3.03v.732z"
-              ></path>
-            </g>
-          </svg>
-          <span class="align-middle">Matrix</span>
+          <FontAwesomeIcon icon={faGithub} class="w-5 !h-5" />
         </a>
-      </li>
-    </ul>
+        <a
+          href={chatLink}
+          target="_blank"
+          rel="noreferrer"
+          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 w-9"
+          aria-label="Chat"
+        >
+          <FontAwesomeIcon icon={faComments} class="w-5 !h-5" />
+        </a>
+      </div>
+    </div>
     {
       docLinks ? (
         <ul class={`flex flex-col my-3 list-none`}>
@@ -161,7 +202,7 @@ const docLinks = Astro.props.docLinks;
                 <a
                   href={docLink.href}
                   target={docLink.target || "_self"}
-                  class={`${docLink.sub ? "ml-4" : ""} block align-middle ${pathname == docLink.href ? "bg-accent" : ""} text-inherit px-2 py-1 mx-1 rounded-sm hover:bg-accent/60 transition-colors`}
+                  class={`${docLink.sub ? "ml-4" : ""} block align-middle ${Astro.url.pathname == docLink.href ? "bg-secondary" : ""} text-inherit px-2 py-1 mx-1 rounded-sm hover:bg-accent transition-colors`}
                 >
                   {docLink.label}
                 </a>
@@ -173,54 +214,15 @@ const docLinks = Astro.props.docLinks;
         ""
       )
     }
-  </nav>
+  </div>
 </header>
 
 <script>
-  const areThemesSupported =
-    window.CSS &&
-    window.CSS.supports &&
-    window.CSS.supports("color", "var(--fake-var)");
-  const savedTheme = localStorage.getItem("theme");
-  const isSystemDark =
-    window.matchMedia &&
-    window.matchMedia("(prefers-color-scheme: dark)").matches;
-  let initialDarkMode = isSystemDark;
-  if (savedTheme == "dark") {
-    initialDarkMode = true;
-  } else if (savedTheme == "light") {
-    initialDarkMode = false;
-  }
-  let isDarkMode = initialDarkMode;
-
-  function updateTheme() {
-    document.documentElement.classList.add("disable-css-transitions");
-    if (isDarkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-    document.documentElement.offsetHeight; // Flush all the CSS changes
-    document.documentElement.classList.remove("disable-css-transitions");
-  }
-
   function initializeHeader() {
-    let themeSelector = document.querySelector("[data-theme-selector]");
-    if (themeSelector) {
-      themeSelector.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (!areThemesSupported) throw new Error("Themes are not supported");
-        localStorage.setItem("theme", isDarkMode ? "light" : "dark");
-        isDarkMode = !isDarkMode;
-        updateTheme();
-      });
-    }
-
-    updateTheme();
-
-    let menuButton = document.querySelector("[data-header-menu-toggle]");
-    let menuClose = document.querySelector("[data-header-menu-close]");
-    let menu = document.querySelector("[data-header-menu]");
+    let menuButton = document.querySelector("[data-mobile-menu-button]");
+    let menuClose = document.querySelector("[data-mobile-menu-close-button]");
+    let menu = document.querySelector("[data-mobile-menu]");
+    let menuLinks = document.querySelectorAll("[data-mobile-menu] a");
     if (menuButton) {
       menuButton.addEventListener("click", (e) => {
         e.preventDefault();
@@ -235,6 +237,15 @@ const docLinks = Astro.props.docLinks;
         if (menu) {
           menu.classList.replace("left-0", "left-full");
         }
+      });
+    }
+    if (menuLinks) {
+      menuLinks.forEach((menuLink) => {
+        menuLink.addEventListener("click", () => {
+          if (menu) {
+            menu.classList.replace("left-0", "left-full");
+          }
+        });
       });
     }
   }

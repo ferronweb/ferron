@@ -1,98 +1,135 @@
 ---
-import { footerLinks } from "../config";
-import SocialIcons from "./SocialIcons.astro";
+import { faThreads, faXTwitter } from "@fortawesome/free-brands-svg-icons";
+import FontAwesomeIcon from "./FontAwesomeIcon.astro";
 import Logo from "./Logo.astro";
-
-const currentYear = new Date().getFullYear();
 ---
 
-<footer class="flex flex-col w-full transition-all border-border border-t">
-  <div
-    class="px-3 sm:px-12 md:px-24 lg:px-6 py-10 w-full mx-auto max-w-screen-xl"
-  >
+<footer class="border-t border-muted/30 py-12 mt-16">
+  <div class="container px-4 md:px-6">
     <div
-      class="flex flex-col lg:flex-row justify-between max-lg:items-start max-sm:items-center items-center mb-6"
+      class="text-center grid grid-cols-1 gap-8 md:grid-cols-4 md:text-start"
     >
-      <div class="flex items-center mb-6 md:mb-0">
-        <Logo width={180} height={60} />
+      <div class="space-y-4">
+        <div class="inline-flex items-center space-x-2">
+          <Logo width={135} height={45} />
+        </div>
+        <p class="text-sm text-muted-foreground">
+          Fast, modern, and easily configurable web server with automatic TLS.
+        </p>
+        <div class="inline-flex space-x-3">
+          <a
+            href="https://x.com/ferron_web"
+            class="text-muted-foreground hover:text-primary transition-colors"
+          >
+            <span class="sr-only">X</span>
+            <FontAwesomeIcon icon={faXTwitter} class="!h-6 w-6" />
+          </a>
+          <a
+            href="https://www.threads.com/@ferronweb"
+            class="text-muted-foreground hover:text-primary transition-colors"
+          >
+            <span class="sr-only">Threads</span>
+            <FontAwesomeIcon icon={faThreads} class="!h-6 w-6" />
+          </a>
+        </div>
       </div>
-      <div
-        class="flex flex-col items-center sm:items-start sm:flex-row justify-between w-full lg:w-auto space-y-6 sm:space-y-0 sm:space-x-6 lg:space-x-16"
-      >
-        <div class="flex flex-col items-center sm:items-start">
-          <div class="text-3xl font-bold text-primary font-rajdhani">
-            Quick links
-          </div>
-          {
-            footerLinks.otherPages.map((link) => (
-              <span>
-                <a
-                  href={link.href}
-                  class="text-base hover:text-primary hover:underline transition-colors duration-100"
-                >
-                  {link.label}
-                </a>
-              </span>
-            ))
-          }
-        </div>
-
-        <div class="flex flex-col items-center sm:items-start">
-          <div class="text-3xl font-bold text-primary font-rajdhani">
-            Resources
-          </div>
-          {
-            footerLinks.resources.map((link) => (
-              <span>
-                <a
-                  href={link.href}
-                  class="text-base hover:text-primary hover:underline transition-colors duration-100"
-                >
-                  {link.label}
-                </a>
-              </span>
-            ))
-          }
-        </div>
-
-        <div class="flex flex-col items-center sm:items-start">
-          <div class="text-3xl font-bold text-primary font-rajdhani">
-            Social
-          </div>
-          <div class="flex space-x-1 py-3">
-            <SocialIcons />
-          </div>
-        </div>
+      <div class="space-y-4">
+        <!-- An empty column... -->
+      </div>
+      <div class="space-y-4">
+        <span class="block font-medium text-lg">Quick links</span>
+        <ul class="space-y-2 text-sm">
+          <li>
+            <a
+              href="/"
+              class="text-muted-foreground hover:text-primary transition-colors"
+              >Home</a
+            >
+          </li>
+          <li>
+            <a
+              href="/download"
+              class="text-muted-foreground hover:text-primary transition-colors"
+              >Download</a
+            >
+          </li>
+          <li>
+            <a
+              href="/contact"
+              class="text-muted-foreground hover:text-primary transition-colors"
+              >Contact</a
+            >
+          </li>
+          <li>
+            <a
+              href="/blog"
+              class="text-muted-foreground hover:text-primary transition-colors"
+              >Blog</a
+            >
+          </li>
+        </ul>
+      </div>
+      <div class="space-y-4">
+        <span class="block font-medium text-lg">Resources</span>
+        <ul class="space-y-2 text-sm">
+          <li>
+            <a
+              href="/docs"
+              class="text-muted-foreground hover:text-primary transition-colors"
+              >Documentation</a
+            >
+          </li>
+          <li>
+            <a
+              href="/changelog"
+              class="text-muted-foreground hover:text-primary transition-colors"
+              >Change log</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://github.com/ferronweb/ferron"
+              class="text-muted-foreground hover:text-primary transition-colors"
+              >GitHub repository</a
+            >
+          </li>
+          <li>
+            <a
+              href="/contribute"
+              class="text-muted-foreground hover:text-primary transition-colors"
+              >Contribute</a
+            >
+          </li>
+          <li>
+            <a
+              href="/blog"
+              class="text-muted-foreground hover:text-primary transition-colors"
+              >Vulnerabilities</a
+            >
+          </li>
+        </ul>
       </div>
     </div>
-    <div class="border-t mb-6 border-gray-300 dark:border-white/30"></div>
     <div
-      class="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0 px-4"
+      class="mt-8 border-t border-muted/30 pt-8 flex flex-col md:flex-row justify-between items-center"
     >
-      <span class="text-sm font-light">
-        Copyright © {currentYear == 2025 ? "" : "2025-"}{currentYear}{" "}
+      <p class="text-muted-foreground text-sm mb-4 md:mb-0">
+        &copy; 2025 Ferron. All rights reserved.
+      </p>
+      <p class="text-muted-foreground text-sm">
         <a
-          href={footerLinks.footerBottom.rightsReserved.href}
-          class="text-primary font-semibold"
-        >
-          {footerLinks.footerBottom.rightsReserved.label}
-        </a>
-      </span>
-      <span class="text-sm font-light">
-        <a
-          href={footerLinks.footerBottom.termsofService.href}
+          href="/tos"
           class="text-primary font-medium transition-all underline-offset-4 hover:underline"
         >
-          {footerLinks.footerBottom.termsofService.label}{" "}
+          Terms of Service
         </a>
-        |{" "}
-        <a
-          href={footerLinks.footerBottom.privacyPolicy.href}
+        | <a
+          href="/privacy"
           class="text-primary font-medium transition-all underline-offset-4 hover:underline"
         >
-          {footerLinks.footerBottom.privacyPolicy.label}
+          Privacy Policy
         </a>
-      </span>
+      </p>
     </div>
   </div>
 </footer>

@@ -1,55 +1,40 @@
 ---
+import { faQuoteRight } from "@fortawesome/free-solid-svg-icons";
 import FontAwesomeIcon from "./FontAwesomeIcon.astro";
-import {
-  faXTwitter,
-  faThreads,
-  faHackerNews
-} from "@fortawesome/free-brands-svg-icons";
 ---
 
-<div class="p-2 break-inside-avoid">
-  <div
-    class="bg-card text-card-foreground border-border border w-full h-full rounded-lg p-3"
-  >
-    <div class="flex flex-row items-center mb-2">
-      <div class="flex-grow self-center px-1">
-        <h3 class="text-2xl font-bold">{Astro.props.name}</h3>
-        {
-          Astro.props.description ? (
-            <p class="text-muted-foreground text-sm">
-              {Astro.props.description}
-            </p>
-          ) : (
-            ""
-          )
-        }
+<div
+  class="bg-secondary/30 backdrop-blur-sm border border-muted/30 p-6 rounded-lg card-hover relative"
+>
+  <FontAwesomeIcon
+    icon={faQuoteRight}
+    class="absolute text-primary/10 !h-24 w-24 -top-4 -left-1 rotate-180"
+  />
+  <div class="flex flex-col h-full">
+    <p class="text-base mb-6 flex-grow">
+      {Astro.props.testimonial}
+    </p><div class="border-t border-muted/30 pt-4">
+      <div class="flex flex-row">
+        <div class="flex-grow">
+          <p class="font-medium">{Astro.props.name}</p>{
+            Astro.props.description ? (
+              <p class="text-sm text-muted-foreground">
+                {Astro.props.description}
+              </p>
+            ) : (
+              ""
+            )
+          }
+        </div>
+        <div>
+          <a href={Astro.props.sourceLink} target="_blank" aria-label="Source">
+            <FontAwesomeIcon
+              icon={Astro.props.sourceIcon}
+              class="w-6 !h-6 self-center"
+            />
+          </a>
+        </div>
       </div>
-      <a
-        class="self-start items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground p-1"
-        href={Astro.props.sourceLink}
-      >
-        {
-          Astro.props.source == "x" ? (
-            <>
-              <span class="sr-only">X icon</span>
-              <FontAwesomeIcon icon={faXTwitter} class="w-6 h-6" />
-            </>
-          ) : Astro.props.source == "hackernews" ? (
-            <>
-              <span class="sr-only">Hacker News icon</span>
-              <FontAwesomeIcon icon={faHackerNews} class="w-6 h-6" />
-            </>
-          ) : Astro.props.source == "threads" ? (
-            <>
-              <span class="sr-only">Threads icon</span>
-              <FontAwesomeIcon icon={faThreads} class="w-6 h-6" />
-            </>
-          ) : (
-            ""
-          )
-        }
-      </a>
     </div>
-    <p class="text-muted-foreground">{Astro.props.testimonial}</p>
   </div>
 </div>
