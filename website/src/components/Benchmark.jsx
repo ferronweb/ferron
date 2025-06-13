@@ -6,6 +6,7 @@ import {
   Label,
   Legend,
   ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis
 } from "recharts";
@@ -56,25 +57,39 @@ function Benchmark({
                 />
               </YAxis>
               <Legend />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  borderWidth: "1px",
+                  borderStyle: "solid",
+                  borderColor: "hsl(var(--border))",
+                  borderImage: "none",
+                  color: "hsl(var(--foreground))"
+                }}
+              />
               <Bar
                 dataKey="ferron"
                 name="Ferron"
                 fill="hsla(var(--primary), 1)"
+                unit={` ${unit}`}
               />
               <Bar
                 dataKey="competitor1"
                 name={competitor1}
                 fill="hsla(var(--chart-3), 1)"
+                unit={` ${unit}`}
               />
               <Bar
                 dataKey="competitor2"
                 name={competitor2}
                 fill="hsla(var(--chart-4), 1)"
+                unit={` ${unit}`}
               />
               <Bar
                 dataKey="competitor3"
                 name={competitor3}
                 fill="hsla(var(--chart-5), 1)"
+                unit={` ${unit}`}
               />
             </BarChart>
           </ResponsiveContainer>
