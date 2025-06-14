@@ -5,66 +5,126 @@ import Benchmark from "./Benchmark";
 <section id="benchmarks" class="py-20 bg-secondary/30">
   <div class="container">
     <div class="text-center mb-16">
-      <h2 class="text-3xl md:text-4xl font-bold mb-4">Unmatched Performance</h2>
+      <h2 class="text-3xl md:text-4xl font-bold mb-4">Fast Performance</h2>
       <p class="text-muted-foreground text-lg max-w-2xl mx-auto">
-        Ferron consistently outperforms other popular web servers in benchmark
+        Ferron can outperform other popular web servers in performance benchmark
         tests across different workloads.
       </p>
     </div>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      {
-        /* TODO: perform benchmarks and compare the results against competing web servers */
-      }
       <Benchmark
         title="Static File Serving"
         description="Requests per second when serving static files (higher is better)"
-        data={/*[
+        data={[
           {
-            name: "1KB Files",
-            ferron: 125000,
-            competitor1: 98000,
-            competitor2: 78000,
-            competitor3: 89000
+            name: "1KB file",
+            ferron: 107347.97,
+            competitor1: 80257.53,
+            competitor2: 27745.4,
+            competitor3: 84987.46
           },
           {
-            name: "100KB Files",
-            ferron: 62000,
-            competitor1: 45000,
-            competitor2: 34000,
-            competitor3: 41000
+            name: "100KB file",
+            ferron: 22048.26,
+            competitor1: 12507.0,
+            competitor2: 19923.47,
+            competitor3: 27982.26
           },
           {
-            name: "1MB Files",
-            ferron: 12000,
-            competitor1: 8500,
-            competitor2: 6200,
-            competitor3: 7800
+            name: "1MB file",
+            ferron: 2158.65,
+            competitor1: 1452.11,
+            competitor2: 5917.18,
+            competitor3: 3271.92
           }
-          ]*/ []}
+        ]}
         unit={"req/s"}
         higherIsBetter={true}
         competitor1={"lighttpd"}
         competitor2={"Apache httpd"}
         competitor3={"Caddy"}
+        command="ferrbench -c 1000 -d 60s -t 12 -h https://localhost --http2"
         client:load
       />
       <Benchmark
         title="Reverse Proxy Performance"
         description="Requests per second when proxying to backend services (higher is better)"
-        data={/*[
+        data={[
           {
-            name: "REST API",
-            ferron: 125000,
-            competitor1: 98000,
-            competitor2: 78000,
-            competitor3: 89000
+            name: "Hello World Axum app",
+            ferron: 132548.87,
+            competitor1: 61586.79,
+            competitor2: 26061.17,
+            competitor3: 31339.37
           }
-          ]*/ []}
+        ]}
         unit={"req/s"}
         higherIsBetter={true}
         competitor1={"Traefik"}
         competitor2={"Apache httpd"}
         competitor3={"Caddy"}
+        command="ferrbench -c 1000 -d 60s -t 12 -h https://localhost --http2"
+        client:load
+      />
+      <Benchmark
+        title="Latency Under Load (Reverse Proxy)"
+        description="Average response time under high concurrency (lower is better)"
+        data={[
+          {
+            name: "100 conn.",
+            ferron: 0.76,
+            competitor1: 1.5,
+            competitor2: 1.32,
+            competitor3: 1.75
+          },
+          {
+            name: "1K conn.",
+            ferron: 14.81,
+            competitor1: 16.12,
+            competitor2: 29.34,
+            competitor3: 31.56
+          },
+          {
+            name: "10K conn.",
+            ferron: 89.64,
+            competitor1: 191.82,
+            competitor2: 59.58,
+            competitor3: 543.49
+          }
+        ]}
+        unit={"ms"}
+        higherIsBetter={false}
+        competitor1={"Traefik"}
+        competitor2={"Apache httpd"}
+        competitor3={"Caddy"}
+        command="ferrbench -c $CONCURRENCY -d 60s -t 12 -h https://localhost --http2"
+        client:load
+      />
+      <Benchmark
+        title="PHP Performance"
+        description="Requests per second when serving PHP through PHP-FPM (higher is better)"
+        data={[
+          {
+            name: "Hello World PHP script",
+            ferron: 44364.78,
+            competitor1: 45255.49,
+            competitor2: 43767.75,
+            competitor3: 34664.32
+          },
+          {
+            name: "Fresh WordPress",
+            ferron: 223.91,
+            competitor1: 225.86,
+            competitor2: 222.74,
+            competitor3: 223.08
+          }
+        ]}
+        unit={"req/s"}
+        higherIsBetter={true}
+        competitor1={"lighttpd"}
+        competitor2={"Apache httpd"}
+        competitor3={"Caddy"}
+        command="ferrbench -c 100 -d 60s -t 12 -h https://localhost --http2"
         client:load
       />
     </div>

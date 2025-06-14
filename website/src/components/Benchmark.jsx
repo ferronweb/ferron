@@ -19,7 +19,8 @@ function Benchmark({
   higherIsBetter,
   competitor1,
   competitor2,
-  competitor3
+  competitor3,
+  command
 }) {
   return (
     <div
@@ -98,10 +99,7 @@ function Benchmark({
           <p>
             {higherIsBetter ? "Higher is better" : "Lower is better"} |
             Benchmarks run on AMD Ryzen 5 8600G, 32GB RAM, with the{" "}
-            <code>
-              ferrbench -c 1000 -d 60s -t 12 -h https://localhost --http2
-            </code>{" "}
-            command
+            <code>{command}</code> command
           </p>
         </div>
       </div>
