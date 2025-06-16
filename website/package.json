@@ -36,7 +36,7 @@
     "postcss-value-parser": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tailwindcss": "^4.1.5"
+    "tailwindcss": "^4.1.10"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.7.1",
