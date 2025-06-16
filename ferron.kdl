@@ -4,5 +4,4 @@
   log "access.log"
   error_log "error.log"
   root "wwwroot"
-  limit rate=25
 }
