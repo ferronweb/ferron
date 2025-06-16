@@ -19,7 +19,7 @@ function HeroCTA() {
       windows:
         'powershell -c "irm https://downloads.ferronweb.org/install.ps1 | iex"',
       docker:
-        "docker pull ferronserver/ferron && docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron"
+        "docker pull ferronserver/ferron && docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:1"
     };
 
     setCommand(commands[selectedButton]);
