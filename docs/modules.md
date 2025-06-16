@@ -11,6 +11,7 @@ The following modules are built into Ferron and are enabled by default:
 - _fauth_ - this module enables authentication forwarded to the authentication server.
 - _fcgi_ - this module enables the support for connecting to FastCGI servers.
 - _fproxy_ - this module enables forward proxy functionality.
+- _limit_ - this module enables rate limits.
 - _replace_ - this module enables replacement of strings in response bodies.
 - _rproxy_ - this module enables reverse proxy functionality.
 - _scgi_ - this module enables the support for connecting to SCGI servers.
@@ -68,6 +69,10 @@ If you are using PHP-FPM only for Ferron, you can set the `listen.owner` and `li
 ### _fproxy_ module
 
 If you are using the _fproxy_ module, then hosts on the local network and local host are also accessible from the proxy. You may block these using a firewall, if you don’t want these hosts to be accessible from the proxy.
+
+### _limit_ module
+
+This module uses a Token Bucket algorithm. The rate limitation is on per-IP address basis.
 
 ### _replace_ module
 

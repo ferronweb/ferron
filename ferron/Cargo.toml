@@ -127,6 +127,9 @@ hashlink = "0.10.0"
 clap = { version = "4.5.38", features = ["cargo"] }
 dirs = "6.0.0"
 
+# Rate limitation
+tokenbucket = { version = "0.1.6", optional = true }
+
 # Performance & Utilities
 mimalloc = { workspace = true }
 memchr = { version = "2.7.4", optional = true }
@@ -154,6 +157,7 @@ default = [
     "fauth",
     "fcgi",
     "fproxy",
+    "limit",
     "replace",
     "rproxy",
     "runtime-monoio",
@@ -166,6 +170,7 @@ default-tokio = [
     "fauth",
     "fcgi",
     "fproxy",
+    "limit",
     "replace",
     "rproxy",
     "runtime-tokio",
@@ -179,6 +184,7 @@ example = []
 fauth = ["rand", "rustls-platform-verifier"]
 fcgi = ["tokio-util/codec", "httparse", "memchr"]
 fproxy = []
+limit = ["tokenbucket"]
 replace = ["memchr"]
 rproxy = ["rand", "rustls-platform-verifier"]
 runtime-monoio = ["monoio", "monoio-compat", "blocking"]

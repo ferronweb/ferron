@@ -1015,13 +1015,14 @@ fn obtain_module_loaders() -> Vec<Box<dyn ModuleLoader + Send + Sync>> {
   // Register module loaders
   register_module_loader!(modules::core::CoreModuleLoader::new());
   register_module_loader!(modules::blocklist::BlocklistModuleLoader::new());
+  #[cfg(feature = "limit")]
+  register_module_loader!(modules::optional::limit::LimitModuleLoader::new());
   #[cfg(feature = "fproxy")]
   register_module_loader!(modules::optional::fproxy::ForwardProxyModuleLoader::new());
   register_module_loader!(modules::fproxy_fallback::ForwardProxyFallbackModuleLoader::new());
   register_module_loader!(modules::rewrite::RewriteModuleLoader::new());
   register_module_loader!(modules::status_codes::StatusCodesModuleLoader::new());
   register_module_loader!(modules::trailing::TrailingSlashRedirectsModuleLoader::new());
-
   #[cfg(feature = "fauth")]
   register_module_loader!(modules::optional::fauth::ForwardedAuthenticationModuleLoader::new());
   #[cfg(feature = "cache")]
