@@ -1072,6 +1072,7 @@ fn obtain_configuration_adapters() -> (
 
   // Register configuration adapters
   register_configuration_adapter!("kdl", config::adapters::kdl::KdlConfigurationAdapter::new());
+  #[cfg(feature = "config-yaml-legacy")]
   register_configuration_adapter!(
     "yaml-legacy",
     config::adapters::yaml_legacy::YamlLegacyConfigurationAdapter::new()
@@ -1081,6 +1082,7 @@ fn obtain_configuration_adapters() -> (
 }
 
 /// Determines the default configuration adapter
+#[cfg(feature = "config-yaml-legacy")]
 fn determine_default_configuration_adapter(path: &Path) -> &'static str {
   match path
     .extension()
@@ -1091,6 +1093,12 @@ fn determine_default_configuration_adapter(path: &Path) -> &'static str {
     Some("yaml") | Some("yml") => "yaml-legacy",
     _ => "kdl",
   }
+}
+
+/// Determines the default configuration adapter
+#[cfg(not(feature = "config-yaml-legacy"))]
+fn determine_default_configuration_adapter(_path: &Path) -> &'static str {
+  "kdl"
 }
 
 /// Parses the command-line arguments

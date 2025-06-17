@@ -3,6 +3,7 @@ use std::{error::Error, path::Path};
 use super::ServerConfiguration;
 
 pub mod kdl;
+#[cfg(feature = "config-yaml-legacy")]
 pub mod yaml_legacy;
 
 /// A trait defining a Ferron server configuration file adapter

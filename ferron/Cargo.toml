@@ -107,7 +107,7 @@ postcard = { version = "1.1.1", optional = true, default-features = false, featu
     "use-std",
 ] }
 kdl = { workspace = true }
-ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core" }
+ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core", optional = true }
 
 # File Serving & Compression
 new_mime_guess = { version = "4.0.4", optional = true }
@@ -153,6 +153,7 @@ winresource = "0.1.19"
 [features]
 default = [
     "cache",
+    "config-yaml-legacy",
     "cgi",
     "fauth",
     "fcgi",
@@ -166,6 +167,7 @@ default = [
 ]
 default-tokio = [
     "cache",
+    "config-yaml-legacy",
     "cgi",
     "fauth",
     "fcgi",
@@ -180,6 +182,7 @@ default-tokio = [
 asgi = ["pyo3", "pyo3-async-runtimes", "tokio-tungstenite", "hyper-tungstenite"]
 cache = ["cache_control", "itertools", "papaya", "ahash"]
 cgi = ["async-process", "httparse", "memchr"]
+config-yaml-legacy = ["ferron-yaml2kdl-core"]
 example = []
 fauth = ["rand", "rustls-platform-verifier"]
 fcgi = ["tokio-util/codec", "httparse", "memchr"]
