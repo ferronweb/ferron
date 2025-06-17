@@ -16,7 +16,7 @@ Before proceeding with the installation, ensure you have the following:
 To download the latest Ferron image from Docker Hub, run the following command:
 
 ```sh
-docker pull ferronserver/ferron
+docker pull ferronserver/ferron:2
 ```
 
 ### 2. Run the Ferron container
@@ -24,7 +24,7 @@ docker pull ferronserver/ferron
 Once the image is downloaded, start a Ferron container using the following command:
 
 ```sh
-docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron
+docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:2
 ```
 
 This command does the following:

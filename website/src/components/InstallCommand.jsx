@@ -26,7 +26,7 @@ function InstallCommand() {
       windows:
         'powershell -c "irm https://downloads.ferronweb.org/install-v2.ps1 | iex"',
       docker:
-        "docker pull ferronserver/ferron && docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron"
+        "docker pull ferronserver/ferron:2 && docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:2"
     };
 
     setCommand(commands[selectedButton]);
