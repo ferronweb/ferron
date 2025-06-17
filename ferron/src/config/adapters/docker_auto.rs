@@ -23,7 +23,7 @@ impl DockerAutoConfigurationAdapter {
 impl ConfigurationAdapter for DockerAutoConfigurationAdapter {
   fn load_configuration(
     &self,
-    path: &Path,
+    _path: &Path,
   ) -> Result<Vec<ServerConfiguration>, Box<dyn Error + Send + Sync>> {
     #[cfg(feature = "config-yaml-legacy")]
     {
