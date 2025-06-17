@@ -4,7 +4,7 @@ title: Privacy Policy
 description: Discover how we collect, use, and protect your data. Our Privacy Policy details our commitment to safeguarding your information on our website.
 ---
 
-Last Updated: 01.03.2025
+Last Updated: 17.06.2025
 
 Welcome to the official website of Ferron, a fast, memory-safe web server written in Rust. Your privacy is important to us. This Privacy Policy explains what data we collect, how we use it, and your rights regarding that data.
 
@@ -21,7 +21,7 @@ We do **not** use cookies or any other tracking mechanisms beyond the minimal da
 
 The data we collect is used solely for the following purposes:
 
-- **Website Analytics**: We use Matomo, a privacy-focused analytics platform, to analyze visitor trends and improve our website. Matomo is configured to respect user privacy and does not use cookies.
+- **Website Analytics**: We use Plausible Community Edition, a privacy-focused analytics platform, to analyze visitor trends and improve our website. Plausible Community Edition is configured to respect user privacy and does not use cookies.
 - **Security Monitoring**: We may use collected IP addresses to identify potential security threats and ensure the stability of our website.
 
 ## Data Retention
@@ -30,7 +30,7 @@ We retain collected data for only as long as necessary for the purposes outlined
 
 ## Third-Party Services
 
-We do not share your data with external third parties, except as required by law. Our analytics provider, Matomo, is self-hosted and configured to anonymize data where possible.
+We do not share your data with external third parties, except as required by law. Our analytics provider, Plausible Community Edition, is self-hosted and configured to anonymize data where possible.
 
 ## Opt-out from Analytics
 
