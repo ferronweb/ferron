@@ -185,7 +185,7 @@ jobs:
   #     - name: Checkout
   #       uses: actions/checkout@v4
   #       with:
-  #         ref: main
+  #         ref: 2.x
 
   #     - name: Install Rust
   #       uses: dtolnay/rust-toolchain@stable
@@ -242,7 +242,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: 2.x
           fetch-depth: 0
 
       - name: Log in to Docker Hub
