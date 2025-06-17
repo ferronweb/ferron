@@ -1077,6 +1077,11 @@ fn obtain_configuration_adapters() -> (
     "yaml-legacy",
     config::adapters::yaml_legacy::YamlLegacyConfigurationAdapter::new()
   );
+  #[cfg(feature = "config-docker-auto")]
+  register_configuration_adapter!(
+    "docker-auto",
+    config::adapters::docker_auto::DockerAutoConfigurationAdapter::new()
+  );
 
   (configuration_adapters, all_adapters)
 }

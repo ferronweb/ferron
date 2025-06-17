@@ -2,6 +2,8 @@ use std::{error::Error, path::Path};
 
 use super::ServerConfiguration;
 
+#[cfg(feature = "config-docker-auto")]
+pub mod docker_auto;
 pub mod kdl;
 #[cfg(feature = "config-yaml-legacy")]
 pub mod yaml_legacy;

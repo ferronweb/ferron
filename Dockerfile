@@ -11,7 +11,7 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
-    cargo build --release && \
+    cargo build --release --features ferron/config-docker-auto && \
     # Copy executables out of the cache
     mkdir .dist && cp target/release/ferron target/release/ferron-passwd target/release/ferron-yaml2kdl .dist
 
@@ -37,4 +37,4 @@ WORKDIR /var/log/ferron
 EXPOSE 80
 
 # Set the command to run the binary
-CMD ["/usr/sbin/ferron", "-c", "/etc/ferron.kdl"]
+CMD ["/usr/sbin/ferron", "--config-adapter", "docker-auto"]

@@ -182,6 +182,7 @@ default-tokio = [
 asgi = ["pyo3", "pyo3-async-runtimes", "tokio-tungstenite", "hyper-tungstenite"]
 cache = ["cache_control", "itertools", "papaya", "ahash"]
 cgi = ["async-process", "httparse", "memchr"]
+config-docker-auto = []
 config-yaml-legacy = ["ferron-yaml2kdl-core"]
 example = []
 fauth = ["rand", "rustls-platform-verifier"]
