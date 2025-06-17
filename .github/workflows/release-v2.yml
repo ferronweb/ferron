@@ -251,6 +251,13 @@ jobs:
   #         username: ${{ secrets.DOCKER_USERNAME }}
   #         password: ${{ secrets.DOCKER_PASSWORD }}
 
+  #     - name: Log in to GitHub Container Registry
+  #       uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772
+  #       with:
+  #         registry: ghcr.io
+  #         username: ${{ github.actor }}
+  #         password: ${{ secrets.GITHUB_TOKEN }}
+
   #     - name: Determine Ferron version
   #       shell: bash
   #       run: |
@@ -273,10 +280,13 @@ jobs:
   #         TAG_TYPE=${{ matrix.group }}
   #         FERRON_MAJOR_VERSION=$(echo "$FERRON_VERSION" | cut -d '.' -f 1)
   #         if [ "$TAG_TYPE" = "latest" ] || [ "$TAG_TYPE" = "" ]; then
-  #           echo "DOCKER_TAGS=ferronserver/ferron:$FERRON_VERSION,ferronserver/ferron:$FERRON_MAJOR_VERSION,ferronserver/ferron:latest" >> $GITHUB_ENV
+  #           DOCKER_HUB_TAGS="ferronserver/ferron:$FERRON_VERSION,ferronserver/ferron:$FERRON_MAJOR_VERSION,ferronserver/ferron:latest"
+  #           DOCKER_GHCR_TAGS="ghcr.io/ferronweb/ferron:$FERRON_VERSION,ghcr.io/ferronweb/ferron:$FERRON_MAJOR_VERSION,ghcr.io/ferronweb/ferron:latest"
   #         else
-  #           echo "DOCKER_TAGS=ferronserver/ferron:$FERRON_VERSION-$TAG_TYPE,ferronserver/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE,ferronserver/ferron:$TAG_TYPE" >> $GITHUB_ENV
+  #           DOCKER_HUB_TAGS="ferronserver/ferron:$FERRON_VERSION-$TAG_TYPE,ferronserver/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE,ferronserver/ferron:$TAG_TYPE"
+  #           DOCKER_GHCR_TAGS="ghcr.io/ferronweb/ferron:$FERRON_VERSION-$TAG_TYPE,ghcr.io/ferronweb/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE,ghcr.io/ferronweb/ferron:TAG_TYPE"
   #         fi
+  #         echo "DOCKER_TAGS=$DOCKER_HUB_TAGS,$DOCKER_GHCR_TAGS" >> $GITHUB_ENV
 
   #     - name: Set up Docker Buildx
   #       uses: docker/setup-buildx-action@v3
