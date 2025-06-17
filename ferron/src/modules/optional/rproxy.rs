@@ -536,7 +536,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
         } else {
-          rustls::ClientConfig::builder().with_platform_verifier()
+          rustls::ClientConfig::builder().with_platform_verifier()?
         })
         .with_no_client_auth();
         let connector = TlsConnector::from(Arc::new(tls_client_config));

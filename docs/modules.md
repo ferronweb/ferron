@@ -11,18 +11,18 @@ The following modules are built into Ferron and are enabled by default:
 - _fauth_ - this module enables authentication forwarded to the authentication server.
 - _fcgi_ - this module enables the support for connecting to FastCGI servers.
 - _fproxy_ - this module enables forward proxy functionality.
-- _limit_ - this module enables rate limits.
-- _replace_ - this module enables replacement of strings in response bodies.
+- _limit_ (Ferron 2.0.0-beta.2 and newer) - this module enables rate limits.
+- _replace_ (Ferron 2.0.0-beta.2 and newer) - this module enables replacement of strings in response bodies.
 - _rproxy_ - this module enables reverse proxy functionality.
 - _scgi_ - this module enables the support for connecting to SCGI servers.
-- _static_ - this module enables static file serving.
+- _static_ (Ferron 2.0.0-beta.1 and newer) - this module enables static file serving.
 
 The following modules are built into Ferron, but are disabled by default:
 
-- _asgi_ - this module enables the support for ASGI web applications.
+- _asgi_ (Ferron 1.1.0 and newer) - this module enables the support for ASGI web applications.
 - _example_ - this module responds with "Hello World!" for "/hello" request paths.
-- _wsgi_ - this module enables the support for WSGI web applications.
-- _wsgid_ - this module enables the support for WSGI web applications running on a pre-forked worker pool.
+- _wsgi_ (Ferron 1.1.0 and newer) - this module enables the support for WSGI web applications.
+- _wsgid_ (Ferron 1.1.0 and newer) - this module enables the support for WSGI web applications running on a pre-forked worker pool.
 
 ## Module notes
 
