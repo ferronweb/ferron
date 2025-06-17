@@ -144,7 +144,7 @@ Ferron can be also configured in the Ferron 1.x-compatible `ferron.yaml` file. B
 - **users** (_Array&lt;Object&gt;_)
   - User list. This setting specifies an array of user objects that the server will use for authentication. It's recommended to use the `ferron-passwd` tool to generate the user objects. Default: None
   - **Sub-properties**:
-    - **user** (_String_)
+    - **name** (_String_)
       - Username. This setting specifies the username for a user. Default: None
     - **pass** (_String_)
       - Password hash. This setting specifies the hashed password for a user. Default: None

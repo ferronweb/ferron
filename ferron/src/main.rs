@@ -37,9 +37,9 @@ use listener_tcp::create_tcp_listener;
 use logging::LogMessage;
 use mimalloc::MiMalloc;
 use modules::ModuleLoader;
-use rustls::crypto::ring::cipher_suite::*;
-use rustls::crypto::ring::default_provider;
-use rustls::crypto::ring::kx_group::*;
+use rustls::crypto::aws_lc_rs::cipher_suite::*;
+use rustls::crypto::aws_lc_rs::default_provider;
+use rustls::crypto::aws_lc_rs::kx_group::*;
 use rustls::server::{ResolvesServerCert, WebPkiClientVerifier};
 use rustls::sign::CertifiedKey;
 use rustls::version::{TLS12, TLS13};
@@ -358,6 +358,8 @@ fn before_starting_server(
             "secp256r1" => SECP256R1,
             "secp384r1" => SECP384R1,
             "x25519" => X25519,
+            "x25519mklem768" => X25519MLKEM768,
+            "mklem768" => MLKEM768,
             _ => Err(anyhow::anyhow!(format!(
               "The \"{}\" ECDH curve is not supported",
               ecdh_curve
@@ -1013,18 +1015,20 @@ fn obtain_module_loaders() -> Vec<Box<dyn ModuleLoader + Send + Sync>> {
   // Register module loaders
   register_module_loader!(modules::core::CoreModuleLoader::new());
   register_module_loader!(modules::blocklist::BlocklistModuleLoader::new());
+  #[cfg(feature = "limit")]
+  register_module_loader!(modules::optional::limit::LimitModuleLoader::new());
   #[cfg(feature = "fproxy")]
   register_module_loader!(modules::optional::fproxy::ForwardProxyModuleLoader::new());
   register_module_loader!(modules::fproxy_fallback::ForwardProxyFallbackModuleLoader::new());
   register_module_loader!(modules::rewrite::RewriteModuleLoader::new());
   register_module_loader!(modules::status_codes::StatusCodesModuleLoader::new());
   register_module_loader!(modules::trailing::TrailingSlashRedirectsModuleLoader::new());
-
-  // TODO: various external modules
   #[cfg(feature = "fauth")]
   register_module_loader!(modules::optional::fauth::ForwardedAuthenticationModuleLoader::new());
   #[cfg(feature = "cache")]
   register_module_loader!(modules::optional::cache::CacheModuleLoader::new());
+  #[cfg(feature = "replace")]
+  register_module_loader!(modules::optional::replace::ReplaceModuleLoader::new());
   #[cfg(feature = "rproxy")]
   register_module_loader!(modules::optional::rproxy::ReverseProxyModuleLoader::new());
   #[cfg(feature = "example")]
@@ -1068,15 +1072,22 @@ fn obtain_configuration_adapters() -> (
 
   // Register configuration adapters
   register_configuration_adapter!("kdl", config::adapters::kdl::KdlConfigurationAdapter::new());
+  #[cfg(feature = "config-yaml-legacy")]
   register_configuration_adapter!(
     "yaml-legacy",
     config::adapters::yaml_legacy::YamlLegacyConfigurationAdapter::new()
+  );
+  #[cfg(feature = "config-docker-auto")]
+  register_configuration_adapter!(
+    "docker-auto",
+    config::adapters::docker_auto::DockerAutoConfigurationAdapter::new()
   );
 
   (configuration_adapters, all_adapters)
 }
 
 /// Determines the default configuration adapter
+#[cfg(feature = "config-yaml-legacy")]
 fn determine_default_configuration_adapter(path: &Path) -> &'static str {
   match path
     .extension()
@@ -1087,6 +1098,12 @@ fn determine_default_configuration_adapter(path: &Path) -> &'static str {
     Some("yaml") | Some("yml") => "yaml-legacy",
     _ => "kdl",
   }
+}
+
+/// Determines the default configuration adapter
+#[cfg(not(feature = "config-yaml-legacy"))]
+fn determine_default_configuration_adapter(_path: &Path) -> &'static str {
+  "kdl"
 }
 
 /// Parses the command-line arguments

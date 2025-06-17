@@ -11,15 +11,18 @@ The following modules are built into Ferron and are enabled by default:
 - _fauth_ - this module enables authentication forwarded to the authentication server.
 - _fcgi_ - this module enables the support for connecting to FastCGI servers.
 - _fproxy_ - this module enables forward proxy functionality.
+- _limit_ (Ferron 2.0.0-beta.2 and newer) - this module enables rate limits.
+- _replace_ (Ferron 2.0.0-beta.2 and newer) - this module enables replacement of strings in response bodies.
 - _rproxy_ - this module enables reverse proxy functionality.
 - _scgi_ - this module enables the support for connecting to SCGI servers.
+- _static_ (Ferron 2.0.0-beta.1 and newer) - this module enables static file serving.
 
 The following modules are built into Ferron, but are disabled by default:
 
-- _asgi_ - this module enables the support for ASGI web applications.
+- _asgi_ (Ferron 1.1.0 and newer) - this module enables the support for ASGI web applications.
 - _example_ - this module responds with "Hello World!" for "/hello" request paths.
-- _wsgi_ - this module enables the support for WSGI web applications.
-- _wsgid_ - this module enables the support for WSGI web applications running on a pre-forked worker pool.
+- _wsgi_ (Ferron 1.1.0 and newer) - this module enables the support for WSGI web applications.
+- _wsgid_ (Ferron 1.1.0 and newer) - this module enables the support for WSGI web applications running on a pre-forked worker pool.
 
 ## Module notes
 
@@ -66,6 +69,14 @@ If you are using PHP-FPM only for Ferron, you can set the `listen.owner` and `li
 ### _fproxy_ module
 
 If you are using the _fproxy_ module, then hosts on the local network and local host are also accessible from the proxy. You may block these using a firewall, if you don’t want these hosts to be accessible from the proxy.
+
+### _limit_ module
+
+This module uses a Token Bucket algorithm. The rate limitation is on per-IP address basis.
+
+### _replace_ module
+
+If you're using this module with static file serving, it's recommended to disable static file compression using `compressed #false`, otherwise the replacement wouldn't work.
 
 ### _rproxy_ module
 

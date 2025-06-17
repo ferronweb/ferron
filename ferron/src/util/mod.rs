@@ -3,6 +3,8 @@ mod anti_xss;
 pub mod asgi;
 #[cfg(feature = "cache")]
 mod atomic_cache;
+#[cfg(feature = "replace")]
+mod body_replacer;
 #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
 pub mod cgi;
 mod config_macros;
@@ -41,6 +43,8 @@ pub mod wsgid;
 pub use anti_xss::*;
 #[cfg(feature = "cache")]
 pub use atomic_cache::*;
+#[cfg(feature = "replace")]
+pub use body_replacer::*;
 pub(crate) use config_macros::*;
 #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
 pub use copy_move::*;

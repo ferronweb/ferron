@@ -271,7 +271,7 @@ pub fn obtain_host_configuration(
         "users" => {
           if let Some(value) = value.as_vec() {
             for value in value {
-              if let Some(user) = value["user"].as_str() {
+              if let Some(user) = value["name"].as_str() {
                 if let Some(pass) = value["pass"].as_str() {
                   let mut kdl_property = KdlNode::new("user");
                   kdl_property.push(KdlValue::String(user.to_string()));
@@ -350,10 +350,10 @@ pub fn obtain_host_configuration(
         "errorPages" => {
           if let Some(value) = value.as_vec() {
             for value in value {
-              if let Some(scode) = value["scode"].as_str() {
+              if let Some(scode) = value["scode"].as_i64() {
                 if let Some(path) = value["path"].as_str() {
                   let mut kdl_property = KdlNode::new("error_page");
-                  kdl_property.push(KdlValue::String(scode.to_string()));
+                  kdl_property.push(KdlValue::Integer(scode as i128));
                   kdl_property.push(KdlValue::String(path.to_string()));
                   kdl_config_nodes.push(kdl_property);
                 }

@@ -981,6 +981,7 @@ async fn request_handler_wrapped(
   };
   let mut request = Request::from_parts(request_parts, request_body);
   let mut latest_auth_data = None;
+  let mut is_error_handler = false;
   let mut handlers_iter: Box<dyn Iterator<Item = Box<dyn ModuleHandlers>>> =
     Box::new(module_handlers.into_iter());
   while let Some(mut handlers) = handlers_iter.next() {
@@ -1059,25 +1060,31 @@ async fn request_handler_wrapped(
           }
           None => match status {
             Some(status) => {
-              let request_option = if let Some(request) = request_option {
-                Some(request)
-              } else {
-                request_parts_cloned.clone().map(|request_parts_cloned| {
-                  Request::from_parts(
-                    request_parts_cloned,
-                    Empty::new().map_err(|e| match e {}).boxed(),
-                  )
-                })
-              };
-              if let Some(request_cloned) = request_option {
+              if !is_error_handler {
                 if let Some(error_configuration) =
                   configurations.find_error_configuration(&configuration.filters, status.as_u16())
                 {
-                  configuration = error_configuration;
-                  handlers_iter = Box::new(executed_handlers.into_iter().chain(handlers_iter));
-                  executed_handlers = Vec::new();
-                  request = request_cloned;
-                  continue;
+                  let request_option = if let Some(request) = request_option {
+                    Some(request)
+                  } else {
+                    request_parts_cloned.clone().map(|request_parts_cloned| {
+                      Request::from_parts(
+                        request_parts_cloned,
+                        Empty::new().map_err(|e| match e {}).boxed(),
+                      )
+                    })
+                  };
+                  if let Some(request_cloned) = request_option {
+                    configuration = error_configuration;
+                    handlers_iter = Box::new(executed_handlers.into_iter().chain(handlers_iter));
+                    executed_handlers = Vec::new();
+                    request = request_cloned;
+                    if let Some(request_data) = request.extensions_mut().get_mut::<RequestData>() {
+                      request_data.error_status_code = Some(status);
+                    }
+                    is_error_handler = true;
+                    continue;
+                  }
                 }
               }
               let response = generate_error_response(status, &configuration, &headers).await;

@@ -77,10 +77,13 @@ fn load_configuration_inner(
   // Parse the configuration file contents
   let kdl_document: KdlDocument = match file_contents.parse() {
     Ok(document) => document,
-    Err(err) => Err(anyhow::anyhow!(
-      "Failed to parse the server configuration file: {}",
-      err
-    ))?,
+    Err(err) => {
+      let err: miette::Error = err.into();
+      Err(anyhow::anyhow!(
+        "Failed to parse the server configuration file: {:?}",
+        err
+      ))?
+    }
   };
 
   // Loaded configuration vector

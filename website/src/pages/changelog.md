@@ -4,6 +4,19 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.2
+
+**Released in June 17, 2025**
+
+- Added a configuration adapter to automatically determine the configuration path when running the web server in a Docker image
+- Added a module to replace substrings in response bodies
+- Added a rate limiting module
+- Added support for key exchanges with post-quantum cryptography
+- Fixed infinite recursion of error handler execution
+- Fixed translation of "errorPages" YAML configuration property
+- Fixed translation of "users" YAML configuration property
+- The KDL parsing errors are now formatted
+
 ## Ferron 2.0.0-beta.1
 
 **Released in June 4, 2025**
