@@ -20,7 +20,7 @@ use tokio_util::io::ReaderStream;
 
 use crate::config::{ServerConfiguration, ServerConfigurations};
 use crate::get_value;
-use crate::logging::{ErrorLogger, LogMessage};
+use crate::logging::{ErrorLogger, LogMessage, Loggers};
 use crate::modules::{ModuleHandlers, RequestData, SocketData};
 use crate::runtime::timeout;
 #[cfg(feature = "runtime-monoio")]
@@ -253,7 +253,7 @@ async fn finalize_response_and_log(
   configuration: &ServerConfiguration,
   http3_alt_port: Option<u16>,
   path: &str,
-  logger: &Sender<LogMessage>,
+  logger: &Option<Sender<LogMessage>>,
   log_enabled: bool,
   socket_data: &SocketData,
   latest_auth_data: Option<String>,
@@ -272,19 +272,21 @@ async fn finalize_response_and_log(
   let response = Response::from_parts(response_parts, response_body);
 
   if log_enabled {
-    log_combined(
-      logger,
-      socket_data.remote_addr.ip(),
-      latest_auth_data,
-      log_method,
-      log_request_path,
-      log_protocol,
-      response.status().as_u16(),
-      extract_content_length(&response),
-      log_referrer,
-      log_user_agent,
-    )
-    .await;
+    if let Some(logger) = &logger {
+      log_combined(
+        logger,
+        socket_data.remote_addr.ip(),
+        latest_auth_data,
+        log_method,
+        log_request_path,
+        log_protocol,
+        response.status().as_u16(),
+        extract_content_length(&response),
+        log_referrer,
+        log_user_agent,
+      )
+      .await;
+    }
   }
 
   response
@@ -298,7 +300,7 @@ async fn execute_response_modifying_handlers(
   configuration: &ServerConfiguration,
   http3_alt_port: Option<u16>,
   path: &str,
-  logger: &Sender<LogMessage>,
+  logger: &Option<Sender<LogMessage>>,
   error_log_enabled: bool,
   log_enabled: bool,
   socket_data: &SocketData,
@@ -315,13 +317,15 @@ async fn execute_response_modifying_handlers(
       Ok(response) => response,
       Err(err) => {
         if error_log_enabled {
-          logger
-            .send(LogMessage::new(
-              format!("Unexpected error while serving a request: {}", err),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
+          if let Some(logger) = &logger {
+            logger
+              .send(LogMessage::new(
+                format!("Unexpected error while serving a request: {}", err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
         }
 
         let error_response =
@@ -359,7 +363,7 @@ async fn request_handler_wrapped(
   server_address: SocketAddr,
   encrypted: bool,
   configurations: Arc<ServerConfigurations>,
-  logger: Sender<LogMessage>,
+  loggers: Loggers,
   http3_alt_port: Option<u16>,
   acme_http_01_resolvers: Arc<Vec<Arc<ResolvesServerCertAcme>>>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
@@ -470,13 +474,15 @@ async fn request_handler_wrapped(
             Ok(host_header_value) => host_header_value,
             Err(err) => {
               if error_log_enabled {
-                logger
-                  .send(LogMessage::new(
-                    format!("Host header sanitation error: {}", err),
-                    true,
-                  ))
-                  .await
-                  .unwrap_or_default();
+                if let Some(logger) = loggers.find_global_logger() {
+                  logger
+                    .send(LogMessage::new(
+                      format!("Host header sanitation error: {}", err),
+                      true,
+                    ))
+                    .await
+                    .unwrap_or_default();
+                }
               }
               let response = Response::builder()
                 .status(StatusCode::BAD_REQUEST)
@@ -492,28 +498,30 @@ async fn request_handler_wrapped(
                 .unwrap_or_default();
 
               if log_enabled {
-                log_combined(
-                  &logger,
-                  socket_data.remote_addr.ip(),
-                  None,
-                  log_method,
-                  log_request_path,
-                  log_protocol,
-                  response.status().as_u16(),
-                  match response.headers().get(header::CONTENT_LENGTH) {
-                    Some(header_value) => match header_value.to_str() {
-                      Ok(header_value) => match header_value.parse::<u64>() {
-                        Ok(content_length) => Some(content_length),
+                if let Some(logger) = loggers.find_global_logger() {
+                  log_combined(
+                    &logger,
+                    socket_data.remote_addr.ip(),
+                    None,
+                    log_method,
+                    log_request_path,
+                    log_protocol,
+                    response.status().as_u16(),
+                    match response.headers().get(header::CONTENT_LENGTH) {
+                      Some(header_value) => match header_value.to_str() {
+                        Ok(header_value) => match header_value.parse::<u64>() {
+                          Ok(content_length) => Some(content_length),
+                          Err(_) => response.body().size_hint().exact(),
+                        },
                         Err(_) => response.body().size_hint().exact(),
                       },
-                      Err(_) => response.body().size_hint().exact(),
+                      None => response.body().size_hint().exact(),
                     },
-                    None => response.body().size_hint().exact(),
-                  },
-                  log_referrer,
-                  log_user_agent,
-                )
-                .await;
+                    log_referrer,
+                    log_user_agent,
+                  )
+                  .await;
+                }
               }
               let (mut response_parts, response_body) = response.into_parts();
               if let Some(http3_alt_port) = http3_alt_port {
@@ -553,13 +561,15 @@ async fn request_handler_wrapped(
       }
       Err(err) => {
         if error_log_enabled {
-          logger
-            .send(LogMessage::new(
-              format!("Host header sanitation error: {}", err),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
+          if let Some(logger) = loggers.find_global_logger() {
+            logger
+              .send(LogMessage::new(
+                format!("Host header sanitation error: {}", err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
         }
         let response = Response::builder()
           .status(StatusCode::BAD_REQUEST)
@@ -574,28 +584,30 @@ async fn request_handler_wrapped(
           )
           .unwrap_or_default();
         if log_enabled {
-          log_combined(
-            &logger,
-            socket_data.remote_addr.ip(),
-            None,
-            log_method,
-            log_request_path,
-            log_protocol,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
+          if let Some(logger) = loggers.find_global_logger() {
+            log_combined(
+              &logger,
+              socket_data.remote_addr.ip(),
+              None,
+              log_method,
+              log_request_path,
+              log_protocol,
+              response.status().as_u16(),
+              match response.headers().get(header::CONTENT_LENGTH) {
+                Some(header_value) => match header_value.to_str() {
+                  Ok(header_value) => match header_value.parse::<u64>() {
+                    Ok(content_length) => Some(content_length),
+                    Err(_) => response.body().size_hint().exact(),
+                  },
                   Err(_) => response.body().size_hint().exact(),
                 },
-                Err(_) => response.body().size_hint().exact(),
+                None => response.body().size_hint().exact(),
               },
-              None => response.body().size_hint().exact(),
-            },
-            log_referrer,
-            log_user_agent,
-          )
-          .await;
+              log_referrer,
+              log_user_agent,
+            )
+            .await;
+          }
         }
         let (mut response_parts, response_body) = response.into_parts();
         if let Some(http3_alt_port) = http3_alt_port {
@@ -629,36 +641,40 @@ async fn request_handler_wrapped(
     }
   };
 
-  // Find the server configuration
-  let mut configuration = match configurations.find_configuration(
-    request.uri().path(),
-    match request.headers().get(header::HOST) {
-      Some(value) => value.to_str().ok().map(|h| {
-        if let Some((left, right)) = h.rsplit_once(':') {
-          if right.parse::<u16>().is_ok() {
-            left
-          } else {
-            h
-          }
+  let hostname_determinant = match request.headers().get(header::HOST) {
+    Some(value) => value.to_str().ok().map(|h| {
+      if let Some((left, right)) = h.rsplit_once(':') {
+        if right.parse::<u16>().is_ok() {
+          left
         } else {
           h
         }
-      }),
-      None => None,
-    },
+      } else {
+        h
+      }
+    }),
+    None => None,
+  };
+
+  // Find the server configuration
+  let mut configuration = match configurations.find_configuration(
+    request.uri().path(),
+    hostname_determinant,
     socket_data.local_addr.ip(),
     socket_data.local_addr.port(),
   ) {
     Some(configuration) => configuration,
     None => {
       if error_log_enabled {
-        logger
-          .send(LogMessage::new(
-            String::from("Cannot determine server configuration"),
-            true,
-          ))
-          .await
-          .unwrap_or_default();
+        if let Some(logger) = loggers.find_global_logger() {
+          logger
+            .send(LogMessage::new(
+              String::from("Cannot determine server configuration"),
+              true,
+            ))
+            .await
+            .unwrap_or_default()
+        }
       }
       let response = Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -673,28 +689,30 @@ async fn request_handler_wrapped(
         )
         .unwrap_or_default();
       if log_enabled {
-        log_combined(
-          &logger,
-          socket_data.remote_addr.ip(),
-          None,
-          log_method,
-          log_request_path,
-          log_protocol,
-          response.status().as_u16(),
-          match response.headers().get(header::CONTENT_LENGTH) {
-            Some(header_value) => match header_value.to_str() {
-              Ok(header_value) => match header_value.parse::<u64>() {
-                Ok(content_length) => Some(content_length),
+        if let Some(logger) = loggers.find_global_logger() {
+          log_combined(
+            &logger,
+            socket_data.remote_addr.ip(),
+            None,
+            log_method,
+            log_request_path,
+            log_protocol,
+            response.status().as_u16(),
+            match response.headers().get(header::CONTENT_LENGTH) {
+              Some(header_value) => match header_value.to_str() {
+                Ok(header_value) => match header_value.parse::<u64>() {
+                  Ok(content_length) => Some(content_length),
+                  Err(_) => response.body().size_hint().exact(),
+                },
                 Err(_) => response.body().size_hint().exact(),
               },
-              Err(_) => response.body().size_hint().exact(),
+              None => response.body().size_hint().exact(),
             },
-            None => response.body().size_hint().exact(),
-          },
-          log_referrer,
-          log_user_agent,
-        )
-        .await;
+            log_referrer,
+            log_user_agent,
+          )
+          .await;
+        }
       }
       let (mut response_parts, response_body) = response.into_parts();
       if let Some(http3_alt_port) = http3_alt_port {
@@ -727,6 +745,15 @@ async fn request_handler_wrapped(
     }
   };
 
+  // Determine the logger
+  let logger = loggers.find_logger(
+    hostname_determinant,
+    socket_data.local_addr.ip(),
+    socket_data.local_addr.port(),
+  );
+  let log_enabled = !get_value!("log", configuration).is_none_or(|v| v.is_null());
+  let error_log_enabled = !get_value!("error_log", configuration).is_none_or(|v| v.is_null());
+
   // Sanitize the URL
   let url_pathname = request.uri().path();
   let sanitized_url_pathname = match sanitize_url(
@@ -738,13 +765,15 @@ async fn request_handler_wrapped(
     Ok(sanitized_url) => sanitized_url,
     Err(err) => {
       if error_log_enabled {
-        logger
-          .send(LogMessage::new(
-            format!("URL sanitation error: {}", err),
-            true,
-          ))
-          .await
-          .unwrap_or_default();
+        if let Some(logger) = &logger {
+          logger
+            .send(LogMessage::new(
+              format!("URL sanitation error: {}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+        }
       }
       let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
 
@@ -791,13 +820,15 @@ async fn request_handler_wrapped(
         Ok(path_and_query) => path_and_query,
         Err(err) => {
           if error_log_enabled {
-            logger
-              .send(LogMessage::new(
-                format!("URL sanitation error: {}", err),
-                true,
-              ))
-              .await
-              .unwrap_or_default();
+            if let Some(logger) = &logger {
+              logger
+                .send(LogMessage::new(
+                  format!("URL sanitation error: {}", err),
+                  true,
+                ))
+                .await
+                .unwrap_or_default();
+            }
           }
           let response =
             generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
@@ -827,13 +858,15 @@ async fn request_handler_wrapped(
       Ok(uri) => uri,
       Err(err) => {
         if error_log_enabled {
-          logger
-            .send(LogMessage::new(
-              format!("URL sanitation error: {}", err),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
+          if let Some(logger) = &logger {
+            logger
+              .send(LogMessage::new(
+                format!("URL sanitation error: {}", err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
         }
         let response =
           generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
@@ -943,9 +976,9 @@ async fn request_handler_wrapped(
 
   // Create an error logger
   let cloned_logger = logger.clone();
-  let error_logger = match error_log_enabled {
-    true => ErrorLogger::new(cloned_logger),
-    false => ErrorLogger::without_logger(),
+  let error_logger = match (cloned_logger, error_log_enabled) {
+    (Some(cloned_logger), true) => ErrorLogger::new(cloned_logger),
+    _ => ErrorLogger::without_logger(),
   };
 
   // Obtain module handlers
@@ -1037,19 +1070,21 @@ async fn request_handler_wrapped(
             {
               Ok(response) => {
                 if log_enabled {
-                  log_combined(
-                    &logger,
-                    socket_data.remote_addr.ip(),
-                    latest_auth_data,
-                    log_method,
-                    log_request_path,
-                    log_protocol,
-                    response.status().as_u16(),
-                    extract_content_length(&response),
-                    log_referrer,
-                    log_user_agent,
-                  )
-                  .await;
+                  if let Some(logger) = &logger {
+                    log_combined(
+                      logger,
+                      socket_data.remote_addr.ip(),
+                      latest_auth_data,
+                      log_method,
+                      log_request_path,
+                      log_protocol,
+                      response.status().as_u16(),
+                      extract_content_length(&response),
+                      log_referrer,
+                      log_user_agent,
+                    )
+                    .await;
+                  }
                 }
                 return Ok(response);
               }
@@ -1116,19 +1151,21 @@ async fn request_handler_wrapped(
               {
                 Ok(response) => {
                   if log_enabled {
-                    log_combined(
-                      &logger,
-                      socket_data.remote_addr.ip(),
-                      latest_auth_data,
-                      log_method,
-                      log_request_path,
-                      log_protocol,
-                      response.status().as_u16(),
-                      extract_content_length(&response),
-                      log_referrer,
-                      log_user_agent,
-                    )
-                    .await;
+                    if let Some(logger) = &logger {
+                      log_combined(
+                        logger,
+                        socket_data.remote_addr.ip(),
+                        latest_auth_data,
+                        log_method,
+                        log_request_path,
+                        log_protocol,
+                        response.status().as_u16(),
+                        extract_content_length(&response),
+                        log_referrer,
+                        log_user_agent,
+                      )
+                      .await;
+                    }
                   }
                   return Ok(response);
                 }
@@ -1161,13 +1198,15 @@ async fn request_handler_wrapped(
         let response = Response::from_parts(response_parts, response_body);
 
         if error_log_enabled {
-          logger
-            .send(LogMessage::new(
-              format!("Unexpected error while serving a request: {}", err),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
+          if let Some(logger) = &logger {
+            logger
+              .send(LogMessage::new(
+                format!("Unexpected error while serving a request: {}", err),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
         }
 
         match execute_response_modifying_handlers(
@@ -1191,19 +1230,21 @@ async fn request_handler_wrapped(
         {
           Ok(response) => {
             if log_enabled {
-              log_combined(
-                &logger,
-                socket_data.remote_addr.ip(),
-                latest_auth_data,
-                log_method,
-                log_request_path,
-                log_protocol,
-                response.status().as_u16(),
-                extract_content_length(&response),
-                log_referrer,
-                log_user_agent,
-              )
-              .await;
+              if let Some(logger) = &logger {
+                log_combined(
+                  logger,
+                  socket_data.remote_addr.ip(),
+                  latest_auth_data,
+                  log_method,
+                  log_request_path,
+                  log_protocol,
+                  response.status().as_u16(),
+                  extract_content_length(&response),
+                  log_referrer,
+                  log_user_agent,
+                )
+                .await;
+              }
             }
             return Ok(response);
           }
@@ -1245,19 +1286,21 @@ async fn request_handler_wrapped(
   {
     Ok(response) => {
       if log_enabled {
-        log_combined(
-          &logger,
-          socket_data.remote_addr.ip(),
-          latest_auth_data,
-          log_method,
-          log_request_path,
-          log_protocol,
-          response.status().as_u16(),
-          extract_content_length(&response),
-          log_referrer,
-          log_user_agent,
-        )
-        .await;
+        if let Some(logger) = &logger {
+          log_combined(
+            logger,
+            socket_data.remote_addr.ip(),
+            latest_auth_data,
+            log_method,
+            log_request_path,
+            log_protocol,
+            response.status().as_u16(),
+            extract_content_length(&response),
+            log_referrer,
+            log_user_agent,
+          )
+          .await;
+        }
       }
       Ok(response)
     }
@@ -1273,7 +1316,7 @@ pub async fn request_handler(
   server_address: SocketAddr,
   encrypted: bool,
   configurations: Arc<ServerConfigurations>,
-  logger: Sender<LogMessage>,
+  loggers: Loggers,
   http3_alt_port: Option<u16>,
   acme_http_01_resolvers: Arc<Vec<Arc<ResolvesServerCertAcme>>>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
@@ -1288,7 +1331,7 @@ pub async fn request_handler(
     server_address,
     encrypted,
     configurations,
-    logger,
+    loggers,
     http3_alt_port,
     acme_http_01_resolvers,
   );

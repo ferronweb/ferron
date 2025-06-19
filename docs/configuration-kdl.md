@@ -59,10 +59,6 @@ include "/etc/ferron.d/**/*.kdl"
 
 ## Global-only directives
 
-- `log <log_file_path: string>`
-  - This directive specifies the path to the access log file, which contains the HTTP response logs in Combined Log Format. Default: none
-- `error_log <error_log_file_path: string>`
-  - This directive specifies the path to the error log file. Default: none
 - `tls_cipher_suite <tls_cipher_suite: string> [<tls_cipher_suite_2: string> ...]`
   - This directive specifies the supported TLS cipher suites. This directive can be specified multiple times. Default: default TLS cipher suite for Rustls
 - `tls_ecdh_curves <ecdh_curve: string> [<ecdh_curve: string> ...]`
@@ -122,6 +118,10 @@ include "/etc/ferron.d/**/*.kdl"
   - This directive specifies whenever the production Let's Encrypt ACME endpoint is used. If set as `auto_tls_letsencrypt_production #false`, the staging Let's Encrypt ACME endpoint is used. Default: `auto_tls_letsencrypt_production #true`
 - `auto_tls_challenge <acme_challenge_type: string>`
   - This directive specifies the used ACME challenge type. The supported types are `"http-01"` (HTTP-01 ACME challenge) and `"tls-alpn-01"` (TLS-ALPN-01 ACME challenge). Default: `auto_tls_challenge "tls-alpn-01"`
+- `log <log_file_path: string>`
+  - This directive specifies the path to the access log file, which contains the HTTP response logs in Combined Log Format. This directive was global-only until Ferron UNRELEASED. Default: none
+- `error_log <error_log_file_path: string>`
+  - This directive specifies the path to the error log file. This directive was global-only until Ferron UNRELEASED. Default: none
 
 ## Directives
 

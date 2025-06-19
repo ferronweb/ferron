@@ -54,6 +54,7 @@ use tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyR
 use tokio::io::{AsyncWriteExt, BufWriter};
 use util::{get_entry, get_value, get_values};
 
+use crate::logging::{LoggerFilter, LoggersBuilder};
 use crate::util::NoServerVerifier;
 
 // Set the global allocator to use mimalloc for performance optimization
@@ -69,8 +70,8 @@ static TCP_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, Sender<()>>>>> =
 static QUIC_LISTENERS: LazyLock<
   Arc<Mutex<HashMap<SocketAddr, (Sender<()>, Sender<Arc<ServerConfig>>)>>>,
 > = LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
-static LOGGING_CHANNEL: LazyLock<Arc<(Sender<LogMessage>, Receiver<LogMessage>)>> =
-  LazyLock::new(|| Arc::new(async_channel::unbounded()));
+static LOGGER_BUILDER: LazyLock<Arc<Mutex<LoggersBuilder>>> =
+  LazyLock::new(|| Arc::new(Mutex::new(LoggersBuilder::new())));
 static URING_ENABLED: LazyLock<Arc<Mutex<bool>>> = LazyLock::new(|| Arc::new(Mutex::new(true)));
 
 /// Handles shutdown signals (SIGHUP and CTRL+C) and returns whether to continue running
@@ -117,24 +118,11 @@ fn handle_shutdown_signals(runtime: &tokio::runtime::Runtime) -> bool {
 
 /// Configure logging with the specified server configurations and runtime
 fn configure_logging(
-  server_configurations: &Arc<ServerConfigurations>,
+  log_filename: Option<String>,
+  error_log_filename: Option<String>,
   secondary_runtime: &tokio::runtime::Runtime,
   logging_rx: &Receiver<LogMessage>,
 ) {
-  // Determine log filenames
-  let error_log_filename = server_configurations
-    .find_global_configuration()
-    .as_deref()
-    .and_then(|c| get_value!("error_log", c))
-    .and_then(|v| v.as_str())
-    .map(String::from);
-  let log_filename = server_configurations
-    .find_global_configuration()
-    .as_deref()
-    .and_then(|c| get_value!("log", c))
-    .and_then(|v| v.as_str())
-    .map(String::from);
-
   // Spawn logging task in the secondary asynchronous runtime
   let logging_rx = logging_rx.clone();
   secondary_runtime.spawn(async move {
@@ -282,9 +270,58 @@ fn before_starting_server(
     .enable_all()
     .build()?;
 
-  // Configure logging
-  let (logging_tx, logging_rx) = &**LOGGING_CHANNEL;
-  configure_logging(&server_configurations, &secondary_runtime, logging_rx);
+  let global_configuration = server_configurations.find_global_configuration();
+
+  // Obtain the loggers builder
+  let mut loggers_builder = (*LOGGER_BUILDER)
+    .lock()
+    .map_err(|_| anyhow::anyhow!("Can't access the loggers"))?;
+
+  let mut log_file_names = HashMap::new();
+
+  // Iterate server configurations (logging configuration)
+  for server_configuration in &server_configurations.inner {
+    // Determine log filenames
+    let error_log_filename = get_value!("error_log", server_configuration)
+      .and_then(|v| v.as_str())
+      .map(String::from);
+    let log_filename = get_value!("log", server_configuration)
+      .and_then(|v| v.as_str())
+      .map(String::from);
+    if log_filename.is_some() || error_log_filename.is_some() {
+      log_file_names.insert(
+        LoggerFilter {
+          hostname: server_configuration.filters.hostname.clone(),
+          ip: server_configuration.filters.ip,
+          port: server_configuration.filters.port,
+        },
+        (log_filename, error_log_filename),
+      );
+    }
+  }
+
+  // Remove unused loggers from the logger builder
+  loggers_builder
+    .inner
+    .retain(|filter, _| log_file_names.contains_key(filter));
+
+  // Configure new loggers
+  for (filter, (log_filename, error_log_filename)) in log_file_names {
+    let (_, logging_rx) = loggers_builder.add(filter, async_channel::unbounded());
+    configure_logging(
+      log_filename,
+      error_log_filename,
+      &secondary_runtime,
+      &logging_rx,
+    );
+  }
+
+  // Obtain loggers from the logger builder
+  let loggers = loggers_builder.build_borrowed();
+
+  // Obtain the global logger
+  let global_logger = loggers.find_global_logger();
+  let global_logger_clone = global_logger.clone();
 
   // Reference to the secondary Tokio runtime
   let secondary_runtime_ref = &secondary_runtime;
@@ -298,18 +335,18 @@ fn before_starting_server(
 
     // Log unused properties
     for unused_property in unused_properties {
-      logging_tx
-        .send_blocking(LogMessage::new(
-          format!(
-            "Unused configuration property detected: \"{}\"",
-            unused_property
-          ),
-          true,
-        ))
-        .unwrap_or_default();
+      if let Some(logging_tx) = &global_logger {
+        logging_tx
+          .send_blocking(LogMessage::new(
+            format!(
+              "Unused configuration property detected: \"{}\"",
+              unused_property
+            ),
+            true,
+          ))
+          .unwrap_or_default();
+      }
     }
-
-    let global_configuration = server_configurations.find_global_configuration();
 
     // Configure cryptography provider for Rustls
     let mut crypto_provider = default_provider();
@@ -500,7 +537,7 @@ fn before_starting_server(
     });
     let mut acme_resolver_count: u64 = 0;
 
-    // Iterate server configurations
+    // Iterate server configurations (TLS configuration)
     for server_configuration in &server_configurations.inner {
       if server_configuration.filters.is_global() && server_configuration.entries.is_empty() {
         // Don't add listeners from an empty global configuration
@@ -625,7 +662,8 @@ fn before_starting_server(
             let challenge_type = match &*challenge_type_str.to_uppercase() {
               "HTTP-01" => {
                 if is_wildcard_domain {
-                  logging_tx
+                  if let Some(logging_tx) = &global_logger {
+                    logging_tx
                                         .send_blocking(LogMessage::new(
                                             format!(
                                                 "HTTP-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{}\"...",
@@ -634,12 +672,15 @@ fn before_starting_server(
                                             true,
                                         ))
                                         .unwrap_or_default();
+                  }
+                  continue;
                 }
                 UseChallenge::Http01
               }
               "TLS-ALPN-01" => {
                 if is_wildcard_domain {
-                  logging_tx
+                  if let Some(logging_tx) = &global_logger {
+                    logging_tx
                                         .send_blocking(LogMessage::new(
                                             format!(
                                                 "TLS-ALPN-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{}\"...",
@@ -648,6 +689,8 @@ fn before_starting_server(
                                             true,
                                         ))
                                         .unwrap_or_default();
+                  }
+                  continue;
                 }
                 UseChallenge::TlsAlpn01
               }
@@ -728,18 +771,20 @@ fn before_starting_server(
             }
             let mut acme_state = acme_config_with_cache.state();
             let acme_resolver = acme_state.resolver();
-            let acme_logger = logging_tx.clone();
+            let acme_logger_option = global_logger.clone();
             secondary_runtime_ref.spawn(async move {
               tokio::time::sleep(Duration::from_millis(50 * acme_resolver_count)).await;
               while let Some(acme_result) = acme_state.next().await {
                 if let Err(acme_error) = acme_result {
-                  acme_logger
-                    .send(LogMessage::new(
-                      format!("Error while obtaining a TLS certificate: {}", acme_error),
-                      true,
-                    ))
-                    .await
-                    .unwrap_or_default();
+                  if let Some(acme_logger) = &acme_logger_option {
+                    acme_logger
+                      .send(LogMessage::new(
+                        format!("Error while obtaining a TLS certificate: {}", acme_error),
+                        true,
+                      ))
+                      .await
+                      .unwrap_or_default();
+                  }
                 }
               }
             });
@@ -771,12 +816,14 @@ fn before_starting_server(
             }
             automatic_tls_used_sni_hostnames.insert((automatic_tls_port, Some(sni_hostname)));
           } else if !server_configuration.filters.is_global() {
-            logging_tx
-              .send_blocking(LogMessage::new(
-                "Skipping automatic TLS for a host without a SNI hostname...".to_string(),
-                true,
-              ))
-              .unwrap_or_default();
+            if let Some(logging_tx) = &global_logger {
+              logging_tx
+                .send_blocking(LogMessage::new(
+                  "Skipping automatic TLS for a host without a SNI hostname...".to_string(),
+                  true,
+                ))
+                .unwrap_or_default();
+            }
           }
         }
       }
@@ -941,7 +988,7 @@ fn before_starting_server(
         server_configurations.clone(),
         listener_handler_rx.clone(),
         enable_uring,
-        logging_tx.clone(),
+        loggers.clone(),
         tls_configs.clone(),
         !quic_listened_socket_addresses.is_empty(),
         acme_tls_alpn_01_configs.clone(),
@@ -974,7 +1021,7 @@ fn before_starting_server(
           encrypted,
           listener_handler_tx.clone(),
           enable_uring,
-          logging_tx.clone(),
+          global_logger.clone(),
           first_startup,
           (tcp_send_buffer_size, tcp_recv_buffer_size),
         )?);
@@ -1000,7 +1047,7 @@ fn before_starting_server(
             tls_config,
             listener_handler_tx.clone(),
             enable_uring,
-            logging_tx.clone(),
+            global_logger.clone(),
             first_startup,
           )?,
         );
@@ -1024,9 +1071,11 @@ fn before_starting_server(
   match execute_rest() {
     Ok(to_restart) => Ok(to_restart),
     Err(err) => {
-      logging_tx
-        .send_blocking(LogMessage::new(err.to_string(), true))
-        .unwrap_or_default();
+      if let Some(logging_tx) = global_logger_clone {
+        logging_tx
+          .send_blocking(LogMessage::new(err.to_string(), true))
+          .unwrap_or_default();
+      }
       std::thread::sleep(Duration::from_millis(100));
       Err(err)?
     }
