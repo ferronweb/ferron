@@ -1249,6 +1249,7 @@ fn main() {
 }
 
 /// In-memory ACME account cache
+#[allow(clippy::type_complexity)]
 struct MemoryAccountCache {
   inner: Arc<tokio::sync::RwLock<HashMap<(Vec<String>, String), Vec<u8>>>>,
 }
@@ -1263,7 +1264,7 @@ impl MemoryAccountCache {
   }
 
   /// Creates a new in-memory ACME account cache from existing data
-  #[allow(dead_code)]
+  #[allow(dead_code, clippy::type_complexity)]
   fn from_data(data: Arc<tokio::sync::RwLock<HashMap<(Vec<String>, String), Vec<u8>>>>) -> Self {
     Self {
       inner: data.clone(),
