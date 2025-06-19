@@ -45,7 +45,7 @@ use rustls::sign::CertifiedKey;
 use rustls::version::{TLS12, TLS13};
 use rustls::{RootCertStore, ServerConfig};
 use rustls_acme::acme::ACME_TLS_ALPN_NAME;
-use rustls_acme::caches::DirCache;
+use rustls_acme::caches::{CompositeCache, DirCache};
 use rustls_acme::{AcmeConfig, ResolvesServerCertAcme, UseChallenge};
 use rustls_native_certs::load_native_certs;
 use sha2::{Digest, Sha256};
@@ -495,6 +495,7 @@ fn before_starting_server(
       p.push("ferron-acme");
       p.into_os_string().into_string().ok()
     });
+    let mut acme_resolver_count: u64 = 0;
 
     // Iterate server configurations
     for server_configuration in &server_configurations.inner {
@@ -675,6 +676,7 @@ fn before_starting_server(
                   Ok(pathbuf) => pathbuf,
                   Err(_) => Err(anyhow::anyhow!("Invalid ACME cache path"))?,
                 };
+                let base_pathbuf = pathbuf.clone();
                 let mut hasher = Sha256::new();
                 hasher.update(format!("{}-{}", automatic_tls_port, sni_hostname));
                 let append_hash = hasher
@@ -685,7 +687,9 @@ fn before_starting_server(
                     output
                   });
                 pathbuf.push(append_hash);
-                Some(DirCache::new(pathbuf))
+                let cert_cache = DirCache::new(pathbuf);
+                let account_cache = DirCache::new(base_pathbuf);
+                Some(CompositeCache::new(cert_cache, account_cache))
               } else {
                 None
               };
@@ -699,6 +703,7 @@ fn before_starting_server(
             let acme_resolver = acme_state.resolver();
             let acme_logger = logging_tx.clone();
             secondary_runtime_ref.spawn(async move {
+              tokio::time::sleep(Duration::from_millis(50 * acme_resolver_count)).await;
               while let Some(acme_result) = acme_state.next().await {
                 if let Err(acme_error) = acme_result {
                   acme_logger
@@ -711,6 +716,7 @@ fn before_starting_server(
                 }
               }
             });
+            acme_resolver_count += 1;
             match &*challenge_type_str.to_uppercase() {
               "HTTP-01" => {
                 acme_http_01_resolvers.push(acme_resolver.clone());
