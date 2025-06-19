@@ -21,6 +21,7 @@ use std::thread;
 use std::time::Duration;
 
 use async_channel::{Receiver, Sender};
+use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use clap::{crate_version, Arg, ArgAction, ArgMatches, Command};
 use config::adapters::ConfigurationAdapter;
@@ -46,7 +47,7 @@ use rustls::version::{TLS12, TLS13};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use rustls_acme::acme::ACME_TLS_ALPN_NAME;
 use rustls_acme::caches::{CompositeCache, DirCache};
-use rustls_acme::{AcmeConfig, ResolvesServerCertAcme, UseChallenge};
+use rustls_acme::{AccountCache, AcmeConfig, ResolvesServerCertAcme, UseChallenge};
 use rustls_native_certs::load_native_certs;
 use rustls_platform_verifier::BuilderVerifierExt;
 use sha2::{Digest, Sha256};
@@ -536,6 +537,7 @@ fn before_starting_server(
       p.into_os_string().into_string().ok()
     });
     let mut acme_resolver_count: u64 = 0;
+    let memory_acme_account_cache_data = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
 
     // Iterate server configurations (TLS configuration)
     for server_configuration in &server_configurations.inner {
@@ -724,7 +726,7 @@ fn before_starting_server(
             {
               acme_config = acme_config.contact_push(format!("mailto:{}", acme_contact));
             }
-            let acme_cache =
+            let mut acme_config_with_cache =
               if let Some(acme_cache_path) = get_value!("auto_tls_cache", server_configuration)
                 .map_or(acme_default_directory.as_deref(), |v| {
                   if v.is_null() {
@@ -753,11 +755,14 @@ fn before_starting_server(
                 pathbuf.push(append_hash);
                 let cert_cache = DirCache::new(pathbuf);
                 let account_cache = DirCache::new(base_pathbuf);
-                Some(CompositeCache::new(cert_cache, account_cache))
+                acme_config.cache(CompositeCache::new(cert_cache, account_cache))
               } else {
-                None
+                acme_config.cache(CompositeCache::new(
+                  rustls_acme::caches::NoCache::<std::io::Error, std::convert::Infallible>::default(
+                  ),
+                  MemoryAccountCache::from_data(memory_acme_account_cache_data.clone()),
+                ))
               };
-            let mut acme_config_with_cache = acme_config.cache_option(acme_cache);
             if let Some(auto_tls_directory) =
               get_value!("auto_tls_directory", server_configuration).and_then(|v| v.as_str())
             {
@@ -1240,5 +1245,61 @@ fn main() {
         std::process::exit(1);
       }
     };
+  }
+}
+
+/// In-memory ACME account cache
+struct MemoryAccountCache {
+  inner: Arc<tokio::sync::RwLock<HashMap<(Vec<String>, String), Vec<u8>>>>,
+}
+
+impl MemoryAccountCache {
+  /// Creates a new in-memory ACME account cache
+  #[allow(dead_code)]
+  fn new() -> Self {
+    Self {
+      inner: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+    }
+  }
+
+  /// Creates a new in-memory ACME account cache from existing data
+  #[allow(dead_code)]
+  fn from_data(data: Arc<tokio::sync::RwLock<HashMap<(Vec<String>, String), Vec<u8>>>>) -> Self {
+    Self {
+      inner: data.clone(),
+    }
+  }
+}
+
+#[async_trait]
+impl AccountCache for MemoryAccountCache {
+  type EA = std::io::Error;
+
+  async fn load_account(
+    &self,
+    contact: &[String],
+    directory_url: &str,
+  ) -> Result<Option<Vec<u8>>, Self::EA> {
+    Ok(
+      self
+        .inner
+        .read()
+        .await
+        .get(&(contact.to_vec(), directory_url.to_string()))
+        .cloned(),
+    )
+  }
+
+  async fn store_account(
+    &self,
+    contact: &[String],
+    directory_url: &str,
+    account: &[u8],
+  ) -> Result<(), Self::EA> {
+    self.inner.write().await.insert(
+      (contact.to_vec(), directory_url.to_string()),
+      account.to_vec(),
+    );
+    Ok(())
   }
 }
