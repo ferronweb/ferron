@@ -43,11 +43,12 @@ use rustls::crypto::aws_lc_rs::kx_group::*;
 use rustls::server::{ResolvesServerCert, WebPkiClientVerifier};
 use rustls::sign::CertifiedKey;
 use rustls::version::{TLS12, TLS13};
-use rustls::{RootCertStore, ServerConfig};
+use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use rustls_acme::acme::ACME_TLS_ALPN_NAME;
 use rustls_acme::caches::{CompositeCache, DirCache};
 use rustls_acme::{AcmeConfig, ResolvesServerCertAcme, UseChallenge};
 use rustls_native_certs::load_native_certs;
+use rustls_platform_verifier::BuilderVerifierExt;
 use sha2::{Digest, Sha256};
 use tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
 use tokio::io::{AsyncWriteExt, BufWriter};
@@ -653,8 +654,16 @@ fn before_starting_server(
                 unsupported
               ))?,
             };
-            let mut acme_config =
-              AcmeConfig::new(vec![&sni_hostname]).challenge_type(challenge_type);
+            let mut acme_config = AcmeConfig::new_with_client_config(
+              vec![&sni_hostname],
+              Arc::new(
+                ClientConfig::builder_with_provider(crypto_provider.clone())
+                  .with_safe_default_protocol_versions()?
+                  .with_platform_verifier()?
+                  .with_no_client_auth(),
+              ),
+            )
+            .challenge_type(challenge_type);
             if let Some(acme_contact) =
               get_value!("auto_tls_contact", server_configuration).and_then(|v| v.as_str())
             {

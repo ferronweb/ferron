@@ -3097,7 +3097,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.12",
- "webpki-roots 1.0.0",
  "x509-parser",
 ]
 
