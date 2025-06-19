@@ -1,0 +1,28 @@
+services:
+  ferron:
+    image: ferronserver/ferron:2
+    container_name: myferron
+    restart: always
+    ports:
+      - "80:80"
+  # network_mode: host #Optionally uncomment this if you are running already in a container like LXC
+    volumes:
+      # Configuration bind mount (host file → container)
+      - "./config/ferron.yaml:/etc/ferron.yaml"
+      
+      # Persistent web root volume
+      - "ferron_web:/var/www/ferron"
+      
+      # Log directory bind mount (host dir → container)
+      - "./logs:/var/log/ferron"
+      
+      # Persistent storage for user management data (if used)
+      - "ferron_data:/var/lib/ferron"
+
+volumes:
+  ferron_web:
+  ferron_data:
+
+#Uncomment the following while runnning in bridge mode to add the ferron-proxy network (or any of your liking)
+#networks:
+ #ferron-proxy:
