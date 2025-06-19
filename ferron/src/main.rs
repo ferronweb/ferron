@@ -54,6 +54,8 @@ use tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyR
 use tokio::io::{AsyncWriteExt, BufWriter};
 use util::{get_entry, get_value, get_values};
 
+use crate::util::NoServerVerifier;
+
 // Set the global allocator to use mimalloc for performance optimization
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -657,10 +659,20 @@ fn before_starting_server(
             let mut acme_config = AcmeConfig::new_with_client_config(
               vec![&sni_hostname],
               Arc::new(
-                ClientConfig::builder_with_provider(crypto_provider.clone())
-                  .with_safe_default_protocol_versions()?
-                  .with_platform_verifier()?
-                  .with_no_client_auth(),
+                (if get_value!("auto_tls_no_verification", server_configuration)
+                  .and_then(|v| v.as_bool())
+                  .unwrap_or(false)
+                {
+                  ClientConfig::builder_with_provider(crypto_provider.clone())
+                    .with_safe_default_protocol_versions()?
+                    .dangerous()
+                    .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
+                } else {
+                  ClientConfig::builder_with_provider(crypto_provider.clone())
+                    .with_safe_default_protocol_versions()?
+                    .with_platform_verifier()?
+                })
+                .with_no_client_auth(),
               ),
             )
             .challenge_type(challenge_type);
@@ -703,11 +715,17 @@ fn before_starting_server(
                 None
               };
             let mut acme_config_with_cache = acme_config.cache_option(acme_cache);
-            acme_config_with_cache = acme_config_with_cache.directory_lets_encrypt(
-              get_value!("auto_tls_letsencrypt_production", server_configuration)
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true),
-            );
+            if let Some(auto_tls_directory) =
+              get_value!("auto_tls_directory", server_configuration).and_then(|v| v.as_str())
+            {
+              acme_config_with_cache = acme_config_with_cache.directory(auto_tls_directory);
+            } else {
+              acme_config_with_cache = acme_config_with_cache.directory_lets_encrypt(
+                get_value!("auto_tls_letsencrypt_production", server_configuration)
+                  .and_then(|v| v.as_bool())
+                  .unwrap_or(true),
+              );
+            }
             let mut acme_state = acme_config_with_cache.state();
             let acme_resolver = acme_state.resolver();
             let acme_logger = logging_tx.clone();
