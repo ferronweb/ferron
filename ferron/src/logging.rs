@@ -202,6 +202,7 @@ impl LoggersBuilder {
       .iter()
       .map(|(k, v)| (k.clone(), v.0.clone()))
       .collect::<Vec<_>>();
+    inner_vector.reverse();
     inner_vector.sort_by(|a, b| a.0.cmp(&b.0));
     Loggers {
       inner: Arc::new(inner_vector),

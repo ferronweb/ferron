@@ -44,6 +44,11 @@ api.example.com {
     }
   }
 
+  // The location configuration order is important; in this host configuration, first the "/v1" location is checked, then the "/" location.
+  location "/" {
+    // ...
+  }
+
   // Below is the error handler configuration for 404 Not Found status code. If "404" wasn't included, it would be for all errors.
   error_config 404 {
     // ...
