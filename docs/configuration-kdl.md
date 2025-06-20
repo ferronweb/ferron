@@ -21,7 +21,7 @@ example.com {
   // Configuration for "example.com" virtual host
 }
 
-192.168.1.1 {
+"192.168.1.1" {
   // Configuration for "192.168.1.1" IP virtual host
 }
 
@@ -29,7 +29,7 @@ example.com:8080 {
   // Configuration for "example.com" virtual host with port 8080
 }
 
-192.168.1.1:8080 {
+"192.168.1.1:8080" {
   // Configuration for "192.168.1.1" IP virtual host with port 8080
 }
 
