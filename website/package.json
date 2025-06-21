@@ -14,7 +14,7 @@
     "@astrojs/react": "^4.2.5",
     "@astrojs/sitemap": "^3.3.1",
     "@csstools/postcss-cascade-layers": "^5.0.1",
-    "@csstools/postcss-color-mix-function": "^3.0.8",
+    "@csstools/postcss-color-mix-function": "^3.0.10",
     "@csstools/postcss-oklab-function": "^4.0.8",
     "@fontsource/inter": "^5.1.1",
     "@fontsource/rajdhani": "^5.1.1",
