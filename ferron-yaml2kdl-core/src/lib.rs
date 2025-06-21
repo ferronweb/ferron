@@ -1062,7 +1062,7 @@ pub fn obtain_global_configuration(
             }
           }
         }
-        "maxCacheEntries" => {
+        "maximumCacheEntries" => {
           if load_server_modules.contains(&"cache".to_string()) {
             if let Some(value) = value.as_i64() {
               let mut kdl_property = KdlNode::new("cache_max_entries");
