@@ -17,9 +17,10 @@ rustls = { version = "0.23.24", default-features = false, features = [
     "std",
     "ring",
 ] }
-rustls-acme = { version = "0.13.0", default-features = false, features = [
+rustls-acme = { version = "0.14.0", default-features = false, features = [
     "tls12",
     "ring",
+    "webpki-roots",
 ] }
 tokio-rustls = { version = "0.26.1", default-features = false, features = [
     "tls12",
@@ -60,8 +61,8 @@ httparse = { version = "1.10.0", optional = true }
 pin-project-lite = "0.2.16"
 hashlink = "0.10.0"
 glob = "0.3.2"
-hyper-tungstenite = "0.17.0"
-tokio-tungstenite = { version = "0.26.2", features = [
+hyper-tungstenite = "0.18.0"
+tokio-tungstenite = { version = "0.27.0", features = [
     "rustls-tls-native-roots",
 ] }
 http = "1.2.0"
