@@ -6,6 +6,11 @@ description: Discover security vulnerabilities of outdated Ferron versions. Stay
 
 Some older versions of Ferron may contain security vulnerabilities. It's recommended to keep Ferron up-to-date.
 
+## Fixed in Ferron 1.3.2
+
+- An attacker could connect to the server acting as a reverse proxy via HTTP/3 to cause a Rust panic in the server, and in effect crash the server. (CWE-248; _fauth_ module; introduced in Ferron 1.1.0)
+- An attacker could connect to the server acting as a reverse proxy via HTTP/3 to cause a Rust panic in the server, and in effect crash the server. (CWE-248; _rproxy_ module; introduced in Ferron 1.1.0)
+
 ## Fixed in Ferron 1.1.1
 
 - An attacker could connect to the server that handles request bodies via HTTP/3 and send a request body to make the server stop accepting HTTP requests due to the server entering an infinite loop after the client finished sending the request body. (CWE-835; introduced in Ferron 1.1.0)

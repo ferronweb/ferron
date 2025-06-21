@@ -16,7 +16,7 @@ use http_body_util::{BodyExt, Empty};
 use hyper::body::Bytes;
 use hyper::client::conn::http1::SendRequest;
 use hyper::header::HeaderName;
-use hyper::{header, Method, Request, StatusCode, Uri};
+use hyper::{header, Method, Request, StatusCode, Uri, Version};
 use hyper_tungstenite::HyperWebsocket;
 use hyper_util::rt::TokioIo;
 use rustls::pki_types::ServerName;
@@ -239,6 +239,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
         );
 
         auth_hyper_request_parts.method = Method::GET;
+        auth_hyper_request_parts.version = Version::HTTP_11;
 
         let auth_request = Request::from_parts(
           auth_hyper_request_parts,

@@ -12,6 +12,7 @@
 <p align="center">
   <a href="https://www.ferronweb.org/docs" target="_blank"><img alt="Static Badge" src="https://img.shields.io/badge/Documentation-orange"></a>
   <a href="https://www.ferronweb.org" target="_blank"><img alt="Website" src="https://img.shields.io/website?url=https%3A%2F%2Fwww.ferronweb.org"></a>
+  <a href="https://matrix.to/#/#ferronweb:matrix.org" target="_blank"><img alt="Chat" src="https://img.shields.io/matrix/ferronweb%3Amatrix.org"></a>
   <a href="https://x.com/ferron_web" target="_blank"><img alt="X (formerly Twitter) Follow" src="https://img.shields.io/twitter/follow/ferron_web"></a>
   <a href="https://hub.docker.com/r/ferronserver/ferron" target="_blank"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/ferronserver/ferron"></a>
   <a href="https://github.com/ferronweb/ferron" target="_blank"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/ferronweb/ferron"></a>

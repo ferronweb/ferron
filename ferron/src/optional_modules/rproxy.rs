@@ -17,7 +17,7 @@ use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Bytes;
 use hyper::client::conn::http1::SendRequest;
-use hyper::{header, Request, StatusCode, Uri};
+use hyper::{header, Request, StatusCode, Uri, Version};
 use hyper_tungstenite::HyperWebsocket;
 use hyper_util::rt::TokioIo;
 use rustls::pki_types::ServerName;
@@ -247,6 +247,8 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
             .headers
             .insert("x-forwarded-host", original_host);
         }
+
+        hyper_request_parts.version = Version::HTTP_11;
 
         let proxy_request = Request::from_parts(hyper_request_parts, request_body);
 
