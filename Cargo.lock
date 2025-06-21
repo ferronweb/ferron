@@ -844,7 +844,7 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "ferron"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -904,7 +904,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-passwd"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "clap",
  "mimalloc",
