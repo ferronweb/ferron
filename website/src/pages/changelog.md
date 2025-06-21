@@ -4,6 +4,13 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.3.2
+
+**Released in June 21, 2025**
+
+- Fixed Rust panics when trying to use reverse proxying with HTTP/3
+- The server now wrap ETags in quotes for partial content requests
+
 ## Ferron 1.3.1
 
 **Released in May 26, 2025**
