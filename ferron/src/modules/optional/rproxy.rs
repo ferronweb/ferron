@@ -11,7 +11,7 @@ use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::client::conn::http1::SendRequest;
-use hyper::{header, Request, Response, StatusCode, Uri};
+use hyper::{header, Request, Response, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::TokioIo;
 #[cfg(feature = "runtime-monoio")]
@@ -378,6 +378,8 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .headers
           .insert("x-forwarded-host", original_host);
       }
+
+      request_parts.version = Version::HTTP_11;
 
       let proxy_request = Request::from_parts(request_parts, request_body);
 
