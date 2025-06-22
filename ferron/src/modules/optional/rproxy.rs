@@ -395,7 +395,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           let sender_option = rwlock_write.get_mut(&addr);
 
           if let Some(sender) = sender_option {
-            if !sender.is_closed() {
+            if !sender.is_closed() && sender.ready().await.is_ok() {
               let result =
                 http_proxy_kept_alive(sender, proxy_request, error_logger, proxy_intercept_errors)
                   .await;

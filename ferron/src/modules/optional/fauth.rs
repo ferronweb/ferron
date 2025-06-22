@@ -304,7 +304,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           let sender_option = rwlock_write.get_mut(&addr);
 
           if let Some(sender) = sender_option {
-            if !sender.is_closed() {
+            if !sender.is_closed() && sender.ready().await.is_ok() {
               let result = http_forwarded_auth_kept_alive(
                 sender,
                 auth_request,
