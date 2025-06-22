@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.4
+
+**Released in June 22, 2025**
+
+- Fixed host configurations not being used.
+
 ## Ferron 2.0.0-beta.3
 
 **Released in June 22, 2025**
