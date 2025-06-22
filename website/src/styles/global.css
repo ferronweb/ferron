@@ -39,7 +39,7 @@ pre {
   --muted-foreground: 0, 0%, 75%;
   --accent: 24, 90%, 45%;
   --accent-foreground: 0, 0%, 98%;
-  --destructive: 0 84.2% 60.2%;
+  --destructive: 0, 84.2%, 60.2%;
   --destructive-foreground: 0, 0%, 98%;
   --border: 220, 15%, 20%;
   --input: 220, 15%, 20%;
