@@ -160,17 +160,17 @@ impl ServerConfigurationFilters {
 
 impl Ord for ServerConfigurationFilters {
   fn cmp(&self, other: &Self) -> Ordering {
-    if self.hostname.is_none() && other.hostname.is_some() {
+    if self.port.is_none() && other.port.is_some() {
       Ordering::Less
-    } else if self.hostname.is_some() && other.hostname.is_none() {
+    } else if self.port.is_some() && other.port.is_none() {
       Ordering::Greater
     } else if self.ip.is_none() && other.ip.is_some() {
       Ordering::Less
     } else if self.ip.is_some() && other.ip.is_none() {
       Ordering::Greater
-    } else if self.port.is_none() && other.port.is_some() {
+    } else if self.hostname.is_none() && other.hostname.is_some() {
       Ordering::Less
-    } else if self.port.is_some() && other.port.is_none() {
+    } else if self.hostname.is_some() && other.hostname.is_none() {
       Ordering::Greater
     } else if self.location_prefix.is_none() && other.location_prefix.is_some() {
       Ordering::Less
