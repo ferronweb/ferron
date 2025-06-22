@@ -16,7 +16,7 @@ pub fn create_tcp_listener(
   encrypted: bool,
   tx: Sender<ConnectionData>,
   enable_uring: bool,
-  logging_tx: Sender<LogMessage>,
+  logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
   tcp_buffer_sizes: (Option<usize>, Option<usize>),
 ) -> Result<Sender<()>, Box<dyn Error + Send + Sync>> {
@@ -52,7 +52,7 @@ async fn tcp_listener_fn(
   encrypted: bool,
   tx: Sender<ConnectionData>,
   listen_error_tx: &Sender<Option<Box<dyn Error + Send + Sync>>>,
-  logging_tx: Sender<LogMessage>,
+  logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
   tcp_buffer_sizes: (Option<usize>, Option<usize>),
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -148,26 +148,30 @@ async fn tcp_listener_fn(
     let (tcp, remote_address) = match listener.accept().await {
       Ok(data) => data,
       Err(err) => {
-        logging_tx
-          .send(LogMessage::new(
-            format!("Cannot accept a connection: {}", err),
-            true,
-          ))
-          .await
-          .unwrap_or_default();
+        if let Some(logging_tx) = &logging_tx {
+          logging_tx
+            .send(LogMessage::new(
+              format!("Cannot accept a connection: {}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+        }
         continue;
       }
     };
     let local_address: SocketAddr = match tcp.local_addr() {
       Ok(data) => data,
       Err(err) => {
-        logging_tx
-          .send(LogMessage::new(
-            format!("Cannot accept a connection: {}", err),
-            true,
-          ))
-          .await
-          .unwrap_or_default();
+        if let Some(logging_tx) = &logging_tx {
+          logging_tx
+            .send(LogMessage::new(
+              format!("Cannot accept a connection: {}", err),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+        }
         continue;
       }
     };

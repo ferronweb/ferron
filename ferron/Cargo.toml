@@ -1,6 +1,6 @@
 [package]
 name = "ferron"
-version = "2.0.0-beta.2"
+version = "2.0.0-beta.3"
 edition = "2021"
 
 [dependencies]
@@ -41,12 +41,11 @@ tokio-rustls = { version = "0.26.2", default-features = false, features = [
 rustls-acme = { version = "0.14.0", default-features = false, features = [
     "tls12",
     "aws-lc-rs",
-    "webpki-roots",
 ] }
 rustls-native-certs = "0.8.1"
 rustls-pemfile = "2.2.0"
 rustls-pki-types = "1.12.0"
-rustls-platform-verifier = { version = "0.6.0", optional = true }
+rustls-platform-verifier = "0.6.0"
 ocsp-stapler = { version = "0.4.7", default-features = false, features = [
     "aws-lc-rs",
 ] }
@@ -186,12 +185,12 @@ cgi = ["async-process", "httparse", "memchr"]
 config-docker-auto = []
 config-yaml-legacy = ["ferron-yaml2kdl-core"]
 example = []
-fauth = ["rand", "rustls-platform-verifier"]
+fauth = ["rand"]
 fcgi = ["tokio-util/codec", "httparse", "memchr"]
 fproxy = []
 limit = ["tokenbucket"]
 replace = ["memchr"]
-rproxy = ["rand", "rustls-platform-verifier"]
+rproxy = ["rand"]
 runtime-monoio = ["monoio", "monoio-compat", "blocking"]
 runtime-tokio = ["tokio/full", "quinn/runtime-tokio", "hyper-util"]
 scgi = ["httparse", "memchr"]

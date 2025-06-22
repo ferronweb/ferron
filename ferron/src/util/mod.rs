@@ -19,7 +19,6 @@ mod match_location;
 mod module_cache;
 #[cfg(feature = "runtime-monoio")]
 mod monoio_file_stream;
-#[cfg(any(feature = "fauth", feature = "rproxy"))]
 mod no_server_verifier;
 #[cfg(feature = "wsgid")]
 mod preforked_process_pool;
@@ -55,7 +54,6 @@ pub use match_location::*;
 pub use module_cache::*;
 #[cfg(feature = "runtime-monoio")]
 pub use monoio_file_stream::*;
-#[cfg(any(feature = "fauth", feature = "rproxy"))]
 pub use no_server_verifier::*;
 #[cfg(feature = "wsgid")]
 pub use preforked_process_pool::*;

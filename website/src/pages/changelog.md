@@ -4,6 +4,18 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.3
+
+**Released in June 22, 2025**
+
+- Added several automatic TLS-related configuration directives
+- Added support for per-host logging
+- Fixed 502 errors caused by canceled operations when reverse proxying with Docker
+- Fixed a bug where location configurations were checked in incorrect order
+- Fixed Rust panics when trying to use reverse proxying with HTTP/3
+- Fixed the translation of "maximumCacheEntries" Ferron 1.x YAML configuration property
+- The server now uses common ACME account cache directory for automatic TLS
+
 ## Ferron 1.3.3
 
 **Released in June 22, 2025**

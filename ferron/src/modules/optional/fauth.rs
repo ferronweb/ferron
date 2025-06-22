@@ -10,6 +10,7 @@ use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
 use hyper::client::conn::http1::SendRequest;
+use hyper::Version;
 use hyper::{header, header::HeaderName, Method, Request, StatusCode, Uri};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::TokioIo;
@@ -283,6 +284,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
         .insert("x-forwarded-method", request_parts.method.as_str().parse()?);
 
       auth_request_parts.method = Method::GET;
+      auth_request_parts.version = Version::HTTP_11;
       let auth_request = Request::from_parts(
         auth_request_parts,
         Empty::new().map_err(|e| match e {}).boxed(),
@@ -302,7 +304,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           let sender_option = rwlock_write.get_mut(&addr);
 
           if let Some(sender) = sender_option {
-            if !sender.is_closed() {
+            if !sender.is_closed() && sender.ready().await.is_ok() {
               let result = http_forwarded_auth_kept_alive(
                 sender,
                 auth_request,

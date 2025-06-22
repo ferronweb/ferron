@@ -214,7 +214,7 @@ pub fn create_quic_listener(
   tls_config: Arc<ServerConfig>,
   tx: Sender<ConnectionData>,
   enable_uring: bool,
-  logging_tx: Sender<LogMessage>,
+  logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
 ) -> Result<(Sender<()>, Sender<Arc<ServerConfig>>), Box<dyn Error + Send + Sync>> {
   let (shutdown_tx, shutdown_rx) = async_channel::unbounded();
@@ -259,7 +259,7 @@ async fn quic_listener_fn(
   tls_config: Arc<ServerConfig>,
   tx: Sender<ConnectionData>,
   listen_error_tx: &Sender<Option<Box<dyn Error + Send + Sync>>>,
-  logging_tx: Sender<LogMessage>,
+  logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
   shutdown_rx: Receiver<()>,
   rustls_config_rx: Receiver<Arc<ServerConfig>>,
@@ -339,13 +339,15 @@ async fn quic_listener_fn(
           match result {
               Some(conn) => conn,
               None => {
-                  logging_tx
-                      .send(LogMessage::new(
-                          "HTTP/3 connections can't be accepted anymore".to_string(),
-                          true,
-                      ))
-                      .await
-                      .unwrap_or_default();
+                  if let Some(logging_tx) = &logging_tx {
+                      logging_tx
+                          .send(LogMessage::new(
+                              "HTTP/3 connections can't be accepted anymore".to_string(),
+                              true,
+                          ))
+                          .await
+                          .unwrap_or_default();
+                  }
                   break;
               }
           }

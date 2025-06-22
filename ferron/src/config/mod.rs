@@ -20,6 +20,9 @@ pub struct ServerConfigurations {
 impl ServerConfigurations {
   /// Creates the server configurations struct
   pub fn new(mut inner: Vec<ServerConfiguration>) -> Self {
+    // Reverse the inner vector to ensure the location configurations are checked in the correct order
+    inner.reverse();
+
     // Sort the configurations array by the specifity of configurations, so that it will be possible to find the configuration
     inner.sort_by(|a, b| a.filters.cmp(&b.filters));
     Self {
