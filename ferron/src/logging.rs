@@ -122,21 +122,12 @@ pub struct LoggerFilter {
 
 impl Ord for LoggerFilter {
   fn cmp(&self, other: &Self) -> Ordering {
-    if self.port.is_none() && other.port.is_some() {
-      Ordering::Less
-    } else if self.port.is_some() && other.port.is_none() {
-      Ordering::Greater
-    } else if self.ip.is_none() && other.ip.is_some() {
-      Ordering::Less
-    } else if self.ip.is_some() && other.ip.is_none() {
-      Ordering::Greater
-    } else if self.port.is_none() && other.port.is_some() {
-      Ordering::Less
-    } else if self.port.is_some() && other.port.is_none() {
-      Ordering::Greater
-    } else {
-      Ordering::Equal
-    }
+    self
+      .port
+      .is_some()
+      .cmp(&other.port.is_some())
+      .then_with(|| self.ip.is_some().cmp(&other.ip.is_some()))
+      .then_with(|| self.hostname.is_some().cmp(&other.hostname.is_some()))
   }
 }
 
