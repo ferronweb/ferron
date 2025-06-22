@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.3.3
+
+**Released in June 22, 2025**
+
+- Fixed 502 errors caused by canceled operations when reverse proxying with Docker
+
 ## Ferron 1.3.2
 
 **Released in June 21, 2025**
