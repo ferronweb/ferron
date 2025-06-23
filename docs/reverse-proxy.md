@@ -2,7 +2,7 @@
 title: Reverse proxy functionality
 ---
 
-Configuring Ferron as a reverse proxy is straightforward - you just need to specify the backend server URL in "proxy" directive. To configure Ferron as a reverse proxy, you can use the configuration below:
+Configuring Ferron as a reverse proxy is straightforward - you just need to specify the backend server URL in `proxy` directive. To configure Ferron as a reverse proxy, you can use the configuration below:
 
 ```kdl
 // Example global configuration with reverse proxy
@@ -50,3 +50,28 @@ bar.example.com {
 ```
 
 For `http://calender.example.net:5000/agenda/example`, you will probably have to either configure the calendar service to strip 'agenda/' or configure URL rewriting in Ferron.
+
+## Load balancing
+
+Ferron supports load balancing by specifying multiple backend servers in the `proxy` directive. To configure Ferron as a load balancer, you can use the configuration below:
+
+```kdl
+// Example global configuration with load balancing
+* {
+    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+    proxy "http://localhost:3001/" // Replace "http://localhost:3001" with the second backend server URL
+}
+```
+
+## Health checks
+
+Ferron supports passive health checks; you can enable it using `lb_health_check` directive. To configure Ferron as a load balancer with passive health checking, you can use the configuration below:
+
+```kdl
+// Example global configuration with load balancing and passive health checking
+* {
+    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+    proxy "http://localhost:3001/" // Replace "http://localhost:3001" with the second backend server URL
+    lb_health_check
+}
+```

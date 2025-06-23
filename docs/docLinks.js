@@ -61,6 +61,11 @@ export default [
     label: "Server modules",
   },
   {
+    href: "/docs/static-file-serving",
+    target: "_self",
+    label: "Static file serving",
+  },
+  {
     href: "/docs/php",
     target: "_self",
     label: "PHP support",
