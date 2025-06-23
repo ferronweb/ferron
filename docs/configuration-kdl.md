@@ -123,6 +123,10 @@ include "/etc/ferron.d/**/*.kdl"
   - This directive specifies whenever the production Let's Encrypt ACME endpoint is used. If set as `auto_tls_letsencrypt_production #false`, the staging Let's Encrypt ACME endpoint is used. Default: `auto_tls_letsencrypt_production #true`
 - `auto_tls_challenge <acme_challenge_type: string>`
   - This directive specifies the used ACME challenge type. The supported types are `"http-01"` (HTTP-01 ACME challenge) and `"tls-alpn-01"` (TLS-ALPN-01 ACME challenge). Default: `auto_tls_challenge "tls-alpn-01"`
+- `auto_tls_directory <auto_tls_directory: string>` (Ferron 2.0.0-beta.3 or newer)
+  - This directive specifies the ACME directory from which the certificates are obtained. Overrides `auto_tls_letsencrypt_production` directive. Default: none
+- `auto_tls_no_verification [auto_tls_no_verification: bool]` (Ferron 2.0.0-beta.3 or newer)
+  - This directive specifies whenever to disable the certificate verification of the ACME server. Default: `auto_tls_no_verification #false`
 - `log <log_file_path: string>`
   - This directive specifies the path to the access log file, which contains the HTTP response logs in Combined Log Format. This directive was global-only until Ferron 2.0.0-beta.3. Default: none
 - `error_log <error_log_file_path: string>`
@@ -224,10 +228,6 @@ include "/etc/ferron.d/**/*.kdl"
   - This directive specifies the response MIME type filters. The filter can be either a specific MIME type (like `text/html`) or a wildcard (`*`) specifying that responses with all MIME types are processed for replacement. This directive can be specified multiple times. Default: `replace_filter_types "text/html"`
 - `limit [enable_limit: bool] [rate=<rate: integer|float>] [burst=<rate: integer|float>]` (_limit_ module; Ferron 2.0.0-beta.2 or newer)
   - This directive specifies whenever the rate limiting is enabled. The `rate` prop specifies the maximum average amount of requests per second, defaults to 25 requests per second. The `burst` prop specifies the maximum peak amount of requests per second, defaults to 4 times the maximum average amount of requests per second. Default: `limit #false`
-- `auto_tls_directory <auto_tls_directory: string>` (Ferron 2.0.0-beta.3 or newer)
-  - This directive specifies the ACME directory from which the certificates are obtained. Overrides `auto_tls_letsencrypt_production` directive. Default: none
-- `auto_tls_no_verification [auto_tls_no_verification: bool]` (Ferron 2.0.0-beta.3 or newer)
-  - This directive specifies whenever to disable the certificate verification of the ACME server. Default: `auto_tls_no_verification #false`
 
 ## Example configuration
 
