@@ -16,6 +16,7 @@ Configuring Ferron as a static file server is straightforward - you just need to
 HTTP compression for static files is enabled by default. To disable it, you can use this configuration:
 
 ```kdl
+// Example global configuration with static file serving and HTTP compression disabled
 * {
     root "/var/www/html" // Replace "/var/www/html" with the directory containing your static files
     compressed #false
@@ -27,6 +28,7 @@ HTTP compression for static files is enabled by default. To disable it, you can 
 Directory listings are disabled by default. To enable them, you can use this configuration:
 
 ```kdl
+// Example global configuration with static file serving and directory listings enabled
 * {
     root "/var/www/html" // Replace "/var/www/html" with the directory containing your static files
     directory_listing

@@ -1,5 +1,5 @@
 ---
-title: Reverse proxy functionality
+title: Reverse proxying
 ---
 
 Configuring Ferron as a reverse proxy is straightforward - you just need to specify the backend server URL in `proxy` directive. To configure Ferron as a reverse proxy, you can use the configuration below:

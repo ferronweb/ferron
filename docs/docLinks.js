@@ -46,6 +46,39 @@ export default [
     label: "Manual installation",
   },
   {
+    href: "/docs/use-cases",
+    target: "_self",
+    label: "Common use cases",
+  },
+  {
+    href: "/docs/use-cases/static-file-serving",
+    target: "_self",
+    sub: true,
+    label: "Static file serving",
+  },
+  {
+    href: "/docs/use-cases/reverse-proxy",
+    target: "_self",
+    sub: true,
+    label: "Reverse proxying",
+  },
+  {
+    href: "/docs/use-cases/php",
+    target: "_self",
+    sub: true,
+    label: "PHP support",
+  },
+  {
+    href: "/docs/automatic-tls",
+    target: "_self",
+    label: "Automatic TLS",
+  },
+  {
+    href: "/docs/modules",
+    target: "_self",
+    label: "Server modules",
+  },
+  {
     href: "/docs/configuration-kdl",
     target: "_self",
     label: "Server configuration",
@@ -56,39 +89,14 @@ export default [
     label: "Server configuration (legacy)",
   },
   {
-    href: "/docs/modules",
+    href: "/docs/web-application-compatibility",
     target: "_self",
-    label: "Server modules",
-  },
-  {
-    href: "/docs/static-file-serving",
-    target: "_self",
-    label: "Static file serving",
-  },
-  {
-    href: "/docs/php",
-    target: "_self",
-    label: "PHP support",
-  },
-  {
-    href: "/docs/reverse-proxy",
-    target: "_self",
-    label: "Reverse proxy functionality",
-  },
-  {
-    href: "/docs/automatic-tls",
-    target: "_self",
-    label: "Automatic TLS",
+    label: "Compatibility with web applications",
   },
   {
     href: "/docs/ferrbench",
     target: "_self",
     label: "FerrBench",
-  },
-  {
-    href: "/docs/web-application-compatibility",
-    target: "_self",
-    label: "Compatibility with web applications",
   },
   {
     href: "https://rustdocs.ferronweb.org",
