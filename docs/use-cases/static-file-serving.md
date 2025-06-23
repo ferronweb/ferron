@@ -34,3 +34,15 @@ Directory listings are disabled by default. To enable them, you can use this con
     directory_listing
 }
 ```
+
+## Single-page applications
+
+Single-page applications (SPAs) are also supported by Ferron by adding an URL rewrite rule (if using static file serving only) in addition to the static file serving configuration. You can use this configuration:
+
+```kdl
+// Example global configuration with static file serving and URL rewrite rule for SPAs
+* {
+    root "/var/www/html" // Replace "/var/www/html" with the directory containing your static files
+    rewrite "^/.*" "/" directory=#false file=#false last=#true
+}
+```
