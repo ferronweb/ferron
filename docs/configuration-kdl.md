@@ -74,27 +74,27 @@ This configuration reference organizes directives by both **scope** (where they 
 
 ### Functional categories
 
-- **TLS/SSL & Security** - certificate management, encryption settings, and security policies
-- **HTTP Protocol & Performance** - protocol settings, timeouts, and performance tuning
-- **Networking & System** - network configuration and system-level settings
+- **TLS/SSL & security** - certificate management, encryption settings, and security policies
+- **HTTP protocol & performance** - protocol settings, timeouts, and performance tuning
+- **Networking & system** - network configuration and system-level settings
 - **Caching** - HTTP caching configuration and cache management
-- **Load Balancing** - health checks and load balancer settings
-- **Static File Serving** - file serving, compression, and directory listings
-- **URL Processing & Routing** - URL rewriting, redirects, and routing rules
-- **Headers & Response Customization** - custom headers and response modification
-- **Security & Access Control** - authentication, authorization, and access restrictions
-- **Reverse Proxy & Load Balancing** - proxy configuration and backend management
-- **Forward Proxy** - forward proxy functionality
-- **Authentication Forwarding** - external authentication integration
-- **CGI & Application Servers** - CGI, FastCGI, SCGI, WSGI, and ASGI configuration
-- **Content Processing** - response body modification and filtering
-- **Rate Limiting** - request rate limiting and throttling
+- **Load balancing** - health checks and load balancer settings
+- **Static file serving** - file serving, compression, and directory listings
+- **URL processing & routing** - URL rewriting, redirects, and routing rules
+- **Headers & response customization** - custom headers and response modification
+- **Security & access control** - authentication, authorization, and access restrictions
+- **Reverse proxy & load balancing** - proxy configuration and backend management
+- **Forward proxy** - forward proxy functionality
+- **Authentication forwarding** - external authentication integration
+- **CGI & application servers** - CGI, FastCGI, SCGI, WSGI, and ASGI configuration
+- **Content processing** - response body modification and filtering
+- **Rate limiting** - request rate limiting and throttling
 - **Logging** - access and error logging configuration
-- **Development & Testing** - development and testing utilities
+- **Development & testing** - development and testing utilities
 
 ## Global-only directives
 
-### TLS/SSL & Security
+### TLS/SSL & security
 
 - `tls_cipher_suite <tls_cipher_suite: string> [<tls_cipher_suite_2: string> ...]`
   - This directive specifies the supported TLS cipher suites. This directive can be specified multiple times. Default: default TLS cipher suite for Rustls
@@ -107,7 +107,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `block <blocked_ip: string> [<blocked_ip: string> ...]`
   - This directive specifies IP addresses to be blocked. This directive can be specified multiple times. Default: none
 
-### HTTP Protocol & Performance
+### HTTP protocol & performance
 
 - `default_http_port <default_http_port: integer|null>`
   - This directive specifies the default port for HTTP connections. If set as `default_http_port #null`, the implicit default HTTP port is disabled. Default: `default_http_port 80`
@@ -133,12 +133,12 @@ This configuration reference organizes directives by both **scope** (where they 
 - `cache_max_entries <cache_max_entries: integer|null>` (_cache_ module)
   - This directive specifies the maximum number of entries that can be stored in the HTTP cache. If set as `cache_max_entries #null`, the cache can theoretically store an unlimited number of entries. The cache keys for entries depend on the request method, the rewritten request URL, the "Host" header value, and varying request headers. Default: `cache_max_entries #null`
 
-### Load Balancing
+### Load balancing
 
 - `lb_health_check_window <lb_health_check_window: integer>` (_rproxy_ module)
   - This directive specifies the window size (in milliseconds) for load balancer health checks. Default: `lb_health_check_window 5000`
 
-### Networking & System
+### Networking & system
 
 - `listen_ip <listen_ip: string>`
   - This directive specifies the IP address to listen. Default: `listen_ip "::1"`
@@ -149,7 +149,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `tcp_recv_buffer <tcp_recv_buffer: integer>`
   - This directive specifies the receive buffer size in bytes for TCP listeners. Default: none
 
-### Application Server Configuration
+### Application server configuration
 
 - `wsgi_clear_imports [wsgi_clear_imports: bool]` (_wsgi_ module)
   - This directive specifies whenever to enable Python module import path clearing. Setting this option as `wsgi_clear_imports #true` improves the compatiblity with setups involving multiple WSGI applications, however module imports inside functions must not be used in the WSGI application. Default: `wsgi_clear_imports #false`
@@ -158,7 +158,7 @@ This configuration reference organizes directives by both **scope** (where they 
 
 ## Global and virtual host directives
 
-### TLS/SSL & Security
+### TLS/SSL & security
 
 - `tls <certificate_path: string> <private_key_path: string>`
   - This directive specifies the path to the TLS certificate and private key. Default: none
@@ -186,7 +186,7 @@ This configuration reference organizes directives by both **scope** (where they 
 
 ## Directives
 
-### Headers & Response Customization
+### Headers & response customization
 
 - `header <header_name: string> <header_value: string>`
   - This directive specifies a header to be added to HTTP responses. This directive can be specified multiple times. Default: none
@@ -195,7 +195,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `error_page <status_code: integer> <path: string>`
   - This directive specifies a custom error page to be served by the web server. Default: none
 
-### Security & Access Control
+### Security & access control
 
 - `trust_x_forwarded_for [trust_x_forwarded_for: bool]`
   - This directive specifies whenever to trust the value of the `X-Forwarded-For` header. It's recommended to configure this directive if behind a reverse proxy. Default: `trust_x_forwarded_for #false`
@@ -204,7 +204,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `users [username: string] [password_hash: string]`
   - This directive specifies an user with a password hash used for the HTTP basic authentication (it can be either Argon2, PBKDF2, or `scrypt` one). It's recommended to use the `ferron-passwd` tool to generate the password hash. This directive can be specified multiple times. Default: none
 
-### URL Processing & Routing
+### URL processing & routing
 
 - `allow_double_slashes [allow_double_slashes: bool]`
   - This directive specifies whenever double slashes are allowed in the URL. Default: `allow_double_slashes #false`
@@ -219,7 +219,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `no_trailing_redirect [no_trailing_redirect: bool]`
   - This directive specifies whenerver not to redirect the URL without a trailing slash to one with a trailing slash, if it refers to a directory. Default: `no_trailing_redirect #false`
 
-### Static File Serving
+### Static file serving
 
 - `root <webroot: string|null>`
   - This directive specifies the webroot from which static files are served. If set as `root #null`, the static file serving functionality is disabled. Default: none
@@ -241,7 +241,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `cache_ignore <ignored_response_header: string> [<ignored_response_header: string> ...]` (_cache_ module)
   - This directive specifies the response headers that are ignored when caching the response. This directive can be specified multiple times. Default: none
 
-### Reverse Proxy & Load Balancing
+### Reverse proxy & load balancing
 
 - `proxy <proxy_to: string|null>` (_rproxy_ module)
   - This directive specifies the URL to which the reverse proxy should forward requests. This directive can be specified multiple times. Default: none
@@ -254,12 +254,12 @@ This configuration reference organizes directives by both **scope** (where they 
 - `proxy_intercept_errors [proxy_intercept_errors: bool]` (_rproxy_ module)
   - This directive specifies whenever the reverse proxy should intercept errors from the backend. Default: `proxy_intercept_errors #false`
 
-### Forward Proxy
+### Forward proxy
 
 - `forward_proxy [enable_forward_proxy: bool]` (_fproxy_ module)
   - This directive specifies whenever the forward proxy functionality is enabled. Default: `forward_proxy #false`
 
-### Authentication Forwarding
+### Authentication forwarding
 
 - `auth_to <auth_to: string|null>` (_fauth_ module)
   - This directive specifies the URL to which the web server should send requests for forwarded authentication. Default: none
@@ -268,7 +268,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `auth_to_copy <request_header_to_copy: string> [<request_header_to_copy: string> ...]` (_fauth_ module)
   - This directive specifies the request headers that will be copied and sent to the forwarded authentication backend server. This directive can be specified multiple times. Default: none
 
-### CGI & Application Servers
+### CGI & application servers
 
 - `cgi [enable_cgi: bool]` (_cgi_ module)
   - This directive specifies whenever the CGI handler is enabled. Default: `cgi #false`
@@ -297,7 +297,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `asgi <asgi_application_path: string|null>` (_asgi_ module)
   - This directive specifies whenever ASGI is enabled and the path to the ASGI application. The ASGI application must have an `application` entry point. Default: `asgi #null`
 
-### Content Processing
+### Content processing
 
 - `replace <searched_string: string> <replaced_string: string> [once=<replace_once: bool>]` (_replace_ module; Ferron 2.0.0-beta.2 or newer)
   - This directive specifies the string to be replaced in a response body, and a replacement string. The `once` prop specifies whenever the string will be replaced once, by default this prop is set to `#true`. Default: none
@@ -306,12 +306,12 @@ This configuration reference organizes directives by both **scope** (where they 
 - `replace_filter_types <filter_type: string> [<filter_type: string> ...]` (_replace_ module; Ferron 2.0.0-beta.2 or newer)
   - This directive specifies the response MIME type filters. The filter can be either a specific MIME type (like `text/html`) or a wildcard (`*`) specifying that responses with all MIME types are processed for replacement. This directive can be specified multiple times. Default: `replace_filter_types "text/html"`
 
-### Rate Limiting
+### Rate limiting
 
 - `limit [enable_limit: bool] [rate=<rate: integer|float>] [burst=<rate: integer|float>]` (_limit_ module; Ferron 2.0.0-beta.2 or newer)
   - This directive specifies whenever the rate limiting is enabled. The `rate` prop specifies the maximum average amount of requests per second, defaults to 25 requests per second. The `burst` prop specifies the maximum peak amount of requests per second, defaults to 4 times the maximum average amount of requests per second. Default: `limit #false`
 
-### Development & Testing
+### Development & testing
 
 - `example_handler [enable_example_handler: bool]` (_example_ module)
   - This directive specifies whenever an example handler is enabled. This handler responds with "Hello World" for "/hello" request paths. Default: `example_handler #false`
