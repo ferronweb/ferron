@@ -132,7 +132,7 @@ include "/etc/ferron.d/**/*.kdl"
 
 - `header <header_name: string> <header_value: string>`
   - This directive specifies a header to be added to HTTP responses. This directive can be specified multiple times. Default: none
-- `allow_double_slashes [h2_enable_connect_protocol: bool]`
+- `allow_double_slashes [allow_double_slashes: bool]`
   - This directive specifies whenever double slashes are allowed in the URL. Default: `allow_double_slashes #false`
 - `server_administrator_email <server_administrator_email: string>`
   - This directive specifies the server administrator's email address to be used in the default 500 Internal Server Error page. Default: none
