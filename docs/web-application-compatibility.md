@@ -19,8 +19,8 @@ You can use the configuration below for websites built on WordPress:
     error_log "/var/log/ferron/error.log" // Replace with the path to the error log
 }
 
-// Host configuration
-* {
+// Host configuration. Replace "example.com" with your domain name.
+example.com {
     root "/var/www/ferron" // Replace with the path to the webroot
     status 403 regex="/\\."
     status 403 regex="^/(?:uploads|files)/.*\\.php(?:$|[#?])"
@@ -44,8 +44,8 @@ You can use the configuration below (without caching) for websites built on Joom
     error_log "/var/log/ferron/error.log" // Replace with the path to the error log
 }
 
-// Host configuration
-* {
+// Host configuration. Replace "example.com" with your domain name.
+example.com {
     root "/var/www/ferron" // Replace with the path to the webroot
     status 403 regex="^/(?:images|cache|media|logs|tmp)/.*\\.(?:php|pl|py|jsp|asp|sh|cgi)(?:$|[#?])"
     rewrite "^/api(?:/(.*))?" "/api/index.php/$1" file=#false directory=#false last=#true
@@ -77,8 +77,8 @@ You can use the configuration below for websites powered by YaBB:
     error_log "/var/log/ferron/error.log" // Replace with the path to the error log
 }
 
-// Host configuration
-* {
+// Host configuration. Replace "example.com" with your domain name.
+example.com {
     root "/var/www/ferron" // Replace with the path to the webroot
     cgi
     status 301 regex="^/(?:$|[?#])" location="/cgi-bin/yabb2/YaBB.pl"

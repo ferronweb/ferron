@@ -7,8 +7,8 @@ Ferron supports running PHP scripts either using PHP-CGI, PHP-CGI configured as 
 To configure PHP through CGI with Ferron, you can use this configuration:
 
 ```kdl
-// Example global configuration with PHP through CGI
-* {
+// Example configuration with PHP through CGI. Replace "example.com" with your domain name.
+example.com {
     root "/var/www/html"
     cgi
     cgi_extension ".php"
@@ -18,8 +18,8 @@ To configure PHP through CGI with Ferron, you can use this configuration:
 To configure PHP through FastCGI with Ferron, you can use this configuration:
 
 ```kdl
-// Example global configuration with PHP through FastCGI
-* {
+// Example configuration with PHP through FastCGI. Replace "example.com" with your domain name.
+example.com {
     root "/var/www/html"
     fcgi_php "unix:///run/php/php8.2-fpm.sock" // Replace with the Unix socket URL with actual path to the PHP FastCGI daemon socket.
 }

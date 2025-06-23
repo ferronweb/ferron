@@ -5,8 +5,8 @@ title: Reverse proxying
 Configuring Ferron as a reverse proxy is straightforward - you just need to specify the backend server URL in `proxy` directive. To configure Ferron as a reverse proxy, you can use the configuration below:
 
 ```kdl
-// Example global configuration with reverse proxy
-* {
+// Example configuration with reverse proxy. Replace "example.com" with your domain name.
+example.com {
     proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
 }
 ```
@@ -56,8 +56,8 @@ For `http://calender.example.net:5000/agenda/example`, you will probably have to
 Ferron supports load balancing by specifying multiple backend servers in the `proxy` directive. To configure Ferron as a load balancer, you can use the configuration below:
 
 ```kdl
-// Example global configuration with load balancing
-* {
+// Example configuration with load balancing. Replace "example.com" with your domain name.
+example.com {
     proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
     proxy "http://localhost:3001/" // Replace "http://localhost:3001" with the second backend server URL
 }
@@ -68,8 +68,8 @@ Ferron supports load balancing by specifying multiple backend servers in the `pr
 Ferron supports passive health checks; you can enable it using `lb_health_check` directive. To configure Ferron as a load balancer with passive health checking, you can use the configuration below:
 
 ```kdl
-// Example global configuration with load balancing and passive health checking
-* {
+// Example configuration with load balancing and passive health checking. Replace "example.com" with your domain name.
+example.com {
     proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
     proxy "http://localhost:3001/" // Replace "http://localhost:3001" with the second backend server URL
     lb_health_check
