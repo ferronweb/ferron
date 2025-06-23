@@ -69,6 +69,12 @@ export default [
     label: "PHP hosting",
   },
   {
+    href: "/docs/use-cases/redirecting",
+    target: "_self",
+    sub: true,
+    label: "Redirecting",
+  },
+  {
     href: "/docs/automatic-tls",
     target: "_self",
     label: "Automatic TLS",
