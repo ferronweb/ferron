@@ -66,7 +66,7 @@ export default [
     href: "/docs/use-cases/php",
     target: "_self",
     sub: true,
-    label: "PHP support",
+    label: "PHP hosting",
   },
   {
     href: "/docs/automatic-tls",

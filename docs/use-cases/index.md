@@ -6,4 +6,4 @@ Ferron is a web server that can be used in many scenarios. Below are some common
 
 - [Static file serving](/docs/use-cases/static-file-serving)
 - [Reverse proxying](/docs/use-cases/reverse-proxy)
-- [PHP support](/docs/use-cases/php)
+- [PHP hosting](/docs/use-cases/php)
