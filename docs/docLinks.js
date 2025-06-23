@@ -80,11 +80,6 @@ export default [
     label: "Automatic TLS",
   },
   {
-    href: "/docs/modules",
-    target: "_self",
-    label: "Server modules",
-  },
-  {
     href: "/docs/configuration-kdl",
     target: "_self",
     label: "Server configuration",
@@ -93,6 +88,11 @@ export default [
     href: "/docs/configuration",
     target: "_self",
     label: "Server configuration (legacy)",
+  },
+  {
+    href: "/docs/modules",
+    target: "_self",
+    label: "Server modules",
   },
   {
     href: "/docs/web-application-compatibility",
