@@ -149,7 +149,7 @@ You might also configure Ferron in a "ferron.kdl" file like this:
 }
 
 // Replace "example.com" with your website's domain name
-"example.com" {
+example.com {
     root "/var/www/ferron"
 }
 ```
