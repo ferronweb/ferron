@@ -8,6 +8,8 @@ The automatic TLS functionality is used to obtain TLS certificates automatically
 
 Ferron supports both production and staging Let's Encrypt directories. The staging Let's Encrypt directory can be used for testing purposes and to verify that the server and automatic TLS is configured correctly.
 
+Also, Ferron 2.0.0-beta.1 and newer support a default OS-specific ACME cache directory in a home directory of a user that Ferron runs as (if the home directory is available), making automatic TLS require less setup.
+
 Below is the example Ferron configuration that configures automatic TLS with production Let's Encrypt directory:
 
 ```kdl
