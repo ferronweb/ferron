@@ -88,3 +88,71 @@ If you need to remove the Ferron container:
 ```sh
 docker rm -f myferron
 ```
+
+## Using Ferron with Docker Compose
+
+If you're using Docker Compose, you can define a service for Ferron in your `docker-compose.yml` file:
+
+```yaml
+services:
+  ferron:
+    image: ferronserver/ferron:1
+    ports:
+      - "80:80"
+    restart: always
+```
+
+Then, you can start Ferron using:
+
+```sh
+docker-compose up -d
+```
+
+### Example: Ferron with Docker Compose and automatic TLS
+
+If using Ferron with Docker Compose and automatic TLS, you can use the following `docker-compose.yml` file contents:
+
+```yaml
+services:
+  ferron:
+    image: ferronserver/ferron:1
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "./ferron.yaml:/etc/ferron.yaml"
+      - "ferron-acme:/var/cache/acme-cache"
+    restart: always
+    depends_on:
+      ferron-acme-change-vol-ownership:
+        condition: service_completed_successfully
+
+  ferron-acme-change-vol-ownership:
+    image: alpine
+    user: "root"
+    volumes:
+      - ferron-acme:/tmp/change-ownership
+    command: chown nobody:nogroup /tmp/change-ownership
+
+volumes:
+  ferron-acme:
+```
+
+You might also configure Ferron in a "ferron.yaml" file like this:
+
+```yaml
+global:
+  secure: true
+  enableAutomaticTLS: true
+  automaticTLSContactCacheDirectory: "/var/cache/acme-cache"
+
+hosts:
+  - domain: "example.com" # Replace "example.com" with your website's domain name
+    wwwroot: "/var/www/ferron"
+```
+
+Then, you can start Ferron using:
+
+```sh
+docker-compose up -d
+```
