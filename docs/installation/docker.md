@@ -114,19 +114,21 @@ If using Ferron with Docker Compose and automatic TLS, you can use the following
 
 ```yaml
 services:
+  # Ferron container
   ferron:
     image: ferronserver/ferron:1
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - "./ferron.yaml:/etc/ferron.yaml"
-      - "ferron-acme:/var/cache/acme-cache"
+      - "./ferron.yaml:/etc/ferron.yaml" # Ferron configuration file
+      - "ferron-acme:/var/cache/acme-cache" # This volume is needed for persistent automatic TLS cache, otherwise the web server will obtain a new certificate on each restart
     restart: always
     depends_on:
       ferron-acme-change-vol-ownership:
         condition: service_completed_successfully
 
+  # Container to change ownership of the volume, necessary for the ACME cache to work properly
   ferron-acme-change-vol-ownership:
     image: alpine
     user: "root"
