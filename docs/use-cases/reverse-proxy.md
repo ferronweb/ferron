@@ -75,3 +75,17 @@ example.com {
     lb_health_check
 }
 ```
+
+## Caching reverse proxy
+
+Ferron supports in-memory caching for speeding up websites. To enable in-memory caching for the reverse proxy, you can use this configuration:
+
+```kdl
+// Example configuration with caching reverse proxy. Replace "example.com" with your domain name.
+example.com {
+    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+    cache
+    // Optional: set Cache-Control header if you want to also cache responses from backend servers without the Cache-Control header
+    header "Cache-Control" "max-age=3600"
+}
+```

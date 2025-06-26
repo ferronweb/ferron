@@ -46,3 +46,16 @@ example.com {
     rewrite "^/.*" "/" directory=#false file=#false last=#true
 }
 ```
+
+## Static file serving with in-memory caching
+
+Ferron supports in-memory caching for speeding up websites. To enable in-memory caching for static files, you can use this configuration:
+
+```kdl
+// Example configuration with static file serving and in-memory caching enabled. Replace "example.com" with your domain name.
+example.com {
+    root "/var/www/html" // Replace "/var/www/html" with the directory containing your static files
+    cache
+    header "Cache-Control" "max-age=3600"
+}
+```
