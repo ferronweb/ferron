@@ -762,7 +762,7 @@ async fn determine_proxy_to(
   proxy_to
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 /// Establishes a new HTTP connection to a backend server and forwards the request
 ///
 /// This function:
