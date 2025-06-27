@@ -189,7 +189,7 @@ This configuration reference organizes directives by both **scope** (where they 
 ### Headers & response customization
 
 - `header <header_name: string> <header_value: string>`
-  - This directive specifies a header to be added to HTTP responses. This directive can be specified multiple times. Default: none
+  - This directive specifies a header to be added to HTTP responses. The header values support the `{path}` placeholder replaced with the request path. This directive can be specified multiple times. Default: none
 - `server_administrator_email <server_administrator_email: string>`
   - This directive specifies the server administrator's email address to be used in the default 500 Internal Server Error page. Default: none
 - `error_page <status_code: integer> <path: string>`
