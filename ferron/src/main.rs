@@ -154,7 +154,7 @@ fn configure_logging(
         131072, file,
       )))),
       Some(Err(e)) => {
-        eprintln!("Failed to open log file: {}", e);
+        eprintln!("Failed to open log file: {e}");
         None
       }
       None => None,
@@ -165,7 +165,7 @@ fn configure_logging(
         131072, file,
       )))),
       Some(Err(e)) => {
-        eprintln!("Failed to open error log file: {}", e);
+        eprintln!("Failed to open error log file: {e}");
         None
       }
       None => None,
@@ -205,11 +205,11 @@ fn configure_logging(
           if is_error {
             let now: DateTime<Local> = Local::now();
             let formatted_time = now.format("%Y-%m-%d %H:%M:%S").to_string();
-            message = format!("[{}]: {}", formatted_time, message);
+            message = format!("[{formatted_time}]: {message}");
           }
           message.push('\n');
           if let Err(e) = locked_file.write(message.as_bytes()).await {
-            eprintln!("Failed to write to log file: {}", e);
+            eprintln!("Failed to write to log file: {e}");
           }
         });
       }
@@ -339,10 +339,7 @@ fn before_starting_server(
       if let Some(logging_tx) = &global_logger {
         logging_tx
           .send_blocking(LogMessage::new(
-            format!(
-              "Unused configuration property detected: \"{}\"",
-              unused_property
-            ),
+            format!("Unused configuration property detected: \"{unused_property}\""),
             true,
           ))
           .unwrap_or_default();
@@ -554,13 +551,13 @@ fn before_starting_server(
         .clone()
         .or_else(|| match server_configuration.filters.ip {
           Some(IpAddr::V4(address)) => Some(address.to_string()),
-          Some(IpAddr::V6(address)) => Some(format!("[{}]", address)),
+          Some(IpAddr::V6(address)) => Some(format!("[{address}]")),
           _ => None,
         })
         .map(|sni| {
           if let Some(https_port) = https_port {
             if Some(https_port) != default_https_port {
-              format!("{}:{}", sni, https_port)
+              format!("{sni}:{https_port}")
             } else {
               sni
             }
@@ -668,8 +665,7 @@ fn before_starting_server(
                     logging_tx
                                         .send_blocking(LogMessage::new(
                                             format!(
-                                                "HTTP-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{}\"...",
-                                                sni_hostname
+                                                "HTTP-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."
                                             ),
                                             true,
                                         ))
@@ -685,8 +681,7 @@ fn before_starting_server(
                     logging_tx
                                         .send_blocking(LogMessage::new(
                                             format!(
-                                                "TLS-ALPN-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{}\"...",
-                                                sni_hostname
+                                                "TLS-ALPN-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."
                                             ),
                                             true,
                                         ))
@@ -724,7 +719,7 @@ fn before_starting_server(
             if let Some(acme_contact) =
               get_value!("auto_tls_contact", server_configuration).and_then(|v| v.as_str())
             {
-              acme_config = acme_config.contact_push(format!("mailto:{}", acme_contact));
+              acme_config = acme_config.contact_push(format!("mailto:{acme_contact}"));
             }
             let mut acme_config_with_cache =
               if let Some(acme_cache_path) = get_value!("auto_tls_cache", server_configuration)
@@ -744,7 +739,7 @@ fn before_starting_server(
                 };
                 let base_pathbuf = pathbuf.clone();
                 let mut hasher = Sha256::new();
-                hasher.update(format!("{}-{}", automatic_tls_port, sni_hostname));
+                hasher.update(format!("{automatic_tls_port}-{sni_hostname}"));
                 let append_hash = hasher
                   .finalize()
                   .iter()
@@ -784,7 +779,7 @@ fn before_starting_server(
                   if let Some(acme_logger) = &acme_logger_option {
                     acme_logger
                       .send(LogMessage::new(
-                        format!("Error while obtaining a TLS certificate: {}", acme_error),
+                        format!("Error while obtaining a TLS certificate: {acme_error}"),
                         true,
                       ))
                       .await
@@ -1241,7 +1236,7 @@ fn main() {
       }
       Ok(false) => break,
       Err(err) => {
-        eprintln!("Error while running a server: {}", err);
+        eprintln!("Error while running a server: {err}");
         std::process::exit(1);
       }
     };

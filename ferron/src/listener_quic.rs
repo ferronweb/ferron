@@ -221,7 +221,7 @@ pub fn create_quic_listener(
   let (rustls_config_tx, rustls_config_rx) = async_channel::unbounded();
   let (listen_error_tx, listen_error_rx) = async_channel::unbounded();
   std::thread::Builder::new()
-    .name(format!("QUIC listener for {}", address))
+    .name(format!("QUIC listener for {address}"))
     .spawn(move || {
       crate::runtime::new_runtime(
         async move {
@@ -283,14 +283,11 @@ async fn quic_listener_fn(
     tries += 1;
     let duration = Duration::from_millis(1000);
     if tries >= 10 {
-      println!("HTTP/3 port is used at try #{}, skipping...", tries);
+      println!("HTTP/3 port is used at try #{tries}, skipping...");
       listen_error_tx.send(None).await.unwrap_or_default();
       break;
     }
-    println!(
-      "HTTP/3 port is used at try #{}, retrying in {:?}...",
-      tries, duration
-    );
+    println!("HTTP/3 port is used at try #{tries}, retrying in {duration:?}...");
     if shutdown_rx.try_recv().is_ok() {
       break;
     }
@@ -322,7 +319,7 @@ async fn quic_listener_fn(
       err
     )))?,
   };
-  println!("HTTP/3 server is listening on {}...", address);
+  println!("HTTP/3 server is listening on {address}...");
   listen_error_tx.send(None).await.unwrap_or_default();
 
   loop {

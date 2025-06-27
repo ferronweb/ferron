@@ -34,7 +34,7 @@ pub fn convert_yaml_to_kdl(
     kdl_configuration_nodes.push(kdl_global_configuration);
   }
   if let Some(secure_global_configuration) = secure_global_configuration {
-    let mut kdl_global_configuration = KdlNode::new(format!("*:{}", secure_port));
+    let mut kdl_global_configuration = KdlNode::new(format!("*:{secure_port}"));
     kdl_global_configuration.set_children(secure_global_configuration);
     kdl_global_configuration.set_format(kdl::KdlNodeFormat {
       leading: "// HTTPS global configuration".to_string(),
@@ -65,16 +65,16 @@ pub fn convert_yaml_to_kdl(
           let mut kdl_host_configuration = KdlNode::new(hostname);
           kdl_host_configuration.set_children(host_configuration);
           kdl_host_configuration.set_format(kdl::KdlNodeFormat {
-            leading: format!("// Host configuration for \"{}\"", hostname),
+            leading: format!("// Host configuration for \"{hostname}\""),
             ..Default::default()
           });
           kdl_configuration_nodes.push(kdl_host_configuration);
         }
         if let Some(secure_host_configuration) = secure_host_configuration {
-          let mut kdl_host_configuration = KdlNode::new(format!("{}:{}", hostname, secure_port));
+          let mut kdl_host_configuration = KdlNode::new(format!("{hostname}:{secure_port}"));
           kdl_host_configuration.set_children(secure_host_configuration);
           kdl_host_configuration.set_format(kdl::KdlNodeFormat {
-            leading: format!("// HTTPS host configuration for \"{}\"", hostname),
+            leading: format!("// HTTPS host configuration for \"{hostname}\""),
             ..Default::default()
           });
           kdl_configuration_nodes.push(kdl_host_configuration);
@@ -916,7 +916,7 @@ pub fn obtain_global_configuration(
                     kdl_sni_children_nodes.push(kdl_tls);
                     kdl_sni_configuration.set_children(kdl_sni_children_to_insert);
                     kdl_sni_configuration.set_format(kdl::KdlNodeFormat {
-                      leading: format!("// SNI configuration for \"{}\"", sni_hostname),
+                      leading: format!("// SNI configuration for \"{sni_hostname}\""),
                       ..Default::default()
                     });
                     sni_configuration.push(kdl_sni_configuration);

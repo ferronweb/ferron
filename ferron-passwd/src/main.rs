@@ -18,14 +18,14 @@ fn main() {
   let password = match prompt_password("Password: ") {
     Ok(pass) => pass,
     Err(e) => {
-      eprintln!("Error reading password: {}", e);
+      eprintln!("Error reading password: {e}");
       process::exit(1);
     }
   };
   let password2 = match prompt_password("Confirm password: ") {
     Ok(pass) => pass,
     Err(e) => {
-      eprintln!("Error reading password confirmation: {}", e);
+      eprintln!("Error reading password confirmation: {e}");
       process::exit(1);
     }
   };
@@ -37,6 +37,6 @@ fn main() {
 
   let password_hash = generate_hash(password);
 
-  println!("The generated password hash: {}", password_hash);
+  println!("The generated password hash: {password_hash}");
   println!("Refer to the Ferron configuration documentation for information on how to configure the users with passwords")
 }

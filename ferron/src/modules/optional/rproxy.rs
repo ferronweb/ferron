@@ -294,7 +294,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         _ => 80,
       });
 
-      let addr = format!("{}:{}", host, port);
+      let addr = format!("{host}:{port}");
       let authority = proxy_request_url.authority().cloned();
 
       let request_path = request_parts.uri.path();
@@ -305,7 +305,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           while proxy_request_path.as_bytes().last().copied() == Some(b'/') {
             proxy_request_path = &proxy_request_path[..(proxy_request_path.len() - 1)];
           }
-          format!("{}{}", proxy_request_path, request_path)
+          format!("{proxy_request_path}{request_path}")
         }
         _ => request_path.to_string(),
       };
@@ -314,7 +314,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         "{}{}",
         path,
         match request_parts.uri.query() {
-          Some(query) => format!("?{}", query),
+          Some(query) => format!("?{query}"),
           None => "".to_string(),
         }
       ))?;
@@ -343,7 +343,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         {
           request_parts.headers.insert(
             header::CONNECTION,
-            format!("keep-alive, {}", connection_str).parse()?,
+            format!("keep-alive, {connection_str}").parse()?,
           );
         }
       } else {
@@ -428,7 +428,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             | std::io::ErrorKind::NotFound
             | std::io::ErrorKind::HostUnreachable => {
               error_logger
-                .log(&format!("Service unavailable: {}", err))
+                .log(&format!("Service unavailable: {err}"))
                 .await;
               return Ok(ResponseData {
                 request: None,
@@ -439,7 +439,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
               });
             }
             std::io::ErrorKind::TimedOut => {
-              error_logger.log(&format!("Gateway timeout: {}", err)).await;
+              error_logger.log(&format!("Gateway timeout: {err}")).await;
               return Ok(ResponseData {
                 request: None,
                 response: None,
@@ -449,7 +449,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
               });
             }
             _ => {
-              error_logger.log(&format!("Bad gateway: {}", err)).await;
+              error_logger.log(&format!("Bad gateway: {err}")).await;
               return Ok(ResponseData {
                 request: None,
                 response: None,
@@ -471,7 +471,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             let failed_attempts = failed_backends_write.get(&proxy_to);
             failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
           }
-          error_logger.log(&format!("Bad gateway: {}", err)).await;
+          error_logger.log(&format!("Bad gateway: {err}")).await;
           return Ok(ResponseData {
             request: None,
             response: None,
@@ -498,7 +498,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             let failed_attempts = failed_backends_write.get(&proxy_to);
             failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
           }
-          error_logger.log(&format!("Bad gateway: {}", err)).await;
+          error_logger.log(&format!("Bad gateway: {err}")).await;
           return Ok(ResponseData {
             request: None,
             response: None,
@@ -553,7 +553,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
               let failed_attempts = failed_backends_write.get(&proxy_to);
               failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
             }
-            error_logger.log(&format!("Bad gateway: {}", err)).await;
+            error_logger.log(&format!("Bad gateway: {err}")).await;
             return Ok(ResponseData {
               request: None,
               response: None,
@@ -726,7 +726,7 @@ async fn http_proxy(
         failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
       }
       // 2. Logging the error
-      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      error_logger.log(&format!("Bad gateway: {err}")).await;
       // 3. Returning a 502 Bad Gateway response
       return Ok(ResponseData {
         request: None,
@@ -751,7 +751,7 @@ async fn http_proxy(
   let proxy_response = match sender.send_request(proxy_request).await {
     Ok(response) => response,
     Err(err) => {
-      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      error_logger.log(&format!("Bad gateway: {err}")).await;
       return Ok(ResponseData {
         request: None,
         response: None,
@@ -798,7 +798,7 @@ async fn http_proxy(
             Err(err) => {
               // Could not upgrade the client connection
               error_logger
-                .log(&format!("HTTP upgrade error: {}", err))
+                .log(&format!("HTTP upgrade error: {err}"))
                 .await;
             }
           }
@@ -807,7 +807,7 @@ async fn http_proxy(
       Err(err) => {
         // Could not upgrade the backend connection
         error_logger
-          .log(&format!("HTTP upgrade error: {}", err))
+          .log(&format!("HTTP upgrade error: {err}"))
           .await;
       }
     }
@@ -878,7 +878,7 @@ async fn http_proxy_kept_alive(
     Ok(response) => response,
     Err(err) => {
       // Log the error and return a 502 Bad Gateway response
-      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      error_logger.log(&format!("Bad gateway: {err}")).await;
       return Ok(ResponseData {
         request: None,
         response: None,
@@ -923,7 +923,7 @@ async fn http_proxy_kept_alive(
             Err(err) => {
               // Could not upgrade the client connection
               error_logger
-                .log(&format!("HTTP upgrade error: {}", err))
+                .log(&format!("HTTP upgrade error: {err}"))
                 .await;
             }
           }
@@ -932,7 +932,7 @@ async fn http_proxy_kept_alive(
       Err(err) => {
         // Could not upgrade the backend connection
         error_logger
-          .log(&format!("HTTP upgrade error: {}", err))
+          .log(&format!("HTTP upgrade error: {err}"))
           .await;
       }
     }

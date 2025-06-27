@@ -488,7 +488,7 @@ mod tests {
   #[test]
   fn should_handle_long_paths() -> Result<()> {
     let long_segment = "a".repeat(1000);
-    let long_path = format!("/{}", long_segment);
+    let long_path = format!("/{long_segment}");
     assert_eq!(sanitize_url(&long_path, false)?, long_path);
     Ok(())
   }

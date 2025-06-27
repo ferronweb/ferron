@@ -280,7 +280,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
       "{}{}",
       request.uri().path(),
       match request.uri().query() {
-        Some(query) => format!("?{}", query),
+        Some(query) => format!("?{query}"),
         None => String::from(""),
       }
     );
@@ -329,7 +329,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
                   "{}{}",
                   location,
                   match request.uri().query() {
-                    Some(query) => format!("?{}", query),
+                    Some(query) => format!("?{query}"),
                     None => String::from(""),
                   }
                 ));
