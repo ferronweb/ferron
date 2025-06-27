@@ -259,6 +259,8 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies a header to be added to HTTP requests sent by the reverse proxy. This directive can be specified multiple times. Default: none
 - `proxy_request_header_remove <header_name: string>` (_rproxy_ module; Ferron UNRELEASED or newer)
   - This directive specifies a header to be removed from HTTP requests sent by the reverse proxy. This directive can be specified multiple times. Default: none
+- `proxy_keepalive [proxy_keepalive: bool]` (_rproxy_ module; Ferron UNRELEASED or newer)
+  - This directive specifies whenever the reverse proxy should keep the connection to the backend alive. Default: `proxy_keepalive #true`
 
 ### Forward proxy
 
