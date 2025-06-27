@@ -187,11 +187,24 @@ fn add_custom_headers(
       if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
         if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
           if !response_parts.headers.contains_key(header_name) {
-            if let Ok(header_value) = HeaderValue::from_str(&header_value.replace("{path}", path)) {
-              if let Ok(header_name) = HeaderName::from_str(header_name) {
+            if let Ok(header_name) = HeaderName::from_str(header_name) {
+              if let Ok(header_value) = HeaderValue::from_str(&header_value.replace("{path}", path))
+              {
                 response_parts.headers.insert(header_name, header_value);
               }
             }
+          }
+        }
+      }
+    }
+  }
+
+  if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
+    for custom_header in custom_headers_to_remove.inner.iter().rev() {
+      if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+        if !response_parts.headers.contains_key(header_name) {
+          if let Ok(header_name) = HeaderName::from_str(header_name) {
+            while response_parts.headers.remove(&header_name).is_some() {}
           }
         }
       }
