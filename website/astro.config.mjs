@@ -4,6 +4,7 @@ import { defineConfig } from "astro/config";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@astrojs/react";
 import sitemap from "@astrojs/sitemap";
+import pagefind from "astro-pagefind";
 
 import kdl from "./kdl.tmLanguage.json";
 
@@ -21,7 +22,7 @@ export default defineConfig({
       chunkSizeWarningLimit: 600
     }
   },
-  integrations: [react(), sitemap()],
+  integrations: [react(), sitemap(), pagefind()],
   markdown: {
     shikiConfig: {
       theme: "nord",

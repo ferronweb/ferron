@@ -2,6 +2,7 @@
 
 import postcss from "postcss";
 import valueParser from "postcss-value-parser";
+import postcssPrefixSelector from "postcss-prefix-selector";
 import postcssCascadeLayers from "@csstools/postcss-cascade-layers";
 import postcssMediaMinmax from "postcss-media-minmax";
 import postcssOklabFunction from "@csstools/postcss-oklab-function";
@@ -286,6 +287,16 @@ addSpaceForEmptyVarFallback.postcss = true;
 
 const config = {
   plugins: [
+    postcssPrefixSelector({
+      // Fix for the polyfill conflicting with default Pagefind UI
+      transform(_prefix, selector, _prefixedSelector, _filePath, _rule) {
+        if (selector.match(/^\.pagefind-ui_/)) {
+          return `body:not(#\\#):not(#\\#) ${selector}`;
+        }
+
+        return selector;
+      }
+    }),
     postcssCascadeLayers,
     propertyInjectPlugin(),
     colorMixVarResolverPlugin(),

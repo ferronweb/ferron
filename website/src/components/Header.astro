@@ -5,9 +5,11 @@ import {
   faBook,
   faComments,
   faFileText,
+  faSearch,
   faX
 } from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
+import Search from "astro-pagefind/components/Search";
 
 const githubLink = "https://github.com/ferronweb/ferron";
 const chatLink = "https://matrix.to/#/#ferronweb:matrix.org";
@@ -65,6 +67,15 @@ const docLinks = Astro.props.docLinks;
             Docs
           </a>
           <div class="ml-2 flex items-center gap-1">
+            <button
+              class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 w-9 cursor-pointer"
+              aria-label="Search"
+              aria-controls="search-menu"
+              aria-expanded="false"
+              data-search-button
+            >
+              <FontAwesomeIcon icon={faSearch} class="w-5 !h-5" />
+            </button>
             <a
               href={githubLink}
               target="_blank"
@@ -125,7 +136,7 @@ const docLinks = Astro.props.docLinks;
       </a>
       <button
         type="button"
-        class="inline-flex items-center justify-center rounded-md p-2 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none cursor-pointer"
+        class="inline-flex items-center justify-center rounded-md p-2 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none transition-colors cursor-pointer"
         aria-controls="close-mobile-menu"
         aria-expanded="false"
         data-mobile-menu-close-button
@@ -215,6 +226,35 @@ const docLinks = Astro.props.docLinks;
       )
     }
   </div>
+
+  <!-- Search Menu -->
+  <div
+    class="hidden max-md:hidden bg-background supports-[backdrop-filter]:bg-background/60 backdrop-blur w-full h-full overflow-auto z-70 fixed top-0 shrink-0"
+    data-search-menu
+  >
+    <div class="flex p-2">
+      <button
+        type="button"
+        class="rounded-md ml-auto p-2 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none transition-colors cursor-pointer"
+        aria-controls="close-search-menu"
+        aria-expanded="false"
+        data-search-close-button
+      >
+        <span class="sr-only">Close search menu</span>
+        <FontAwesomeIcon icon={faX} class="self-center w-5 !h-5" />
+      </button>
+    </div>
+    <div class="p-4">
+      <Search
+        className="max-w-screen-xl mx-auto pagefind-ui"
+        uiOptions={{
+          showImages: false,
+          showSubResults: false,
+          resetStyles: false
+        }}
+      />
+    </div>
+  </div>
 </header>
 
 <script>
@@ -228,6 +268,7 @@ const docLinks = Astro.props.docLinks;
         e.preventDefault();
         if (menu) {
           menu.classList.replace("left-full", "left-0");
+          document.documentElement.classList.add("md:overflow-hidden");
         }
       });
     }
@@ -236,6 +277,7 @@ const docLinks = Astro.props.docLinks;
         e.preventDefault();
         if (menu) {
           menu.classList.replace("left-0", "left-full");
+          document.documentElement.classList.remove("md:overflow-hidden");
         }
       });
     }
@@ -244,8 +286,31 @@ const docLinks = Astro.props.docLinks;
         menuLink.addEventListener("click", () => {
           if (menu) {
             menu.classList.replace("left-0", "left-full");
+            document.documentElement.classList.remove("md:overflow-hidden");
           }
         });
+      });
+    }
+
+    let searchButton = document.querySelector("[data-search-button]");
+    let searchClose = document.querySelector("[data-search-close-button]");
+    let search = document.querySelector("[data-search-menu]");
+    if (searchButton) {
+      searchButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (search) {
+          search.classList.remove("hidden");
+          document.documentElement.classList.add("md:overflow-hidden");
+        }
+      });
+    }
+    if (searchClose) {
+      searchClose.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (search) {
+          search.classList.add("hidden");
+          document.documentElement.classList.remove("md:overflow-hidden");
+        }
       });
     }
   }
