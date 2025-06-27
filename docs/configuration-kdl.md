@@ -194,7 +194,7 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the server administrator's email address to be used in the default 500 Internal Server Error page. Default: none
 - `error_page <status_code: integer> <path: string>`
   - This directive specifies a custom error page to be served by the web server. Default: none
-- `header_remove <header_name: string>`
+- `header_remove <header_name: string>` (Ferron UNRELEASED or newer)
   - This directive specifies a header to be removed from HTTP responses. This directive can be specified multiple times. Default: none
 
 ### Security & access control
@@ -255,6 +255,10 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies whenever the reverse proxy should not verify the TLS certificate of the backend. Default: `proxy_no_verification #false`
 - `proxy_intercept_errors [proxy_intercept_errors: bool]` (_rproxy_ module)
   - This directive specifies whenever the reverse proxy should intercept errors from the backend. Default: `proxy_intercept_errors #false`
+- `proxy_request_header <header_name: string> <header_value: string>` (_rproxy_ module; Ferron UNRELEASED or newer)
+  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy. This directive can be specified multiple times. Default: none
+- `proxy_request_header_remove <header_name: string>` (_rproxy_ module; Ferron UNRELEASED or newer)
+  - This directive specifies a header to be removed from HTTP requests sent by the reverse proxy. This directive can be specified multiple times. Default: none
 
 ### Forward proxy
 
