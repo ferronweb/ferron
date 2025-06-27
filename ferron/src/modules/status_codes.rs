@@ -7,7 +7,7 @@ use base64::{engine::general_purpose, Engine};
 use bytes::Bytes;
 use fancy_regex::{Regex, RegexBuilder};
 use http_body_util::combinators::BoxBody;
-use http_body_util::{BodyExt, Empty};
+use http_body_util::{BodyExt, Empty, Full};
 use hyper::header::HeaderValue;
 use hyper::{header, HeaderMap, Request, Response, StatusCode};
 use password_auth::verify_password;
@@ -29,6 +29,7 @@ struct NonStandardCode {
   disable_brute_force_protection: bool,
   user_list: Option<Vec<String>>,
   users: Option<IpBlockList>,
+  body: Option<String>,
 }
 
 /// A status codes module loader
@@ -136,6 +137,11 @@ impl ModuleLoader for StatusCodesModuleLoader {
                 }
                 None => None,
               };
+              let body = non_standard_code_config_entry
+                .props
+                .get("body")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
               non_standard_codes_list.push(NonStandardCode {
                 status_code,
                 url,
@@ -145,6 +151,7 @@ impl ModuleLoader for StatusCodesModuleLoader {
                 disable_brute_force_protection,
                 user_list,
                 users,
+                body,
               });
             }
           }
@@ -208,6 +215,10 @@ impl ModuleLoader for StatusCodesModuleLoader {
         {
           Err(anyhow::anyhow!(
             "The custom status code allowed clients list must be a string"
+          ))?
+        } else if !entry.props.get("body").is_none_or(|v| v.is_string()) {
+          Err(anyhow::anyhow!(
+            "The custom status code response body must be a string"
           ))?
         }
       }
@@ -348,7 +359,13 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
                 Response::builder()
                   .status(StatusCode::from_u16(non_standard_code.status_code)?)
                   .header(header::LOCATION, redirect_url.unwrap_or(request_url))
-                  .body(Empty::new().map_err(|e| match e {}).boxed())?,
+                  .body(if let Some(body) = &non_standard_code.body {
+                    Full::new(Bytes::from(body.clone()))
+                      .map_err(|e| match e {})
+                      .boxed()
+                  } else {
+                    Empty::new().map_err(|e| match e {}).boxed()
+                  })?,
               ),
               response_status: None,
               response_headers: None,
@@ -461,22 +478,57 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
               }
             }
 
-            return Ok(ResponseData {
-              request: Some(request),
-              response: None,
-              response_status: Some(StatusCode::UNAUTHORIZED),
-              response_headers: Some(header_map),
-              new_remote_address: None,
-            });
+            if let Some(body) = &non_standard_code.body {
+              let mut response_builder = Response::builder().status(StatusCode::UNAUTHORIZED);
+              if let Some(headers) = response_builder.headers_mut() {
+                *headers = header_map;
+              }
+              let response = response_builder.body(
+                Full::new(Bytes::from(body.clone()))
+                  .map_err(|e| match e {})
+                  .boxed(),
+              )?;
+              return Ok(ResponseData {
+                request: Some(request),
+                response: Some(response),
+                response_status: None,
+                response_headers: None,
+                new_remote_address: None,
+              });
+            } else {
+              return Ok(ResponseData {
+                request: Some(request),
+                response: None,
+                response_status: Some(StatusCode::UNAUTHORIZED),
+                response_headers: Some(header_map),
+                new_remote_address: None,
+              });
+            }
           }
           _ => {
-            return Ok(ResponseData {
-              request: Some(request),
-              response: None,
-              response_status: Some(StatusCode::from_u16(non_standard_code.status_code)?),
-              response_headers: None,
-              new_remote_address: None,
-            });
+            let status_code = StatusCode::from_u16(non_standard_code.status_code)?;
+            if let Some(body) = &non_standard_code.body {
+              let response = Response::builder().status(status_code).body(
+                Full::new(Bytes::from(body.clone()))
+                  .map_err(|e| match e {})
+                  .boxed(),
+              )?;
+              return Ok(ResponseData {
+                request: Some(request),
+                response: Some(response),
+                response_status: None,
+                response_headers: None,
+                new_remote_address: None,
+              });
+            } else {
+              return Ok(ResponseData {
+                request: Some(request),
+                response: None,
+                response_status: Some(status_code),
+                response_headers: None,
+                new_remote_address: None,
+              });
+            }
           }
         }
       }
