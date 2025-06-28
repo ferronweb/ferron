@@ -4,9 +4,9 @@ title: Privacy Policy
 description: Discover how we collect, use, and protect your data. Our Privacy Policy details our commitment to safeguarding your information on our website.
 ---
 
-Last Updated: 17.06.2025
+Last Updated: 28.06.2025
 
-Welcome to the official website of Ferron, a fast, memory-safe web server written in Rust. Your privacy is important to us. This Privacy Policy explains what data we collect, how we use it, and your rights regarding that data.
+Welcome to the official website of Ferron, a fast, modern web server. Your privacy is important to us. This Privacy Policy explains what data we collect, how we use it, and your rights regarding that data.
 
 ## Information We Collect
 
