@@ -6,10 +6,8 @@ import Logo from "./Logo.astro";
 
 <footer class="border-t border-muted/30 py-12">
   <div class="container px-4 md:px-6">
-    <div
-      class="text-center grid grid-cols-1 gap-8 md:grid-cols-4 md:text-start"
-    >
-      <div class="space-y-4">
+    <div class="text-center flex flex-col gap-8 md:flex-row md:text-start">
+      <div class="space-y-4 md:max-w-sm">
         <div class="inline-flex items-center space-x-2">
           <Logo width={135} height={45} />
         </div>
@@ -33,81 +31,80 @@ import Logo from "./Logo.astro";
           </a>
         </div>
       </div>
-      <div class="space-y-4">
-        <!-- An empty column... -->
-      </div>
-      <div class="space-y-4">
-        <span class="block font-medium text-lg">Quick links</span>
-        <ul class="space-y-2 text-sm">
-          <li>
-            <a
-              href="/"
-              class="text-muted-foreground hover:text-primary transition-colors"
-              >Home</a
-            >
-          </li>
-          <li>
-            <a
-              href="/download"
-              class="text-muted-foreground hover:text-primary transition-colors"
-              >Download</a
-            >
-          </li>
-          <li>
-            <a
-              href="/contact"
-              class="text-muted-foreground hover:text-primary transition-colors"
-              >Contact</a
-            >
-          </li>
-          <li>
-            <a
-              href="/blog"
-              class="text-muted-foreground hover:text-primary transition-colors"
-              >Blog</a
-            >
-          </li>
-        </ul>
-      </div>
-      <div class="space-y-4">
-        <span class="block font-medium text-lg">Resources</span>
-        <ul class="space-y-2 text-sm">
-          <li>
-            <a
-              href="/docs"
-              class="text-muted-foreground hover:text-primary transition-colors"
-              >Documentation</a
-            >
-          </li>
-          <li>
-            <a
-              href="/changelog"
-              class="text-muted-foreground hover:text-primary transition-colors"
-              >Change log</a
-            >
-          </li>
-          <li>
-            <a
-              href="https://github.com/ferronweb/ferron"
-              class="text-muted-foreground hover:text-primary transition-colors"
-              >GitHub repository</a
-            >
-          </li>
-          <li>
-            <a
-              href="/contribute"
-              class="text-muted-foreground hover:text-primary transition-colors"
-              >Contribute</a
-            >
-          </li>
-          <li>
-            <a
-              href="/vulnerabilities"
-              class="text-muted-foreground hover:text-primary transition-colors"
-              >Vulnerabilities</a
-            >
-          </li>
-        </ul>
+      <div class="grow flex flex-col justify-end md:flex-row gap-8">
+        <div class="space-y-4 lg:min-w-44 xl:min-w-56">
+          <span class="block font-medium text-xl">Quick links</span>
+          <ul class="space-y-2 text-sm">
+            <li>
+              <a
+                href="/"
+                class="text-muted-foreground hover:text-primary transition-colors"
+                >Home</a
+              >
+            </li>
+            <li>
+              <a
+                href="/download"
+                class="text-muted-foreground hover:text-primary transition-colors"
+                >Download</a
+              >
+            </li>
+            <li>
+              <a
+                href="/contact"
+                class="text-muted-foreground hover:text-primary transition-colors"
+                >Contact</a
+              >
+            </li>
+            <li>
+              <a
+                href="/blog"
+                class="text-muted-foreground hover:text-primary transition-colors"
+                >Blog</a
+              >
+            </li>
+          </ul>
+        </div>
+        <div class="space-y-4 lg:min-w-44 xl:min-w-56">
+          <span class="block font-medium text-xl">Resources</span>
+          <ul class="space-y-2 text-sm">
+            <li>
+              <a
+                href="/docs"
+                class="text-muted-foreground hover:text-primary transition-colors"
+                >Documentation</a
+              >
+            </li>
+            <li>
+              <a
+                href="/changelog"
+                class="text-muted-foreground hover:text-primary transition-colors"
+                >Change log</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://github.com/ferronweb/ferron"
+                class="text-muted-foreground hover:text-primary transition-colors"
+                >GitHub repository</a
+              >
+            </li>
+            <li>
+              <a
+                href="/contribute"
+                class="text-muted-foreground hover:text-primary transition-colors"
+                >Contribute</a
+              >
+            </li>
+            <li>
+              <a
+                href="/vulnerabilities"
+                class="text-muted-foreground hover:text-primary transition-colors"
+                >Vulnerabilities</a
+              >
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
     <div
