@@ -15,7 +15,7 @@ Ferron 2.0.0-beta.1 got faster, thanks to [Monoio](https://github.com/bytedance/
 
 The pre-built executables will use Tokio for Windows, and Monoio for other operating systems.
 
-![Performance of static file serving of a default Ferron page by Ferron 1.3.1 and 2.0.0-beta.1 at various concurrency levels](/img/benchmark-ferron-1-vs-2.png)
+![Performance of static file serving of a default Ferron page by Ferron 1.3.1 and 2.0.0-beta.1 at various concurrency levels](img/benchmark-ferron-1-vs-2.png)
 
 ### Ease of configuration
 

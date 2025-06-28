@@ -19,7 +19,7 @@ The architecture of web servers like Ferron and Apache httpd also highlights the
 
 ## Performance
 
-![A chart comparing the performance of various web servers, including Ferron and Apache httpd](/img/performance-comparison-chart.png)
+![A chart comparing the performance of various web servers, including Ferron and Apache httpd](img/performance-comparison-chart.png)
 
 The performance of static web servers, as illustrated above, was evaluated using the command `wrk -c 100 -d 60 -t 6 https://localhost/index.nginx-debian.html` on a server equipped with an AMD Ryzen 5 8600G CPU. The benchmarked web servers served the default NGINX web server page, and all configurations included request logging to a log file.
 

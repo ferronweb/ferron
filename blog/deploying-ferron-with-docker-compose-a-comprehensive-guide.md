@@ -15,7 +15,7 @@ In this post, you will configure Ferron with Docker Compose in various configura
 
 ## Simple static web server
 
-![The diagram of the Docker container structure](/img/ferron-container-static.png)
+![The diagram of the Docker container structure](img/ferron-container-static.png)
 
 For this use case, we are going to use Ferron's Docker image, along with a volume containing static files.
 
@@ -61,13 +61,13 @@ docker-compose up -d
 
 After running this command, the static file server will be available at `http://localhost/`. When browsing this website, this page should appear:
 
-![The test webpage for Ferron + Docker Compose setup](/img/ferron-docker-compose-test.png)
+![The test webpage for Ferron + Docker Compose setup](img/ferron-docker-compose-test.png)
 
 You have now set up a simple static web server with Ferron and Docker Compose.
 
 ## Reverse proxy for Node.js "Hello World" application
 
-![The diagram of the Docker container structure](/img/ferron-container-proxied.png)
+![The diagram of the Docker container structure](img/ferron-container-proxied.png)
 
 For this use case, we are also going to use Ferron's Docker image, along with custom configuration, and a custom Docker image containing the web application based on Node.js's Docker image.
 
@@ -186,7 +186,7 @@ You have now set up a web application reverse proxied with Ferron using Docker C
 
 ## PHP web server
 
-![The diagram of the Docker container structure](/img/ferron-container-php.png)
+![The diagram of the Docker container structure](img/ferron-container-php.png)
 
 For this use case, we are also going to use Ferron's Docker image, along with custom configuration, and a PHP-FPM Docker image.
 
@@ -256,7 +256,7 @@ docker-compose up -d
 
 After running this command, the PHP information page will be available at `http://localhost/`. When browsing this website, this page should appear:
 
-![The PHP information page that serves as a test for Ferron + Docker Compose setup](/img/ferron-docker-compose-test-php.png)
+![The PHP information page that serves as a test for Ferron + Docker Compose setup](img/ferron-docker-compose-test-php.png)
 
 You have now set up a web server that can run PHP scripts with Ferron and Docker Compose.
 

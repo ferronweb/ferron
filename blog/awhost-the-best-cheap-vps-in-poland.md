@@ -47,9 +47,9 @@ awHost supports two locations - Poland (through eTop), and France (through OVH).
 
 awHost also offers anti-DDoS protection along with their VPS servers. For the Polish location, this is done by selective blackholing, while for the French location, a more advanced anti-DDoS protection is used.
 
-![Some of the VPS plan pricing of awHost](/img/vps-pricing-awhost.png)
+![Some of the VPS plan pricing of awHost](img/vps-pricing-awhost.png)
 
-![Some of the VPS plan pricing of nazwa.pl](/img/vps-pricing-nazwapl.png)
+![Some of the VPS plan pricing of nazwa.pl](img/vps-pricing-nazwapl.png)
 
 awHost offers relatively cheap VPS servers, compared to other Polish VPS providers like nazwa.pl:
 
@@ -65,7 +65,7 @@ Overall, awHost has very competitive pricing compared to some other VPS provider
 
 ## VPS server management
 
-![The VPS hosting panel for awHost](/img/awhost-vps-panel.png)
+![The VPS hosting panel for awHost](img/awhost-vps-panel.png)
 
 After purchasing a VPS server, the server gets provisioned for some time. After provisioning the server, the data for logging into a VPS server via SSH can be accessed either through an email message, or through the hosting panel.
 
@@ -83,13 +83,13 @@ The SSH service is configured to be on a non-standard port, reducing some risk o
 
 The port 25 is unblocked by default in VPS servers (at least for Polish location). This can be useful when setting up a VPS as a mail server.
 
-![One of the VPS servers from awHost (that hosts Ferron website) doesn't appear to be on the blocklist](/img/awhost-vps-blocklists.png)
+![One of the VPS servers from awHost (that hosts Ferron website) doesn't appear to be on the blocklist](img/awhost-vps-blocklists.png)
 
 Checking one of the VPS servers from awHost (one that runs the website you're reading the website on as of the time of writing the post), the server doesn't appear to be listed in a blocklist, further enhancing the trust of the VPS provider.
 
 The VPS servers from awHost appear to have IPv4 addresses only. If you would like to use IPv6, you'll have to use an IPv6 tunneling service, like [one from Hurricane Electric](https://tunnelbroker.net/).
 
-![The internet speed test results from a VPS from awHost](/img/awhost-speed-test.png)
+![The internet speed test results from a VPS from awHost](img/awhost-speed-test.png)
 
 Checking the internet speed using `speedtest-cli` tool, you can see that the internet speed is higher than the specified 250 Mbps speed. This might be possibly due to the internet connection being shared and the specified speed being the average internet speed.
 
