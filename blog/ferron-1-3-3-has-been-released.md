@@ -2,7 +2,7 @@
 title: "Ferron 1.3.3 has been released"
 description: We are excited to announce the release of Ferron 1.3.3. This release brings a fix related to reverse proxying.
 date: 2025-06-22 11:31:00
-cover: /img/covers/ferron-1-3-3-has-been-released.png
+cover: ./covers/ferron-1-3-3-has-been-released.png
 ---
 
 We are excited to introduce Ferron 1.3.3, where we have fixed a bug related to reverse proxying.

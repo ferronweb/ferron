@@ -2,7 +2,7 @@
 title: "Ferron 1.0.0-beta10 has been released"
 description: We are excited to introduce Ferron 1.0.0-beta10. This release brings several enhancements, and some important fixes.
 date: 2025-03-30 11:53:00
-cover: /img/covers/ferron-1-0-0-beta10-has-been-released.png
+cover: ./covers/ferron-1-0-0-beta10-has-been-released.png
 ---
 
 We are excited to introduce Ferron 1.0.0-beta10, packed with enhancements and important fixes.

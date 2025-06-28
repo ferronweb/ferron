@@ -2,7 +2,7 @@
 title: "Ferron 2.0.0-beta.3 has been released"
 description: We are excited to announce the release of Ferron 2.0.0-beta.3. This release brings several new features, improvements, and fixes.
 date: 2025-06-22 12:20:00
-cover: /img/covers/ferron-2-0-0-beta-3-has-been-released.png
+cover: ./covers/ferron-2-0-0-beta-3-has-been-released.png
 ---
 
 We are excited to introduce Ferron 2.0.0-beta.3, with new features, enhancements, and some important fixes.

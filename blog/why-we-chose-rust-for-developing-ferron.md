@@ -2,7 +2,7 @@
 title: Why we chose Rust for developing Ferron?
 description: Discover why we chose Rust for Ferron, a fast, memory-safe web server, highlighting its performance, safety, and concurrency benefits.
 date: 2025-03-06 15:23:00
-cover: /img/covers/why-we-chose-rust-for-developing-ferron.png
+cover: ./covers/why-we-chose-rust-for-developing-ferron.png
 ---
 
 Choosing the right programming language for web server development is very important, as it affects performance, security, scalability, and maintainability. It determines the server's ability to handle traffic efficiently and reliably.

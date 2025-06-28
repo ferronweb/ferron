@@ -2,7 +2,7 @@
 title: "Introducing FerrBench: a modern HTTP benchmarking tool"
 description: We are excited to introduce FerrBench, a modern HTTP benchmarking tool designed to provide realistic performance metrics for modern web frameworks and servers.
 date: 2025-03-15 16:17:00
-cover: /img/covers/introducing-ferrbench-a-modern-http-benchmarking-tool.png
+cover: ./covers/introducing-ferrbench-a-modern-http-benchmarking-tool.png
 ---
 
 We are excited to announce FerrBench, a modern HTTP benchmarking tool designed to provide realistic performance metrics for modern web frameworks and servers. Based on [rewrk](https://github.com/lnx-search/rewrk) and powered by [hyper's client API](https://github.com/hyperium/hyper), FerrBench offers both HTTP/1 and HTTP/2 benchmarking without the outdated biases of HTTP/1 pipelining.

@@ -2,7 +2,7 @@
 title: "Ferron 1.1.0 has been released"
 description: We are excited to introduce Ferron 1.1.0. This release brings several enhancements, and new features.
 date: 2025-04-29 16:33:00
-cover: /img/covers/ferron-1-1-0-has-been-released.png
+cover: ./covers/ferron-1-1-0-has-been-released.png
 ---
 
 We are excited to introduce Ferron 1.1.0, packed with enhancements and new features.

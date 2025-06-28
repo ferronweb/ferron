@@ -2,7 +2,7 @@
 title: Introducing Ferron
 description: We are thrilled to introduce Ferron, a fast, memory-safe web server written in Rust.
 date: 2025-03-01 20:38:00
-cover: /img/covers/introducing-ferron.png
+cover: ./covers/introducing-ferron.png
 ---
 
 ## A New Era for High-Performance Web Serving

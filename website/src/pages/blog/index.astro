@@ -8,6 +8,8 @@ import {
   faChevronRight,
   faExternalLink
 } from "@fortawesome/free-solid-svg-icons";
+import blogMissing from "../../assets/blog-missing.png";
+import { Image } from "astro:assets";
 
 const posts = await getCollection("blog");
 const postsSorted = posts.sort((a, b) => {
@@ -72,11 +74,9 @@ if (begPage < 1) {
               <div class="group text-card-foreground bg-card rounded-lg border-border border h-full flex flex-col">
                 <a href={`/blog/${post.id}`} class="flex flex-col grow">
                   <div class="relative overflow-hidden rounded-t-lg">
-                    <img
-                      src={
-                        post.data.cover ? post.data.cover : "/blog-missing.png"
-                      }
-                      alt={post.data.title}
+                    <Image
+                      src={post.data.cover || blogMissing}
+                      alt={post.data.title || null}
                       width={500}
                       height={300}
                       class="w-full object-cover transition-transform duration-200 group-hover:scale-105"

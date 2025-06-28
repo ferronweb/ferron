@@ -2,7 +2,7 @@
 title: "Ferron 1.1.2 has been released"
 description: We are excited to announce the release of Ferron 1.1.2. This release brings a HTTP/3-related bugfix.
 date: 2025-04-30 13:05:00
-cover: /img/covers/ferron-1-1-2-has-been-released.png
+cover: ./covers/ferron-1-1-2-has-been-released.png
 ---
 
 We are excited to introduce Ferron 1.1.2, where we have fixed a bug related to the HTTP/3 protocol.

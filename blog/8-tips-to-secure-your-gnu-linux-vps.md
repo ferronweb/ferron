@@ -2,7 +2,7 @@
 title: 8 tips to secure your GNU/Linux VPS
 description: "Secure your GNU/Linux VPS with these essential steps. Protect against DDoS, update software, secure SSH, and more to safeguard your data."
 date: 2025-03-25 11:38:00
-cover: /img/covers/8-tips-to-secure-your-gnu-linux-vps.png
+cover: ./covers/8-tips-to-secure-your-gnu-linux-vps.png
 ---
 
 Security is essential for a GNU/Linux VPS (virtual private server) because attackers actively search for vulnerable servers to exploit.

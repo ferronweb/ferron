@@ -2,7 +2,7 @@
 title: What is automatic TLS and why is it essential for modern web security?
 description: "Discover automatic TLS: simplifying secure internet traffic management. Learn its benefits, tools, challenges, and future impact on web security."
 date: 2025-03-13 17:36:00
-cover: /img/covers/what-is-automatic-tls-and-why-is-it-essential-for-modern-web-security.png
+cover: ./covers/what-is-automatic-tls-and-why-is-it-essential-for-modern-web-security.png
 ---
 
 TLS (Transport Layer Security) is a protocol that provides security, integrity, and encryption for network traffic. TLS relies on certificates to establish trust between a client and a server.

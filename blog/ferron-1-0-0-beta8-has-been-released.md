@@ -2,7 +2,7 @@
 title: "Ferron 1.0.0-beta8 has been released"
 description: We are excited to announce the release of Ferron 1.0.0-beta8. This release brings several new features, improvements, and fixes.
 date: 2025-03-28 21:00:00
-cover: /img/covers/ferron-1-0-0-beta8-has-been-released.png
+cover: ./covers/ferron-1-0-0-beta8-has-been-released.png
 ---
 
 We are excited to introduce Ferron 1.0.0-beta8, packed with new features, enhancements, and important fixes.

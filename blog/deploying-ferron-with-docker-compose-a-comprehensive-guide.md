@@ -2,7 +2,7 @@
 title: "Deploying Ferron with Docker Compose: a comprehensive guide"
 description: "Learn how to deploy Ferron web server with Docker Compose for static, proxy, and PHP configurations. Simplify deployment and enhance scalability."
 date: 2025-03-09 08:42:00
-cover: /img/covers/deploying-ferron-with-docker-compose-a-comprehensive-guide.png
+cover: ./covers/deploying-ferron-with-docker-compose-a-comprehensive-guide.png
 ---
 
 Ferron is designed to be a fast, memory-safe web server. It supports both static file serving and dynamic content (including PHP). It can be also used as a reverse proxy.

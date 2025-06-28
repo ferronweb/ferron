@@ -2,7 +2,7 @@
 title: "awHost: The Best Cheap VPS in Poland?"
 description: "awHost offers affordable VPS hosting in Poland with competitive pricing, flexible plans, unlimited bandwidth, ideal for both individuals and businesses."
 date: 2025-06-23 07:22:00
-cover: /img/covers/awhost-the-best-cheap-vps-in-poland.png
+cover: ./covers/awhost-the-best-cheap-vps-in-poland.png
 ---
 
 [awHost](https://awhost.pl/) is a Polish VPS hosting provider that is known for offering cheap, affordable VPS servers.

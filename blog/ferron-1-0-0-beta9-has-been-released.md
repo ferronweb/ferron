@@ -2,7 +2,7 @@
 title: "Ferron 1.0.0-beta9 has been released"
 description: We are excited to announce the release of Ferron 1.0.0-beta9. This release brings a CGI bugfix.
 date: 2025-03-29 14:18:00
-cover: /img/covers/ferron-1-0-0-beta9-has-been-released.png
+cover: ./covers/ferron-1-0-0-beta9-has-been-released.png
 ---
 
 We are excited to introduce Ferron 1.0.0-beta9, where we have fixed a bug related to CGI (Common Gateway Interface).

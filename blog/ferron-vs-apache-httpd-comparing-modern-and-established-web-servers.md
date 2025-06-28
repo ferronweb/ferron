@@ -2,7 +2,7 @@
 title: "Ferron vs. Apache httpd: comparing modern and established web servers"
 description: This blog post compares Ferron, a modern Rust-based web server, with the established Apache httpd. It covers various aspects, helping readers identify the strengths and ideal scenarios for each server to meet their needs.
 date: 2025-03-07 15:20:00
-cover: /img/covers/ferron-vs-apache-httpd-comparing-modern-and-established-web-servers.png
+cover: ./covers/ferron-vs-apache-httpd-comparing-modern-and-established-web-servers.png
 ---
 
 Ferron is a modern web server developed in Rust, that emphasizes performance, safety, and modularity. By using Rust's memory safety features, Ferron aims to serve web content securely and efficiently.

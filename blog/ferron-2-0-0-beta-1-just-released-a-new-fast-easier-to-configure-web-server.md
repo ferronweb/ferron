@@ -2,7 +2,7 @@
 title: "Ferron 2.0.0-beta.1 just released - a new, fast, easier to configure web server"
 description: We are very excited to announce Ferron 2.0.0-beta.1, the first beta version of what it would be Ferron 2.0.0.
 date: 2025-06-04 15:29:00
-cover: /img/covers/ferron-2-0-0-beta-1-just-released-a-new-fast-easier-to-configure-web-server.png
+cover: ./covers/ferron-2-0-0-beta-1-just-released-a-new-fast-easier-to-configure-web-server.png
 ---
 
 We are very excited to announce Ferron 2.0.0-beta.1, the first beta version of what it would be Ferron 2.0.0. We have rewritten the web server to be faster, and easier to configure. Also, the new web server will support zero-setup automatic TLS enabled by default.

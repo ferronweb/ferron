@@ -2,7 +2,7 @@
 title: "Ferron 1.0.0-beta11 has been released"
 description: We are excited to introduce Ferron 1.0.0-beta11. This release brings several enhancements, and some important fixes.
 date: 2025-04-05 18:48:00
-cover: /img/covers/ferron-1-0-0-beta11-has-been-released.png
+cover: ./covers/ferron-1-0-0-beta11-has-been-released.png
 ---
 
 We are excited to introduce Ferron 1.0.0-beta11, packed with enhancements and important fixes.

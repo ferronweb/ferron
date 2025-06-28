@@ -2,7 +2,7 @@
 title: "Ferron 1.0.0: a new era for web servers"
 description: We are thrilled to announce the release of Ferron 1.0.0, the first stable version of our fast, memory-safe web server written in Rust.
 date: 2025-04-12 02:08:00
-cover: /img/covers/ferron-1-0-0-a-new-era-for-web-servers.png
+cover: ./covers/ferron-1-0-0-a-new-era-for-web-servers.png
 ---
 
 We are thrilled to announce the release of Ferron 1.0.0, the first stable version of our fast, memory-safe web server written in Rust. After extensive development and rigorous testing, Ferron is ready to power your web applications with speed, security, and reliability.

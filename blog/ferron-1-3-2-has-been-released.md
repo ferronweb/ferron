@@ -2,7 +2,7 @@
 title: "Ferron 1.3.2 has been released"
 description: We are excited to announce the release of Ferron 1.3.2. This release brings better compliance with HTTP and a fix related to reverse proxying and HTTP/3.
 date: 2025-06-21 16:43:00
-cover: /img/covers/ferron-1-3-2-has-been-released.png
+cover: ./covers/ferron-1-3-2-has-been-released.png
 ---
 
 We are excited to introduce Ferron 1.3.2, where we have improved the compliance with HTTP specification and fixed a bug related to reverse proxying and HTTP/3.

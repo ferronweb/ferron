@@ -2,7 +2,7 @@
 title: How to configure a VPS for sending emails?
 description: "Learn how to configure a VPS for sending emails, set up the hostname, the SPF record, and the SMTP server."
 date: 2025-06-19 06:57:00
-cover: /img/covers/how-to-configure-a-vps-for-sending-emails.png
+cover: ./covers/how-to-configure-a-vps-for-sending-emails.png
 ---
 
 If you have a VPS, you might prefer not to pay for an external service for sending email messages (Amazon SES, Mailgun, SendGrid, Mailchimp, and so on) - it might be cheaper to just send email messages directly from a VPS server.

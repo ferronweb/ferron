@@ -2,7 +2,7 @@
 title: "Ferron 1.0.0-beta1 Release: A New Era in Web Server Technology"
 description: We are thrilled to announce the release of Ferron 1.0.0-beta1, marking a significant milestone in the evolution of our web server technology.
 date: 2025-03-02 08:27:00
-cover: /img/covers/ferron-1-0-0-beta1-release-a-new-era-in-web-server-technology.png
+cover: ./covers/ferron-1-0-0-beta1-release-a-new-era-in-web-server-technology.png
 ---
 
 We are thrilled to announce the release of Ferron 1.0.0-beta1, marking a significant milestone in the evolution of our web server technology. This release not only brings a host of improvements and fixes but also introduces a new identity for our project. Let's dive into the key changes and enhancements that set Ferron 1.0.0-beta1 apart from its predecessor, Project Karpacz 0.7.0.

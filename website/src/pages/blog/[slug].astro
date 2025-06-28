@@ -4,6 +4,8 @@ import MainLayout from "../../layouts/MainLayout.astro";
 import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import { format } from "date-fns";
+import blogMissing from "../../assets/blog-missing.png";
+import { Image } from "astro:assets";
 
 export async function getStaticPaths() {
   const posts = await getCollection("blog");
@@ -20,7 +22,7 @@ const { Content } = await render(Astro.props.post);
 <MainLayout
   title={data.title}
   description={data.description}
-  image={data.cover || "/blog-missing.png"}
+  image={data.cover || blogMissing}
 >
   <main
     class="max-w-5xl container mx-auto py-8 md:py-28 flex flex-col items-center !px-4"
@@ -42,9 +44,9 @@ const { Content } = await render(Astro.props.post);
         <h1 class="text-3xl md:text-5xl mb-8 py-4 font-bold">
           {data.title}
         </h1>
-        <img
-          src={data.cover || "/blog-missing.png"}
-          alt={data.title}
+        <Image
+          src={data.cover || blogMissing}
+          alt={data.title || null}
           width={1200}
           height={800}
           class="w-full h-auto object-cover rounded-lg md:rounded-xl border"
