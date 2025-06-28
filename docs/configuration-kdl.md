@@ -131,7 +131,7 @@ This configuration reference organizes directives by both **scope** (where they 
 ### Caching
 
 - `cache_max_entries <cache_max_entries: integer|null>` (_cache_ module)
-  - This directive specifies the maximum number of entries that can be stored in the HTTP cache. If set as `cache_max_entries #null`, the cache can theoretically store an unlimited number of entries. The cache keys for entries depend on the request method, the rewritten request URL, the "Host" header value, and varying request headers. Default: `cache_max_entries #null`
+  - This directive specifies the maximum number of entries that can be stored in the HTTP cache. If set as `cache_max_entries #null`, the cache can theoretically store an unlimited number of entries. The cache keys for entries depend on the request method, the rewritten request URL, the "Host" header value, and varying request headers. Default: `cache_max_entries 1024`
 
 ### Load balancing
 
@@ -237,7 +237,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `cache [enable_cache: bool]` (_cache_ module)
   - This directive specifies whenever the HTTP cache is enabled. Default: `cache #false`
 - `cache_max_response_size <cache_max_response_size: integer|null>` (_cache_ module)
-  - This directive specifies the maximum size of the response (in bytes) that can be stored in the HTTP cache. If set as `cache_max_response_size #null`, the cache can theoretically store responses of any size. Default: `cache_max_response_size #null`
+  - This directive specifies the maximum size of the response (in bytes) that can be stored in the HTTP cache. If set as `cache_max_response_size #null`, the cache can theoretically store responses of any size. Default: `cache_max_response_size 2097152`
 - `cache_vary <varying_request_header: string> [<varying_request_header: string> ...]` (_cache_ module)
   - This directive specifies the request headers that are used to vary the cache entries. This directive can be specified multiple times. Default: none
 - `cache_ignore <ignored_response_header: string> [<ignored_response_header: string> ...]` (_cache_ module)

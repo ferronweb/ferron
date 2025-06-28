@@ -27,6 +27,10 @@ use crate::util::AtomicGenericCache;
 use crate::{config::ServerConfiguration, util::ModuleCache};
 use crate::{get_entry, get_value, get_values};
 
+// Default cache size limits
+const DEFAULT_MAX_CACHE_RESPONSE_SIZE: u64 = 2097152; // 2 MB
+const DEFAULT_MAX_CACHE_ENTRIES: usize = 1024;
+
 // Constants for optimization
 const CACHE_HEADER_NAME: &str = "X-Ferron-Cache";
 const DEFAULT_MAX_AGE: u64 = 300;
@@ -317,8 +321,17 @@ impl ModuleLoader for CacheModuleLoader {
           let maximum_cache_entries = global_config
             .and_then(|c| get_entry!("cache_max_entries", c))
             .and_then(|e| e.values.first())
-            .and_then(|v| v.as_i128())
-            .map(|v| v as usize);
+            .and_then(|v| {
+              if v.is_null() {
+                None
+              } else {
+                Some(
+                  v.as_i128()
+                    .map(|v| v as usize)
+                    .unwrap_or(DEFAULT_MAX_CACHE_ENTRIES),
+                )
+              }
+            });
 
           // Use optimized cache size calculation
           let cache_size = maximum_cache_entries.map_or(2048, |e| e.clamp(512, 8192));
@@ -387,7 +400,8 @@ impl ModuleLoader for CacheModuleLoader {
             )
             .into(),
           );
-        } else if !entry.values[0].is_integer() || entry.values[0].as_i128().is_some_and(|v| v < 0)
+        } else if (!entry.values[0].is_integer() && !entry.values[0].is_null())
+          || entry.values[0].as_i128().is_some_and(|v| v < 0)
         {
           return Err(anyhow::anyhow!("Invalid maximum cache response size configuration").into());
         }
@@ -480,7 +494,17 @@ impl CacheModuleHandlers {
     );
 
     self.maximum_cached_response_size =
-      get_value!("cache_max_response_size", config).and_then(|v| v.as_i128().map(|f| f as u64));
+      get_value!("cache_max_response_size", config).and_then(|v| {
+        if v.is_null() {
+          None
+        } else {
+          Some(
+            v.as_i128()
+              .map(|f| f as u64)
+              .unwrap_or(DEFAULT_MAX_CACHE_RESPONSE_SIZE),
+          )
+        }
+      });
   }
 
   /// Optimized cache cleanup with batching
