@@ -1013,7 +1013,7 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "ferron"
-version = "2.0.0-beta.4"
+version = "2.0.0-beta.5"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1088,7 +1088,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-passwd"
-version = "2.0.0-beta.4"
+version = "2.0.0-beta.5"
 dependencies = [
  "clap",
  "mimalloc",
@@ -1100,7 +1100,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-yaml2kdl"
-version = "2.0.0-beta.4"
+version = "2.0.0-beta.5"
 dependencies = [
  "clap",
  "ferron-yaml2kdl-core",
@@ -1110,7 +1110,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-yaml2kdl-core"
-version = "2.0.0-beta.4"
+version = "2.0.0-beta.5"
 dependencies = [
  "anyhow",
  "glob",

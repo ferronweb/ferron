@@ -194,7 +194,7 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the server administrator's email address to be used in the default 500 Internal Server Error page. Default: none
 - `error_page <status_code: integer> <path: string>`
   - This directive specifies a custom error page to be served by the web server. Default: none
-- `header_remove <header_name: string>` (Ferron UNRELEASED or newer)
+- `header_remove <header_name: string>` (Ferron 2.0.0-beta.5 or newer)
   - This directive specifies a header to be removed from HTTP responses. This directive can be specified multiple times. Default: none
 
 ### Security & access control
@@ -202,7 +202,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `trust_x_forwarded_for [trust_x_forwarded_for: bool]`
   - This directive specifies whenever to trust the value of the `X-Forwarded-For` header. It's recommended to configure this directive if behind a reverse proxy. Default: `trust_x_forwarded_for #false`
 - `status <status_code: integer> url=<url: string>|regex=<regex: string> [location=<location: string>] [realm=<realm: string>] [brute_protection=<enable_brute_protection: bool>] [users=<users: string>] [allowed=<allowed: string>] [body=<response_body: string>]`
-  - This directive specifies the custom status code. This directive can be specified multiple times. The `url` prop specifies the request path for this status code. The `regex` prop specifies the regular expression (like `^/ferron(?:$|[/#?])`) for the custom status code. The `location` prop specifies the destination for the redirect. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whenever the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. The `allowed` prop is a comma-separated list of allowed IP addresses. The `body` prop (Ferron UNRELEASED or newer) specifies the response body to be sent. Default: none
+  - This directive specifies the custom status code. This directive can be specified multiple times. The `url` prop specifies the request path for this status code. The `regex` prop specifies the regular expression (like `^/ferron(?:$|[/#?])`) for the custom status code. The `location` prop specifies the destination for the redirect. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whenever the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. The `allowed` prop is a comma-separated list of allowed IP addresses. The `body` prop (Ferron 2.0.0-beta.5 or newer) specifies the response body to be sent. Default: none
 - `users [username: string] [password_hash: string]`
   - This directive specifies an user with a password hash used for the HTTP basic authentication (it can be either Argon2, PBKDF2, or `scrypt` one). It's recommended to use the `ferron-passwd` tool to generate the password hash. This directive can be specified multiple times. Default: none
 
@@ -255,11 +255,11 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies whenever the reverse proxy should not verify the TLS certificate of the backend. Default: `proxy_no_verification #false`
 - `proxy_intercept_errors [proxy_intercept_errors: bool]` (_rproxy_ module)
   - This directive specifies whenever the reverse proxy should intercept errors from the backend. Default: `proxy_intercept_errors #false`
-- `proxy_request_header <header_name: string> <header_value: string>` (_rproxy_ module; Ferron UNRELEASED or newer)
+- `proxy_request_header <header_name: string> <header_value: string>` (_rproxy_ module; Ferron 2.0.0-beta.5 or newer)
   - This directive specifies a header to be added to HTTP requests sent by the reverse proxy. This directive can be specified multiple times. Default: none
-- `proxy_request_header_remove <header_name: string>` (_rproxy_ module; Ferron UNRELEASED or newer)
+- `proxy_request_header_remove <header_name: string>` (_rproxy_ module; Ferron 2.0.0-beta.5 or newer)
   - This directive specifies a header to be removed from HTTP requests sent by the reverse proxy. This directive can be specified multiple times. Default: none
-- `proxy_keepalive [proxy_keepalive: bool]` (_rproxy_ module; Ferron UNRELEASED or newer)
+- `proxy_keepalive [proxy_keepalive: bool]` (_rproxy_ module; Ferron 2.0.0-beta.5 or newer)
   - This directive specifies whenever the reverse proxy should keep the connection to the backend alive. Default: `proxy_keepalive #true`
 
 ### Forward proxy

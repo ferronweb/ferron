@@ -4,6 +4,17 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.5
+
+**Released in June 29, 2025**
+
+- Added a configuration directive for removing response headers
+- Added support for disabling HTTP keep-alive for reverse proxy
+- Added support for setting headers for HTTP requests sent by the reverse proxy
+- Added support for specifying custom response bodies in the `status` directive
+- Fixed explicitly specified HTTP-only ports erroneously marked as HTTPS ports
+- The HTTP cache size is now limited by default
+
 ## Ferron 2.0.0-beta.4
 
 **Released in June 22, 2025**
