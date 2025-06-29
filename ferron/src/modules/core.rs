@@ -542,6 +542,18 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
+    if let Some(entries) = get_entries_for_validation!("header_remove", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `header_remove` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_string() {
+          Err(anyhow::anyhow!("The header name must be a string"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -610,7 +622,7 @@ impl ModuleHandlers for CoreModuleHandlers {
         let mut uri_parts = request_parts.uri.into_parts();
         let new_path = if request_path == path_prepared {
           Some("/")
-        } else if request_path.starts_with(&format!("{}/", path_prepared)) {
+        } else if request_path.starts_with(&format!("{path_prepared}/")) {
           request_path.strip_prefix(&path_prepared)
         } else {
           None
@@ -623,7 +635,7 @@ impl ModuleHandlers for CoreModuleHandlers {
                 new_path,
                 path_and_query
                   .query()
-                  .map_or("".to_string(), |q| format!("?{}", q))
+                  .map_or("".to_string(), |q| format!("?{q}"))
               )
               .parse()?,
             )
@@ -737,7 +749,7 @@ impl ModuleHandlers for CoreModuleHandlers {
                 .scheme("https")
                 .authority(match default_https_port {
                   443 => host_name,
-                  port => format!("{}:{}", host_name, port),
+                  port => format!("{host_name}:{port}"),
                 })
                 .path_and_query(path_and_query)
                 .build()?;
@@ -821,7 +833,7 @@ impl ModuleHandlers for CoreModuleHandlers {
                   false => "http",
                 })
                 .authority(match host_port {
-                  Some(port) => format!("www.{}:{}", host_name, port),
+                  Some(port) => format!("www.{host_name}:{port}"),
                   None => host_name,
                 })
                 .path_and_query(path_and_query)

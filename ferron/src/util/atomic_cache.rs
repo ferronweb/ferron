@@ -1528,10 +1528,8 @@ mod tests {
               id: (thread_id * 1000 + i) as u32,
               value: (thread_id * 1000 + i) as u32,
             };
-            cache
-              .insert(format!("key:{}:{}", thread_id, i), entry)
-              .unwrap();
-            cache.get(&format!("key:{}:{}", thread_id, i));
+            cache.insert(format!("key:{thread_id}:{i}"), entry).unwrap();
+            cache.get(&format!("key:{thread_id}:{i}"));
           }
         })
       })
@@ -1540,8 +1538,6 @@ mod tests {
     for handle in handles {
       handle.join().unwrap();
     }
-
-    assert!(true);
   }
 
   #[test]
@@ -1557,9 +1553,7 @@ mod tests {
               id: (thread_id * 1000 + i) as u32,
               value: (thread_id * 1000 + i) as u32,
             };
-            cache
-              .insert(format!("key:{}:{}", thread_id, i), entry)
-              .unwrap();
+            cache.insert(format!("key:{thread_id}:{i}"), entry).unwrap();
           }
         })
       })
@@ -1574,7 +1568,7 @@ mod tests {
         let cache = Arc::clone(&cache);
         thread::spawn(move || {
           for i in 0..1_000 {
-            cache.get(&format!("key:{}:{}", thread_id, i));
+            cache.get(&format!("key:{thread_id}:{i}"));
           }
         })
       })
@@ -1583,8 +1577,6 @@ mod tests {
     for handle in handles {
       handle.join().unwrap();
     }
-
-    assert!(true);
   }
 
   #[derive(Copy, Clone, Debug, Default, PartialEq)]
@@ -1637,7 +1629,7 @@ mod tests {
     let cache = create_cache::<String, u32>(64);
 
     // Create keys that are likely to hash to similar values
-    let keys: Vec<String> = (0..1000).map(|i| format!("collision_key_{}", i)).collect();
+    let keys: Vec<String> = (0..1000).map(|i| format!("collision_key_{i}")).collect();
 
     // Insert all keys
     for (i, key) in keys.iter().enumerate() {
@@ -1705,16 +1697,16 @@ mod tests {
           let mut last_seen = vec![0u64; 100];
 
           for _ in 0..5000 {
-            for key_idx in 0..100 {
-              let key = format!("seq_{}", key_idx);
+            for (key_idx, last_seen_value) in last_seen.iter_mut().enumerate() {
+              let key = format!("seq_{key_idx}");
               if let Some(value) = cache.get(&key) {
-                if value < last_seen[key_idx] {
+                if value < *last_seen_value {
                   // Should never see a value go backwards (except for wraparound)
-                  if last_seen[key_idx] - value > 5000 {
+                  if *last_seen_value - value > 5000 {
                     inconsistency.store(true, Ordering::Relaxed);
                   }
                 }
-                last_seen[key_idx] = value;
+                *last_seen_value = value;
               }
             }
 
@@ -1760,7 +1752,7 @@ mod tests {
         let cache = Arc::clone(&cache);
         thread::spawn(move || {
           for i in 0..100 {
-            let key = format!("large_{}_{}", thread_id, i);
+            let key = format!("large_{thread_id}_{i}");
             let val = LargeTestStruct::new((thread_id * 100 + i) as u64);
 
             cache.insert(key.clone(), val).unwrap();
@@ -1854,7 +1846,7 @@ mod tests {
         permissions: (i % 4) as u16 * 0x0F,
         login_count: (i % 20) as u16,
       };
-      cache.insert(format!("user_{}", i), session).unwrap();
+      cache.insert(format!("user_{i}"), session).unwrap();
     }
 
     let initial_count = cache.len();
@@ -1888,7 +1880,7 @@ mod tests {
 
     // Insert entries with deliberate delays to ensure different timestamps
     for i in 0..10 {
-      let key = format!("timed_key_{}", i);
+      let key = format!("timed_key_{i}");
       cache.insert(key.clone(), i as u32).unwrap();
       insert_order.push(key);
       thread::sleep(Duration::from_millis(2)); // Ensure different timestamps
@@ -1926,7 +1918,7 @@ mod tests {
 
     for i in 0..total_inserts {
       small_cache
-        .insert(format!("overflow_{}", i), i as u64)
+        .insert(format!("overflow_{i}"), i as u64)
         .unwrap();
     }
 
@@ -1938,7 +1930,7 @@ mod tests {
     let recent_range = total_inserts - small_cache.capacity()..total_inserts;
 
     for i in recent_range {
-      if small_cache.get(&format!("overflow_{}", i)).is_some() {
+      if small_cache.get(&format!("overflow_{i}")).is_some() {
         recent_found += 1;
       }
     }
@@ -1948,7 +1940,7 @@ mod tests {
     // Older entries should mostly be gone
     let mut old_found = 0;
     for i in 0..small_cache.capacity() {
-      if small_cache.get(&format!("overflow_{}", i)).is_some() {
+      if small_cache.get(&format!("overflow_{i}")).is_some() {
         old_found += 1;
       }
     }
@@ -2558,7 +2550,7 @@ mod tests {
     // Populate cache
     for i in 0..100 {
       assert!(cache
-        .insert(format!("key{}", i), format!("value{}", i))
+        .insert(format!("key{i}"), format!("value{i}"))
         .unwrap());
     }
 
@@ -2801,7 +2793,7 @@ mod tests {
 
     // Insert many items
     for i in 0..100 {
-      assert!(cache.insert(format!("key_{}", i), i).unwrap());
+      assert!(cache.insert(format!("key_{i}"), i).unwrap());
     }
 
     assert_eq!(cache.len(), 100);
@@ -2825,7 +2817,7 @@ mod tests {
 
     // Insert many items
     for i in 0..100 {
-      assert!(cache.insert(format!("key_{}", i), i).unwrap());
+      assert!(cache.insert(format!("key_{i}"), i).unwrap());
     }
 
     assert_eq!(cache.len(), 100);
@@ -2841,7 +2833,7 @@ mod tests {
 
     // Insert many items
     for i in 0..1000 {
-      _ = cache.insert(format!("key_{}", i), i);
+      _ = cache.insert(format!("key_{i}"), i);
     }
 
     assert_eq!(cache.len(), 512);
@@ -2857,12 +2849,10 @@ mod tests {
         tokio::spawn(async move {
           for i in 0..1000 {
             let entry = LargeTestStruct::new(i);
-            cache
-              .insert(format!("key:{}:{}", thread_id, i), entry)
-              .unwrap();
+            cache.insert(format!("key:{thread_id}:{i}"), entry).unwrap();
             for i in 0..25 {
               // Get the cached value 25 times
-              cache.get(&format!("key:{}:{}", thread_id, i));
+              cache.get(&format!("key:{thread_id}:{i}"));
             }
           }
         })
@@ -2872,7 +2862,5 @@ mod tests {
     for handle in handles {
       handle.await.unwrap();
     }
-
-    assert!(true);
   }
 }

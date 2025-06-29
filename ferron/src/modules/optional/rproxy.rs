@@ -11,6 +11,7 @@ use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::client::conn::http1::SendRequest;
+use hyper::header::{HeaderName, HeaderValue};
 use hyper::{header, Request, Response, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::TokioIo;
@@ -191,6 +192,50 @@ impl ModuleLoader for ReverseProxyModuleLoader {
       }
     };
 
+    if let Some(entries) =
+      get_entries_for_validation!("proxy_request_header", config, used_properties)
+    {
+      for entry in &entries.inner {
+        if entry.values.len() != 2 {
+          Err(anyhow::anyhow!(
+            "The `proxy_request_header` configuration property must have exactly two values"
+          ))?
+        } else if !entry.values[0].is_string() {
+          Err(anyhow::anyhow!("The header name must be a string"))?
+        } else if !entry.values[1].is_string() {
+          Err(anyhow::anyhow!("The header value must be a string"))?
+        }
+      }
+    }
+
+    if let Some(entries) =
+      get_entries_for_validation!("proxy_request_header_remove", config, used_properties)
+    {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `proxy_request_header_remove` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_string() {
+          Err(anyhow::anyhow!("The header name must be a string"))?
+        }
+      }
+    }
+
+    if let Some(entries) = get_entries_for_validation!("proxy_keepalive", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `proxy_keepalive` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_bool() {
+          Err(anyhow::anyhow!(
+            "Invalid reverse proxy HTTP keep-alive enabling option"
+          ))?
+        }
+      }
+    };
+
     Ok(())
   }
 }
@@ -294,7 +339,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         _ => 80,
       });
 
-      let addr = format!("{}:{}", host, port);
+      let addr = format!("{host}:{port}");
       let authority = proxy_request_url.authority().cloned();
 
       let request_path = request_parts.uri.path();
@@ -305,7 +350,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           while proxy_request_path.as_bytes().last().copied() == Some(b'/') {
             proxy_request_path = &proxy_request_path[..(proxy_request_path.len() - 1)];
           }
-          format!("{}{}", proxy_request_path, request_path)
+          format!("{proxy_request_path}{request_path}")
         }
         _ => request_path.to_string(),
       };
@@ -314,7 +359,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         "{}{}",
         path,
         match request_parts.uri.query() {
-          Some(query) => format!("?{}", query),
+          Some(query) => format!("?{query}"),
           None => "".to_string(),
         }
       ))?;
@@ -343,7 +388,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         {
           request_parts.headers.insert(
             header::CONNECTION,
-            format!("keep-alive, {}", connection_str).parse()?,
+            format!("keep-alive, {connection_str}").parse()?,
           );
         }
       } else {
@@ -379,40 +424,81 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .insert("x-forwarded-host", original_host);
       }
 
+      if let Some(custom_headers) = get_entries!("proxy_request_header", config) {
+        for custom_header in custom_headers.inner.iter().rev() {
+          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+            if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+              if !request_parts.headers.contains_key(header_name) {
+                if let Ok(header_name) = HeaderName::from_str(header_name) {
+                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                    request_parts.headers.insert(header_name, header_value);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if let Some(custom_headers_to_remove) = get_entries!("proxy_request_header_remove", config) {
+        for custom_header in custom_headers_to_remove.inner.iter().rev() {
+          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+            if !request_parts.headers.contains_key(header_name) {
+              if let Ok(header_name) = HeaderName::from_str(header_name) {
+                while request_parts.headers.remove(&header_name).is_some() {}
+              }
+            }
+          }
+        }
+      }
+
       request_parts.version = Version::HTTP_11;
 
       let proxy_request = Request::from_parts(request_parts, request_body);
 
-      let connections = &self.connections[rand::random_range(..self.connections.len())];
+      let connections = if get_value!("proxy_keepalive", config)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
+      {
+        let connections = &self.connections[rand::random_range(..self.connections.len())];
 
-      let rwlock_read = connections.read().await;
-      let sender_read_option = rwlock_read.get(&addr);
+        let rwlock_read = connections.read().await;
+        let sender_read_option = rwlock_read.get(&addr);
 
-      if let Some(sender_read) = sender_read_option {
-        if !sender_read.is_closed() {
-          drop(rwlock_read);
-          let mut rwlock_write = connections.write().await;
-          let sender_option = rwlock_write.get_mut(&addr);
+        if let Some(sender_read) = sender_read_option {
+          if !sender_read.is_closed() {
+            drop(rwlock_read);
+            let mut rwlock_write = connections.write().await;
+            let sender_option = rwlock_write.get_mut(&addr);
 
-          if let Some(sender) = sender_option {
-            if !sender.is_closed() && sender.ready().await.is_ok() {
-              let result =
-                http_proxy_kept_alive(sender, proxy_request, error_logger, proxy_intercept_errors)
-                  .await;
-              drop(rwlock_write);
-              return result;
+            if let Some(sender) = sender_option {
+              if !sender.is_closed() && sender.ready().await.is_ok() {
+                let result = http_proxy_kept_alive(
+                  sender,
+                  proxy_request,
+                  error_logger,
+                  proxy_intercept_errors,
+                )
+                .await;
+                drop(rwlock_write);
+                return result;
+              } else {
+                drop(rwlock_write);
+              }
             } else {
               drop(rwlock_write);
             }
           } else {
-            drop(rwlock_write);
+            drop(rwlock_read);
           }
         } else {
           drop(rwlock_read);
         }
+
+        Some(connections)
       } else {
-        drop(rwlock_read);
-      }
+        None
+      };
 
       let stream = match TcpStream::connect(&addr).await {
         Ok(stream) => stream,
@@ -428,7 +514,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             | std::io::ErrorKind::NotFound
             | std::io::ErrorKind::HostUnreachable => {
               error_logger
-                .log(&format!("Service unavailable: {}", err))
+                .log(&format!("Service unavailable: {err}"))
                 .await;
               return Ok(ResponseData {
                 request: None,
@@ -439,7 +525,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
               });
             }
             std::io::ErrorKind::TimedOut => {
-              error_logger.log(&format!("Gateway timeout: {}", err)).await;
+              error_logger.log(&format!("Gateway timeout: {err}")).await;
               return Ok(ResponseData {
                 request: None,
                 response: None,
@@ -449,7 +535,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
               });
             }
             _ => {
-              error_logger.log(&format!("Bad gateway: {}", err)).await;
+              error_logger.log(&format!("Bad gateway: {err}")).await;
               return Ok(ResponseData {
                 request: None,
                 response: None,
@@ -471,7 +557,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             let failed_attempts = failed_backends_write.get(&proxy_to);
             failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
           }
-          error_logger.log(&format!("Bad gateway: {}", err)).await;
+          error_logger.log(&format!("Bad gateway: {err}")).await;
           return Ok(ResponseData {
             request: None,
             response: None,
@@ -498,7 +584,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             let failed_attempts = failed_backends_write.get(&proxy_to);
             failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
           }
-          error_logger.log(&format!("Bad gateway: {}", err)).await;
+          error_logger.log(&format!("Bad gateway: {err}")).await;
           return Ok(ResponseData {
             request: None,
             response: None,
@@ -553,7 +639,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
               let failed_attempts = failed_backends_write.get(&proxy_to);
               failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
             }
-            error_logger.log(&format!("Bad gateway: {}", err)).await;
+            error_logger.log(&format!("Bad gateway: {err}")).await;
             return Ok(ResponseData {
               request: None,
               response: None,
@@ -676,7 +762,7 @@ async fn determine_proxy_to(
   proxy_to
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 /// Establishes a new HTTP connection to a backend server and forwards the request
 ///
 /// This function:
@@ -687,7 +773,7 @@ async fn determine_proxy_to(
 /// 5. Stores the connection in the connection pool for future reuse if possible
 ///
 /// # Parameters
-/// * `connections` - Connection pool for storing and reusing HTTP connections
+/// * `connections` - Optional connection pool for storing and reusing HTTP connections
 /// * `connect_addr` - The address (host:port) to connect to
 /// * `stream` - The network stream to the backend server (TCP or TLS)
 /// * `proxy_request` - The HTTP request to forward to the backend
@@ -699,7 +785,7 @@ async fn determine_proxy_to(
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
 async fn http_proxy(
-  connections: &RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>,
+  connections: Option<&RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>>,
   connect_addr: String,
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
@@ -726,7 +812,7 @@ async fn http_proxy(
         failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
       }
       // 2. Logging the error
-      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      error_logger.log(&format!("Bad gateway: {err}")).await;
       // 3. Returning a 502 Bad Gateway response
       return Ok(ResponseData {
         request: None,
@@ -751,7 +837,7 @@ async fn http_proxy(
   let proxy_response = match sender.send_request(proxy_request).await {
     Ok(response) => response,
     Err(err) => {
-      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      error_logger.log(&format!("Bad gateway: {err}")).await;
       return Ok(ResponseData {
         request: None,
         response: None,
@@ -798,7 +884,7 @@ async fn http_proxy(
             Err(err) => {
               // Could not upgrade the client connection
               error_logger
-                .log(&format!("HTTP upgrade error: {}", err))
+                .log(&format!("HTTP upgrade error: {err}"))
                 .await;
             }
           }
@@ -807,7 +893,7 @@ async fn http_proxy(
       Err(err) => {
         // Could not upgrade the backend connection
         error_logger
-          .log(&format!("HTTP upgrade error: {}", err))
+          .log(&format!("HTTP upgrade error: {err}"))
           .await;
       }
     }
@@ -835,10 +921,12 @@ async fn http_proxy(
   };
 
   // Store the HTTP connection in the connection pool for future reuse if it's still open
-  if !sender.is_closed() {
-    let mut rwlock_write = connections.write().await;
-    rwlock_write.insert(connect_addr, sender);
-    drop(rwlock_write);
+  if let Some(connections) = connections {
+    if !sender.is_closed() {
+      let mut rwlock_write = connections.write().await;
+      rwlock_write.insert(connect_addr, sender);
+      drop(rwlock_write);
+    }
   }
 
   Ok(response)
@@ -878,7 +966,7 @@ async fn http_proxy_kept_alive(
     Ok(response) => response,
     Err(err) => {
       // Log the error and return a 502 Bad Gateway response
-      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      error_logger.log(&format!("Bad gateway: {err}")).await;
       return Ok(ResponseData {
         request: None,
         response: None,
@@ -923,7 +1011,7 @@ async fn http_proxy_kept_alive(
             Err(err) => {
               // Could not upgrade the client connection
               error_logger
-                .log(&format!("HTTP upgrade error: {}", err))
+                .log(&format!("HTTP upgrade error: {err}"))
                 .await;
             }
           }
@@ -932,7 +1020,7 @@ async fn http_proxy_kept_alive(
       Err(err) => {
         // Could not upgrade the backend connection
         error_logger
-          .log(&format!("HTTP upgrade error: {}", err))
+          .log(&format!("HTTP upgrade error: {err}"))
           .await;
       }
     }

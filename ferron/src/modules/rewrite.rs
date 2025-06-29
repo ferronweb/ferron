@@ -204,7 +204,7 @@ impl ModuleHandlers for RewriteModuleHandlers {
       "{}{}",
       request.uri().path(),
       match request.uri().query() {
-        Some(query) => format!("?{}", query),
+        Some(query) => format!("?{query}"),
         None => String::from(""),
       }
     );
@@ -324,8 +324,7 @@ impl ModuleHandlers for RewriteModuleHandlers {
       {
         error_logger
           .log(&format!(
-            "URL rewritten from \"{}\" to \"{}\"",
-            original_url, rewritten_url
+            "URL rewritten from \"{original_url}\" to \"{rewritten_url}\""
           ))
           .await;
       }

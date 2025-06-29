@@ -109,8 +109,7 @@ impl Decoder for FcgiDecoder {
                   if app_status != 0 {
                     // Inject data into standard error stream
                     return Ok(Some(FcgiDecodedData::Stderr(Bytes::from_owner(format!(
-                      "FastCGI application exited with code {}",
-                      app_status
+                      "FastCGI application exited with code {app_status}"
                     )))));
                   }
                 } else {

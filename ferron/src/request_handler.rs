@@ -152,7 +152,7 @@ async fn log_combined(
         protocol,
         status_code,
         match content_length {
-          Some(content_length) => format!("{}", content_length),
+          Some(content_length) => format!("{content_length}"),
           None => String::from("-"),
         },
         match referrer {
@@ -187,11 +187,24 @@ fn add_custom_headers(
       if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
         if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
           if !response_parts.headers.contains_key(header_name) {
-            if let Ok(header_value) = HeaderValue::from_str(&header_value.replace("{path}", path)) {
-              if let Ok(header_name) = HeaderName::from_str(header_name) {
+            if let Ok(header_name) = HeaderName::from_str(header_name) {
+              if let Ok(header_value) = HeaderValue::from_str(&header_value.replace("{path}", path))
+              {
                 response_parts.headers.insert(header_name, header_value);
               }
             }
+          }
+        }
+      }
+    }
+  }
+
+  if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
+    for custom_header in custom_headers_to_remove.inner.iter().rev() {
+      if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+        if !response_parts.headers.contains_key(header_name) {
+          if let Ok(header_name) = HeaderName::from_str(header_name) {
+            while response_parts.headers.remove(&header_name).is_some() {}
           }
         }
       }
@@ -208,16 +221,16 @@ fn add_http3_alt_svc_header(
     if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
       Some(value) => {
         let header_value_old = String::from_utf8_lossy(value.as_bytes());
-        let header_value_new = format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+        let header_value_new = format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
         if header_value_old != header_value_new {
-          HeaderValue::from_bytes(format!("{}, {}", header_value_old, header_value_new).as_bytes())
+          HeaderValue::from_bytes(format!("{header_value_old}, {header_value_new}").as_bytes())
         } else {
           HeaderValue::from_bytes(header_value_old.as_bytes())
         }
       }
       None => HeaderValue::from_bytes(
-        format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+        format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
       ),
     } {
       response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -320,7 +333,7 @@ async fn execute_response_modifying_handlers(
           if let Some(logger) = &logger {
             logger
               .send(LogMessage::new(
-                format!("Unexpected error while serving a request: {}", err),
+                format!("Unexpected error while serving a request: {err}"),
                 true,
               ))
               .await
@@ -384,7 +397,7 @@ async fn request_handler_wrapped(
       "{}{}",
       request.uri().path(),
       match request.uri().query() {
-        Some(query) => format!("?{}", query),
+        Some(query) => format!("?{query}"),
         None => String::from(""),
       }
     ),
@@ -477,7 +490,7 @@ async fn request_handler_wrapped(
                 if let Some(logger) = loggers.find_global_logger() {
                   logger
                     .send(LogMessage::new(
-                      format!("Host header sanitation error: {}", err),
+                      format!("Host header sanitation error: {err}"),
                       true,
                     ))
                     .await
@@ -529,18 +542,18 @@ async fn request_handler_wrapped(
                   Some(value) => {
                     let header_value_old = String::from_utf8_lossy(value.as_bytes());
                     let header_value_new =
-                      format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                      format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
                     if header_value_old != header_value_new {
                       HeaderValue::from_bytes(
-                        format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                        format!("{header_value_old}, {header_value_new}").as_bytes(),
                       )
                     } else {
                       HeaderValue::from_bytes(header_value_old.as_bytes())
                     }
                   }
                   None => HeaderValue::from_bytes(
-                    format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+                    format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
                   ),
                 } {
                   response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -564,7 +577,7 @@ async fn request_handler_wrapped(
           if let Some(logger) = loggers.find_global_logger() {
             logger
               .send(LogMessage::new(
-                format!("Host header sanitation error: {}", err),
+                format!("Host header sanitation error: {err}"),
                 true,
               ))
               .await
@@ -615,18 +628,18 @@ async fn request_handler_wrapped(
             Some(value) => {
               let header_value_old = String::from_utf8_lossy(value.as_bytes());
               let header_value_new =
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
               if header_value_old != header_value_new {
                 HeaderValue::from_bytes(
-                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                  format!("{header_value_old}, {header_value_new}").as_bytes(),
                 )
               } else {
                 HeaderValue::from_bytes(header_value_old.as_bytes())
               }
             }
             None => HeaderValue::from_bytes(
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+              format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
             ),
           } {
             response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -719,19 +732,16 @@ async fn request_handler_wrapped(
         if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
           Some(value) => {
             let header_value_old = String::from_utf8_lossy(value.as_bytes());
-            let header_value_new =
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+            let header_value_new = format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
             if header_value_old != header_value_new {
-              HeaderValue::from_bytes(
-                format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-              )
+              HeaderValue::from_bytes(format!("{header_value_old}, {header_value_new}").as_bytes())
             } else {
               HeaderValue::from_bytes(header_value_old.as_bytes())
             }
           }
           None => HeaderValue::from_bytes(
-            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+            format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
           ),
         } {
           response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -768,7 +778,7 @@ async fn request_handler_wrapped(
         if let Some(logger) = &logger {
           logger
             .send(LogMessage::new(
-              format!("URL sanitation error: {}", err),
+              format!("URL sanitation error: {err}"),
               true,
             ))
             .await
@@ -808,7 +818,7 @@ async fn request_handler_wrapped(
         match url_parts.path_and_query {
           Some(path_and_query) => {
             match path_and_query.query() {
-              Some(query) => format!("?{}", query),
+              Some(query) => format!("?{query}"),
               None => String::from(""),
             }
           }
@@ -823,7 +833,7 @@ async fn request_handler_wrapped(
             if let Some(logger) = &logger {
               logger
                 .send(LogMessage::new(
-                  format!("URL sanitation error: {}", err),
+                  format!("URL sanitation error: {err}"),
                   true,
                 ))
                 .await
@@ -861,7 +871,7 @@ async fn request_handler_wrapped(
           if let Some(logger) = &logger {
             logger
               .send(LogMessage::new(
-                format!("URL sanitation error: {}", err),
+                format!("URL sanitation error: {err}"),
                 true,
               ))
               .await
@@ -1201,7 +1211,7 @@ async fn request_handler_wrapped(
           if let Some(logger) = &logger {
             logger
               .send(LogMessage::new(
-                format!("Unexpected error while serving a request: {}", err),
+                format!("Unexpected error while serving a request: {err}"),
                 true,
               ))
               .await

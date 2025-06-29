@@ -23,7 +23,7 @@ pub fn create_tcp_listener(
   let (shutdown_tx, shutdown_rx) = async_channel::unbounded();
   let (listen_error_tx, listen_error_rx) = async_channel::unbounded();
   std::thread::Builder::new()
-        .name(format!("TCP listener for {}", address))
+        .name(format!("TCP listener for {address}"))
         .spawn(move || {
             crate::runtime::new_runtime(async move {
       crate::runtime::select! {
@@ -99,24 +99,18 @@ async fn tcp_listener_fn(
     tries += 1;
     if tries >= 10 {
       if encrypted {
-        println!("HTTPS port is used at try #{}, skipping...", tries);
+        println!("HTTPS port is used at try #{tries}, skipping...");
       } else {
-        println!("HTTP port is used at try #{}, skipping...", tries);
+        println!("HTTP port is used at try #{tries}, skipping...");
       }
       listen_error_tx.send(None).await.unwrap_or_default();
       break;
     }
     let duration = Duration::from_millis(1000);
     if encrypted {
-      println!(
-        "HTTPS port is used at try #{}, retrying in {:?}...",
-        tries, duration
-      );
+      println!("HTTPS port is used at try #{tries}, retrying in {duration:?}...");
     } else {
-      println!(
-        "HTTP port is used at try #{}, retrying in {:?}...",
-        tries, duration
-      );
+      println!("HTTP port is used at try #{tries}, retrying in {duration:?}...");
     }
     crate::runtime::sleep(duration).await;
   }
@@ -138,9 +132,9 @@ async fn tcp_listener_fn(
   };
 
   if encrypted {
-    println!("HTTPS server is listening on {}...", address);
+    println!("HTTPS server is listening on {address}...");
   } else {
-    println!("HTTP server is listening on {}...", address);
+    println!("HTTP server is listening on {address}...");
   }
   listen_error_tx.send(None).await.unwrap_or_default();
 
@@ -151,7 +145,7 @@ async fn tcp_listener_fn(
         if let Some(logging_tx) = &logging_tx {
           logging_tx
             .send(LogMessage::new(
-              format!("Cannot accept a connection: {}", err),
+              format!("Cannot accept a connection: {err}"),
               true,
             ))
             .await
@@ -166,7 +160,7 @@ async fn tcp_listener_fn(
         if let Some(logging_tx) = &logging_tx {
           logging_tx
             .send(LogMessage::new(
-              format!("Cannot accept a connection: {}", err),
+              format!("Cannot accept a connection: {err}"),
               true,
             ))
             .await

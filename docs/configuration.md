@@ -75,7 +75,7 @@ Ferron can be also configured in the Ferron 1.x-compatible `ferron.yaml` file. B
 - **timeout** (_u32_ or `null`)
   - A maximum time (in milliseconds) for server to process the request, after which the server resets the connection. If set to `null`, the timeout is disabled. It's not recommended to disable the timeout, as disabling it may leave the server vulnerable to Slow HTTP attacks. Default: `300000`
 - **maximumCacheEntries** (_u32_ or `null`; _cache_ module)
-  - Maximum amount of cache entries that can be stored in the cache. If set to `null`, the cache can theoretically store unlimited entries. The cache keys for entries depend on the request method, the request URL, the "Host" header value, and varying request headers. Default: `null`
+  - Maximum amount of cache entries that can be stored in the cache. If set to `null`, the cache can theoretically store unlimited entries. The cache keys for entries depend on the request method, the request URL, the "Host" header value, and varying request headers. Default: `1024`
 - **useAutomaticTLSHTTPChallenge** (_bool_; Ferron 1.1.0 and newer)
   - Option to enable HTTP-based ACME challenge for automatic TLS. When set to `true`, the server will use the HTTP-01 ACME challenge instead of TLS-ALPN-01 one. Default: `false`
 - **enableHTTP3** (_bool_; Ferron 1.1.0 and newer)
@@ -189,7 +189,7 @@ Ferron can be also configured in the Ferron 1.x-compatible `ferron.yaml` file. B
 - **cacheIgnoreHeaders** (_Array&lt;String&gt;_; _cache_ module)
   - A list of response headers that will not be stored in a cache. Default: None
 - **maximumCacheResponseSize** (_u64_ or `null`; _cache_ module)
-  - A maximum response size to be cached in bytes. If `null`, the maximum response size is unlimited theoretically. Default: `null`
+  - A maximum response size to be cached in bytes. If `null`, the maximum response size is unlimited theoretically. Default: `2097152`
 - **cgiScriptExtensions** (_Array&lt;String&gt;_; _cgi_ module)
   - CGI script extensions, which will be handled via CGI handler outside the `cgi-bin` directory. Default: None
 - **cgiScriptInterpreters** (_Object_; _cgi_ module)

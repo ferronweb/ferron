@@ -160,29 +160,24 @@ impl ServerConfigurationFilters {
 
 impl Ord for ServerConfigurationFilters {
   fn cmp(&self, other: &Self) -> Ordering {
-    if self.port.is_none() && other.port.is_some() {
-      Ordering::Less
-    } else if self.port.is_some() && other.port.is_none() {
-      Ordering::Greater
-    } else if self.ip.is_none() && other.ip.is_some() {
-      Ordering::Less
-    } else if self.ip.is_some() && other.ip.is_none() {
-      Ordering::Greater
-    } else if self.hostname.is_none() && other.hostname.is_some() {
-      Ordering::Less
-    } else if self.hostname.is_some() && other.hostname.is_none() {
-      Ordering::Greater
-    } else if self.location_prefix.is_none() && other.location_prefix.is_some() {
-      Ordering::Less
-    } else if self.location_prefix.is_some() && other.location_prefix.is_none() {
-      Ordering::Greater
-    } else if self.error_handler_status.is_none() && other.error_handler_status.is_some() {
-      Ordering::Less
-    } else if self.error_handler_status.is_some() && other.error_handler_status.is_none() {
-      Ordering::Greater
-    } else {
-      Ordering::Equal
-    }
+    self
+      .port
+      .is_some()
+      .cmp(&other.port.is_some())
+      .then_with(|| self.ip.is_some().cmp(&other.ip.is_some()))
+      .then_with(|| self.hostname.is_some().cmp(&other.hostname.is_some()))
+      .then_with(|| {
+        self
+          .location_prefix
+          .is_some()
+          .cmp(&other.location_prefix.is_some())
+      })
+      .then_with(|| {
+        self
+          .error_handler_status
+          .is_some()
+          .cmp(&other.error_handler_status.is_some())
+      })
   }
 }
 

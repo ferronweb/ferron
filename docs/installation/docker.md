@@ -89,3 +89,73 @@ If you need to remove the Ferron container:
 ```sh
 docker rm -f myferron
 ```
+
+## Using Ferron with Docker Compose
+
+If you're using Docker Compose, you can define a service for Ferron in your `docker-compose.yml` file:
+
+```yaml
+services:
+  ferron:
+    image: ferronserver/ferron:2
+    ports:
+      - "80:80"
+    restart: always
+```
+
+Then, you can start Ferron using:
+
+```sh
+docker-compose up -d
+```
+
+### Example: Ferron with Docker Compose and automatic TLS
+
+If using Ferron with Docker Compose and automatic TLS, you can use the following `docker-compose.yml` file contents:
+
+```yaml
+services:
+  # Ferron container
+  ferron:
+    image: ferronserver/ferron:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "./ferron.kdl:/etc/ferron.kdl" # Ferron configuration file
+      - "ferron-acme:/var/cache/acme-cache" # This volume is needed for persistent automatic TLS cache, otherwise the web server will obtain a new certificate on each restart
+    restart: always
+    depends_on:
+      ferron-acme-change-vol-ownership:
+        condition: service_completed_successfully
+
+  # Container to change ownership of the volume, necessary for the ACME cache to work properly
+  ferron-acme-change-vol-ownership:
+    image: alpine
+    user: "root"
+    volumes:
+      - ferron-acme:/tmp/change-ownership
+    command: chown nobody:nogroup /tmp/change-ownership
+
+volumes:
+  ferron-acme:
+```
+
+You might also configure Ferron in a "ferron.kdl" file like this:
+
+```kdl
+* {
+    auto_tls_cache "/var/cache/acme-cache"
+}
+
+// Replace "example.com" with your website's domain name
+example.com {
+    root "/var/www/ferron"
+}
+```
+
+Then, you can start Ferron using:
+
+```sh
+docker-compose up -d
+```

@@ -168,7 +168,7 @@ async fn http_handler_fn(
               if let Some(logging_tx) = loggers.find_global_logger() {
                 logging_tx
                   .send(LogMessage::new(
-                    format!("Cannot accept a connection: {}", err),
+                    format!("Cannot accept a connection: {err}"),
                     true,
                   ))
                   .await
@@ -257,7 +257,7 @@ async fn http_tcp_handler_fn(
       if let Some(logging_tx) = loggers.find_global_logger() {
         logging_tx
           .send(LogMessage::new(
-            format!("Cannot accept a connection: {}", err),
+            format!("Cannot accept a connection: {err}"),
             true,
           ))
           .await
@@ -273,7 +273,7 @@ async fn http_tcp_handler_fn(
         if let Some(logging_tx) = loggers.find_global_logger() {
           logging_tx
             .send(LogMessage::new(
-              format!("Error during TLS handshake: {}", err),
+              format!("Error during TLS handshake: {err}"),
               true,
             ))
             .await
@@ -291,7 +291,7 @@ async fn http_tcp_handler_fn(
             if let Some(logging_tx) = loggers.find_global_logger() {
               logging_tx
                 .send(LogMessage::new(
-                  format!("Error during TLS handshake: {}", err),
+                  format!("Error during TLS handshake: {err}"),
                   true,
                 ))
                 .await
@@ -310,7 +310,7 @@ async fn http_tcp_handler_fn(
         if let Some(logging_tx) = loggers.find_global_logger() {
           logging_tx
             .send(LogMessage::new(
-              format!("Error during TLS handshake: {}", err),
+              format!("Error during TLS handshake: {err}"),
               true,
             ))
             .await
@@ -428,7 +428,7 @@ async fn http_tcp_handler_fn(
         if let Some(logging_tx) = loggers.find_global_logger() {
           logging_tx
             .send(LogMessage::new(
-              format!("Error serving HTTPS connection: {}", err),
+              format!("Error serving HTTPS connection: {err}"),
               true,
             ))
             .await
@@ -489,7 +489,7 @@ async fn http_tcp_handler_fn(
         if let Some(logging_tx) = loggers.find_global_logger() {
           logging_tx
             .send(LogMessage::new(
-              format!("Error serving HTTPS connection: {}", err),
+              format!("Error serving HTTPS connection: {err}"),
               true,
             ))
             .await
@@ -564,7 +564,7 @@ async fn http_tcp_handler_fn(
       if let Some(logging_tx) = loggers.find_global_logger() {
         logging_tx
           .send(LogMessage::new(
-            format!("Error serving HTTP connection: {}", err),
+            format!("Error serving HTTP connection: {err}"),
             true,
           ))
           .await
@@ -593,7 +593,7 @@ async fn http_quic_handler_fn(
             if let Some(logging_tx) = loggers.find_global_logger() {
               logging_tx
                 .send(LogMessage::new(
-                  format!("Error serving HTTP/3 connection: {}", err),
+                  format!("Error serving HTTP/3 connection: {err}"),
                   true,
                 ))
                 .await
@@ -617,7 +617,7 @@ async fn http_quic_handler_fn(
                   if let Some(logging_tx) = loggers.find_global_logger() {
                     logging_tx
                       .send(LogMessage::new(
-                        format!("Error serving HTTP/3 connection: {}", err),
+                        format!("Error serving HTTP/3 connection: {err}"),
                         true,
                       ))
                       .await
@@ -686,7 +686,7 @@ async fn http_quic_handler_fn(
                   if let Some(logging_tx) = loggers.find_global_logger() {
                     logging_tx
                       .send(LogMessage::new(
-                        format!("Error serving HTTP/3 connection: {}", err),
+                        format!("Error serving HTTP/3 connection: {err}"),
                         true,
                       ))
                       .await
@@ -709,7 +709,7 @@ async fn http_quic_handler_fn(
                 if let Some(logging_tx) = loggers.find_global_logger() {
                   logging_tx
                     .send(LogMessage::new(
-                      format!("Error serving HTTP/3 connection: {}", err),
+                      format!("Error serving HTTP/3 connection: {err}"),
                       true,
                     ))
                     .await
@@ -728,7 +728,7 @@ async fn http_quic_handler_fn(
                             if let Some(logging_tx) = loggers.find_global_logger() {
                               logging_tx
                                 .send(LogMessage::new(
-                                  format!("Error serving HTTP/3 connection: {}", err),
+                                  format!("Error serving HTTP/3 connection: {err}"),
                                   true,
                                 ))
                                 .await
@@ -758,7 +758,7 @@ async fn http_quic_handler_fn(
                             if let Some(logging_tx) = loggers.find_global_logger() {
                               logging_tx
                                 .send(LogMessage::new(
-                                  format!("Error serving HTTP/3 connection: {}", err),
+                                  format!("Error serving HTTP/3 connection: {err}"),
                                   true,
                                 ))
                                 .await
@@ -786,7 +786,7 @@ async fn http_quic_handler_fn(
                     if let Some(logging_tx) = loggers.find_global_logger() {
                       logging_tx
                         .send(LogMessage::new(
-                          format!("Error serving HTTP/3 connection: {}", err),
+                          format!("Error serving HTTP/3 connection: {err}"),
                           true,
                         ))
                         .await
@@ -801,7 +801,7 @@ async fn http_quic_handler_fn(
                   if let Some(logging_tx) = loggers.find_global_logger() {
                     logging_tx
                       .send(LogMessage::new(
-                        format!("Error serving HTTP/3 connection: {}", err),
+                        format!("Error serving HTTP/3 connection: {err}"),
                         true,
                       ))
                       .await
@@ -816,7 +816,7 @@ async fn http_quic_handler_fn(
             if let Some(logging_tx) = loggers.find_global_logger() {
               logging_tx
                 .send(LogMessage::new(
-                  format!("Error serving HTTP/3 connection: {}", err),
+                  format!("Error serving HTTP/3 connection: {err}"),
                   true,
                 ))
                 .await
@@ -831,7 +831,7 @@ async fn http_quic_handler_fn(
       if let Some(logging_tx) = loggers.find_global_logger() {
         logging_tx
           .send(LogMessage::new(
-            format!("Cannot accept a connection: {}", err),
+            format!("Cannot accept a connection: {err}"),
             true,
           ))
           .await

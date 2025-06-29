@@ -155,7 +155,7 @@ pub async fn generate_directory_listing(
           anti_xss(urlencoding::encode(&filename).as_ref()),
           anti_xss(&filename)
         );
-        let row = format!("<tr><td>{}</td><td>-</td><td>-</td></tr>", filename_link);
+        let row = format!("<tr><td>{filename_link}</td><td>-</td><td>-</td></tr>");
         table_rows.push(row);
       }
     };
@@ -248,7 +248,7 @@ fn etag_strong_to_weak(input: &str) -> String {
   if input.starts_with("W/") {
     input.to_string()
   } else {
-    format!("W/{}", input)
+    format!("W/{input}")
   }
 }
 
@@ -444,11 +444,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
       let cache_key = format!(
         "{}{}{}",
         match &config.filters.ip {
-          Some(ip) => format!("{}-", ip),
+          Some(ip) => format!("{ip}-"),
           None => String::from(""),
         },
         match &config.filters.hostname {
-          Some(domain) => format!("{}-", domain),
+          Some(domain) => format!("{domain}-"),
           None => String::from(""),
         },
         request_path
@@ -941,12 +941,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   .header(header::CONTENT_LENGTH, content_length)
                   .header(
                     header::CONTENT_RANGE,
-                    format!("bytes {}-{}/{}", range_begin, range_end, file_length),
+                    format!("bytes {range_begin}-{range_end}/{file_length}"),
                   );
 
                 if let Some(etag) = etag_option {
-                  response_builder =
-                    response_builder.header(header::ETAG, format!("W/\"{}\"", etag));
+                  response_builder = response_builder.header(header::ETAG, format!("W/\"{etag}\""));
                 }
 
                 if let Some(content_type) = content_type_option {
@@ -1100,20 +1099,19 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               if let Some(etag) = etag_option {
                 if use_brotli {
                   response_builder =
-                    response_builder.header(header::ETAG, format!("W/\"{}-br\"", etag));
+                    response_builder.header(header::ETAG, format!("W/\"{etag}-br\""));
                 } else if use_zstd {
                   response_builder =
-                    response_builder.header(header::ETAG, format!("W/\"{}-zstd\"", etag));
+                    response_builder.header(header::ETAG, format!("W/\"{etag}-zstd\""));
                 } else if use_deflate {
                   response_builder =
-                    response_builder.header(header::ETAG, format!("W/\"{}-deflate\"", etag));
+                    response_builder.header(header::ETAG, format!("W/\"{etag}-deflate\""));
                 } else if use_gzip {
                   response_builder =
-                    response_builder.header(header::ETAG, format!("W/\"{}-gzip\"", etag));
+                    response_builder.header(header::ETAG, format!("W/\"{etag}-gzip\""));
                 } else {
                   // Uncompressed content
-                  response_builder =
-                    response_builder.header(header::ETAG, format!("W/\"{}\"", etag));
+                  response_builder = response_builder.header(header::ETAG, format!("W/\"{etag}\""));
                 }
               }
 

@@ -55,14 +55,14 @@ fn main() {
   let kdl_config = match convert_yaml_to_kdl(input_pathbuf) {
     Ok(config) => config,
     Err(err) => {
-      eprintln!("Error converting the server configuration: {}", err);
+      eprintln!("Error converting the server configuration: {err}");
       std::process::exit(1);
     }
   };
 
   // Write the converted server configuration
   if let Err(err) = fs::write(output_pathbuf, kdl_config.to_string()) {
-    eprintln!("Error writing the server configuration: {}", err);
+    eprintln!("Error writing the server configuration: {err}");
     std::process::exit(1);
   }
 }

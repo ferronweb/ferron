@@ -312,7 +312,7 @@ async fn execute_scgi_with_environment_variables(
   environment_variables.insert(
     "PATH_INFO".to_string(),
     match &path_info {
-      Some(path_info) => format!("/{}", path_info),
+      Some(path_info) => format!("/{path_info}"),
       None => "".to_string(),
     },
   );
@@ -336,7 +336,7 @@ async fn execute_scgi_with_environment_variables(
       "{}{}",
       original_request_uri.path(),
       match original_request_uri.query() {
-        Some(query) => format!("?{}", query),
+        Some(query) => format!("?{query}"),
         None => String::from(""),
       }
     ),
@@ -454,7 +454,7 @@ async fn execute_scgi(
 
   let scgi_to_fixed = if let Some(stripped) = scgi_to.strip_prefix("unix:///") {
     // hyper::Uri fails to parse a string if there is an empty authority, so add an "ignore" authority to Unix socket URLs
-    &format!("unix://ignore/{}", stripped)
+    &format!("unix://ignore/{stripped}")
   } else {
     scgi_to
   };
@@ -474,7 +474,7 @@ async fn execute_scgi(
         None => Err(anyhow::anyhow!("The SCGI URL doesn't include the port"))?,
       };
 
-      let addr = format!("{}:{}", host, port);
+      let addr = format!("{host}:{port}");
 
       match connect_tcp(&addr).await {
         Ok(data) => data,
@@ -483,7 +483,7 @@ async fn execute_scgi(
           | std::io::ErrorKind::NotFound
           | std::io::ErrorKind::HostUnreachable => {
             error_logger
-              .log(&format!("Service unavailable: {}", err))
+              .log(&format!("Service unavailable: {err}"))
               .await;
             return Ok(ResponseData {
               request: None,
@@ -506,7 +506,7 @@ async fn execute_scgi(
           | std::io::ErrorKind::NotFound
           | std::io::ErrorKind::HostUnreachable => {
             error_logger
-              .log(&format!("Service unavailable: {}", err))
+              .log(&format!("Service unavailable: {err}"))
               .await;
             return Ok(ResponseData {
               request: None,

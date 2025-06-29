@@ -141,11 +141,11 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
             let cache_key = format!(
               "{}{}{}",
               match &config.filters.ip {
-                Some(ip) => format!("{}-", ip),
+                Some(ip) => format!("{ip}-"),
                 None => String::from(""),
               },
               match &config.filters.hostname {
-                Some(domain) => format!("{}-", domain),
+                Some(domain) => format!("{domain}-"),
                 None => String::from(""),
               },
               request_path
@@ -159,7 +159,7 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
                   "{}/{}",
                   request_path,
                   match request_query {
-                    Some(query) => format!("?{}", query),
+                    Some(query) => format!("?{query}"),
                     None => String::from(""),
                   }
                 );
@@ -232,7 +232,7 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
                       "{}/{}",
                       request_path,
                       match request_query {
-                        Some(query) => format!("?{}", query),
+                        Some(query) => format!("?{query}"),
                         None => String::from(""),
                       }
                     );

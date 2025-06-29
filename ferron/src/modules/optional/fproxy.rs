@@ -119,7 +119,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
                 Ok(stream) => stream,
                 Err(err) => {
                   error_logger
-                    .log(&format!("Cannot connect to the remote server: {}", err))
+                    .log(&format!("Cannot connect to the remote server: {err}"))
                     .await;
                   return;
                 }
@@ -129,8 +129,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
                 Err(err) => {
                   error_logger
                     .log(&format!(
-                      "Cannot disable Nagle algorithm when connecting to the remote server: {}",
-                      err
+                      "Cannot disable Nagle algorithm when connecting to the remote server: {err}"
                     ))
                     .await;
                   return;
@@ -142,8 +141,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
                 Err(err) => {
                   error_logger
                     .log(&format!(
-                      "Cannot convert the TCP stream into polled I/O: {}",
-                      err
+                      "Cannot convert the TCP stream into polled I/O: {err}"
                     ))
                     .await;
                   return;
@@ -164,8 +162,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
             Err(err) => {
               error_logger
                 .log(&format!(
-                  "Error while upgrading HTTP CONNECT request: {}",
-                  err
+                  "Error while upgrading HTTP CONNECT request: {err}"
                 ))
                 .await;
             }
@@ -224,7 +221,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
 
       let port = request_parts.uri.port_u16().unwrap_or(80);
 
-      let addr = format!("{}:{}", host, port);
+      let addr = format!("{host}:{port}");
       let stream = match TcpStream::connect(addr).await {
         Ok(stream) => stream,
         Err(err) => {
@@ -233,7 +230,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
             | tokio::io::ErrorKind::NotFound
             | tokio::io::ErrorKind::HostUnreachable => {
               error_logger
-                .log(&format!("Service unavailable: {}", err))
+                .log(&format!("Service unavailable: {err}"))
                 .await;
               return Ok(ResponseData {
                 request: None,
@@ -244,7 +241,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
               });
             }
             tokio::io::ErrorKind::TimedOut => {
-              error_logger.log(&format!("Gateway timeout: {}", err)).await;
+              error_logger.log(&format!("Gateway timeout: {err}")).await;
               return Ok(ResponseData {
                 request: None,
                 response: None,
@@ -254,7 +251,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
               });
             }
             _ => {
-              error_logger.log(&format!("Bad gateway: {}", err)).await;
+              error_logger.log(&format!("Bad gateway: {err}")).await;
               return Ok(ResponseData {
                 request: None,
                 response: None,
@@ -270,7 +267,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
       match stream.set_nodelay(true) {
         Ok(_) => (),
         Err(err) => {
-          error_logger.log(&format!("Bad gateway: {}", err)).await;
+          error_logger.log(&format!("Bad gateway: {err}")).await;
           return Ok(ResponseData {
             request: None,
             response: None,
@@ -285,7 +282,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
       let stream = match stream.into_poll_io() {
         Ok(stream) => stream,
         Err(err) => {
-          error_logger.log(&format!("Bad gateway: {}", err)).await;
+          error_logger.log(&format!("Bad gateway: {err}")).await;
           return Ok(ResponseData {
             request: None,
             response: None,
@@ -302,7 +299,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
         "{}{}",
         request_path,
         match request_parts.uri.query() {
-          Some(query) => format!("?{}", query),
+          Some(query) => format!("?{query}"),
           None => "".to_string(),
         }
       ))?;
@@ -340,7 +337,7 @@ async fn http_proxy(
   let (mut sender, conn) = match hyper::client::conn::http1::handshake(io).await {
     Ok(data) => data,
     Err(err) => {
-      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      error_logger.log(&format!("Bad gateway: {err}")).await;
       return Ok(ResponseData {
         request: None,
         response: None,
@@ -358,7 +355,7 @@ async fn http_proxy(
   let proxy_response = match sender.send_request(proxy_request).await {
     Ok(response) => response,
     Err(err) => {
-      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      error_logger.log(&format!("Bad gateway: {err}")).await;
       return Ok(ResponseData {
         request: None,
         response: None,
