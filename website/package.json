@@ -16,8 +16,6 @@
     "@csstools/postcss-cascade-layers": "^5.0.1",
     "@csstools/postcss-color-mix-function": "^3.0.8",
     "@csstools/postcss-oklab-function": "^4.0.8",
-    "@fontsource/ibm-plex-mono": "^5.2.6",
-    "@fontsource/ibm-plex-sans": "^5.2.6",
     "@fortawesome/free-brands-svg-icons": "^6.7.2",
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "@fortawesome/react-fontawesome": "^0.2.2",

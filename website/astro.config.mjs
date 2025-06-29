@@ -1,5 +1,5 @@
 // @ts-check
-import { defineConfig } from "astro/config";
+import { defineConfig, fontProviders } from "astro/config";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@astrojs/react";
@@ -14,9 +14,6 @@ export default defineConfig({
 
   vite: {
     plugins: [tailwindcss()],
-    ssr: {
-      noExternal: ["@fontsource/ibm-plex-sans"]
-    },
     build: {
       assetsInlineLimit: 0,
       chunkSizeWarningLimit: 600
@@ -32,5 +29,23 @@ export default defineConfig({
   prefetch: {
     prefetchAll: true,
     defaultStrategy: "tap"
+  },
+  experimental: {
+    fonts: [
+      {
+        provider: fontProviders.fontsource(),
+        name: "IBM Plex Sans",
+        weights: [400, 500, 700],
+        cssVariable: "--font-ibm-plex-sans",
+        fallbacks: ["sans-serif"]
+      },
+      {
+        provider: fontProviders.fontsource(),
+        name: "IBM Plex Mono",
+        weights: [400, 500, 700],
+        cssVariable: "--font-ibm-plex-mono",
+        fallbacks: ["monospace"]
+      }
+    ]
   }
 });

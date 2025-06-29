@@ -1,11 +1,7 @@
 ---
-import "@fontsource/ibm-plex-sans";
-import "@fontsource/ibm-plex-sans/500.css";
-import "@fontsource/ibm-plex-sans/700.css";
-import "@fontsource/ibm-plex-mono";
-import "@fontsource/ibm-plex-mono/700.css";
 import "../styles/global.css";
 import { SEO } from "astro-seo";
+import { Font } from "astro:assets";
 import { ClientRouter } from "astro:transitions";
 ---
 
@@ -15,6 +11,8 @@ import { ClientRouter } from "astro:transitions";
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <Font cssVariable="--font-ibm-plex-sans" preload />
+    <Font cssVariable="--font-ibm-plex-mono" preload />
     <SEO
       title={Astro.props.title
         ? `${Astro.props.title} - Ferron`
