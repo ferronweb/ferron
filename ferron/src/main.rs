@@ -827,12 +827,6 @@ fn before_starting_server(
           }
         }
       }
-      if let Some(https_port) = https_port {
-        if let std::collections::hash_map::Entry::Vacant(entry) = tls_ports.entry(https_port) {
-          // Insert an empty custom SNI resolver
-          entry.insert(CustomSniResolver::new());
-        }
-      }
     }
 
     // If HTTP/1.1 isn't enabled, don't listen to non-encrypted ports
