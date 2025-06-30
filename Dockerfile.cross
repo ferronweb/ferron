@@ -43,7 +43,7 @@ RUN --mount=type=cache,sharing=locked,target=/usr/local/cargo/git \
     # Install the Rustup target
     rustup target add $TARGET_TRIPLE && \
     # Configure Cargo
-    echo -e "[target.$TARGET_TRIPLE]\nlinker = \"$TARGET_GCC\"" >> /usr/local/cargo/config && \
+    echo "[target.$TARGET_TRIPLE]\nlinker = \"$TARGET_GCC\"" >> /usr/local/cargo/config && \
     TARGET_PATH="target/$TARGET_TRIPLE/release" && TARGET_ARG="--target $TARGET_TRIPLE"; \
     fi && \
     cargo build --release --features ferron/config-docker-auto $TARGET_ARG && \
