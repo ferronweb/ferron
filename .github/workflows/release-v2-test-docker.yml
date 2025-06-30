@@ -33,7 +33,8 @@ jobs:
       matrix:
         include:
           - group: latest
-            dockerfile: ./Dockerfile
+            dockerfile: ./Dockerfile.cross
+            platforms: linux/amd64,linux/arm64
           - group: alpine
             dockerfile: ./Dockerfile.alpine
 
@@ -96,7 +97,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platforms }}
           push: false #true
           tags: ${{ env.DOCKER_TAGS }}
           cache-from: type=gha
