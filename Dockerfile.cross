@@ -31,13 +31,16 @@ RUN --mount=type=cache,sharing=locked,target=/usr/local/cargo/git \
     TARGET_ARG= && \
     TARGET_PATH="target/release" && \
     if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
+    TARGET_TRIPLE="" && \
     case "$TARGETPLATFORM" in \
-    "linux/386") TARGET_PATH="target/i686-unknown-linux-gnu/release" && TARGET_ARG="--target i686-unknown-linux-gnu" ;; \
-    "linux/amd64") TARGET_PATH="target/x86_64-unknown-linux-gnu/release" && TARGET_ARG="--target x86_64-unknown-linux-gnu" ;; \
-    "linux/arm64") TARGET_PATH="target/aarch64-unknown-linux-gnu/release" && TARGET_ARG="--target aarch64-unknown-linux-gnu" ;; \
-    "linux/arm/v7") TARGET_PATH="target/armv7-unknown-linux-gnueabihf/release" && TARGET_ARG="--target armv7-unknown-linux-gnueabihf" ;; \
+    "linux/386") TARGET_TRIPLE="i686-unknown-linux-gnu" ;; \
+    "linux/amd64") TARGET_TRIPLE="x86_64-unknown-linux-gnu" ;; \
+    "linux/arm64") TARGET_TRIPLE="aarch64-unknown-linux-gnu" ;; \
+    "linux/arm/v7") TARGET_TRIPLE="armv7-unknown-linux-gnueabihf" ;; \
     "*") echo "Unsupported target platform for cross-compilation: $TARGETPLATFORM" && exit 1 ;; \
-    esac \
+    esac && \
+    rustup target add $TARGET_TRIPLE && \
+    TARGET_PATH="target/$TARGET_TRIPLE/release" && TARGET_ARG="--target $TARGET_TRIPLE" \
     fi && \
     cargo build --release --features ferron/config-docker-auto $TARGET_ARG && \
     # Copy executables out of the cache
