@@ -16,17 +16,17 @@ on:
       - "ferron-yaml2kdl/**"
       - "ferron-yaml2kdl-core/**"
       - "wwwroot/**"
-      - ".github/workflows/release-v2.yml"
+      - ".github/workflows/release-v2-test-docker.yml"
 
 jobs:
   docker:
     runs-on: ubuntu-latest
 
-    permissions:
-      packages: write
-      contents: read
-      attestations: write
-      id-token: write
+    # permissions:
+    #   packages: write
+    #   contents: read
+    #   attestations: write
+    #   id-token: write
 
     strategy:
       fail-fast: false
