@@ -1029,9 +1029,7 @@ async fn server_event_loop(
             Err(err) => {
               logger
                 .send(LogMessage::new(
-                  format!(
-                    "Couldn't add a certificate to the certificate store: {err}"
-                  ),
+                  format!("Couldn't add a certificate to the certificate store: {err}"),
                   true,
                 ))
                 .await

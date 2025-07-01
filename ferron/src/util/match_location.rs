@@ -21,8 +21,7 @@ pub fn match_location(path: &str, req_path: &str) -> bool {
     req_path_prepared = req_path_prepared.to_lowercase();
   }
 
-  path_prepared == req_path_prepared
-    || req_path_prepared.starts_with(&format!("{path_prepared}/"))
+  path_prepared == req_path_prepared || req_path_prepared.starts_with(&format!("{path_prepared}/"))
 }
 
 #[cfg(test)]
