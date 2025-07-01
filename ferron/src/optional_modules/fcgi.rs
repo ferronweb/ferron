@@ -128,7 +128,7 @@ impl ServerModuleHandlers for FcgiModuleHandlers {
         }
 
         let request_path_with_slashes = match request_path == canonical_fastcgi_path {
-          true => format!("{}/", request_path),
+          true => format!("{request_path}/"),
           false => request_path.to_string(),
         };
         if let Some(stripped_request_path) =
@@ -177,11 +177,11 @@ impl ServerModuleHandlers for FcgiModuleHandlers {
           let cache_key = format!(
             "{}{}{}",
             match config["ip"].as_str() {
-              Some(ip) => format!("{}-", ip),
+              Some(ip) => format!("{ip}-"),
               None => String::from(""),
             },
             match config["domain"].as_str() {
-              Some(domain) => format!("{}-", domain),
+              Some(domain) => format!("{domain}-"),
               None => String::from(""),
             },
             request_path
@@ -491,7 +491,7 @@ async fn execute_fastcgi_with_environment_variables(
   environment_variables.insert(
     "PATH_INFO".to_string(),
     match &path_info {
-      Some(path_info) => format!("/{}", path_info),
+      Some(path_info) => format!("/{path_info}"),
       None => "".to_string(),
     },
   );
@@ -517,7 +517,7 @@ async fn execute_fastcgi_with_environment_variables(
       "{}{}",
       original_request_uri.path(),
       match original_request_uri.query() {
-        Some(query) => format!("?{}", query),
+        Some(query) => format!("?{query}"),
         None => String::from(""),
       }
     ),
@@ -635,7 +635,7 @@ async fn execute_fastcgi(
 
   let fastcgi_to_fixed = if let Some(stripped) = fastcgi_to.strip_prefix("unix:///") {
     // hyper::Uri fails to parse a string if there is an empty authority, so add an "ignore" authority to Unix socket URLs
-    &format!("unix://ignore/{}", stripped)
+    &format!("unix://ignore/{stripped}")
   } else {
     fastcgi_to
   };
@@ -655,7 +655,7 @@ async fn execute_fastcgi(
         None => Err(anyhow::anyhow!("The FastCGI URL doesn't include the port"))?,
       };
 
-      let addr = format!("{}:{}", host, port);
+      let addr = format!("{host}:{port}");
 
       match connect_tcp(&addr).await {
         Ok(data) => data,
@@ -664,7 +664,7 @@ async fn execute_fastcgi(
           | tokio::io::ErrorKind::NotFound
           | tokio::io::ErrorKind::HostUnreachable => {
             error_logger
-              .log(&format!("Service unavailable: {}", err))
+              .log(&format!("Service unavailable: {err}"))
               .await;
             return Ok(
               ResponseData::builder_without_request()
@@ -685,7 +685,7 @@ async fn execute_fastcgi(
           | tokio::io::ErrorKind::NotFound
           | tokio::io::ErrorKind::HostUnreachable => {
             error_logger
-              .log(&format!("Service unavailable: {}", err))
+              .log(&format!("Service unavailable: {err}"))
               .await;
             return Ok(
               ResponseData::builder_without_request()
@@ -783,7 +783,7 @@ async fn execute_fastcgi(
           let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
           if !stderr_string.is_empty() {
             error_logger
-              .log(&format!("There were CGI errors: {}", stderr_string))
+              .log(&format!("There were CGI errors: {stderr_string}"))
               .await;
           }
         return Ok(
@@ -804,7 +804,7 @@ async fn execute_fastcgi(
             let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
             if !stderr_string.is_empty() {
               error_logger
-                .log(&format!("There were FastCGI errors: {}", stderr_string))
+                .log(&format!("There were FastCGI errors: {stderr_string}"))
                 .await;
             }
           return Ok(
@@ -889,7 +889,7 @@ async fn execute_fastcgi(
               let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
               if !stderr_string.is_empty() {
                 error_logger
-                  .log(&format!("There were FastCGI errors: {}", stderr_string))
+                  .log(&format!("There were FastCGI errors: {stderr_string}"))
                   .await;
               }
             },
@@ -901,7 +901,7 @@ async fn execute_fastcgi(
           let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
           if !stderr_string.is_empty() {
             error_logger
-              .log(&format!("There were FastCGI errors: {}", stderr_string))
+              .log(&format!("There were FastCGI errors: {stderr_string}"))
               .await;
           }
         } else {

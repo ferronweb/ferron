@@ -81,11 +81,11 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
               let cache_key = format!(
                 "{}{}{}",
                 match config["ip"].as_str() {
-                  Some(ip) => format!("{}-", ip),
+                  Some(ip) => format!("{ip}-"),
                   None => String::from(""),
                 },
                 match config["domain"].as_str() {
-                  Some(domain) => format!("{}-", domain),
+                  Some(domain) => format!("{domain}-"),
                   None => String::from(""),
                 },
                 request_path
@@ -99,7 +99,7 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
                     "{}/{}",
                     request_path,
                     match request_query {
-                      Some(query) => format!("?{}", query),
+                      Some(query) => format!("?{query}"),
                       None => String::from(""),
                     }
                   );
@@ -147,7 +147,7 @@ impl ServerModuleHandlers for RedirectTrailingSlashesModuleHandlers {
                         "{}/{}",
                         request_path,
                         match request_query {
-                          Some(query) => format!("?{}", query),
+                          Some(query) => format!("?{query}"),
                           None => String::from(""),
                         }
                       );

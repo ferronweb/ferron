@@ -240,7 +240,7 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
         "{}{}",
         hyper_request.uri().path(),
         match hyper_request.uri().query() {
-          Some(query) => format!("?{}", query),
+          Some(query) => format!("?{query}"),
           None => String::from(""),
         }
       );
@@ -289,7 +289,7 @@ impl ServerModuleHandlers for NonStandardCodesModuleHandlers {
                     "{}{}",
                     location,
                     match hyper_request.uri().query() {
-                      Some(query) => format!("?{}", query),
+                      Some(query) => format!("?{query}"),
                       None => String::from(""),
                     }
                   ));

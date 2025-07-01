@@ -89,7 +89,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
 
       let port = hyper_request_parts.uri.port_u16().unwrap_or(80);
 
-      let addr = format!("{}:{}", host, port);
+      let addr = format!("{host}:{port}");
       let stream = match TcpStream::connect(addr).await {
         Ok(stream) => stream,
         Err(err) => {
@@ -98,7 +98,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
             | tokio::io::ErrorKind::NotFound
             | tokio::io::ErrorKind::HostUnreachable => {
               error_logger
-                .log(&format!("Service unavailable: {}", err))
+                .log(&format!("Service unavailable: {err}"))
                 .await;
               return Ok(
                 ResponseData::builder_without_request()
@@ -107,7 +107,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
               );
             }
             tokio::io::ErrorKind::TimedOut => {
-              error_logger.log(&format!("Gateway timeout: {}", err)).await;
+              error_logger.log(&format!("Gateway timeout: {err}")).await;
               return Ok(
                 ResponseData::builder_without_request()
                   .status(StatusCode::GATEWAY_TIMEOUT)
@@ -115,7 +115,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
               );
             }
             _ => {
-              error_logger.log(&format!("Bad gateway: {}", err)).await;
+              error_logger.log(&format!("Bad gateway: {err}")).await;
               return Ok(
                 ResponseData::builder_without_request()
                   .status(StatusCode::BAD_GATEWAY)
@@ -129,7 +129,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
       match stream.set_nodelay(true) {
         Ok(_) => (),
         Err(err) => {
-          error_logger.log(&format!("Bad gateway: {}", err)).await;
+          error_logger.log(&format!("Bad gateway: {err}")).await;
           return Ok(
             ResponseData::builder_without_request()
               .status(StatusCode::BAD_GATEWAY)
@@ -144,7 +144,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
         "{}{}",
         hyper_request_path,
         match hyper_request_parts.uri.query() {
-          Some(query) => format!("?{}", query),
+          Some(query) => format!("?{query}"),
           None => "".to_string(),
         }
       ))?;
@@ -188,7 +188,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
         Ok(stream) => stream,
         Err(err) => {
           error_logger
-            .log(&format!("Cannot connect to the remote server: {}", err))
+            .log(&format!("Cannot connect to the remote server: {err}"))
             .await;
           return Ok(());
         }
@@ -198,8 +198,7 @@ impl ServerModuleHandlers for ForwardProxyModuleHandlers {
         Err(err) => {
           error_logger
             .log(&format!(
-              "Cannot disable Nagle algorithm when connecting to the remote server: {}",
-              err
+              "Cannot disable Nagle algorithm when connecting to the remote server: {err}"
             ))
             .await;
           return Ok(());
@@ -248,7 +247,7 @@ async fn http_proxy(
   let (mut sender, conn) = match hyper::client::conn::http1::handshake(io).await {
     Ok(data) => data,
     Err(err) => {
-      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      error_logger.log(&format!("Bad gateway: {err}")).await;
       return Ok(
         ResponseData::builder_without_request()
           .status(StatusCode::BAD_GATEWAY)
@@ -272,7 +271,7 @@ async fn http_proxy(
         let proxy_response = match proxy_response {
           Ok(response) => response,
           Err(err) => {
-            error_logger.log(&format!("Bad gateway: {}", err)).await;
+            error_logger.log(&format!("Bad gateway: {err}")).await;
             return Ok(ResponseData::builder_without_request().status(StatusCode::BAD_GATEWAY).build());
           }
         };

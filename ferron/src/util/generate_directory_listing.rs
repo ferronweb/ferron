@@ -85,7 +85,7 @@ pub async fn generate_directory_listing(
           anti_xss(urlencoding::encode(&filename).as_ref()),
           anti_xss(&filename)
         );
-        let row = format!("<tr><td>{}</td><td>-</td><td>-</td></tr>", filename_link);
+        let row = format!("<tr><td>{filename_link}</td><td>-</td><td>-</td></tr>");
         table_rows.push(row);
       }
     };

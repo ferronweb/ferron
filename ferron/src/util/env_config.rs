@@ -277,6 +277,6 @@ pub fn apply_env_vars_to_config(yaml_config: &mut Yaml) {
 pub fn log_env_var_overrides() -> Vec<String> {
   env::vars()
     .filter(|(k, _)| k.starts_with("FERRON_"))
-    .map(|(k, v)| format!("Environment override: {}={}", k, v))
+    .map(|(k, v)| format!("Environment override: {k}={v}"))
     .collect()
 }

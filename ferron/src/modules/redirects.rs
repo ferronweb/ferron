@@ -92,7 +92,7 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
           .scheme("https")
           .authority(match config["sport"].as_i64() {
             None | Some(443) => host_name,
-            Some(port) => format!("{}:{}", host_name, port),
+            Some(port) => format!("{host_name}:{port}"),
           })
           .path_and_query(path_and_query)
           .build()?;
@@ -152,7 +152,7 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
                   false => "http",
                 })
                 .authority(match host_port {
-                  Some(port) => format!("www.{}:{}", host_name, port),
+                  Some(port) => format!("www.{host_name}:{port}"),
                   None => host_name,
                 })
                 .path_and_query(path_and_query)

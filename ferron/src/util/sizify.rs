@@ -35,7 +35,7 @@ pub fn sizify(bytes: u64, add_i: bool) -> String {
   let prefix = prefixes[prefix_index];
   let suffix = if prefix_index > 0 && add_i { "i" } else { "" };
 
-  format!("{}{}{}", size, prefix, suffix)
+  format!("{size}{prefix}{suffix}")
 }
 
 #[cfg(test)]

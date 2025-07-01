@@ -9,7 +9,7 @@ pub fn match_hostname(hostname: Option<&str>, req_hostname: Option<&str>) -> boo
       let hostnames_root = &hostname[2..];
       if req_hostname == hostnames_root
         || (req_hostname.len() > hostnames_root.len()
-          && req_hostname.ends_with(&format!(".{}", hostnames_root)[..]))
+          && req_hostname.ends_with(&format!(".{hostnames_root}")[..]))
       {
         return true;
       }

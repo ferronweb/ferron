@@ -156,7 +156,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
         "{}{}",
         hyper_request.uri().path(),
         match hyper_request.uri().query() {
-          Some(query) => format!("?{}", query),
+          Some(query) => format!("?{query}"),
           None => String::from(""),
         }
       );
@@ -228,8 +228,7 @@ impl ServerModuleHandlers for UrlRewriteModuleHandlers {
         if config["enableRewriteLogging"].as_bool() == Some(true) {
           error_logger
             .log(&format!(
-              "URL rewritten from \"{}\" to \"{}\"",
-              original_url, rewritten_url
+              "URL rewritten from \"{original_url}\" to \"{rewritten_url}\""
             ))
             .await;
         }

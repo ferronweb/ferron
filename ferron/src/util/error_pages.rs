@@ -10,7 +10,7 @@ pub fn generate_default_error_page(
   };
 
   let error_500 = format!("The server encountered an unexpected error. You may need to contact the server administrator{} to resolve the error.", match server_administrator_email {
-        Some(email_address) => format!(" at {}", email_address),
+        Some(email_address) => format!(" at {email_address}"),
         None => String::from("")
     });
   let status_code_description = String::from(match status_code.as_u16() {
