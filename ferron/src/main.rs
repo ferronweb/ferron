@@ -467,7 +467,7 @@ fn main() {
         println!("Reloading the server configuration...");
       }
       Err(err) => {
-        eprintln!("FATAL ERROR: {}", err);
+        eprintln!("FATAL ERROR: {err}");
         std::process::exit(1);
       }
     }

@@ -22,7 +22,7 @@ pub fn match_location(path: &str, req_path: &str) -> bool {
   }
 
   path_prepared == req_path_prepared
-    || req_path_prepared.starts_with(&format!("{}/", path_prepared))
+    || req_path_prepared.starts_with(&format!("{path_prepared}/"))
 }
 
 #[cfg(test)]

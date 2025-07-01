@@ -177,7 +177,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           _ => 80,
         });
 
-        let addr = format!("{}:{}", host, port);
+        let addr = format!("{host}:{port}");
         let authority = proxy_request_url.authority().cloned();
 
         let hyper_request_path = hyper_request_parts.uri.path();
@@ -188,7 +188,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
             while proxy_request_path.as_bytes().last().copied() == Some(b'/') {
               proxy_request_path = &proxy_request_path[..(proxy_request_path.len() - 1)];
             }
-            format!("{}{}", proxy_request_path, hyper_request_path)
+            format!("{proxy_request_path}{hyper_request_path}")
           }
           _ => hyper_request_path.to_string(),
         };
@@ -197,7 +197,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           "{}{}",
           path,
           match hyper_request_parts.uri.query() {
-            Some(query) => format!("?{}", query),
+            Some(query) => format!("?{query}"),
             None => "".to_string(),
           }
         ))?;
@@ -301,7 +301,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
               | tokio::io::ErrorKind::NotFound
               | tokio::io::ErrorKind::HostUnreachable => {
                 error_logger
-                  .log(&format!("Service unavailable: {}", err))
+                  .log(&format!("Service unavailable: {err}"))
                   .await;
                 return Ok(
                   ResponseData::builder_without_request()
@@ -310,7 +310,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
                 );
               }
               tokio::io::ErrorKind::TimedOut => {
-                error_logger.log(&format!("Gateway timeout: {}", err)).await;
+                error_logger.log(&format!("Gateway timeout: {err}")).await;
                 return Ok(
                   ResponseData::builder_without_request()
                     .status(StatusCode::GATEWAY_TIMEOUT)
@@ -318,7 +318,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
                 );
               }
               _ => {
-                error_logger.log(&format!("Bad gateway: {}", err)).await;
+                error_logger.log(&format!("Bad gateway: {err}")).await;
                 return Ok(
                   ResponseData::builder_without_request()
                     .status(StatusCode::BAD_GATEWAY)
@@ -338,7 +338,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
               let failed_attempts = failed_backends_write.get(&proxy_to);
               failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
             }
-            error_logger.log(&format!("Bad gateway: {}", err)).await;
+            error_logger.log(&format!("Bad gateway: {err}")).await;
             return Ok(
               ResponseData::builder_without_request()
                 .status(StatusCode::BAD_GATEWAY)
@@ -386,7 +386,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
                 let failed_attempts = failed_backends_write.get(&proxy_to);
                 failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
               }
-              error_logger.log(&format!("Bad gateway: {}", err)).await;
+              error_logger.log(&format!("Bad gateway: {err}")).await;
               return Ok(
                 ResponseData::builder_without_request()
                   .status(StatusCode::BAD_GATEWAY)
@@ -506,7 +506,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
             while proxy_request_path.as_bytes().last().copied() == Some(b'/') {
               proxy_request_path = &proxy_request_path[..(proxy_request_path.len() - 1)];
             }
-            format!("{}{}", proxy_request_path, request_path)
+            format!("{proxy_request_path}{request_path}")
           }
           _ => request_path.to_string(),
         };
@@ -521,7 +521,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           Some(path_and_query) => {
             let path_and_query_string = match path_and_query.query() {
               Some(query) => {
-                format!("{}?{}", path, query)
+                format!("{path}?{query}")
               }
               None => path,
             };
@@ -588,7 +588,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           Ok(data) => data,
           Err(err) => {
             error_logger
-              .log(&format!("Cannot connect to WebSocket server: {}", err))
+              .log(&format!("Cannot connect to WebSocket server: {err}"))
               .await;
             return Ok(());
           }
@@ -761,7 +761,7 @@ async fn http_proxy(
         let failed_attempts = failed_backends_write.get(&proxy_to);
         failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
       }
-      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      error_logger.log(&format!("Bad gateway: {err}")).await;
       return Ok(
         ResponseData::builder_without_request()
           .status(StatusCode::BAD_GATEWAY)
@@ -785,7 +785,7 @@ async fn http_proxy(
         let proxy_response = match proxy_response {
           Ok(response) => response,
           Err(err) => {
-            error_logger.log(&format!("Bad gateway: {}", err)).await;
+            error_logger.log(&format!("Bad gateway: {err}")).await;
             return Ok(ResponseData::builder_without_request().status(StatusCode::BAD_GATEWAY).build());
           }
         };
@@ -839,7 +839,7 @@ async fn http_proxy_kept_alive(
   let proxy_response = match sender.send_request(proxy_request).await {
     Ok(response) => response,
     Err(err) => {
-      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      error_logger.log(&format!("Bad gateway: {err}")).await;
       return Ok(
         ResponseData::builder_without_request()
           .status(StatusCode::BAD_GATEWAY)

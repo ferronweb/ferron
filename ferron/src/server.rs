@@ -74,7 +74,7 @@ async fn accept_quic_connection(
             Err(err) => {
               logger_clone
                 .send(LogMessage::new(
-                  format!("Error serving HTTP/3 connection: {}", err),
+                  format!("Error serving HTTP/3 connection: {err}"),
                   true,
                 ))
                 .await
@@ -101,7 +101,7 @@ async fn accept_quic_connection(
                   Err(err) => {
                     logger_clone
                       .send(LogMessage::new(
-                        format!("Error serving HTTP/3 connection: {}", err),
+                        format!("Error serving HTTP/3 connection: {err}"),
                         true,
                       ))
                       .await
@@ -170,7 +170,7 @@ async fn accept_quic_connection(
                   Err(err) => {
                     logger_clone
                       .send(LogMessage::new(
-                        format!("Error serving HTTP/3 connection: {}", err),
+                        format!("Error serving HTTP/3 connection: {err}"),
                         true,
                       ))
                       .await
@@ -191,7 +191,7 @@ async fn accept_quic_connection(
                 {
                   logger_clone
                     .send(LogMessage::new(
-                      format!("Error serving HTTP/3 connection: {}", err),
+                      format!("Error serving HTTP/3 connection: {err}"),
                       true,
                     ))
                     .await
@@ -208,7 +208,7 @@ async fn accept_quic_connection(
                             if let Err(err) = send.send_data(data).await {
                               logger_clone
                                 .send(LogMessage::new(
-                                  format!("Error serving HTTP/3 connection: {}", err),
+                                  format!("Error serving HTTP/3 connection: {err}"),
                                   true,
                                 ))
                                 .await
@@ -234,7 +234,7 @@ async fn accept_quic_connection(
                             if let Err(err) = send.send_trailers(trailers).await {
                               logger_clone
                                 .send(LogMessage::new(
-                                  format!("Error serving HTTP/3 connection: {}", err),
+                                  format!("Error serving HTTP/3 connection: {err}"),
                                   true,
                                 ))
                                 .await
@@ -258,7 +258,7 @@ async fn accept_quic_connection(
                     Err(err) => {
                       logger_clone
                         .send(LogMessage::new(
-                          format!("Error serving HTTP/3 connection: {}", err),
+                          format!("Error serving HTTP/3 connection: {err}"),
                           true,
                         ))
                         .await
@@ -271,7 +271,7 @@ async fn accept_quic_connection(
                   if let Err(err) = send.finish().await {
                     logger_clone
                       .send(LogMessage::new(
-                        format!("Error serving HTTP/3 connection: {}", err),
+                        format!("Error serving HTTP/3 connection: {err}"),
                         true,
                       ))
                       .await
@@ -284,7 +284,7 @@ async fn accept_quic_connection(
             Err(err) => {
               logger_clone
                 .send(LogMessage::new(
-                  format!("Error serving HTTP/3 connection: {}", err),
+                  format!("Error serving HTTP/3 connection: {err}"),
                   true,
                 ))
                 .await
@@ -297,7 +297,7 @@ async fn accept_quic_connection(
       Err(err) => {
         logger_clone
           .send(LogMessage::new(
-            format!("Cannot accept a connection: {}", err),
+            format!("Cannot accept a connection: {err}"),
             true,
           ))
           .await
@@ -323,7 +323,7 @@ async fn accept_connection(
   if let Err(err) = stream.set_nodelay(true) {
     logger
       .send(LogMessage::new(
-        format!("Cannot disable Nagle algorithm: {}", err),
+        format!("Cannot disable Nagle algorithm: {err}"),
         true,
       ))
       .await
@@ -337,7 +337,7 @@ async fn accept_connection(
     Err(err) => {
       logger
         .send(LogMessage::new(
-          format!("Cannot obtain local address of the connection: {}", err),
+          format!("Cannot obtain local address of the connection: {err}"),
           true,
         ))
         .await
@@ -355,7 +355,7 @@ async fn accept_connection(
         Err(err) => {
           logger
             .send(LogMessage::new(
-              format!("Error during TLS handshake: {}", err),
+              format!("Error during TLS handshake: {err}"),
               true,
             ))
             .await
@@ -371,7 +371,7 @@ async fn accept_connection(
             Err(err) => {
               logger
                 .send(LogMessage::new(
-                  format!("Error during TLS handshake: {}", err),
+                  format!("Error during TLS handshake: {err}"),
                   true,
                 ))
                 .await
@@ -388,7 +388,7 @@ async fn accept_connection(
         Err(err) => {
           logger
             .send(LogMessage::new(
-              format!("Error during TLS handshake: {}", err),
+              format!("Error during TLS handshake: {err}"),
               true,
             ))
             .await
@@ -485,7 +485,7 @@ async fn accept_connection(
         {
           logger
             .send(LogMessage::new(
-              format!("Error serving HTTPS connection: {}", err),
+              format!("Error serving HTTPS connection: {err}"),
               true,
             ))
             .await
@@ -532,7 +532,7 @@ async fn accept_connection(
         {
           logger
             .send(LogMessage::new(
-              format!("Error serving HTTPS connection: {}", err),
+              format!("Error serving HTTPS connection: {err}"),
               true,
             ))
             .await
@@ -585,7 +585,7 @@ async fn accept_connection(
       {
         logger
           .send(LogMessage::new(
-            format!("Error serving HTTP connection: {}", err),
+            format!("Error serving HTTP connection: {err}"),
             true,
           ))
           .await
@@ -618,7 +618,7 @@ async fn server_event_loop(
     Err(err) => {
       logger
         .send(LogMessage::new(
-          format!("Server configuration validation failed: {}", err),
+          format!("Server configuration validation failed: {err}"),
           true,
         ))
         .await
@@ -643,8 +643,7 @@ async fn server_event_loop(
           logger
             .send(LogMessage::new(
               format!(
-                "Unused configuration property detected: \"{}\". You might load an appropriate module to use this configuration property",
-                unused_property
+                "Unused configuration property detected: \"{unused_property}\". You might load an appropriate module to use this configuration property"
               ),
               true,
             ))
@@ -655,7 +654,7 @@ async fn server_event_loop(
       Err(err) => {
         logger
           .send(LogMessage::new(
-            format!("Server configuration validation failed: {}", err),
+            format!("Server configuration validation failed: {err}"),
             true,
           ))
           .await
@@ -692,7 +691,7 @@ async fn server_event_loop(
           _ => {
             logger
               .send(LogMessage::new(
-                format!("The \"{}\" cipher suite is not supported", cipher_suite),
+                format!("The \"{cipher_suite}\" cipher suite is not supported"),
                 true,
               ))
               .await
@@ -721,7 +720,7 @@ async fn server_event_loop(
           _ => {
             logger
               .send(LogMessage::new(
-                format!("The \"{}\" ECDH curve is not supported", ecdh_curve),
+                format!("The \"{ecdh_curve}\" ECDH curve is not supported"),
                 true,
               ))
               .await
@@ -779,7 +778,7 @@ async fn server_event_loop(
           Err(err) => {
             logger
               .send(LogMessage::new(
-                format!("Cannot load the \"{}\" TLS certificate: {}", cert_path, err),
+                format!("Cannot load the \"{cert_path}\" TLS certificate: {err}"),
                 true,
               ))
               .await
@@ -795,7 +794,7 @@ async fn server_event_loop(
           Err(err) => {
             logger
               .send(LogMessage::new(
-                format!("Cannot load the \"{}\" private key: {}", cert_path, err),
+                format!("Cannot load the \"{cert_path}\" private key: {err}"),
                 true,
               ))
               .await
@@ -811,7 +810,7 @@ async fn server_event_loop(
           Err(err) => {
             logger
               .send(LogMessage::new(
-                format!("Cannot load the \"{}\" private key: {}", cert_path, err),
+                format!("Cannot load the \"{cert_path}\" private key: {err}"),
                 true,
               ))
               .await
@@ -838,7 +837,7 @@ async fn server_event_loop(
                 Err(err) => {
                   logger
                     .send(LogMessage::new(
-                      format!("Cannot load the \"{}\" TLS certificate: {}", cert_path, err),
+                      format!("Cannot load the \"{cert_path}\" TLS certificate: {err}"),
                       true,
                     ))
                     .await
@@ -854,7 +853,7 @@ async fn server_event_loop(
                 Err(err) => {
                   logger
                     .send(LogMessage::new(
-                      format!("Cannot load the \"{}\" private key: {}", cert_path, err),
+                      format!("Cannot load the \"{cert_path}\" private key: {err}"),
                       true,
                     ))
                     .await
@@ -870,7 +869,7 @@ async fn server_event_loop(
                 Err(err) => {
                   logger
                     .send(LogMessage::new(
-                      format!("Cannot load the \"{}\" private key: {}", cert_path, err),
+                      format!("Cannot load the \"{cert_path}\" private key: {err}"),
                       true,
                     ))
                     .await
@@ -918,7 +917,7 @@ async fn server_event_loop(
           Err(err) => {
             logger
               .send(LogMessage::new(
-                format!("Couldn't create the TLS server configuration: {}", err),
+                format!("Couldn't create the TLS server configuration: {err}"),
                 true,
               ))
               .await
@@ -948,7 +947,7 @@ async fn server_event_loop(
           Err(err) => {
             logger
               .send(LogMessage::new(
-                format!("Couldn't create the TLS server configuration: {}", err),
+                format!("Couldn't create the TLS server configuration: {err}"),
                 true,
               ))
               .await
@@ -966,7 +965,7 @@ async fn server_event_loop(
           Err(err) => {
             logger
               .send(LogMessage::new(
-                format!("Couldn't create the TLS server configuration: {}", err),
+                format!("Couldn't create the TLS server configuration: {err}"),
                 true,
               ))
               .await
@@ -1031,8 +1030,7 @@ async fn server_event_loop(
               logger
                 .send(LogMessage::new(
                   format!(
-                    "Couldn't add a certificate to the certificate store: {}",
-                    err
+                    "Couldn't add a certificate to the certificate store: {err}"
                   ),
                   true,
                 ))
@@ -1155,7 +1153,7 @@ async fn server_event_loop(
   // Create ACME configuration
   let mut acme_config = AcmeConfig::new(acme_domains).challenge_type(acme_challenge_type);
   if let Some(acme_contact_unwrapped) = acme_contact {
-    acme_config = acme_config.contact_push(format!("mailto:{}", acme_contact_unwrapped));
+    acme_config = acme_config.contact_push(format!("mailto:{acme_contact_unwrapped}"));
   }
   let mut acme_config_with_cache = acme_config.cache_option(acme_cache);
   acme_config_with_cache =
@@ -1183,7 +1181,7 @@ async fn server_event_loop(
         if let Err(acme_error) = acme_result {
           acme_logger
             .send(LogMessage::new(
-              format!("Error while obtaining a TLS certificate: {}", acme_error),
+              format!("Error while obtaining a TLS certificate: {acme_error}"),
               true,
             ))
             .await
@@ -1235,7 +1233,7 @@ async fn server_event_loop(
       Err(err) => {
         logger
           .send(LogMessage::new(
-            format!("There was a problem when starting HTTP/3 server: {}", err),
+            format!("There was a problem when starting HTTP/3 server: {err}"),
             true,
           ))
           .await
@@ -1269,13 +1267,13 @@ async fn server_event_loop(
 
   // Bind to the specified ports
   if !non_tls_disabled {
-    println!("HTTP server is listening at {}", addr);
+    println!("HTTP server is listening at {addr}");
     listener = Some(match TcpListener::bind(addr).await {
       Ok(listener) => listener,
       Err(err) => {
         logger
           .send(LogMessage::new(
-            format!("Cannot listen to HTTP port: {}", err),
+            format!("Cannot listen to HTTP port: {err}"),
             true,
           ))
           .await
@@ -1289,13 +1287,13 @@ async fn server_event_loop(
   }
 
   if tls_enabled {
-    println!("HTTPS server is listening at {}", addr_tls);
+    println!("HTTPS server is listening at {addr_tls}");
     listener_tls = Some(match TcpListener::bind(addr_tls).await {
       Ok(listener) => listener,
       Err(err) => {
         logger
           .send(LogMessage::new(
-            format!("Cannot listen to HTTPS port: {}", err),
+            format!("Cannot listen to HTTPS port: {err}"),
             true,
           ))
           .await
@@ -1308,13 +1306,13 @@ async fn server_event_loop(
     });
 
     if let Some(quic_config) = quic_config {
-      println!("HTTP/3 server is listening at {}", addr_tls);
+      println!("HTTP/3 server is listening at {addr_tls}");
       listener_quic = Some(match quinn::Endpoint::server(quic_config, addr_tls) {
         Ok(listener) => listener,
         Err(err) => {
           logger
             .send(LogMessage::new(
-              format!("Cannot listen to HTTP/3 port: {}", err),
+              format!("Cannot listen to HTTP/3 port: {err}"),
               true,
             ))
             .await
@@ -1399,7 +1397,7 @@ async fn server_event_loop(
           Err(err) => {
             logger
               .send(LogMessage::new(
-                format!("Cannot accept a connection: {}", err),
+                format!("Cannot accept a connection: {err}"),
                 true,
               ))
               .await
@@ -1425,7 +1423,7 @@ async fn server_event_loop(
           Err(err) => {
             logger
               .send(LogMessage::new(
-                format!("Cannot accept a connection: {}", err),
+                format!("Cannot accept a connection: {err}"),
                 true,
               ))
               .await
@@ -1548,7 +1546,7 @@ pub fn start_server(
     let log_file_wrapped = match log_file {
       Some(Ok(file)) => Some(Arc::new(Mutex::new(BufWriter::with_capacity(131072, file)))),
       Some(Err(e)) => {
-        eprintln!("Failed to open log file: {}", e);
+        eprintln!("Failed to open log file: {e}");
         None
       }
       None => None,
@@ -1557,7 +1555,7 @@ pub fn start_server(
     let error_log_file_wrapped = match error_log_file {
       Some(Ok(file)) => Some(Arc::new(Mutex::new(BufWriter::with_capacity(131072, file)))),
       Some(Err(e)) => {
-        eprintln!("Failed to open error log file: {}", e);
+        eprintln!("Failed to open error log file: {e}");
         None
       }
       None => None,
@@ -1597,11 +1595,11 @@ pub fn start_server(
           if is_error {
             let now: DateTime<Local> = Local::now();
             let formatted_time = now.format("%Y-%m-%d %H:%M:%S").to_string();
-            message = format!("[{}]: {}", formatted_time, message);
+            message = format!("[{formatted_time}]: {message}");
           }
           message.push('\n');
           if let Err(e) = locked_file.write(message.as_bytes()).await {
-            eprintln!("Failed to write to log file: {}", e);
+            eprintln!("Failed to write to log file: {e}");
           }
         });
       }

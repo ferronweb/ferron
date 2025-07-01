@@ -141,11 +141,11 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
         let cache_key = format!(
           "{}{}{}",
           match config["ip"].as_str() {
-            Some(ip) => format!("{}-", ip),
+            Some(ip) => format!("{ip}-"),
             None => String::from(""),
           },
           match config["domain"].as_str() {
-            Some(domain) => format!("{}-", domain),
+            Some(domain) => format!("{domain}-"),
             None => String::from(""),
           },
           request_path
@@ -557,12 +557,12 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                     .header(header::CONTENT_LENGTH, content_length)
                     .header(
                       header::CONTENT_RANGE,
-                      format!("bytes {}-{}/{}", range_begin, range_end, file_length),
+                      format!("bytes {range_begin}-{range_end}/{file_length}"),
                     );
 
                   if let Some(etag) = etag_option {
                     response_builder =
-                      response_builder.header(header::ETAG, format!("\"{}\"", etag));
+                      response_builder.header(header::ETAG, format!("\"{etag}\""));
                   }
 
                   if let Some(content_type) = content_type_option {
@@ -685,19 +685,19 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                 if let Some(etag) = etag_option {
                   if use_brotli {
                     response_builder =
-                      response_builder.header(header::ETAG, format!("\"{}-br\"", etag));
+                      response_builder.header(header::ETAG, format!("\"{etag}-br\""));
                   } else if use_zstd {
                     response_builder =
-                      response_builder.header(header::ETAG, format!("\"{}-zstd\"", etag));
+                      response_builder.header(header::ETAG, format!("\"{etag}-zstd\""));
                   } else if use_deflate {
                     response_builder =
-                      response_builder.header(header::ETAG, format!("\"{}-deflate\"", etag));
+                      response_builder.header(header::ETAG, format!("\"{etag}-deflate\""));
                   } else if use_gzip {
                     response_builder =
-                      response_builder.header(header::ETAG, format!("\"{}-gzip\"", etag));
+                      response_builder.header(header::ETAG, format!("\"{etag}-gzip\""));
                   } else {
                     response_builder =
-                      response_builder.header(header::ETAG, format!("\"{}\"", etag));
+                      response_builder.header(header::ETAG, format!("\"{etag}\""));
                   }
                 }
 
