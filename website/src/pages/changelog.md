@@ -4,6 +4,13 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.6
+
+**Released in July 4, 2025**
+
+- Fixed TCP connection closure when the server request the closure
+- Switched ACME implementation to prepare for DNS-01 ACME challenge support
+
 ## Ferron 2.0.0-beta.5
 
 **Released in June 29, 2025**
