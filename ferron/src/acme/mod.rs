@@ -1,6 +1,12 @@
 use std::{
-  collections::HashMap, error::Error, future::Future, ops::Deref, path::PathBuf, pin::Pin,
-  sync::Arc, time::Duration,
+  collections::HashMap,
+  error::Error,
+  future::Future,
+  ops::{Deref, Sub},
+  path::PathBuf,
+  pin::Pin,
+  sync::Arc,
+  time::Duration,
 };
 
 use base64::Engine;
@@ -110,8 +116,15 @@ pub async fn provision_certificate(
   if let Some(certified_key) = config.certified_key_lock.read().await.as_deref() {
     if let Some(certificate) = certified_key.cert.first() {
       let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
-      if let Some(time_to_expiration) = x509_certificate.validity.time_to_expiration() {
-        if time_to_expiration > Duration::from_secs(SECONDS_BEFORE_RENEWAL) {
+      let validity = x509_certificate.validity();
+      if let Some(time_to_expiration) = validity.time_to_expiration() {
+        let time_before_expiration =
+          if let Some(valid_duration) = validity.not_after.sub(validity.not_before) {
+            (valid_duration.whole_seconds().unsigned_abs() / 2).min(SECONDS_BEFORE_RENEWAL)
+          } else {
+            SECONDS_BEFORE_RENEWAL
+          };
+        if time_to_expiration > Duration::from_secs(time_before_expiration) {
           // Certificate is still valid, no need to renew
           return Ok(());
         }
@@ -136,8 +149,15 @@ pub async fn provision_certificate(
     .collect::<Result<Vec<_>, _>>()?;
     if let Some(certificate) = certs.first() {
       let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
-      if let Some(time_to_expiration) = x509_certificate.validity.time_to_expiration() {
-        if time_to_expiration > Duration::from_secs(SECONDS_BEFORE_RENEWAL) {
+      let validity = x509_certificate.validity();
+      if let Some(time_to_expiration) = validity.time_to_expiration() {
+        let time_before_expiration =
+          if let Some(valid_duration) = validity.not_after.sub(validity.not_before) {
+            (valid_duration.whole_seconds().unsigned_abs() / 2).min(SECONDS_BEFORE_RENEWAL)
+          } else {
+            SECONDS_BEFORE_RENEWAL
+          };
+        if time_to_expiration > Duration::from_secs(time_before_expiration) {
           // Certificate is still valid, no need to renew
           let private_key = (match rustls_pemfile::private_key(&mut std::io::Cursor::new(
             certificate_data.private_key_pem.as_bytes(),
