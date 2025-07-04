@@ -37,11 +37,11 @@ impl SendRwStream {
         let io_result = monoio::select! {
           biased;
 
-          result = reader.read_buf(&mut buffer) => {
-            result
-          }
           _ = read_cancel_clone.cancelled() => {
             break;
+          }
+          result = reader.read_buf(&mut buffer) => {
+            result
           }
         };
         if let Ok(n) = io_result.as_ref() {
