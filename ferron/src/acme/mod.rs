@@ -104,6 +104,23 @@ pub async fn set_in_cache(
   }
 }
 
+/// Checks if the TLS certificate is valid
+fn check_certificate_validity(x509_certificate: &X509Certificate) -> bool {
+  let validity = x509_certificate.validity();
+  if let Some(time_to_expiration) = validity.time_to_expiration() {
+    let time_before_expiration =
+      if let Some(valid_duration) = validity.not_after.sub(validity.not_before) {
+        (valid_duration.whole_seconds().unsigned_abs() / 2).min(SECONDS_BEFORE_RENEWAL)
+      } else {
+        SECONDS_BEFORE_RENEWAL
+      };
+    if time_to_expiration > Duration::from_secs(time_before_expiration) {
+      return true;
+    }
+  }
+  false
+}
+
 /// Provisions TLS certificates using the ACME protocol.
 pub async fn provision_certificate(
   config: &mut AcmeConfig,
@@ -116,18 +133,9 @@ pub async fn provision_certificate(
   if let Some(certified_key) = config.certified_key_lock.read().await.as_deref() {
     if let Some(certificate) = certified_key.cert.first() {
       let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
-      let validity = x509_certificate.validity();
-      if let Some(time_to_expiration) = validity.time_to_expiration() {
-        let time_before_expiration =
-          if let Some(valid_duration) = validity.not_after.sub(validity.not_before) {
-            (valid_duration.whole_seconds().unsigned_abs() / 2).min(SECONDS_BEFORE_RENEWAL)
-          } else {
-            SECONDS_BEFORE_RENEWAL
-          };
-        if time_to_expiration > Duration::from_secs(time_before_expiration) {
-          // Certificate is still valid, no need to renew
-          return Ok(());
-        }
+      if check_certificate_validity(&x509_certificate) {
+        // Certificate is still valid, no need to renew
+        return Ok(());
       }
     }
   }
@@ -149,37 +157,28 @@ pub async fn provision_certificate(
     .collect::<Result<Vec<_>, _>>()?;
     if let Some(certificate) = certs.first() {
       let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
-      let validity = x509_certificate.validity();
-      if let Some(time_to_expiration) = validity.time_to_expiration() {
-        let time_before_expiration =
-          if let Some(valid_duration) = validity.not_after.sub(validity.not_before) {
-            (valid_duration.whole_seconds().unsigned_abs() / 2).min(SECONDS_BEFORE_RENEWAL)
-          } else {
-            SECONDS_BEFORE_RENEWAL
-          };
-        if time_to_expiration > Duration::from_secs(time_before_expiration) {
-          // Certificate is still valid, no need to renew
-          let private_key = (match rustls_pemfile::private_key(&mut std::io::Cursor::new(
-            certificate_data.private_key_pem.as_bytes(),
-          )) {
-            Ok(Some(private_key)) => Ok(private_key),
-            Ok(None) => Err(std::io::Error::new(
-              std::io::ErrorKind::InvalidData,
-              "Invalid private key",
-            )),
-            Err(err) => Err(err),
-          })?;
+      if check_certificate_validity(&x509_certificate) {
+        // Certificate is still valid, no need to renew
+        let private_key = (match rustls_pemfile::private_key(&mut std::io::Cursor::new(
+          certificate_data.private_key_pem.as_bytes(),
+        )) {
+          Ok(Some(private_key)) => Ok(private_key),
+          Ok(None) => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid private key",
+          )),
+          Err(err) => Err(err),
+        })?;
 
-          let signing_key = CryptoProvider::get_default()
-            .ok_or(anyhow::anyhow!("Cannot get default crypto provider"))?
-            .key_provider
-            .load_private_key(private_key)?;
+        let signing_key = CryptoProvider::get_default()
+          .ok_or(anyhow::anyhow!("Cannot get default crypto provider"))?
+          .key_provider
+          .load_private_key(private_key)?;
 
-          *config.certified_key_lock.write().await =
-            Some(Arc::new(CertifiedKey::new(certs, signing_key)));
+        *config.certified_key_lock.write().await =
+          Some(Arc::new(CertifiedKey::new(certs, signing_key)));
 
-          return Ok(());
-        }
+        return Ok(());
       }
     }
   }
