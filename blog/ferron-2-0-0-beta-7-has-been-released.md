@@ -1,7 +1,7 @@
 ---
 title: "Ferron 2.0.0-beta.7 has been released"
 description: We are excited to announce the release of Ferron 2.0.0-beta.7. This release brings a fix related to automatic TLS.
-date: 2025-07-04 13:18:00
+date: 2025-07-04 12:18:00
 cover: ./covers/ferron-2-0-0-beta-7-has-been-released.png
 ---
 
