@@ -77,7 +77,7 @@ struct CertificateCacheData {
 }
 
 /// Gets data from the cache.
-pub async fn get_from_cache(cache: &AcmeCache, key: &str) -> Option<Vec<u8>> {
+async fn get_from_cache(cache: &AcmeCache, key: &str) -> Option<Vec<u8>> {
   match cache {
     AcmeCache::Memory(cache) => cache.read().await.get(key).cloned(),
     AcmeCache::File(path) => tokio::fs::read(path.join(key)).await.ok(),
@@ -85,7 +85,7 @@ pub async fn get_from_cache(cache: &AcmeCache, key: &str) -> Option<Vec<u8>> {
 }
 
 /// Sets data in the cache.
-pub async fn set_in_cache(
+async fn set_in_cache(
   cache: &AcmeCache,
   key: &str,
   value: Vec<u8>,
