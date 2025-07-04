@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.7
+
+**Released in July 4, 2025**
+
+- Fixed an ACME error related to contact addresses, even if the contact address is valid
+
 ## Ferron 2.0.0-beta.6
 
 **Released in July 4, 2025**
