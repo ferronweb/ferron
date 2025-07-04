@@ -63,9 +63,10 @@ rcgen = { version = "0.14.1", default-features = false, features = [
     "pem",
 ] }
 password-auth = { workspace = true }
-sha2 = "0.10.9"
+sha2 = { version = "0.10.9", optional = true }
 base64 = "0.22.1"
 rand = { version = "0.9.1", optional = true }
+xxhash-rust = { version = "0.8.15", features = ["std", "xxh3"] }
 
 # Async Runtime & Concurrency
 tokio = { version = "1.45.0", features = [
@@ -155,7 +156,6 @@ smallvec = { version = "1.15.0", features = [
 ] }
 papaya = { version = "0.2.1", optional = true }
 ahash = { version = "0.8.12", optional = true }
-xxhash-rust = { version = "0.8.15", features = ["std", "xxh3"] }
 
 [dev-dependencies]
 tokio-test = "0.4.4"
@@ -209,7 +209,7 @@ rproxy = ["rand"]
 runtime-monoio = ["monoio", "monoio-compat", "blocking"]
 runtime-tokio = ["tokio/full", "quinn/runtime-tokio", "hyper-util/tokio"]
 scgi = ["httparse", "memchr"]
-static = ["new_mime_guess", "async-compression"]
+static = ["new_mime_guess", "async-compression", "sha2"]
 wsgi = ["pyo3", "futures-executor"]
 wsgid = [
     "pyo3",

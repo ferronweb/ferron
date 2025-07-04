@@ -13,7 +13,6 @@ mod util;
 
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::fmt::Write;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -22,6 +21,7 @@ use std::thread;
 use std::time::Duration;
 
 use async_channel::{Receiver, Sender};
+use base64::Engine;
 use chrono::{DateTime, Local};
 use clap::{crate_version, Arg, ArgAction, ArgMatches, Command};
 use config::adapters::ConfigurationAdapter;
@@ -48,10 +48,10 @@ use rustls::version::{TLS12, TLS13};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use rustls_native_certs::load_native_certs;
 use rustls_platform_verifier::BuilderVerifierExt;
-use sha2::{Digest, Sha256};
 use tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
 use tokio::io::{AsyncWriteExt, BufWriter};
 use util::{get_entry, get_value, get_values};
+use xxhash_rust::xxh3::xxh3_128;
 
 use crate::acme::{
   provision_certificate, AcmeCache, AcmeConfig, AcmeResolver, TlsAlpn01Resolver, ACME_TLS_ALPN_NAME,
@@ -714,15 +714,9 @@ fn before_starting_server(
                   Err(_) => Err(anyhow::anyhow!("Invalid ACME cache path"))?,
                 };
                 let base_pathbuf = pathbuf.clone();
-                let mut hasher = Sha256::new();
-                hasher.update(format!("{automatic_tls_port}-{sni_hostname}"));
-                let append_hash = hasher
-                  .finalize()
-                  .iter()
-                  .fold(String::new(), |mut output, b| {
-                    let _ = write!(output, "{b:02x}");
-                    output
-                  });
+                let append_hash = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+                  xxh3_128(format!("{automatic_tls_port}-{sni_hostname}").as_bytes()).to_be_bytes(),
+                );
                 pathbuf.push(append_hash);
                 (Some(base_pathbuf), Some(pathbuf))
               } else {
