@@ -142,7 +142,7 @@ pub async fn provision_certificate(
 
   let certificate_cache_key = format!(
     "certificate_{}",
-    base64::engine::general_purpose::STANDARD
+    base64::engine::general_purpose::URL_SAFE_NO_PAD
       .encode(xxh3_128(config.domains.join(",").as_bytes()).to_be_bytes())
   );
 
@@ -185,7 +185,7 @@ pub async fn provision_certificate(
 
   let account_cache_key = format!(
     "account_{}",
-    base64::engine::general_purpose::STANDARD.encode(
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
       xxh3_128(format!("{};{}", &config.contact.join(","), &config.directory).as_bytes())
         .to_be_bytes()
     )
