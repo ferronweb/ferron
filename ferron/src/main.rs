@@ -779,7 +779,9 @@ fn before_starting_server(
             let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock));
             let acme_logger_option = global_logger.clone();
             secondary_runtime_ref.spawn(async move {
-              tokio::time::sleep(Duration::from_millis(50 * acme_resolver_count)).await;
+              if acme_resolver_count > 0 {
+                tokio::time::sleep(Duration::from_millis((50 * acme_resolver_count) + 200)).await;
+              }
               let mut acme_state =
                 futures_util::stream::unfold((acme_config, true), |(mut config, first_time)| {
                   Box::pin(async move {
