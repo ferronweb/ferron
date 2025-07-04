@@ -240,7 +240,6 @@ pub async fn provision_certificate(
 
   let mut acme_order = acme_account.new_order(&acme_new_order).await?;
   let acme_authorizations = acme_order.authorizations().await?;
-  let mut challenge_identifiers = Vec::new();
   for acme_authorization in acme_authorizations {
     let Identifier::Dns(identifier) = acme_authorization.identifier;
 
@@ -262,7 +261,6 @@ pub async fn provision_certificate(
       ))?;
 
     let key_authorization = acme_order.key_authorization(challenge);
-    // TODO: ACME challenges
     match config.challenge_type {
       ChallengeType::TlsAlpn01 => {
         let mut params = CertificateParams::new(vec![identifier.clone()])?;
@@ -297,8 +295,6 @@ pub async fn provision_certificate(
     }
 
     acme_order.set_challenge_ready(&challenge.url).await?;
-
-    challenge_identifiers.push(identifier);
   }
 
   while let OrderStatus::Pending = acme_order.refresh().await?.status {
@@ -316,7 +312,7 @@ pub async fn provision_certificate(
     ))?;
   }
 
-  let mut params = CertificateParams::new(challenge_identifiers)?;
+  let mut params = CertificateParams::new(config.domains.clone())?;
   params.distinguished_name = DistinguishedName::new();
   let key_pair = KeyPair::generate()?;
   let csr = params.serialize_request(&key_pair)?;
