@@ -383,7 +383,7 @@ impl HttpsClientForAcme {
       HyperClient::builder(TokioExecutor::new()).build(
         hyper_rustls::HttpsConnectorBuilder::new()
           .with_tls_config(tls_config)
-          .https_only()
+          .https_or_http()
           .enable_http1()
           .enable_http2()
           .build(),
