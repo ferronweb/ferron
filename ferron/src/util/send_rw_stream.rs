@@ -5,6 +5,7 @@ use async_channel::{Receiver, Sender};
 use bytes::{Bytes, BytesMut};
 use futures_util::{Sink, Stream};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio_util::sync::CancellationToken;
 
 const MAX_BUFFER_SIZE: usize = 16384;
 const MAX_READ_CHANNEL_CAPACITY: usize = 2;
@@ -15,6 +16,7 @@ const MAX_WRITE_CHANNEL_CAPACITY: usize = 2;
 pub struct SendRwStream {
   rx: Pin<Box<Receiver<Result<Bytes, std::io::Error>>>>,
   tx: Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send>>,
+  read_cancel: CancellationToken,
 }
 
 impl SendRwStream {
@@ -23,6 +25,8 @@ impl SendRwStream {
     let (inner_tx, rx) = async_channel::bounded(MAX_READ_CHANNEL_CAPACITY);
     let (tx, inner_rx) = async_channel::bounded(MAX_WRITE_CHANNEL_CAPACITY);
     let (mut reader, mut writer) = tokio::io::split(stream);
+    let read_cancel = CancellationToken::new();
+    let read_cancel_clone = read_cancel.clone();
     monoio::spawn(async move {
       loop {
         let buffer_sz = MAX_BUFFER_SIZE;
@@ -30,7 +34,16 @@ impl SendRwStream {
           break;
         }
         let mut buffer = BytesMut::with_capacity(buffer_sz);
-        let io_result = reader.read_buf(&mut buffer).await;
+        let io_result = monoio::select! {
+          biased;
+
+          result = reader.read_buf(&mut buffer) => {
+            result
+          }
+          _ => read_cancel_clone.cancelled() => {
+            break;
+          }
+        };
         if let Ok(n) = io_result.as_ref() {
           if n == &0 {
             break;
@@ -72,6 +85,7 @@ impl SendRwStream {
     Self {
       rx: Box::pin(rx),
       tx: Box::pin(tx),
+      read_cancel,
     }
   }
 }
@@ -107,6 +121,7 @@ impl Stream for SendRwStream {
 impl Drop for SendRwStream {
   fn drop(&mut self) {
     self.rx.close();
+    self.read_cancel.cancel();
   }
 }
 
