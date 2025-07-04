@@ -57,7 +57,7 @@ ocsp-stapler = { version = "0.4.7", default-features = false, features = [
     "aws-lc-rs",
 ] }
 x509-parser = "0.17.0"
-rcgen = { version = "0.13.2", default-features = false, features = [
+rcgen = { version = "0.14.1", default-features = false, features = [
     "crypto",
     "aws_lc_rs",
     "pem",
