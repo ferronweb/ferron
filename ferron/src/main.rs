@@ -746,7 +746,7 @@ fn before_starting_server(
               contact: if let Some(contact) =
                 get_value!("auto_tls_contact", server_configuration).and_then(|v| v.as_str())
               {
-                vec![contact.to_string()]
+                vec![format!("mailto:{}", contact.to_string())]
               } else {
                 vec![]
               },
