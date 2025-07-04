@@ -36,7 +36,7 @@ impl SendReadStream {
           result = reader.read_buf(&mut buffer) => {
             result
           }
-          _ => read_cancel_clone.cancelled() => {
+          _ = read_cancel_clone.cancelled() => {
             break;
           }
         };
