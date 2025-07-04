@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -30,11 +31,22 @@ impl SendRwStream {
           break;
         }
         let mut buffer = BytesMut::with_capacity(buffer_sz);
-        let io_result = reader.read_buf(&mut buffer).await;
+        let io_future = reader.read_buf(&mut buffer);
+        let mut io_future_pinned = Box::pin(io_future);
+        let inner_tx_borrowed = &inner_tx;
+        let io_result = futures_util::future::poll_fn(|cx| {
+          if inner_tx_borrowed.is_closed() {
+            return Poll::Ready(Err(std::io::Error::other("The channel is closed")));
+          }
+          Pin::new(&mut io_future_pinned).poll(cx)
+        })
+        .await;
         if let Ok(n) = io_result.as_ref() {
           if n == &0 {
             break;
           }
+        } else if inner_tx.is_closed() {
+          break;
         }
         let is_err = io_result.is_err();
         if inner_tx

@@ -12,7 +12,6 @@ use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use hyper::body::{Body, Bytes, Frame};
 use hyper::header::{HeaderName, HeaderValue};
 use hyper::{header, HeaderMap, Method, Request, Response, StatusCode};
-use rustls_acme::ResolvesServerCertAcme;
 #[cfg(feature = "runtime-tokio")]
 use tokio::io::BufReader;
 #[cfg(feature = "runtime-tokio")]
@@ -378,7 +377,7 @@ async fn request_handler_wrapped(
   configurations: Arc<ServerConfigurations>,
   loggers: Loggers,
   http3_alt_port: Option<u16>,
-  acme_http_01_resolvers: Arc<Vec<Arc<ResolvesServerCertAcme>>>,
+  acme_http_01_resolvers: Arc<Vec<crate::acme::Http01DataLock>>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
   // Global configuration
   let global_configuration = configurations.find_global_configuration();
@@ -947,38 +946,41 @@ async fn request_handler_wrapped(
       .strip_prefix("/.well-known/acme-challenge/")
     {
       for acme_http01_resolver in &*acme_http_01_resolvers {
-        if let Some(acme_response) = acme_http01_resolver.get_http_01_key_auth(challenge_token) {
-          let response = Response::builder()
-            .status(StatusCode::OK)
-            .header(
-              header::CONTENT_TYPE,
-              HeaderValue::from_static("application/octet-stream"),
-            )
-            .body(
-              Full::new(Bytes::from(acme_response))
-                .map_err(|e| match e {})
-                .boxed(),
-            )
-            .unwrap_or_default();
+        if let Some(http01_acme_data) = &*acme_http01_resolver.read().await {
+          let acme_response = http01_acme_data.1.clone();
+          if challenge_token == http01_acme_data.0 {
+            let response = Response::builder()
+              .status(StatusCode::OK)
+              .header(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/octet-stream"),
+              )
+              .body(
+                Full::new(Bytes::from(acme_response))
+                  .map_err(|e| match e {})
+                  .boxed(),
+              )
+              .unwrap_or_default();
 
-          return Ok(
-            finalize_response_and_log(
-              response,
-              &configuration,
-              http3_alt_port,
-              &sanitized_url_pathname,
-              &logger,
-              log_enabled,
-              &socket_data,
-              None,
-              log_method,
-              log_request_path,
-              log_protocol,
-              log_referrer,
-              log_user_agent,
-            )
-            .await,
-          );
+            return Ok(
+              finalize_response_and_log(
+                response,
+                &configuration,
+                http3_alt_port,
+                &sanitized_url_pathname,
+                &logger,
+                log_enabled,
+                &socket_data,
+                None,
+                log_method,
+                log_request_path,
+                log_protocol,
+                log_referrer,
+                log_user_agent,
+              )
+              .await,
+            );
+          }
         }
       }
     }
@@ -1328,7 +1330,7 @@ pub async fn request_handler(
   configurations: Arc<ServerConfigurations>,
   loggers: Loggers,
   http3_alt_port: Option<u16>,
-  acme_http_01_resolvers: Arc<Vec<Arc<ResolvesServerCertAcme>>>,
+  acme_http_01_resolvers: Arc<Vec<crate::acme::Http01DataLock>>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
   let global_configuration = configurations.find_global_configuration();
   let timeout_from_config = global_configuration

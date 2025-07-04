@@ -8,8 +8,8 @@ WORKDIR /usr/src/ferron
 COPY . .
 
 # Build the actual application (cache dependencies with BuildKit)
-RUN --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/usr/local/cargo/registry \
+RUN --mount=type=cache,sharing=locked,target=/usr/local/cargo/git \
+    --mount=type=cache,sharing=locked,target=/usr/local/cargo/registry \
     --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
     cargo build --release --features ferron/config-docker-auto && \
     # Copy executables out of the cache

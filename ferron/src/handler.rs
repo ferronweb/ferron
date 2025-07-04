@@ -24,7 +24,6 @@ use monoio::net::TcpStream;
 use monoio_compat::hyper::{MonoioExecutor, MonoioIo, MonoioTimer};
 use rustls::server::Acceptor;
 use rustls::ServerConfig;
-use rustls_acme::{is_tls_alpn_challenge, ResolvesServerCertAcme};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream;
@@ -32,6 +31,7 @@ use tokio_rustls::LazyConfigAcceptor;
 #[cfg(feature = "runtime-monoio")]
 use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
 
+use crate::acme::ACME_TLS_ALPN_NAME;
 use crate::config::ServerConfigurations;
 use crate::get_value;
 use crate::listener_handler_communication::ConnectionData;
@@ -67,7 +67,7 @@ pub fn create_http_handler(
   tls_configs: HashMap<u16, Arc<ServerConfig>>,
   http3_enabled: bool,
   acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
-  acme_http_01_resolvers: Vec<Arc<ResolvesServerCertAcme>>,
+  acme_http_01_resolvers: Vec<crate::acme::Http01DataLock>,
 ) -> Result<Sender<()>, Box<dyn Error + Send + Sync>> {
   let (shutdown_tx, shutdown_rx) = async_channel::unbounded();
   let (handler_init_tx, listen_error_rx) = async_channel::unbounded();
@@ -116,7 +116,7 @@ async fn http_handler_fn(
   tls_configs: HashMap<u16, Arc<ServerConfig>>,
   http3_enabled: bool,
   acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
-  acme_http_01_resolvers: Vec<Arc<ResolvesServerCertAcme>>,
+  acme_http_01_resolvers: Vec<crate::acme::Http01DataLock>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   handler_init_tx.send(None).await.unwrap_or_default();
 
@@ -247,7 +247,7 @@ async fn http_tcp_handler_fn(
   http3_enabled: bool,
   connection_reference: Arc<()>,
   acme_tls_alpn_01_config: Option<Arc<ServerConfig>>,
-  acme_http_01_resolvers: Arc<Vec<Arc<ResolvesServerCertAcme>>>,
+  acme_http_01_resolvers: Arc<Vec<crate::acme::Http01DataLock>>,
 ) {
   let _connection_reference = Arc::downgrade(&connection_reference);
   #[cfg(feature = "runtime-monoio")]
@@ -284,7 +284,13 @@ async fn http_tcp_handler_fn(
     };
 
     if let Some(acme_config) = acme_tls_alpn_01_config {
-      if is_tls_alpn_challenge(&start_handshake.client_hello()) {
+      if start_handshake
+        .client_hello()
+        .alpn()
+        .into_iter()
+        .flatten()
+        .eq([ACME_TLS_ALPN_NAME])
+      {
         match start_handshake.into_stream(acme_config).await {
           Ok(_) => (),
           Err(err) => {

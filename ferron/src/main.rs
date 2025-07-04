@@ -1,3 +1,4 @@
+mod acme;
 mod config;
 mod handler;
 mod listener_handler_communication;
@@ -12,7 +13,6 @@ mod util;
 
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::fmt::Write;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -21,7 +21,7 @@ use std::thread;
 use std::time::Duration;
 
 use async_channel::{Receiver, Sender};
-use async_trait::async_trait;
+use base64::Engine;
 use chrono::{DateTime, Local};
 use clap::{crate_version, Arg, ArgAction, ArgMatches, Command};
 use config::adapters::ConfigurationAdapter;
@@ -32,6 +32,7 @@ use config::ServerConfigurations;
 use futures_util::stream::StreamExt;
 use handler::create_http_handler;
 use human_panic::{setup_panic, Metadata};
+use instant_acme::{ChallengeType, LetsEncrypt};
 use listener_handler_communication::ConnectionData;
 use listener_quic::create_quic_listener;
 use listener_tcp::create_tcp_listener;
@@ -45,16 +46,16 @@ use rustls::server::{ResolvesServerCert, WebPkiClientVerifier};
 use rustls::sign::CertifiedKey;
 use rustls::version::{TLS12, TLS13};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
-use rustls_acme::acme::ACME_TLS_ALPN_NAME;
-use rustls_acme::caches::{CompositeCache, DirCache};
-use rustls_acme::{AccountCache, AcmeConfig, ResolvesServerCertAcme, UseChallenge};
 use rustls_native_certs::load_native_certs;
 use rustls_platform_verifier::BuilderVerifierExt;
-use sha2::{Digest, Sha256};
 use tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
 use tokio::io::{AsyncWriteExt, BufWriter};
 use util::{get_entry, get_value, get_values};
+use xxhash_rust::xxh3::xxh3_128;
 
+use crate::acme::{
+  provision_certificate, AcmeCache, AcmeConfig, AcmeResolver, TlsAlpn01Resolver, ACME_TLS_ALPN_NAME,
+};
 use crate::logging::{LoggerFilter, LoggersBuilder};
 use crate::util::NoServerVerifier;
 
@@ -527,8 +528,8 @@ fn before_starting_server(
     let mut certified_keys_to_preload: HashMap<u16, Vec<Arc<CertifiedKey>>> = HashMap::new();
     let mut used_sni_hostnames = HashSet::new();
     let mut automatic_tls_used_sni_hostnames = HashSet::new();
-    let mut acme_tls_alpn_01_resolvers: HashMap<u16, CustomSniResolver> = HashMap::new();
-    let mut acme_http_01_resolvers: Vec<Arc<ResolvesServerCertAcme>> = Vec::new();
+    let mut acme_tls_alpn_01_resolvers: HashMap<u16, TlsAlpn01Resolver> = HashMap::new();
+    let mut acme_http_01_resolvers: Vec<crate::acme::Http01DataLock> = Vec::new();
     let acme_default_directory = dirs::data_local_dir().and_then(|mut p| {
       p.push("ferron-acme");
       p.into_os_string().into_string().ok()
@@ -673,7 +674,7 @@ fn before_starting_server(
                   }
                   continue;
                 }
-                UseChallenge::Http01
+                ChallengeType::Http01
               }
               "TLS-ALPN-01" => {
                 if is_wildcard_domain {
@@ -689,39 +690,14 @@ fn before_starting_server(
                   }
                   continue;
                 }
-                UseChallenge::TlsAlpn01
+                ChallengeType::TlsAlpn01
               }
               unsupported => Err(anyhow::anyhow!(
                 "Unsupported ACME challenge type: {}",
                 unsupported
               ))?,
             };
-            let mut acme_config = AcmeConfig::new_with_client_config(
-              vec![&sni_hostname],
-              Arc::new(
-                (if get_value!("auto_tls_no_verification", server_configuration)
-                  .and_then(|v| v.as_bool())
-                  .unwrap_or(false)
-                {
-                  ClientConfig::builder_with_provider(crypto_provider.clone())
-                    .with_safe_default_protocol_versions()?
-                    .dangerous()
-                    .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
-                } else {
-                  ClientConfig::builder_with_provider(crypto_provider.clone())
-                    .with_safe_default_protocol_versions()?
-                    .with_platform_verifier()?
-                })
-                .with_no_client_auth(),
-              ),
-            )
-            .challenge_type(challenge_type);
-            if let Some(acme_contact) =
-              get_value!("auto_tls_contact", server_configuration).and_then(|v| v.as_str())
-            {
-              acme_config = acme_config.contact_push(format!("mailto:{acme_contact}"));
-            }
-            let mut acme_config_with_cache =
+            let (account_cache_path, cert_cache_path) =
               if let Some(acme_cache_path) = get_value!("auto_tls_cache", server_configuration)
                 .map_or(acme_default_directory.as_deref(), |v| {
                   if v.is_null() {
@@ -738,42 +714,79 @@ fn before_starting_server(
                   Err(_) => Err(anyhow::anyhow!("Invalid ACME cache path"))?,
                 };
                 let base_pathbuf = pathbuf.clone();
-                let mut hasher = Sha256::new();
-                hasher.update(format!("{automatic_tls_port}-{sni_hostname}"));
-                let append_hash = hasher
-                  .finalize()
-                  .iter()
-                  .fold(String::new(), |mut output, b| {
-                    let _ = write!(output, "{b:02x}");
-                    output
-                  });
+                let append_hash = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+                  xxh3_128(format!("{automatic_tls_port}-{sni_hostname}").as_bytes()).to_be_bytes(),
+                );
                 pathbuf.push(append_hash);
-                let cert_cache = DirCache::new(pathbuf);
-                let account_cache = DirCache::new(base_pathbuf);
-                acme_config.cache(CompositeCache::new(cert_cache, account_cache))
+                (Some(base_pathbuf), Some(pathbuf))
               } else {
-                acme_config.cache(CompositeCache::new(
-                  rustls_acme::caches::NoCache::<std::io::Error, std::convert::Infallible>::default(
-                  ),
-                  MemoryAccountCache::from_data(memory_acme_account_cache_data.clone()),
-                ))
+                (None, None)
               };
-            if let Some(auto_tls_directory) =
-              get_value!("auto_tls_directory", server_configuration).and_then(|v| v.as_str())
-            {
-              acme_config_with_cache = acme_config_with_cache.directory(auto_tls_directory);
-            } else {
-              acme_config_with_cache = acme_config_with_cache.directory_lets_encrypt(
-                get_value!("auto_tls_letsencrypt_production", server_configuration)
+            let certified_key_lock = Arc::new(tokio::sync::RwLock::new(None));
+            let tls_alpn_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
+            let http_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
+            let acme_config = AcmeConfig {
+              rustls_client_config:
+                (if get_value!("auto_tls_no_verification", server_configuration)
                   .and_then(|v| v.as_bool())
-                  .unwrap_or(true),
-              );
-            }
-            let mut acme_state = acme_config_with_cache.state();
-            let acme_resolver = acme_state.resolver();
+                  .unwrap_or(false)
+                {
+                  ClientConfig::builder_with_provider(crypto_provider.clone())
+                    .with_safe_default_protocol_versions()?
+                    .dangerous()
+                    .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
+                } else {
+                  ClientConfig::builder_with_provider(crypto_provider.clone())
+                    .with_safe_default_protocol_versions()?
+                    .with_platform_verifier()?
+                })
+                .with_no_client_auth(),
+              domains: vec![sni_hostname.clone()],
+              challenge_type,
+              contact: if let Some(contact) =
+                get_value!("auto_tls_contact", server_configuration).and_then(|v| v.as_str())
+              {
+                vec![contact.to_string()]
+              } else {
+                vec![]
+              },
+              directory: if let Some(directory) =
+                get_value!("auto_tls_directory", server_configuration).and_then(|v| v.as_str())
+              {
+                directory.to_string()
+              } else if get_value!("auto_tls_letsencrypt_production", server_configuration)
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true)
+              {
+                LetsEncrypt::Production.url().to_string()
+              } else {
+                LetsEncrypt::Staging.url().to_string()
+              },
+              account_cache: if let Some(account_cache_path) = account_cache_path {
+                AcmeCache::File(account_cache_path)
+              } else {
+                AcmeCache::Memory(memory_acme_account_cache_data.clone())
+              },
+              certificate_cache: if let Some(cert_cache_path) = cert_cache_path {
+                AcmeCache::File(cert_cache_path)
+              } else {
+                AcmeCache::Memory(Arc::new(tokio::sync::RwLock::new(HashMap::new())))
+              },
+              certified_key_lock: certified_key_lock.clone(),
+              tls_alpn_01_data_lock: tls_alpn_01_data_lock.clone(),
+              http_01_data_lock: http_01_data_lock.clone(),
+            };
+            let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock));
             let acme_logger_option = global_logger.clone();
             secondary_runtime_ref.spawn(async move {
               tokio::time::sleep(Duration::from_millis(50 * acme_resolver_count)).await;
+              let mut acme_state =
+                futures_util::stream::unfold((acme_config, true), |(mut config, first_time)| {
+                  Box::pin(async move {
+                    let result = provision_certificate(&mut config, first_time).await;
+                    Some((result, (config, false)))
+                  })
+                });
               while let Some(acme_result) = acme_state.next().await {
                 if let Err(acme_error) = acme_result {
                   if let Some(acme_logger) = &acme_logger_option {
@@ -791,17 +804,15 @@ fn before_starting_server(
             acme_resolver_count += 1;
             match &*challenge_type_str.to_uppercase() {
               "HTTP-01" => {
-                acme_http_01_resolvers.push(acme_resolver.clone());
+                acme_http_01_resolvers.push(http_01_data_lock);
               }
               "TLS-ALPN-01" => {
-                // We think that the SNI hostnames for ACME certificate resolution are the same as the resolved domain names,
-                // at least for Let's Encrypt ACME endpoints...
                 if let Some(sni_resolver) = acme_tls_alpn_01_resolvers.get_mut(&automatic_tls_port)
                 {
-                  sni_resolver.load_host_resolver(&sni_hostname, acme_resolver.clone());
+                  sni_resolver.load_resolver(tls_alpn_01_data_lock);
                 } else {
-                  let mut sni_resolver = CustomSniResolver::new();
-                  sni_resolver.load_host_resolver(&sni_hostname, acme_resolver.clone());
+                  let mut sni_resolver = TlsAlpn01Resolver::new();
+                  sni_resolver.load_resolver(tls_alpn_01_data_lock);
                   acme_tls_alpn_01_resolvers.insert(automatic_tls_port, sni_resolver);
                 }
               }
@@ -1234,62 +1245,5 @@ fn main() {
         std::process::exit(1);
       }
     };
-  }
-}
-
-/// In-memory ACME account cache
-#[allow(clippy::type_complexity)]
-struct MemoryAccountCache {
-  inner: Arc<tokio::sync::RwLock<HashMap<(Vec<String>, String), Vec<u8>>>>,
-}
-
-impl MemoryAccountCache {
-  /// Creates a new in-memory ACME account cache
-  #[allow(dead_code)]
-  fn new() -> Self {
-    Self {
-      inner: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-    }
-  }
-
-  /// Creates a new in-memory ACME account cache from existing data
-  #[allow(dead_code, clippy::type_complexity)]
-  fn from_data(data: Arc<tokio::sync::RwLock<HashMap<(Vec<String>, String), Vec<u8>>>>) -> Self {
-    Self {
-      inner: data.clone(),
-    }
-  }
-}
-
-#[async_trait]
-impl AccountCache for MemoryAccountCache {
-  type EA = std::io::Error;
-
-  async fn load_account(
-    &self,
-    contact: &[String],
-    directory_url: &str,
-  ) -> Result<Option<Vec<u8>>, Self::EA> {
-    Ok(
-      self
-        .inner
-        .read()
-        .await
-        .get(&(contact.to_vec(), directory_url.to_string()))
-        .cloned(),
-    )
-  }
-
-  async fn store_account(
-    &self,
-    contact: &[String],
-    directory_url: &str,
-    account: &[u8],
-  ) -> Result<(), Self::EA> {
-    self.inner.write().await.insert(
-      (contact.to_vec(), directory_url.to_string()),
-      account.to_vec(),
-    );
-    Ok(())
   }
 }
