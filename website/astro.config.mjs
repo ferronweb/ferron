@@ -23,7 +23,9 @@ export default defineConfig({
     react(),
     sitemap(),
     pagefind(),
-    (await import("astro-compress")).default()
+    (await import("astro-compress")).default({
+      HTML: false
+    })
   ],
   markdown: {
     shikiConfig: {
