@@ -19,7 +19,12 @@ export default defineConfig({
       chunkSizeWarningLimit: 600
     }
   },
-  integrations: [react(), sitemap(), pagefind()],
+  integrations: [
+    react(),
+    sitemap(),
+    pagefind(),
+    (await import("astro-compress")).default()
+  ],
   markdown: {
     shikiConfig: {
       theme: "nord",
