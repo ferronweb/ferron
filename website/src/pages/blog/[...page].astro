@@ -1,15 +1,15 @@
 ---
 import { getCollection } from "astro:content";
-import MainLayout from "../../../layouts/MainLayout.astro";
+import MainLayout from "../../layouts/MainLayout.astro";
 import type { GetStaticPathsOptions } from "astro";
 import { format } from "date-fns";
-import FontAwesomeIcon from "../../../components/FontAwesomeIcon.astro";
+import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
 import {
   faChevronLeft,
   faChevronRight,
   faExternalLink
 } from "@fortawesome/free-solid-svg-icons";
-import blogMissing from "../../../assets/blog-missing.png";
+import blogMissing from "../../assets/blog-missing.png";
 import { Image } from "astro:assets";
 
 // prettier-ignore
@@ -121,7 +121,11 @@ if (begPage < 1) {
                   <li>
                     <a
                       class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-10 w-10"
-                      href={`/blog/page/${currentPage - 1}`}
+                      href={
+                        currentPage - 1 == 1
+                          ? "/blog"
+                          : `/blog/${currentPage - 1}`
+                      }
                     >
                       <FontAwesomeIcon icon={faChevronLeft} />
                     </a>
@@ -132,7 +136,9 @@ if (begPage < 1) {
                     <li>
                       <a
                         class={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${currentPage === begPage + i ? "bg-accent/75 text-accent-foreground" : ""} hover:bg-accent hover:text-accent-foreground h-10 w-10`}
-                        href={`/blog/page/${begPage + i}`}
+                        href={
+                          begPage + i == 1 ? "/blog" : `/blog/${begPage + i}`
+                        }
                       >
                         {begPage + i}
                       </a>
@@ -143,7 +149,11 @@ if (begPage < 1) {
                   <li>
                     <a
                       class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-10 w-10"
-                      href={`/blog/page/${currentPage + 1}`}
+                      href={
+                        currentPage + 1 == 1
+                          ? "/blog"
+                          : `/blog/${currentPage + 1}`
+                      }
                     >
                       <FontAwesomeIcon icon={faChevronRight} />
                     </a>
