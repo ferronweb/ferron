@@ -2,19 +2,18 @@
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import Root from "./Root.astro";
-// import Banner from "../components/Banner.astro";
+import Banner from "../components/Banner.astro";
 ---
 
 <Root {...Astro.props}>
   {
-    /*<Banner>
-    <p>
-      We have just released Ferron 1.0.0! <a
-        href="/blog/ferron-1-0-0-a-new-era-for-web-servers"
-        >Read the blog post</a
-      >
-    </p>
-  </Banner>*/
+    (
+      <Banner>
+        <p>
+          <strong>Notice:</strong> Ferron 2.0.0 is currently in beta.
+        </p>
+      </Banner>
+    )
   }
   <Header />
   <div class="grow">
