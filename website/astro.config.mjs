@@ -10,7 +10,7 @@ import kdl from "./kdl.tmLanguage.json";
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://www.ferronweb.org",
+  site: "https://v2.ferronweb.org",
 
   vite: {
     plugins: [tailwindcss()],
