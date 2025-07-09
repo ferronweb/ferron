@@ -51,6 +51,12 @@ example.com {
 
 This DNS provider uses [Porkbun API](https://porkbun.com/api/json/v3/documentation) to authenticate and authorize ACME-related DNS records.
 
+### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="porkbun" api_key="your_api_key" secret_key="your_secret_key"
+```
+
 #### Additional props
 
 - `api_key` - Porkbun API key (required)
@@ -60,9 +66,15 @@ This DNS provider uses [Porkbun API](https://porkbun.com/api/json/v3/documentati
 
 This DNS provider uses [RFC 2136 protocol](https://tools.ietf.org/html/rfc2136) to authenticate and authorize ACME-related DNS records. This provider can be used with servers that support RFC 2136. like Bind9.
 
+### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="rfc2136" server="udp://127.0.0.1:53" key_name="dnskey" key_secret="your_key_secret" key_algorithm="hmac-sha256"
+```
+
 #### Additional props
 
-- `server` - DNS server address (required)
+- `server` - DNS server address URL, with either "tcp" or "udp" scheme (required)
 - `key_name` - DNS server key name (required)
 - `key_secret` - DNS server key secret (required)
 - `key_algorithm` - DNS server key algorithm. Supported values are `hmac-md5`, `gss`, `hmac-sha1`, `hmac-sha224`, `hmac-sha256`, `hmac-sha256-128`, `hmac-sha384`, `hmac-sha384-192`, `hmac-sha512` and `hmac-sha512-256` (required)
