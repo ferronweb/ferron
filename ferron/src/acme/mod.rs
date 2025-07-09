@@ -4,6 +4,7 @@ use std::{
   collections::HashMap,
   error::Error,
   future::Future,
+  net::IpAddr,
   ops::{Deref, Sub},
   path::PathBuf,
   pin::Pin,
@@ -268,7 +269,13 @@ pub async fn provision_certificate(
   let acme_identifiers_vec = config
     .domains
     .iter()
-    .map(|s| Identifier::Dns(s.to_string()))
+    .map(|s| {
+      if let Ok(ip) = s.parse::<IpAddr>() {
+        Identifier::Ip(ip)
+      } else {
+        Identifier::Dns(s.to_string())
+      }
+    })
     .collect::<Vec<_>>();
 
   let mut acme_new_order = NewOrder::new(&acme_identifiers_vec);

@@ -676,6 +676,18 @@ fn before_starting_server(
                 }
               })
               .unwrap_or(HashMap::new());
+            if sni_hostname.parse::<IpAddr>().is_ok() {
+              if let Some(logging_tx) = &global_logger {
+                logging_tx
+                                  .send_blocking(LogMessage::new(
+                                      format!(
+                                          "Ferron's automatic TLS functionality doesn't support IP address-based identifiers, skipping SNI host \"{sni_hostname}\"..."
+                                      ),
+                                      true,
+                                  ))
+                                  .unwrap_or_default();
+              }
+            }
             let challenge_type = match &*challenge_type_str.to_uppercase() {
               "HTTP-01" => {
                 if is_wildcard_domain {
