@@ -53,5 +53,5 @@ This DNS provider uses [Porkbun API](https://porkbun.com/api/json/v3/documentati
 
 #### Additional props
 
-- `api_key` - Porkbun API key
-- `secret_key` - Porkbun secret API key
+- `api_key` - Porkbun API key (required)
+- `secret_key` - Porkbun secret API key (required)
