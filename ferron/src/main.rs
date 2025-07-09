@@ -29,7 +29,6 @@ use config::processing::{
   load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration,
 };
 use config::ServerConfigurations;
-use futures_util::stream::StreamExt;
 use handler::create_http_handler;
 use human_panic::{setup_panic, Metadata};
 use instant_acme::{ChallengeType, LetsEncrypt};
@@ -534,8 +533,8 @@ fn before_starting_server(
       p.push("ferron-acme");
       p.into_os_string().into_string().ok()
     });
-    let mut acme_resolver_count: u64 = 0;
     let memory_acme_account_cache_data = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+    let mut acme_configs = Vec::new();
 
     // Iterate server configurations (TLS configuration)
     for server_configuration in &server_configurations.inner {
@@ -923,33 +922,7 @@ fn before_starting_server(
               },
             };
             let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock));
-            let acme_logger_option = global_logger.clone();
-            secondary_runtime_ref.spawn(async move {
-              if acme_resolver_count > 0 {
-                tokio::time::sleep(Duration::from_millis((50 * acme_resolver_count) + 200)).await;
-              }
-              let mut acme_state =
-                futures_util::stream::unfold((acme_config, true), |(mut config, first_time)| {
-                  Box::pin(async move {
-                    let result = provision_certificate(&mut config, first_time).await;
-                    Some((result, (config, false)))
-                  })
-                });
-              while let Some(acme_result) = acme_state.next().await {
-                if let Err(acme_error) = acme_result {
-                  if let Some(acme_logger) = &acme_logger_option {
-                    acme_logger
-                      .send(LogMessage::new(
-                        format!("Error while obtaining a TLS certificate: {acme_error}"),
-                        true,
-                      ))
-                      .await
-                      .unwrap_or_default();
-                  }
-                }
-              }
-            });
-            acme_resolver_count += 1;
+            acme_configs.push(acme_config);
             match &*challenge_type_str.to_uppercase() {
               "HTTP-01" => {
                 acme_http_01_resolvers.push(http_01_data_lock);
@@ -986,6 +959,30 @@ fn before_starting_server(
           }
         }
       }
+    }
+
+    if !acme_configs.is_empty() {
+      // Spawn a task to handle ACME certificate provisioning, one certificate at time
+
+      let acme_logger_option = global_logger.clone();
+      secondary_runtime_ref.spawn(async move {
+        loop {
+          for acme_config in &mut acme_configs {
+            if let Err(acme_error) = provision_certificate(acme_config).await {
+              if let Some(acme_logger) = &acme_logger_option {
+                acme_logger
+                  .send(LogMessage::new(
+                    format!("Error while obtaining a TLS certificate: {acme_error}"),
+                    true,
+                  ))
+                  .await
+                  .unwrap_or_default();
+              }
+            }
+          }
+          tokio::time::sleep(Duration::from_secs(10)).await;
+        }
+      });
     }
 
     // If HTTP/1.1 isn't enabled, don't listen to non-encrypted ports

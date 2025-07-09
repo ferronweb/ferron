@@ -130,12 +130,7 @@ fn check_certificate_validity(x509_certificate: &X509Certificate) -> bool {
 /// Provisions TLS certificates using the ACME protocol.
 pub async fn provision_certificate(
   config: &mut AcmeConfig,
-  first_time: bool,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
-  if !first_time {
-    tokio::time::sleep(Duration::from_secs(10)).await;
-  }
-
   if let Some(certified_key) = config.certified_key_lock.read().await.as_deref() {
     if let Some(certificate) = certified_key.cert.first() {
       let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
