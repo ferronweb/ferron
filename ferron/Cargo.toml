@@ -145,6 +145,10 @@ dirs = "6.0.0"
 # Rate limitation
 tokenbucket = { version = "0.1.6", optional = true }
 
+# Automatic TLS DNS-01 challenge
+hickory-resolver = "0.25.2"
+porkbun-api = { version = "1.0.1", optional = true }
+
 # Performance & Utilities
 mimalloc = { workspace = true }
 memchr = { version = "2.7.4", optional = true }
@@ -167,6 +171,7 @@ winresource = "0.1.19"
 
 [features]
 default = [
+    "acmedns-porkbun",
     "cache",
     "config-yaml-legacy",
     "cgi",
@@ -181,6 +186,7 @@ default = [
     "static",
 ]
 default-tokio = [
+    "acmedns-porkbun",
     "cache",
     "config-yaml-legacy",
     "cgi",
@@ -194,6 +200,7 @@ default-tokio = [
     "scgi",
     "static",
 ]
+acmedns-porkbun = ["porkbun-api"]
 asgi = ["pyo3", "pyo3-async-runtimes", "tokio-tungstenite", "hyper-tungstenite"]
 cache = ["cache_control", "itertools", "papaya", "ahash"]
 cgi = ["async-process", "httparse", "memchr"]

@@ -172,8 +172,8 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the directory to store cached ACME data, such as cached account data and certifies. Default: OS-specific directory, for example on GNU/Linux it can be `/home/user/.local/share/ferron-acme` for the "user" user, on macOS it can be `/Users/user/Library/Application Support/ferron-acme` for the "user" user, on Windows it can be `C:\Users\user\AppData\Local\ferron-acme` for the "user" user.
 - `auto_tls_letsencrypt_production [enable_auto_tls_letsencrypt_production: bool]`
   - This directive specifies whenever the production Let's Encrypt ACME endpoint is used. If set as `auto_tls_letsencrypt_production #false`, the staging Let's Encrypt ACME endpoint is used. Default: `auto_tls_letsencrypt_production #true`
-- `auto_tls_challenge <acme_challenge_type: string>`
-  - This directive specifies the used ACME challenge type. The supported types are `"http-01"` (HTTP-01 ACME challenge) and `"tls-alpn-01"` (TLS-ALPN-01 ACME challenge). Default: `auto_tls_challenge "tls-alpn-01"`
+- `auto_tls_challenge <acme_challenge_type: string> [provider=<acme_challenge_provider: string>] [...]`
+  - This directive specifies the used ACME challenge type. The supported types are `"http-01"` (HTTP-01 ACME challenge), `"tls-alpn-01"` (TLS-ALPN-01 ACME challenge) and `"dns-01"` (DNS-01 ACME challenge; Ferron UNRELEASED or newer). The `provider` prop defines the DNS provider to use for DNS-01 challenges. Additional props can be passed as parameters for the DNS provider, see automatic TLS documentation. Default: `auto_tls_challenge "tls-alpn-01"`
 - `auto_tls_directory <auto_tls_directory: string>` (Ferron 2.0.0-beta.3 or newer)
   - This directive specifies the ACME directory from which the certificates are obtained. Overrides `auto_tls_letsencrypt_production` directive. Default: none
 - `auto_tls_no_verification [auto_tls_no_verification: bool]` (Ferron 2.0.0-beta.3 or newer)

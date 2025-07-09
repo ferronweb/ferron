@@ -1,3 +1,5 @@
+pub mod dns;
+
 use std::{
   collections::HashMap,
   error::Error,
@@ -32,6 +34,8 @@ use tokio::sync::RwLock;
 use x509_parser::prelude::{FromDer, X509Certificate};
 use xxhash_rust::xxh3::xxh3_128;
 
+use crate::acme::dns::DnsProvider;
+
 pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 const SECONDS_BEFORE_RENEWAL: u64 = 86400; // 1 day before expiration
 
@@ -60,6 +64,8 @@ pub struct AcmeConfig {
   pub tls_alpn_01_data_lock: TlsAlpn01DataLock,
   /// The lock for managing the HTTP-01 data.
   pub http_01_data_lock: Http01DataLock,
+  /// The ACME DNS provider.
+  pub dns_provider: Option<Arc<dyn DnsProvider + Send + Sync>>,
 }
 
 /// Represents the type of cache to use for storing ACME data.
@@ -239,6 +245,7 @@ pub async fn provision_certificate(
   };
 
   let mut acme_order = acme_account.new_order(&acme_new_order).await?;
+  let mut dns_01_identifiers = Vec::new();
   let acme_authorizations = acme_order.authorizations().await?;
   for acme_authorization in acme_authorizations {
     let Identifier::Dns(identifier) = acme_authorization.identifier;
@@ -291,6 +298,22 @@ pub async fn provision_certificate(
         *config.http_01_data_lock.write().await =
           Some((challenge.token.clone(), key_auth_value.to_string()));
       }
+      ChallengeType::Dns01 => {
+        if let Some(dns_provider) = &config.dns_provider {
+          dns_provider
+            .remove_acme_txt_record(&identifier)
+            .await
+            .unwrap_or_default();
+          dns_provider
+            .set_acme_txt_record(&identifier, &key_authorization.dns_value())
+            .await?;
+          // Wait for DNS propagation
+          tokio::time::sleep(Duration::from_secs(60)).await;
+          dns_01_identifiers.push(identifier.clone());
+        } else {
+          Err(anyhow::anyhow!("No DNS provider configured."))?;
+        }
+      }
       _ => (),
     }
 
@@ -312,42 +335,60 @@ pub async fn provision_certificate(
     ))?;
   }
 
-  let mut params = CertificateParams::new(config.domains.clone())?;
-  params.distinguished_name = DistinguishedName::new();
-  let key_pair = KeyPair::generate()?;
-  let csr = params.serialize_request(&key_pair)?;
-  let csr_der = csr.der().deref();
+  let finalize_closure = async {
+    let mut params = CertificateParams::new(config.domains.clone())?;
+    params.distinguished_name = DistinguishedName::new();
+    let key_pair = KeyPair::generate()?;
+    let csr = params.serialize_request(&key_pair)?;
+    let csr_der = csr.der().deref();
 
-  acme_order.finalize(csr_der).await?;
-  let cert_chain_pem = loop {
-    match acme_order.certificate().await.unwrap() {
-      Some(cert_chain_pem) => break cert_chain_pem,
-      None => tokio::time::sleep(Duration::from_secs(5)).await,
+    acme_order.finalize(csr_der).await?;
+    let cert_chain_pem = loop {
+      match acme_order.certificate().await.unwrap() {
+        Some(cert_chain_pem) => break cert_chain_pem,
+        None => tokio::time::sleep(Duration::from_secs(5)).await,
+      }
+    };
+
+    let certificate_cache_data = CertificateCacheData {
+      certificate_chain_pem: cert_chain_pem.clone(),
+      private_key_pem: key_pair.serialize_pem(),
+    };
+
+    set_in_cache(
+      &config.certificate_cache,
+      &certificate_cache_key,
+      serde_json::to_vec(&certificate_cache_data)?,
+    )
+    .await?;
+
+    let certs = rustls_pemfile::certs(&mut std::io::Cursor::new(cert_chain_pem.as_bytes()))
+      .collect::<Result<Vec<_>, _>>()?;
+    let private_key = PrivateKeyDer::try_from(key_pair.serialize_der())?;
+
+    let signing_key = CryptoProvider::get_default()
+      .ok_or(anyhow::anyhow!("Cannot get default crypto provider"))?
+      .key_provider
+      .load_private_key(private_key)?;
+
+    *config.certified_key_lock.write().await =
+      Some(Arc::new(CertifiedKey::new(certs, signing_key)));
+
+    Ok::<_, Box<dyn Error + Send + Sync>>(())
+  };
+
+  if let Err(finalize_error) = finalize_closure.await {
+    // Cleanup
+    if let Some(dns_provider) = &config.dns_provider {
+      for identifier in dns_01_identifiers {
+        dns_provider
+          .remove_acme_txt_record(&identifier)
+          .await
+          .unwrap_or_default();
+      }
     }
-  };
-
-  let certificate_cache_data = CertificateCacheData {
-    certificate_chain_pem: cert_chain_pem.clone(),
-    private_key_pem: key_pair.serialize_pem(),
-  };
-
-  set_in_cache(
-    &config.certificate_cache,
-    &certificate_cache_key,
-    serde_json::to_vec(&certificate_cache_data)?,
-  )
-  .await?;
-
-  let certs = rustls_pemfile::certs(&mut std::io::Cursor::new(cert_chain_pem.as_bytes()))
-    .collect::<Result<Vec<_>, _>>()?;
-  let private_key = PrivateKeyDer::try_from(key_pair.serialize_der())?;
-
-  let signing_key = CryptoProvider::get_default()
-    .ok_or(anyhow::anyhow!("Cannot get default crypto provider"))?
-    .key_provider
-    .load_private_key(private_key)?;
-
-  *config.certified_key_lock.write().await = Some(Arc::new(CertifiedKey::new(certs, signing_key)));
+    Err(finalize_error)?;
+  }
 
   Ok(())
 }

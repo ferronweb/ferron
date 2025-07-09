@@ -656,9 +656,26 @@ fn before_starting_server(
         if !is_auto_tls_sni_hostname_used {
           if let Some(sni_hostname) = sni_hostname {
             let is_wildcard_domain = sni_hostname.starts_with("*.");
-            let challenge_type_str = get_value!("auto_tls_challenge", server_configuration)
+            let challenge_type_entry = get_entry!("auto_tls_challenge", server_configuration);
+            let challenge_type_str = challenge_type_entry
+              .and_then(|e| e.values.first())
               .and_then(|v| v.as_str())
               .unwrap_or("tls-alpn-01");
+            let challenge_params = challenge_type_entry
+              .and_then(|e| {
+                let mut props_str = HashMap::new();
+                for (prop_name, prop_value) in e.props.iter() {
+                  if let Some(prop_value) = prop_value.as_str() {
+                    props_str.insert(prop_name.to_string(), prop_value.to_string());
+                  }
+                }
+                if props_str.is_empty() {
+                  None
+                } else {
+                  Some(props_str)
+                }
+              })
+              .unwrap_or(HashMap::new());
             let challenge_type = match &*challenge_type_str.to_uppercase() {
               "HTTP-01" => {
                 if is_wildcard_domain {
@@ -692,6 +709,7 @@ fn before_starting_server(
                 }
                 ChallengeType::TlsAlpn01
               }
+              "DNS-01" => ChallengeType::Dns01,
               unsupported => Err(anyhow::anyhow!(
                 "Unsupported ACME challenge type: {}",
                 unsupported
@@ -775,6 +793,39 @@ fn before_starting_server(
               certified_key_lock: certified_key_lock.clone(),
               tls_alpn_01_data_lock: tls_alpn_01_data_lock.clone(),
               http_01_data_lock: http_01_data_lock.clone(),
+              dns_provider: if &*challenge_type_str.to_uppercase() != "DNS-01" {
+                None
+              } else if let Some(provider_name) = challenge_params.get("provider") {
+                match provider_name.as_str() {
+                  #[cfg(feature = "acmedns-porkbun")]
+                  "porkbun" => {
+                    let api_key = challenge_params
+                      .get("api_key")
+                      .ok_or_else(|| anyhow::anyhow!("Missing Porkbun API key"))?;
+                    let secret_key = challenge_params
+                      .get("secret_key")
+                      .ok_or_else(|| anyhow::anyhow!("Missing Porkbun secret key"))?;
+                    Some(Arc::new(
+                      crate::acme::dns::porkbun::PorkbunDnsProvider::new(api_key, secret_key),
+                    ))
+                  }
+                  /*"cloudflare" => {
+                    let api_key = challenge_params
+                      .get("api_key")
+                      .ok_or_else(|| anyhow::anyhow!("Missing Cloudflare API key"))?;
+                    let email = challenge_params
+                      .get("email")
+                      .ok_or_else(|| anyhow::anyhow!("Missing Cloudflare email"))?;
+                    Some(Arc::new(CloudflareDnsProvider::new(api_key, email)))
+                  }*/
+                  _ => Err(anyhow::anyhow!(
+                    "Unsupported DNS provider: {}",
+                    provider_name
+                  ))?,
+                }
+              } else {
+                Err(anyhow::anyhow!("No DNS provider specified"))?
+              },
             };
             let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock));
             let acme_logger_option = global_logger.clone();
