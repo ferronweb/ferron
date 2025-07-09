@@ -38,25 +38,48 @@ impl ModuleLoader for BlocklistModuleLoader {
       self
         .cache
         .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |_| {
-          let mut blocklist_str_vec = Vec::new();
-          for blocked_ip_config in global_config.map_or(vec![], |c| get_values!("block", c)) {
-            if let Some(blocked_ip) = blocked_ip_config.as_str() {
-              blocklist_str_vec.push(blocked_ip);
+          let blocklist_value_vec = global_config.map_or(vec![], |c| get_values!("block", c));
+          let blocklist = if !blocklist_value_vec.is_empty() {
+            let mut blocklist_str_vec = Vec::new();
+            for blocked_ip_config in blocklist_value_vec {
+              if let Some(blocked_ip) = blocked_ip_config.as_str() {
+                blocklist_str_vec.push(blocked_ip);
+              }
             }
-          }
 
-          let mut blocklist = IpBlockList::new();
-          blocklist.load_from_vec(blocklist_str_vec);
+            let mut blocklist = IpBlockList::new();
+            blocklist.load_from_vec(blocklist_str_vec);
+            Some(Arc::new(blocklist))
+          } else {
+            None
+          };
+
+          let allowlist_value_vec = global_config.map_or(vec![], |c| get_values!("allow", c));
+          let allowlist = if !allowlist_value_vec.is_empty() {
+            let mut allowlist_str_vec = Vec::new();
+            for allowed_ip_config in allowlist_value_vec {
+              if let Some(allowed_ip) = allowed_ip_config.as_str() {
+                allowlist_str_vec.push(allowed_ip);
+              }
+            }
+
+            let mut allowlist = IpBlockList::new();
+            allowlist.load_from_vec(allowlist_str_vec);
+            Some(Arc::new(allowlist))
+          } else {
+            None
+          };
 
           Ok(Arc::new(BlocklistModule {
-            blocklist: Arc::new(blocklist),
+            blocklist,
+            allowlist,
           }))
         })?,
     )
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {
-    vec!["block"]
+    vec!["block", "allow"]
   }
 
   fn validate_configuration(
@@ -78,18 +101,34 @@ impl ModuleLoader for BlocklistModuleLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("allow", config, used_properties) {
+      for entry in &entries.inner {
+        for value in &entry.values {
+          if !value.is_string() {
+            Err(anyhow::anyhow!("Invalid allowed IP address"))?
+          } else if let Some(value) = value.as_str() {
+            if value.parse::<IpAddr>().is_err() {
+              Err(anyhow::anyhow!("Invalid allowed IP address"))?
+            }
+          }
+        }
+      }
+    }
+
     Ok(())
   }
 }
 
 /// A blocklist module
 struct BlocklistModule {
-  blocklist: Arc<IpBlockList>,
+  allowlist: Option<Arc<IpBlockList>>,
+  blocklist: Option<Arc<IpBlockList>>,
 }
 
 impl Module for BlocklistModule {
   fn get_module_handlers(&self) -> Box<dyn ModuleHandlers> {
     Box::new(BlocklistModuleHandlers {
+      allowlist: self.allowlist.clone(),
       blocklist: self.blocklist.clone(),
     })
   }
@@ -97,7 +136,8 @@ impl Module for BlocklistModule {
 
 /// Handlers for the blocklist module
 struct BlocklistModuleHandlers {
-  blocklist: Arc<IpBlockList>,
+  allowlist: Option<Arc<IpBlockList>>,
+  blocklist: Option<Arc<IpBlockList>>,
 }
 
 #[async_trait(?Send)]
@@ -109,10 +149,15 @@ impl ModuleHandlers for BlocklistModuleHandlers {
     socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
+    let blocked = self.blocklist.as_ref().map_or(false, |blocklist| {
+      blocklist.is_blocked(socket_data.remote_addr.ip())
+    }) || !self.allowlist.as_ref().map_or(true, |allowlist| {
+      allowlist.is_blocked(socket_data.remote_addr.ip())
+    });
     Ok(ResponseData {
       request: Some(request),
       response: None,
-      response_status: if self.blocklist.is_blocked(socket_data.remote_addr.ip()) {
+      response_status: if blocked {
         Some(StatusCode::FORBIDDEN)
       } else {
         None

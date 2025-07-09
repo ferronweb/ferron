@@ -30,6 +30,7 @@ struct NonStandardCode {
   user_list: Option<Vec<String>>,
   users: Option<IpBlockList>,
   body: Option<String>,
+  not_allowed: Option<IpBlockList>,
 }
 
 /// A status codes module loader
@@ -137,6 +138,20 @@ impl ModuleLoader for StatusCodesModuleLoader {
                 }
                 None => None,
               };
+              let not_allowed = match non_standard_code_config_entry
+                .props
+                .get("not_allowed")
+                .and_then(|v| v.as_str())
+              {
+                Some(userlist) => {
+                  let users_str_vec = userlist.split(",").collect::<Vec<_>>();
+
+                  let mut users_init = IpBlockList::new();
+                  users_init.load_from_vec(users_str_vec);
+                  Some(users_init)
+                }
+                None => None,
+              };
               let body = non_standard_code_config_entry
                 .props
                 .get("body")
@@ -152,6 +167,7 @@ impl ModuleLoader for StatusCodesModuleLoader {
                 user_list,
                 users,
                 body,
+                not_allowed,
               });
             }
           }
@@ -302,11 +318,17 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
       let mut redirect_url = None;
       let mut url_matched = false;
 
-      if let Some(users) = &non_standard_code.users {
-        if !users.is_blocked(socket_data.remote_addr.ip()) {
-          // Don't process this non-standard code
-          continue;
-        }
+      let not_applicable = non_standard_code
+        .users
+        .as_ref()
+        .is_some_and(|allowed| allowed.is_blocked(socket_data.remote_addr.ip()))
+        || !non_standard_code
+          .not_allowed
+          .as_ref()
+          .is_none_or(|not_allowed| not_allowed.is_blocked(socket_data.remote_addr.ip()));
+      if not_applicable {
+        // Don't process this non-standard code if not applicable
+        continue;
       }
 
       if let Some(regex) = &non_standard_code.regex {
