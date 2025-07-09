@@ -93,7 +93,7 @@ auto_tls_challenge "dns-01" provider="porkbun" api_key="your_api_key" secret_key
 
 ### RFC 2136 (`rfc2136`)
 
-This DNS provider uses [RFC 2136 protocol](https://tools.ietf.org/html/rfc2136) to authenticate and authorize ACME-related DNS records. This provider can be used with servers that support RFC 2136. like Bind9.
+This DNS provider uses [RFC 2136 protocol](https://tools.ietf.org/html/rfc2136) to authenticate and authorize ACME-related DNS records. This provider can be used with servers that support RFC 2136, like Bind9.
 
 #### Example directive specification
 
