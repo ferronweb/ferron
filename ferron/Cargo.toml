@@ -45,9 +45,10 @@ hyper-rustls = { version = "0.27.7", default-features = false, features = [
     "http2",
     "native-tokio",
 ] }
-instant-acme = { version = "0.7.2", default-features = false, features = [
+instant-acme = { version = "0.8.0", default-features = false, features = [
     "hyper-rustls",
     "aws-lc-rs",
+    "rcgen",
 ] }
 rustls-native-certs = "0.8.1"
 rustls-pemfile = "2.2.0"

@@ -13,15 +13,14 @@ use std::{
 
 use base64::Engine;
 use bytes::Bytes;
-use http_body_util::Full;
 use hyper::Request;
 use hyper_util::client::legacy::Client as HyperClient;
 use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
 use instant_acme::{
-  Account, AccountCredentials, AuthorizationStatus, BytesResponse, ChallengeType, HttpClient,
-  Identifier, NewAccount, NewOrder, OrderStatus,
+  Account, AccountCredentials, AuthorizationStatus, BodyWrapper, BytesResponse, ChallengeType,
+  HttpClient, Identifier, NewAccount, NewOrder, OrderStatus, RetryPolicy,
 };
-use rcgen::{CertificateParams, CustomExtension, DistinguishedName, KeyPair};
+use rcgen::{CertificateParams, CustomExtension, KeyPair};
 use rustls::{
   crypto::CryptoProvider,
   server::{ClientHello, ResolvesServerCert},
@@ -213,33 +212,35 @@ pub async fn provision_certificate(
   let account_cache_key = get_account_cache_key(config);
   let certificate_cache_key = get_certificate_cache_key(config);
 
+  let acme_account_builder = Account::builder_with_http(Box::new(HttpsClientForAcme::new(
+    config.rustls_client_config.clone(),
+  )));
+
   let acme_account = if let Some(account_credentials_serialized) =
     get_from_cache(&config.account_cache, &account_cache_key).await
   {
     let account_credentials =
       serde_json::from_slice::<AccountCredentials>(&account_credentials_serialized)?;
-    Account::from_credentials_and_http(
-      account_credentials,
-      Box::new(HttpsClientForAcme::new(config.rustls_client_config.clone())),
-    )
-    .await?
+    acme_account_builder
+      .from_credentials(account_credentials)
+      .await?
   } else {
-    let (account, account_credentials) = Account::create_with_http(
-      &NewAccount {
-        contact: config
-          .contact
-          .iter()
-          .map(|s| s.deref())
-          .collect::<Vec<_>>()
-          .as_slice(),
-        terms_of_service_agreed: true,
-        only_return_existing: false,
-      },
-      &config.directory,
-      None,
-      Box::new(HttpsClientForAcme::new(config.rustls_client_config.clone())),
-    )
-    .await?;
+    let (account, account_credentials) = acme_account_builder
+      .create(
+        &NewAccount {
+          contact: config
+            .contact
+            .iter()
+            .map(|s| s.deref())
+            .collect::<Vec<_>>()
+            .as_slice(),
+          terms_of_service_agreed: true,
+          only_return_existing: false,
+        },
+        config.directory.clone(),
+        None,
+      )
+      .await?;
 
     set_in_cache(
       &config.account_cache,
@@ -256,34 +257,32 @@ pub async fn provision_certificate(
     .map(|s| Identifier::Dns(s.to_string()))
     .collect::<Vec<_>>();
 
-  let acme_new_order = NewOrder {
-    identifiers: &acme_identifiers_vec,
-  };
+  let acme_new_order = NewOrder::new(&acme_identifiers_vec);
 
   let mut acme_order = acme_account.new_order(&acme_new_order).await?;
   let mut dns_01_identifiers = Vec::new();
-  let acme_authorizations = acme_order.authorizations().await?;
-  for acme_authorization in acme_authorizations {
-    let Identifier::Dns(identifier) = acme_authorization.identifier;
-
+  let mut acme_authorizations = acme_order.authorizations();
+  while let Some(acme_authorization) = acme_authorizations.next().await {
+    let mut acme_authorization = acme_authorization?;
     match acme_authorization.status {
       AuthorizationStatus::Pending => {}
       AuthorizationStatus::Valid => continue,
-      _ => Err(anyhow::anyhow!(
-        "Invalid ACME authorization status for {}",
-        identifier
-      ))?,
+      _ => Err(anyhow::anyhow!("Invalid ACME authorization status"))?,
     }
 
-    let challenge = acme_authorization
-      .challenges
-      .iter()
-      .find(|c| c.r#type == config.challenge_type)
+    let mut challenge = acme_authorization
+      .challenge(config.challenge_type.clone())
       .ok_or(anyhow::anyhow!(
         "The ACME server doesn't support the requested challenge type"
       ))?;
 
-    let key_authorization = acme_order.key_authorization(challenge);
+    let identifier = match challenge.identifier().identifier {
+      Identifier::Dns(identifier) => identifier.to_string(),
+      Identifier::Ip(ip) => ip.to_string(),
+      _ => Err(anyhow::anyhow!("Unsupported ACME identifier type",))?,
+    };
+
+    let key_authorization = challenge.key_authorization();
     match config.challenge_type {
       ChallengeType::TlsAlpn01 => {
         let mut params = CertificateParams::new(vec![identifier.clone()])?;
@@ -333,42 +332,21 @@ pub async fn provision_certificate(
       _ => (),
     }
 
-    acme_order.set_challenge_ready(&challenge.url).await?;
+    challenge.set_ready().await?;
   }
 
-  while let OrderStatus::Pending = acme_order.refresh().await?.status {
-    tokio::time::sleep(Duration::from_secs(3)).await;
-  }
-
-  let acme_order_state = acme_order.state();
-  if acme_order_state.status != OrderStatus::Ready {
-    Err(anyhow::anyhow!(
-      "ACME order is not ready: {}",
-      acme_order_state
-        .error
-        .as_ref()
-        .map_or("Unknown reason".to_string(), |e| e.to_string())
-    ))?;
+  let acme_order_status = acme_order.poll_ready(&RetryPolicy::default()).await?;
+  if acme_order_status != OrderStatus::Ready {
+    Err(anyhow::anyhow!("ACME order is not ready",))?;
   }
 
   let finalize_closure = async {
-    let mut params = CertificateParams::new(config.domains.clone())?;
-    params.distinguished_name = DistinguishedName::new();
-    let key_pair = KeyPair::generate()?;
-    let csr = params.serialize_request(&key_pair)?;
-    let csr_der = csr.der().deref();
-
-    acme_order.finalize(csr_der).await?;
-    let cert_chain_pem = loop {
-      match acme_order.certificate().await.unwrap() {
-        Some(cert_chain_pem) => break cert_chain_pem,
-        None => tokio::time::sleep(Duration::from_secs(5)).await,
-      }
-    };
+    let private_key_pem = acme_order.finalize().await?;
+    let certificate_chain_pem = acme_order.poll_certificate(&RetryPolicy::default()).await?;
 
     let certificate_cache_data = CertificateCacheData {
-      certificate_chain_pem: cert_chain_pem.clone(),
-      private_key_pem: key_pair.serialize_pem(),
+      certificate_chain_pem: certificate_chain_pem.clone(),
+      private_key_pem: private_key_pem.clone(),
     };
 
     set_in_cache(
@@ -378,9 +356,17 @@ pub async fn provision_certificate(
     )
     .await?;
 
-    let certs = rustls_pemfile::certs(&mut std::io::Cursor::new(cert_chain_pem.as_bytes()))
+    let certs = rustls_pemfile::certs(&mut std::io::Cursor::new(certificate_chain_pem.as_bytes()))
       .collect::<Result<Vec<_>, _>>()?;
-    let private_key = PrivateKeyDer::try_from(key_pair.serialize_der())?;
+    let private_key =
+      (match rustls_pemfile::private_key(&mut std::io::Cursor::new(private_key_pem.as_bytes())) {
+        Ok(Some(private_key)) => Ok(private_key),
+        Ok(None) => Err(std::io::Error::new(
+          std::io::ErrorKind::InvalidData,
+          "Invalid private key",
+        )),
+        Err(err) => Err(err),
+      })?;
 
     let signing_key = CryptoProvider::get_default()
       .ok_or(anyhow::anyhow!("Cannot get default crypto provider"))?
@@ -429,7 +415,9 @@ impl ResolvesServerCert for AcmeResolver {
   }
 }
 
-struct HttpsClientForAcme(HyperClient<hyper_rustls::HttpsConnector<HttpConnector>, Full<Bytes>>);
+struct HttpsClientForAcme(
+  HyperClient<hyper_rustls::HttpsConnector<HttpConnector>, BodyWrapper<Bytes>>,
+);
 
 impl HttpsClientForAcme {
   fn new(tls_config: ClientConfig) -> Self {
@@ -449,16 +437,9 @@ impl HttpsClientForAcme {
 impl HttpClient for HttpsClientForAcme {
   fn request(
     &self,
-    req: Request<Full<Bytes>>,
+    req: Request<BodyWrapper<Bytes>>,
   ) -> Pin<Box<dyn Future<Output = Result<BytesResponse, instant_acme::Error>> + Send>> {
-    let fut = self.0.request(req);
-
-    Box::pin(async move {
-      match fut.await {
-        Ok(rsp) => Ok(BytesResponse::from(rsp)),
-        Err(e) => Err(e.into()),
-      }
-    })
+    HttpClient::request(&self.0, req)
   }
 }
 

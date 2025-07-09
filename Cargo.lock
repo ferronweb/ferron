@@ -1841,6 +1841,7 @@ dependencies = [
  "rustls 0.23.28",
  "rustls-native-certs",
  "rustls-pki-types",
+ "rustls-platform-verifier 0.6.0",
  "tokio",
  "tokio-rustls 0.26.2",
  "tower-service",
@@ -2046,9 +2047,9 @@ dependencies = [
 
 [[package]]
 name = "instant-acme"
-version = "0.7.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37221e690dcc5d0ea7c1f70decda6ae3495e72e8af06bca15e982193ffdf4fc4"
+checksum = "eafa1ff693805da8c1e150c6e1f21c83b461c1a96f92716c068b76bed7a8ef5a"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
@@ -2057,13 +2058,17 @@ dependencies = [
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
+ "httpdate",
  "hyper 1.6.0",
  "hyper-rustls 0.27.7",
  "hyper-util",
+ "rcgen",
+ "rustls 0.23.28",
  "rustls-pki-types",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
+ "tokio",
 ]
 
 [[package]]
