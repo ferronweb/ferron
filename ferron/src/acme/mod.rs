@@ -53,6 +53,8 @@ pub struct AcmeConfig {
   pub contact: Vec<String>,
   /// The directory URL for the ACME server.
   pub directory: String,
+  /// The optional ACME profile name
+  pub profile: Option<String>,
   /// The cache for storing ACME account information.
   pub account_cache: AcmeCache,
   /// The cache for storing ACME certificate information.
@@ -141,8 +143,20 @@ fn get_account_cache_key(config: &AcmeConfig) -> String {
 fn get_certificate_cache_key(config: &AcmeConfig) -> String {
   format!(
     "certificate_{}",
-    base64::engine::general_purpose::URL_SAFE_NO_PAD
-      .encode(xxh3_128(config.domains.join(",").as_bytes()).to_be_bytes())
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+      xxh3_128(
+        format!(
+          "{}{}",
+          config.domains.join(","),
+          config
+            .profile
+            .as_ref()
+            .map_or("".to_string(), |p| format!(";{p}"))
+        )
+        .as_bytes()
+      )
+      .to_be_bytes()
+    )
   )
 }
 
@@ -257,7 +271,10 @@ pub async fn provision_certificate(
     .map(|s| Identifier::Dns(s.to_string()))
     .collect::<Vec<_>>();
 
-  let acme_new_order = NewOrder::new(&acme_identifiers_vec);
+  let mut acme_new_order = NewOrder::new(&acme_identifiers_vec);
+  if let Some(profile) = &config.profile {
+    acme_new_order = acme_new_order.profile(profile);
+  }
 
   let mut acme_order = acme_account.new_order(&acme_new_order).await?;
   let mut dns_01_identifiers = Vec::new();

@@ -584,6 +584,19 @@ impl ModuleLoader for CoreModuleLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("auto_tls_profile", config, used_properties)
+    {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `auto_tls_profile` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
+          Err(anyhow::anyhow!("Invalid ACME profile name"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }

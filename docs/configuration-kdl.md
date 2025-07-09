@@ -178,6 +178,8 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the ACME directory from which the certificates are obtained. Overrides `auto_tls_letsencrypt_production` directive. Default: none
 - `auto_tls_no_verification [auto_tls_no_verification: bool]` (Ferron 2.0.0-beta.3 or newer)
   - This directive specifies whenever to disable the certificate verification of the ACME server. Default: `auto_tls_no_verification #false`
+- `auto_tls_profile <auto_tls_profile: string|null>` (Ferron UNRELEASED or newer)
+  - This directive specifies the ACME profile to use for the certificates. Default: `auto_tls_profile #null`
 
 ### Logging
 

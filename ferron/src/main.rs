@@ -780,6 +780,8 @@ fn before_starting_server(
               } else {
                 LetsEncrypt::Staging.url().to_string()
               },
+              profile: get_value!("auto_tls_profile", server_configuration)
+                .and_then(|v| v.as_str().map(|s| s.to_string())),
               account_cache: if let Some(account_cache_path) = account_cache_path {
                 AcmeCache::File(account_cache_path)
               } else {
