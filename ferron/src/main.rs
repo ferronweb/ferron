@@ -53,7 +53,8 @@ use util::{get_entry, get_value, get_values};
 use xxhash_rust::xxh3::xxh3_128;
 
 use crate::acme::{
-  provision_certificate, AcmeCache, AcmeConfig, AcmeResolver, TlsAlpn01Resolver, ACME_TLS_ALPN_NAME,
+  check_certificate_validity_or_install_cached, provision_certificate, AcmeCache, AcmeConfig,
+  AcmeResolver, TlsAlpn01Resolver, ACME_TLS_ALPN_NAME,
 };
 use crate::logging::{LoggerFilter, LoggersBuilder};
 use crate::util::NoServerVerifier;
@@ -966,6 +967,13 @@ fn before_starting_server(
 
       let acme_logger_option = global_logger.clone();
       secondary_runtime_ref.spawn(async move {
+        for acme_config in &mut acme_configs {
+          // Install the certificates from the cache if they're valid
+          check_certificate_validity_or_install_cached(acme_config)
+            .await
+            .unwrap_or_default();
+        }
+
         loop {
           for acme_config in &mut acme_configs {
             if let Err(acme_error) = provision_certificate(acme_config).await {

@@ -127,25 +127,40 @@ fn check_certificate_validity(x509_certificate: &X509Certificate) -> bool {
   false
 }
 
-/// Provisions TLS certificates using the ACME protocol.
-pub async fn provision_certificate(
+/// Determines the account cache key
+fn get_account_cache_key(config: &AcmeConfig) -> String {
+  format!(
+    "account_{}",
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+      xxh3_128(format!("{};{}", &config.contact.join(","), &config.directory).as_bytes())
+        .to_be_bytes()
+    )
+  )
+}
+
+/// Determines the certificate cache key
+fn get_certificate_cache_key(config: &AcmeConfig) -> String {
+  format!(
+    "certificate_{}",
+    base64::engine::general_purpose::URL_SAFE_NO_PAD
+      .encode(xxh3_128(config.domains.join(",").as_bytes()).to_be_bytes())
+  )
+}
+
+/// Checks if the TLS certificate (cached or live) is valid. If cached certificate is valid, installs the cached certificate
+pub async fn check_certificate_validity_or_install_cached(
   config: &mut AcmeConfig,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> Result<bool, Box<dyn Error + Send + Sync>> {
   if let Some(certified_key) = config.certified_key_lock.read().await.as_deref() {
     if let Some(certificate) = certified_key.cert.first() {
       let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
       if check_certificate_validity(&x509_certificate) {
-        // Certificate is still valid, no need to renew
-        return Ok(());
+        return Ok(true);
       }
     }
   }
 
-  let certificate_cache_key = format!(
-    "certificate_{}",
-    base64::engine::general_purpose::URL_SAFE_NO_PAD
-      .encode(xxh3_128(config.domains.join(",").as_bytes()).to_be_bytes())
-  );
+  let certificate_cache_key = get_certificate_cache_key(config);
 
   if let Some(serialized_certificate_cache_data) =
     get_from_cache(&config.certificate_cache, &certificate_cache_key).await
@@ -159,7 +174,6 @@ pub async fn provision_certificate(
     if let Some(certificate) = certs.first() {
       let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
       if check_certificate_validity(&x509_certificate) {
-        // Certificate is still valid, no need to renew
         let private_key = (match rustls_pemfile::private_key(&mut std::io::Cursor::new(
           certificate_data.private_key_pem.as_bytes(),
         )) {
@@ -179,18 +193,25 @@ pub async fn provision_certificate(
         *config.certified_key_lock.write().await =
           Some(Arc::new(CertifiedKey::new(certs, signing_key)));
 
-        return Ok(());
+        return Ok(true);
       }
     }
   }
 
-  let account_cache_key = format!(
-    "account_{}",
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
-      xxh3_128(format!("{};{}", &config.contact.join(","), &config.directory).as_bytes())
-        .to_be_bytes()
-    )
-  );
+  Ok(false)
+}
+
+/// Provisions TLS certificates using the ACME protocol.
+pub async fn provision_certificate(
+  config: &mut AcmeConfig,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+  if check_certificate_validity_or_install_cached(config).await? {
+    // Certificate is still valid, no need to renew
+    return Ok(());
+  }
+
+  let account_cache_key = get_account_cache_key(config);
+  let certificate_cache_key = get_certificate_cache_key(config);
 
   let acme_account = if let Some(account_credentials_serialized) =
     get_from_cache(&config.account_cache, &account_cache_key).await
