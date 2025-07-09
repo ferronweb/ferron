@@ -377,18 +377,19 @@ pub async fn provision_certificate(
     Ok::<_, Box<dyn Error + Send + Sync>>(())
   };
 
-  if let Err(finalize_error) = finalize_closure.await {
-    // Cleanup
-    if let Some(dns_provider) = &config.dns_provider {
-      for identifier in dns_01_identifiers {
-        dns_provider
-          .remove_acme_txt_record(&identifier)
-          .await
-          .unwrap_or_default();
-      }
+  let result = finalize_closure.await;
+
+  // Cleanup
+  if let Some(dns_provider) = &config.dns_provider {
+    for identifier in dns_01_identifiers {
+      dns_provider
+        .remove_acme_txt_record(&identifier)
+        .await
+        .unwrap_or_default();
     }
-    Err(finalize_error)?;
   }
+
+  result?;
 
   Ok(())
 }
