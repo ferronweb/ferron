@@ -809,6 +809,86 @@ fn before_starting_server(
                       crate::acme::dns::porkbun::PorkbunDnsProvider::new(api_key, secret_key),
                     ))
                   }
+                  #[cfg(feature = "acmedns-rfc2136")]
+                  "rfc2136" => {
+                    use std::net::ToSocketAddrs;
+
+                    let addr_str = challenge_params
+                      .get("server")
+                      .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 server address"))?;
+                    let addr_uri = addr_str
+                      .parse::<hyper::Uri>()
+                      .map_err(|e| anyhow::anyhow!("Invalid RFC 2136 server address: {}", e))?;
+                    let addr = match addr_uri.scheme_str() {
+                      Some("tcp") => dns_update::providers::rfc2136::DnsAddress::Tcp(
+                        addr_uri
+                          .authority()
+                          .ok_or_else(|| {
+                            anyhow::anyhow!("Missing RFC 2136 server address hostname")
+                          })?
+                          .as_str()
+                          .to_socket_addrs()
+                          .map_err(|e| {
+                            anyhow::anyhow!("Failed to resolve RFC 2136 server address: {}", e)
+                          })?
+                          .next()
+                          .ok_or_else(|| anyhow::anyhow!("No RFC 2136 server addresses found"))?,
+                      ),
+                      Some("udp") => dns_update::providers::rfc2136::DnsAddress::Udp(
+                        addr_uri
+                          .authority()
+                          .ok_or_else(|| {
+                            anyhow::anyhow!("Missing RFC 2136 server address hostname")
+                          })?
+                          .as_str()
+                          .to_socket_addrs()
+                          .map_err(|e| {
+                            anyhow::anyhow!("Failed to resolve RFC 2136 server address: {}", e)
+                          })?
+                          .next()
+                          .ok_or_else(|| anyhow::anyhow!("No RFC 2136 server addresses found"))?,
+                      ),
+                      _ => Err(anyhow::anyhow!("Invalid RFC 2136 server address scheme"))?,
+                    };
+                    let key_name = challenge_params
+                      .get("key_name")
+                      .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 key name"))?;
+                    let key = base64::engine::general_purpose::STANDARD
+                      .decode(
+                        challenge_params
+                          .get("key_secret")
+                          .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 key name"))?,
+                      )
+                      .map_err(|e| anyhow::anyhow!("Failed to decode RFC 2136 key: {}", e))?;
+                    let tsig_algorithm = match &challenge_params
+                      .get("key_algorithm")
+                      .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 TSIG algorithm"))?
+                      .to_uppercase() as &str
+                    {
+                      "HMAC-MD5" => dns_update::TsigAlgorithm::HmacMd5,
+                      "GSS" => dns_update::TsigAlgorithm::Gss,
+                      "HMAC-SHA1" => dns_update::TsigAlgorithm::HmacSha1,
+                      "HMAC-SHA224" => dns_update::TsigAlgorithm::HmacSha224,
+                      "HMAC-SHA256" => dns_update::TsigAlgorithm::HmacSha256,
+                      "HMAC-SHA256-128" => dns_update::TsigAlgorithm::HmacSha256_128,
+                      "HMAC-SHA384" => dns_update::TsigAlgorithm::HmacSha384,
+                      "HMAC-SHA384-192" => dns_update::TsigAlgorithm::HmacSha384_192,
+                      "HMAC-SHA512" => dns_update::TsigAlgorithm::HmacSha512,
+                      "HMAC-SHA512-256" => dns_update::TsigAlgorithm::HmacSha512_256,
+                      _ => Err(anyhow::anyhow!("Unsupported RFC 2136 TSIG algorithm"))?,
+                    };
+                    Some(Arc::new(
+                      crate::acme::dns::rfc2136::Rfc2136DnsProvider::new(
+                        addr,
+                        key_name,
+                        key,
+                        tsig_algorithm,
+                      )
+                      .map_err(|e| {
+                        anyhow::anyhow!("Failed to initalize RFC 2136 DNS provider: {}", e)
+                      })?,
+                    ))
+                  }
                   /*"cloudflare" => {
                     let api_key = challenge_params
                       .get("api_key")

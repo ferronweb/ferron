@@ -1,5 +1,7 @@
 #[cfg(feature = "acmedns-porkbun")]
 pub mod porkbun;
+#[cfg(feature = "acmedns-rfc2136")]
+pub mod rfc2136;
 
 use std::error::Error;
 

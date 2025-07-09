@@ -148,6 +148,7 @@ tokenbucket = { version = "0.1.6", optional = true }
 # Automatic TLS DNS-01 challenge
 hickory-resolver = "0.25.2"
 porkbun-api = { version = "1.0.1", optional = true }
+dns-update = { version = "0.1.2", optional = true }
 
 # Performance & Utilities
 mimalloc = { workspace = true }
@@ -172,6 +173,7 @@ winresource = "0.1.19"
 [features]
 default = [
     "acmedns-porkbun",
+    "acmedns-rfc2136",
     "cache",
     "config-yaml-legacy",
     "cgi",
@@ -187,6 +189,7 @@ default = [
 ]
 default-tokio = [
     "acmedns-porkbun",
+    "acmedns-rfc2136",
     "cache",
     "config-yaml-legacy",
     "cgi",
@@ -201,6 +204,7 @@ default-tokio = [
     "static",
 ]
 acmedns-porkbun = ["porkbun-api"]
+acmedns-rfc2136 = ["dns-update"]
 asgi = ["pyo3", "pyo3-async-runtimes", "tokio-tungstenite", "hyper-tungstenite"]
 cache = ["cache_control", "itertools", "papaya", "ahash"]
 cgi = ["async-process", "httparse", "memchr"]
