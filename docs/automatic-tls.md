@@ -51,7 +51,7 @@ example.com {
 
 This DNS provider uses [Porkbun API](https://porkbun.com/api/json/v3/documentation) to authenticate and authorize ACME-related DNS records.
 
-### Additional props
+#### Additional props
 
 - `api_key` - Porkbun API key
 - `secret_key` - Porkbun secret API key
