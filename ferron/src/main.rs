@@ -902,6 +902,17 @@ fn before_starting_server(
                         })?,
                     ))
                   }
+                  #[cfg(feature = "acmedns-desec")]
+                  "desec" => {
+                    let api_token = challenge_params
+                      .get("api_token")
+                      .ok_or_else(|| anyhow::anyhow!("Missing deSEC API token"))?;
+                    Some(Arc::new(
+                      crate::acme::dns::desec::DesecDnsProvider::new(api_token).map_err(|e| {
+                        anyhow::anyhow!("Failed to initalize deSEC DNS provider: {}", e)
+                      })?,
+                    ))
+                  }
                   _ => Err(anyhow::anyhow!(
                     "Unsupported DNS provider: {}",
                     provider_name

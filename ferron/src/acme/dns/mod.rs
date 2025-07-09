@@ -1,5 +1,7 @@
 #[cfg(feature = "acmedns-cloudflare")]
 pub mod cloudflare;
+#[cfg(feature = "acmedns-desec")]
+pub mod desec;
 #[cfg(feature = "acmedns-porkbun")]
 pub mod porkbun;
 #[cfg(feature = "acmedns-rfc2136")]

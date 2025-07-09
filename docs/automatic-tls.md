@@ -62,6 +62,20 @@ auto_tls_challenge "dns-01" provider="cloudflare" api_key="your_api_key" email="
 - `api_key` - Cloudflare API key (required)
 - `email` - Cloudflare account email address (optional)
 
+### deSEC (`desec`)
+
+This DNS provider uses [deSEC API](https://desec.readthedocs.io/en/latest/index.html) to authenticate and authorize ACME-related DNS records.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="desec" api_token="your_api_token"
+```
+
+#### Additional props
+
+- `api_token` - deSEC API token (required)
+
 ### Porkbun (`porkbun`)
 
 This DNS provider uses [Porkbun API](https://porkbun.com/api/json/v3/documentation) to authenticate and authorize ACME-related DNS records.
