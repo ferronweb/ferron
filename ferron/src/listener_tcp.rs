@@ -197,7 +197,7 @@ async fn tcp_listener_fn(
       tcp_socket2
         .set_linger(Some(Duration::ZERO))
         .unwrap_or_default();
-      tcp_socket2.set_nodelay(true).unwrap_or_default();
+      tcp_socket2.set_tcp_nodelay(true).unwrap_or_default();
 
       let tcp_std = tcp_socket2.into();
       ConnectionData {
