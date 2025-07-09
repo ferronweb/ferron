@@ -47,11 +47,26 @@ example.com {
 }
 ```
 
+### Cloudflare (`cloudflare`)
+
+This DNS provider uses [Cloudflare API](https://developers.cloudflare.com/api/resources/dns/) to authenticate and authorize ACME-related DNS records.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="cloudflare" api_key="your_api_key" email="your_email@example.com"
+```
+
+#### Additional props
+
+- `api_key` - Cloudflare API key (required)
+- `email` - Cloudflare account email address (optional)
+
 ### Porkbun (`porkbun`)
 
 This DNS provider uses [Porkbun API](https://porkbun.com/api/json/v3/documentation) to authenticate and authorize ACME-related DNS records.
 
-### Example directive specification
+#### Example directive specification
 
 ```kdl
 auto_tls_challenge "dns-01" provider="porkbun" api_key="your_api_key" secret_key="your_secret_key"
@@ -66,7 +81,7 @@ auto_tls_challenge "dns-01" provider="porkbun" api_key="your_api_key" secret_key
 
 This DNS provider uses [RFC 2136 protocol](https://tools.ietf.org/html/rfc2136) to authenticate and authorize ACME-related DNS records. This provider can be used with servers that support RFC 2136. like Bind9.
 
-### Example directive specification
+#### Example directive specification
 
 ```kdl
 auto_tls_challenge "dns-01" provider="rfc2136" server="udp://127.0.0.1:53" key_name="dnskey" key_secret="your_key_secret" key_algorithm="hmac-sha256"

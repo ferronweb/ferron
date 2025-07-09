@@ -172,6 +172,7 @@ winresource = "0.1.19"
 
 [features]
 default = [
+    "acmedns-cloudflare",
     "acmedns-porkbun",
     "acmedns-rfc2136",
     "cache",
@@ -188,6 +189,7 @@ default = [
     "static",
 ]
 default-tokio = [
+    "acmedns-cloudflare",
     "acmedns-porkbun",
     "acmedns-rfc2136",
     "cache",
@@ -203,6 +205,7 @@ default-tokio = [
     "scgi",
     "static",
 ]
+acmedns-cloudflare = ["dns-update"]
 acmedns-porkbun = ["porkbun-api"]
 acmedns-rfc2136 = ["dns-update"]
 asgi = ["pyo3", "pyo3-async-runtimes", "tokio-tungstenite", "hyper-tungstenite"]

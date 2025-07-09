@@ -889,15 +889,19 @@ fn before_starting_server(
                       })?,
                     ))
                   }
-                  /*"cloudflare" => {
+                  #[cfg(feature = "acmedns-cloudflare")]
+                  "cloudflare" => {
                     let api_key = challenge_params
                       .get("api_key")
                       .ok_or_else(|| anyhow::anyhow!("Missing Cloudflare API key"))?;
-                    let email = challenge_params
-                      .get("email")
-                      .ok_or_else(|| anyhow::anyhow!("Missing Cloudflare email"))?;
-                    Some(Arc::new(CloudflareDnsProvider::new(api_key, email)))
-                  }*/
+                    let email = challenge_params.get("email").map(|x| x as &str);
+                    Some(Arc::new(
+                      crate::acme::dns::cloudflare::CloudflareDnsProvider::new(api_key, email)
+                        .map_err(|e| {
+                          anyhow::anyhow!("Failed to initalize Cloudflare DNS provider: {}", e)
+                        })?,
+                    ))
+                  }
                   _ => Err(anyhow::anyhow!(
                     "Unsupported DNS provider: {}",
                     provider_name
