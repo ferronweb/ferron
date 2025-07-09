@@ -244,6 +244,8 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the request headers that are used to vary the cache entries. This directive can be specified multiple times. Default: none
 - `cache_ignore <ignored_response_header: string> [<ignored_response_header: string> ...]` (_cache_ module)
   - This directive specifies the response headers that are ignored when caching the response. This directive can be specified multiple times. Default: none
+- `file_cache_control <cache_control: string|null>` (_static_ module)
+  - This directive specifies the Cache-Control header value for static files. If set as `file_cache_control #null`, the Cache-Control header is not set. Default: `file_cache_control #null`
 
 ### Reverse proxy & load balancing
 

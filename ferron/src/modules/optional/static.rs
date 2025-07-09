@@ -336,6 +336,20 @@ impl ModuleLoader for StaticFileServingModuleLoader {
       }
     };
 
+    if let Some(entries) =
+      get_entries_for_validation!("file_cache_control", config, used_properties)
+    {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `file_cache_control` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
+          Err(anyhow::anyhow!("Invalid file cache control header value"))?
+        }
+      }
+    };
+
     Ok(())
   }
 }
@@ -567,6 +581,9 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
           if metadata.is_file() {
             // Handle file serving
 
+            // Obtain the "Cache-Control" header value
+            let cache_control = get_value!("file_cache_control", config).and_then(|v| v.as_str());
+
             // Determine if compression should be used
             let mut compression_possible = false;
 
@@ -783,15 +800,19 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                       // Client's cached version matches our current version
                       if etag_extracted == etag {
                         let etag_original = if_none_match.to_string();
+                        let mut not_modified_response = Response::builder()
+                          .status(StatusCode::NOT_MODIFIED)
+                          .header(header::ETAG, etag_strong_to_weak(&etag_original))
+                          .header(header::VARY, vary)
+                          .body(Empty::new().map_err(|e| match e {}).boxed())?;
+                        if let Some(cache_control) = cache_control {
+                          not_modified_response
+                            .headers_mut()
+                            .insert(header::CACHE_CONTROL, HeaderValue::from_str(cache_control)?);
+                        }
                         return Ok(ResponseData {
                           request: Some(request),
-                          response: Some(
-                            Response::builder()
-                              .status(StatusCode::NOT_MODIFIED)
-                              .header(header::ETAG, etag_strong_to_weak(&etag_original))
-                              .header(header::VARY, vary)
-                              .body(Empty::new().map_err(|e| match e {}).boxed())?,
-                          ),
+                          response: Some(not_modified_response),
                           response_status: None,
                           response_headers: None,
                           new_remote_address: None,
@@ -950,6 +971,10 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
                 if let Some(content_type) = content_type_option {
                   response_builder = response_builder.header(header::CONTENT_TYPE, content_type);
+                }
+
+                if let Some(cache_control) = cache_control {
+                  response_builder = response_builder.header(header::CACHE_CONTROL, cache_control);
                 }
 
                 response_builder = response_builder.header(header::VARY, vary);
@@ -1119,6 +1144,10 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
               if let Some(content_type) = content_type_option {
                 response_builder = response_builder.header(header::CONTENT_TYPE, content_type);
+              }
+
+              if let Some(cache_control) = cache_control {
+                response_builder = response_builder.header(header::CACHE_CONTROL, cache_control);
               }
 
               // Set appropriate Content-Encoding header based on compression method
