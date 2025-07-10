@@ -100,6 +100,11 @@ export default [
     label: "Compatibility with web applications",
   },
   {
+    href: "/docs/commands",
+    target: "_self",
+    label: "Commands",
+  },
+  {
     href: "/docs/ferrbench",
     target: "_self",
     label: "FerrBench",
