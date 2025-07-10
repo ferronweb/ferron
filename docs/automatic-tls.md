@@ -105,5 +105,5 @@ auto_tls_challenge "dns-01" provider="rfc2136" server="udp://127.0.0.1:53" key_n
 
 - `server` - DNS server address URL, with either "tcp" or "udp" scheme (required)
 - `key_name` - DNS server key name (required)
-- `key_secret` - DNS server key secret (required)
+- `key_secret` - DNS server key secret, encoded in Base64 (required)
 - `key_algorithm` - DNS server key algorithm. Supported values are `hmac-md5`, `gss`, `hmac-sha1`, `hmac-sha224`, `hmac-sha256`, `hmac-sha256-128`, `hmac-sha384`, `hmac-sha384-192`, `hmac-sha512` and `hmac-sha512-256` (required)
