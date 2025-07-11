@@ -452,6 +452,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
                   if let Ok(header_value) = HeaderValue::from_str(&replace_header_placeholders(
                     header_value,
                     &request_parts,
+                    Some(socket_data),
                   )) {
                     request_parts.headers.insert(header_name, header_value);
                   }
@@ -467,9 +468,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
             if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
               if let Ok(header_name) = HeaderName::from_str(header_name) {
-                if let Ok(header_value) =
-                  HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts))
-                {
+                if let Ok(header_value) = HeaderValue::from_str(&replace_header_placeholders(
+                  header_value,
+                  &request_parts,
+                  Some(socket_data),
+                )) {
                   request_parts.headers.insert(header_name, header_value);
                 }
               }

@@ -1,6 +1,9 @@
+use crate::modules::SocketData;
+
 pub fn replace_header_placeholders(
   input: &str,
   request_parts: &hyper::http::request::Parts,
+  socket_data: Option<&SocketData>,
 ) -> String {
   let mut output = String::new();
   let mut index_rb_saved = 0;
@@ -23,6 +26,50 @@ pub fn replace_header_placeholders(
             hyper::Version::HTTP_3 => "HTTP/3.0",
             _ => "HTTP/Unknown",
           }),
+          "scheme" => {
+            if let Some(socket_data) = socket_data {
+              output.push_str(if socket_data.encrypted {
+                "https"
+              } else {
+                "http"
+              });
+            } else {
+              // No socket data, leave it as is
+              output.push_str("{scheme}");
+            }
+          }
+          "client_ip" => {
+            if let Some(socket_data) = socket_data {
+              output.push_str(&socket_data.remote_addr.ip().to_string());
+            } else {
+              // No socket data, leave it as is
+              output.push_str("{client_ip}");
+            }
+          }
+          "client_port" => {
+            if let Some(socket_data) = socket_data {
+              output.push_str(&socket_data.remote_addr.port().to_string());
+            } else {
+              // No socket data, leave it as is
+              output.push_str("{client_port}");
+            }
+          }
+          "server_ip" => {
+            if let Some(socket_data) = socket_data {
+              output.push_str(&socket_data.local_addr.ip().to_string());
+            } else {
+              // No socket data, leave it as is
+              output.push_str("{server_ip}");
+            }
+          }
+          "server_port" => {
+            if let Some(socket_data) = socket_data {
+              output.push_str(&socket_data.local_addr.port().to_string());
+            } else {
+              // No socket data, leave it as is
+              output.push_str("{server_port}");
+            }
+          }
           _ => {
             if let Some(header_name) = placeholder_value.strip_prefix("header:") {
               if let Some(header_value) = request_parts.headers.get(header_name) {
@@ -89,7 +136,7 @@ mod tests {
     let parts = make_parts("/some/path", Method::GET, Version::HTTP_11, None);
     let input = "Path: {path}, Method: {method}, Version: {version}";
     let expected = "Path: /some/path, Method: GET, Version: HTTP/1.1";
-    let output = replace_header_placeholders(input, &parts);
+    let output = replace_header_placeholders(input, &parts, None);
     assert_eq!(output, expected);
   }
 
@@ -103,7 +150,7 @@ mod tests {
     );
     let input = "Header: {header:User-Agent}";
     let expected = "Header: MyApp/1.0";
-    let output = replace_header_placeholders(input, &parts);
+    let output = replace_header_placeholders(input, &parts, None);
     assert_eq!(output, expected);
   }
 
@@ -112,7 +159,7 @@ mod tests {
     let parts = make_parts("/", Method::GET, Version::HTTP_11, None);
     let input = "Header: {header:Missing}";
     let expected = "Header: ";
-    let output = replace_header_placeholders(input, &parts);
+    let output = replace_header_placeholders(input, &parts, None);
     assert_eq!(output, expected);
   }
 
@@ -121,7 +168,7 @@ mod tests {
     let parts = make_parts("/", Method::GET, Version::HTTP_11, None);
     let input = "Unknown: {foo}";
     let expected = "Unknown: {foo}";
-    let output = replace_header_placeholders(input, &parts);
+    let output = replace_header_placeholders(input, &parts, None);
     assert_eq!(output, expected);
   }
 
@@ -129,7 +176,7 @@ mod tests {
   fn test_no_placeholders() {
     let parts = make_parts("/", Method::GET, Version::HTTP_11, None);
     let input = "Static string with no placeholders.";
-    let output = replace_header_placeholders(input, &parts);
+    let output = replace_header_placeholders(input, &parts, None);
     assert_eq!(output, input);
   }
 
@@ -146,7 +193,7 @@ mod tests {
     );
     let input = "{method} {path} {version} Host: {header:Host} Content-Type: {header:Content-Type}";
     let expected = "PUT /data HTTP/2.0 Host: api.example.com Content-Type: application/json";
-    let output = replace_header_placeholders(input, &parts);
+    let output = replace_header_placeholders(input, &parts, None);
     assert_eq!(output, expected);
   }
 }

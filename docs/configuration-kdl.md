@@ -342,6 +342,11 @@ Ferron supports the following header name placeholders:
 - `{method}` (Ferron UNRELEASED or newer) - the request method
 - `{version}` (Ferron UNRELEASED or newer) - the HTTP version of the request
 - `{header:<header_name>}` (Ferron UNRELEASED or newer) - the header value of the request URI
+- `{scheme}` (Ferron UNRELEASED or newer) - the scheme of the request URI (`http` or `https`), applicable only for reverse proxying.
+- `{client_ip}` (Ferron UNRELEASED or newer) - the client IP address, applicable only for reverse proxying.
+- `{client_port}` (Ferron UNRELEASED or newer) - the client port number, applicable only for reverse proxying.
+- `{server_ip}` (Ferron UNRELEASED or newer) - the server IP address, applicable only for reverse proxying.
+- `{server_port}` (Ferron UNRELEASED or newer) - the server port number, applicable only for reverse proxying.
 
 ## Example configuration
 
