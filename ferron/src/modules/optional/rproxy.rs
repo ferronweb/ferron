@@ -35,7 +35,10 @@ use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
 #[cfg(feature = "runtime-monoio")]
 use crate::util::SendRwStream;
-use crate::util::{get_entries, get_entries_for_validation, get_value, NoServerVerifier, TtlCache};
+use crate::util::{
+  get_entries, get_entries_for_validation, get_value, replace_header_placeholders,
+  NoServerVerifier, TtlCache,
+};
 use crate::{config::ServerConfiguration, util::ModuleCache};
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
@@ -430,7 +433,10 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
               if !request_parts.headers.contains_key(header_name) {
                 if let Ok(header_name) = HeaderName::from_str(header_name) {
-                  if let Ok(header_value) = HeaderValue::from_str(header_value) {
+                  if let Ok(header_value) = HeaderValue::from_str(&replace_header_placeholders(
+                    header_value,
+                    &request_parts,
+                  )) {
                     request_parts.headers.insert(header_name, header_value);
                   }
                 }

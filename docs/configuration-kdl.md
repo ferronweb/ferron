@@ -193,7 +193,7 @@ This configuration reference organizes directives by both **scope** (where they 
 ### Headers & response customization
 
 - `header <header_name: string> <header_value: string>`
-  - This directive specifies a header to be added to HTTP responses. The header values support the `{path}` placeholder replaced with the request path. This directive can be specified multiple times. Default: none
+  - This directive specifies a header to be added to HTTP responses. The header values supports placeholders like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
 - `server_administrator_email <server_administrator_email: string>`
   - This directive specifies the server administrator's email address to be used in the default 500 Internal Server Error page. Default: none
 - `error_page <status_code: integer> <path: string>`
@@ -262,7 +262,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `proxy_intercept_errors [proxy_intercept_errors: bool]` (_rproxy_ module)
   - This directive specifies whenever the reverse proxy should intercept errors from the backend. Default: `proxy_intercept_errors #false`
 - `proxy_request_header <header_name: string> <header_value: string>` (_rproxy_ module; Ferron 2.0.0-beta.5 or newer)
-  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy. This directive can be specified multiple times. Default: none
+  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy. The header values supports placeholders (on Ferron UNRELEASED and newer) like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
 - `proxy_request_header_remove <header_name: string>` (_rproxy_ module; Ferron 2.0.0-beta.5 or newer)
   - This directive specifies a header to be removed from HTTP requests sent by the reverse proxy. This directive can be specified multiple times. Default: none
 - `proxy_keepalive [proxy_keepalive: bool]` (_rproxy_ module; Ferron 2.0.0-beta.5 or newer)
@@ -329,6 +329,15 @@ This configuration reference organizes directives by both **scope** (where they 
 
 - `example_handler [enable_example_handler: bool]` (_example_ module)
   - This directive specifies whenever an example handler is enabled. This handler responds with "Hello World" for "/hello" request paths. Default: `example_handler #false`
+
+## Header name placeholders
+
+Ferron supports the following header name placeholders:
+
+- `{path}` - the path part of the request URI
+- `{method}` (Ferron UNRELEASED or newer) - the request method
+- `{version}` (Ferron UNRELEASED or newer) - the HTTP version of the request
+- `{header:<header_name>}` (Ferron UNRELEASED or newer) - the header value of the request URI
 
 ## Example configuration
 

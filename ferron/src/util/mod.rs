@@ -13,6 +13,7 @@ mod copy_move;
 mod error_pages;
 #[cfg(feature = "fcgi")]
 pub mod fcgi;
+mod header_placeholders;
 mod ip_blocklist;
 mod match_hostname;
 mod match_location;
@@ -48,6 +49,7 @@ pub(crate) use config_macros::*;
 #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
 pub use copy_move::*;
 pub use error_pages::*;
+pub use header_placeholders::*;
 pub use ip_blocklist::*;
 pub use match_hostname::*;
 pub use match_location::*;

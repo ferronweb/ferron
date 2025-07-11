@@ -25,7 +25,8 @@ use crate::runtime::timeout;
 #[cfg(feature = "runtime-monoio")]
 use crate::util::MonoioFileStream;
 use crate::util::{
-  generate_default_error_page, get_entries, get_entry, sanitize_url, SERVER_SOFTWARE,
+  generate_default_error_page, get_entries, get_entry, replace_header_placeholders, sanitize_url,
+  SERVER_SOFTWARE,
 };
 
 /// Generates an error response
@@ -178,35 +179,20 @@ async fn log_combined(
 /// Helper function to add custom headers to response
 fn add_custom_headers(
   response_parts: &mut hyper::http::response::Parts,
-  configuration: &ServerConfiguration,
-  path: &str,
+  headers_to_add: &HeaderMap,
+  headers_to_remove: &[HeaderName],
 ) {
-  if let Some(custom_headers) = get_entries!("header", configuration) {
-    for custom_header in custom_headers.inner.iter().rev() {
-      if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-        if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-          if !response_parts.headers.contains_key(header_name) {
-            if let Ok(header_name) = HeaderName::from_str(header_name) {
-              if let Ok(header_value) = HeaderValue::from_str(&header_value.replace("{path}", path))
-              {
-                response_parts.headers.insert(header_name, header_value);
-              }
-            }
-          }
-        }
-      }
+  for (header_name, header_value) in headers_to_add {
+    if !response_parts.headers.contains_key(header_name) {
+      response_parts
+        .headers
+        .insert(header_name, header_value.to_owned());
     }
   }
 
-  if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
-    for custom_header in custom_headers_to_remove.inner.iter().rev() {
-      if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-        if !response_parts.headers.contains_key(header_name) {
-          if let Ok(header_name) = HeaderName::from_str(header_name) {
-            while response_parts.headers.remove(&header_name).is_some() {}
-          }
-        }
-      }
+  for header_to_remove in headers_to_remove.iter().rev() {
+    if response_parts.headers.contains_key(header_to_remove) {
+      while response_parts.headers.remove(header_to_remove).is_some() {}
     }
   }
 }
@@ -262,9 +248,9 @@ fn extract_content_length(response: &Response<BoxBody<Bytes, std::io::Error>>) -
 #[allow(clippy::too_many_arguments)]
 async fn finalize_response_and_log(
   response: Response<BoxBody<Bytes, std::io::Error>>,
-  configuration: &ServerConfiguration,
   http3_alt_port: Option<u16>,
-  path: &str,
+  headers_to_add: HeaderMap,
+  headers_to_remove: Vec<HeaderName>,
   logger: &Option<Sender<LogMessage>>,
   log_enabled: bool,
   socket_data: &SocketData,
@@ -277,7 +263,7 @@ async fn finalize_response_and_log(
 ) -> Response<BoxBody<Bytes, std::io::Error>> {
   let (mut response_parts, response_body) = response.into_parts();
 
-  add_custom_headers(&mut response_parts, configuration, path);
+  add_custom_headers(&mut response_parts, &headers_to_add, &headers_to_remove);
   add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
   add_server_header(&mut response_parts);
 
@@ -311,7 +297,8 @@ async fn execute_response_modifying_handlers(
   mut executed_handlers: Vec<Box<dyn ModuleHandlers>>,
   configuration: &ServerConfiguration,
   http3_alt_port: Option<u16>,
-  path: &str,
+  headers_to_add: HeaderMap,
+  headers_to_remove: Vec<HeaderName>,
   logger: &Option<Sender<LogMessage>>,
   error_log_enabled: bool,
   log_enabled: bool,
@@ -345,9 +332,9 @@ async fn execute_response_modifying_handlers(
 
         let final_response = finalize_response_and_log(
           error_response,
-          configuration,
           http3_alt_port,
-          path,
+          headers_to_add,
+          headers_to_remove,
           logger,
           log_enabled,
           socket_data,
@@ -786,12 +773,44 @@ async fn request_handler_wrapped(
       }
       let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
 
+      // Determine headers to add/remove
+      let mut headers_to_add = HeaderMap::new();
+      let mut headers_to_remove = Vec::new();
+      let (request_parts, _) = request.into_parts();
+      if let Some(custom_headers) = get_entries!("header", configuration) {
+        for custom_header in custom_headers.inner.iter().rev() {
+          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+            if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+              if !headers_to_add.contains_key(header_name) {
+                if let Ok(header_name) = HeaderName::from_str(header_name) {
+                  if let Ok(header_value) = HeaderValue::from_str(&replace_header_placeholders(
+                    header_value,
+                    &request_parts,
+                  )) {
+                    headers_to_add.insert(header_name, header_value);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
+        for custom_header in custom_headers_to_remove.inner.iter().rev() {
+          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+            if let Ok(header_name) = HeaderName::from_str(header_name) {
+              headers_to_remove.push(header_name);
+            }
+          }
+        }
+      }
+
       return Ok(
         finalize_response_and_log(
           response,
-          &configuration,
           http3_alt_port,
-          url_pathname,
+          headers_to_add,
+          headers_to_remove,
           &logger,
           log_enabled,
           &socket_data,
@@ -809,6 +828,7 @@ async fn request_handler_wrapped(
 
   if sanitized_url_pathname != url_pathname {
     let (mut parts, body) = request.into_parts();
+    let orig_uri = parts.uri.clone();
     let mut url_parts = parts.uri.into_parts();
     url_parts.path_and_query = Some(
       match format!(
@@ -842,12 +862,44 @@ async fn request_handler_wrapped(
           let response =
             generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
 
+          parts.uri = orig_uri;
+
+          // Determine headers to add/remove
+          let mut headers_to_add = HeaderMap::new();
+          let mut headers_to_remove = Vec::new();
+          if let Some(custom_headers) = get_entries!("header", configuration) {
+            for custom_header in custom_headers.inner.iter().rev() {
+              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                  if !headers_to_add.contains_key(header_name) {
+                    if let Ok(header_name) = HeaderName::from_str(header_name) {
+                      if let Ok(header_value) =
+                        HeaderValue::from_str(&replace_header_placeholders(header_value, &parts))
+                      {
+                        headers_to_add.insert(header_name, header_value);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
+            for custom_header in custom_headers_to_remove.inner.iter().rev() {
+              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                if let Ok(header_name) = HeaderName::from_str(header_name) {
+                  headers_to_remove.push(header_name);
+                }
+              }
+            }
+          }
+
           return Ok(
             finalize_response_and_log(
               response,
-              &configuration,
               http3_alt_port,
-              &sanitized_url_pathname,
+              headers_to_add,
+              headers_to_remove,
               &logger,
               log_enabled,
               &socket_data,
@@ -880,12 +932,44 @@ async fn request_handler_wrapped(
         let response =
           generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
 
+        parts.uri = orig_uri;
+
+        // Determine headers to add/remove
+        let mut headers_to_add = HeaderMap::new();
+        let mut headers_to_remove = Vec::new();
+        if let Some(custom_headers) = get_entries!("header", configuration) {
+          for custom_header in custom_headers.inner.iter().rev() {
+            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+              if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                if !headers_to_add.contains_key(header_name) {
+                  if let Ok(header_name) = HeaderName::from_str(header_name) {
+                    if let Ok(header_value) =
+                      HeaderValue::from_str(&replace_header_placeholders(header_value, &parts))
+                    {
+                      headers_to_add.insert(header_name, header_value);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
+          for custom_header in custom_headers_to_remove.inner.iter().rev() {
+            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+              if let Ok(header_name) = HeaderName::from_str(header_name) {
+                headers_to_remove.push(header_name);
+              }
+            }
+          }
+        }
+
         return Ok(
           finalize_response_and_log(
             response,
-            &configuration,
             http3_alt_port,
-            &sanitized_url_pathname,
+            headers_to_add,
+            headers_to_remove,
             &logger,
             log_enabled,
             &socket_data,
@@ -902,6 +986,38 @@ async fn request_handler_wrapped(
     };
     request = Request::from_parts(parts, body);
   }
+
+  // Determine headers to add/remove
+  let mut headers_to_add = HeaderMap::new();
+  let mut headers_to_remove = Vec::new();
+  let (request_parts, request_body) = request.into_parts();
+  if let Some(custom_headers) = get_entries!("header", configuration) {
+    for custom_header in custom_headers.inner.iter().rev() {
+      if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+        if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+          if !headers_to_add.contains_key(header_name) {
+            if let Ok(header_name) = HeaderName::from_str(header_name) {
+              if let Ok(header_value) =
+                HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts))
+              {
+                headers_to_add.insert(header_name, header_value);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
+    for custom_header in custom_headers_to_remove.inner.iter().rev() {
+      if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+        if let Ok(header_name) = HeaderName::from_str(header_name) {
+          headers_to_remove.push(header_name);
+        }
+      }
+    }
+  }
+  let mut request = Request::from_parts(request_parts, request_body);
 
   if request.uri().path() == "*" {
     let response = match request.method() {
@@ -921,9 +1037,9 @@ async fn request_handler_wrapped(
     return Ok(
       finalize_response_and_log(
         response,
-        &configuration,
         http3_alt_port,
-        &sanitized_url_pathname,
+        headers_to_add,
+        headers_to_remove,
         &logger,
         log_enabled,
         &socket_data,
@@ -965,9 +1081,9 @@ async fn request_handler_wrapped(
             return Ok(
               finalize_response_and_log(
                 response,
-                &configuration,
                 http3_alt_port,
-                &sanitized_url_pathname,
+                headers_to_add,
+                headers_to_remove,
                 &logger,
                 log_enabled,
                 &socket_data,
@@ -1055,7 +1171,7 @@ async fn request_handler_wrapped(
         match response {
           Some(response) => {
             let (mut response_parts, response_body) = response.into_parts();
-            add_custom_headers(&mut response_parts, &configuration, &sanitized_url_pathname);
+            add_custom_headers(&mut response_parts, &headers_to_add, &headers_to_remove);
             add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
             add_server_header(&mut response_parts);
 
@@ -1066,7 +1182,8 @@ async fn request_handler_wrapped(
               executed_handlers,
               &configuration,
               http3_alt_port,
-              &sanitized_url_pathname,
+              headers_to_add,
+              headers_to_remove,
               &logger,
               error_log_enabled,
               log_enabled,
@@ -1135,8 +1252,9 @@ async fn request_handler_wrapped(
                 }
               }
               let response = generate_error_response(status, &configuration, &headers).await;
+
               let (mut response_parts, response_body) = response.into_parts();
-              add_custom_headers(&mut response_parts, &configuration, &sanitized_url_pathname);
+              add_custom_headers(&mut response_parts, &headers_to_add, &headers_to_remove);
               add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
               add_server_header(&mut response_parts);
 
@@ -1147,7 +1265,8 @@ async fn request_handler_wrapped(
                 executed_handlers,
                 &configuration,
                 http3_alt_port,
-                &sanitized_url_pathname,
+                headers_to_add,
+                headers_to_remove,
                 &logger,
                 error_log_enabled,
                 log_enabled,
@@ -1202,13 +1321,6 @@ async fn request_handler_wrapped(
         let response =
           generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &configuration, &None).await;
 
-        let (mut response_parts, response_body) = response.into_parts();
-        add_custom_headers(&mut response_parts, &configuration, &sanitized_url_pathname);
-        add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
-        add_server_header(&mut response_parts);
-
-        let response = Response::from_parts(response_parts, response_body);
-
         if error_log_enabled {
           if let Some(logger) = &logger {
             logger
@@ -1221,12 +1333,20 @@ async fn request_handler_wrapped(
           }
         }
 
+        let (mut response_parts, response_body) = response.into_parts();
+        add_custom_headers(&mut response_parts, &headers_to_add, &headers_to_remove);
+        add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
+        add_server_header(&mut response_parts);
+
+        let response = Response::from_parts(response_parts, response_body);
+
         match execute_response_modifying_handlers(
           response,
           executed_handlers,
           &configuration,
           http3_alt_port,
-          &sanitized_url_pathname,
+          headers_to_add,
+          headers_to_remove,
           &logger,
           error_log_enabled,
           log_enabled,
@@ -1271,7 +1391,7 @@ async fn request_handler_wrapped(
   let response = generate_error_response(StatusCode::NOT_FOUND, &configuration, &None).await;
 
   let (mut response_parts, response_body) = response.into_parts();
-  add_custom_headers(&mut response_parts, &configuration, &sanitized_url_pathname);
+  add_custom_headers(&mut response_parts, &headers_to_add, &headers_to_remove);
   add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
   add_server_header(&mut response_parts);
 
@@ -1282,7 +1402,8 @@ async fn request_handler_wrapped(
     executed_handlers,
     &configuration,
     http3_alt_port,
-    &sanitized_url_pathname,
+    headers_to_add,
+    headers_to_remove,
     &logger,
     error_log_enabled,
     log_enabled,
