@@ -200,6 +200,8 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies a custom error page to be served by the web server. Default: none
 - `header_remove <header_name: string>` (Ferron 2.0.0-beta.5 or newer)
   - This directive specifies a header to be removed from HTTP responses. This directive can be specified multiple times. Default: none
+- `header_replace <header_name: string> <header_value: string>` (Ferron UNRELEASED or newer)
+  - This directive specifies a header to be added to HTTP responses, potentially replacing existing headers. The header values supports placeholders like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
 
 ### Security & access control
 
@@ -267,6 +269,8 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies a header to be removed from HTTP requests sent by the reverse proxy. This directive can be specified multiple times. Default: none
 - `proxy_keepalive [proxy_keepalive: bool]` (_rproxy_ module; Ferron 2.0.0-beta.5 or newer)
   - This directive specifies whenever the reverse proxy should keep the connection to the backend alive. Default: `proxy_keepalive #true`
+- `proxy_request_header_replace <header_name: string> <header_value: string>` (_rproxy_ module; Ferron UNRELEASED or newer)
+  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy, potentially replacing existing headers. The header values supports placeholders (on Ferron UNRELEASED and newer) like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
 
 ### Forward proxy
 
