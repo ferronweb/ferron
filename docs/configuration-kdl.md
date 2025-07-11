@@ -106,7 +106,7 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies whenever OCSP stapling is enabled. Default: `ocsp_stapling #true`
 - `block <blocked_ip: string> [<blocked_ip: string> ...]`
   - This directive specifies IP addresses to be blocked. This directive can be specified multiple times. Default: none
-- `allow <allowed_ip: string> [<allowed_ip: string> ...]` (Ferron UNRELEASED or newer)
+- `allow <allowed_ip: string> [<allowed_ip: string> ...]` (Ferron 2.0.0-beta.9 or newer)
   - This directive specifies IP addresses to be allowed. This directive can be specified multiple times. Default: none
 
 ### HTTP protocol & performance
@@ -173,12 +173,12 @@ This configuration reference organizes directives by both **scope** (where they 
 - `auto_tls_letsencrypt_production [enable_auto_tls_letsencrypt_production: bool]`
   - This directive specifies whenever the production Let's Encrypt ACME endpoint is used. If set as `auto_tls_letsencrypt_production #false`, the staging Let's Encrypt ACME endpoint is used. Default: `auto_tls_letsencrypt_production #true`
 - `auto_tls_challenge <acme_challenge_type: string> [provider=<acme_challenge_provider: string>] [...]`
-  - This directive specifies the used ACME challenge type. The supported types are `"http-01"` (HTTP-01 ACME challenge), `"tls-alpn-01"` (TLS-ALPN-01 ACME challenge) and `"dns-01"` (DNS-01 ACME challenge; Ferron UNRELEASED or newer). The `provider` prop defines the DNS provider to use for DNS-01 challenges. Additional props can be passed as parameters for the DNS provider, see automatic TLS documentation. Default: `auto_tls_challenge "tls-alpn-01"`
+  - This directive specifies the used ACME challenge type. The supported types are `"http-01"` (HTTP-01 ACME challenge), `"tls-alpn-01"` (TLS-ALPN-01 ACME challenge) and `"dns-01"` (DNS-01 ACME challenge; Ferron 2.0.0-beta.9 or newer). The `provider` prop defines the DNS provider to use for DNS-01 challenges. Additional props can be passed as parameters for the DNS provider, see automatic TLS documentation. Default: `auto_tls_challenge "tls-alpn-01"`
 - `auto_tls_directory <auto_tls_directory: string>` (Ferron 2.0.0-beta.3 or newer)
   - This directive specifies the ACME directory from which the certificates are obtained. Overrides `auto_tls_letsencrypt_production` directive. Default: none
 - `auto_tls_no_verification [auto_tls_no_verification: bool]` (Ferron 2.0.0-beta.3 or newer)
   - This directive specifies whenever to disable the certificate verification of the ACME server. Default: `auto_tls_no_verification #false`
-- `auto_tls_profile <auto_tls_profile: string|null>` (Ferron UNRELEASED or newer)
+- `auto_tls_profile <auto_tls_profile: string|null>` (Ferron 2.0.0-beta.9 or newer)
   - This directive specifies the ACME profile to use for the certificates. Default: `auto_tls_profile #null`
 
 ### Logging
@@ -200,7 +200,7 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies a custom error page to be served by the web server. Default: none
 - `header_remove <header_name: string>` (Ferron 2.0.0-beta.5 or newer)
   - This directive specifies a header to be removed from HTTP responses. This directive can be specified multiple times. Default: none
-- `header_replace <header_name: string> <header_value: string>` (Ferron UNRELEASED or newer)
+- `header_replace <header_name: string> <header_value: string>` (Ferron 2.0.0-beta.9 or newer)
   - This directive specifies a header to be added to HTTP responses, potentially replacing existing headers. The header values supports placeholders like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
 
 ### Security & access control
@@ -248,7 +248,7 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the request headers that are used to vary the cache entries. This directive can be specified multiple times. Default: none
 - `cache_ignore <ignored_response_header: string> [<ignored_response_header: string> ...]` (_cache_ module)
   - This directive specifies the response headers that are ignored when caching the response. This directive can be specified multiple times. Default: none
-- `file_cache_control <cache_control: string|null>` (_static_ module; Ferron UNRELEASED or newer)
+- `file_cache_control <cache_control: string|null>` (_static_ module; Ferron 2.0.0-beta.9 or newer)
   - This directive specifies the Cache-Control header value for static files. If set as `file_cache_control #null`, the Cache-Control header is not set. Default: `file_cache_control #null`
 
 ### Reverse proxy & load balancing
@@ -264,13 +264,13 @@ This configuration reference organizes directives by both **scope** (where they 
 - `proxy_intercept_errors [proxy_intercept_errors: bool]` (_rproxy_ module)
   - This directive specifies whenever the reverse proxy should intercept errors from the backend. Default: `proxy_intercept_errors #false`
 - `proxy_request_header <header_name: string> <header_value: string>` (_rproxy_ module; Ferron 2.0.0-beta.5 or newer)
-  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy. The header values supports placeholders (on Ferron UNRELEASED and newer) like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
+  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy. The header values supports placeholders (on Ferron 2.0.0-beta.9 and newer) like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
 - `proxy_request_header_remove <header_name: string>` (_rproxy_ module; Ferron 2.0.0-beta.5 or newer)
   - This directive specifies a header to be removed from HTTP requests sent by the reverse proxy. This directive can be specified multiple times. Default: none
 - `proxy_keepalive [proxy_keepalive: bool]` (_rproxy_ module; Ferron 2.0.0-beta.5 or newer)
   - This directive specifies whenever the reverse proxy should keep the connection to the backend alive. Default: `proxy_keepalive #true`
-- `proxy_request_header_replace <header_name: string> <header_value: string>` (_rproxy_ module; Ferron UNRELEASED or newer)
-  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy, potentially replacing existing headers. The header values supports placeholders (on Ferron UNRELEASED and newer) like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
+- `proxy_request_header_replace <header_name: string> <header_value: string>` (_rproxy_ module; Ferron 2.0.0-beta.9 or newer)
+  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy, potentially replacing existing headers. The header values supports placeholders (on Ferron 2.0.0-beta.9 and newer) like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
 
 ### Forward proxy
 
@@ -339,14 +339,14 @@ This configuration reference organizes directives by both **scope** (where they 
 Ferron supports the following header name placeholders:
 
 - `{path}` - the path part of the request URI
-- `{method}` (Ferron UNRELEASED or newer) - the request method
-- `{version}` (Ferron UNRELEASED or newer) - the HTTP version of the request
-- `{header:<header_name>}` (Ferron UNRELEASED or newer) - the header value of the request URI
-- `{scheme}` (Ferron UNRELEASED or newer) - the scheme of the request URI (`http` or `https`), applicable only for reverse proxying.
-- `{client_ip}` (Ferron UNRELEASED or newer) - the client IP address, applicable only for reverse proxying.
-- `{client_port}` (Ferron UNRELEASED or newer) - the client port number, applicable only for reverse proxying.
-- `{server_ip}` (Ferron UNRELEASED or newer) - the server IP address, applicable only for reverse proxying.
-- `{server_port}` (Ferron UNRELEASED or newer) - the server port number, applicable only for reverse proxying.
+- `{method}` (Ferron 2.0.0-beta.9 or newer) - the request method
+- `{version}` (Ferron 2.0.0-beta.9 or newer) - the HTTP version of the request
+- `{header:<header_name>}` (Ferron 2.0.0-beta.9 or newer) - the header value of the request URI
+- `{scheme}` (Ferron 2.0.0-beta.9 or newer) - the scheme of the request URI (`http` or `https`), applicable only for reverse proxying.
+- `{client_ip}` (Ferron 2.0.0-beta.9 or newer) - the client IP address, applicable only for reverse proxying.
+- `{client_port}` (Ferron 2.0.0-beta.9 or newer) - the client port number, applicable only for reverse proxying.
+- `{server_ip}` (Ferron 2.0.0-beta.9 or newer) - the server IP address, applicable only for reverse proxying.
+- `{server_port}` (Ferron 2.0.0-beta.9 or newer) - the server port number, applicable only for reverse proxying.
 
 ## Example configuration
 

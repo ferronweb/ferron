@@ -4,6 +4,18 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.9
+
+**Released in July 11, 2025**
+
+- Added support for ACME profiles
+- Added support for DNS-01 ACME challenge
+- Added support for header replacement
+- Added support for IP allowlists
+- Added support for more header value placeholders
+- Added support for setting "Cache-Control"
+- The server now obtains TLS certificates from ACME server sequentially
+
 ## Ferron 2.0.0-beta.8
 
 **Released in July 4, 2025**

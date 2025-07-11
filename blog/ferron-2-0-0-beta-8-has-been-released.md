@@ -1,8 +1,8 @@
 ---
 title: "Ferron 2.0.0-beta.8 has been released"
-description: We are excited to announce the release of Ferron 2.0.0-beta.7. This release brings a fix related to TCP connections.
+description: We are excited to announce the release of Ferron 2.0.0-beta.8. This release brings a fix related to TCP connections.
 date: 2025-07-04 13:25:00
-cover: ./covers/ferron-2-0-0-beta-7-has-been-released.png
+cover: ./covers/ferron-2-0-0-beta-8-has-been-released.png
 ---
 
 We are excited to introduce Ferron 2.0.0-beta.8, with a fix related to TCP connections.
