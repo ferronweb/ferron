@@ -180,6 +180,7 @@ async fn log_combined(
 fn add_custom_headers(
   response_parts: &mut hyper::http::response::Parts,
   headers_to_add: &HeaderMap,
+  headers_to_replace: &HeaderMap,
   headers_to_remove: &[HeaderName],
 ) {
   for (header_name, header_value) in headers_to_add {
@@ -188,6 +189,12 @@ fn add_custom_headers(
         .headers
         .insert(header_name, header_value.to_owned());
     }
+  }
+
+  for (header_name, header_value) in headers_to_replace {
+    response_parts
+      .headers
+      .insert(header_name, header_value.to_owned());
   }
 
   for header_to_remove in headers_to_remove.iter().rev() {
@@ -250,6 +257,7 @@ async fn finalize_response_and_log(
   response: Response<BoxBody<Bytes, std::io::Error>>,
   http3_alt_port: Option<u16>,
   headers_to_add: HeaderMap,
+  headers_to_replace: HeaderMap,
   headers_to_remove: Vec<HeaderName>,
   logger: &Option<Sender<LogMessage>>,
   log_enabled: bool,
@@ -263,7 +271,12 @@ async fn finalize_response_and_log(
 ) -> Response<BoxBody<Bytes, std::io::Error>> {
   let (mut response_parts, response_body) = response.into_parts();
 
-  add_custom_headers(&mut response_parts, &headers_to_add, &headers_to_remove);
+  add_custom_headers(
+    &mut response_parts,
+    &headers_to_add,
+    &headers_to_replace,
+    &headers_to_remove,
+  );
   add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
   add_server_header(&mut response_parts);
 
@@ -298,6 +311,7 @@ async fn execute_response_modifying_handlers(
   configuration: &ServerConfiguration,
   http3_alt_port: Option<u16>,
   headers_to_add: HeaderMap,
+  headers_to_replace: HeaderMap,
   headers_to_remove: Vec<HeaderName>,
   logger: &Option<Sender<LogMessage>>,
   error_log_enabled: bool,
@@ -334,6 +348,7 @@ async fn execute_response_modifying_handlers(
           error_response,
           http3_alt_port,
           headers_to_add,
+          headers_to_replace,
           headers_to_remove,
           logger,
           log_enabled,
@@ -773,8 +788,9 @@ async fn request_handler_wrapped(
       }
       let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
 
-      // Determine headers to add/remove
+      // Determine headers to add/remove/replace
       let mut headers_to_add = HeaderMap::new();
+      let mut headers_to_replace = HeaderMap::new();
       let mut headers_to_remove = Vec::new();
       let (request_parts, _) = request.into_parts();
       if let Some(custom_headers) = get_entries!("header", configuration) {
@@ -789,6 +805,21 @@ async fn request_handler_wrapped(
                   )) {
                     headers_to_add.insert(header_name, header_value);
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+      if let Some(custom_headers) = get_entries!("header_replace", configuration) {
+        for custom_header in custom_headers.inner.iter().rev() {
+          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+            if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+              if let Ok(header_name) = HeaderName::from_str(header_name) {
+                if let Ok(header_value) =
+                  HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts))
+                {
+                  headers_to_replace.insert(header_name, header_value);
                 }
               }
             }
@@ -810,6 +841,7 @@ async fn request_handler_wrapped(
           response,
           http3_alt_port,
           headers_to_add,
+          headers_to_replace,
           headers_to_remove,
           &logger,
           log_enabled,
@@ -864,8 +896,9 @@ async fn request_handler_wrapped(
 
           parts.uri = orig_uri;
 
-          // Determine headers to add/remove
+          // Determine headers to add/remove/replace
           let mut headers_to_add = HeaderMap::new();
+          let mut headers_to_replace = HeaderMap::new();
           let mut headers_to_remove = Vec::new();
           if let Some(custom_headers) = get_entries!("header", configuration) {
             for custom_header in custom_headers.inner.iter().rev() {
@@ -878,6 +911,21 @@ async fn request_handler_wrapped(
                       {
                         headers_to_add.insert(header_name, header_value);
                       }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if let Some(custom_headers) = get_entries!("header_replace", configuration) {
+            for custom_header in custom_headers.inner.iter().rev() {
+              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                  if let Ok(header_name) = HeaderName::from_str(header_name) {
+                    if let Ok(header_value) =
+                      HeaderValue::from_str(&replace_header_placeholders(header_value, &parts))
+                    {
+                      headers_to_replace.insert(header_name, header_value);
                     }
                   }
                 }
@@ -899,6 +947,7 @@ async fn request_handler_wrapped(
               response,
               http3_alt_port,
               headers_to_add,
+              headers_to_replace,
               headers_to_remove,
               &logger,
               log_enabled,
@@ -934,8 +983,9 @@ async fn request_handler_wrapped(
 
         parts.uri = orig_uri;
 
-        // Determine headers to add/remove
+        // Determine headers to add/remove/replace
         let mut headers_to_add = HeaderMap::new();
+        let mut headers_to_replace = HeaderMap::new();
         let mut headers_to_remove = Vec::new();
         if let Some(custom_headers) = get_entries!("header", configuration) {
           for custom_header in custom_headers.inner.iter().rev() {
@@ -948,6 +998,21 @@ async fn request_handler_wrapped(
                     {
                       headers_to_add.insert(header_name, header_value);
                     }
+                  }
+                }
+              }
+            }
+          }
+        }
+        if let Some(custom_headers) = get_entries!("header_replace", configuration) {
+          for custom_header in custom_headers.inner.iter().rev() {
+            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+              if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                if let Ok(header_name) = HeaderName::from_str(header_name) {
+                  if let Ok(header_value) =
+                    HeaderValue::from_str(&replace_header_placeholders(header_value, &parts))
+                  {
+                    headers_to_replace.insert(header_name, header_value);
                   }
                 }
               }
@@ -969,6 +1034,7 @@ async fn request_handler_wrapped(
             response,
             http3_alt_port,
             headers_to_add,
+            headers_to_replace,
             headers_to_remove,
             &logger,
             log_enabled,
@@ -987,8 +1053,9 @@ async fn request_handler_wrapped(
     request = Request::from_parts(parts, body);
   }
 
-  // Determine headers to add/remove
+  // Determine headers to add/remove/replace
   let mut headers_to_add = HeaderMap::new();
+  let mut headers_to_replace = HeaderMap::new();
   let mut headers_to_remove = Vec::new();
   let (request_parts, request_body) = request.into_parts();
   if let Some(custom_headers) = get_entries!("header", configuration) {
@@ -1002,6 +1069,21 @@ async fn request_handler_wrapped(
               {
                 headers_to_add.insert(header_name, header_value);
               }
+            }
+          }
+        }
+      }
+    }
+  }
+  if let Some(custom_headers) = get_entries!("header_replace", configuration) {
+    for custom_header in custom_headers.inner.iter().rev() {
+      if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+        if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+          if let Ok(header_name) = HeaderName::from_str(header_name) {
+            if let Ok(header_value) =
+              HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts))
+            {
+              headers_to_replace.insert(header_name, header_value);
             }
           }
         }
@@ -1039,6 +1121,7 @@ async fn request_handler_wrapped(
         response,
         http3_alt_port,
         headers_to_add,
+        headers_to_replace,
         headers_to_remove,
         &logger,
         log_enabled,
@@ -1083,6 +1166,7 @@ async fn request_handler_wrapped(
                 response,
                 http3_alt_port,
                 headers_to_add,
+                headers_to_replace,
                 headers_to_remove,
                 &logger,
                 log_enabled,
@@ -1171,7 +1255,12 @@ async fn request_handler_wrapped(
         match response {
           Some(response) => {
             let (mut response_parts, response_body) = response.into_parts();
-            add_custom_headers(&mut response_parts, &headers_to_add, &headers_to_remove);
+            add_custom_headers(
+              &mut response_parts,
+              &headers_to_add,
+              &headers_to_replace,
+              &headers_to_remove,
+            );
             add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
             add_server_header(&mut response_parts);
 
@@ -1183,6 +1272,7 @@ async fn request_handler_wrapped(
               &configuration,
               http3_alt_port,
               headers_to_add,
+              headers_to_replace,
               headers_to_remove,
               &logger,
               error_log_enabled,
@@ -1254,7 +1344,12 @@ async fn request_handler_wrapped(
               let response = generate_error_response(status, &configuration, &headers).await;
 
               let (mut response_parts, response_body) = response.into_parts();
-              add_custom_headers(&mut response_parts, &headers_to_add, &headers_to_remove);
+              add_custom_headers(
+                &mut response_parts,
+                &headers_to_add,
+                &headers_to_replace,
+                &headers_to_remove,
+              );
               add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
               add_server_header(&mut response_parts);
 
@@ -1266,6 +1361,7 @@ async fn request_handler_wrapped(
                 &configuration,
                 http3_alt_port,
                 headers_to_add,
+                headers_to_replace,
                 headers_to_remove,
                 &logger,
                 error_log_enabled,
@@ -1334,7 +1430,12 @@ async fn request_handler_wrapped(
         }
 
         let (mut response_parts, response_body) = response.into_parts();
-        add_custom_headers(&mut response_parts, &headers_to_add, &headers_to_remove);
+        add_custom_headers(
+          &mut response_parts,
+          &headers_to_add,
+          &headers_to_replace,
+          &headers_to_remove,
+        );
         add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
         add_server_header(&mut response_parts);
 
@@ -1346,6 +1447,7 @@ async fn request_handler_wrapped(
           &configuration,
           http3_alt_port,
           headers_to_add,
+          headers_to_replace,
           headers_to_remove,
           &logger,
           error_log_enabled,
@@ -1391,7 +1493,12 @@ async fn request_handler_wrapped(
   let response = generate_error_response(StatusCode::NOT_FOUND, &configuration, &None).await;
 
   let (mut response_parts, response_body) = response.into_parts();
-  add_custom_headers(&mut response_parts, &headers_to_add, &headers_to_remove);
+  add_custom_headers(
+    &mut response_parts,
+    &headers_to_add,
+    &headers_to_replace,
+    &headers_to_remove,
+  );
   add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
   add_server_header(&mut response_parts);
 
@@ -1403,6 +1510,7 @@ async fn request_handler_wrapped(
     &configuration,
     http3_alt_port,
     headers_to_add,
+    headers_to_replace,
     headers_to_remove,
     &logger,
     error_log_enabled,

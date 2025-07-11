@@ -597,6 +597,20 @@ impl ModuleLoader for CoreModuleLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("header_replace", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 2 {
+          Err(anyhow::anyhow!(
+            "The `header_replace` configuration property must have exactly two values"
+          ))?
+        } else if !entry.values[0].is_string() {
+          Err(anyhow::anyhow!("The header name must be a string"))?
+        } else if !entry.values[1].is_string() {
+          Err(anyhow::anyhow!("The header value must be a string"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }

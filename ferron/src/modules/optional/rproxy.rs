@@ -239,6 +239,22 @@ impl ModuleLoader for ReverseProxyModuleLoader {
       }
     };
 
+    if let Some(entries) =
+      get_entries_for_validation!("proxy_request_header_replace", config, used_properties)
+    {
+      for entry in &entries.inner {
+        if entry.values.len() != 2 {
+          Err(anyhow::anyhow!(
+            "The `proxy_request_header_replace` configuration property must have exactly two values"
+          ))?
+        } else if !entry.values[0].is_string() {
+          Err(anyhow::anyhow!("The header name must be a string"))?
+        } else if !entry.values[1].is_string() {
+          Err(anyhow::anyhow!("The header value must be a string"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -439,6 +455,22 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
                   )) {
                     request_parts.headers.insert(header_name, header_value);
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if let Some(custom_headers) = get_entries!("proxy_request_header_replace", config) {
+        for custom_header in custom_headers.inner.iter().rev() {
+          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+            if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+              if let Ok(header_name) = HeaderName::from_str(header_name) {
+                if let Ok(header_value) =
+                  HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts))
+                {
+                  request_parts.headers.insert(header_name, header_value);
                 }
               }
             }
