@@ -12,7 +12,7 @@ use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::client::conn::http1::SendRequest;
 use hyper::header::{HeaderName, HeaderValue};
-use hyper::{header, Request, Response, StatusCode, Uri, Version};
+use hyper::{header, HeaderMap, Request, Response, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::TokioIo;
 #[cfg(feature = "runtime-monoio")]
@@ -329,6 +329,56 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     {
       let (mut request_parts, request_body) = request.into_parts();
 
+      // Determine headers to add/remove/replace
+      let mut headers_to_add = HeaderMap::new();
+      let mut headers_to_replace = HeaderMap::new();
+      let mut headers_to_remove = Vec::new();
+      if let Some(custom_headers) = get_entries!("proxy_request_header", config) {
+        for custom_header in custom_headers.inner.iter().rev() {
+          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+            if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+              if !headers_to_add.contains_key(header_name) {
+                if let Ok(header_name) = HeaderName::from_str(header_name) {
+                  if let Ok(header_value) = HeaderValue::from_str(&replace_header_placeholders(
+                    header_value,
+                    &request_parts,
+                    Some(socket_data),
+                  )) {
+                    headers_to_add.insert(header_name, header_value);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      if let Some(custom_headers) = get_entries!("proxy_request_header_replace", config) {
+        for custom_header in custom_headers.inner.iter().rev() {
+          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+            if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+              if let Ok(header_name) = HeaderName::from_str(header_name) {
+                if let Ok(header_value) = HeaderValue::from_str(&replace_header_placeholders(
+                  header_value,
+                  &request_parts,
+                  Some(socket_data),
+                )) {
+                  headers_to_replace.insert(header_name, header_value);
+                }
+              }
+            }
+          }
+        }
+      }
+      if let Some(custom_headers_to_remove) = get_entries!("proxy_request_header_remove", config) {
+        for custom_header in custom_headers_to_remove.inner.iter().rev() {
+          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+            if let Ok(header_name) = HeaderName::from_str(header_name) {
+              headers_to_remove.push(header_name);
+            }
+          }
+        }
+      }
+
       let proxy_request_url = proxy_to.parse::<hyper::Uri>()?;
       let scheme_str = proxy_request_url.scheme_str();
       let mut encrypted = false;
@@ -443,53 +493,23 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .insert("x-forwarded-host", original_host);
       }
 
-      if let Some(custom_headers) = get_entries!("proxy_request_header", config) {
-        for custom_header in custom_headers.inner.iter().rev() {
-          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-            if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-              if !request_parts.headers.contains_key(header_name) {
-                if let Ok(header_name) = HeaderName::from_str(header_name) {
-                  if let Ok(header_value) = HeaderValue::from_str(&replace_header_placeholders(
-                    header_value,
-                    &request_parts,
-                    Some(socket_data),
-                  )) {
-                    request_parts.headers.insert(header_name, header_value);
-                  }
-                }
-              }
-            }
+      for (header_name_option, header_value) in headers_to_add {
+        if let Some(header_name) = header_name_option {
+          if !request_parts.headers.contains_key(&header_name) {
+            request_parts.headers.insert(header_name, header_value);
           }
         }
       }
 
-      if let Some(custom_headers) = get_entries!("proxy_request_header_replace", config) {
-        for custom_header in custom_headers.inner.iter().rev() {
-          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-            if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-              if let Ok(header_name) = HeaderName::from_str(header_name) {
-                if let Ok(header_value) = HeaderValue::from_str(&replace_header_placeholders(
-                  header_value,
-                  &request_parts,
-                  Some(socket_data),
-                )) {
-                  request_parts.headers.insert(header_name, header_value);
-                }
-              }
-            }
-          }
+      for (header_name_option, header_value) in headers_to_replace {
+        if let Some(header_name) = header_name_option {
+          request_parts.headers.insert(header_name, header_value);
         }
       }
 
-      if let Some(custom_headers_to_remove) = get_entries!("proxy_request_header_remove", config) {
-        for custom_header in custom_headers_to_remove.inner.iter().rev() {
-          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-            if !request_parts.headers.contains_key(header_name) {
-              if let Ok(header_name) = HeaderName::from_str(header_name) {
-                while request_parts.headers.remove(&header_name).is_some() {}
-              }
-            }
-          }
+      for header_to_remove in headers_to_remove.into_iter().rev() {
+        if request_parts.headers.contains_key(&header_to_remove) {
+          while request_parts.headers.remove(&header_to_remove).is_some() {}
         }
       }
 
