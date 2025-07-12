@@ -23,6 +23,7 @@ mod monoio_file_stream;
 mod no_server_verifier;
 #[cfg(feature = "wsgid")]
 mod preforked_process_pool;
+mod proxy_protocol;
 #[cfg(feature = "fcgi")]
 mod read_to_end_move;
 #[cfg(all(feature = "scgi", feature = "runtime-monoio"))]
@@ -59,6 +60,7 @@ pub use monoio_file_stream::*;
 pub use no_server_verifier::*;
 #[cfg(feature = "wsgid")]
 pub use preforked_process_pool::*;
+pub use proxy_protocol::*;
 #[cfg(feature = "fcgi")]
 pub use read_to_end_move::*;
 #[cfg(all(feature = "scgi", feature = "runtime-monoio"))]

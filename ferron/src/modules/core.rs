@@ -611,6 +611,18 @@ impl ModuleLoader for CoreModuleLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("protocol_proxy", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `protocol_proxy` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_bool() {
+          Err(anyhow::anyhow!("Invalid PROXY protocol enabling option"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }

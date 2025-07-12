@@ -37,6 +37,7 @@ use crate::get_value;
 use crate::listener_handler_communication::ConnectionData;
 use crate::logging::{LogMessage, Loggers};
 use crate::request_handler::request_handler;
+use crate::util::read_proxy_header;
 #[cfg(feature = "runtime-monoio")]
 use crate::util::SendRwStream;
 
@@ -68,6 +69,7 @@ pub fn create_http_handler(
   http3_enabled: bool,
   acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
   acme_http_01_resolvers: Vec<crate::acme::Http01DataLock>,
+  enable_proxy_protocol: bool,
 ) -> Result<Sender<()>, Box<dyn Error + Send + Sync>> {
   let (shutdown_tx, shutdown_rx) = async_channel::unbounded();
   let (handler_init_tx, listen_error_rx) = async_channel::unbounded();
@@ -86,6 +88,7 @@ pub fn create_http_handler(
             http3_enabled,
             acme_tls_alpn_01_configs,
             acme_http_01_resolvers,
+            enable_proxy_protocol,
           )
           .await
           .err()
@@ -117,6 +120,7 @@ async fn http_handler_fn(
   http3_enabled: bool,
   acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
   acme_http_01_resolvers: Vec<crate::acme::Http01DataLock>,
+  enable_proxy_protocol: bool,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   handler_init_tx.send(None).await.unwrap_or_default();
 
@@ -189,6 +193,7 @@ async fn http_handler_fn(
             connections_references_cloned,
             acme_tls_alpn_01_config,
             acme_http_01_resolvers,
+            enable_proxy_protocol,
           )
           .await;
         }
@@ -248,6 +253,7 @@ async fn http_tcp_handler_fn(
   connection_reference: Arc<()>,
   acme_tls_alpn_01_config: Option<Arc<ServerConfig>>,
   acme_http_01_resolvers: Arc<Vec<crate::acme::Http01DataLock>>,
+  enable_proxy_protocol: bool,
 ) {
   let _connection_reference = Arc::downgrade(&connection_reference);
   #[cfg(feature = "runtime-monoio")]
@@ -266,6 +272,30 @@ async fn http_tcp_handler_fn(
       return;
     }
   };
+
+  // PROXY protocol header precedes TLS handshakes too...
+  let (tcp_stream, proxy_protocol_client_address, proxy_protocol_server_address) =
+    if enable_proxy_protocol {
+      // Read and parse the PROXY protocol header
+      match read_proxy_header(tcp_stream).await {
+        Ok((tcp_stream, client_ip, server_ip)) => (tcp_stream, client_ip, server_ip),
+        Err(err) => {
+          if let Some(logging_tx) = loggers.find_global_logger() {
+            logging_tx
+              .send(LogMessage::new(
+                format!("Error reading PROXY protocol header: {err}"),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
+          return;
+        }
+      }
+    } else {
+      (tcp_stream, None, None)
+    };
+
   let maybe_tls_stream = if let Some(tls_config) = tls_config {
     let start_handshake = match LazyConfigAcceptor::new(Acceptor::default(), tcp_stream).await {
       Ok(start_handshake) => start_handshake,
@@ -426,6 +456,8 @@ async fn http_tcp_handler_fn(
                 None
               },
               acme_http_01_resolvers.clone(),
+              proxy_protocol_client_address,
+              proxy_protocol_server_address,
             )
           }),
         )
@@ -486,6 +518,8 @@ async fn http_tcp_handler_fn(
                 None
               },
               acme_http_01_resolvers.clone(),
+              proxy_protocol_client_address,
+              proxy_protocol_server_address,
             )
           }),
         )
@@ -561,6 +595,8 @@ async fn http_tcp_handler_fn(
               None
             },
             acme_http_01_resolvers.clone(),
+            proxy_protocol_client_address,
+            proxy_protocol_server_address,
           )
         }),
       )
@@ -684,6 +720,8 @@ async fn http_quic_handler_fn(
                 loggers.clone(),
                 None,
                 Arc::new(vec![]),
+                None,
+                None,
               )
               .await
               {

@@ -489,6 +489,11 @@ fn before_starting_server(
       tls_config_builder_wants_verifier.with_no_client_auth()
     };
 
+    let enable_proxy_protocol = global_configuration
+      .as_ref()
+      .and_then(|c| get_value!("protocol_proxy", c))
+      .and_then(|v| v.as_bool())
+      .unwrap_or(false);
     let protocols = global_configuration
       .as_ref()
       .and_then(|c| get_entry!("protocols", c))
@@ -499,6 +504,12 @@ fn before_starting_server(
           .collect::<Vec<_>>()
       })
       .unwrap_or(vec!["h1", "h2"]);
+
+    if enable_proxy_protocol && protocols.contains(&"h3") {
+      Err(anyhow::anyhow!(
+        "PROXY protocol isn't supported with HTTP/3"
+      ))?
+    }
 
     let default_http_port = global_configuration
       .as_deref()
@@ -1165,6 +1176,7 @@ fn before_starting_server(
         !quic_listened_socket_addresses.is_empty(),
         acme_tls_alpn_01_configs.clone(),
         acme_http_01_resolvers.clone(),
+        enable_proxy_protocol,
       )?);
     }
 

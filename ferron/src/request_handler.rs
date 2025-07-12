@@ -380,6 +380,8 @@ async fn request_handler_wrapped(
   loggers: Loggers,
   http3_alt_port: Option<u16>,
   acme_http_01_resolvers: Arc<Vec<crate::acme::Http01DataLock>>,
+  proxy_protocol_client_address: Option<SocketAddr>,
+  proxy_protocol_server_address: Option<SocketAddr>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
   // Global configuration
   let global_configuration = configurations.find_global_configuration();
@@ -472,8 +474,8 @@ async fn request_handler_wrapped(
 
   // Construct socket data
   let mut socket_data = SocketData {
-    remote_addr: client_address,
-    local_addr: server_address,
+    remote_addr: proxy_protocol_client_address.unwrap_or(client_address),
+    local_addr: proxy_protocol_server_address.unwrap_or(server_address),
     encrypted,
   };
 
@@ -1572,6 +1574,8 @@ pub async fn request_handler(
   loggers: Loggers,
   http3_alt_port: Option<u16>,
   acme_http_01_resolvers: Arc<Vec<crate::acme::Http01DataLock>>,
+  proxy_protocol_client_address: Option<SocketAddr>,
+  proxy_protocol_server_address: Option<SocketAddr>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
   let global_configuration = configurations.find_global_configuration();
   let timeout_from_config = global_configuration
@@ -1587,6 +1591,8 @@ pub async fn request_handler(
     loggers,
     http3_alt_port,
     acme_http_01_resolvers,
+    proxy_protocol_client_address,
+    proxy_protocol_server_address,
   );
   if timeout_from_config.is_some_and(|v| v.is_null()) {
     request_handler_future.await.map_err(|e| anyhow::anyhow!(e))
