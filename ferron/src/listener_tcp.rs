@@ -62,7 +62,7 @@ async fn tcp_listener_fn(
     #[cfg(feature = "runtime-monoio")]
     let listener_opts = {
       let mut listener_opts = ListenerOpts::new()
-        .reuse_addr(false)
+        .reuse_addr(!cfg!(windows))
         .reuse_port(false)
         .backlog(-1);
       if let Some(tcp_send_buffer_size) = tcp_buffer_sizes.0 {
@@ -192,12 +192,8 @@ async fn tcp_listener_fn(
         unsafe { std::net::TcpStream::from_raw_socket(raw_fd) }
       };
 
-      // Set SO_LINGER and TCP_NODELAY
-      // SO_LINGER is set to 1 second, and not 0 seconds, otherwise `w3m` and `lynx` may report unexpected connection close errors.
+      // Set TCP_NODELAY
       let tcp_socket2 = socket2::Socket::from(tcp_std);
-      tcp_socket2
-        .set_linger(Some(Duration::from_secs(1)))
-        .unwrap_or_default();
       tcp_socket2.set_tcp_nodelay(true).unwrap_or_default();
 
       let tcp_std = tcp_socket2.into();
@@ -209,10 +205,6 @@ async fn tcp_listener_fn(
     };
     #[cfg(feature = "runtime-tokio")]
     let tcp_data = {
-      // SO_LINGER is set to 1 second, and not 0 seconds, otherwise `w3m` and `lynx` may report unexpected connection close errors.
-      tcp
-        .set_linger(Some(Duration::from_secs(1)))
-        .unwrap_or_default();
       tcp.set_nodelay(true).unwrap_or_default();
 
       ConnectionData {
