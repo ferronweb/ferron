@@ -5,6 +5,7 @@ use async_channel::Receiver;
 use bytes::{Bytes, BytesMut};
 use futures_util::Stream;
 use monoio::fs::File;
+use tokio_util::sync::CancellationToken;
 
 const MAX_BUFFER_SIZE: usize = 16384;
 const MAX_CHANNEL_CAPACITY: usize = 2;
@@ -13,12 +14,15 @@ const MAX_CHANNEL_CAPACITY: usize = 2;
 #[allow(clippy::type_complexity)]
 pub struct MonoioFileStream {
   rx: Pin<Box<Receiver<Result<Bytes, std::io::Error>>>>,
+  read_cancel: CancellationToken,
 }
 
 impl MonoioFileStream {
   /// Creates a new stream from Monoio's `File`, with specified start and end positions
   pub fn new(file: File, start: Option<usize>, end: Option<usize>) -> Self {
     let (tx, rx) = async_channel::bounded(MAX_CHANNEL_CAPACITY);
+    let read_cancel = CancellationToken::new();
+    let read_cancel_clone = read_cancel.clone();
     monoio::spawn(async move {
       let mut current_pos = start.unwrap_or(0);
       loop {
@@ -27,7 +31,16 @@ impl MonoioFileStream {
           break;
         }
         let buffer = BytesMut::with_capacity(buffer_sz);
-        let (io_result, mut buffer) = file.read_at(buffer, current_pos as u64).await;
+        let (io_result, mut buffer) = monoio::select! {
+          biased;
+
+          _ = read_cancel_clone.cancelled() => {
+            break;
+          }
+          result = file.read_at(buffer, current_pos as u64) => {
+            result
+          }
+        };
         if let Ok(n) = io_result.as_ref() {
           if n == &0 {
             break;
@@ -50,7 +63,10 @@ impl MonoioFileStream {
         }
       }
     });
-    Self { rx: Box::pin(rx) }
+    Self {
+      rx: Box::pin(rx),
+      read_cancel,
+    }
   }
 }
 
@@ -65,5 +81,6 @@ impl Stream for MonoioFileStream {
 impl Drop for MonoioFileStream {
   fn drop(&mut self) {
     self.rx.close();
+    self.read_cancel.cancel();
   }
 }
