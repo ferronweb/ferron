@@ -17,6 +17,7 @@ pub struct SendRwStream {
   rx: Pin<Box<Receiver<Result<Bytes, std::io::Error>>>>,
   tx: Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send>>,
   read_cancel: CancellationToken,
+  write_cancel: CancellationToken,
 }
 
 impl SendRwStream {
@@ -26,7 +27,9 @@ impl SendRwStream {
     let (tx, inner_rx) = async_channel::bounded(MAX_WRITE_CHANNEL_CAPACITY);
     let (mut reader, mut writer) = tokio::io::split(stream);
     let read_cancel = CancellationToken::new();
+    let write_cancel = CancellationToken::new();
     let read_cancel_clone = read_cancel.clone();
+    let write_cancel_clone = write_cancel.clone();
     monoio::spawn(async move {
       loop {
         let buffer_sz = MAX_BUFFER_SIZE;
@@ -66,7 +69,25 @@ impl SendRwStream {
       }
     });
     monoio::spawn(async move {
-      while let Ok(mut bytes) = inner_rx.recv().await {
+      loop {
+        let rx_read_result = monoio::select! {
+          biased;
+
+          result = inner_rx.recv() => {
+            result
+          }
+          _ = write_cancel_clone.cancelled() => {
+            break;
+          }
+        };
+        let mut bytes = match rx_read_result {
+          Ok(bytes) => bytes,
+          Err(_) => {
+            // `inner_rx` is closed, but not dropped, shutting down the writer
+            writer.shutdown().await.unwrap_or_default();
+            break;
+          }
+        };
         if writer.write_all_buf(&mut bytes).await.is_err() {
           break;
         }
@@ -86,6 +107,7 @@ impl SendRwStream {
       rx: Box::pin(rx),
       tx: Box::pin(tx),
       read_cancel,
+      write_cancel,
     }
   }
 }
@@ -122,6 +144,7 @@ impl Drop for SendRwStream {
   fn drop(&mut self) {
     self.rx.close();
     self.read_cancel.cancel();
+    self.write_cancel.cancel();
   }
 }
 
