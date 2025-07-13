@@ -94,75 +94,110 @@ fn load_configuration_inner(
     let global_name = kdl_node.name().value();
     let children = kdl_node.children();
     if let Some(children) = children {
-      let (hostname, ip, port) = if let Ok(socket_addr) = global_name.parse::<SocketAddr>() {
-        (None, Some(socket_addr.ip()), Some(socket_addr.port()))
-      } else if let Some((address, port_str)) = global_name.rsplit_once(':') {
-        if let Ok(port) = port_str.parse::<u16>() {
-          if let Ok(ip_address) = address
-            .strip_prefix('[')
-            .and_then(|s| s.strip_suffix(']'))
-            .unwrap_or(address)
-            .parse::<IpAddr>()
-          {
-            (None, Some(ip_address), Some(port))
-          } else if address == "*" || address.is_empty() {
-            (None, None, Some(port))
+      for global_name in global_name.split(",") {
+        let (hostname, ip, port) = if let Ok(socket_addr) = global_name.parse::<SocketAddr>() {
+          (None, Some(socket_addr.ip()), Some(socket_addr.port()))
+        } else if let Some((address, port_str)) = global_name.rsplit_once(':') {
+          if let Ok(port) = port_str.parse::<u16>() {
+            if let Ok(ip_address) = address
+              .strip_prefix('[')
+              .and_then(|s| s.strip_suffix(']'))
+              .unwrap_or(address)
+              .parse::<IpAddr>()
+            {
+              (None, Some(ip_address), Some(port))
+            } else if address == "*" || address.is_empty() {
+              (None, None, Some(port))
+            } else {
+              (Some(address.to_string()), None, Some(port))
+            }
+          } else if port_str == "*" {
+            if let Ok(ip_address) = address
+              .strip_prefix('[')
+              .and_then(|s| s.strip_suffix(']'))
+              .unwrap_or(address)
+              .parse::<IpAddr>()
+            {
+              (None, Some(ip_address), None)
+            } else if address == "*" || address.is_empty() {
+              (None, None, None)
+            } else {
+              (Some(address.to_string()), None, None)
+            }
           } else {
-            (Some(address.to_string()), None, Some(port))
+            let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
+
+            Err(anyhow::anyhow!(
+              "Invalid host specifier at \"{}\"",
+              canonical_path
+            ))?
           }
-        } else if port_str == "*" {
-          if let Ok(ip_address) = address
-            .strip_prefix('[')
-            .and_then(|s| s.strip_suffix(']'))
-            .unwrap_or(address)
-            .parse::<IpAddr>()
-          {
-            (None, Some(ip_address), None)
-          } else if address == "*" || address.is_empty() {
-            (None, None, None)
-          } else {
-            (Some(address.to_string()), None, None)
-          }
+        } else if let Ok(ip_address) = global_name
+          .strip_prefix('[')
+          .and_then(|s| s.strip_suffix(']'))
+          .unwrap_or(global_name)
+          .parse::<IpAddr>()
+        {
+          (None, Some(ip_address), None)
+        } else if global_name == "*" || global_name.is_empty() {
+          (None, None, None)
         } else {
-          let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
+          (Some(global_name.to_string()), None, None)
+        };
 
-          Err(anyhow::anyhow!(
-            "Invalid host specifier at \"{}\"",
-            canonical_path
-          ))?
-        }
-      } else if let Ok(ip_address) = global_name
-        .strip_prefix('[')
-        .and_then(|s| s.strip_suffix(']'))
-        .unwrap_or(global_name)
-        .parse::<IpAddr>()
-      {
-        (None, Some(ip_address), None)
-      } else if global_name == "*" || global_name.is_empty() {
-        (None, None, None)
-      } else {
-        (Some(global_name.to_string()), None, None)
-      };
+        let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
+        for kdl_node in children.nodes() {
+          let kdl_node_name = kdl_node.name().value();
+          let children = kdl_node.children();
+          if kdl_node_name == "location" {
+            let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
+              HashMap::new();
+            if let Some(children) = children {
+              if let Some(location) = kdl_node.entry(0) {
+                if let Some(location_str) = location.value().as_string() {
+                  for kdl_node in children.nodes() {
+                    let kdl_node_name = kdl_node.name().value();
+                    let children = kdl_node.children();
+                    if kdl_node_name == "error_config" {
+                      let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
+                        HashMap::new();
+                      if let Some(children) = children {
+                        if let Some(error_status_code) = kdl_node.entry(0) {
+                          if let Some(error_status_code) = error_status_code.value().as_integer() {
+                            for kdl_node in children.nodes() {
+                              let kdl_node_name = kdl_node.name().value();
+                              let value = kdl_node_to_configuration_entry(kdl_node);
+                              if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
+                                entries.inner.push(value);
+                              } else {
+                                configuration_entries.insert(
+                                  kdl_node_name.to_string(),
+                                  ServerConfigurationEntries { inner: vec![value] },
+                                );
+                              }
+                            }
+                            configurations.push(ServerConfiguration {
+                              entries: configuration_entries,
+                              filters: ServerConfigurationFilters {
+                                hostname: hostname.clone(),
+                                ip,
+                                port,
+                                location_prefix: Some(location_str.to_string()),
+                                error_handler_status: Some(ErrorHandlerStatus::Status(
+                                  error_status_code as u16,
+                                )),
+                              },
+                              modules: vec![],
+                            });
+                          } else {
+                            let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
 
-      let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
-      for kdl_node in children.nodes() {
-        let kdl_node_name = kdl_node.name().value();
-        let children = kdl_node.children();
-        if kdl_node_name == "location" {
-          let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
-            HashMap::new();
-          if let Some(children) = children {
-            if let Some(location) = kdl_node.entry(0) {
-              if let Some(location_str) = location.value().as_string() {
-                for kdl_node in children.nodes() {
-                  let kdl_node_name = kdl_node.name().value();
-                  let children = kdl_node.children();
-                  if kdl_node_name == "error_config" {
-                    let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
-                      HashMap::new();
-                    if let Some(children) = children {
-                      if let Some(error_status_code) = kdl_node.entry(0) {
-                        if let Some(error_status_code) = error_status_code.value().as_integer() {
+                            Err(anyhow::anyhow!(
+                              "Invalid error handler status code at \"{}\"",
+                              canonical_path
+                            ))?
+                          }
+                        } else {
                           for kdl_node in children.nodes() {
                             let kdl_node_name = kdl_node.name().value();
                             let value = kdl_node_to_configuration_entry(kdl_node);
@@ -182,54 +217,89 @@ fn load_configuration_inner(
                               ip,
                               port,
                               location_prefix: Some(location_str.to_string()),
-                              error_handler_status: Some(ErrorHandlerStatus::Status(
-                                error_status_code as u16,
-                              )),
+                              error_handler_status: Some(ErrorHandlerStatus::Any),
                             },
                             modules: vec![],
                           });
-                        } else {
-                          let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
-
-                          Err(anyhow::anyhow!(
-                            "Invalid error handler status code at \"{}\"",
-                            canonical_path
-                          ))?
                         }
                       } else {
-                        for kdl_node in children.nodes() {
-                          let kdl_node_name = kdl_node.name().value();
-                          let value = kdl_node_to_configuration_entry(kdl_node);
-                          if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
-                            entries.inner.push(value);
-                          } else {
-                            configuration_entries.insert(
-                              kdl_node_name.to_string(),
-                              ServerConfigurationEntries { inner: vec![value] },
-                            );
-                          }
-                        }
-                        configurations.push(ServerConfiguration {
-                          entries: configuration_entries,
-                          filters: ServerConfigurationFilters {
-                            hostname: hostname.clone(),
-                            ip,
-                            port,
-                            location_prefix: Some(location_str.to_string()),
-                            error_handler_status: Some(ErrorHandlerStatus::Any),
-                          },
-                          modules: vec![],
-                        });
+                        let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
+
+                        Err(anyhow::anyhow!(
+                          "Error handler blocks should have children, but they don't at \"{}\"",
+                          canonical_path
+                        ))?
                       }
                     } else {
-                      let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
-
-                      Err(anyhow::anyhow!(
-                        "Error handler blocks should have children, but they don't at \"{}\"",
-                        canonical_path
-                      ))?
+                      let value = kdl_node_to_configuration_entry(kdl_node);
+                      if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
+                        entries.inner.push(value);
+                      } else {
+                        configuration_entries.insert(
+                          kdl_node_name.to_string(),
+                          ServerConfigurationEntries { inner: vec![value] },
+                        );
+                      }
                     }
-                  } else {
+                  }
+                  if kdl_node
+                    .entry("remove_base")
+                    .and_then(|e| e.value().as_bool())
+                    .unwrap_or(false)
+                  {
+                    configuration_entries.insert(
+                      "UNDOCUMENTED_REMOVE_PATH_PREFIX".to_string(),
+                      ServerConfigurationEntries {
+                        inner: vec![ServerConfigurationEntry {
+                          values: vec![ServerConfigurationValue::String(location_str.to_string())],
+                          props: HashMap::new(),
+                        }],
+                      },
+                    );
+                  }
+                  configurations.push(ServerConfiguration {
+                    entries: configuration_entries,
+                    filters: ServerConfigurationFilters {
+                      hostname: hostname.clone(),
+                      ip,
+                      port,
+                      location_prefix: Some(location_str.to_string()),
+                      error_handler_status: None,
+                    },
+                    modules: vec![],
+                  });
+                } else {
+                  let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
+
+                  Err(anyhow::anyhow!(
+                    "Invalid location path at \"{}\"",
+                    canonical_path
+                  ))?
+                }
+              } else {
+                let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
+
+                Err(anyhow::anyhow!(
+                  "Invalid location at \"{}\"",
+                  canonical_path
+                ))?
+              }
+            } else {
+              let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
+
+              Err(anyhow::anyhow!(
+                "Locations should have children, but they don't at \"{}\"",
+                canonical_path
+              ))?
+            }
+          } else if kdl_node_name == "error_config" {
+            let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
+              HashMap::new();
+            if let Some(children) = children {
+              if let Some(error_status_code) = kdl_node.entry(0) {
+                if let Some(error_status_code) = error_status_code.value().as_integer() {
+                  for kdl_node in children.nodes() {
+                    let kdl_node_name = kdl_node.name().value();
                     let value = kdl_node_to_configuration_entry(kdl_node);
                     if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
                       entries.inner.push(value);
@@ -240,63 +310,28 @@ fn load_configuration_inner(
                       );
                     }
                   }
-                }
-                if kdl_node
-                  .entry("remove_base")
-                  .and_then(|e| e.value().as_bool())
-                  .unwrap_or(false)
-                {
-                  configuration_entries.insert(
-                    "UNDOCUMENTED_REMOVE_PATH_PREFIX".to_string(),
-                    ServerConfigurationEntries {
-                      inner: vec![ServerConfigurationEntry {
-                        values: vec![ServerConfigurationValue::String(location_str.to_string())],
-                        props: HashMap::new(),
-                      }],
+                  configurations.push(ServerConfiguration {
+                    entries: configuration_entries,
+                    filters: ServerConfigurationFilters {
+                      hostname: hostname.clone(),
+                      ip,
+                      port,
+                      location_prefix: None,
+                      error_handler_status: Some(ErrorHandlerStatus::Status(
+                        error_status_code as u16,
+                      )),
                     },
-                  );
+                    modules: vec![],
+                  });
+                } else {
+                  let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
+
+                  Err(anyhow::anyhow!(
+                    "Invalid error handler status code at \"{}\"",
+                    canonical_path
+                  ))?
                 }
-                configurations.push(ServerConfiguration {
-                  entries: configuration_entries,
-                  filters: ServerConfigurationFilters {
-                    hostname: hostname.clone(),
-                    ip,
-                    port,
-                    location_prefix: Some(location_str.to_string()),
-                    error_handler_status: None,
-                  },
-                  modules: vec![],
-                });
               } else {
-                let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
-
-                Err(anyhow::anyhow!(
-                  "Invalid location path at \"{}\"",
-                  canonical_path
-                ))?
-              }
-            } else {
-              let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
-
-              Err(anyhow::anyhow!(
-                "Invalid location at \"{}\"",
-                canonical_path
-              ))?
-            }
-          } else {
-            let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
-
-            Err(anyhow::anyhow!(
-              "Locations should have children, but they don't at \"{}\"",
-              canonical_path
-            ))?
-          }
-        } else if kdl_node_name == "error_config" {
-          let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
-            HashMap::new();
-          if let Some(children) = children {
-            if let Some(error_status_code) = kdl_node.entry(0) {
-              if let Some(error_status_code) = error_status_code.value().as_integer() {
                 for kdl_node in children.nodes() {
                   let kdl_node_name = kdl_node.name().value();
                   let value = kdl_node_to_configuration_entry(kdl_node);
@@ -316,76 +351,43 @@ fn load_configuration_inner(
                     ip,
                     port,
                     location_prefix: None,
-                    error_handler_status: Some(ErrorHandlerStatus::Status(
-                      error_status_code as u16,
-                    )),
+                    error_handler_status: Some(ErrorHandlerStatus::Any),
                   },
                   modules: vec![],
                 });
-              } else {
-                let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
-
-                Err(anyhow::anyhow!(
-                  "Invalid error handler status code at \"{}\"",
-                  canonical_path
-                ))?
               }
             } else {
-              for kdl_node in children.nodes() {
-                let kdl_node_name = kdl_node.name().value();
-                let value = kdl_node_to_configuration_entry(kdl_node);
-                if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
-                  entries.inner.push(value);
-                } else {
-                  configuration_entries.insert(
-                    kdl_node_name.to_string(),
-                    ServerConfigurationEntries { inner: vec![value] },
-                  );
-                }
-              }
-              configurations.push(ServerConfiguration {
-                entries: configuration_entries,
-                filters: ServerConfigurationFilters {
-                  hostname: hostname.clone(),
-                  ip,
-                  port,
-                  location_prefix: None,
-                  error_handler_status: Some(ErrorHandlerStatus::Any),
-                },
-                modules: vec![],
-              });
+              let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
+
+              Err(anyhow::anyhow!(
+                "Error handler blocks should have children, but they don't at \"{}\"",
+                canonical_path
+              ))?
             }
           } else {
-            let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
-
-            Err(anyhow::anyhow!(
-              "Error handler blocks should have children, but they don't at \"{}\"",
-              canonical_path
-            ))?
-          }
-        } else {
-          let value = kdl_node_to_configuration_entry(kdl_node);
-          if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
-            entries.inner.push(value);
-          } else {
-            configuration_entries.insert(
-              kdl_node_name.to_string(),
-              ServerConfigurationEntries { inner: vec![value] },
-            );
+            let value = kdl_node_to_configuration_entry(kdl_node);
+            if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
+              entries.inner.push(value);
+            } else {
+              configuration_entries.insert(
+                kdl_node_name.to_string(),
+                ServerConfigurationEntries { inner: vec![value] },
+              );
+            }
           }
         }
+        configurations.push(ServerConfiguration {
+          entries: configuration_entries,
+          filters: ServerConfigurationFilters {
+            hostname,
+            ip,
+            port,
+            location_prefix: None,
+            error_handler_status: None,
+          },
+          modules: vec![],
+        });
       }
-      configurations.push(ServerConfiguration {
-        entries: configuration_entries,
-        filters: ServerConfigurationFilters {
-          hostname,
-          ip,
-          port,
-          location_prefix: None,
-          error_handler_status: None,
-        },
-        modules: vec![],
-      });
     } else if global_name == "include" {
       // Get the list of included files and include the configurations
       let mut include_files = Vec::new();

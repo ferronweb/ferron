@@ -54,6 +54,12 @@ api.example.com {
     // ...
   }
 }
+
+example.com,example.org {
+  // Configuration for example.com and example.org (Ferron UNRELEASED or newer)
+  // The virtual host identifiers (like example.com or "192.168.1.1") are comma-separated, but adding spaces will not be interpreted,
+  // For example "example.com, example.org" will not work for "example.org", but "example.com,example.org" will work.
+}
 ```
 
 Also, it's possible to include other configuration files using an `include <included_configuration_path: string>` directive, like this:
