@@ -193,9 +193,10 @@ async fn tcp_listener_fn(
       };
 
       // Set SO_LINGER and TCP_NODELAY
+      // SO_LINGER is set to 1 second, and not 0 seconds, otherwise `w3m` and `lynx` may report unexpected connection close errors.
       let tcp_socket2 = socket2::Socket::from(tcp_std);
       tcp_socket2
-        .set_linger(Some(Duration::ZERO))
+        .set_linger(Some(Duration::from_secs(1)))
         .unwrap_or_default();
       tcp_socket2.set_tcp_nodelay(true).unwrap_or_default();
 
@@ -208,7 +209,10 @@ async fn tcp_listener_fn(
     };
     #[cfg(feature = "runtime-tokio")]
     let tcp_data = {
-      tcp.set_linger(Some(Duration::ZERO)).unwrap_or_default();
+      // SO_LINGER is set to 1 second, and not 0 seconds, otherwise `w3m` and `lynx` may report unexpected connection close errors.
+      tcp
+        .set_linger(Some(Duration::from_secs(1)))
+        .unwrap_or_default();
       tcp.set_nodelay(true).unwrap_or_default();
 
       ConnectionData {
