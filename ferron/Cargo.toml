@@ -154,6 +154,17 @@ dns-update = { version = "0.1.2", optional = true, default-features = false, fea
     "hickory-aws-lc-rs",
 ] }
 desec_api = { version = "0.4.0", optional = true }
+aws-config = { version = "1.8.1", optional = true, default-features = false, features = [
+    "default-https-client", # This feature flag enables aws-lc-rs crypto provider
+    "rt-tokio",
+] } # Needed for Route53
+aws-credential-types = { version = "1.2.3", optional = true, features = [
+    "hardcoded-credentials",
+] } # Needed for Route53
+aws-sdk-route53 = { version = "1.84.0", optional = true, default-features = false, features = [
+    "default-https-client", # This feature flag enables aws-lc-rs crypto provider
+    "rt-tokio",
+] }
 
 # Performance & Utilities
 mimalloc = { workspace = true }
@@ -181,6 +192,7 @@ default = [
     "acmedns-desec",
     "acmedns-porkbun",
     "acmedns-rfc2136",
+    "acmedns-route53",
     "cache",
     "config-yaml-legacy",
     "cgi",
@@ -199,6 +211,7 @@ default-tokio = [
     "acmedns-desec",
     "acmedns-porkbun",
     "acmedns-rfc2136",
+    "acmedns-route53",
     "cache",
     "config-yaml-legacy",
     "cgi",
@@ -216,6 +229,7 @@ acmedns-cloudflare = ["dns-update"]
 acmedns-desec = ["desec_api"]
 acmedns-porkbun = ["porkbun-api"]
 acmedns-rfc2136 = ["dns-update"]
+acmedns-route53 = ["aws-config", "aws-credential-types", "aws-sdk-route53"]
 asgi = ["pyo3", "pyo3-async-runtimes", "tokio-tungstenite", "hyper-tungstenite"]
 cache = ["cache_control", "itertools", "papaya", "ahash"]
 cgi = ["async-process", "httparse", "memchr"]

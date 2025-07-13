@@ -938,6 +938,27 @@ fn before_starting_server(
                       })?,
                     ))
                   }
+                  #[cfg(feature = "acmedns-route53")]
+                  "route53" => {
+                    let access_key_id = challenge_params.get("access_key_id").map(|v| v as &str);
+                    let secret_access_key =
+                      challenge_params.get("secret_access_key").map(|v| v as &str);
+                    let region = challenge_params.get("region").map(|v| v as &str);
+                    let profile_name = challenge_params.get("profile_name").map(|v| v as &str);
+                    let hosted_zone_id = challenge_params.get("hosted_zone_id").map(|v| v as &str);
+                    Some(Arc::new(
+                      crate::acme::dns::route53::Route53DnsProvider::new(
+                        region,
+                        profile_name,
+                        access_key_id,
+                        secret_access_key,
+                        hosted_zone_id,
+                      )
+                      .map_err(|e| {
+                        anyhow::anyhow!("Failed to initalize Route53 DNS provider: {}", e)
+                      })?,
+                    ))
+                  }
                   _ => Err(anyhow::anyhow!(
                     "Unsupported DNS provider: {}",
                     provider_name

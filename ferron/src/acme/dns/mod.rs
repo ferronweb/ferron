@@ -6,6 +6,8 @@ pub mod desec;
 pub mod porkbun;
 #[cfg(feature = "acmedns-rfc2136")]
 pub mod rfc2136;
+#[cfg(feature = "acmedns-route53")]
+pub mod route53;
 
 use std::error::Error;
 
