@@ -129,7 +129,7 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the maximum HTTP/2 frame size. Default: Hyper defaults
 - `h2_enable_connect_protocol [h2_enable_connect_protocol: bool]`
   - This directive specifies whenever the CONNECT protocol in HTTP/2 is enabled. Default: Hyper defaults
-- `protocol_proxy [enable_proxy_protocol: bool]` (Ferron UNRELEASED or newer)
+- `protocol_proxy [enable_proxy_protocol: bool]` (Ferron 2.0.0-beta.10 or newer)
   - This directive specifies whenever the PROXY protocol acceptation is enabled. If enabled, the server will expect the PROXY protocol header at the beginning of each connection. Default: `protocol_proxy #false`
 
 ### Caching

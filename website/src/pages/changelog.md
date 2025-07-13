@@ -4,6 +4,13 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.10
+
+**Released in July 13, 2025**
+
+- Added support for accepting connections that use PROXY protocol
+- Fixed unexpected connection closure errors in `w3m` and `lynx`
+
 ## Ferron 2.0.0-beta.9
 
 **Released in July 11, 2025**
