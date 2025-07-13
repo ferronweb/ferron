@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.12
+
+**Released in July 13, 2025**
+
+- Fixed "address in use" errors when listening to a TCP port after stopping and shortly after starting the web server
+
 ## Ferron 2.0.0-beta.11
 
 **Released in July 13, 2025**
