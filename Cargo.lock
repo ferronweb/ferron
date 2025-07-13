@@ -236,9 +236,9 @@ dependencies = [
 
 [[package]]
 name = "async-compression"
-version = "0.4.25"
+version = "0.4.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40f6024f3f856663b45fd0c9b6f2024034a702f453549449e0d84a305900dad4"
+checksum = "937f41778d8baa0b8984a101f48ec5d2e5b0d23a3f9235b2066eef29c3472bb9"
 dependencies = [
  "brotli",
  "flate2",
@@ -986,7 +986,7 @@ dependencies = [
 [[package]]
 name = "dns-update"
 version = "0.1.2"
-source = "git+https://github.com/DorianNiemiecSVRJS/dns-update.git#e03600bb861e675826be5b5e8147a8d4a367100e"
+source = "git+https://github.com/DorianNiemiecSVRJS/dns-update.git#329db6f1d9877ecc0bc744fb3f59a38c0f59daa2"
 dependencies = [
  "hickory-client",
  "reqwest",
@@ -1571,6 +1571,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8a6fe56c0038198998a6f217ca4e7ef3a5e51f46163bd6dd60b5c71ca6c6502"
 dependencies = [
  "async-trait",
+ "aws-lc-rs",
  "bitflags 2.9.1",
  "bytes",
  "cfg-if",
@@ -3461,7 +3462,6 @@ dependencies = [
  "aws-lc-rs",
  "log",
  "once_cell",
- "ring",
  "rustls-pki-types",
  "rustls-webpki",
  "subtle",
