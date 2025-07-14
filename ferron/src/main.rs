@@ -673,7 +673,7 @@ fn before_starting_server(
         nonencrypted_ports.insert(http_port);
       }
       if let Some(automatic_tls_port) = automatic_tls_port {
-        if !is_auto_tls_sni_hostname_used || on_demand_tls {
+        if !is_auto_tls_sni_hostname_used {
           if sni_hostname.is_some() || on_demand_tls {
             let is_wildcard_domain = sni_hostname.as_ref().is_some_and(|s| s.starts_with("*."));
             let challenge_type_entry = get_entry!("auto_tls_challenge", server_configuration);
@@ -996,7 +996,8 @@ fn before_starting_server(
                 port: automatic_tls_port,
               };
               acme_on_demand_configs.push(acme_on_demand_config);
-            } else if let Some(sni_hostname) = &sni_hostname {
+              automatic_tls_used_sni_hostnames.insert((automatic_tls_port, sni_hostname));
+            } else if let Some(sni_hostname) = sni_hostname {
               let (account_cache_path, cert_cache_path) = if let Some(acme_cache_path) =
                 acme_cache_path_option.clone()
               {
@@ -1081,16 +1082,14 @@ fn before_starting_server(
                 _ => (),
               }
               if let Some(sni_resolver) = tls_ports.get_mut(&automatic_tls_port) {
-                sni_resolver.load_host_resolver(sni_hostname, acme_resolver);
+                sni_resolver.load_host_resolver(&sni_hostname, acme_resolver);
               } else {
                 let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
                 tls_port_locks.insert(automatic_tls_port, sni_resolver_list.clone());
                 let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
-                sni_resolver.load_host_resolver(sni_hostname, acme_resolver);
+                sni_resolver.load_host_resolver(&sni_hostname, acme_resolver);
                 tls_ports.insert(automatic_tls_port, sni_resolver);
               }
-            }
-            if let Some(sni_hostname) = sni_hostname {
               automatic_tls_used_sni_hostnames.insert((automatic_tls_port, Some(sni_hostname)));
             }
           } else if !server_configuration.filters.is_global()
