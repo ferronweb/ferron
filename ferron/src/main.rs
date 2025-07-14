@@ -1145,6 +1145,7 @@ fn before_starting_server(
           // On-demand TLS
           let acme_configs_mutex = acme_configs_mutex.clone();
           let acme_logger_option = acme_logger_option.clone();
+          let acme_on_demand_configs = Arc::new(acme_on_demand_configs);
           tokio::spawn(async move {
             let mut existing_combinations = HashSet::new();
             while let Ok(received_data) = acme_on_demand_rx.recv().await {
@@ -1285,23 +1286,28 @@ fn before_starting_server(
                 existing_combinations.insert(received_data.clone());
               }
               let (sni_hostname, port) = received_data;
-              // Should have been using HashMap instead of manually iterating a Vec...
-              for acme_on_demand_config in &acme_on_demand_configs {
-                if match_hostname(
-                  acme_on_demand_config.sni_hostname.as_deref(),
-                  Some(&sni_hostname),
-                ) && acme_on_demand_config.port == port
-                {
-                  acme_configs_mutex.lock().await.push(
-                    convert_on_demand_config(
-                      acme_on_demand_config,
-                      sni_hostname.clone(),
-                      memory_acme_account_cache_data.clone(),
-                    )
-                    .await,
-                  );
+              let acme_configs_mutex = acme_configs_mutex.clone();
+              let acme_on_demand_configs = acme_on_demand_configs.clone();
+              let memory_acme_account_cache_data = memory_acme_account_cache_data.clone();
+              tokio::spawn(async move {
+                for acme_on_demand_config in acme_on_demand_configs.iter() {
+                  if match_hostname(
+                    acme_on_demand_config.sni_hostname.as_deref(),
+                    Some(&sni_hostname),
+                  ) && acme_on_demand_config.port == port
+                  {
+                    acme_configs_mutex.lock().await.push(
+                      convert_on_demand_config(
+                        acme_on_demand_config,
+                        sni_hostname.clone(),
+                        memory_acme_account_cache_data,
+                      )
+                      .await,
+                    );
+                    break;
+                  }
                 }
-              }
+              });
             }
           });
         }
