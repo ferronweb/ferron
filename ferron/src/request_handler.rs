@@ -1222,7 +1222,8 @@ async fn request_handler_wrapped(
   let mut executed_handlers = Vec::new();
   let (request_parts, request_body) = request.into_parts();
   let request_parts_cloned = if configurations.inner.iter().rev().any(|c| {
-    c.filters.hostname == configuration.filters.hostname
+    c.filters.is_host
+      && c.filters.hostname == configuration.filters.hostname
       && c.filters.ip == configuration.filters.ip
       && c.filters.port == configuration.filters.port
       && (c.filters.location_prefix.is_none()

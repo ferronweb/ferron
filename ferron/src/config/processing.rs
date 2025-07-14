@@ -86,28 +86,30 @@ pub fn remove_and_add_global_configuration(
 ) -> Vec<ServerConfiguration> {
   // The resulting list of server configurations
   let mut new_server_configurations = Vec::new();
-  // Flag to track if a global configuration exists
-  let mut has_global = false;
+  // Flag to track if a global non-host configuration exists
+  let mut has_global_non_host = false;
 
   // Process each server configuration
   for server_configuration in server_configurations {
     // Only keep non-empty configurations
     if !server_configuration.entries.is_empty() {
-      // Check if this is a global configuration
-      if server_configuration.filters.is_global() {
-        has_global = true;
+      // Check if this is a global non-host configuration
+      if server_configuration.filters.is_global_non_host() {
+        has_global_non_host = true;
       }
       // Add the configuration to the result list
       new_server_configurations.push(server_configuration);
     }
   }
-  // If no global configuration exists, add a default one at the beginning
-  if !has_global {
+
+  // If no global non-host configuration exists, add a default one at the beginning
+  if !has_global_non_host {
     new_server_configurations.insert(
       0,
       ServerConfiguration {
         entries: HashMap::new(),
         filters: ServerConfigurationFilters {
+          is_host: false,
           hostname: None,
           ip: None,
           port: None,
@@ -149,6 +151,7 @@ pub fn premerge_configuration(
 
       // Determine if filter criteria match or if parent has wildcard (None) values
       // A None in parent (sc2) means it matches any value in child (sc1)
+      let is_host_match = !sc2.is_host || sc1.is_host == sc2.is_host;
       let ports_match = sc2.port.is_none() || sc1.port == sc2.port;
       let ips_match = sc2.ip.is_none() || sc1.ip == sc2.ip;
       let hostnames_match = sc2.hostname.is_none() || sc1.hostname == sc2.hostname;
@@ -162,7 +165,8 @@ pub fn premerge_configuration(
         && location_prefixes_match
         && hostnames_match
         && ips_match
-        && ports_match;
+        && ports_match
+        && is_host_match;
 
       // Case 2: Location prefix inheritance
       // Child has location prefix but parent doesn't, and all other filters match
@@ -172,7 +176,8 @@ pub fn premerge_configuration(
         && sc2.location_prefix.is_none()
         && hostnames_match
         && ips_match
-        && ports_match;
+        && ports_match
+        && is_host_match;
 
       // Case 3: Hostname inheritance
       // Child has hostname but parent doesn't, and all other filters match
@@ -183,7 +188,8 @@ pub fn premerge_configuration(
         && sc1.hostname.is_some()
         && sc2.hostname.is_none()
         && ips_match
-        && ports_match;
+        && ports_match
+        && is_host_match;
 
       // Case 4: IP address inheritance
       // Child has IP but parent doesn't, and all other filters match
@@ -195,7 +201,8 @@ pub fn premerge_configuration(
         && sc2.hostname.is_none()
         && sc1.ip.is_some()
         && sc2.ip.is_none()
-        && ports_match;
+        && ports_match
+        && is_host_match;
 
       // Case 5: Port inheritance
       // Child has port but parent doesn't, and all other filters are None
@@ -208,10 +215,26 @@ pub fn premerge_configuration(
         && sc1.ip.is_none()
         && sc2.ip.is_none()
         && sc1.port.is_some()
-        && sc2.port.is_none();
+        && sc2.port.is_none()
+        && is_host_match;
+
+      // Case 6: Host block flag inheritance
+      // Child has host block flag but parent doesn't, and all other filters are None
+      let case6 = sc1.error_handler_status.is_none()
+        && sc2.error_handler_status.is_none()
+        && sc1.location_prefix.is_none()
+        && sc2.location_prefix.is_none()
+        && sc1.hostname.is_none()
+        && sc2.hostname.is_none()
+        && sc1.ip.is_none()
+        && sc2.ip.is_none()
+        && sc1.port.is_none()
+        && sc2.port.is_none()
+        && sc1.is_host
+        && !sc2.is_host;
 
       // If any inheritance case matches, this configuration should inherit from the parent
-      if case1 || case2 || case3 || case4 || case5 {
+      if case1 || case2 || case3 || case4 || case5 || case6 {
         layers_indexes.push(sc2_index);
       }
     }
@@ -372,6 +395,7 @@ mod tests {
   use std::net::{IpAddr, Ipv4Addr};
 
   fn make_filters(
+    is_host: bool,
     hostname: Option<&str>,
     ip: Option<IpAddr>,
     port: Option<u16>,
@@ -379,6 +403,7 @@ mod tests {
     error_handler_status: Option<ErrorHandlerStatus>,
   ) -> ServerConfigurationFilters {
     ServerConfigurationFilters {
+      is_host,
       hostname: hostname.map(String::from),
       ip,
       port,
@@ -411,6 +436,7 @@ mod tests {
   }
 
   fn config_with_filters(
+    is_host: bool,
     hostname: Option<&str>,
     ip: Option<IpAddr>,
     port: Option<u16>,
@@ -420,6 +446,7 @@ mod tests {
   ) -> ServerConfiguration {
     ServerConfiguration {
       filters: ServerConfigurationFilters {
+        is_host,
         hostname: hostname.map(|s| s.to_string()),
         ip,
         port,
@@ -434,6 +461,7 @@ mod tests {
   #[test]
   fn merges_identical_filters_and_combines_entries() {
     let filters = make_filters(
+      true,
       Some("example.com"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(8080),
@@ -442,6 +470,7 @@ mod tests {
     );
 
     let filters_2 = make_filters(
+      true,
       Some("example.com"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(8080),
@@ -492,6 +521,7 @@ mod tests {
   #[test]
   fn does_not_merge_different_filters() {
     let filters1 = make_filters(
+      true,
       Some("example.com"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(8080),
@@ -500,6 +530,7 @@ mod tests {
     );
 
     let filters2 = make_filters(
+      true,
       Some("example.org"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(8080),
@@ -538,6 +569,7 @@ mod tests {
   #[test]
   fn merges_entries_with_non_overlapping_keys() {
     let filters = make_filters(
+      true,
       Some("example.com"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(8080),
@@ -546,6 +578,7 @@ mod tests {
     );
 
     let filters_2 = make_filters(
+      true,
       Some("example.com"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(8080),
@@ -589,6 +622,7 @@ mod tests {
   #[test]
   fn test_no_merge_returns_all() {
     let config1 = config_with_filters(
+      true,
       Some("example.com"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(80),
@@ -601,6 +635,7 @@ mod tests {
     );
 
     let config2 = config_with_filters(
+      true,
       Some("example.org"),
       Some(IpAddr::V4(Ipv4Addr::new(192, 168, 0, 1))),
       Some(8080),
@@ -620,9 +655,10 @@ mod tests {
   }
 
   #[test]
-  fn test_merge_case5_port() {
+  fn test_merge_case6_is_host() {
     // Less specific config (no port)
     let base = config_with_filters(
+      false,
       None,
       None,
       None,
@@ -636,6 +672,45 @@ mod tests {
 
     // More specific config (with port)
     let specific = config_with_filters(
+      true,
+      None,
+      None,
+      None,
+      None,
+      None,
+      vec![make_entry_premerge(
+        "shared",
+        ServerConfigurationValue::String("specific".into()),
+      )],
+    );
+
+    let merged = premerge_configuration(vec![base, specific]);
+    assert_eq!(merged.len(), 2);
+
+    let entries = &merged[1].entries["shared"].inner;
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].values[0].as_str(), Some("specific"));
+  }
+
+  #[test]
+  fn test_merge_case5_port() {
+    // Less specific config (no port)
+    let base = config_with_filters(
+      true,
+      None,
+      None,
+      None,
+      None,
+      None,
+      vec![make_entry_premerge(
+        "shared",
+        ServerConfigurationValue::String("base".into()),
+      )],
+    );
+
+    // More specific config (with port)
+    let specific = config_with_filters(
+      true,
       None,
       None,
       Some(80),
@@ -658,6 +733,7 @@ mod tests {
   #[test]
   fn test_merge_case1_error_handler() {
     let base = config_with_filters(
+      true,
       Some("host"),
       Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
       Some(3000),
@@ -670,6 +746,7 @@ mod tests {
     );
 
     let specific = config_with_filters(
+      true,
       Some("host"),
       Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
       Some(3000),
@@ -693,6 +770,7 @@ mod tests {
   fn test_merge_preserves_specificity_order() {
     let configs = vec![
       config_with_filters(
+        true,
         None,
         None,
         None,
@@ -704,6 +782,7 @@ mod tests {
         )],
       ),
       config_with_filters(
+        true,
         None,
         None,
         Some(80),
@@ -715,6 +794,7 @@ mod tests {
         )],
       ),
       config_with_filters(
+        true,
         Some("host"),
         None,
         Some(80),

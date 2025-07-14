@@ -47,7 +47,8 @@ impl ServerConfigurations {
       .iter()
       .rev()
       .find(|&server_configuration| {
-        match_hostname(server_configuration.filters.hostname.as_deref(), hostname)
+        server_configuration.filters.is_host
+          && match_hostname(server_configuration.filters.hostname.as_deref(), hostname)
           && (server_configuration.filters.ip.is_none()
             || server_configuration.filters.ip == Some(ip))
           && (server_configuration.filters.port.is_none()
@@ -73,7 +74,8 @@ impl ServerConfigurations {
       .iter()
       .rev()
       .find(|c| {
-        c.filters.hostname == filters.hostname
+        c.filters.is_host
+          && c.filters.hostname == filters.hostname
           && c.filters.ip == filters.ip
           && c.filters.port == filters.port
           && (c.filters.location_prefix.is_none()
@@ -86,12 +88,15 @@ impl ServerConfigurations {
       .cloned()
   }
 
-  /// Finds the global server configuration
+  /// Finds the global server configuration (host or non-host)
   pub fn find_global_configuration(&self) -> Option<Arc<ServerConfiguration>> {
     self
       .inner
       .iter()
-      .find(|server_configuration| server_configuration.filters.is_global())
+      .find(|server_configuration| {
+        server_configuration.filters.is_global()
+          || server_configuration.filters.is_global_non_host()
+      })
       .cloned()
   }
 }
@@ -131,6 +136,9 @@ pub enum ErrorHandlerStatus {
 /// A Ferron server configuration filter
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ServerConfigurationFilters {
+  /// Whether the configuration represents a host block
+  pub is_host: bool,
+
   /// The hostname
   pub hostname: Option<String>,
 
@@ -150,20 +158,26 @@ pub struct ServerConfigurationFilters {
 impl ServerConfigurationFilters {
   /// Checks if the server configuration is global
   pub fn is_global(&self) -> bool {
-    self.hostname.is_none()
+    self.is_host
+      && self.hostname.is_none()
       && self.ip.is_none()
       && self.port.is_none()
       && self.location_prefix.is_none()
       && self.error_handler_status.is_none()
+  }
+
+  /// Checks if the server configuration is global and doesn't represent a host block
+  pub fn is_global_non_host(&self) -> bool {
+    !self.is_host
   }
 }
 
 impl Ord for ServerConfigurationFilters {
   fn cmp(&self, other: &Self) -> Ordering {
     self
-      .port
-      .is_some()
-      .cmp(&other.port.is_some())
+      .is_host
+      .cmp(&other.is_host)
+      .then_with(|| self.port.is_some().cmp(&other.port.is_some()))
       .then_with(|| self.ip.is_some().cmp(&other.ip.is_some()))
       .then_with(|| self.hostname.is_some().cmp(&other.hostname.is_some()))
       .then_with(|| {

@@ -9,6 +9,10 @@ Ferron 2.0.0-beta.1 and newer can be configured in a [KDL-format](https://kdl.de
 At the top level of the server configration, the confguration blocks representing specific virtual host are specified. Below are the examples of such configuration blocks:
 
 ```kdl
+globals {
+  // Global configuration that doesn't imply any virtual host (Ferron UNRELEASED or newer)
+}
+
 * {
   // Global configuration
 }

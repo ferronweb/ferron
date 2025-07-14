@@ -1,4 +1,3 @@
-* {
-  default_https_port #null
+:80 {
   root "wwwroot"
 }

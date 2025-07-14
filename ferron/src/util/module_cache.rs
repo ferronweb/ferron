@@ -155,6 +155,7 @@ mod test {
     let config = ServerConfiguration {
       entries: config_entries,
       filters: ServerConfigurationFilters {
+        is_host: true,
         hostname: None,
         ip: None,
         port: None,
@@ -188,6 +189,7 @@ mod test {
     let config2 = ServerConfiguration {
       entries: config2_entries,
       filters: ServerConfigurationFilters {
+        is_host: true,
         hostname: None,
         ip: None,
         port: Some(80),
@@ -236,6 +238,7 @@ mod test {
     let config = ServerConfiguration {
       entries: config_entries,
       filters: ServerConfigurationFilters {
+        is_host: true,
         hostname: None,
         ip: None,
         port: None,
@@ -269,6 +272,7 @@ mod test {
     let config2 = ServerConfiguration {
       entries: config2_entries,
       filters: ServerConfigurationFilters {
+        is_host: true,
         hostname: None,
         ip: None,
         port: Some(80),
@@ -306,6 +310,7 @@ mod test {
     let config = ServerConfiguration {
       entries: HashMap::new(),
       filters: ServerConfigurationFilters {
+        is_host: true,
         hostname: None,
         ip: None,
         port: None,

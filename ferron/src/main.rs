@@ -291,6 +291,7 @@ fn before_starting_server(
       .and_then(|v| v.as_str())
       .map(String::from);
     if log_filename.is_some() || error_log_filename.is_some() {
+      // If there are two global configurations, the latest one takes precedence, because the entry is overridden in the `HashMap`
       log_file_names.insert(
         LoggerFilter {
           hostname: server_configuration.filters.hostname.clone(),
@@ -550,8 +551,10 @@ fn before_starting_server(
 
     // Iterate server configurations (TLS configuration)
     for server_configuration in &server_configurations.inner {
-      if server_configuration.filters.is_global() && server_configuration.entries.is_empty() {
-        // Don't add listeners from an empty global configuration
+      if server_configuration.filters.is_global_non_host()
+        || (server_configuration.filters.is_global() && server_configuration.entries.is_empty())
+      {
+        // Don't add listeners from an empty global configuration or non-host global configuration
         continue;
       }
 

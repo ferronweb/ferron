@@ -95,8 +95,10 @@ fn load_configuration_inner(
     let children = kdl_node.children();
     if let Some(children) = children {
       for global_name in global_name.split(",") {
-        let (hostname, ip, port) = if let Ok(socket_addr) = global_name.parse::<SocketAddr>() {
-          (None, Some(socket_addr.ip()), Some(socket_addr.port()))
+        let (hostname, ip, port, is_host) = if global_name == "globals" {
+          (None, None, None, false)
+        } else if let Ok(socket_addr) = global_name.parse::<SocketAddr>() {
+          (None, Some(socket_addr.ip()), Some(socket_addr.port()), true)
         } else if let Some((address, port_str)) = global_name.rsplit_once(':') {
           if let Ok(port) = port_str.parse::<u16>() {
             if let Ok(ip_address) = address
@@ -105,11 +107,11 @@ fn load_configuration_inner(
               .unwrap_or(address)
               .parse::<IpAddr>()
             {
-              (None, Some(ip_address), Some(port))
+              (None, Some(ip_address), Some(port), true)
             } else if address == "*" || address.is_empty() {
-              (None, None, Some(port))
+              (None, None, Some(port), true)
             } else {
-              (Some(address.to_string()), None, Some(port))
+              (Some(address.to_string()), None, Some(port), true)
             }
           } else if port_str == "*" {
             if let Ok(ip_address) = address
@@ -118,11 +120,11 @@ fn load_configuration_inner(
               .unwrap_or(address)
               .parse::<IpAddr>()
             {
-              (None, Some(ip_address), None)
+              (None, Some(ip_address), None, true)
             } else if address == "*" || address.is_empty() {
-              (None, None, None)
+              (None, None, None, true)
             } else {
-              (Some(address.to_string()), None, None)
+              (Some(address.to_string()), None, None, true)
             }
           } else {
             let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
@@ -138,11 +140,11 @@ fn load_configuration_inner(
           .unwrap_or(global_name)
           .parse::<IpAddr>()
         {
-          (None, Some(ip_address), None)
+          (None, Some(ip_address), None, true)
         } else if global_name == "*" || global_name.is_empty() {
-          (None, None, None)
+          (None, None, None, true)
         } else {
-          (Some(global_name.to_string()), None, None)
+          (Some(global_name.to_string()), None, None, true)
         };
 
         let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
@@ -179,6 +181,7 @@ fn load_configuration_inner(
                             configurations.push(ServerConfiguration {
                               entries: configuration_entries,
                               filters: ServerConfigurationFilters {
+                                is_host,
                                 hostname: hostname.clone(),
                                 ip,
                                 port,
@@ -213,6 +216,7 @@ fn load_configuration_inner(
                           configurations.push(ServerConfiguration {
                             entries: configuration_entries,
                             filters: ServerConfigurationFilters {
+                              is_host,
                               hostname: hostname.clone(),
                               ip,
                               port,
@@ -260,6 +264,7 @@ fn load_configuration_inner(
                   configurations.push(ServerConfiguration {
                     entries: configuration_entries,
                     filters: ServerConfigurationFilters {
+                      is_host,
                       hostname: hostname.clone(),
                       ip,
                       port,
@@ -313,6 +318,7 @@ fn load_configuration_inner(
                   configurations.push(ServerConfiguration {
                     entries: configuration_entries,
                     filters: ServerConfigurationFilters {
+                      is_host,
                       hostname: hostname.clone(),
                       ip,
                       port,
@@ -347,6 +353,7 @@ fn load_configuration_inner(
                 configurations.push(ServerConfiguration {
                   entries: configuration_entries,
                   filters: ServerConfigurationFilters {
+                    is_host,
                     hostname: hostname.clone(),
                     ip,
                     port,
@@ -379,6 +386,7 @@ fn load_configuration_inner(
         configurations.push(ServerConfiguration {
           entries: configuration_entries,
           filters: ServerConfigurationFilters {
+            is_host,
             hostname,
             ip,
             port,
