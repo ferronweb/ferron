@@ -473,16 +473,23 @@ pub async fn convert_on_demand_config(
     sni_hostname.clone(),
     Arc::new(AcmeResolver::new(certified_key_lock.clone())),
   );
-  config
-    .tls_alpn_01_resolver_lock
-    .write()
-    .await
-    .push(tls_alpn_01_data_lock.clone());
-  config
-    .http_01_resolver_lock
-    .write()
-    .await
-    .push(http_01_data_lock.clone());
+  match config.challenge_type {
+    ChallengeType::TlsAlpn01 => {
+      config
+        .tls_alpn_01_resolver_lock
+        .write()
+        .await
+        .push(tls_alpn_01_data_lock.clone());
+    }
+    ChallengeType::Http01 => {
+      config
+        .http_01_resolver_lock
+        .write()
+        .await
+        .push(http_01_data_lock.clone());
+    }
+    _ => (),
+  };
 
   AcmeConfig {
     rustls_client_config: config.rustls_client_config.clone(),
