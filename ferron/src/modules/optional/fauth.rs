@@ -9,17 +9,16 @@ use bytes::Bytes;
 use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
-use hyper::client::conn::http1::SendRequest;
 use hyper::Version;
 use hyper::{header, header::HeaderName, Method, Request, StatusCode, Uri};
 #[cfg(feature = "runtime-tokio")]
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 #[cfg(feature = "runtime-monoio")]
 use monoio::io::IntoPollIo;
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
 #[cfg(feature = "runtime-monoio")]
-use monoio_compat::hyper::MonoioIo;
+use monoio_compat::hyper::{MonoioExecutor, MonoioIo};
 use rustls_pki_types::ServerName;
 use rustls_platform_verifier::BuilderVerifierExt;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -39,11 +38,16 @@ use crate::{config::ServerConfiguration, util::ModuleCache};
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
 
-/// A reverse proxy module loader
+enum SendRequest {
+  Http1(hyper::client::conn::http1::SendRequest<BoxBody<Bytes, std::io::Error>>),
+  Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
+}
+
+/// A forwarded authentication module loader
 #[allow(clippy::type_complexity)]
 pub struct ForwardedAuthenticationModuleLoader {
   cache: ModuleCache<ForwardedAuthenticationModule>,
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>>>,
+  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
 }
 
 impl ForwardedAuthenticationModuleLoader {
@@ -133,10 +137,10 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
   }
 }
 
-/// A reverse proxy module
+/// A forwarded authentication module
 #[allow(clippy::type_complexity)]
 struct ForwardedAuthenticationModule {
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>>>,
+  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
 }
 
 impl Module for ForwardedAuthenticationModule {
@@ -147,10 +151,10 @@ impl Module for ForwardedAuthenticationModule {
   }
 }
 
-/// Handlers for the reverse proxy module
+/// Handlers for the forwarded authentication proxy module
 #[allow(clippy::type_complexity)]
 struct ForwardedAuthenticationModuleHandlers {
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>>>,
+  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
 }
 
 #[async_trait(?Send)]
@@ -298,13 +302,19 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
       let sender_read_option = rwlock_read.get(&addr);
 
       if let Some(sender_read) = sender_read_option {
-        if !sender_read.is_closed() {
+        if match sender_read {
+          SendRequest::Http1(sender) => !sender.is_closed(),
+          SendRequest::Http2(sender) => !sender.is_closed(),
+        } {
           drop(rwlock_read);
           let mut rwlock_write = connections.write().await;
           let sender_option = rwlock_write.get_mut(&addr);
 
           if let Some(sender) = sender_option {
-            if !sender.is_closed() && sender.ready().await.is_ok() {
+            if match sender {
+              SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+              SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+            } {
               let result = http_forwarded_auth_kept_alive(
                 sender,
                 auth_request,
@@ -419,10 +429,11 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           error_logger,
           original_request,
           forwarded_auth_copy_headers,
+          false,
         )
         .await
       } else {
-        let tls_client_config = (if disable_certificate_verification {
+        let mut tls_client_config = (if disable_certificate_verification {
           rustls::ClientConfig::builder()
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
@@ -430,6 +441,8 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           rustls::ClientConfig::builder().with_platform_verifier()?
         })
         .with_no_client_auth();
+        tls_client_config.alpn_protocols =
+          vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
         let connector = TlsConnector::from(Arc::new(tls_client_config));
         let domain = ServerName::try_from(host)?.to_owned();
 
@@ -446,6 +459,9 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
             });
           }
         };
+
+        // Enable HTTP/2 when the ALPN protocol is "h2"
+        let enable_http2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
 
         #[cfg(feature = "runtime-monoio")]
         let rw = {
@@ -466,6 +482,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           error_logger,
           original_request,
           forwarded_auth_copy_headers,
+          enable_http2,
         )
         .await
       }
@@ -483,38 +500,73 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
 #[allow(clippy::too_many_arguments)]
 async fn http_forwarded_auth(
-  connections: &RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>,
+  connections: &RwLock<HashMap<String, SendRequest>>,
   connect_addr: String,
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   mut original_request: Request<BoxBody<Bytes, std::io::Error>>,
   forwarded_auth_copy_headers: Vec<String>,
+  use_http2: bool,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   #[cfg(feature = "runtime-monoio")]
   let io = MonoioIo::new(stream);
   #[cfg(feature = "runtime-tokio")]
   let io = TokioIo::new(stream);
 
-  let (mut sender, conn) = match hyper::client::conn::http1::handshake(io).await {
-    Ok(data) => data,
-    Err(err) => {
-      error_logger.log(&format!("Bad gateway: {err}")).await;
-      return Ok(ResponseData {
-        request: None,
-        response: None,
-        response_status: Some(StatusCode::BAD_GATEWAY),
-        response_headers: None,
-        new_remote_address: None,
-      });
-    }
+  let mut sender = if use_http2 {
+    #[cfg(feature = "runtime-monoio")]
+    let executor = MonoioExecutor;
+    #[cfg(feature = "runtime-tokio")]
+    let executor = TokioExecutor::new();
+
+    let (sender, conn) = match hyper::client::conn::http2::handshake(executor, io).await {
+      Ok(data) => data,
+      Err(err) => {
+        error_logger.log(&format!("Bad gateway: {err}")).await;
+        return Ok(ResponseData {
+          request: None,
+          response: None,
+          response_status: Some(StatusCode::BAD_GATEWAY),
+          response_headers: None,
+          new_remote_address: None,
+        });
+      }
+    };
+
+    crate::runtime::spawn(async move {
+      conn.await.unwrap_or_default();
+    });
+
+    SendRequest::Http2(sender)
+  } else {
+    let (sender, conn) = match hyper::client::conn::http1::handshake(io).await {
+      Ok(data) => data,
+      Err(err) => {
+        error_logger.log(&format!("Bad gateway: {err}")).await;
+        return Ok(ResponseData {
+          request: None,
+          response: None,
+          response_status: Some(StatusCode::BAD_GATEWAY),
+          response_headers: None,
+          new_remote_address: None,
+        });
+      }
+    };
+
+    crate::runtime::spawn(async move {
+      conn.await.unwrap_or_default();
+    });
+
+    SendRequest::Http1(sender)
   };
 
-  crate::runtime::spawn(async move {
-    conn.await.unwrap_or_default();
-  });
+  let send_request_result = match &mut sender {
+    SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
+    SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
+  };
 
-  let proxy_response = match sender.send_request(proxy_request).await {
+  let proxy_response = match send_request_result {
     Ok(response) => response,
     Err(err) => {
       error_logger.log(&format!("Bad gateway: {err}")).await;
@@ -564,7 +616,10 @@ async fn http_forwarded_auth(
     }
   };
 
-  if !sender.is_closed() {
+  if !(match &sender {
+    SendRequest::Http1(sender) => sender.is_closed(),
+    SendRequest::Http2(sender) => sender.is_closed(),
+  }) {
     let mut rwlock_write = connections.write().await;
     rwlock_write.insert(connect_addr, sender);
     drop(rwlock_write);
@@ -574,13 +629,18 @@ async fn http_forwarded_auth(
 }
 
 async fn http_forwarded_auth_kept_alive(
-  sender: &mut SendRequest<BoxBody<Bytes, std::io::Error>>,
+  sender: &mut SendRequest,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   mut original_request: Request<BoxBody<Bytes, std::io::Error>>,
   forwarded_auth_copy_headers: Vec<String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  let proxy_response = match sender.send_request(proxy_request).await {
+  let send_request_result = match sender {
+    SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
+    SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
+  };
+
+  let proxy_response = match send_request_result {
     Ok(response) => response,
     Err(err) => {
       error_logger.log(&format!("Bad gateway: {err}")).await;

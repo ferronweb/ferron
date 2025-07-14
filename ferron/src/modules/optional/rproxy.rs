@@ -10,17 +10,16 @@ use bytes::Bytes;
 use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
-use hyper::client::conn::http1::SendRequest;
 use hyper::header::{HeaderName, HeaderValue};
 use hyper::{header, HeaderMap, Request, Response, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 #[cfg(feature = "runtime-monoio")]
 use monoio::io::IntoPollIo;
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
 #[cfg(feature = "runtime-monoio")]
-use monoio_compat::hyper::MonoioIo;
+use monoio_compat::hyper::{MonoioExecutor, MonoioIo};
 use rustls_pki_types::ServerName;
 use rustls_platform_verifier::BuilderVerifierExt;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -43,11 +42,16 @@ use crate::{config::ServerConfiguration, util::ModuleCache};
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
 
+enum SendRequest {
+  Http1(hyper::client::conn::http1::SendRequest<BoxBody<Bytes, std::io::Error>>),
+  Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
+}
+
 /// A reverse proxy module loader
 #[allow(clippy::type_complexity)]
 pub struct ReverseProxyModuleLoader {
   cache: ModuleCache<ReverseProxyModule>,
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>>>,
+  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
 }
 
 impl ReverseProxyModuleLoader {
@@ -262,7 +266,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 /// A reverse proxy module
 #[allow(clippy::type_complexity)]
 struct ReverseProxyModule {
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>>>,
+  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
   failed_backends: Arc<RwLock<TtlCache<String, u64>>>,
 }
 
@@ -278,7 +282,7 @@ impl Module for ReverseProxyModule {
 /// Handlers for the reverse proxy module
 #[allow(clippy::type_complexity)]
 struct ReverseProxyModuleHandlers {
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>>>,
+  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
   failed_backends: Arc<RwLock<TtlCache<String, u64>>>,
 }
 
@@ -527,13 +531,19 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         let sender_read_option = rwlock_read.get(&addr);
 
         if let Some(sender_read) = sender_read_option {
-          if !sender_read.is_closed() {
+          if match sender_read {
+            SendRequest::Http1(sender) => !sender.is_closed(),
+            SendRequest::Http2(sender) => !sender.is_closed(),
+          } {
             drop(rwlock_read);
             let mut rwlock_write = connections.write().await;
             let sender_option = rwlock_write.get_mut(&addr);
 
             if let Some(sender) = sender_option {
-              if !sender.is_closed() && sender.ready().await.is_ok() {
+              if match sender {
+                SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+                SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+              } {
                 let result = http_proxy_kept_alive(
                   sender,
                   proxy_request,
@@ -677,10 +687,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           proxy_to,
           failed_backends_option_borrowed,
           proxy_intercept_errors,
+          false,
         )
         .await
       } else {
-        let tls_client_config = (if disable_certificate_verification {
+        let mut tls_client_config = (if disable_certificate_verification {
           rustls::ClientConfig::builder()
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
@@ -688,6 +699,8 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           rustls::ClientConfig::builder().with_platform_verifier()?
         })
         .with_no_client_auth();
+        tls_client_config.alpn_protocols =
+          vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
         let connector = TlsConnector::from(Arc::new(tls_client_config));
         let domain = ServerName::try_from(host)?.to_owned();
 
@@ -711,6 +724,9 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           }
         };
 
+        // Enable HTTP/2 when the ALPN protocol is "h2"
+        let enable_http2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
+
         #[cfg(feature = "runtime-monoio")]
         let rw = {
           let send_rw_stream = SendRwStream::new(tls_stream);
@@ -731,6 +747,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           proxy_to,
           failed_backends_option_borrowed,
           proxy_intercept_errors,
+          enable_http2,
         )
         .await
       }
@@ -842,11 +859,13 @@ async fn determine_proxy_to(
 /// * `proxy_to` - The full URL of the backend server (used for health checking)
 /// * `failed_backends` - Cache for tracking failed backend attempts (for health checking)
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
+/// * `use_http2` - Whether to use HTTP/2 for the connection
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
+#[allow(clippy::too_many_arguments)]
 async fn http_proxy(
-  connections: Option<&RwLock<HashMap<String, SendRequest<BoxBody<Bytes, std::io::Error>>>>>,
+  connections: Option<&RwLock<HashMap<String, SendRequest>>>,
   connect_addr: String,
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
@@ -854,6 +873,7 @@ async fn http_proxy(
   proxy_to: String,
   failed_backends: Option<&tokio::sync::RwLock<TtlCache<std::string::String, u64>>>,
   proxy_intercept_errors: bool,
+  use_http2: bool,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   // Convert the async stream to a Monoio- or Tokio-compatible I/O type
   #[cfg(feature = "runtime-monoio")]
@@ -861,41 +881,85 @@ async fn http_proxy(
   #[cfg(feature = "runtime-tokio")]
   let io = TokioIo::new(stream);
 
-  // Establish an HTTP/1.1 connection to the backend server
-  let (mut sender, conn) = match hyper::client::conn::http1::handshake(io).await {
-    Ok(data) => data,
-    Err(err) => {
-      // Handle connection failure by:
-      // 1. Incrementing the failure count for this backend if health checking is enabled
-      if let Some(failed_backends) = failed_backends {
-        let mut failed_backends_write = failed_backends.write().await;
-        let failed_attempts = failed_backends_write.get(&proxy_to);
-        failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
-      }
-      // 2. Logging the error
-      error_logger.log(&format!("Bad gateway: {err}")).await;
-      // 3. Returning a 502 Bad Gateway response
-      return Ok(ResponseData {
-        request: None,
-        response: None,
-        response_status: Some(StatusCode::BAD_GATEWAY),
-        response_headers: None,
-        new_remote_address: None,
-      });
-    }
-  };
+  // Establish an HTTP/1.1 or HTTP/2 connection to the backend server
+  let mut sender = if use_http2 {
+    #[cfg(feature = "runtime-monoio")]
+    let executor = MonoioExecutor;
+    #[cfg(feature = "runtime-tokio")]
+    let executor = TokioExecutor::new();
 
-  // Enable HTTP protocol upgrades (e.g., WebSockets) and spawn a task to drive the connection
-  let conn_with_upgrades = conn.with_upgrades();
-  crate::runtime::spawn(async move {
-    conn_with_upgrades.await.unwrap_or_default();
-  });
+    let (sender, conn) = match hyper::client::conn::http2::handshake(executor, io).await {
+      Ok(data) => data,
+      Err(err) => {
+        // Handle connection failure by:
+        // 1. Incrementing the failure count for this backend if health checking is enabled
+        if let Some(failed_backends) = failed_backends {
+          let mut failed_backends_write = failed_backends.write().await;
+          let failed_attempts = failed_backends_write.get(&proxy_to);
+          failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
+        }
+        // 2. Logging the error
+        error_logger.log(&format!("Bad gateway: {err}")).await;
+        // 3. Returning a 502 Bad Gateway response
+        return Ok(ResponseData {
+          request: None,
+          response: None,
+          response_status: Some(StatusCode::BAD_GATEWAY),
+          response_headers: None,
+          new_remote_address: None,
+        });
+      }
+    };
+
+    // Spawn a task to drive the connection
+    crate::runtime::spawn(async move {
+      conn.await.unwrap_or_default();
+    });
+
+    SendRequest::Http2(sender)
+  } else {
+    let (sender, conn) = match hyper::client::conn::http1::handshake(io).await {
+      Ok(data) => data,
+      Err(err) => {
+        // Handle connection failure by:
+        // 1. Incrementing the failure count for this backend if health checking is enabled
+        if let Some(failed_backends) = failed_backends {
+          let mut failed_backends_write = failed_backends.write().await;
+          let failed_attempts = failed_backends_write.get(&proxy_to);
+          failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
+        }
+        // 2. Logging the error
+        error_logger.log(&format!("Bad gateway: {err}")).await;
+        // 3. Returning a 502 Bad Gateway response
+        return Ok(ResponseData {
+          request: None,
+          response: None,
+          response_status: Some(StatusCode::BAD_GATEWAY),
+          response_headers: None,
+          new_remote_address: None,
+        });
+      }
+    };
+
+    // Enable HTTP protocol upgrades (e.g., WebSockets) and spawn a task to drive the connection
+    let conn_with_upgrades = conn.with_upgrades();
+    crate::runtime::spawn(async move {
+      conn_with_upgrades.await.unwrap_or_default();
+    });
+
+    SendRequest::Http1(sender)
+  };
 
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
   let proxy_request = Request::from_parts(proxy_request_parts, proxy_request_body);
 
-  let proxy_response = match sender.send_request(proxy_request).await {
+  let send_request_result = match &mut sender {
+    SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
+    SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
+  };
+
+  let proxy_response = match send_request_result {
     Ok(response) => response,
     Err(err) => {
       error_logger.log(&format!("Bad gateway: {err}")).await;
@@ -983,7 +1047,10 @@ async fn http_proxy(
 
   // Store the HTTP connection in the connection pool for future reuse if it's still open
   if let Some(connections) = connections {
-    if !sender.is_closed() {
+    if !(match &sender {
+      SendRequest::Http1(sender) => sender.is_closed(),
+      SendRequest::Http2(sender) => sender.is_closed(),
+    }) {
       let mut rwlock_write = connections.write().await;
       rwlock_write.insert(connect_addr, sender);
       drop(rwlock_write);
@@ -1013,7 +1080,7 @@ async fn http_proxy(
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
 async fn http_proxy_kept_alive(
-  sender: &mut SendRequest<BoxBody<Bytes, std::io::Error>>,
+  sender: &mut SendRequest,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
@@ -1022,8 +1089,13 @@ async fn http_proxy_kept_alive(
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
   let proxy_request = Request::from_parts(proxy_request_parts, proxy_request_body);
 
+  let send_request_result = match sender {
+    SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
+    SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
+  };
+
   // Send the request over the existing connection and await the response
-  let proxy_response = match sender.send_request(proxy_request).await {
+  let proxy_response = match send_request_result {
     Ok(response) => response,
     Err(err) => {
       // Log the error and return a 502 Bad Gateway response
