@@ -192,6 +192,8 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies whenever to disable the certificate verification of the ACME server. Default: `auto_tls_no_verification #false`
 - `auto_tls_profile <auto_tls_profile: string|null>` (Ferron 2.0.0-beta.9 or newer)
   - This directive specifies the ACME profile to use for the certificates. Default: `auto_tls_profile #null`
+- `auto_tls_on_demand <auto_tls_on_demand: bool>` (Ferron UNRELEASED or newer)
+  - This directive specifies whenever to enable the automatic TLS on demand. The functionality obtains TLS certificates automatically when a website is accessed for the first time. Default: `auto_tls_on_demand #false`
 
 ### Logging
 

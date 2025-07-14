@@ -53,11 +53,11 @@ use util::{get_entry, get_value, get_values};
 use xxhash_rust::xxh3::xxh3_128;
 
 use crate::acme::{
-  check_certificate_validity_or_install_cached, provision_certificate, AcmeCache, AcmeConfig,
-  AcmeResolver, TlsAlpn01Resolver, ACME_TLS_ALPN_NAME,
+  check_certificate_validity_or_install_cached, convert_on_demand_config, provision_certificate,
+  AcmeCache, AcmeConfig, AcmeOnDemandConfig, AcmeResolver, TlsAlpn01Resolver, ACME_TLS_ALPN_NAME,
 };
 use crate::logging::{LoggerFilter, LoggersBuilder};
-use crate::util::NoServerVerifier;
+use crate::util::{match_hostname, NoServerVerifier};
 
 // Set the global allocator to use mimalloc for performance optimization
 #[global_allocator]
@@ -536,18 +536,29 @@ fn before_starting_server(
       });
 
     let mut tls_ports: HashMap<u16, CustomSniResolver> = HashMap::new();
+    let mut tls_port_locks: HashMap<
+      u16,
+      Arc<tokio::sync::RwLock<HashMap<String, Arc<dyn ResolvesServerCert>>>>,
+    > = HashMap::new();
     let mut nonencrypted_ports = HashSet::new();
     let mut certified_keys_to_preload: HashMap<u16, Vec<Arc<CertifiedKey>>> = HashMap::new();
     let mut used_sni_hostnames = HashSet::new();
     let mut automatic_tls_used_sni_hostnames = HashSet::new();
     let mut acme_tls_alpn_01_resolvers: HashMap<u16, TlsAlpn01Resolver> = HashMap::new();
-    let mut acme_http_01_resolvers: Vec<crate::acme::Http01DataLock> = Vec::new();
+    let mut acme_tls_alpn_01_resolver_locks: HashMap<
+      u16,
+      Arc<tokio::sync::RwLock<Vec<crate::acme::TlsAlpn01DataLock>>>,
+    > = HashMap::new();
+    let acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>> =
+      Arc::new(tokio::sync::RwLock::new(Vec::new()));
     let acme_default_directory = dirs::data_local_dir().and_then(|mut p| {
       p.push("ferron-acme");
       p.into_os_string().into_string().ok()
     });
     let memory_acme_account_cache_data = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
     let mut acme_configs = Vec::new();
+    let mut acme_on_demand_configs = Vec::new();
+    let (acme_on_demand_tx, acme_on_demand_rx) = async_channel::unbounded();
 
     // Iterate server configurations (TLS configuration)
     for server_configuration in &server_configurations.inner {
@@ -557,6 +568,10 @@ fn before_starting_server(
         // Don't add listeners from an empty global configuration or non-host global configuration
         continue;
       }
+
+      let on_demand_tls = get_value!("auto_tls_on_demand", server_configuration)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
       let https_port = server_configuration.filters.port.or(default_https_port);
 
@@ -649,7 +664,9 @@ fn before_starting_server(
                       sni_resolver.load_fallback_resolver(resolver);
                     }
                   } else {
-                    let mut sni_resolver = CustomSniResolver::new();
+                    let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+                    tls_port_locks.insert(https_port, sni_resolver_list.clone());
+                    let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
                     if let Some(sni_hostname) = &sni_hostname {
                       sni_resolver.load_host_resolver(sni_hostname, resolver);
                     } else {
@@ -667,9 +684,9 @@ fn before_starting_server(
         nonencrypted_ports.insert(http_port);
       }
       if let Some(automatic_tls_port) = automatic_tls_port {
-        if !is_auto_tls_sni_hostname_used {
-          if let Some(sni_hostname) = sni_hostname {
-            let is_wildcard_domain = sni_hostname.starts_with("*.");
+        if !is_auto_tls_sni_hostname_used || on_demand_tls {
+          if sni_hostname.is_some() || on_demand_tls {
+            let is_wildcard_domain = sni_hostname.as_ref().is_some_and(|s| s.starts_with("*."));
             let challenge_type_entry = get_entry!("auto_tls_challenge", server_configuration);
             let challenge_type_str = challenge_type_entry
               .and_then(|e| e.values.first())
@@ -690,9 +707,10 @@ fn before_starting_server(
                 }
               })
               .unwrap_or(HashMap::new());
-            if sni_hostname.parse::<IpAddr>().is_ok() {
-              if let Some(logging_tx) = &global_logger {
-                logging_tx
+            if let Some(sni_hostname) = &sni_hostname {
+              if sni_hostname.parse::<IpAddr>().is_ok() {
+                if let Some(logging_tx) = &global_logger {
+                  logging_tx
                                   .send_blocking(LogMessage::new(
                                       format!(
                                           "Ferron's automatic TLS functionality doesn't support IP address-based identifiers, skipping SNI host \"{sni_hostname}\"..."
@@ -700,13 +718,16 @@ fn before_starting_server(
                                       true,
                                   ))
                                   .unwrap_or_default();
+                }
+                continue;
               }
             }
             let challenge_type = match &*challenge_type_str.to_uppercase() {
               "HTTP-01" => {
-                if is_wildcard_domain {
-                  if let Some(logging_tx) = &global_logger {
-                    logging_tx
+                if let Some(sni_hostname) = &sni_hostname {
+                  if is_wildcard_domain && !on_demand_tls {
+                    if let Some(logging_tx) = &global_logger {
+                      logging_tx
                                         .send_blocking(LogMessage::new(
                                             format!(
                                                 "HTTP-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."
@@ -714,15 +735,17 @@ fn before_starting_server(
                                             true,
                                         ))
                                         .unwrap_or_default();
+                    }
+                    continue;
                   }
-                  continue;
                 }
                 ChallengeType::Http01
               }
               "TLS-ALPN-01" => {
-                if is_wildcard_domain {
-                  if let Some(logging_tx) = &global_logger {
-                    logging_tx
+                if let Some(sni_hostname) = &sni_hostname {
+                  if is_wildcard_domain && !on_demand_tls {
+                    if let Some(logging_tx) = &global_logger {
+                      logging_tx
                                         .send_blocking(LogMessage::new(
                                             format!(
                                                 "TLS-ALPN-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."
@@ -730,8 +753,9 @@ fn before_starting_server(
                                             true,
                                         ))
                                         .unwrap_or_default();
+                    }
+                    continue;
                   }
-                  continue;
                 }
                 ChallengeType::TlsAlpn01
               }
@@ -741,87 +765,8 @@ fn before_starting_server(
                 unsupported
               ))?,
             };
-            let (account_cache_path, cert_cache_path) =
-              if let Some(acme_cache_path) = get_value!("auto_tls_cache", server_configuration)
-                .map_or(acme_default_directory.as_deref(), |v| {
-                  if v.is_null() {
-                    None
-                  } else if let Some(v) = v.as_str() {
-                    Some(v)
-                  } else {
-                    acme_default_directory.as_deref()
-                  }
-                })
-              {
-                let mut pathbuf = match PathBuf::from_str(acme_cache_path) {
-                  Ok(pathbuf) => pathbuf,
-                  Err(_) => Err(anyhow::anyhow!("Invalid ACME cache path"))?,
-                };
-                let base_pathbuf = pathbuf.clone();
-                let append_hash = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
-                  xxh3_128(format!("{automatic_tls_port}-{sni_hostname}").as_bytes()).to_be_bytes(),
-                );
-                pathbuf.push(append_hash);
-                (Some(base_pathbuf), Some(pathbuf))
-              } else {
-                (None, None)
-              };
-            let certified_key_lock = Arc::new(tokio::sync::RwLock::new(None));
-            let tls_alpn_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
-            let http_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
-            let acme_config = AcmeConfig {
-              rustls_client_config:
-                (if get_value!("auto_tls_no_verification", server_configuration)
-                  .and_then(|v| v.as_bool())
-                  .unwrap_or(false)
-                {
-                  ClientConfig::builder_with_provider(crypto_provider.clone())
-                    .with_safe_default_protocol_versions()?
-                    .dangerous()
-                    .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
-                } else {
-                  ClientConfig::builder_with_provider(crypto_provider.clone())
-                    .with_safe_default_protocol_versions()?
-                    .with_platform_verifier()?
-                })
-                .with_no_client_auth(),
-              domains: vec![sni_hostname.clone()],
-              challenge_type,
-              contact: if let Some(contact) =
-                get_value!("auto_tls_contact", server_configuration).and_then(|v| v.as_str())
-              {
-                vec![format!("mailto:{}", contact.to_string())]
-              } else {
-                vec![]
-              },
-              directory: if let Some(directory) =
-                get_value!("auto_tls_directory", server_configuration).and_then(|v| v.as_str())
-              {
-                directory.to_string()
-              } else if get_value!("auto_tls_letsencrypt_production", server_configuration)
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true)
-              {
-                LetsEncrypt::Production.url().to_string()
-              } else {
-                LetsEncrypt::Staging.url().to_string()
-              },
-              profile: get_value!("auto_tls_profile", server_configuration)
-                .and_then(|v| v.as_str().map(|s| s.to_string())),
-              account_cache: if let Some(account_cache_path) = account_cache_path {
-                AcmeCache::File(account_cache_path)
-              } else {
-                AcmeCache::Memory(memory_acme_account_cache_data.clone())
-              },
-              certificate_cache: if let Some(cert_cache_path) = cert_cache_path {
-                AcmeCache::File(cert_cache_path)
-              } else {
-                AcmeCache::Memory(Arc::new(tokio::sync::RwLock::new(HashMap::new())))
-              },
-              certified_key_lock: certified_key_lock.clone(),
-              tls_alpn_01_data_lock: tls_alpn_01_data_lock.clone(),
-              http_01_data_lock: http_01_data_lock.clone(),
-              dns_provider: if &*challenge_type_str.to_uppercase() != "DNS-01" {
+            let dns_provider: Option<Arc<dyn crate::acme::dns::DnsProvider + Send + Sync>> =
+              if &*challenge_type_str.to_uppercase() != "DNS-01" {
                 None
               } else if let Some(provider_name) = challenge_params.get("provider") {
                 match provider_name.as_str() {
@@ -969,35 +914,199 @@ fn before_starting_server(
                 }
               } else {
                 Err(anyhow::anyhow!("No DNS provider specified"))?
-              },
-            };
-            let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock));
-            acme_configs.push(acme_config);
-            match &*challenge_type_str.to_uppercase() {
-              "HTTP-01" => {
-                acme_http_01_resolvers.push(http_01_data_lock);
-              }
-              "TLS-ALPN-01" => {
-                if let Some(sni_resolver) = acme_tls_alpn_01_resolvers.get_mut(&automatic_tls_port)
-                {
-                  sni_resolver.load_resolver(tls_alpn_01_data_lock);
+              };
+            let acme_cache_path_option = get_value!("auto_tls_cache", server_configuration)
+              .map_or(acme_default_directory.as_deref(), |v| {
+                if v.is_null() {
+                  None
+                } else if let Some(v) = v.as_str() {
+                  Some(v)
                 } else {
-                  let mut sni_resolver = TlsAlpn01Resolver::new();
-                  sni_resolver.load_resolver(tls_alpn_01_data_lock);
-                  acme_tls_alpn_01_resolvers.insert(automatic_tls_port, sni_resolver);
+                  acme_default_directory.as_deref()
                 }
+              })
+              .map(|path| path.to_owned());
+            let rustls_client_config =
+              (if get_value!("auto_tls_no_verification", server_configuration)
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+              {
+                ClientConfig::builder_with_provider(crypto_provider.clone())
+                  .with_safe_default_protocol_versions()?
+                  .dangerous()
+                  .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
+              } else {
+                ClientConfig::builder_with_provider(crypto_provider.clone())
+                  .with_safe_default_protocol_versions()?
+                  .with_platform_verifier()?
+              })
+              .with_no_client_auth();
+            if on_demand_tls {
+              if &*challenge_type_str.to_uppercase() == "TLS-ALPN-01" {
+                // Add TLS-ALPN-01 resolver
+                let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+                acme_tls_alpn_01_resolver_locks
+                  .insert(automatic_tls_port, sni_resolver_list.clone());
+                let sni_resolver = TlsAlpn01Resolver::with_resolvers(sni_resolver_list);
+                acme_tls_alpn_01_resolvers.insert(automatic_tls_port, sni_resolver);
               }
-              _ => (),
+
+              if let Some(sni_resolver) = tls_ports.get_mut(&automatic_tls_port) {
+                sni_resolver.load_fallback_sender(acme_on_demand_tx.clone(), automatic_tls_port);
+              } else {
+                let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+                tls_port_locks.insert(automatic_tls_port, sni_resolver_list.clone());
+                let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
+                sni_resolver.load_fallback_sender(acme_on_demand_tx.clone(), automatic_tls_port);
+                tls_ports.insert(automatic_tls_port, sni_resolver);
+              }
+
+              let acme_on_demand_config = AcmeOnDemandConfig {
+                rustls_client_config,
+                challenge_type,
+                contact: if let Some(contact) =
+                  get_value!("auto_tls_contact", server_configuration).and_then(|v| v.as_str())
+                {
+                  vec![format!("mailto:{}", contact.to_string())]
+                } else {
+                  vec![]
+                },
+                directory: if let Some(directory) =
+                  get_value!("auto_tls_directory", server_configuration).and_then(|v| v.as_str())
+                {
+                  directory.to_string()
+                } else if get_value!("auto_tls_letsencrypt_production", server_configuration)
+                  .and_then(|v| v.as_bool())
+                  .unwrap_or(true)
+                {
+                  LetsEncrypt::Production.url().to_string()
+                } else {
+                  LetsEncrypt::Staging.url().to_string()
+                },
+                profile: get_value!("auto_tls_profile", server_configuration)
+                  .and_then(|v| v.as_str().map(|s| s.to_string())),
+                cache_path: if let Some(acme_cache_path) = acme_cache_path_option.clone() {
+                  match PathBuf::from_str(&acme_cache_path) {
+                    Ok(pathbuf) => Some(pathbuf),
+                    Err(_) => Err(anyhow::anyhow!("Invalid ACME cache path"))?,
+                  }
+                } else {
+                  None
+                },
+                sni_resolver_lock: tls_port_locks
+                  .get(&automatic_tls_port)
+                  .cloned()
+                  .unwrap_or(Arc::new(tokio::sync::RwLock::new(HashMap::new()))),
+                tls_alpn_01_resolver_lock: acme_tls_alpn_01_resolver_locks
+                  .get(&automatic_tls_port)
+                  .cloned()
+                  .unwrap_or(Arc::new(tokio::sync::RwLock::new(Vec::new()))),
+                http_01_resolver_lock: acme_http_01_resolvers.clone(),
+                dns_provider,
+                sni_hostname: sni_hostname.clone(),
+                port: automatic_tls_port,
+              };
+              acme_on_demand_configs.push(acme_on_demand_config);
+            } else if let Some(sni_hostname) = &sni_hostname {
+              let (account_cache_path, cert_cache_path) = if let Some(acme_cache_path) =
+                acme_cache_path_option.clone()
+              {
+                let mut pathbuf = match PathBuf::from_str(&acme_cache_path) {
+                  Ok(pathbuf) => pathbuf,
+                  Err(_) => Err(anyhow::anyhow!("Invalid ACME cache path"))?,
+                };
+                let base_pathbuf = pathbuf.clone();
+                let append_hash = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+                  xxh3_128(format!("{automatic_tls_port}-{sni_hostname}").as_bytes()).to_be_bytes(),
+                );
+                pathbuf.push(append_hash);
+                (Some(base_pathbuf), Some(pathbuf))
+              } else {
+                (None, None)
+              };
+              let certified_key_lock = Arc::new(tokio::sync::RwLock::new(None));
+              let tls_alpn_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
+              let http_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
+              let acme_config = AcmeConfig {
+                rustls_client_config,
+                domains: vec![sni_hostname.clone()],
+                challenge_type,
+                contact: if let Some(contact) =
+                  get_value!("auto_tls_contact", server_configuration).and_then(|v| v.as_str())
+                {
+                  vec![format!("mailto:{}", contact.to_string())]
+                } else {
+                  vec![]
+                },
+                directory: if let Some(directory) =
+                  get_value!("auto_tls_directory", server_configuration).and_then(|v| v.as_str())
+                {
+                  directory.to_string()
+                } else if get_value!("auto_tls_letsencrypt_production", server_configuration)
+                  .and_then(|v| v.as_bool())
+                  .unwrap_or(true)
+                {
+                  LetsEncrypt::Production.url().to_string()
+                } else {
+                  LetsEncrypt::Staging.url().to_string()
+                },
+                profile: get_value!("auto_tls_profile", server_configuration)
+                  .and_then(|v| v.as_str().map(|s| s.to_string())),
+                account_cache: if let Some(account_cache_path) = account_cache_path {
+                  AcmeCache::File(account_cache_path)
+                } else {
+                  AcmeCache::Memory(memory_acme_account_cache_data.clone())
+                },
+                certificate_cache: if let Some(cert_cache_path) = cert_cache_path {
+                  AcmeCache::File(cert_cache_path)
+                } else {
+                  AcmeCache::Memory(Arc::new(tokio::sync::RwLock::new(HashMap::new())))
+                },
+                certified_key_lock: certified_key_lock.clone(),
+                tls_alpn_01_data_lock: tls_alpn_01_data_lock.clone(),
+                http_01_data_lock: http_01_data_lock.clone(),
+                dns_provider,
+              };
+              let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock));
+              acme_configs.push(acme_config);
+              match &*challenge_type_str.to_uppercase() {
+                "HTTP-01" => {
+                  acme_http_01_resolvers
+                    .blocking_write()
+                    .push(http_01_data_lock);
+                }
+                "TLS-ALPN-01" => {
+                  if let Some(sni_resolver) =
+                    acme_tls_alpn_01_resolvers.get_mut(&automatic_tls_port)
+                  {
+                    sni_resolver.load_resolver(tls_alpn_01_data_lock);
+                  } else {
+                    let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+                    acme_tls_alpn_01_resolver_locks
+                      .insert(automatic_tls_port, sni_resolver_list.clone());
+                    let sni_resolver = TlsAlpn01Resolver::with_resolvers(sni_resolver_list);
+                    sni_resolver.load_resolver(tls_alpn_01_data_lock);
+                    acme_tls_alpn_01_resolvers.insert(automatic_tls_port, sni_resolver);
+                  }
+                }
+                _ => (),
+              }
+              if let Some(sni_resolver) = tls_ports.get_mut(&automatic_tls_port) {
+                sni_resolver.load_host_resolver(sni_hostname, acme_resolver);
+              } else {
+                let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+                tls_port_locks.insert(automatic_tls_port, sni_resolver_list.clone());
+                let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
+                sni_resolver.load_host_resolver(sni_hostname, acme_resolver);
+                tls_ports.insert(automatic_tls_port, sni_resolver);
+              }
             }
-            if let Some(sni_resolver) = tls_ports.get_mut(&automatic_tls_port) {
-              sni_resolver.load_host_resolver(&sni_hostname, acme_resolver);
-            } else {
-              let mut sni_resolver = CustomSniResolver::new();
-              sni_resolver.load_host_resolver(&sni_hostname, acme_resolver);
-              tls_ports.insert(automatic_tls_port, sni_resolver);
+            if let Some(sni_hostname) = sni_hostname {
+              automatic_tls_used_sni_hostnames.insert((automatic_tls_port, Some(sni_hostname)));
             }
-            automatic_tls_used_sni_hostnames.insert((automatic_tls_port, Some(sni_hostname)));
-          } else if !server_configuration.filters.is_global() {
+          } else if !server_configuration.filters.is_global()
+            && !server_configuration.filters.is_global_non_host()
+          {
             if let Some(logging_tx) = &global_logger {
               logging_tx
                 .send_blocking(LogMessage::new(
@@ -1011,7 +1120,7 @@ fn before_starting_server(
       }
     }
 
-    if !acme_configs.is_empty() {
+    if !acme_configs.is_empty() || !acme_on_demand_configs.is_empty() {
       // Spawn a task to handle ACME certificate provisioning, one certificate at time
 
       let acme_logger_option = global_logger.clone();
@@ -1023,8 +1132,44 @@ fn before_starting_server(
             .unwrap_or_default();
         }
 
+        // Wrap ACME configurations in a mutex
+        let acme_configs_mutex = Arc::new(tokio::sync::Mutex::new(acme_configs));
+
+        if !acme_on_demand_configs.is_empty() {
+          // On-demand TLS
+          let acme_configs_mutex = acme_configs_mutex.clone();
+          tokio::spawn(async move {
+            let mut existing_combinations = HashSet::new();
+            while let Ok(received_data) = acme_on_demand_rx.recv().await {
+              if existing_combinations.contains(&received_data) {
+                continue;
+              } else {
+                existing_combinations.insert(received_data.clone());
+              }
+              let (sni_hostname, port) = received_data;
+              // Should have been using HashMap instead of manually iterating a Vec...
+              for acme_on_demand_config in &acme_on_demand_configs {
+                if match_hostname(
+                  acme_on_demand_config.sni_hostname.as_deref(),
+                  Some(&sni_hostname),
+                ) && acme_on_demand_config.port == port
+                {
+                  acme_configs_mutex.lock().await.push(
+                    convert_on_demand_config(
+                      acme_on_demand_config,
+                      sni_hostname.clone(),
+                      memory_acme_account_cache_data.clone(),
+                    )
+                    .await,
+                  );
+                }
+              }
+            }
+          });
+        }
+
         loop {
-          for acme_config in &mut acme_configs {
+          for acme_config in &mut *acme_configs_mutex.lock().await {
             if let Err(acme_error) = provision_certificate(acme_config).await {
               if let Some(acme_logger) = &acme_logger_option {
                 acme_logger

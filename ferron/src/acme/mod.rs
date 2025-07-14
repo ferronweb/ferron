@@ -92,6 +92,34 @@ async fn get_from_cache(cache: &AcmeCache, key: &str) -> Option<Vec<u8>> {
   }
 }
 
+/// Represents the on-demand configuration for the ACME client.
+pub struct AcmeOnDemandConfig {
+  /// The Rustls client configuration to use for ACME communication.
+  pub rustls_client_config: ClientConfig,
+  /// The type of challenge to use for ACME certificate issuance.
+  pub challenge_type: ChallengeType,
+  /// The contact information for the ACME account.
+  pub contact: Vec<String>,
+  /// The directory URL for the ACME server.
+  pub directory: String,
+  /// The optional ACME profile name
+  pub profile: Option<String>,
+  /// The path to the cache directory for storing ACME information.
+  pub cache_path: Option<PathBuf>,
+  /// The lock for managing the SNI resolver.
+  pub sni_resolver_lock: Arc<RwLock<HashMap<String, Arc<dyn ResolvesServerCert>>>>,
+  /// The lock for managing the TLS-ALPN-01 resolver.
+  pub tls_alpn_01_resolver_lock: Arc<RwLock<Vec<TlsAlpn01DataLock>>>,
+  /// The lock for managing the HTTP-01 resolver.
+  pub http_01_resolver_lock: Arc<RwLock<Vec<Http01DataLock>>>,
+  /// The ACME DNS provider.
+  pub dns_provider: Option<Arc<dyn DnsProvider + Send + Sync>>,
+  /// The SNI hostname.
+  pub sni_hostname: Option<String>,
+  /// The port to use for ACME communication.
+  pub port: u16,
+}
+
 /// Sets data in the cache.
 async fn set_in_cache(
   cache: &AcmeCache,
@@ -420,6 +448,66 @@ pub async fn provision_certificate(
   Ok(())
 }
 
+/// Converts a `AcmeOnDemandConfig` into an `AcmeConfig`
+pub async fn convert_on_demand_config(
+  config: &AcmeOnDemandConfig,
+  sni_hostname: String,
+  memory_acme_account_cache_data: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+) -> AcmeConfig {
+  let (account_cache_path, cert_cache_path) = if let Some(mut pathbuf) = config.cache_path.clone() {
+    let base_pathbuf = pathbuf.clone();
+    let append_hash = base64::engine::general_purpose::URL_SAFE_NO_PAD
+      .encode(xxh3_128(format!("{}-{sni_hostname}", config.port).as_bytes()).to_be_bytes());
+    pathbuf.push(append_hash);
+    (Some(base_pathbuf), Some(pathbuf))
+  } else {
+    (None, None)
+  };
+
+  let certified_key_lock = Arc::new(tokio::sync::RwLock::new(None));
+  let tls_alpn_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
+  let http_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
+
+  // Insert new locked data
+  config.sni_resolver_lock.write().await.insert(
+    sni_hostname.clone(),
+    Arc::new(AcmeResolver::new(certified_key_lock.clone())),
+  );
+  config
+    .tls_alpn_01_resolver_lock
+    .write()
+    .await
+    .push(tls_alpn_01_data_lock.clone());
+  config
+    .http_01_resolver_lock
+    .write()
+    .await
+    .push(http_01_data_lock.clone());
+
+  AcmeConfig {
+    rustls_client_config: config.rustls_client_config.clone(),
+    domains: vec![sni_hostname],
+    challenge_type: config.challenge_type.clone(),
+    contact: config.contact.clone(),
+    directory: config.directory.clone(),
+    profile: config.profile.clone(),
+    account_cache: if let Some(account_cache_path) = account_cache_path {
+      AcmeCache::File(account_cache_path)
+    } else {
+      AcmeCache::Memory(memory_acme_account_cache_data.clone())
+    },
+    certificate_cache: if let Some(cert_cache_path) = cert_cache_path {
+      AcmeCache::File(cert_cache_path)
+    } else {
+      AcmeCache::Memory(Arc::new(tokio::sync::RwLock::new(HashMap::new())))
+    },
+    certified_key_lock: certified_key_lock.clone(),
+    tls_alpn_01_data_lock: tls_alpn_01_data_lock.clone(),
+    http_01_data_lock: http_01_data_lock.clone(),
+    dns_provider: config.dns_provider.clone(),
+  }
+}
+
 /// An ACME resolver resolving one certified key
 #[derive(Debug)]
 pub struct AcmeResolver {
@@ -470,27 +558,33 @@ impl HttpClient for HttpsClientForAcme {
 /// The TLS-ALPN-01 ACME challenge certificate resolver
 #[derive(Debug)]
 pub struct TlsAlpn01Resolver {
-  resolvers: Vec<TlsAlpn01DataLock>,
+  resolvers: Arc<tokio::sync::RwLock<Vec<TlsAlpn01DataLock>>>,
 }
 
 impl TlsAlpn01Resolver {
   /// Creates a TLS-ALPN-01 resolver
+  #[allow(dead_code)]
   pub fn new() -> Self {
     Self {
-      resolvers: Vec::new(),
+      resolvers: Arc::new(tokio::sync::RwLock::new(Vec::new())),
     }
   }
 
+  /// Creates a TLS-ALPN-01 resolver with provided resolver list lock
+  pub fn with_resolvers(resolvers: Arc<tokio::sync::RwLock<Vec<TlsAlpn01DataLock>>>) -> Self {
+    Self { resolvers }
+  }
+
   /// Loads a certificate resolver lock
-  pub fn load_resolver(&mut self, resolver: TlsAlpn01DataLock) {
-    self.resolvers.push(resolver);
+  pub fn load_resolver(&self, resolver: TlsAlpn01DataLock) {
+    self.resolvers.blocking_write().push(resolver);
   }
 }
 
 impl ResolvesServerCert for TlsAlpn01Resolver {
   fn resolve(&self, client_hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
     let hostname = client_hello.server_name();
-    for resolver_lock in &self.resolvers {
+    for resolver_lock in &*self.resolvers.blocking_read() {
       if let Some(hostname) = hostname {
         let resolver_data = resolver_lock.blocking_read().clone();
         if let Some(resolver_data) = resolver_data {

@@ -623,6 +623,22 @@ impl ModuleLoader for CoreModuleLoader {
       }
     }
 
+    if let Some(entries) =
+      get_entries_for_validation!("auto_tls_on_demand", config, used_properties)
+    {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `auto_tls_on_demand` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_bool() {
+          Err(anyhow::anyhow!(
+            "Invalid on-demand automatic TLS enabling option"
+          ))?
+        }
+      }
+    }
+
     Ok(())
   }
 }

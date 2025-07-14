@@ -68,7 +68,7 @@ pub fn create_http_handler(
   tls_configs: HashMap<u16, Arc<ServerConfig>>,
   http3_enabled: bool,
   acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
-  acme_http_01_resolvers: Vec<crate::acme::Http01DataLock>,
+  acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   enable_proxy_protocol: bool,
 ) -> Result<Sender<()>, Box<dyn Error + Send + Sync>> {
   let (shutdown_tx, shutdown_rx) = async_channel::unbounded();
@@ -119,12 +119,11 @@ async fn http_handler_fn(
   tls_configs: HashMap<u16, Arc<ServerConfig>>,
   http3_enabled: bool,
   acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
-  acme_http_01_resolvers: Vec<crate::acme::Http01DataLock>,
+  acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   enable_proxy_protocol: bool,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   handler_init_tx.send(None).await.unwrap_or_default();
 
-  let acme_http_01_resolvers = Arc::new(acme_http_01_resolvers);
   let connections_references = Arc::new(());
 
   loop {
@@ -252,7 +251,7 @@ async fn http_tcp_handler_fn(
   http3_enabled: bool,
   connection_reference: Arc<()>,
   acme_tls_alpn_01_config: Option<Arc<ServerConfig>>,
-  acme_http_01_resolvers: Arc<Vec<crate::acme::Http01DataLock>>,
+  acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   enable_proxy_protocol: bool,
 ) {
   let _connection_reference = Arc::downgrade(&connection_reference);
@@ -719,7 +718,7 @@ async fn http_quic_handler_fn(
                 configurations.clone(),
                 loggers.clone(),
                 None,
-                Arc::new(vec![]),
+                Arc::new(tokio::sync::RwLock::new(vec![])),
                 None,
                 None,
               )

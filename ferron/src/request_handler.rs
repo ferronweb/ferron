@@ -379,7 +379,7 @@ async fn request_handler_wrapped(
   configurations: Arc<ServerConfigurations>,
   loggers: Loggers,
   http3_alt_port: Option<u16>,
-  acme_http_01_resolvers: Arc<Vec<crate::acme::Http01DataLock>>,
+  acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   proxy_protocol_client_address: Option<SocketAddr>,
   proxy_protocol_server_address: Option<SocketAddr>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
@@ -1152,13 +1152,14 @@ async fn request_handler_wrapped(
   }
 
   // HTTP-01 ACME challenge for automatic TLS
-  if !acme_http_01_resolvers.is_empty() {
+  let acme_http_01_resolvers_inner = acme_http_01_resolvers.read().await;
+  if !acme_http_01_resolvers_inner.is_empty() {
     if let Some(challenge_token) = request
       .uri()
       .path()
       .strip_prefix("/.well-known/acme-challenge/")
     {
-      for acme_http01_resolver in &*acme_http_01_resolvers {
+      for acme_http01_resolver in &*acme_http_01_resolvers_inner {
         if let Some(http01_acme_data) = &*acme_http01_resolver.read().await {
           let acme_response = http01_acme_data.1.clone();
           if challenge_token == http01_acme_data.0 {
@@ -1199,6 +1200,7 @@ async fn request_handler_wrapped(
       }
     }
   };
+  drop(acme_http_01_resolvers_inner);
 
   // Create an error logger
   let cloned_logger = logger.clone();
@@ -1574,7 +1576,7 @@ pub async fn request_handler(
   configurations: Arc<ServerConfigurations>,
   loggers: Loggers,
   http3_alt_port: Option<u16>,
-  acme_http_01_resolvers: Arc<Vec<crate::acme::Http01DataLock>>,
+  acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   proxy_protocol_client_address: Option<SocketAddr>,
   proxy_protocol_server_address: Option<SocketAddr>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
