@@ -536,6 +536,7 @@ fn before_starting_server(
       });
 
     let mut tls_ports: HashMap<u16, CustomSniResolver> = HashMap::new();
+    #[allow(clippy::type_complexity)]
     let mut tls_port_locks: HashMap<
       u16,
       Arc<tokio::sync::RwLock<HashMap<String, Arc<dyn ResolvesServerCert>>>>,

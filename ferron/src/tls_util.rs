@@ -47,8 +47,6 @@ impl CustomSniResolver {
       .insert(host.to_string(), resolver);
   }
 
-  /// Loads a host certificate resolver for a specific host asynchronously
-
   /// Loads a fallback sender used for sending SNI hostnames for a specific host
   pub fn load_fallback_sender(
     &mut self,
