@@ -575,26 +575,14 @@ fn before_starting_server(
 
       let https_port = server_configuration.filters.port.or(default_https_port);
 
-      let sni_hostname = server_configuration
-        .filters
-        .hostname
-        .clone()
-        .or_else(|| match server_configuration.filters.ip {
+      let sni_hostname = server_configuration.filters.hostname.clone().or_else(|| {
+        // !!! UNTESTED, many clients don't send SNI hostname when accessing via IP address anyway
+        match server_configuration.filters.ip {
           Some(IpAddr::V4(address)) => Some(address.to_string()),
           Some(IpAddr::V6(address)) => Some(format!("[{address}]")),
           _ => None,
-        })
-        .map(|sni| {
-          if let Some(https_port) = https_port {
-            if Some(https_port) != default_https_port {
-              format!("{sni}:{https_port}")
-            } else {
-              sni
-            }
-          } else {
-            sni
-          }
-        });
+        }
+      });
 
       let is_sni_hostname_used = !https_port.is_none_or(|p| {
         !used_sni_hostnames.contains(&(p, sni_hostname.clone()))
