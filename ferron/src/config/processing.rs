@@ -31,7 +31,8 @@ pub fn merge_duplicates(
       let server_configuration_source = &server_configurations[server_configurations_index];
 
       // Check if all filter criteria match exactly between the two configurations
-      if server_configuration_source.filters.hostname == server_configuration.filters.hostname
+      if server_configuration_source.filters.is_host == server_configuration.filters.is_host
+        && server_configuration_source.filters.hostname == server_configuration.filters.hostname
         && server_configuration_source.filters.ip == server_configuration.filters.ip
         && server_configuration_source.filters.port == server_configuration.filters.port
         && server_configuration_source.filters.location_prefix
