@@ -309,7 +309,7 @@ pub fn load_modules(
   // Find the global configuration to pass to modules
   let global_configuration = server_configurations
     .iter()
-    .find(|c| c.filters.is_global())
+    .find(|c| c.filters.is_global() || c.filters.is_global_non_host())
     .cloned();
 
   // Process each server configuration

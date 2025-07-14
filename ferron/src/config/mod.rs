@@ -47,8 +47,7 @@ impl ServerConfigurations {
       .iter()
       .rev()
       .find(|&server_configuration| {
-        server_configuration.filters.is_host
-          && match_hostname(server_configuration.filters.hostname.as_deref(), hostname)
+        match_hostname(server_configuration.filters.hostname.as_deref(), hostname)
           && (server_configuration.filters.ip.is_none()
             || server_configuration.filters.ip == Some(ip))
           && (server_configuration.filters.port.is_none()
