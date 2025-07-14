@@ -639,6 +639,40 @@ impl ModuleLoader for CoreModuleLoader {
       }
     }
 
+    if let Some(entries) =
+      get_entries_for_validation!("auto_tls_on_demand_ask", config, used_properties)
+    {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `auto_tls_on_demand_ask` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
+          Err(anyhow::anyhow!(
+            "Invalid automatic TLS on demand ask endpoint URL"
+          ))?
+        }
+      }
+    }
+
+    if let Some(entries) = get_entries_for_validation!(
+      "auto_tls_on_demand_ask_no_verification",
+      config,
+      used_properties
+    ) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `auto_tls_on_demand_ask_no_verification` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_bool() {
+          Err(anyhow::anyhow!(
+            "Invalid automatic TLS on demand ask endpoint certificate verification disabling option"
+          ))?
+        }
+      }
+    }
+
     Ok(())
   }
 }

@@ -560,6 +560,24 @@ fn before_starting_server(
     let mut acme_configs = Vec::new();
     let mut acme_on_demand_configs = Vec::new();
     let (acme_on_demand_tx, acme_on_demand_rx) = async_channel::unbounded();
+    let on_demand_tls_ask_endpoint = match global_configuration
+      .as_ref()
+      .and_then(|c| get_value!("auto_tls_on_demand_ask", c))
+      .and_then(|v| v.as_str())
+      .map(|u| u.parse::<hyper::Uri>())
+    {
+      Some(Ok(uri)) => Some(uri),
+      Some(Err(err)) => Err(anyhow::anyhow!(
+        "Failed to parse automatic TLS on demand asking endpoint URI: {}",
+        err
+      ))?,
+      None => None,
+    };
+    let on_demand_tls_ask_endpoint_verify = !global_configuration
+      .as_ref()
+      .and_then(|c| get_value!("auto_tls_on_demand_ask_no_verification", c))
+      .and_then(|v| v.as_bool())
+      .unwrap_or(false);
 
     // Iterate server configurations (TLS configuration)
     for server_configuration in &server_configurations.inner {
@@ -1126,9 +1144,141 @@ fn before_starting_server(
         if !acme_on_demand_configs.is_empty() {
           // On-demand TLS
           let acme_configs_mutex = acme_configs_mutex.clone();
+          let acme_logger_option = acme_logger_option.clone();
           tokio::spawn(async move {
             let mut existing_combinations = HashSet::new();
             while let Ok(received_data) = acme_on_demand_rx.recv().await {
+              let on_demand_tls_ask_endpoint = on_demand_tls_ask_endpoint.clone();
+              if let Some(on_demand_tls_ask_endpoint) = on_demand_tls_ask_endpoint {
+                let mut url_parts = on_demand_tls_ask_endpoint.into_parts();
+                if let Some(path_and_query) = url_parts.path_and_query {
+                  let query = path_and_query.query();
+                  let query = if let Some(query) = query {
+                    format!("{}&domain={}", query, urlencoding::encode(&received_data.0))
+                  } else {
+                    format!("domain={}", urlencoding::encode(&received_data.0))
+                  };
+                  url_parts.path_and_query = Some(
+                    match format!("{}?{}", path_and_query.path(), query).parse() {
+                      Ok(parsed) => parsed,
+                      Err(err) => {
+                        if let Some(acme_logger) = &acme_logger_option {
+                          acme_logger
+                            .send(LogMessage::new(
+                              format!(
+                                "Error while formatting the URL for on-demand TLS request: {err}"
+                              ),
+                              true,
+                            ))
+                            .await
+                            .unwrap_or_default();
+                        }
+                        continue;
+                      }
+                    },
+                  );
+                } else {
+                  url_parts.path_and_query = Some(
+                    match format!("/?domain={}", urlencoding::encode(&received_data.0)).parse() {
+                      Ok(parsed) => parsed,
+                      Err(err) => {
+                        if let Some(acme_logger) = &acme_logger_option {
+                          acme_logger
+                            .send(LogMessage::new(
+                              format!(
+                                "Error while formatting the URL for on-demand TLS request: {err}"
+                              ),
+                              true,
+                            ))
+                            .await
+                            .unwrap_or_default();
+                        }
+                        continue;
+                      }
+                    },
+                  );
+                }
+                let endpoint_url = match hyper::Uri::from_parts(url_parts) {
+                  Ok(parsed) => parsed,
+                  Err(err) => {
+                    if let Some(acme_logger) = &acme_logger_option {
+                      acme_logger
+                        .send(LogMessage::new(
+                          format!(
+                            "Error while formatting the URL for on-demand TLS request: {err}"
+                          ),
+                          true,
+                        ))
+                        .await
+                        .unwrap_or_default();
+                    }
+                    continue;
+                  }
+                };
+                let ask_closure = async {
+                  let client = hyper_util::client::legacy::Client::builder(
+                    hyper_util::rt::TokioExecutor::new(),
+                  )
+                  .build::<_, http_body_util::Empty<hyper::body::Bytes>>(
+                    hyper_rustls::HttpsConnectorBuilder::new()
+                      .with_tls_config(
+                        (if !on_demand_tls_ask_endpoint_verify {
+                          ClientConfig::builder_with_provider(crypto_provider.clone())
+                            .with_safe_default_protocol_versions()?
+                            .dangerous()
+                            .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
+                        } else {
+                          ClientConfig::builder_with_provider(crypto_provider.clone())
+                            .with_safe_default_protocol_versions()?
+                            .with_platform_verifier()?
+                        })
+                        .with_no_client_auth(),
+                      )
+                      .https_or_http()
+                      .enable_http1()
+                      .enable_http2()
+                      .build(),
+                  );
+                  let request = hyper::Request::builder()
+                    .method(hyper::Method::GET)
+                    .uri(endpoint_url)
+                    .body(http_body_util::Empty::<hyper::body::Bytes>::new())?;
+                  let response = client.request(request).await?;
+
+                  Ok::<_, Box<dyn Error + Send + Sync>>(response.status().is_success())
+                };
+                match ask_closure.await {
+                    Ok(true) => (),
+                    Ok(false) => {
+                        if let Some(acme_logger) = &acme_logger_option {
+                          acme_logger
+                            .send(LogMessage::new(
+                              format!(
+                                "The TLS certificate cannot be issued for \"{}\" hostname", &received_data.0
+                              ),
+                              true,
+                            ))
+                            .await
+                            .unwrap_or_default();
+                        }
+                        continue;
+                    },
+                    Err(err) => {
+                        if let Some(acme_logger) = &acme_logger_option {
+                          acme_logger
+                            .send(LogMessage::new(
+                              format!(
+                                  "Error while determining if the TLS certificate can be issued for \"{}\" hostname: {err}", &received_data.0
+                              ),
+                              true,
+                            ))
+                            .await
+                            .unwrap_or_default();
+                        }
+                        continue;
+                    },
+                }
+              }
               if existing_combinations.contains(&received_data) {
                 continue;
               } else {

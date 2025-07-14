@@ -118,6 +118,10 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies IP addresses to be blocked. This directive can be specified multiple times. Default: none
 - `allow <allowed_ip: string> [<allowed_ip: string> ...]` (Ferron 2.0.0-beta.9 or newer)
   - This directive specifies IP addresses to be allowed. This directive can be specified multiple times. Default: none
+- `auto_tls_on_demand_ask <auto_tls_on_demand_ask_url: string|null>` (Ferron UNRELEASED or newer)
+  - This directive specifies the URL to be used for asking whenever to the hostname for automatic TLS on demand is allowed. The server will append the `domain` query parameter with the domain name for the certificate to issue as a value to the URL. It's recommended to configure this option when using automatic TLS on demand to prevent abuse. Default: `auto_tls_on_demand_ask #null`
+- `auto_tls_on_demand_ask_no_verification [auto_tls_on_demand_ask_no_verification: bool]` (Ferron UNRELEASED or newer)
+  - This directive specifies whenever the server should not verify the TLS certificate of the automatic TLS on demand asking endpoint. Default: `auto_tls_on_demand_ask_no_verification #false`
 
 ### HTTP protocol & performance
 
