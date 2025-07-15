@@ -197,7 +197,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `auto_tls_profile <auto_tls_profile: string|null>` (Ferron 2.0.0-beta.9 or newer)
   - This directive specifies the ACME profile to use for the certificates. Default: `auto_tls_profile #null`
 - `auto_tls_on_demand <auto_tls_on_demand: bool>` (Ferron UNRELEASED or newer)
-  - This directive specifies whenever to enable the automatic TLS on demand. The functionality obtains TLS certificates automatically when a website is accessed for the first time. It's recommended to use either HTTP-01 or TLS-ALPN-01 ACME challenges, as DNS-01 ACME challenges might be slower due to DNS propagation delays. Default: `auto_tls_on_demand #false`
+  - This directive specifies whenever to enable the automatic TLS on demand. The functionality obtains TLS certificates automatically when a website is accessed for the first time. It's recommended to use either HTTP-01 or TLS-ALPN-01 ACME challenges, as DNS-01 ACME challenges might be slower due to DNS propagation delays. It's also recommended to configure the `auto_tls_on_demand_ask` directive alongside this directive. Default: `auto_tls_on_demand #false`
 
 ### Logging
 
