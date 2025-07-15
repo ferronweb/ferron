@@ -9,6 +9,9 @@ function HeroCTA() {
   const copyToClipboard = () => {
     navigator.clipboard.writeText(command);
     setIsCopied(true);
+    window.plausible.trackEvent("install-command-copy", {
+      props: { variant: selectedButton }
+    }); // Track the command copying button clicks; the Plausible event name is "install-command-copy".
     setTimeout(() => setIsCopied(false), 2000);
   };
 

@@ -58,6 +58,8 @@ import { Font } from "astro:assets";
   plausible.trackPageview();
   plausible.enableAutoOutboundTracking();
 
+  window.plausible = plausible;
+
   document.addEventListener("astro:after-swap", () => {
     // Track page view
     plausible.trackPageview();
