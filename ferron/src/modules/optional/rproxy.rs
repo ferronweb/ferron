@@ -259,6 +259,20 @@ impl ModuleLoader for ReverseProxyModuleLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("proxy_http2", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `proxy_http2` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_bool() {
+          Err(anyhow::anyhow!(
+            "Invalid reverse proxy HTTP/2 enabling option"
+          ))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -691,6 +705,9 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         )
         .await
       } else {
+        let enable_http2_config = get_value!("proxy_http2", config)
+          .and_then(|v| v.as_bool())
+          .unwrap_or(false);
         let mut tls_client_config = (if disable_certificate_verification {
           rustls::ClientConfig::builder()
             .dangerous()
@@ -699,8 +716,12 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           rustls::ClientConfig::builder().with_platform_verifier()?
         })
         .with_no_client_auth();
-        tls_client_config.alpn_protocols =
-          vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
+        if enable_http2_config {
+          tls_client_config.alpn_protocols =
+            vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
+        } else {
+          tls_client_config.alpn_protocols = vec![b"http/1.1".to_vec(), b"http/1.0".to_vec()];
+        }
         let connector = TlsConnector::from(Arc::new(tls_client_config));
         let domain = ServerName::try_from(host)?.to_owned();
 
@@ -725,7 +746,8 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         };
 
         // Enable HTTP/2 when the ALPN protocol is "h2"
-        let enable_http2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
+        let enable_http2 =
+          enable_http2_config && tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
 
         #[cfg(feature = "runtime-monoio")]
         let rw = {
