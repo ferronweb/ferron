@@ -52,6 +52,25 @@ pre {
   --chart-5: 180, 70%, 45%;
 }
 
+/* Custom scrollbar styles for Chromium, because the default ones inside the body are light style, which may not match the website's dark style. */
+@supports selector(::-webkit-scrollbar) {
+  body ::-webkit-scrollbar {
+    @apply h-2 w-2;
+  }
+
+  body ::-webkit-scrollbar-track {
+    @apply bg-background p-0.5;
+  }
+
+  body ::-webkit-scrollbar-thumb {
+    @apply bg-foreground/30 rounded-full;
+  }
+
+  body ::-webkit-scrollbar-thumb:hover {
+    @apply bg-foreground/50;
+  }
+}
+
 @layer utilities {
   .container {
     margin-inline: auto;
