@@ -177,6 +177,24 @@ fn get_certificate_cache_key(config: &AcmeConfig) -> String {
   )
 }
 
+/// Determines the account cache key
+fn get_hostname_cache_key(config: &AcmeOnDemandConfig) -> String {
+  format!(
+    "hostname_{}",
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+      xxh3_128(
+        format!(
+          "{}{}",
+          &config.port,
+          config.sni_hostname.as_ref().map_or("".to_string(), |h| format!(";{h}"))
+        )
+        .as_bytes()
+      )
+      .to_be_bytes()
+    )
+  )
+}
+
 /// Checks if the TLS certificate (cached or live) is valid. If cached certificate is valid, installs the cached certificate
 pub async fn check_certificate_validity_or_install_cached(
   config: &mut AcmeConfig,
@@ -410,6 +428,38 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
 
   result?;
 
+  Ok(())
+}
+
+/// Obtains the list of domains for which `AcmeOnDemandConfig` was converted into `AcmeConfig` from cache.
+pub async fn get_cached_domains(config: &AcmeOnDemandConfig) -> Vec<String> {
+  if let Some(pathbuf) = config.cache_path.clone() {
+    let hostname_cache_key = get_hostname_cache_key(config);
+    let hostname_cache = AcmeCache::File(pathbuf);
+    let cache_data = get_from_cache(&hostname_cache, &hostname_cache_key).await;
+    if let Some(data) = cache_data {
+      serde_json::from_slice(&data).unwrap_or_default()
+    } else {
+      Vec::new()
+    }
+  } else {
+    Vec::new()
+  }
+}
+
+/// Adds the domain to the cache.
+pub async fn add_domain_to_cache(
+  config: &AcmeOnDemandConfig,
+  domain: &str,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+  if let Some(pathbuf) = config.cache_path.clone() {
+    let hostname_cache_key = get_hostname_cache_key(config);
+    let hostname_cache = AcmeCache::File(pathbuf);
+    let mut cached_domains = get_cached_domains(config).await;
+    cached_domains.push(domain.to_string());
+    let data = serde_json::to_vec(&cached_domains)?;
+    set_in_cache(&hostname_cache, &hostname_cache_key, data).await?;
+  }
   Ok(())
 }
 

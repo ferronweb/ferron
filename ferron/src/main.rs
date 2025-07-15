@@ -51,8 +51,9 @@ use util::{get_entry, get_value, get_values};
 use xxhash_rust::xxh3::xxh3_128;
 
 use crate::acme::{
-  check_certificate_validity_or_install_cached, convert_on_demand_config, provision_certificate, AcmeCache, AcmeConfig,
-  AcmeOnDemandConfig, AcmeResolver, TlsAlpn01Resolver, ACME_TLS_ALPN_NAME,
+  add_domain_to_cache, check_certificate_validity_or_install_cached, convert_on_demand_config, get_cached_domains,
+  provision_certificate, AcmeCache, AcmeConfig, AcmeOnDemandConfig, AcmeResolver, TlsAlpn01Resolver,
+  ACME_TLS_ALPN_NAME,
 };
 use crate::logging::{LoggerFilter, LoggersBuilder};
 use crate::util::{match_hostname, NoServerVerifier};
@@ -689,13 +690,11 @@ fn before_starting_server(
               if sni_hostname.parse::<IpAddr>().is_ok() {
                 if let Some(logging_tx) = &global_logger {
                   logging_tx
-                                  .send_blocking(LogMessage::new(
-                                      format!(
-                                          "Ferron's automatic TLS functionality doesn't support IP address-based identifiers, skipping SNI host \"{sni_hostname}\"..."
-                                      ),
-                                      true,
-                                  ))
-                                  .unwrap_or_default();
+                    .send_blocking(LogMessage::new(
+                      format!("Ferron's automatic TLS functionality doesn't support IP address-based identifiers, skipping SNI host \"{sni_hostname}\"..."),
+                      true,
+                    ))
+                    .unwrap_or_default();
                 }
                 continue;
               }
@@ -706,13 +705,11 @@ fn before_starting_server(
                   if is_wildcard_domain && !on_demand_tls {
                     if let Some(logging_tx) = &global_logger {
                       logging_tx
-                                        .send_blocking(LogMessage::new(
-                                            format!(
-                                                "HTTP-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."
-                                            ),
-                                            true,
-                                        ))
-                                        .unwrap_or_default();
+                        .send_blocking(LogMessage::new(
+                          format!("HTTP-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."),
+                          true,
+                        ))
+                        .unwrap_or_default();
                     }
                     continue;
                   }
@@ -724,13 +721,11 @@ fn before_starting_server(
                   if is_wildcard_domain && !on_demand_tls {
                     if let Some(logging_tx) = &global_logger {
                       logging_tx
-                                        .send_blocking(LogMessage::new(
-                                            format!(
-                                                "TLS-ALPN-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."
-                                            ),
-                                            true,
-                                        ))
-                                        .unwrap_or_default();
+                        .send_blocking(LogMessage::new(
+                          format!("TLS-ALPN-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."),
+                          true,
+                        ))
+                        .unwrap_or_default();
                     }
                     continue;
                   }
@@ -1071,8 +1066,31 @@ fn before_starting_server(
             .unwrap_or_default();
         }
 
+        let mut existing_combinations = HashSet::new();
+        for acme_on_demand_config in &mut acme_on_demand_configs {
+          for cached_domain in get_cached_domains(acme_on_demand_config).await {
+            let mut acme_config = convert_on_demand_config(
+              acme_on_demand_config,
+              cached_domain.clone(),
+              memory_acme_account_cache_data.clone(),
+            )
+            .await;
+
+            existing_combinations.insert((cached_domain, acme_on_demand_config.port));
+
+            // Install the certificates from the cache if they're valid
+            check_certificate_validity_or_install_cached(&mut acme_config)
+              .await
+              .unwrap_or_default();
+
+            acme_configs.push(acme_config);
+          }
+        }
+
         // Wrap ACME configurations in a mutex
         let acme_configs_mutex = Arc::new(tokio::sync::Mutex::new(acme_configs));
+
+        let prevent_file_race_conditions_mutex = Arc::new(tokio::sync::Mutex::new(()));
 
         if !acme_on_demand_configs.is_empty() {
           // On-demand TLS
@@ -1080,7 +1098,7 @@ fn before_starting_server(
           let acme_logger_option = acme_logger_option.clone();
           let acme_on_demand_configs = Arc::new(acme_on_demand_configs);
           tokio::spawn(async move {
-            let mut existing_combinations = HashSet::new();
+            let mut existing_combinations = existing_combinations;
             while let Ok(received_data) = acme_on_demand_rx.recv().await {
               let on_demand_tls_ask_endpoint = on_demand_tls_ask_endpoint.clone();
               if let Some(on_demand_tls_ask_endpoint) = on_demand_tls_ask_endpoint {
@@ -1214,11 +1232,18 @@ fn before_starting_server(
               let acme_configs_mutex = acme_configs_mutex.clone();
               let acme_on_demand_configs = acme_on_demand_configs.clone();
               let memory_acme_account_cache_data = memory_acme_account_cache_data.clone();
+              let prevent_file_race_conditions_mutex = prevent_file_race_conditions_mutex.clone();
               tokio::spawn(async move {
                 for acme_on_demand_config in acme_on_demand_configs.iter() {
                   if match_hostname(acme_on_demand_config.sni_hostname.as_deref(), Some(&sni_hostname))
                     && acme_on_demand_config.port == port
                   {
+                    let mutex_guard = prevent_file_race_conditions_mutex.lock().await;
+                    add_domain_to_cache(acme_on_demand_config, &sni_hostname)
+                      .await
+                      .unwrap_or_default();
+                    drop(mutex_guard);
+
                     acme_configs_mutex.lock().await.push(
                       convert_on_demand_config(
                         acme_on_demand_config,
