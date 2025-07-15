@@ -268,7 +268,7 @@ const docLinks = Astro.props.docLinks;
         e.preventDefault();
         if (menu) {
           menu.classList.replace("left-full", "left-0");
-          document.documentElement.classList.add("md:overflow-hidden");
+          document.documentElement.classList.add("max-md:overflow-hidden");
         }
       });
     }
@@ -277,7 +277,7 @@ const docLinks = Astro.props.docLinks;
         e.preventDefault();
         if (menu) {
           menu.classList.replace("left-0", "left-full");
-          document.documentElement.classList.remove("md:overflow-hidden");
+          document.documentElement.classList.remove("max-md:overflow-hidden");
         }
       });
     }
@@ -286,7 +286,7 @@ const docLinks = Astro.props.docLinks;
         menuLink.addEventListener("click", () => {
           if (menu) {
             menu.classList.replace("left-0", "left-full");
-            document.documentElement.classList.remove("md:overflow-hidden");
+            document.documentElement.classList.remove("max-md:overflow-hidden");
           }
         });
       });
@@ -300,7 +300,7 @@ const docLinks = Astro.props.docLinks;
         e.preventDefault();
         if (search) {
           search.classList.remove("hidden");
-          document.documentElement.classList.add("md:overflow-hidden");
+          document.documentElement.classList.add("max-md:overflow-hidden");
         }
       });
     }
@@ -309,7 +309,7 @@ const docLinks = Astro.props.docLinks;
         e.preventDefault();
         if (search) {
           search.classList.add("hidden");
-          document.documentElement.classList.remove("md:overflow-hidden");
+          document.documentElement.classList.remove("max-md:overflow-hidden");
         }
       });
     }
