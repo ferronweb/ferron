@@ -53,21 +53,24 @@ pre {
 }
 
 /* Custom scrollbar styles for Chromium, because the default ones inside the body are light style, which may not match the website's dark style. */
-@supports selector(::-webkit-scrollbar) {
-  body ::-webkit-scrollbar {
-    @apply h-2 w-2;
-  }
+@media (width >= 48rem) {
+  /* Equivalent to `md:<class>` in Tailwind CSS */
+  @supports selector(::-webkit-scrollbar) {
+    body ::-webkit-scrollbar {
+      @apply h-2 w-2;
+    }
 
-  body ::-webkit-scrollbar-track {
-    @apply bg-background;
-  }
+    body ::-webkit-scrollbar-track {
+      @apply bg-background;
+    }
 
-  body ::-webkit-scrollbar-thumb {
-    @apply bg-foreground/30 rounded-full;
-  }
+    body ::-webkit-scrollbar-thumb {
+      @apply bg-foreground/30 rounded-full;
+    }
 
-  body ::-webkit-scrollbar-thumb:hover {
-    @apply bg-foreground/50;
+    body ::-webkit-scrollbar-thumb:hover {
+      @apply bg-foreground/50;
+    }
   }
 }
 
