@@ -59,7 +59,7 @@ pre {
   }
 
   body ::-webkit-scrollbar-track {
-    @apply bg-background p-0.5;
+    @apply bg-background;
   }
 
   body ::-webkit-scrollbar-thumb {
