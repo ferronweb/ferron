@@ -1,11 +1,8 @@
 ---
-import "@fontsource/inter";
-import "@fontsource/inter/700.css";
-import "@fontsource/rajdhani";
-import "@fontsource/rajdhani/700.css";
 import "../styles/global.css";
 import { SEO } from "astro-seo";
 import { ClientRouter } from "astro:transitions";
+import { Font } from "astro:assets";
 ---
 
 <!doctype html>
@@ -14,6 +11,8 @@ import { ClientRouter } from "astro:transitions";
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <Font cssVariable="--font-rajdhani" />
+    <Font cssVariable="--font-inter" />
     <SEO
       title={Astro.props.title
         ? `${Astro.props.title} - Ferron`

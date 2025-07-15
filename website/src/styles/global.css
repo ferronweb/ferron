@@ -6,7 +6,7 @@ html,
 body {
   margin: 0;
   width: 100%;
-  font-family: Inter;
+  font-family: var(--font-inter);
   background-color: hsla(var(--background), 1);
   color: hsla(var(--foreground), 1);
 }
@@ -83,7 +83,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: Rajdhani;
+  font-family: var(--font-rajdhani);
 }
 
 .disable-css-transitions * {
@@ -91,9 +91,9 @@ h6 {
 }
 
 .font-inter {
-  font-family: Inter;
+  font-family: var(--font-inter);
 }
 
 .font-rajdhani {
-  font-family: Rajdhani;
+  font-family: var(--font-rajdhani);
 }

@@ -1,5 +1,5 @@
 // @ts-check
-import { defineConfig } from "astro/config";
+import { defineConfig, fontProviders } from "astro/config";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@astrojs/react";
@@ -12,9 +12,6 @@ export default defineConfig({
 
   vite: {
     plugins: [tailwindcss()],
-    ssr: {
-      noExternal: ["@fontsource/inter", "@fontsource/rajdhani"]
-    },
     build: {
       assetsInlineLimit: 0,
       chunkSizeWarningLimit: 600
@@ -30,5 +27,23 @@ export default defineConfig({
   prefetch: {
     prefetchAll: true,
     defaultStrategy: "tap"
+  },
+  experimental: {
+    fonts: [
+      {
+        provider: fontProviders.fontsource(),
+        name: "Rajdhani",
+        weights: [400, 700],
+        cssVariable: "--font-rajdhani",
+        fallbacks: ["sans-serif"]
+      },
+      {
+        provider: fontProviders.fontsource(),
+        name: "Inter",
+        weights: [400, 700],
+        cssVariable: "--font-inter",
+        fallbacks: ["sans-serif"]
+      }
+    ]
   }
 });

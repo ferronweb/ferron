@@ -16,8 +16,6 @@
     "@csstools/postcss-cascade-layers": "^5.0.1",
     "@csstools/postcss-color-mix-function": "^3.0.8",
     "@csstools/postcss-oklab-function": "^4.0.8",
-    "@fontsource/inter": "^5.1.1",
-    "@fontsource/rajdhani": "^5.1.1",
     "@tailwindcss/typography": "^0.5.16",
     "@tailwindcss/vite": "^4.0.9",
     "@types/react": "^19.0.10",
