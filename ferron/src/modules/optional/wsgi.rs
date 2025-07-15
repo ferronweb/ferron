@@ -31,9 +31,7 @@ use crate::config::ServerConfiguration;
 use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use crate::util::wsgi::{load_wsgi_application, WsgiErrorStream, WsgiInputStream};
-use crate::util::{
-  get_entries, get_entries_for_validation, get_entry, get_value, ModuleCache, SERVER_SOFTWARE,
-};
+use crate::util::{get_entries, get_entries_for_validation, get_entry, get_value, ModuleCache, SERVER_SOFTWARE};
 
 /// A WSGI module loader
 pub struct WsgiModuleLoader {
@@ -66,17 +64,12 @@ impl ModuleLoader for WsgiModuleLoader {
           if let Some(wsgi_application_path) = get_value!("wsgi", config).and_then(|v| v.as_str()) {
             Ok(Arc::new(WsgiModule {
               wsgi_application: Some(Arc::new(
-                load_wsgi_application(
-                  PathBuf::from_str(wsgi_application_path)?.as_path(),
-                  clear_sys_path,
-                )
-                .map_err(|e| anyhow::anyhow!("Cannot load a WSGI application: {}", e))?,
+                load_wsgi_application(PathBuf::from_str(wsgi_application_path)?.as_path(), clear_sys_path)
+                  .map_err(|e| anyhow::anyhow!("Cannot load a WSGI application: {}", e))?,
               )),
             }))
           } else {
-            Ok(Arc::new(WsgiModule {
-              wsgi_application: None,
-            }))
+            Ok(Arc::new(WsgiModule { wsgi_application: None }))
           }
         })?,
     )
@@ -98,44 +91,33 @@ impl ModuleLoader for WsgiModuleLoader {
             "The `wsgi` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
-          Err(anyhow::anyhow!(
-            "The WSGI application path must be a string"
-          ))?
+          Err(anyhow::anyhow!("The WSGI application path must be a string"))?
         }
       }
     };
 
-    if let Some(entries) = get_entries_for_validation!("wsgi_environment", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("wsgi_environment", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 2 {
           Err(anyhow::anyhow!(
             "The `wsgi_environment` configuration property must have exactly two values"
           ))?
         } else if !entry.values[0].is_string() {
-          Err(anyhow::anyhow!(
-            "The WSGI environment variable name must be a string"
-          ))?
+          Err(anyhow::anyhow!("The WSGI environment variable name must be a string"))?
         } else if !entry.values[1].is_string() {
-          Err(anyhow::anyhow!(
-            "The WSGI environment variable value must be a string"
-          ))?
+          Err(anyhow::anyhow!("The WSGI environment variable value must be a string"))?
         }
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("wsgi_clear_imports", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("wsgi_clear_imports", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
             "The `wsgi_clear_imports` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
-          Err(anyhow::anyhow!(
-            "Invalid WSGI Python import clearing option"
-          ))?
+          Err(anyhow::anyhow!("Invalid WSGI Python import clearing option"))?
         }
       }
     };
@@ -236,9 +218,7 @@ impl ModuleHandlers for WsgiModuleHandlers {
       let execute_path_info = request_path.strip_prefix("/").map(|s| s.to_string());
 
       let mut additional_environment_variables = HashMap::new();
-      if let Some(additional_environment_variables_config) =
-        get_entries!("wsgi_environment", config)
-      {
+      if let Some(additional_environment_variables_config) = get_entries!("wsgi_environment", config) {
         for additional_variable in additional_environment_variables_config.inner.iter() {
           if let Some(key) = additional_variable.values.first().and_then(|v| v.as_str()) {
             if let Some(value) = additional_variable.values.get(1).and_then(|v| v.as_str()) {
@@ -341,19 +321,13 @@ async fn execute_wsgi_with_environment_variables(
       _ => "HTTP/Unknown".to_string(),
     },
   );
-  environment_variables.insert(
-    "SERVER_PORT".to_string(),
-    socket_data.local_addr.port().to_string(),
-  );
+  environment_variables.insert("SERVER_PORT".to_string(), socket_data.local_addr.port().to_string());
   environment_variables.insert(
     "SERVER_ADDR".to_string(),
     socket_data.local_addr.ip().to_canonical().to_string(),
   );
   if let Some(server_administrator_email) = server_administrator_email {
-    environment_variables.insert(
-      "SERVER_ADMIN".to_string(),
-      server_administrator_email.to_string(),
-    );
+    environment_variables.insert("SERVER_ADMIN".to_string(), server_administrator_email.to_string());
   }
   if let Some(host) = request.headers().get(header::HOST) {
     environment_variables.insert(
@@ -362,10 +336,7 @@ async fn execute_wsgi_with_environment_variables(
     );
   }
 
-  environment_variables.insert(
-    "DOCUMENT_ROOT".to_string(),
-    wwwroot.to_string_lossy().to_string(),
-  );
+  environment_variables.insert("DOCUMENT_ROOT".to_string(), wwwroot.to_string_lossy().to_string());
   environment_variables.insert(
     "PATH_INFO".to_string(),
     match &path_info {
@@ -398,10 +369,7 @@ async fn execute_wsgi_with_environment_variables(
     ),
   );
 
-  environment_variables.insert(
-    "REMOTE_PORT".to_string(),
-    socket_data.remote_addr.port().to_string(),
-  );
+  environment_variables.insert("REMOTE_PORT".to_string(), socket_data.remote_addr.port().to_string());
   environment_variables.insert(
     "REMOTE_ADDR".to_string(),
     socket_data.remote_addr.ip().to_canonical().to_string(),
@@ -481,20 +449,12 @@ async fn execute_wsgi_with_environment_variables(
   }
 
   for (env_var_key, env_var_value) in additional_environment_variables {
-    if let hashlink::linked_hash_map::Entry::Vacant(entry) =
-      environment_variables.entry(env_var_key)
-    {
+    if let hashlink::linked_hash_map::Entry::Vacant(entry) = environment_variables.entry(env_var_key) {
       entry.insert(env_var_value);
     }
   }
 
-  execute_wsgi(
-    request,
-    error_logger,
-    wsgi_application,
-    environment_variables,
-  )
-  .await
+  execute_wsgi(request, error_logger, wsgi_application, environment_variables).await
 }
 
 async fn execute_wsgi(
@@ -564,8 +524,7 @@ async fn execute_wsgi(
       )?;
       let mut environment: HashMap<String, Bound<'_, PyAny>> = HashMap::new();
       let is_https = environment_variables.contains_key("HTTPS");
-      let content_length = if let Some(content_length) = environment_variables.get("CONTENT_LENGTH")
-      {
+      let content_length = if let Some(content_length) = environment_variables.get("CONTENT_LENGTH") {
         content_length.parse::<u64>().ok()
       } else {
         None
@@ -576,10 +535,7 @@ async fn execute_wsgi(
           PyString::new(py, &environment_variable_value).into_any(),
         );
       }
-      environment.insert(
-        "wsgi.version".to_string(),
-        PyTuple::new(py, [1, 0])?.into_any(),
-      );
+      environment.insert("wsgi.version".to_string(), PyTuple::new(py, [1, 0])?.into_any());
       environment.insert(
         "wsgi.url_scheme".to_string(),
         PyString::new(py, if is_https { "https" } else { "http" }).into_any(),
@@ -596,27 +552,13 @@ async fn execute_wsgi(
       );
       environment.insert(
         "wsgi.errors".to_string(),
-        WsgiErrorStream::new(error_logger_owned)
-          .into_pyobject(py)?
-          .into_any(),
+        WsgiErrorStream::new(error_logger_owned).into_pyobject(py)?.into_any(),
       );
-      environment.insert(
-        "wsgi.multithread".to_string(),
-        PyBool::new(py, true).as_any().clone(),
-      );
-      environment.insert(
-        "wsgi.multiprocess".to_string(),
-        PyBool::new(py, false).as_any().clone(),
-      );
-      environment.insert(
-        "wsgi.run_once".to_string(),
-        PyBool::new(py, false).as_any().clone(),
-      );
+      environment.insert("wsgi.multithread".to_string(), PyBool::new(py, true).as_any().clone());
+      environment.insert("wsgi.multiprocess".to_string(), PyBool::new(py, false).as_any().clone());
+      environment.insert("wsgi.run_once".to_string(), PyBool::new(py, false).as_any().clone());
       let body_unknown = wsgi_application.call(py, (environment, start_response), None)?;
-      let body_iterator = body_unknown
-        .downcast_bound::<PyIterator>(py)?
-        .clone()
-        .unbind();
+      let body_iterator = body_unknown.downcast_bound::<PyIterator>(py)?.clone().unbind();
       Ok(body_iterator)
     })
   })
@@ -626,48 +568,45 @@ async fn execute_wsgi(
   ))?;
 
   let wsgi_head_clone = wsgi_head.clone();
-  let mut response_stream =
-    futures_util::stream::unfold(Arc::new(body_iterator), move |body_iterator_arc| {
-      let wsgi_head_clone = wsgi_head_clone.clone();
-      Box::pin(async move {
-        let body_iterator_arc_clone = body_iterator_arc.clone();
-        let blocking_thread_result = crate::runtime::spawn_blocking(move || {
-          Python::with_gil(|py| -> PyResult<Option<Bytes>> {
-            let mut body_iterator_bound = body_iterator_arc_clone.bind(py).clone();
-            if let Some(body_chunk) = body_iterator_bound.next() {
-              Ok(Some(Bytes::from(body_chunk?.extract::<Vec<u8>>()?)))
-            } else {
-              Ok(None)
-            }
-          })
+  let mut response_stream = futures_util::stream::unfold(Arc::new(body_iterator), move |body_iterator_arc| {
+    let wsgi_head_clone = wsgi_head_clone.clone();
+    Box::pin(async move {
+      let body_iterator_arc_clone = body_iterator_arc.clone();
+      let blocking_thread_result = crate::runtime::spawn_blocking(move || {
+        Python::with_gil(|py| -> PyResult<Option<Bytes>> {
+          let mut body_iterator_bound = body_iterator_arc_clone.bind(py).clone();
+          if let Some(body_chunk) = body_iterator_bound.next() {
+            Ok(Some(Bytes::from(body_chunk?.extract::<Vec<u8>>()?)))
+          } else {
+            Ok(None)
+          }
         })
-        .await;
+      })
+      .await;
 
-        match blocking_thread_result {
-          Err(_) => Some((
-            Err(std::io::Error::other(
-              "Can't spawn a blocking task for WSGI",
-            )),
-            body_iterator_arc,
-          )),
-          Ok(Err(error)) => Some((Err(std::io::Error::other(error)), body_iterator_arc)),
-          Ok(Ok(None)) => None,
-          Ok(Ok(Some(chunk))) => {
-            let wsgi_head_locked = wsgi_head_clone.lock().await;
-            if !wsgi_head_locked.is_set {
-              Some((
-                Err(std::io::Error::other(
-                  "The \"start_response\" function hasn't been called.",
-                )),
-                body_iterator_arc,
-              ))
-            } else {
-              Some((Ok(chunk), body_iterator_arc))
-            }
+      match blocking_thread_result {
+        Err(_) => Some((
+          Err(std::io::Error::other("Can't spawn a blocking task for WSGI")),
+          body_iterator_arc,
+        )),
+        Ok(Err(error)) => Some((Err(std::io::Error::other(error)), body_iterator_arc)),
+        Ok(Ok(None)) => None,
+        Ok(Ok(Some(chunk))) => {
+          let wsgi_head_locked = wsgi_head_clone.lock().await;
+          if !wsgi_head_locked.is_set {
+            Some((
+              Err(std::io::Error::other(
+                "The \"start_response\" function hasn't been called.",
+              )),
+              body_iterator_arc,
+            ))
+          } else {
+            Some((Ok(chunk), body_iterator_arc))
           }
         }
-      })
-    });
+      }
+    })
+  });
 
   let first_chunk = response_stream.next().await;
   let response_body = if let Some(Err(first_chunk_error)) = first_chunk {

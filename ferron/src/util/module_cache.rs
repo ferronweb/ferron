@@ -130,9 +130,7 @@ impl<T> Default for ModuleCache<T> {
 
 #[cfg(test)]
 mod test {
-  use crate::config::{
-    ServerConfigurationEntry, ServerConfigurationFilters, ServerConfigurationValue,
-  };
+  use crate::config::{ServerConfigurationEntry, ServerConfigurationFilters, ServerConfigurationValue};
 
   use super::*;
 
@@ -179,9 +177,7 @@ mod test {
       "ignore".to_string(),
       ServerConfigurationEntries {
         inner: vec![ServerConfigurationEntry {
-          values: vec![ServerConfigurationValue::String(
-            "something else".to_string(),
-          )],
+          values: vec![ServerConfigurationValue::String("something else".to_string())],
           props: HashMap::new(),
         }],
       },
@@ -201,18 +197,14 @@ mod test {
 
     assert_eq!(
       cache
-        .get_or::<_, Box<dyn std::error::Error + Send + Sync>>(&config, |_config| Ok(Arc::new(
-          module
-        )))
+        .get_or::<_, Box<dyn std::error::Error + Send + Sync>>(&config, |_config| Ok(Arc::new(module)))
         .unwrap(),
       Arc::new(module)
     );
 
     assert_eq!(
       cache
-        .get_or::<_, Box<dyn std::error::Error + Send + Sync>>(&config2, |_config| Ok(Arc::new(
-          module
-        )))
+        .get_or::<_, Box<dyn std::error::Error + Send + Sync>>(&config2, |_config| Ok(Arc::new(module)))
         .unwrap(),
       Arc::new(module)
     );
@@ -262,9 +254,7 @@ mod test {
       "ignore".to_string(),
       ServerConfigurationEntries {
         inner: vec![ServerConfigurationEntry {
-          values: vec![ServerConfigurationValue::String(
-            "something else".to_string(),
-          )],
+          values: vec![ServerConfigurationValue::String("something else".to_string())],
           props: HashMap::new(),
         }],
       },
@@ -285,9 +275,7 @@ mod test {
     // Should initialize a module
     assert_eq!(
       cache
-        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(&config, |_config| Ok(
-          Arc::new(module)
-        ))
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(&config, |_config| Ok(Arc::new(module)))
         .unwrap(),
       Arc::new(module)
     );
@@ -295,9 +283,7 @@ mod test {
     // Should obtain cached module (not initialize module2)
     assert_eq!(
       cache
-        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(&config2, |_config| Ok(
-          Arc::new(module2)
-        ))
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(&config2, |_config| Ok(Arc::new(module2)))
         .unwrap(),
       Arc::new(module)
     );

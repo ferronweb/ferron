@@ -118,15 +118,9 @@ async fn tcp_listener_fn(
     Ok(listener) => listener,
     Err(err) => {
       if encrypted {
-        Err(anyhow::anyhow!(format!(
-          "Cannot listen to HTTPS port: {}",
-          err
-        )))?
+        Err(anyhow::anyhow!(format!("Cannot listen to HTTPS port: {}", err)))?
       } else {
-        Err(anyhow::anyhow!(format!(
-          "Cannot listen to HTTP port: {}",
-          err
-        )))?
+        Err(anyhow::anyhow!(format!("Cannot listen to HTTP port: {}", err)))?
       }
     }
   };
@@ -144,10 +138,7 @@ async fn tcp_listener_fn(
       Err(err) => {
         if let Some(logging_tx) = &logging_tx {
           logging_tx
-            .send(LogMessage::new(
-              format!("Cannot accept a connection: {err}"),
-              true,
-            ))
+            .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
             .await
             .unwrap_or_default();
         }
@@ -159,10 +150,7 @@ async fn tcp_listener_fn(
       Err(err) => {
         if let Some(logging_tx) = &logging_tx {
           logging_tx
-            .send(LogMessage::new(
-              format!("Cannot accept a connection: {err}"),
-              true,
-            ))
+            .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
             .await
             .unwrap_or_default();
         }

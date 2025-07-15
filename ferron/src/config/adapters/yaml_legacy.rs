@@ -50,10 +50,7 @@ impl YamlLegacyConfigurationAdapter {
 }
 
 impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
-  fn load_configuration(
-    &self,
-    path: &Path,
-  ) -> Result<Vec<ServerConfiguration>, Box<dyn Error + Send + Sync>> {
+  fn load_configuration(&self, path: &Path) -> Result<Vec<ServerConfiguration>, Box<dyn Error + Send + Sync>> {
     // Read and parse the configuration file contents
     let kdl_document: KdlDocument = match convert_yaml_to_kdl(path.to_path_buf()) {
       Ok(document) => document,
@@ -119,14 +116,12 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
             (Some(global_name.to_string()), None, None, true)
           };
 
-          let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
-            HashMap::new();
+          let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
           for kdl_node in children.nodes() {
             let kdl_node_name = kdl_node.name().value();
             let children = kdl_node.children();
             if kdl_node_name == "location" {
-              let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
-                HashMap::new();
+              let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
               if let Some(children) = children {
                 if let Some(location) = kdl_node.entry(0) {
                   if let Some(location_str) = location.value().as_string() {
@@ -134,17 +129,14 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                       let kdl_node_name = kdl_node.name().value();
                       let children = kdl_node.children();
                       if kdl_node_name == "error_config" {
-                        let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
-                          HashMap::new();
+                        let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
                         if let Some(children) = children {
                           if let Some(error_status_code) = kdl_node.entry(0) {
-                            if let Some(error_status_code) = error_status_code.value().as_integer()
-                            {
+                            if let Some(error_status_code) = error_status_code.value().as_integer() {
                               for kdl_node in children.nodes() {
                                 let kdl_node_name = kdl_node.name().value();
                                 let value = kdl_node_to_configuration_entry(kdl_node);
-                                if let Some(entries) = configuration_entries.get_mut(kdl_node_name)
-                                {
+                                if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
                                   entries.inner.push(value);
                                 } else {
                                   configuration_entries.insert(
@@ -161,9 +153,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                                   ip,
                                   port,
                                   location_prefix: Some(location_str.to_string()),
-                                  error_handler_status: Some(ErrorHandlerStatus::Status(
-                                    error_status_code as u16,
-                                  )),
+                                  error_handler_status: Some(ErrorHandlerStatus::Status(error_status_code as u16)),
                                 },
                                 modules: vec![],
                               });
@@ -222,9 +212,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                         "UNDOCUMENTED_REMOVE_PATH_PREFIX".to_string(),
                         ServerConfigurationEntries {
                           inner: vec![ServerConfigurationEntry {
-                            values: vec![ServerConfigurationValue::String(
-                              location_str.to_string(),
-                            )],
+                            values: vec![ServerConfigurationValue::String(location_str.to_string())],
                             props: HashMap::new(),
                           }],
                         },
@@ -249,13 +237,10 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                   Err(anyhow::anyhow!("Invalid location"))?
                 }
               } else {
-                Err(anyhow::anyhow!(
-                  "Locations should have children, but they don't"
-                ))?
+                Err(anyhow::anyhow!("Locations should have children, but they don't"))?
               }
             } else if kdl_node_name == "error_config" {
-              let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
-                HashMap::new();
+              let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
               if let Some(children) = children {
                 if let Some(error_status_code) = kdl_node.entry(0) {
                   if let Some(error_status_code) = error_status_code.value().as_integer() {
@@ -279,9 +264,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                         ip,
                         port,
                         location_prefix: None,
-                        error_handler_status: Some(ErrorHandlerStatus::Status(
-                          error_status_code as u16,
-                        )),
+                        error_handler_status: Some(ErrorHandlerStatus::Status(error_status_code as u16)),
                       },
                       modules: vec![],
                     });

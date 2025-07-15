@@ -59,10 +59,7 @@ impl ModuleLoader for RewriteModuleLoader {
                 Some(regex_str) => regex_str,
                 None => Err(anyhow::anyhow!("Invalid URL rewrite regular expression"))?,
               };
-              let regex = match RegexBuilder::new(regex_str)
-                .case_insensitive(cfg!(windows))
-                .build()
-              {
+              let regex = match RegexBuilder::new(regex_str).case_insensitive(cfg!(windows)).build() {
                 Ok(regex) => regex,
                 Err(err) => Err(anyhow::anyhow!(
                   "Invalid URL rewrite regular expression: {}",
@@ -123,13 +120,9 @@ impl ModuleLoader for RewriteModuleLoader {
             "The `rewrite` configuration property must have exactly two values"
           ))?
         } else if !entry.values[0].is_string() {
-          Err(anyhow::anyhow!(
-            "The URL rewrite regular expression must be a string"
-          ))?
+          Err(anyhow::anyhow!("The URL rewrite regular expression must be a string"))?
         } else if !entry.values[1].is_string() {
-          Err(anyhow::anyhow!(
-            "The URL rewrite replacement must be a string"
-          ))?
+          Err(anyhow::anyhow!("The URL rewrite replacement must be a string"))?
         } else if !entry.props.get("directory").is_none_or(|v| v.is_bool()) {
           Err(anyhow::anyhow!(
             "The URL rewrite disabling when it's a directory option must be boolean"
@@ -139,14 +132,8 @@ impl ModuleLoader for RewriteModuleLoader {
             "The URL rewrite disabling when it's a file option must be boolean"
           ))?
         } else if !entry.props.get("last").is_none_or(|v| v.is_bool()) {
-          Err(anyhow::anyhow!(
-            "The URL rewrite last rule option must be boolean"
-          ))?
-        } else if !entry
-          .props
-          .get("allow_double_slashes")
-          .is_none_or(|v| v.is_bool())
-        {
+          Err(anyhow::anyhow!("The URL rewrite last rule option must be boolean"))?
+        } else if !entry.props.get("allow_double_slashes").is_none_or(|v| v.is_bool()) {
           Err(anyhow::anyhow!(
             "The URL rewrite double slashes allowing option must be boolean"
           ))?
@@ -280,8 +267,7 @@ impl ModuleHandlers for RewriteModuleHandlers {
             data
           };
 
-          if (url_rewrite_map_entry.is_not_file && is_file)
-            || (url_rewrite_map_entry.is_not_directory && is_directory)
+          if (url_rewrite_map_entry.is_not_file && is_file) || (url_rewrite_map_entry.is_not_directory && is_directory)
           {
             continue;
           }
@@ -323,9 +309,7 @@ impl ModuleHandlers for RewriteModuleHandlers {
         .unwrap_or(false)
       {
         error_logger
-          .log(&format!(
-            "URL rewritten from \"{original_url}\" to \"{rewritten_url}\""
-          ))
+          .log(&format!("URL rewritten from \"{original_url}\" to \"{rewritten_url}\""))
           .await;
       }
       let request_data = request.extensions_mut().get_mut::<RequestData>();

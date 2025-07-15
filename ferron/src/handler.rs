@@ -154,9 +154,7 @@ async fn http_handler_fn(
     ) {
       None
     } else {
-      acme_tls_alpn_01_configs
-        .get(&conn_data.server_address.port())
-        .cloned()
+      acme_tls_alpn_01_configs.get(&conn_data.server_address.port()).cloned()
     };
     let acme_http_01_resolvers = acme_http_01_resolvers.clone();
     let loggers = loggers.clone();
@@ -170,10 +168,7 @@ async fn http_handler_fn(
             Err(err) => {
               if let Some(logging_tx) = loggers.find_global_logger() {
                 logging_tx
-                  .send(LogMessage::new(
-                    format!("Cannot accept a connection: {err}"),
-                    true,
-                  ))
+                  .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
                   .await
                   .unwrap_or_default();
               }
@@ -261,10 +256,7 @@ async fn http_tcp_handler_fn(
     Err(err) => {
       if let Some(logging_tx) = loggers.find_global_logger() {
         logging_tx
-          .send(LogMessage::new(
-            format!("Cannot accept a connection: {err}"),
-            true,
-          ))
+          .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
           .await
           .unwrap_or_default();
       }
@@ -273,27 +265,26 @@ async fn http_tcp_handler_fn(
   };
 
   // PROXY protocol header precedes TLS handshakes too...
-  let (tcp_stream, proxy_protocol_client_address, proxy_protocol_server_address) =
-    if enable_proxy_protocol {
-      // Read and parse the PROXY protocol header
-      match read_proxy_header(tcp_stream).await {
-        Ok((tcp_stream, client_ip, server_ip)) => (tcp_stream, client_ip, server_ip),
-        Err(err) => {
-          if let Some(logging_tx) = loggers.find_global_logger() {
-            logging_tx
-              .send(LogMessage::new(
-                format!("Error reading PROXY protocol header: {err}"),
-                true,
-              ))
-              .await
-              .unwrap_or_default();
-          }
-          return;
+  let (tcp_stream, proxy_protocol_client_address, proxy_protocol_server_address) = if enable_proxy_protocol {
+    // Read and parse the PROXY protocol header
+    match read_proxy_header(tcp_stream).await {
+      Ok((tcp_stream, client_ip, server_ip)) => (tcp_stream, client_ip, server_ip),
+      Err(err) => {
+        if let Some(logging_tx) = loggers.find_global_logger() {
+          logging_tx
+            .send(LogMessage::new(
+              format!("Error reading PROXY protocol header: {err}"),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
         }
+        return;
       }
-    } else {
-      (tcp_stream, None, None)
-    };
+    }
+  } else {
+    (tcp_stream, None, None)
+  };
 
   let maybe_tls_stream = if let Some(tls_config) = tls_config {
     let start_handshake = match LazyConfigAcceptor::new(Acceptor::default(), tcp_stream).await {
@@ -301,10 +292,7 @@ async fn http_tcp_handler_fn(
       Err(err) => {
         if let Some(logging_tx) = loggers.find_global_logger() {
           logging_tx
-            .send(LogMessage::new(
-              format!("Error during TLS handshake: {err}"),
-              true,
-            ))
+            .send(LogMessage::new(format!("Error during TLS handshake: {err}"), true))
             .await
             .unwrap_or_default();
         }
@@ -325,10 +313,7 @@ async fn http_tcp_handler_fn(
           Err(err) => {
             if let Some(logging_tx) = loggers.find_global_logger() {
               logging_tx
-                .send(LogMessage::new(
-                  format!("Error during TLS handshake: {err}"),
-                  true,
-                ))
+                .send(LogMessage::new(format!("Error during TLS handshake: {err}"), true))
                 .await
                 .unwrap_or_default();
             }
@@ -344,10 +329,7 @@ async fn http_tcp_handler_fn(
       Err(err) => {
         if let Some(logging_tx) = loggers.find_global_logger() {
           logging_tx
-            .send(LogMessage::new(
-              format!("Error during TLS handshake: {err}"),
-              true,
-            ))
+            .send(LogMessage::new(format!("Error during TLS handshake: {err}"), true))
             .await
             .unwrap_or_default();
         }
@@ -438,9 +420,7 @@ async fn http_tcp_handler_fn(
             let (request_parts, request_body) = request.into_parts();
             let request = Request::from_parts(
               request_parts,
-              request_body
-                .map_err(|e| std::io::Error::other(e.to_string()))
-                .boxed(),
+              request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
             );
             request_handler(
               request,
@@ -464,10 +444,7 @@ async fn http_tcp_handler_fn(
       {
         if let Some(logging_tx) = loggers.find_global_logger() {
           logging_tx
-            .send(LogMessage::new(
-              format!("Error serving HTTPS connection: {err}"),
-              true,
-            ))
+            .send(LogMessage::new(format!("Error serving HTTPS connection: {err}"), true))
             .await
             .unwrap_or_default();
         }
@@ -500,9 +477,7 @@ async fn http_tcp_handler_fn(
             let (request_parts, request_body) = request.into_parts();
             let request = Request::from_parts(
               request_parts,
-              request_body
-                .map_err(|e| std::io::Error::other(e.to_string()))
-                .boxed(),
+              request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
             );
             request_handler(
               request,
@@ -527,10 +502,7 @@ async fn http_tcp_handler_fn(
       {
         if let Some(logging_tx) = loggers.find_global_logger() {
           logging_tx
-            .send(LogMessage::new(
-              format!("Error serving HTTPS connection: {err}"),
-              true,
-            ))
+            .send(LogMessage::new(format!("Error serving HTTPS connection: {err}"), true))
             .await
             .unwrap_or_default();
         }
@@ -577,9 +549,7 @@ async fn http_tcp_handler_fn(
           let (request_parts, request_body) = request.into_parts();
           let request = Request::from_parts(
             request_parts,
-            request_body
-              .map_err(|e| std::io::Error::other(e.to_string()))
-              .boxed(),
+            request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
           );
           request_handler(
             request,
@@ -604,10 +574,7 @@ async fn http_tcp_handler_fn(
     {
       if let Some(logging_tx) = loggers.find_global_logger() {
         logging_tx
-          .send(LogMessage::new(
-            format!("Error serving HTTP connection: {err}"),
-            true,
-          ))
+          .send(LogMessage::new(format!("Error serving HTTP connection: {err}"), true))
           .await
           .unwrap_or_default();
       }
@@ -633,10 +600,7 @@ async fn http_quic_handler_fn(
           Err(err) => {
             if let Some(logging_tx) = loggers.find_global_logger() {
               logging_tx
-                .send(LogMessage::new(
-                  format!("Error serving HTTP/3 connection: {err}"),
-                  true,
-                ))
+                .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
                 .await
                 .unwrap_or_default();
             }
@@ -657,10 +621,7 @@ async fn http_quic_handler_fn(
                 Err(err) => {
                   if let Some(logging_tx) = loggers.find_global_logger() {
                     logging_tx
-                      .send(LogMessage::new(
-                        format!("Error serving HTTP/3 connection: {err}"),
-                        true,
-                      ))
+                      .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
                       .await
                       .unwrap_or_default();
                   }
@@ -668,45 +629,28 @@ async fn http_quic_handler_fn(
                 }
               };
               let (mut send, receive) = stream.split();
-              let request_body_stream = futures_util::stream::unfold(
-                (receive, false),
-                |(mut receive, mut is_body_finished)| async move {
+              let request_body_stream =
+                futures_util::stream::unfold((receive, false), |(mut receive, mut is_body_finished)| async move {
                   loop {
                     if !is_body_finished {
                       match receive.recv_data().await {
                         Ok(Some(mut data)) => {
-                          return Some((
-                            Ok(Frame::data(data.copy_to_bytes(data.remaining()))),
-                            (receive, false),
-                          ))
+                          return Some((Ok(Frame::data(data.copy_to_bytes(data.remaining()))), (receive, false)))
                         }
                         Ok(None) => is_body_finished = true,
-                        Err(err) => {
-                          return Some((
-                            Err(std::io::Error::other(err.to_string())),
-                            (receive, false),
-                          ))
-                        }
+                        Err(err) => return Some((Err(std::io::Error::other(err.to_string())), (receive, false))),
                       }
                     } else {
                       match receive.recv_trailers().await {
-                        Ok(Some(trailers)) => {
-                          return Some((Ok(Frame::trailers(trailers)), (receive, true)))
-                        }
+                        Ok(Some(trailers)) => return Some((Ok(Frame::trailers(trailers)), (receive, true))),
                         Ok(None) => {
                           return None;
                         }
-                        Err(err) => {
-                          return Some((
-                            Err(std::io::Error::other(err.to_string())),
-                            (receive, true),
-                          ))
-                        }
+                        Err(err) => return Some((Err(std::io::Error::other(err.to_string())), (receive, true))),
                       }
                     }
                   }
-                },
-              );
+                });
               let request_body = BodyExt::boxed(StreamBody::new(request_body_stream));
               let (request_parts, _) = request.into_parts();
               let request = Request::from_parts(request_parts, request_body);
@@ -728,10 +672,7 @@ async fn http_quic_handler_fn(
                 Err(err) => {
                   if let Some(logging_tx) = loggers.find_global_logger() {
                     logging_tx
-                      .send(LogMessage::new(
-                        format!("Error serving HTTP/3 connection: {err}"),
-                        true,
-                      ))
+                      .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
                       .await
                       .unwrap_or_default();
                   }
@@ -739,22 +680,13 @@ async fn http_quic_handler_fn(
                 }
               };
               if let Ok(http_date) = httpdate::fmt_http_date(SystemTime::now()).try_into() {
-                response
-                  .headers_mut()
-                  .entry(hyper::header::DATE)
-                  .or_insert(http_date);
+                response.headers_mut().entry(hyper::header::DATE).or_insert(http_date);
               }
               let (response_parts, mut response_body) = response.into_parts();
-              if let Err(err) = send
-                .send_response(Response::from_parts(response_parts, ()))
-                .await
-              {
+              if let Err(err) = send.send_response(Response::from_parts(response_parts, ())).await {
                 if let Some(logging_tx) = loggers.find_global_logger() {
                   logging_tx
-                    .send(LogMessage::new(
-                      format!("Error serving HTTP/3 connection: {err}"),
-                      true,
-                    ))
+                    .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
                     .await
                     .unwrap_or_default();
                 }
@@ -770,10 +702,7 @@ async fn http_quic_handler_fn(
                           if let Err(err) = send.send_data(data).await {
                             if let Some(logging_tx) = loggers.find_global_logger() {
                               logging_tx
-                                .send(LogMessage::new(
-                                  format!("Error serving HTTP/3 connection: {err}"),
-                                  true,
-                                ))
+                                .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
                                 .await
                                 .unwrap_or_default();
                             }
@@ -783,12 +712,12 @@ async fn http_quic_handler_fn(
                         Err(_) => {
                           if let Some(logging_tx) = loggers.find_global_logger() {
                             logging_tx
-                            .send(LogMessage::new(
-                              "Error serving HTTP/3 connection: the frame isn't really a data frame".to_string(),
-                              true,
-                            ))
-                            .await
-                            .unwrap_or_default();
+                              .send(LogMessage::new(
+                                "Error serving HTTP/3 connection: the frame isn't really a data frame".to_string(),
+                                true,
+                              ))
+                              .await
+                              .unwrap_or_default();
                           }
                           return;
                         }
@@ -800,10 +729,7 @@ async fn http_quic_handler_fn(
                           if let Err(err) = send.send_trailers(trailers).await {
                             if let Some(logging_tx) = loggers.find_global_logger() {
                               logging_tx
-                                .send(LogMessage::new(
-                                  format!("Error serving HTTP/3 connection: {err}"),
-                                  true,
-                                ))
+                                .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
                                 .await
                                 .unwrap_or_default();
                             }
@@ -813,12 +739,12 @@ async fn http_quic_handler_fn(
                         Err(_) => {
                           if let Some(logging_tx) = loggers.find_global_logger() {
                             logging_tx
-                            .send(LogMessage::new(
-                              "Error serving HTTP/3 connection: the frame isn't really a trailers frame".to_string(),
-                              true,
-                            ))
-                            .await
-                            .unwrap_or_default();
+                              .send(LogMessage::new(
+                                "Error serving HTTP/3 connection: the frame isn't really a trailers frame".to_string(),
+                                true,
+                              ))
+                              .await
+                              .unwrap_or_default();
                           }
                           return;
                         }
@@ -828,10 +754,7 @@ async fn http_quic_handler_fn(
                   Err(err) => {
                     if let Some(logging_tx) = loggers.find_global_logger() {
                       logging_tx
-                        .send(LogMessage::new(
-                          format!("Error serving HTTP/3 connection: {err}"),
-                          true,
-                        ))
+                        .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
                         .await
                         .unwrap_or_default();
                     }
@@ -843,10 +766,7 @@ async fn http_quic_handler_fn(
                 if let Err(err) = send.finish().await {
                   if let Some(logging_tx) = loggers.find_global_logger() {
                     logging_tx
-                      .send(LogMessage::new(
-                        format!("Error serving HTTP/3 connection: {err}"),
-                        true,
-                      ))
+                      .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
                       .await
                       .unwrap_or_default();
                   }
@@ -858,10 +778,7 @@ async fn http_quic_handler_fn(
           Err(err) => {
             if let Some(logging_tx) = loggers.find_global_logger() {
               logging_tx
-                .send(LogMessage::new(
-                  format!("Error serving HTTP/3 connection: {err}"),
-                  true,
-                ))
+                .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
                 .await
                 .unwrap_or_default();
             }
@@ -873,10 +790,7 @@ async fn http_quic_handler_fn(
     Err(err) => {
       if let Some(logging_tx) = loggers.find_global_logger() {
         logging_tx
-          .send(LogMessage::new(
-            format!("Cannot accept a connection: {err}"),
-            true,
-          ))
+          .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
           .await
           .unwrap_or_default();
       }

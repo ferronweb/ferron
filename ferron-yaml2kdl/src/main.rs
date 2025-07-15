@@ -11,23 +11,23 @@ static GLOBAL: MiMalloc = MiMalloc;
 /// Parses the command-line arguments
 fn parse_arguments() -> ArgMatches {
   Command::new(crate_name!())
-        .version(crate_version!())
-        .about("A utility that attempts to convert Ferron 1.x YAML configuration to Ferron 2.x KDL configuration")
-        .arg(
-            Arg::new("input")
-                .help("The name of an input file, containing Ferron 1.x YAML configuration")
-                .required(true)
-                .action(ArgAction::Set)
-                .value_parser(PathBuf::from_str),
-        )
-        .arg(
-            Arg::new("output")
-                .help("The name of an output file, containing Ferron 2.x KDL configuration")
-                .required(true)
-                .action(ArgAction::Set)
-                .value_parser(PathBuf::from_str),
-        )
-        .get_matches()
+    .version(crate_version!())
+    .about("A utility that attempts to convert Ferron 1.x YAML configuration to Ferron 2.x KDL configuration")
+    .arg(
+      Arg::new("input")
+        .help("The name of an input file, containing Ferron 1.x YAML configuration")
+        .required(true)
+        .action(ArgAction::Set)
+        .value_parser(PathBuf::from_str),
+    )
+    .arg(
+      Arg::new("output")
+        .help("The name of an output file, containing Ferron 2.x KDL configuration")
+        .required(true)
+        .action(ArgAction::Set)
+        .value_parser(PathBuf::from_str),
+    )
+    .get_matches()
 }
 
 /// The main entry point of the application

@@ -48,10 +48,8 @@ impl ServerConfigurations {
       .rev()
       .find(|&server_configuration| {
         match_hostname(server_configuration.filters.hostname.as_deref(), hostname)
-          && (server_configuration.filters.ip.is_none()
-            || server_configuration.filters.ip == Some(ip))
-          && (server_configuration.filters.port.is_none()
-            || server_configuration.filters.port == Some(port))
+          && (server_configuration.filters.ip.is_none() || server_configuration.filters.ip == Some(ip))
+          && (server_configuration.filters.port.is_none() || server_configuration.filters.port == Some(port))
           && server_configuration
             .filters
             .location_prefix
@@ -77,11 +75,9 @@ impl ServerConfigurations {
           && c.filters.hostname == filters.hostname
           && c.filters.ip == filters.ip
           && c.filters.port == filters.port
-          && (c.filters.location_prefix.is_none()
-            || c.filters.location_prefix == filters.location_prefix)
+          && (c.filters.location_prefix.is_none() || c.filters.location_prefix == filters.location_prefix)
           && !c.filters.error_handler_status.as_ref().is_none_or(|s| {
-            !(matches!(s, ErrorHandlerStatus::Any)
-              || matches!(s, ErrorHandlerStatus::Status(x) if *x == status_code))
+            !(matches!(s, ErrorHandlerStatus::Any) || matches!(s, ErrorHandlerStatus::Status(x) if *x == status_code))
           })
       })
       .cloned()
@@ -93,8 +89,7 @@ impl ServerConfigurations {
       .inner
       .iter()
       .find(|server_configuration| {
-        server_configuration.filters.is_global()
-          || server_configuration.filters.is_global_non_host()
+        server_configuration.filters.is_global() || server_configuration.filters.is_global_non_host()
       })
       .cloned()
   }
@@ -179,12 +174,7 @@ impl Ord for ServerConfigurationFilters {
       .then_with(|| self.port.is_some().cmp(&other.port.is_some()))
       .then_with(|| self.ip.is_some().cmp(&other.ip.is_some()))
       .then_with(|| self.hostname.is_some().cmp(&other.hostname.is_some()))
-      .then_with(|| {
-        self
-          .location_prefix
-          .is_some()
-          .cmp(&other.location_prefix.is_some())
-      })
+      .then_with(|| self.location_prefix.is_some().cmp(&other.location_prefix.is_some()))
       .then_with(|| {
         self
           .error_handler_status
@@ -210,10 +200,7 @@ pub struct ServerConfigurationEntries {
 impl ServerConfigurationEntries {
   /// Extracts one value from the entry list
   pub fn get_value(&self) -> Option<&ServerConfigurationValue> {
-    self
-      .inner
-      .last()
-      .and_then(|last_vector| last_vector.values.first())
+    self.inner.last().and_then(|last_vector| last_vector.values.first())
   }
 
   /// Extracts one entry from the entry list
@@ -223,8 +210,7 @@ impl ServerConfigurationEntries {
 
   /// Extracts a vector of values from the entry list
   pub fn get_values(&self) -> Vec<&ServerConfigurationValue> {
-    let mut iterator: Box<dyn Iterator<Item = &ServerConfigurationValue>> =
-      Box::new(vec![].into_iter());
+    let mut iterator: Box<dyn Iterator<Item = &ServerConfigurationValue>> = Box::new(vec![].into_iter());
     for entry in &self.inner {
       iterator = Box::new(iterator.chain(entry.values.iter()));
     }

@@ -10,9 +10,7 @@ use hyper::{header, Request, Response, StatusCode, Uri};
 
 use crate::config::ServerConfiguration;
 use crate::logging::ErrorLogger;
-use crate::util::{
-  get_entries_for_validation, get_entry, get_value, get_values_for_validation, ModuleCache,
-};
+use crate::util::{get_entries_for_validation, get_entry, get_value, get_values_for_validation, ModuleCache};
 
 use super::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 
@@ -82,29 +80,21 @@ impl ModuleLoader for CoreModuleLoader {
             "The `tls` configuration property must have exactly two values"
           ))?
         } else if !tls_entry.values[0].is_string() {
-          Err(anyhow::anyhow!(
-            "The path to the TLS certificate must be a string"
-          ))?
+          Err(anyhow::anyhow!("The path to the TLS certificate must be a string"))?
         } else if !tls_entry.values[1].is_string() {
-          Err(anyhow::anyhow!(
-            "The path to the TLS private key must be a string"
-          ))?
+          Err(anyhow::anyhow!("The path to the TLS private key must be a string"))?
         }
       }
     };
 
-    if let Some(error_log_entries) =
-      get_entries_for_validation!("error_log", config, used_properties)
-    {
+    if let Some(error_log_entries) = get_entries_for_validation!("error_log", config, used_properties) {
       for error_log_entry in &error_log_entries.inner {
         if error_log_entry.values.len() != 1 {
           Err(anyhow::anyhow!(
             "The `error_log` configuration property must have exactly one value"
           ))?
         } else if !error_log_entry.values[0].is_string() {
-          Err(anyhow::anyhow!(
-            "The path to the error log must be a string"
-          ))?
+          Err(anyhow::anyhow!("The path to the error log must be a string"))?
         }
       }
     };
@@ -116,9 +106,7 @@ impl ModuleLoader for CoreModuleLoader {
             "The `log` configuration property must have exactly one value"
           ))?
         } else if !log_entry.values[0].is_string() {
-          Err(anyhow::anyhow!(
-            "The path to the access log must be a string"
-          ))?
+          Err(anyhow::anyhow!("The path to the access log must be a string"))?
         }
       }
     };
@@ -171,8 +159,7 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(entries) = get_entries_for_validation!("default_http_port", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("default_http_port", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -188,9 +175,7 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("default_https_port", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("default_https_port", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -206,9 +191,7 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("h2_initial_window_size", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("h2_initial_window_size", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -220,8 +203,7 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(entries) = get_entries_for_validation!("h2_max_frame_size", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("h2_max_frame_size", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -233,25 +215,19 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("h2_max_concurrent_streams", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("h2_max_concurrent_streams", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
             "The `h2_max_concurrent_streams` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_integer() {
-          Err(anyhow::anyhow!(
-            "Invalid HTTP/2 maximum concurrent streams amount"
-          ))?
+          Err(anyhow::anyhow!("Invalid HTTP/2 maximum concurrent streams amount"))?
         }
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("h2_max_header_list_size", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("h2_max_header_list_size", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -263,18 +239,14 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("h2_enable_connect_protocol", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("h2_enable_connect_protocol", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
             "The `h2_enable_connect_protocol` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_bool() {
-          Err(anyhow::anyhow!(
-            "Invalid HTTP/2 CONNECT protocol enabling option"
-          ))?
+          Err(anyhow::anyhow!("Invalid HTTP/2 CONNECT protocol enabling option"))?
         }
       }
     };
@@ -319,9 +291,7 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("allow_double_slashes", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("allow_double_slashes", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -333,18 +303,14 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("server_administrator_email", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("server_administrator_email", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
             "The `server_administrator_email` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_string() {
-          Err(anyhow::anyhow!(
-            "Invalid server administrator's email address"
-          ))?
+          Err(anyhow::anyhow!("Invalid server administrator's email address"))?
         }
       }
     };
@@ -375,9 +341,7 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("trust_x_forwarded_for", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("trust_x_forwarded_for", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -391,18 +355,14 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("no_redirect_to_https", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("no_redirect_to_https", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
             "The `no_redirect_to_https` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_bool() {
-          Err(anyhow::anyhow!(
-            "Invalid redirect to HTTPS disabling option"
-          ))?
+          Err(anyhow::anyhow!("Invalid redirect to HTTPS disabling option"))?
         }
       }
     };
@@ -414,9 +374,7 @@ impl ModuleLoader for CoreModuleLoader {
             "The `wwwredirect` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_bool() {
-          Err(anyhow::anyhow!(
-            "Invalid redirect to \"www.\" URL enabling option"
-          ))?
+          Err(anyhow::anyhow!("Invalid redirect to \"www.\" URL enabling option"))?
         }
       }
     };
@@ -449,8 +407,7 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(entries) = get_entries_for_validation!("auto_tls_contact", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("auto_tls_contact", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -474,14 +431,12 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("auto_tls_letsencrypt_production", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("auto_tls_letsencrypt_production", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
-                        "The `auto_tls_letsencrypt_production` configuration property must have exactly one value"
-                    ))?
+            "The `auto_tls_letsencrypt_production` configuration property must have exactly one value"
+          ))?
         } else if !entry.values[0].is_bool() {
           Err(anyhow::anyhow!(
             "Invalid automatic TLS Let's Encrypt production directory enabling option"
@@ -490,9 +445,7 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("auto_tls_challenge", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("auto_tls_challenge", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -522,8 +475,7 @@ impl ModuleLoader for CoreModuleLoader {
           Err(anyhow::anyhow!(
             "The `tcp_send_buffer` configuration property must have exactly one value"
           ))?
-        } else if !entry.values[0].is_integer() || entry.values[0].as_i128().is_some_and(|v| v < 0)
-        {
+        } else if !entry.values[0].is_integer() || entry.values[0].as_i128().is_some_and(|v| v < 0) {
           Err(anyhow::anyhow!("Invalid TCP listener send buffer size"))?
         }
       }
@@ -535,8 +487,7 @@ impl ModuleLoader for CoreModuleLoader {
           Err(anyhow::anyhow!(
             "The `tcp_recv_buffer` configuration property must have exactly one value"
           ))?
-        } else if !entry.values[0].is_integer() || entry.values[0].as_i128().is_some_and(|v| v < 0)
-        {
+        } else if !entry.values[0].is_integer() || entry.values[0].as_i128().is_some_and(|v| v < 0) {
           Err(anyhow::anyhow!("Invalid TCP listener receive buffer size"))?
         }
       }
@@ -554,9 +505,7 @@ impl ModuleLoader for CoreModuleLoader {
       }
     }
 
-    if let Some(entries) =
-      get_entries_for_validation!("auto_tls_directory", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("auto_tls_directory", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -568,9 +517,7 @@ impl ModuleLoader for CoreModuleLoader {
       }
     }
 
-    if let Some(entries) =
-      get_entries_for_validation!("auto_tls_no_verification", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("auto_tls_no_verification", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -584,8 +531,7 @@ impl ModuleLoader for CoreModuleLoader {
       }
     }
 
-    if let Some(entries) = get_entries_for_validation!("auto_tls_profile", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("auto_tls_profile", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -623,43 +569,33 @@ impl ModuleLoader for CoreModuleLoader {
       }
     }
 
-    if let Some(entries) =
-      get_entries_for_validation!("auto_tls_on_demand", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("auto_tls_on_demand", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
             "The `auto_tls_on_demand` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_bool() {
-          Err(anyhow::anyhow!(
-            "Invalid on-demand automatic TLS enabling option"
-          ))?
+          Err(anyhow::anyhow!("Invalid on-demand automatic TLS enabling option"))?
         }
       }
     }
 
-    if let Some(entries) =
-      get_entries_for_validation!("auto_tls_on_demand_ask", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("auto_tls_on_demand_ask", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
             "The `auto_tls_on_demand_ask` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
-          Err(anyhow::anyhow!(
-            "Invalid automatic TLS on demand ask endpoint URL"
-          ))?
+          Err(anyhow::anyhow!("Invalid automatic TLS on demand ask endpoint URL"))?
         }
       }
     }
 
-    if let Some(entries) = get_entries_for_validation!(
-      "auto_tls_on_demand_ask_no_verification",
-      config,
-      used_properties
-    ) {
+    if let Some(entries) =
+      get_entries_for_validation!("auto_tls_on_demand_ask_no_verification", config, used_properties)
+    {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -717,13 +653,10 @@ impl ModuleHandlers for CoreModuleHandlers {
 
     if !is_proxy_request {
       // Remove the location prefix using an undocumented configuration property
-      if let Some(path) =
-        get_value!("UNDOCUMENTED_REMOVE_PATH_PREFIX", config).and_then(|v| v.as_str())
-      {
+      if let Some(path) = get_value!("UNDOCUMENTED_REMOVE_PATH_PREFIX", config).and_then(|v| v.as_str()) {
         let mut path_without_trailing_slashes = path;
         while path_without_trailing_slashes.ends_with("/") {
-          path_without_trailing_slashes =
-            &path_without_trailing_slashes[..(path_without_trailing_slashes.len() - 1)];
+          path_without_trailing_slashes = &path_without_trailing_slashes[..(path_without_trailing_slashes.len() - 1)];
         }
 
         let mut path_prepared = path_without_trailing_slashes.to_owned();
@@ -752,9 +685,7 @@ impl ModuleHandlers for CoreModuleHandlers {
               format!(
                 "{}{}",
                 new_path,
-                path_and_query
-                  .query()
-                  .map_or("".to_string(), |q| format!("?{q}"))
+                path_and_query.query().map_or("".to_string(), |q| format!("?{q}"))
               )
               .parse()?,
             )
@@ -807,10 +738,7 @@ impl ModuleHandlers for CoreModuleHandlers {
             }
           };
 
-          new_remote_address = Some(SocketAddr::new(
-            prepared_remote_ip,
-            socket_data.remote_addr.port(),
-          ));
+          new_remote_address = Some(SocketAddr::new(prepared_remote_ip, socket_data.remote_addr.port()));
         }
       }
 
@@ -853,11 +781,7 @@ impl ModuleHandlers for CoreModuleHandlers {
               let mut parts: Vec<&str> = host_header.split(':').collect();
 
               if parts.len() > 1
-                && !(parts[0].starts_with('[')
-                  && parts
-                    .last()
-                    .map(|part| part.ends_with(']'))
-                    .unwrap_or(false))
+                && !(parts[0].starts_with('[') && parts.last().map(|part| part.ends_with(']')).unwrap_or(false))
               {
                 parts.pop();
               }
@@ -918,11 +842,7 @@ impl ModuleHandlers for CoreModuleHandlers {
             let mut host_port: Option<&str> = None;
 
             if parts.len() > 1
-              && !(parts[0].starts_with('[')
-                && parts
-                  .last()
-                  .map(|part| part.ends_with(']'))
-                  .unwrap_or(false))
+              && !(parts[0].starts_with('[') && parts.last().map(|part| part.ends_with(']')).unwrap_or(false))
             {
               host_port = parts.pop();
             }

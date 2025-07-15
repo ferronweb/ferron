@@ -18,8 +18,8 @@ use hyper::Request;
 use hyper_util::client::legacy::Client as HyperClient;
 use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
 use instant_acme::{
-  Account, AccountCredentials, AuthorizationStatus, BodyWrapper, BytesResponse, ChallengeType,
-  HttpClient, Identifier, NewAccount, NewOrder, OrderStatus, RetryPolicy,
+  Account, AccountCredentials, AuthorizationStatus, BodyWrapper, BytesResponse, ChallengeType, HttpClient, Identifier,
+  NewAccount, NewOrder, OrderStatus, RetryPolicy,
 };
 use rcgen::{CertificateParams, CustomExtension, KeyPair};
 use rustls::{
@@ -121,11 +121,7 @@ pub struct AcmeOnDemandConfig {
 }
 
 /// Sets data in the cache.
-async fn set_in_cache(
-  cache: &AcmeCache,
-  key: &str,
-  value: Vec<u8>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn set_in_cache(cache: &AcmeCache, key: &str, value: Vec<u8>) -> Result<(), Box<dyn Error + Send + Sync>> {
   match cache {
     AcmeCache::Memory(cache) => {
       cache.write().await.insert(key.to_string(), value);
@@ -133,9 +129,7 @@ async fn set_in_cache(
     }
     AcmeCache::File(path) => {
       tokio::fs::create_dir_all(path).await.unwrap_or_default();
-      tokio::fs::write(path.join(key), value)
-        .await
-        .map_err(Into::into)
+      tokio::fs::write(path.join(key), value).await.map_err(Into::into)
     }
   }
 }
@@ -144,12 +138,11 @@ async fn set_in_cache(
 fn check_certificate_validity(x509_certificate: &X509Certificate) -> bool {
   let validity = x509_certificate.validity();
   if let Some(time_to_expiration) = validity.time_to_expiration() {
-    let time_before_expiration =
-      if let Some(valid_duration) = validity.not_after.sub(validity.not_before) {
-        (valid_duration.whole_seconds().unsigned_abs() / 2).min(SECONDS_BEFORE_RENEWAL)
-      } else {
-        SECONDS_BEFORE_RENEWAL
-      };
+    let time_before_expiration = if let Some(valid_duration) = validity.not_after.sub(validity.not_before) {
+      (valid_duration.whole_seconds().unsigned_abs() / 2).min(SECONDS_BEFORE_RENEWAL)
+    } else {
+      SECONDS_BEFORE_RENEWAL
+    };
     if time_to_expiration > Duration::from_secs(time_before_expiration) {
       return true;
     }
@@ -161,10 +154,8 @@ fn check_certificate_validity(x509_certificate: &X509Certificate) -> bool {
 fn get_account_cache_key(config: &AcmeConfig) -> String {
   format!(
     "account_{}",
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
-      xxh3_128(format!("{};{}", &config.contact.join(","), &config.directory).as_bytes())
-        .to_be_bytes()
-    )
+    base64::engine::general_purpose::URL_SAFE_NO_PAD
+      .encode(xxh3_128(format!("{};{}", &config.contact.join(","), &config.directory).as_bytes()).to_be_bytes())
   )
 }
 
@@ -177,10 +168,7 @@ fn get_certificate_cache_key(config: &AcmeConfig) -> String {
         format!(
           "{}{}",
           config.domains.join(","),
-          config
-            .profile
-            .as_ref()
-            .map_or("".to_string(), |p| format!(";{p}"))
+          config.profile.as_ref().map_or("".to_string(), |p| format!(";{p}"))
         )
         .as_bytes()
       )
@@ -207,8 +195,7 @@ pub async fn check_certificate_validity_or_install_cached(
   if let Some(serialized_certificate_cache_data) =
     get_from_cache(&config.certificate_cache, &certificate_cache_key).await
   {
-    let certificate_data =
-      serde_json::from_slice::<CertificateCacheData>(&serialized_certificate_cache_data)?;
+    let certificate_data = serde_json::from_slice::<CertificateCacheData>(&serialized_certificate_cache_data)?;
     let certs = rustls_pemfile::certs(&mut std::io::Cursor::new(
       certificate_data.certificate_chain_pem.as_bytes(),
     ))
@@ -216,24 +203,22 @@ pub async fn check_certificate_validity_or_install_cached(
     if let Some(certificate) = certs.first() {
       let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
       if check_certificate_validity(&x509_certificate) {
-        let private_key = (match rustls_pemfile::private_key(&mut std::io::Cursor::new(
-          certificate_data.private_key_pem.as_bytes(),
-        )) {
-          Ok(Some(private_key)) => Ok(private_key),
-          Ok(None) => Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "Invalid private key",
-          )),
-          Err(err) => Err(err),
-        })?;
+        let private_key =
+          (match rustls_pemfile::private_key(&mut std::io::Cursor::new(certificate_data.private_key_pem.as_bytes())) {
+            Ok(Some(private_key)) => Ok(private_key),
+            Ok(None) => Err(std::io::Error::new(
+              std::io::ErrorKind::InvalidData,
+              "Invalid private key",
+            )),
+            Err(err) => Err(err),
+          })?;
 
         let signing_key = CryptoProvider::get_default()
           .ok_or(anyhow::anyhow!("Cannot get default crypto provider"))?
           .key_provider
           .load_private_key(private_key)?;
 
-        *config.certified_key_lock.write().await =
-          Some(Arc::new(CertifiedKey::new(certs, signing_key)));
+        *config.certified_key_lock.write().await = Some(Arc::new(CertifiedKey::new(certs, signing_key)));
 
         return Ok(true);
       }
@@ -244,9 +229,7 @@ pub async fn check_certificate_validity_or_install_cached(
 }
 
 /// Provisions TLS certificates using the ACME protocol.
-pub async fn provision_certificate(
-  config: &mut AcmeConfig,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dyn Error + Send + Sync>> {
   if check_certificate_validity_or_install_cached(config).await? {
     // Certificate is still valid, no need to renew
     return Ok(());
@@ -255,44 +238,34 @@ pub async fn provision_certificate(
   let account_cache_key = get_account_cache_key(config);
   let certificate_cache_key = get_certificate_cache_key(config);
 
-  let acme_account_builder = Account::builder_with_http(Box::new(HttpsClientForAcme::new(
-    config.rustls_client_config.clone(),
-  )));
+  let acme_account_builder =
+    Account::builder_with_http(Box::new(HttpsClientForAcme::new(config.rustls_client_config.clone())));
 
-  let acme_account = if let Some(account_credentials_serialized) =
-    get_from_cache(&config.account_cache, &account_cache_key).await
-  {
-    let account_credentials =
-      serde_json::from_slice::<AccountCredentials>(&account_credentials_serialized)?;
-    acme_account_builder
-      .from_credentials(account_credentials)
-      .await?
-  } else {
-    let (account, account_credentials) = acme_account_builder
-      .create(
-        &NewAccount {
-          contact: config
-            .contact
-            .iter()
-            .map(|s| s.deref())
-            .collect::<Vec<_>>()
-            .as_slice(),
-          terms_of_service_agreed: true,
-          only_return_existing: false,
-        },
-        config.directory.clone(),
-        None,
+  let acme_account =
+    if let Some(account_credentials_serialized) = get_from_cache(&config.account_cache, &account_cache_key).await {
+      let account_credentials = serde_json::from_slice::<AccountCredentials>(&account_credentials_serialized)?;
+      acme_account_builder.from_credentials(account_credentials).await?
+    } else {
+      let (account, account_credentials) = acme_account_builder
+        .create(
+          &NewAccount {
+            contact: config.contact.iter().map(|s| s.deref()).collect::<Vec<_>>().as_slice(),
+            terms_of_service_agreed: true,
+            only_return_existing: false,
+          },
+          config.directory.clone(),
+          None,
+        )
+        .await?;
+
+      set_in_cache(
+        &config.account_cache,
+        &account_cache_key,
+        serde_json::to_vec(&account_credentials)?,
       )
       .await?;
-
-    set_in_cache(
-      &config.account_cache,
-      &account_cache_key,
-      serde_json::to_vec(&account_credentials)?,
-    )
-    .await?;
-    account
-  };
+      account
+    };
 
   let acme_identifiers_vec = config
     .domains
@@ -338,11 +311,9 @@ pub async fn provision_certificate(
     match config.challenge_type {
       ChallengeType::TlsAlpn01 => {
         let mut params = CertificateParams::new(vec![identifier.clone()])?;
-        params
-          .custom_extensions
-          .push(CustomExtension::new_acme_identifier(
-            key_authorization.digest().as_ref(),
-          ));
+        params.custom_extensions.push(CustomExtension::new_acme_identifier(
+          key_authorization.digest().as_ref(),
+        ));
         let key_pair = KeyPair::generate()?;
         let certificate = params.self_signed(&key_pair)?;
         let private_key = PrivateKeyDer::try_from(key_pair.serialize_der())?;
@@ -353,17 +324,13 @@ pub async fn provision_certificate(
           .load_private_key(private_key)?;
 
         *config.tls_alpn_01_data_lock.write().await = Some((
-          Arc::new(CertifiedKey::new(
-            vec![certificate.der().to_owned()],
-            signing_key,
-          )),
+          Arc::new(CertifiedKey::new(vec![certificate.der().to_owned()], signing_key)),
           identifier.clone(),
         ));
       }
       ChallengeType::Http01 => {
         let key_auth_value = key_authorization.as_str();
-        *config.http_01_data_lock.write().await =
-          Some((challenge.token.clone(), key_auth_value.to_string()));
+        *config.http_01_data_lock.write().await = Some((challenge.token.clone(), key_auth_value.to_string()));
       }
       ChallengeType::Dns01 => {
         if let Some(dns_provider) = &config.dns_provider {
@@ -410,23 +377,21 @@ pub async fn provision_certificate(
 
     let certs = rustls_pemfile::certs(&mut std::io::Cursor::new(certificate_chain_pem.as_bytes()))
       .collect::<Result<Vec<_>, _>>()?;
-    let private_key =
-      (match rustls_pemfile::private_key(&mut std::io::Cursor::new(private_key_pem.as_bytes())) {
-        Ok(Some(private_key)) => Ok(private_key),
-        Ok(None) => Err(std::io::Error::new(
-          std::io::ErrorKind::InvalidData,
-          "Invalid private key",
-        )),
-        Err(err) => Err(err),
-      })?;
+    let private_key = (match rustls_pemfile::private_key(&mut std::io::Cursor::new(private_key_pem.as_bytes())) {
+      Ok(Some(private_key)) => Ok(private_key),
+      Ok(None) => Err(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        "Invalid private key",
+      )),
+      Err(err) => Err(err),
+    })?;
 
     let signing_key = CryptoProvider::get_default()
       .ok_or(anyhow::anyhow!("Cannot get default crypto provider"))?
       .key_provider
       .load_private_key(private_key)?;
 
-    *config.certified_key_lock.write().await =
-      Some(Arc::new(CertifiedKey::new(certs, signing_key)));
+    *config.certified_key_lock.write().await = Some(Arc::new(CertifiedKey::new(certs, signing_key)));
 
     Ok::<_, Box<dyn Error + Send + Sync>>(())
   };
@@ -534,9 +499,7 @@ impl ResolvesServerCert for AcmeResolver {
   }
 }
 
-struct HttpsClientForAcme(
-  HyperClient<hyper_rustls::HttpsConnector<HttpConnector>, BodyWrapper<Bytes>>,
-);
+struct HttpsClientForAcme(HyperClient<hyper_rustls::HttpsConnector<HttpConnector>, BodyWrapper<Bytes>>);
 
 impl HttpsClientForAcme {
   fn new(tls_config: ClientConfig) -> Self {

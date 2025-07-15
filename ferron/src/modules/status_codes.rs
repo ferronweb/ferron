@@ -62,25 +62,16 @@ impl ModuleLoader for StatusCodesModuleLoader {
           let mut non_standard_codes_list = Vec::new();
           if let Some(non_standard_code_config_entries) = get_entries!("status", config) {
             for non_standard_code_config_entry in &non_standard_code_config_entries.inner {
-              let status_code: u16 = match non_standard_code_config_entry
-                .values
-                .first()
-                .and_then(|v| v.as_i128())
-              {
+              let status_code: u16 = match non_standard_code_config_entry.values.first().and_then(|v| v.as_i128()) {
                 Some(scode) => scode.try_into()?,
-                None => Err(anyhow::anyhow!(
-                  "Non-standard codes must include a status code"
-                ))?,
+                None => Err(anyhow::anyhow!("Non-standard codes must include a status code"))?,
               };
               let regex = match non_standard_code_config_entry
                 .props
                 .get("regex")
                 .and_then(|v| v.as_str())
               {
-                Some(regex_str) => match RegexBuilder::new(regex_str)
-                  .case_insensitive(cfg!(windows))
-                  .build()
-                {
+                Some(regex_str) => match RegexBuilder::new(regex_str).case_insensitive(cfg!(windows)).build() {
                   Ok(regex) => Some(regex),
                   Err(err) => Err(anyhow::anyhow!(
                     "Invalid non-standard code regular expression: {}",
@@ -118,12 +109,7 @@ impl ModuleLoader for StatusCodesModuleLoader {
                 .props
                 .get("users")
                 .and_then(|v| v.as_str())
-                .map(|userlist| {
-                  userlist
-                    .split(",")
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>()
-                });
+                .map(|userlist| userlist.split(",").map(|s| s.to_string()).collect::<Vec<_>>());
               let users = match non_standard_code_config_entry
                 .props
                 .get("allowed")
@@ -197,9 +183,7 @@ impl ModuleLoader for StatusCodesModuleLoader {
             "Non-standard codes must either include URL or a matching regular expression"
           ))?
         } else if !entry.props.get("url").is_none_or(|v| v.is_string()) {
-          Err(anyhow::anyhow!(
-            "The custom status code URL must be a string"
-          ))?
+          Err(anyhow::anyhow!("The custom status code URL must be a string"))?
         } else if !entry.props.get("regex").is_none_or(|v| v.is_string()) {
           Err(anyhow::anyhow!(
             "The custom status code regular expression must be a string"
@@ -212,30 +196,20 @@ impl ModuleLoader for StatusCodesModuleLoader {
           Err(anyhow::anyhow!(
             "The custom status code HTTP authentication realm must be a string"
           ))?
-        } else if !entry
-          .props
-          .get("brute_protection")
-          .is_none_or(|v| v.is_bool())
-        {
+        } else if !entry.props.get("brute_protection").is_none_or(|v| v.is_bool()) {
           Err(anyhow::anyhow!(
-                        "The custom status code HTTP authentication brute-force protection realm must be boolean"
-                    ))?
+            "The custom status code HTTP authentication brute-force protection realm must be boolean"
+          ))?
         } else if !entry.props.get("users").is_none_or(|v| v.is_string()) {
           Err(anyhow::anyhow!(
             "The custom status code HTTP authentication allowed users list must be a string"
           ))?
-        } else if !entry
-          .props
-          .get("brute_protection")
-          .is_none_or(|v| v.is_string())
-        {
+        } else if !entry.props.get("brute_protection").is_none_or(|v| v.is_string()) {
           Err(anyhow::anyhow!(
             "The custom status code allowed clients list must be a string"
           ))?
         } else if !entry.props.get("body").is_none_or(|v| v.is_string()) {
-          Err(anyhow::anyhow!(
-            "The custom status code response body must be a string"
-          ))?
+          Err(anyhow::anyhow!("The custom status code response body must be a string"))?
         }
       }
     }
@@ -382,9 +356,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
                   .status(StatusCode::from_u16(non_standard_code.status_code)?)
                   .header(header::LOCATION, redirect_url.unwrap_or(request_url))
                   .body(if let Some(body) = &non_standard_code.body {
-                    Full::new(Bytes::from(body.clone()))
-                      .map_err(|e| match e {})
-                      .boxed()
+                    Full::new(Bytes::from(body.clone())).map_err(|e| match e {}).boxed()
                   } else {
                     Empty::new().map_err(|e| match e {}).boxed()
                   })?,
@@ -457,9 +429,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
                           continue;
                         }
                       }
-                      if let Some(password_hash_db) =
-                        user_config.values.get(1).and_then(|v| v.as_str())
-                      {
+                      if let Some(password_hash_db) = user_config.values.get(1).and_then(|v| v.as_str()) {
                         let password_cloned = password.clone();
                         let password_hash_db_cloned = password_hash_db.to_string();
                         // Offload verifying the hash into a separate blocking thread.
@@ -467,9 +437,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
                           verify_password(password_cloned, &password_hash_db_cloned).is_ok()
                         })
                         .await
-                        .map_err(|_| {
-                          anyhow::anyhow!("Can't spawn a blocking task to verify the password")
-                        })?;
+                        .map_err(|_| anyhow::anyhow!("Can't spawn a blocking task to verify the password"))?;
                         if password_valid {
                           authorized_user = Some(&username);
                           break;
@@ -505,11 +473,8 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
               if let Some(headers) = response_builder.headers_mut() {
                 *headers = header_map;
               }
-              let response = response_builder.body(
-                Full::new(Bytes::from(body.clone()))
-                  .map_err(|e| match e {})
-                  .boxed(),
-              )?;
+              let response =
+                response_builder.body(Full::new(Bytes::from(body.clone())).map_err(|e| match e {}).boxed())?;
               return Ok(ResponseData {
                 request: Some(request),
                 response: Some(response),
@@ -530,11 +495,9 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
           _ => {
             let status_code = StatusCode::from_u16(non_standard_code.status_code)?;
             if let Some(body) = &non_standard_code.body {
-              let response = Response::builder().status(status_code).body(
-                Full::new(Bytes::from(body.clone()))
-                  .map_err(|e| match e {})
-                  .boxed(),
-              )?;
+              let response = Response::builder()
+                .status(status_code)
+                .body(Full::new(Bytes::from(body.clone())).map_err(|e| match e {}).boxed())?;
               return Ok(ResponseData {
                 request: Some(request),
                 response: Some(response),

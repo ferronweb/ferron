@@ -26,8 +26,7 @@ impl DnsProvider for CloudflareDnsProvider {
     acme_challenge_identifier: &str,
     dns_value: &str,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    let (subdomain, domain_name) =
-      separate_subdomain_from_domain_name(acme_challenge_identifier).await;
+    let (subdomain, domain_name) = separate_subdomain_from_domain_name(acme_challenge_identifier).await;
     let subdomain = if subdomain.is_empty() {
       "_acme-challenge".to_string()
     } else {
@@ -49,12 +48,8 @@ impl DnsProvider for CloudflareDnsProvider {
     Ok(())
   }
 
-  async fn remove_acme_txt_record(
-    &self,
-    acme_challenge_identifier: &str,
-  ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    let (subdomain, domain_name) =
-      separate_subdomain_from_domain_name(acme_challenge_identifier).await;
+  async fn remove_acme_txt_record(&self, acme_challenge_identifier: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let (subdomain, domain_name) = separate_subdomain_from_domain_name(acme_challenge_identifier).await;
     let subdomain = if subdomain.is_empty() {
       "_acme-challenge".to_string()
     } else {

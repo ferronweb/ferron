@@ -56,9 +56,8 @@ impl Read for WsgidBodyReader {
           .map_err(|e| std::io::Error::other(e.to_string()))?,
         )?;
 
-        let received_message =
-          postcard::from_bytes::<ServerToProcessPoolMessage>(&read_ipc_message(rx)?)
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        let received_message = postcard::from_bytes::<ServerToProcessPoolMessage>(&read_ipc_message(rx)?)
+          .map_err(|e| std::io::Error::other(e.to_string()))?;
         if let Some(body_error_message) = received_message.body_error_message {
           return Err(std::io::Error::other(body_error_message));
         } else if let Some(body_chunk) = received_message.body_chunk {
@@ -92,10 +91,7 @@ mod tests {
   fn test_read_from_ipc() {
     let (tx_inner, mut rx_outer) = interprocess::unnamed_pipe::pipe().unwrap();
     let (mut tx_outer, rx_inner) = interprocess::unnamed_pipe::pipe().unwrap();
-    let mut reader = WsgidBodyReader::new(
-      Arc::new(Mutex::new(tx_inner)),
-      Arc::new(Mutex::new(rx_inner)),
-    );
+    let mut reader = WsgidBodyReader::new(Arc::new(Mutex::new(tx_inner)), Arc::new(Mutex::new(rx_inner)));
     let input = b"Some data";
     write_ipc_message(
       &mut tx_outer,
@@ -128,12 +124,10 @@ mod tests {
     assert_eq!(&input[0..read_bytes], input);
 
     let received_message =
-      postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message(&mut rx_outer).unwrap())
-        .unwrap();
+      postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message(&mut rx_outer).unwrap()).unwrap();
     assert!(received_message.requests_body_chunk);
     let received_message =
-      postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message(&mut rx_outer).unwrap())
-        .unwrap();
+      postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message(&mut rx_outer).unwrap()).unwrap();
     assert!(received_message.requests_body_chunk);
   }
 
@@ -141,10 +135,7 @@ mod tests {
   fn test_empty_input() {
     let (tx_inner, _rx_outer) = interprocess::unnamed_pipe::pipe().unwrap();
     let (mut tx_outer, rx_inner) = interprocess::unnamed_pipe::pipe().unwrap();
-    let mut reader = WsgidBodyReader::new(
-      Arc::new(Mutex::new(tx_inner)),
-      Arc::new(Mutex::new(rx_inner)),
-    );
+    let mut reader = WsgidBodyReader::new(Arc::new(Mutex::new(tx_inner)), Arc::new(Mutex::new(rx_inner)));
     write_ipc_message(
       &mut tx_outer,
       &postcard::to_allocvec(&ServerToProcessPoolMessage {
@@ -168,10 +159,7 @@ mod tests {
   fn test_multiple_chunks() {
     let (tx_inner, _rx_outer) = interprocess::unnamed_pipe::pipe().unwrap();
     let (mut tx_outer, rx_inner) = interprocess::unnamed_pipe::pipe().unwrap();
-    let mut reader = WsgidBodyReader::new(
-      Arc::new(Mutex::new(tx_inner)),
-      Arc::new(Mutex::new(rx_inner)),
-    );
+    let mut reader = WsgidBodyReader::new(Arc::new(Mutex::new(tx_inner)), Arc::new(Mutex::new(rx_inner)));
 
     let input1 = b"First chunk ";
     let input2 = b"Second chunk";
@@ -222,10 +210,7 @@ mod tests {
   fn test_error_message() {
     let (tx_inner, _rx_outer) = interprocess::unnamed_pipe::pipe().unwrap();
     let (mut tx_outer, rx_inner) = interprocess::unnamed_pipe::pipe().unwrap();
-    let mut reader = WsgidBodyReader::new(
-      Arc::new(Mutex::new(tx_inner)),
-      Arc::new(Mutex::new(rx_inner)),
-    );
+    let mut reader = WsgidBodyReader::new(Arc::new(Mutex::new(tx_inner)), Arc::new(Mutex::new(rx_inner)));
 
     let error_message = "something went wrong".to_string();
     write_ipc_message(
@@ -252,10 +237,7 @@ mod tests {
   fn test_buffering_behavior() {
     let (tx_inner, _rx_outer) = interprocess::unnamed_pipe::pipe().unwrap();
     let (mut tx_outer, rx_inner) = interprocess::unnamed_pipe::pipe().unwrap();
-    let mut reader = WsgidBodyReader::new(
-      Arc::new(Mutex::new(tx_inner)),
-      Arc::new(Mutex::new(rx_inner)),
-    );
+    let mut reader = WsgidBodyReader::new(Arc::new(Mutex::new(tx_inner)), Arc::new(Mutex::new(rx_inner)));
 
     let data = b"This is a long chunk of data";
     write_ipc_message(

@@ -24,9 +24,7 @@ impl CustomSniResolver {
   }
 
   /// Creates a custom SNI resolver with provided resolvers lock
-  pub fn with_resolvers(
-    resolvers: Arc<tokio::sync::RwLock<HashMap<String, Arc<dyn ResolvesServerCert>>>>,
-  ) -> Self {
+  pub fn with_resolvers(resolvers: Arc<tokio::sync::RwLock<HashMap<String, Arc<dyn ResolvesServerCert>>>>) -> Self {
     Self {
       fallback_resolver: None,
       resolvers,
@@ -41,18 +39,11 @@ impl CustomSniResolver {
 
   /// Loads a host certificate resolver for a specific host
   pub fn load_host_resolver(&mut self, host: &str, resolver: Arc<dyn ResolvesServerCert>) {
-    self
-      .resolvers
-      .blocking_write()
-      .insert(host.to_string(), resolver);
+    self.resolvers.blocking_write().insert(host.to_string(), resolver);
   }
 
   /// Loads a fallback sender used for sending SNI hostnames for a specific host
-  pub fn load_fallback_sender(
-    &mut self,
-    fallback_sender: async_channel::Sender<(String, u16)>,
-    port: u16,
-  ) {
+  pub fn load_fallback_sender(&mut self, fallback_sender: async_channel::Sender<(String, u16)>, port: u16) {
     self.fallback_sender = Some((fallback_sender, port));
   }
 }
@@ -65,9 +56,7 @@ impl ResolvesServerCert for CustomSniResolver {
       let keys_iterator = resolvers.keys();
       for configured_hostname in keys_iterator {
         if match_hostname(Some(configured_hostname), Some(hostname)) {
-          return resolvers
-            .get(configured_hostname)
-            .and_then(|r| r.resolve(client_hello));
+          return resolvers.get(configured_hostname).and_then(|r| r.resolve(client_hello));
         }
       }
     }
@@ -79,9 +68,7 @@ impl ResolvesServerCert for CustomSniResolver {
       .or_else(|| {
         if let Some((sender, port)) = &self.fallback_sender {
           if let Some(hostname) = hostname {
-            sender
-              .send_blocking((hostname.to_string(), *port))
-              .unwrap_or_default();
+            sender.send_blocking((hostname.to_string(), *port)).unwrap_or_default();
           }
         }
         None

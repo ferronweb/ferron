@@ -26,8 +26,7 @@ impl DnsProvider for PorkbunDnsProvider {
     acme_challenge_identifier: &str,
     dns_value: &str,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    let (subdomain, domain_name) =
-      separate_subdomain_from_domain_name(acme_challenge_identifier).await;
+    let (subdomain, domain_name) = separate_subdomain_from_domain_name(acme_challenge_identifier).await;
     let subdomain = if subdomain.is_empty() {
       "_acme-challenge".to_string()
     } else {
@@ -38,21 +37,15 @@ impl DnsProvider for PorkbunDnsProvider {
     Ok(())
   }
 
-  async fn remove_acme_txt_record(
-    &self,
-    acme_challenge_identifier: &str,
-  ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    let (subdomain, domain_name) =
-      separate_subdomain_from_domain_name(acme_challenge_identifier).await;
+  async fn remove_acme_txt_record(&self, acme_challenge_identifier: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let (subdomain, domain_name) = separate_subdomain_from_domain_name(acme_challenge_identifier).await;
     let subdomain = if subdomain.is_empty() {
       "_acme-challenge".to_string()
     } else {
       format!("_acme-challenge.{subdomain}")
     };
     for dns_entry in self.client.get_all(&domain_name).await? {
-      if dns_entry.name == format!("{subdomain}.{domain_name}")
-        && dns_entry.record_type == DnsRecordType::TXT
-      {
+      if dns_entry.name == format!("{subdomain}.{domain_name}") && dns_entry.record_type == DnsRecordType::TXT {
         self.client.delete(&domain_name, &dns_entry.id).await?;
       }
     }

@@ -31,8 +31,7 @@ use crate::util::cgi::CgiResponse;
 #[cfg(feature = "runtime-monoio")]
 use crate::util::SendReadStream;
 use crate::util::{
-  get_entries, get_entries_for_validation, get_entry, get_value, Copier, ModuleCache,
-  SERVER_SOFTWARE,
+  get_entries, get_entries_for_validation, get_entry, get_value, Copier, ModuleCache, SERVER_SOFTWARE,
 };
 
 /// A SCGI module loader
@@ -58,9 +57,7 @@ impl ModuleLoader for ScgiModuleLoader {
     Ok(
       self
         .cache
-        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |_| {
-          Ok(Arc::new(ScgiModule))
-        })?,
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |_| Ok(Arc::new(ScgiModule)))?,
     )
   }
 
@@ -85,21 +82,16 @@ impl ModuleLoader for ScgiModuleLoader {
       }
     };
 
-    if let Some(entries) = get_entries_for_validation!("scgi_environment", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("scgi_environment", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 2 {
           Err(anyhow::anyhow!(
             "The `scgi_environment` configuration property must have exactly two values"
           ))?
         } else if !entry.values[0].is_string() {
-          Err(anyhow::anyhow!(
-            "The SCGI environment variable name must be a string"
-          ))?
+          Err(anyhow::anyhow!("The SCGI environment variable name must be a string"))?
         } else if !entry.values[1].is_string() {
-          Err(anyhow::anyhow!(
-            "The SCGI environment variable value must be a string"
-          ))?
+          Err(anyhow::anyhow!("The SCGI environment variable value must be a string"))?
         }
       }
     };
@@ -197,9 +189,7 @@ impl ModuleHandlers for ScgiModuleHandlers {
       let execute_path_info = request_path.strip_prefix("/").map(|s| s.to_string());
 
       let mut additional_environment_variables = HashMap::new();
-      if let Some(additional_environment_variables_config) =
-        get_entries!("scgi_environment", config)
-      {
+      if let Some(additional_environment_variables_config) = get_entries!("scgi_environment", config) {
         for additional_variable in additional_environment_variables_config.inner.iter() {
           if let Some(key) = additional_variable.values.first().and_then(|v| v.as_str()) {
             if let Some(value) = additional_variable.values.get(1).and_then(|v| v.as_str()) {
@@ -284,19 +274,13 @@ async fn execute_scgi_with_environment_variables(
       _ => "HTTP/Unknown".to_string(),
     },
   );
-  environment_variables.insert(
-    "SERVER_PORT".to_string(),
-    socket_data.local_addr.port().to_string(),
-  );
+  environment_variables.insert("SERVER_PORT".to_string(), socket_data.local_addr.port().to_string());
   environment_variables.insert(
     "SERVER_ADDR".to_string(),
     socket_data.local_addr.ip().to_canonical().to_string(),
   );
   if let Some(server_administrator_email) = server_administrator_email {
-    environment_variables.insert(
-      "SERVER_ADMIN".to_string(),
-      server_administrator_email.to_string(),
-    );
+    environment_variables.insert("SERVER_ADMIN".to_string(), server_administrator_email.to_string());
   }
   if let Some(host) = request.headers().get(header::HOST) {
     environment_variables.insert(
@@ -305,10 +289,7 @@ async fn execute_scgi_with_environment_variables(
     );
   }
 
-  environment_variables.insert(
-    "DOCUMENT_ROOT".to_string(),
-    wwwroot.to_string_lossy().to_string(),
-  );
+  environment_variables.insert("DOCUMENT_ROOT".to_string(), wwwroot.to_string_lossy().to_string());
   environment_variables.insert(
     "PATH_INFO".to_string(),
     match &path_info {
@@ -342,10 +323,7 @@ async fn execute_scgi_with_environment_variables(
     ),
   );
 
-  environment_variables.insert(
-    "REMOTE_PORT".to_string(),
-    socket_data.remote_addr.port().to_string(),
-  );
+  environment_variables.insert("REMOTE_PORT".to_string(), socket_data.remote_addr.port().to_string());
   environment_variables.insert(
     "REMOTE_ADDR".to_string(),
     socket_data.remote_addr.ip().to_canonical().to_string(),
@@ -425,9 +403,7 @@ async fn execute_scgi_with_environment_variables(
   }
 
   for (env_var_key, env_var_value) in additional_environment_variables {
-    if let hashlink::linked_hash_map::Entry::Vacant(entry) =
-      environment_variables.entry(env_var_key)
-    {
+    if let hashlink::linked_hash_map::Entry::Vacant(entry) = environment_variables.entry(env_var_key) {
       entry.insert(env_var_value);
     }
   }
@@ -447,9 +423,7 @@ async fn execute_scgi(
   for (key, value) in env::vars_os() {
     let key_string = key.to_string_lossy().to_string();
     let value_string = value.to_string_lossy().to_string();
-    environment_variables
-      .entry(key_string)
-      .or_insert(value_string);
+    environment_variables.entry(key_string).or_insert(value_string);
   }
 
   let scgi_to_fixed = if let Some(stripped) = scgi_to.strip_prefix("unix:///") {
@@ -482,9 +456,7 @@ async fn execute_scgi(
           std::io::ErrorKind::ConnectionRefused
           | std::io::ErrorKind::NotFound
           | std::io::ErrorKind::HostUnreachable => {
-            error_logger
-              .log(&format!("Service unavailable: {err}"))
-              .await;
+            error_logger.log(&format!("Service unavailable: {err}")).await;
             return Ok(ResponseData {
               request: None,
               response: None,
@@ -505,9 +477,7 @@ async fn execute_scgi(
           std::io::ErrorKind::ConnectionRefused
           | std::io::ErrorKind::NotFound
           | std::io::ErrorKind::HostUnreachable => {
-            error_logger
-              .log(&format!("Service unavailable: {err}"))
-              .await;
+            error_logger.log(&format!("Service unavailable: {err}")).await;
             return Ok(ResponseData {
               request: None,
               response: None,
@@ -520,9 +490,7 @@ async fn execute_scgi(
         },
       }
     }
-    _ => Err(anyhow::anyhow!(
-      "Only HTTP and HTTPS reverse proxy URLs are supported."
-    ))?,
+    _ => Err(anyhow::anyhow!("Only HTTP and HTTPS reverse proxy URLs are supported."))?,
   };
 
   // Create environment variable netstring
@@ -543,16 +511,13 @@ async fn execute_scgi(
 
   let environment_variables_to_wrap_length = environment_variables_to_wrap.len();
   let mut environment_variables_netstring = Vec::new();
-  environment_variables_netstring
-    .extend_from_slice(environment_variables_to_wrap_length.to_string().as_bytes());
+  environment_variables_netstring.extend_from_slice(environment_variables_to_wrap_length.to_string().as_bytes());
   environment_variables_netstring.push(b':');
   environment_variables_netstring.append(&mut environment_variables_to_wrap);
   environment_variables_netstring.push(b',');
 
   // Write environment variable netstring
-  socket_writer
-    .write_all(&environment_variables_netstring)
-    .await?;
+  socket_writer.write_all(&environment_variables_netstring).await?;
 
   let cgi_stdin_reader = StreamReader::new(body.into_data_stream().map_err(std::io::Error::other));
 
@@ -631,9 +596,7 @@ async fn execute_scgi(
 }
 
 #[cfg(feature = "runtime-monoio")]
-async fn connect_tcp(
-  addr: &str,
-) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
+async fn connect_tcp(addr: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
   let socket = TcpStream::connect(addr).await?;
   socket.set_nodelay(true)?;
 
@@ -660,9 +623,7 @@ async fn connect_tcp(
 
 #[allow(dead_code)]
 #[cfg(all(feature = "runtime-monoio", unix))]
-async fn connect_unix(
-  path: &str,
-) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
+async fn connect_unix(path: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
   use monoio::net::UnixStream;
 
   let socket = UnixStream::connect(path).await?;

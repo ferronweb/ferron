@@ -41,11 +41,7 @@ impl Route53DnsProvider {
     let mut credentials = None;
     if let Some(access_key_id) = access_key_id {
       if let Some(secret_access_key) = secret_access_key {
-        credentials = Some(Credentials::from_keys(
-          access_key_id,
-          secret_access_key,
-          None,
-        ))
+        credentials = Some(Credentials::from_keys(access_key_id, secret_access_key, None))
       }
     }
     Ok(Self {
@@ -84,8 +80,7 @@ impl DnsProvider for Route53DnsProvider {
       client_option.replace(client.clone());
       client
     };
-    let (subdomain, domain_name) =
-      separate_subdomain_from_domain_name(acme_challenge_identifier).await;
+    let (subdomain, domain_name) = separate_subdomain_from_domain_name(acme_challenge_identifier).await;
     let subdomain = if subdomain.is_empty() {
       "_acme-challenge".to_string()
     } else {
@@ -94,11 +89,7 @@ impl DnsProvider for Route53DnsProvider {
     let hosted_zone_id = if let Some(hosted_zone_id) = &self.hosted_zone_id {
       hosted_zone_id.to_string()
     } else {
-      let hosted_zones = client
-        .list_hosted_zones_by_name()
-        .dns_name(&domain_name)
-        .send()
-        .await?;
+      let hosted_zones = client.list_hosted_zones_by_name().dns_name(&domain_name).send().await?;
       hosted_zones
         .hosted_zone_id()
         .ok_or_else(|| anyhow::anyhow!("Route 53 hosted zone not found"))?
@@ -117,11 +108,7 @@ impl DnsProvider for Route53DnsProvider {
                   .name(format!("{subdomain}.{domain_name}."))
                   .r#type(RrType::Txt)
                   .ttl(300)
-                  .resource_records(
-                    ResourceRecord::builder()
-                      .value(format!("\"{dns_value}\""))
-                      .build()?,
-                  )
+                  .resource_records(ResourceRecord::builder().value(format!("\"{dns_value}\"")).build()?)
                   .build()?,
               )
               .build()?,
@@ -133,10 +120,7 @@ impl DnsProvider for Route53DnsProvider {
     Ok(())
   }
 
-  async fn remove_acme_txt_record(
-    &self,
-    acme_challenge_identifier: &str,
-  ) -> Result<(), Box<dyn Error + Send + Sync>> {
+  async fn remove_acme_txt_record(&self, acme_challenge_identifier: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
     let client_option = &mut *self.client.lock().await;
     let client = if let Some(client) = client_option {
       client.clone()
@@ -156,8 +140,7 @@ impl DnsProvider for Route53DnsProvider {
       client_option.replace(client.clone());
       client
     };
-    let (subdomain, domain_name) =
-      separate_subdomain_from_domain_name(acme_challenge_identifier).await;
+    let (subdomain, domain_name) = separate_subdomain_from_domain_name(acme_challenge_identifier).await;
     let subdomain = if subdomain.is_empty() {
       "_acme-challenge".to_string()
     } else {
@@ -166,11 +149,7 @@ impl DnsProvider for Route53DnsProvider {
     let hosted_zone_id = if let Some(hosted_zone_id) = &self.hosted_zone_id {
       hosted_zone_id.to_string()
     } else {
-      let hosted_zones = client
-        .list_hosted_zones_by_name()
-        .dns_name(&domain_name)
-        .send()
-        .await?;
+      let hosted_zones = client.list_hosted_zones_by_name().dns_name(&domain_name).send().await?;
       hosted_zones
         .hosted_zone_id()
         .ok_or_else(|| anyhow::anyhow!("Route 53 hosted zone not found"))?

@@ -19,9 +19,7 @@ impl IpBlockList {
     for ip_str in ip_list {
       match ip_str {
         "localhost" => {
-          self
-            .blocked_ips
-            .insert(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1).into());
+          self.blocked_ips.insert(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1).into());
         }
         _ => {
           if let Ok(ip) = ip_str.parse::<IpAddr>() {

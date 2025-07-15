@@ -13,9 +13,7 @@ use super::{ServerConfiguration, ServerConfigurationFilters};
 /// This function takes a vector of server configurations and combines those that have matching
 /// filter criteria (hostname, IP, port, location prefix, and error handler status).
 /// For configurations with identical filters, their entries are merged.
-pub fn merge_duplicates(
-  mut server_configurations: Vec<ServerConfiguration>,
-) -> Vec<ServerConfiguration> {
+pub fn merge_duplicates(mut server_configurations: Vec<ServerConfiguration>) -> Vec<ServerConfiguration> {
   // The resulting list of unique configurations after merging
   let mut server_configurations_without_duplicates = Vec::new();
 
@@ -35,10 +33,8 @@ pub fn merge_duplicates(
         && server_configuration_source.filters.hostname == server_configuration.filters.hostname
         && server_configuration_source.filters.ip == server_configuration.filters.ip
         && server_configuration_source.filters.port == server_configuration.filters.port
-        && server_configuration_source.filters.location_prefix
-          == server_configuration.filters.location_prefix
-        && server_configuration_source.filters.error_handler_status
-          == server_configuration.filters.error_handler_status
+        && server_configuration_source.filters.location_prefix == server_configuration.filters.location_prefix
+        && server_configuration_source.filters.error_handler_status == server_configuration.filters.error_handler_status
       {
         // Clone the entries from the matching configuration
         let mut cloned_hashmap = server_configuration_source.entries.clone();
@@ -132,9 +128,7 @@ pub fn remove_and_add_global_configuration(
 /// This function implements a layered configuration system where more specific configurations
 /// inherit and override properties from less specific ones. It handles matching logic based
 /// on specificity of filters (error handlers, location prefixes, hostnames, IPs, ports).
-pub fn premerge_configuration(
-  mut server_configurations: Vec<ServerConfiguration>,
-) -> Vec<ServerConfiguration> {
+pub fn premerge_configuration(mut server_configurations: Vec<ServerConfiguration>) -> Vec<ServerConfiguration> {
   // Sort server configurations vector, based on the ascending specifity, to simplify the merging algorithm
   server_configurations.sort_by(|a, b| a.filters.cmp(&b.filters));
   let mut new_server_configurations = Vec::new();
@@ -156,8 +150,7 @@ pub fn premerge_configuration(
       let ports_match = sc2.port.is_none() || sc1.port == sc2.port;
       let ips_match = sc2.ip.is_none() || sc1.ip == sc2.ip;
       let hostnames_match = sc2.hostname.is_none() || sc1.hostname == sc2.hostname;
-      let location_prefixes_match =
-        sc2.location_prefix.is_none() || sc1.location_prefix == sc2.location_prefix;
+      let location_prefixes_match = sc2.location_prefix.is_none() || sc1.location_prefix == sc2.location_prefix;
 
       // Case 1: Child has error handler but parent doesn't, and all other filters match
       // This is for error handler inheritance
@@ -422,18 +415,12 @@ mod tests {
     }
   }
 
-  fn make_entry_premerge(
-    key: &str,
-    value: ServerConfigurationValue,
-  ) -> (String, ServerConfigurationEntries) {
+  fn make_entry_premerge(key: &str, value: ServerConfigurationValue) -> (String, ServerConfigurationEntries) {
     let entry = ServerConfigurationEntry {
       values: vec![value],
       props: HashMap::new(),
     };
-    (
-      key.to_string(),
-      ServerConfigurationEntries { inner: vec![entry] },
-    )
+    (key.to_string(), ServerConfigurationEntries { inner: vec![entry] })
   }
 
   fn config_with_filters(
@@ -509,11 +496,7 @@ mod tests {
     let merged_entries = &merged[0].entries;
     assert!(merged_entries.contains_key("route"));
     let route_entry = merged_entries.get("route").unwrap();
-    let values: Vec<_> = route_entry
-      .inner
-      .iter()
-      .flat_map(|e| e.values.iter())
-      .collect();
+    let values: Vec<_> = route_entry.inner.iter().flat_map(|e| e.values.iter()).collect();
     assert_eq!(values.len(), 2);
     assert!(values.contains(&&ServerConfigurationValue::String("v1".into())));
     assert!(values.contains(&&ServerConfigurationValue::String("v2".into())));
@@ -777,10 +760,7 @@ mod tests {
         None,
         None,
         None,
-        vec![make_entry_premerge(
-          "a",
-          ServerConfigurationValue::String("v1".into()),
-        )],
+        vec![make_entry_premerge("a", ServerConfigurationValue::String("v1".into()))],
       ),
       config_with_filters(
         true,
@@ -789,10 +769,7 @@ mod tests {
         Some(80),
         None,
         None,
-        vec![make_entry_premerge(
-          "a",
-          ServerConfigurationValue::String("v2".into()),
-        )],
+        vec![make_entry_premerge("a", ServerConfigurationValue::String("v2".into()))],
       ),
       config_with_filters(
         true,
@@ -801,10 +778,7 @@ mod tests {
         Some(80),
         None,
         None,
-        vec![make_entry_premerge(
-          "a",
-          ServerConfigurationValue::String("v3".into()),
-        )],
+        vec![make_entry_premerge("a", ServerConfigurationValue::String("v3".into()))],
       ),
     ];
 

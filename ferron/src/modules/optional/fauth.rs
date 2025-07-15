@@ -98,16 +98,12 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
             "The `auth_to` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
-          Err(anyhow::anyhow!(
-            "Invalid forwarded authentication backend server"
-          ))?
+          Err(anyhow::anyhow!("Invalid forwarded authentication backend server"))?
         }
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("auth_to_no_verification", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("auth_to_no_verification", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -190,16 +186,12 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
         Some("https") => {
           encrypted = true;
         }
-        _ => Err(anyhow::anyhow!(
-          "Only HTTP and HTTPS reverse proxy URLs are supported."
-        ))?,
+        _ => Err(anyhow::anyhow!("Only HTTP and HTTPS reverse proxy URLs are supported."))?,
       };
 
       let host = match auth_request_url.host() {
         Some(host) => host,
-        None => Err(anyhow::anyhow!(
-          "The reverse proxy URL doesn't include the host"
-        ))?,
+        None => Err(anyhow::anyhow!("The reverse proxy URL doesn't include the host"))?,
       };
 
       let port = auth_request_url.port_u16().unwrap_or(match scheme_str {
@@ -255,28 +247,17 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
       // X-Forwarded-* headers to send the client's data to a forwarded authentication server
       auth_request_parts.headers.insert(
         "x-forwarded-for",
-        socket_data
-          .remote_addr
-          .ip()
-          .to_canonical()
-          .to_string()
-          .parse()?,
+        socket_data.remote_addr.ip().to_canonical().to_string().parse()?,
       );
 
       if socket_data.encrypted {
-        auth_request_parts
-          .headers
-          .insert("x-forwarded-proto", "https".parse()?);
+        auth_request_parts.headers.insert("x-forwarded-proto", "https".parse()?);
       } else {
-        auth_request_parts
-          .headers
-          .insert("x-forwarded-proto", "http".parse()?);
+        auth_request_parts.headers.insert("x-forwarded-proto", "http".parse()?);
       }
 
       if let Some(original_host) = original_host {
-        auth_request_parts
-          .headers
-          .insert("x-forwarded-host", original_host);
+        auth_request_parts.headers.insert("x-forwarded-host", original_host);
       }
 
       auth_request_parts
@@ -289,10 +270,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
       auth_request_parts.method = Method::GET;
       auth_request_parts.version = Version::HTTP_11;
-      let auth_request = Request::from_parts(
-        auth_request_parts,
-        Empty::new().map_err(|e| match e {}).boxed(),
-      );
+      let auth_request = Request::from_parts(auth_request_parts, Empty::new().map_err(|e| match e {}).boxed());
 
       let original_request = Request::from_parts(request_parts, request_body);
 
@@ -345,9 +323,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
             std::io::ErrorKind::ConnectionRefused
             | std::io::ErrorKind::NotFound
             | std::io::ErrorKind::HostUnreachable => {
-              error_logger
-                .log(&format!("Service unavailable: {err}"))
-                .await;
+              error_logger.log(&format!("Service unavailable: {err}")).await;
               return Ok(ResponseData {
                 request: None,
                 response: None,
@@ -441,8 +417,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           rustls::ClientConfig::builder().with_platform_verifier()?
         })
         .with_no_client_auth();
-        tls_client_config.alpn_protocols =
-          vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
+        tls_client_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
         let connector = TlsConnector::from(Arc::new(tls_client_config));
         let domain = ServerName::try_from(host)?.to_owned();
 
@@ -587,10 +562,7 @@ async fn http_forwarded_auth(
       for forwarded_auth_copy_header_string in forwarded_auth_copy_headers.iter() {
         let forwarded_auth_copy_header = HeaderName::from_str(forwarded_auth_copy_header_string)?;
         if response_headers.contains_key(&forwarded_auth_copy_header) {
-          while request_headers
-            .remove(&forwarded_auth_copy_header)
-            .is_some()
-          {}
+          while request_headers.remove(&forwarded_auth_copy_header).is_some() {}
           for header_value in response_headers.get_all(&forwarded_auth_copy_header).iter() {
             request_headers.append(&forwarded_auth_copy_header, header_value.clone());
           }
@@ -607,9 +579,7 @@ async fn http_forwarded_auth(
   } else {
     ResponseData {
       request: None,
-      response: Some(
-        proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed()),
-      ),
+      response: Some(proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed())),
       response_status: None,
       response_headers: None,
       new_remote_address: None,
@@ -661,10 +631,7 @@ async fn http_forwarded_auth_kept_alive(
       for forwarded_auth_copy_header_string in forwarded_auth_copy_headers.iter() {
         let forwarded_auth_copy_header = HeaderName::from_str(forwarded_auth_copy_header_string)?;
         if response_headers.contains_key(&forwarded_auth_copy_header) {
-          while request_headers
-            .remove(&forwarded_auth_copy_header)
-            .is_some()
-          {}
+          while request_headers.remove(&forwarded_auth_copy_header).is_some() {}
           for header_value in response_headers.get_all(&forwarded_auth_copy_header).iter() {
             request_headers.append(&forwarded_auth_copy_header, header_value.clone());
           }
@@ -681,9 +648,7 @@ async fn http_forwarded_auth_kept_alive(
   } else {
     ResponseData {
       request: None,
-      response: Some(
-        proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed()),
-      ),
+      response: Some(proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed())),
       response_status: None,
       response_headers: None,
       new_remote_address: None,

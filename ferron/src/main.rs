@@ -25,9 +25,7 @@ use base64::Engine;
 use chrono::{DateTime, Local};
 use clap::{crate_version, Arg, ArgAction, ArgMatches, Command};
 use config::adapters::ConfigurationAdapter;
-use config::processing::{
-  load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration,
-};
+use config::processing::{load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration};
 use config::ServerConfigurations;
 use handler::create_http_handler;
 use human_panic::{setup_panic, Metadata};
@@ -53,8 +51,8 @@ use util::{get_entry, get_value, get_values};
 use xxhash_rust::xxh3::xxh3_128;
 
 use crate::acme::{
-  check_certificate_validity_or_install_cached, convert_on_demand_config, provision_certificate,
-  AcmeCache, AcmeConfig, AcmeOnDemandConfig, AcmeResolver, TlsAlpn01Resolver, ACME_TLS_ALPN_NAME,
+  check_certificate_validity_or_install_cached, convert_on_demand_config, provision_certificate, AcmeCache, AcmeConfig,
+  AcmeOnDemandConfig, AcmeResolver, TlsAlpn01Resolver, ACME_TLS_ALPN_NAME,
 };
 use crate::logging::{LoggerFilter, LoggersBuilder};
 use crate::util::{match_hostname, NoServerVerifier};
@@ -69,9 +67,8 @@ static LISTENER_HANDLER_CHANNEL: LazyLock<Arc<(Sender<ConnectionData>, Receiver<
 static TCP_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, Sender<()>>>>> =
   LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
 #[allow(clippy::type_complexity)]
-static QUIC_LISTENERS: LazyLock<
-  Arc<Mutex<HashMap<SocketAddr, (Sender<()>, Sender<Arc<ServerConfig>>)>>>,
-> = LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
+static QUIC_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, (Sender<()>, Sender<Arc<ServerConfig>>)>>>> =
+  LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
 static LOGGER_BUILDER: LazyLock<Arc<Mutex<LoggersBuilder>>> =
   LazyLock::new(|| Arc::new(Mutex::new(LoggersBuilder::new())));
 static URING_ENABLED: LazyLock<Arc<Mutex<bool>>> = LazyLock::new(|| Arc::new(Mutex::new(true)));
@@ -87,9 +84,7 @@ fn handle_shutdown_signals(runtime: &tokio::runtime::Runtime) -> bool {
       let cancel_token_clone = cancel_token.clone();
       let continue_tx_clone = continue_tx.clone();
       tokio::spawn(async move {
-        if let Ok(mut signal) =
-          tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())
-        {
+        if let Ok(mut signal) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()) {
           tokio::select! {
             _ = signal.recv() => {
               continue_tx_clone.send(true).await.unwrap_or_default();
@@ -183,8 +178,7 @@ fn configure_logging(
           let mut locked_file = log_file_wrapped_cloned.lock().await;
           locked_file.flush().await.unwrap_or_default();
         }
-        if let Some(error_log_file_wrapped_cloned) = error_log_file_wrapped_cloned_for_sleep.clone()
-        {
+        if let Some(error_log_file_wrapped_cloned) = error_log_file_wrapped_cloned_for_sleep.clone() {
           let mut locked_file = error_log_file_wrapped_cloned.lock().await;
           locked_file.flush().await.unwrap_or_default();
         }
@@ -232,19 +226,19 @@ fn before_starting_server(
     .get_one::<PathBuf>("config")
     .ok_or(anyhow::anyhow!("Cannot obtain the configuration path"))?
     .as_path();
-  let configuration_adapter: &str = args.get_one::<String>("config-adapter").map_or(
-    determine_default_configuration_adapter(configuration_path),
-    |s| s as &str,
-  );
+  let configuration_adapter: &str = args
+    .get_one::<String>("config-adapter")
+    .map_or(determine_default_configuration_adapter(configuration_path), |s| {
+      s as &str
+    });
 
   // Obtain the configuration adapter
-  let configuration_adapter =
-    configuration_adapters
-      .get(configuration_adapter)
-      .ok_or(anyhow::anyhow!(
-        "The \"{}\" configuration adapter isn't supported",
-        configuration_adapter
-      ))?;
+  let configuration_adapter = configuration_adapters
+    .get(configuration_adapter)
+    .ok_or(anyhow::anyhow!(
+      "The \"{}\" configuration adapter isn't supported",
+      configuration_adapter
+    ))?;
 
   // Load the configuration
   let configs_to_process = configuration_adapter.load_configuration(configuration_path)?;
@@ -311,12 +305,7 @@ fn before_starting_server(
   // Configure new loggers
   for (filter, (log_filename, error_log_filename)) in log_file_names {
     let (_, logging_rx) = loggers_builder.add(filter, async_channel::unbounded());
-    configure_logging(
-      log_filename,
-      error_log_filename,
-      &secondary_runtime,
-      &logging_rx,
-    );
+    configure_logging(log_filename, error_log_filename, &secondary_runtime, &logging_rx);
   }
 
   // Obtain loggers from the logger builder
@@ -366,14 +355,10 @@ fn before_starting_server(
             "TLS_CHACHA20_POLY1305_SHA256" => TLS13_CHACHA20_POLY1305_SHA256,
             "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256" => TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
             "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384" => TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-            "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256" => {
-              TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
-            }
+            "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256" => TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
             "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256" => TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
             "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384" => TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-            "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256" => {
-              TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
-            }
+            "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256" => TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
             _ => Err(anyhow::anyhow!(format!(
               "The \"{}\" cipher suite is not supported",
               cipher_suite
@@ -413,16 +398,13 @@ fn before_starting_server(
 
     // Install a process-wide cryptography provider. If it fails, then error it out.
     if crypto_provider.clone().install_default().is_err() && first_startup {
-      Err(anyhow::anyhow!(
-        "Cannot install a process-wide cryptography provider"
-      ))?;
+      Err(anyhow::anyhow!("Cannot install a process-wide cryptography provider"))?;
     }
 
     let crypto_provider = Arc::new(crypto_provider);
 
     // Build TLS configuration
-    let tls_config_builder_wants_versions =
-      ServerConfig::builder_with_provider(crypto_provider.clone());
+    let tls_config_builder_wants_versions = ServerConfig::builder_with_provider(crypto_provider.clone());
 
     let min_tls_version_option = global_configuration
       .as_deref()
@@ -433,32 +415,30 @@ fn before_starting_server(
       .and_then(|c| get_value!("tls_max_version", c))
       .and_then(|v| v.as_str());
 
-    let tls_config_builder_wants_verifier =
-      if min_tls_version_option.is_none() && max_tls_version_option.is_none() {
-        tls_config_builder_wants_versions.with_safe_default_protocol_versions()?
-      } else {
-        let tls_versions = [("TLSv1.2", &TLS12), ("TLSv1.3", &TLS13)];
-        let min_tls_version_index =
-          min_tls_version_option.map_or(Some(0), |v| tls_versions.iter().position(|p| p.0 == v));
-        let max_tls_version_index = max_tls_version_option
-          .map_or(Some(tls_versions.len() - 1), |v| {
-            tls_versions.iter().position(|p| p.0 == v)
-          });
-        if let Some(min_tls_version_index) = min_tls_version_index {
-          if let Some(max_tls_version_index) = max_tls_version_index {
-            tls_config_builder_wants_versions.with_protocol_versions(
-              &tls_versions[min_tls_version_index..max_tls_version_index]
-                .iter()
-                .map(|p| p.1)
-                .collect::<Vec<_>>(),
-            )?
-          } else {
-            Err(anyhow::anyhow!("Invalid maximum TLS version"))?
-          }
+    let tls_config_builder_wants_verifier = if min_tls_version_option.is_none() && max_tls_version_option.is_none() {
+      tls_config_builder_wants_versions.with_safe_default_protocol_versions()?
+    } else {
+      let tls_versions = [("TLSv1.2", &TLS12), ("TLSv1.3", &TLS13)];
+      let min_tls_version_index =
+        min_tls_version_option.map_or(Some(0), |v| tls_versions.iter().position(|p| p.0 == v));
+      let max_tls_version_index = max_tls_version_option.map_or(Some(tls_versions.len() - 1), |v| {
+        tls_versions.iter().position(|p| p.0 == v)
+      });
+      if let Some(min_tls_version_index) = min_tls_version_index {
+        if let Some(max_tls_version_index) = max_tls_version_index {
+          tls_config_builder_wants_versions.with_protocol_versions(
+            &tls_versions[min_tls_version_index..max_tls_version_index]
+              .iter()
+              .map(|p| p.1)
+              .collect::<Vec<_>>(),
+          )?
         } else {
-          Err(anyhow::anyhow!("Invalid minimum TLS version"))?
+          Err(anyhow::anyhow!("Invalid maximum TLS version"))?
         }
-      };
+      } else {
+        Err(anyhow::anyhow!("Invalid minimum TLS version"))?
+      }
+    };
 
     let tls_config_builder_wants_server_cert = if global_configuration
       .as_deref()
@@ -498,18 +478,11 @@ fn before_starting_server(
     let protocols = global_configuration
       .as_ref()
       .and_then(|c| get_entry!("protocols", c))
-      .map(|e| {
-        e.values
-          .iter()
-          .filter_map(|v| v.as_str())
-          .collect::<Vec<_>>()
-      })
+      .map(|e| e.values.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
       .unwrap_or(vec!["h1", "h2"]);
 
     if enable_proxy_protocol && protocols.contains(&"h3") {
-      Err(anyhow::anyhow!(
-        "PROXY protocol isn't supported with HTTP/3"
-      ))?
+      Err(anyhow::anyhow!("PROXY protocol isn't supported with HTTP/3"))?
     }
 
     let default_http_port = global_configuration
@@ -537,10 +510,8 @@ fn before_starting_server(
 
     let mut tls_ports: HashMap<u16, CustomSniResolver> = HashMap::new();
     #[allow(clippy::type_complexity)]
-    let mut tls_port_locks: HashMap<
-      u16,
-      Arc<tokio::sync::RwLock<HashMap<String, Arc<dyn ResolvesServerCert>>>>,
-    > = HashMap::new();
+    let mut tls_port_locks: HashMap<u16, Arc<tokio::sync::RwLock<HashMap<String, Arc<dyn ResolvesServerCert>>>>> =
+      HashMap::new();
     let mut nonencrypted_ports = HashSet::new();
     let mut certified_keys_to_preload: HashMap<u16, Vec<Arc<CertifiedKey>>> = HashMap::new();
     let mut used_sni_hostnames = HashSet::new();
@@ -607,8 +578,8 @@ fn before_starting_server(
         !used_sni_hostnames.contains(&(p, sni_hostname.clone()))
           && !automatic_tls_used_sni_hostnames.contains(&(p, sni_hostname.clone()))
       });
-      let is_auto_tls_sni_hostname_used = https_port
-        .is_some_and(|p| automatic_tls_used_sni_hostnames.contains(&(p, sni_hostname.clone())));
+      let is_auto_tls_sni_hostname_used =
+        https_port.is_some_and(|p| automatic_tls_used_sni_hostnames.contains(&(p, sni_hostname.clone())));
 
       let mut automatic_tls_port = None;
       if server_configuration.filters.port.is_none() {
@@ -767,10 +738,7 @@ fn before_starting_server(
                 ChallengeType::TlsAlpn01
               }
               "DNS-01" => ChallengeType::Dns01,
-              unsupported => Err(anyhow::anyhow!(
-                "Unsupported ACME challenge type: {}",
-                unsupported
-              ))?,
+              unsupported => Err(anyhow::anyhow!("Unsupported ACME challenge type: {}", unsupported))?,
             };
             let dns_provider: Option<Arc<dyn crate::acme::dns::DnsProvider + Send + Sync>> =
               if &*challenge_type_str.to_uppercase() != "DNS-01" {
@@ -785,9 +753,9 @@ fn before_starting_server(
                     let secret_key = challenge_params
                       .get("secret_key")
                       .ok_or_else(|| anyhow::anyhow!("Missing Porkbun secret key"))?;
-                    Some(Arc::new(
-                      crate::acme::dns::porkbun::PorkbunDnsProvider::new(api_key, secret_key),
-                    ))
+                    Some(Arc::new(crate::acme::dns::porkbun::PorkbunDnsProvider::new(
+                      api_key, secret_key,
+                    )))
                   }
                   #[cfg(feature = "acmedns-rfc2136")]
                   "rfc2136" => {
@@ -803,28 +771,20 @@ fn before_starting_server(
                       Some("tcp") => dns_update::providers::rfc2136::DnsAddress::Tcp(
                         addr_uri
                           .authority()
-                          .ok_or_else(|| {
-                            anyhow::anyhow!("Missing RFC 2136 server address hostname")
-                          })?
+                          .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 server address hostname"))?
                           .as_str()
                           .to_socket_addrs()
-                          .map_err(|e| {
-                            anyhow::anyhow!("Failed to resolve RFC 2136 server address: {}", e)
-                          })?
+                          .map_err(|e| anyhow::anyhow!("Failed to resolve RFC 2136 server address: {}", e))?
                           .next()
                           .ok_or_else(|| anyhow::anyhow!("No RFC 2136 server addresses found"))?,
                       ),
                       Some("udp") => dns_update::providers::rfc2136::DnsAddress::Udp(
                         addr_uri
                           .authority()
-                          .ok_or_else(|| {
-                            anyhow::anyhow!("Missing RFC 2136 server address hostname")
-                          })?
+                          .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 server address hostname"))?
                           .as_str()
                           .to_socket_addrs()
-                          .map_err(|e| {
-                            anyhow::anyhow!("Failed to resolve RFC 2136 server address: {}", e)
-                          })?
+                          .map_err(|e| anyhow::anyhow!("Failed to resolve RFC 2136 server address: {}", e))?
                           .next()
                           .ok_or_else(|| anyhow::anyhow!("No RFC 2136 server addresses found"))?,
                       ),
@@ -858,15 +818,8 @@ fn before_starting_server(
                       _ => Err(anyhow::anyhow!("Unsupported RFC 2136 TSIG algorithm"))?,
                     };
                     Some(Arc::new(
-                      crate::acme::dns::rfc2136::Rfc2136DnsProvider::new(
-                        addr,
-                        key_name,
-                        key,
-                        tsig_algorithm,
-                      )
-                      .map_err(|e| {
-                        anyhow::anyhow!("Failed to initalize RFC 2136 DNS provider: {}", e)
-                      })?,
+                      crate::acme::dns::rfc2136::Rfc2136DnsProvider::new(addr, key_name, key, tsig_algorithm)
+                        .map_err(|e| anyhow::anyhow!("Failed to initalize RFC 2136 DNS provider: {}", e))?,
                     ))
                   }
                   #[cfg(feature = "acmedns-cloudflare")]
@@ -877,9 +830,7 @@ fn before_starting_server(
                     let email = challenge_params.get("email").map(|x| x as &str);
                     Some(Arc::new(
                       crate::acme::dns::cloudflare::CloudflareDnsProvider::new(api_key, email)
-                        .map_err(|e| {
-                          anyhow::anyhow!("Failed to initalize Cloudflare DNS provider: {}", e)
-                        })?,
+                        .map_err(|e| anyhow::anyhow!("Failed to initalize Cloudflare DNS provider: {}", e))?,
                     ))
                   }
                   #[cfg(feature = "acmedns-desec")]
@@ -888,16 +839,14 @@ fn before_starting_server(
                       .get("api_token")
                       .ok_or_else(|| anyhow::anyhow!("Missing deSEC API token"))?;
                     Some(Arc::new(
-                      crate::acme::dns::desec::DesecDnsProvider::new(api_token).map_err(|e| {
-                        anyhow::anyhow!("Failed to initalize deSEC DNS provider: {}", e)
-                      })?,
+                      crate::acme::dns::desec::DesecDnsProvider::new(api_token)
+                        .map_err(|e| anyhow::anyhow!("Failed to initalize deSEC DNS provider: {}", e))?,
                     ))
                   }
                   #[cfg(feature = "acmedns-route53")]
                   "route53" => {
                     let access_key_id = challenge_params.get("access_key_id").map(|v| v as &str);
-                    let secret_access_key =
-                      challenge_params.get("secret_access_key").map(|v| v as &str);
+                    let secret_access_key = challenge_params.get("secret_access_key").map(|v| v as &str);
                     let region = challenge_params.get("region").map(|v| v as &str);
                     let profile_name = challenge_params.get("profile_name").map(|v| v as &str);
                     let hosted_zone_id = challenge_params.get("hosted_zone_id").map(|v| v as &str);
@@ -909,15 +858,10 @@ fn before_starting_server(
                         secret_access_key,
                         hosted_zone_id,
                       )
-                      .map_err(|e| {
-                        anyhow::anyhow!("Failed to initalize Route53 DNS provider: {}", e)
-                      })?,
+                      .map_err(|e| anyhow::anyhow!("Failed to initalize Route53 DNS provider: {}", e))?,
                     ))
                   }
-                  _ => Err(anyhow::anyhow!(
-                    "Unsupported DNS provider: {}",
-                    provider_name
-                  ))?,
+                  _ => Err(anyhow::anyhow!("Unsupported DNS provider: {}", provider_name))?,
                 }
               } else {
                 Err(anyhow::anyhow!("No DNS provider specified"))?
@@ -933,27 +877,25 @@ fn before_starting_server(
                 }
               })
               .map(|path| path.to_owned());
-            let rustls_client_config =
-              (if get_value!("auto_tls_no_verification", server_configuration)
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-              {
-                ClientConfig::builder_with_provider(crypto_provider.clone())
-                  .with_safe_default_protocol_versions()?
-                  .dangerous()
-                  .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
-              } else {
-                ClientConfig::builder_with_provider(crypto_provider.clone())
-                  .with_safe_default_protocol_versions()?
-                  .with_platform_verifier()?
-              })
-              .with_no_client_auth();
+            let rustls_client_config = (if get_value!("auto_tls_no_verification", server_configuration)
+              .and_then(|v| v.as_bool())
+              .unwrap_or(false)
+            {
+              ClientConfig::builder_with_provider(crypto_provider.clone())
+                .with_safe_default_protocol_versions()?
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
+            } else {
+              ClientConfig::builder_with_provider(crypto_provider.clone())
+                .with_safe_default_protocol_versions()?
+                .with_platform_verifier()?
+            })
+            .with_no_client_auth();
             if on_demand_tls {
               if &*challenge_type_str.to_uppercase() == "TLS-ALPN-01" {
                 // Add TLS-ALPN-01 resolver
                 let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-                acme_tls_alpn_01_resolver_locks
-                  .insert(automatic_tls_port, sni_resolver_list.clone());
+                acme_tls_alpn_01_resolver_locks.insert(automatic_tls_port, sni_resolver_list.clone());
                 let sni_resolver = TlsAlpn01Resolver::with_resolvers(sni_resolver_list);
                 acme_tls_alpn_01_resolvers.insert(automatic_tls_port, sni_resolver);
               }
@@ -1016,17 +958,15 @@ fn before_starting_server(
               acme_on_demand_configs.push(acme_on_demand_config);
               automatic_tls_used_sni_hostnames.insert((automatic_tls_port, sni_hostname));
             } else if let Some(sni_hostname) = sni_hostname {
-              let (account_cache_path, cert_cache_path) = if let Some(acme_cache_path) =
-                acme_cache_path_option.clone()
+              let (account_cache_path, cert_cache_path) = if let Some(acme_cache_path) = acme_cache_path_option.clone()
               {
                 let mut pathbuf = match PathBuf::from_str(&acme_cache_path) {
                   Ok(pathbuf) => pathbuf,
                   Err(_) => Err(anyhow::anyhow!("Invalid ACME cache path"))?,
                 };
                 let base_pathbuf = pathbuf.clone();
-                let append_hash = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
-                  xxh3_128(format!("{automatic_tls_port}-{sni_hostname}").as_bytes()).to_be_bytes(),
-                );
+                let append_hash = base64::engine::general_purpose::URL_SAFE_NO_PAD
+                  .encode(xxh3_128(format!("{automatic_tls_port}-{sni_hostname}").as_bytes()).to_be_bytes());
                 pathbuf.push(append_hash);
                 (Some(base_pathbuf), Some(pathbuf))
               } else {
@@ -1079,19 +1019,14 @@ fn before_starting_server(
               acme_configs.push(acme_config);
               match &*challenge_type_str.to_uppercase() {
                 "HTTP-01" => {
-                  acme_http_01_resolvers
-                    .blocking_write()
-                    .push(http_01_data_lock);
+                  acme_http_01_resolvers.blocking_write().push(http_01_data_lock);
                 }
                 "TLS-ALPN-01" => {
-                  if let Some(sni_resolver) =
-                    acme_tls_alpn_01_resolvers.get_mut(&automatic_tls_port)
-                  {
+                  if let Some(sni_resolver) = acme_tls_alpn_01_resolvers.get_mut(&automatic_tls_port) {
                     sni_resolver.load_resolver(tls_alpn_01_data_lock);
                   } else {
                     let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-                    acme_tls_alpn_01_resolver_locks
-                      .insert(automatic_tls_port, sni_resolver_list.clone());
+                    acme_tls_alpn_01_resolver_locks.insert(automatic_tls_port, sni_resolver_list.clone());
                     let sni_resolver = TlsAlpn01Resolver::with_resolvers(sni_resolver_list);
                     sni_resolver.load_resolver(tls_alpn_01_data_lock);
                     acme_tls_alpn_01_resolvers.insert(automatic_tls_port, sni_resolver);
@@ -1110,9 +1045,7 @@ fn before_starting_server(
               }
               automatic_tls_used_sni_hostnames.insert((automatic_tls_port, Some(sni_hostname)));
             }
-          } else if !server_configuration.filters.is_global()
-            && !server_configuration.filters.is_global_non_host()
-          {
+          } else if !server_configuration.filters.is_global() && !server_configuration.filters.is_global_non_host() {
             if let Some(logging_tx) = &global_logger {
               logging_tx
                 .send_blocking(LogMessage::new(
@@ -1159,25 +1092,21 @@ fn before_starting_server(
                   } else {
                     format!("domain={}", urlencoding::encode(&received_data.0))
                   };
-                  url_parts.path_and_query = Some(
-                    match format!("{}?{}", path_and_query.path(), query).parse() {
-                      Ok(parsed) => parsed,
-                      Err(err) => {
-                        if let Some(acme_logger) = &acme_logger_option {
-                          acme_logger
-                            .send(LogMessage::new(
-                              format!(
-                                "Error while formatting the URL for on-demand TLS request: {err}"
-                              ),
-                              true,
-                            ))
-                            .await
-                            .unwrap_or_default();
-                        }
-                        continue;
+                  url_parts.path_and_query = Some(match format!("{}?{}", path_and_query.path(), query).parse() {
+                    Ok(parsed) => parsed,
+                    Err(err) => {
+                      if let Some(acme_logger) = &acme_logger_option {
+                        acme_logger
+                          .send(LogMessage::new(
+                            format!("Error while formatting the URL for on-demand TLS request: {err}"),
+                            true,
+                          ))
+                          .await
+                          .unwrap_or_default();
                       }
-                    },
-                  );
+                      continue;
+                    }
+                  });
                 } else {
                   url_parts.path_and_query = Some(
                     match format!("/?domain={}", urlencoding::encode(&received_data.0)).parse() {
@@ -1186,9 +1115,7 @@ fn before_starting_server(
                         if let Some(acme_logger) = &acme_logger_option {
                           acme_logger
                             .send(LogMessage::new(
-                              format!(
-                                "Error while formatting the URL for on-demand TLS request: {err}"
-                              ),
+                              format!("Error while formatting the URL for on-demand TLS request: {err}"),
                               true,
                             ))
                             .await
@@ -1205,9 +1132,7 @@ fn before_starting_server(
                     if let Some(acme_logger) = &acme_logger_option {
                       acme_logger
                         .send(LogMessage::new(
-                          format!(
-                            "Error while formatting the URL for on-demand TLS request: {err}"
-                          ),
+                          format!("Error while formatting the URL for on-demand TLS request: {err}"),
                           true,
                         ))
                         .await
@@ -1217,10 +1142,8 @@ fn before_starting_server(
                   }
                 };
                 let ask_closure = async {
-                  let client = hyper_util::client::legacy::Client::builder(
-                    hyper_util::rt::TokioExecutor::new(),
-                  )
-                  .build::<_, http_body_util::Empty<hyper::body::Bytes>>(
+                  let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                    .build::<_, http_body_util::Empty<hyper::body::Bytes>>(
                     hyper_rustls::HttpsConnectorBuilder::new()
                       .with_tls_config(
                         (if !on_demand_tls_ask_endpoint_verify {
@@ -1249,35 +1172,37 @@ fn before_starting_server(
                   Ok::<_, Box<dyn Error + Send + Sync>>(response.status().is_success())
                 };
                 match ask_closure.await {
-                    Ok(true) => (),
-                    Ok(false) => {
-                        if let Some(acme_logger) = &acme_logger_option {
-                          acme_logger
-                            .send(LogMessage::new(
-                              format!(
-                                "The TLS certificate cannot be issued for \"{}\" hostname", &received_data.0
-                              ),
-                              true,
-                            ))
-                            .await
-                            .unwrap_or_default();
-                        }
-                        continue;
-                    },
-                    Err(err) => {
-                        if let Some(acme_logger) = &acme_logger_option {
-                          acme_logger
-                            .send(LogMessage::new(
-                              format!(
-                                  "Error while determining if the TLS certificate can be issued for \"{}\" hostname: {err}", &received_data.0
-                              ),
-                              true,
-                            ))
-                            .await
-                            .unwrap_or_default();
-                        }
-                        continue;
-                    },
+                  Ok(true) => (),
+                  Ok(false) => {
+                    if let Some(acme_logger) = &acme_logger_option {
+                      acme_logger
+                        .send(LogMessage::new(
+                          format!(
+                            "The TLS certificate cannot be issued for \"{}\" hostname",
+                            &received_data.0
+                          ),
+                          true,
+                        ))
+                        .await
+                        .unwrap_or_default();
+                    }
+                    continue;
+                  }
+                  Err(err) => {
+                    if let Some(acme_logger) = &acme_logger_option {
+                      acme_logger
+                        .send(LogMessage::new(
+                          format!(
+                            "Error while determining if the TLS certificate can be issued for \"{}\" hostname: {err}",
+                            &received_data.0
+                          ),
+                          true,
+                        ))
+                        .await
+                        .unwrap_or_default();
+                    }
+                    continue;
+                  }
                 }
               }
               if existing_combinations.contains(&received_data) {
@@ -1291,10 +1216,8 @@ fn before_starting_server(
               let memory_acme_account_cache_data = memory_acme_account_cache_data.clone();
               tokio::spawn(async move {
                 for acme_on_demand_config in acme_on_demand_configs.iter() {
-                  if match_hostname(
-                    acme_on_demand_config.sni_hostname.as_deref(),
-                    Some(&sni_hostname),
-                  ) && acme_on_demand_config.port == port
+                  if match_hostname(acme_on_demand_config.sni_hostname.as_deref(), Some(&sni_hostname))
+                    && acme_on_demand_config.port == port
                   {
                     acme_configs_mutex.lock().await.push(
                       convert_on_demand_config(
@@ -1355,8 +1278,7 @@ fn before_starting_server(
       let resolver: Arc<dyn ResolvesServerCert> = if enable_ocsp_stapling {
         // The `ocsp_stapler` crate is dependent on Tokio, so we create a stapler in the Tokio runtime...
         // If this wasn't wrapped in a Tokio runtime, creation of a OCSP stapler would just cause a panic.
-        let stapler = secondary_runtime_ref
-          .block_on(async move { ocsp_stapler::Stapler::new(Arc::new(sni_resolver)) });
+        let stapler = secondary_runtime_ref.block_on(async move { ocsp_stapler::Stapler::new(Arc::new(sni_resolver)) });
         if let Some(certified_keys_to_preload) = certified_keys_to_preload.get(&tls_port) {
           for certified_key in certified_keys_to_preload {
             stapler.preload(certified_key.clone());
@@ -1438,8 +1360,7 @@ fn before_starting_server(
     let mut quic_listener_socketaddrs_to_remove = Vec::new();
     for (key, value) in &*tcp_listeners {
       if enable_uring != *uring_enabled_locked
-        || (!listened_socket_addresses.contains(&(*key, true))
-          && !listened_socket_addresses.contains(&(*key, false)))
+        || (!listened_socket_addresses.contains(&(*key, true)) && !listened_socket_addresses.contains(&(*key, false)))
       {
         // Shut down the TCP listener
         value.send_blocking(()).unwrap_or_default();
@@ -1495,9 +1416,7 @@ fn before_starting_server(
 
     // Error out, if server is configured to listen to no port
     if listened_socket_addresses.is_empty() && quic_listened_socket_addresses.is_empty() {
-      Err(anyhow::anyhow!(
-        "The server is configured to listen to no port"
-      ))?
+      Err(anyhow::anyhow!("The server is configured to listen to no port"))?
     }
 
     let tcp_send_buffer_size = global_configuration
@@ -1532,9 +1451,7 @@ fn before_starting_server(
       if let Some(quic_listener_entry) = quic_listeners.get(&socket_address) {
         // Replace the TLS configuration in the QUIC listener
         let (_, tls_quic_listener) = quic_listener_entry;
-        tls_quic_listener
-          .send_blocking(tls_config)
-          .unwrap_or_default();
+        tls_quic_listener.send_blocking(tls_config).unwrap_or_default();
       } else {
         // Create a QUIC listener
         quic_listeners.insert(
@@ -1637,8 +1554,7 @@ fn obtain_configuration_adapters() -> (
   Vec<&'static str>,
 ) {
   // Configuration adapters
-  let mut configuration_adapters: HashMap<String, Box<dyn ConfigurationAdapter + Send + Sync>> =
-    HashMap::new();
+  let mut configuration_adapters: HashMap<String, Box<dyn ConfigurationAdapter + Send + Sync>> = HashMap::new();
   let mut all_adapters = Vec::new();
 
   // Configuration adapter registration macro

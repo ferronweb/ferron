@@ -32,9 +32,7 @@ const V2_LENGTH_INDEX: usize = 14;
 const READ_BUFFER_LEN: usize = 512;
 
 /// Reads the PROXY protocol header from the given `AsyncRead`.
-pub async fn read_proxy_header<I>(
-  mut stream: I,
-) -> Result<(I, Option<SocketAddr>, Option<SocketAddr>), std::io::Error>
+pub async fn read_proxy_header<I>(mut stream: I) -> Result<(I, Option<SocketAddr>, Option<SocketAddr>), std::io::Error>
 where
   I: AsyncRead + Unpin,
 {
@@ -49,9 +47,7 @@ where
   if &buffer[..V1_PREFIX_LEN] == ppp::v1::PROTOCOL_PREFIX.as_bytes() {
     read_v1_header(&mut stream, &mut buffer).await?;
   } else {
-    stream
-      .read_exact(&mut buffer[V1_PREFIX_LEN..V2_MINIMUM_LEN])
-      .await?;
+    stream.read_exact(&mut buffer[V1_PREFIX_LEN..V2_MINIMUM_LEN]).await?;
     if &buffer[..V2_PREFIX_LEN] == ppp::v2::PROTOCOL_PREFIX {
       dynamic_buffer = read_v2_header(&mut stream, &mut buffer).await?;
     } else {
@@ -121,10 +117,7 @@ where
   }
 }
 
-async fn read_v2_header<I>(
-  mut stream: I,
-  buffer: &mut [u8; READ_BUFFER_LEN],
-) -> Result<Option<Vec<u8>>, std::io::Error>
+async fn read_v2_header<I>(mut stream: I, buffer: &mut [u8; READ_BUFFER_LEN]) -> Result<Option<Vec<u8>>, std::io::Error>
 where
   I: AsyncRead + Unpin,
 {
@@ -144,18 +137,13 @@ where
     Ok(Some(dynamic_buffer))
   } else {
     // Read the remaining header length
-    stream
-      .read_exact(&mut buffer[V2_MINIMUM_LEN..full_length])
-      .await?;
+    stream.read_exact(&mut buffer[V2_MINIMUM_LEN..full_length]).await?;
 
     Ok(None)
   }
 }
 
-async fn read_v1_header<I>(
-  mut stream: I,
-  buffer: &mut [u8; READ_BUFFER_LEN],
-) -> Result<(), std::io::Error>
+async fn read_v1_header<I>(mut stream: I, buffer: &mut [u8; READ_BUFFER_LEN]) -> Result<(), std::io::Error>
 where
   I: AsyncRead + Unpin,
 {

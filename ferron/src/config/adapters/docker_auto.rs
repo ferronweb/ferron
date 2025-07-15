@@ -21,22 +21,14 @@ impl DockerAutoConfigurationAdapter {
 }
 
 impl ConfigurationAdapter for DockerAutoConfigurationAdapter {
-  fn load_configuration(
-    &self,
-    _path: &Path,
-  ) -> Result<Vec<ServerConfiguration>, Box<dyn Error + Send + Sync>> {
+  fn load_configuration(&self, _path: &Path) -> Result<Vec<ServerConfiguration>, Box<dyn Error + Send + Sync>> {
     #[cfg(feature = "config-yaml-legacy")]
     {
       use crate::config::adapters::yaml_legacy::YamlLegacyConfigurationAdapter;
       if fs::exists("/etc/ferron.yaml")? {
-        return Ok(
-          YamlLegacyConfigurationAdapter::new()
-            .load_configuration(Path::new("/etc/ferron.yaml"))?,
-        );
+        return Ok(YamlLegacyConfigurationAdapter::new().load_configuration(Path::new("/etc/ferron.yaml"))?);
       } else if fs::exists("/etc/ferron.yml")? {
-        return Ok(
-          YamlLegacyConfigurationAdapter::new().load_configuration(Path::new("/etc/ferron.yml"))?,
-        );
+        return Ok(YamlLegacyConfigurationAdapter::new().load_configuration(Path::new("/etc/ferron.yml"))?);
       }
     }
 

@@ -129,10 +129,7 @@ fn load_configuration_inner(
           } else {
             let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
 
-            Err(anyhow::anyhow!(
-              "Invalid host specifier at \"{}\"",
-              canonical_path
-            ))?
+            Err(anyhow::anyhow!("Invalid host specifier at \"{}\"", canonical_path))?
           }
         } else if let Ok(ip_address) = global_name
           .strip_prefix('[')
@@ -152,8 +149,7 @@ fn load_configuration_inner(
           let kdl_node_name = kdl_node.name().value();
           let children = kdl_node.children();
           if kdl_node_name == "location" {
-            let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
-              HashMap::new();
+            let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
             if let Some(children) = children {
               if let Some(location) = kdl_node.entry(0) {
                 if let Some(location_str) = location.value().as_string() {
@@ -161,8 +157,7 @@ fn load_configuration_inner(
                     let kdl_node_name = kdl_node.name().value();
                     let children = kdl_node.children();
                     if kdl_node_name == "error_config" {
-                      let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
-                        HashMap::new();
+                      let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
                       if let Some(children) = children {
                         if let Some(error_status_code) = kdl_node.entry(0) {
                           if let Some(error_status_code) = error_status_code.value().as_integer() {
@@ -186,9 +181,7 @@ fn load_configuration_inner(
                                 ip,
                                 port,
                                 location_prefix: Some(location_str.to_string()),
-                                error_handler_status: Some(ErrorHandlerStatus::Status(
-                                  error_status_code as u16,
-                                )),
+                                error_handler_status: Some(ErrorHandlerStatus::Status(error_status_code as u16)),
                               },
                               modules: vec![],
                             });
@@ -276,18 +269,12 @@ fn load_configuration_inner(
                 } else {
                   let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
 
-                  Err(anyhow::anyhow!(
-                    "Invalid location path at \"{}\"",
-                    canonical_path
-                  ))?
+                  Err(anyhow::anyhow!("Invalid location path at \"{}\"", canonical_path))?
                 }
               } else {
                 let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
 
-                Err(anyhow::anyhow!(
-                  "Invalid location at \"{}\"",
-                  canonical_path
-                ))?
+                Err(anyhow::anyhow!("Invalid location at \"{}\"", canonical_path))?
               }
             } else {
               let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
@@ -298,8 +285,7 @@ fn load_configuration_inner(
               ))?
             }
           } else if kdl_node_name == "error_config" {
-            let mut configuration_entries: HashMap<String, ServerConfigurationEntries> =
-              HashMap::new();
+            let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
             if let Some(children) = children {
               if let Some(error_status_code) = kdl_node.entry(0) {
                 if let Some(error_status_code) = error_status_code.value().as_integer() {
@@ -323,9 +309,7 @@ fn load_configuration_inner(
                       ip,
                       port,
                       location_prefix: None,
-                      error_handler_status: Some(ErrorHandlerStatus::Status(
-                        error_status_code as u16,
-                      )),
+                      error_handler_status: Some(ErrorHandlerStatus::Status(error_status_code as u16)),
                     },
                     modules: vec![],
                   });
@@ -449,8 +433,7 @@ fn load_configuration_inner(
                 ))?
               }
             };
-            include_files
-              .push(fs::canonicalize(&file_globbed).unwrap_or_else(|_| file_globbed.clone()));
+            include_files.push(fs::canonicalize(&file_globbed).unwrap_or_else(|_| file_globbed.clone()));
           }
         }
       }
@@ -461,10 +444,7 @@ fn load_configuration_inner(
     } else {
       let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
 
-      Err(anyhow::anyhow!(
-        "Invalid top-level directive at \"{}\"",
-        canonical_path
-      ))?
+      Err(anyhow::anyhow!("Invalid top-level directive at \"{}\"", canonical_path))?
     }
   }
 
@@ -482,10 +462,7 @@ impl KdlConfigurationAdapter {
 }
 
 impl ConfigurationAdapter for KdlConfigurationAdapter {
-  fn load_configuration(
-    &self,
-    path: &Path,
-  ) -> Result<Vec<ServerConfiguration>, Box<dyn Error + Send + Sync>> {
+  fn load_configuration(&self, path: &Path) -> Result<Vec<ServerConfiguration>, Box<dyn Error + Send + Sync>> {
     load_configuration_inner(path.to_path_buf(), &mut HashSet::new())
   }
 }

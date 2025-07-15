@@ -11,10 +11,7 @@ pub fn load_config(path: PathBuf) -> Result<Yaml, Box<dyn Error + Send + Sync>> 
   load_config_inner(path, &mut HashSet::new())
 }
 
-fn load_config_inner(
-  path: PathBuf,
-  loaded_paths: &mut HashSet<PathBuf>,
-) -> Result<Yaml, Box<dyn Error + Send + Sync>> {
+fn load_config_inner(path: PathBuf, loaded_paths: &mut HashSet<PathBuf>) -> Result<Yaml, Box<dyn Error + Send + Sync>> {
   // Canonicalize the path
   let canonical_pathbuf = fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
 
@@ -112,8 +109,7 @@ fn load_config_inner(
                 ))?
               }
             };
-            include_files
-              .push(fs::canonicalize(&file_globbed).unwrap_or_else(|_| file_globbed.clone()));
+            include_files.push(fs::canonicalize(&file_globbed).unwrap_or_else(|_| file_globbed.clone()));
           }
         }
       }

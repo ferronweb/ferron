@@ -59,10 +59,7 @@ impl<MakeFut, Fut> UdpPollHelper<MakeFut, Fut> {
   /// it yields [`Poll::Ready`], then creating a new one on the next
   /// [`poll_writable`](UdpPoller::poll_writable)
   fn new(make_fut: MakeFut) -> Self {
-    Self {
-      make_fut,
-      fut: None,
-    }
+    Self { make_fut, fut: None }
   }
 }
 
@@ -295,29 +292,18 @@ async fn quic_listener_fn(
   }
   let udp_socket = match udp_socket_result {
     Ok(socket) => socket,
-    Err(err) => Err(anyhow::anyhow!(format!(
-      "Cannot listen to HTTP/3 port: {}",
-      err
-    )))?,
+    Err(err) => Err(anyhow::anyhow!(format!("Cannot listen to HTTP/3 port: {}", err)))?,
   };
-  let endpoint = match quinn::Endpoint::new(
-    quinn::EndpointConfig::default(),
-    Some(server_config),
-    udp_socket,
-    {
-      #[cfg(feature = "runtime-monoio")]
-      let runtime = Arc::new(MonoioAsyncioRuntime);
-      #[cfg(feature = "runtime-tokio")]
-      let runtime = Arc::new(quinn::TokioRuntime);
+  let endpoint = match quinn::Endpoint::new(quinn::EndpointConfig::default(), Some(server_config), udp_socket, {
+    #[cfg(feature = "runtime-monoio")]
+    let runtime = Arc::new(MonoioAsyncioRuntime);
+    #[cfg(feature = "runtime-tokio")]
+    let runtime = Arc::new(quinn::TokioRuntime);
 
-      runtime
-    },
-  ) {
+    runtime
+  }) {
     Ok(endpoint) => endpoint,
-    Err(err) => Err(anyhow::anyhow!(format!(
-      "Cannot listen to HTTP/3 port: {}",
-      err
-    )))?,
+    Err(err) => Err(anyhow::anyhow!(format!("Cannot listen to HTTP/3 port: {}", err)))?,
   };
   println!("HTTP/3 server is listening on {address}...");
   listen_error_tx.send(None).await.unwrap_or_default();
@@ -364,9 +350,7 @@ async fn quic_listener_fn(
     };
     let remote_address = new_conn.remote_address();
     let local_address = SocketAddr::new(
-      new_conn
-        .local_ip()
-        .unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED)),
+      new_conn.local_ip().unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED)),
       udp_port,
     );
     let quic_data = ConnectionData {

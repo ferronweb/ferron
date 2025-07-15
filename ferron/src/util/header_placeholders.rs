@@ -28,11 +28,7 @@ pub fn replace_header_placeholders(
           }),
           "scheme" => {
             if let Some(socket_data) = socket_data {
-              output.push_str(if socket_data.encrypted {
-                "https"
-              } else {
-                "http"
-              });
+              output.push_str(if socket_data.encrypted { "https" } else { "http" });
             } else {
               // No socket data, leave it as is
               output.push_str("{scheme}");
@@ -106,12 +102,7 @@ mod tests {
   use hyper::http::{request::Parts, Method, Version};
   use hyper::Request;
 
-  fn make_parts(
-    uri_str: &str,
-    method: Method,
-    version: Version,
-    headers: Option<Vec<(&str, &str)>>,
-  ) -> Parts {
+  fn make_parts(uri_str: &str, method: Method, version: Version, headers: Option<Vec<(&str, &str)>>) -> Parts {
     let mut parts = Request::builder()
       .uri(uri_str)
       .method(method)
@@ -186,10 +177,7 @@ mod tests {
       "/data",
       Method::PUT,
       Version::HTTP_2,
-      Some(vec![
-        ("Content-Type", "application/json"),
-        ("Host", "api.example.com"),
-      ]),
+      Some(vec![("Content-Type", "application/json"), ("Host", "api.example.com")]),
     );
     let input = "{method} {path} {version} Host: {header:Host} Content-Type: {header:Content-Type}";
     let expected = "PUT /data HTTP/2.0 Host: api.example.com Content-Type: application/json";

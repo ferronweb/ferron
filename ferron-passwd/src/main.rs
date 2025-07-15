@@ -38,5 +38,7 @@ fn main() {
   let password_hash = generate_hash(password);
 
   println!("The generated password hash: {password_hash}");
-  println!("Refer to the Ferron configuration documentation for information on how to configure the users with passwords")
+  println!(
+    "Refer to the Ferron configuration documentation for information on how to configure the users with passwords"
+  )
 }

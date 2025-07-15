@@ -33,8 +33,7 @@ use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use crate::util::cgi::CgiResponse;
 use crate::util::{
-  get_entries, get_entries_for_validation, get_entry, get_value, Copier, ModuleCache, TtlCache,
-  SERVER_SOFTWARE,
+  get_entries, get_entries_for_validation, get_entry, get_value, Copier, ModuleCache, TtlCache, SERVER_SOFTWARE,
 };
 
 /// A CGI module loader
@@ -95,20 +94,13 @@ impl ModuleLoader for CgiModuleLoader {
     if let Some(entries) = get_entries_for_validation!("cgi_interpreter", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.first().is_some_and(|v| v.is_null())
-          || entry
-            .values
-            .get(1)
-            .is_some_and(|v| v.is_null() || v.is_string())
+          || entry.values.get(1).is_some_and(|v| v.is_null() || v.is_string())
         {
-          Err(anyhow::anyhow!(
-            "Invalid CGI extension interpreter specification"
-          ))?
+          Err(anyhow::anyhow!("Invalid CGI extension interpreter specification"))?
         }
         for value in &entry.values {
           if !value.is_string() {
-            Err(anyhow::anyhow!(
-              "Invalid CGI extension interpreter specification"
-            ))?
+            Err(anyhow::anyhow!("Invalid CGI extension interpreter specification"))?
           }
         }
       }
@@ -133,13 +125,9 @@ impl ModuleLoader for CgiModuleLoader {
             "The `cgi_environment` configuration property must have exactly two values"
           ))?
         } else if !entry.values[0].is_string() {
-          Err(anyhow::anyhow!(
-            "The CGI environment variable name must be a string"
-          ))?
+          Err(anyhow::anyhow!("The CGI environment variable name must be a string"))?
         } else if !entry.values[1].is_string() {
-          Err(anyhow::anyhow!(
-            "The CGI environment variable value must be a string"
-          ))?
+          Err(anyhow::anyhow!("The CGI environment variable value must be a string"))?
         }
       }
     };
@@ -182,11 +170,7 @@ impl ModuleHandlers for CgiModuleHandlers {
     let cgi_script_exts_config = get_entries!("cgi_extension", config);
     if let Some(cgi_script_exts_obtained) = cgi_script_exts_config {
       for cgi_script_ext_config in cgi_script_exts_obtained.inner.iter() {
-        if let Some(cgi_script_ext) = cgi_script_ext_config
-          .values
-          .first()
-          .and_then(|v| v.as_str())
-        {
+        if let Some(cgi_script_ext) = cgi_script_ext_config.values.first().and_then(|v| v.as_str()) {
           cgi_script_exts.push(cgi_script_ext);
         }
       }
@@ -306,14 +290,10 @@ impl ModuleHandlers for CgiModuleHandlers {
                 while request_path_normalized.contains("//") {
                   request_path_normalized = request_path_normalized.replace("//", "/");
                 }
-                if request_path_normalized == "/cgi-bin"
-                  || request_path_normalized.starts_with("/cgi-bin/")
-                {
+                if request_path_normalized == "/cgi-bin" || request_path_normalized.starts_with("/cgi-bin/") {
                   execute_pathbuf = Some(joined_pathbuf);
                 } else {
-                  let contained_extension = joined_pathbuf
-                    .extension()
-                    .map(|a| format!(".{}", a.to_string_lossy()));
+                  let contained_extension = joined_pathbuf.extension().map(|a| format!(".{}", a.to_string_lossy()));
                   if let Some(contained_extension) = contained_extension {
                     if cgi_script_exts.contains(&(&contained_extension as &str)) {
                       execute_pathbuf = Some(joined_pathbuf);
@@ -351,9 +331,7 @@ impl ModuleHandlers for CgiModuleHandlers {
                           true => request_path.to_lowercase(),
                           false => request_path.to_string(),
                         };
-                        if request_path_normalized == "/cgi-bin"
-                          || request_path_normalized.starts_with("/cgi-bin/")
-                        {
+                        if request_path_normalized == "/cgi-bin" || request_path_normalized.starts_with("/cgi-bin/") {
                           execute_pathbuf = Some(temp_joined_pathbuf);
                           break;
                         } else {
@@ -428,16 +406,13 @@ impl ModuleHandlers for CgiModuleHandlers {
                         while request_path_normalized.contains("//") {
                           request_path_normalized = request_path_normalized.replace("//", "/");
                         }
-                        if request_path_normalized == "/cgi-bin"
-                          || request_path_normalized.starts_with("/cgi-bin/")
-                        {
+                        if request_path_normalized == "/cgi-bin" || request_path_normalized.starts_with("/cgi-bin/") {
                           execute_pathbuf = Some(temp_pathbuf);
                           execute_path_info = path_info;
                           break;
                         } else {
-                          let contained_extension = temp_pathbuf
-                            .extension()
-                            .map(|a| format!(".{}", a.to_string_lossy()));
+                          let contained_extension =
+                            temp_pathbuf.extension().map(|a| format!(".{}", a.to_string_lossy()));
                           if let Some(contained_extension) = contained_extension {
                             if cgi_script_exts.contains(&(&contained_extension as &str)) {
                               execute_pathbuf = Some(temp_pathbuf);
@@ -480,10 +455,7 @@ impl ModuleHandlers for CgiModuleHandlers {
         cgi_interpreters.insert(".php".to_string(), vec!["php-cgi".to_string()]);
         if cfg!(windows) {
           cgi_interpreters.insert(".exe".to_string(), vec![]);
-          cgi_interpreters.insert(
-            ".bat".to_string(),
-            vec!["cmd".to_string(), "/c".to_string()],
-          );
+          cgi_interpreters.insert(".bat".to_string(), vec!["cmd".to_string(), "/c".to_string()]);
           cgi_interpreters.insert(".vbs".to_string(), vec!["cscript".to_string()]);
         }
 
@@ -506,9 +478,7 @@ impl ModuleHandlers for CgiModuleHandlers {
         }
 
         let mut additional_environment_variables = HashMap::new();
-        if let Some(additional_environment_variables_config) =
-          get_entries!("cgi_environment", config)
-        {
+        if let Some(additional_environment_variables_config) = get_entries!("cgi_environment", config) {
           for additional_variable in additional_environment_variables_config.inner.iter() {
             if let Some(key) = additional_variable.values.first().and_then(|v| v.as_str()) {
               if let Some(value) = additional_variable.values.get(1).and_then(|v| v.as_str()) {
@@ -594,19 +564,13 @@ async fn execute_cgi_with_environment_variables(
       _ => "HTTP/Unknown".to_string(),
     },
   );
-  environment_variables.insert(
-    "SERVER_PORT".to_string(),
-    socket_data.local_addr.port().to_string(),
-  );
+  environment_variables.insert("SERVER_PORT".to_string(), socket_data.local_addr.port().to_string());
   environment_variables.insert(
     "SERVER_ADDR".to_string(),
     socket_data.local_addr.ip().to_canonical().to_string(),
   );
   if let Some(server_administrator_email) = server_administrator_email {
-    environment_variables.insert(
-      "SERVER_ADMIN".to_string(),
-      server_administrator_email.to_string(),
-    );
+    environment_variables.insert("SERVER_ADMIN".to_string(), server_administrator_email.to_string());
   }
   if let Some(host) = request.headers().get(header::HOST) {
     environment_variables.insert(
@@ -615,10 +579,7 @@ async fn execute_cgi_with_environment_variables(
     );
   }
 
-  environment_variables.insert(
-    "DOCUMENT_ROOT".to_string(),
-    wwwroot.to_string_lossy().to_string(),
-  );
+  environment_variables.insert("DOCUMENT_ROOT".to_string(), wwwroot.to_string_lossy().to_string());
   environment_variables.insert(
     "PATH_INFO".to_string(),
     match &path_info {
@@ -651,10 +612,7 @@ async fn execute_cgi_with_environment_variables(
     ),
   );
 
-  environment_variables.insert(
-    "REMOTE_PORT".to_string(),
-    socket_data.remote_addr.port().to_string(),
-  );
+  environment_variables.insert("REMOTE_PORT".to_string(), socket_data.remote_addr.port().to_string());
   environment_variables.insert(
     "REMOTE_ADDR".to_string(),
     socket_data.remote_addr.ip().to_canonical().to_string(),
@@ -726,9 +684,7 @@ async fn execute_cgi_with_environment_variables(
   }
 
   for (env_var_key, env_var_value) in additional_environment_variables {
-    if let hashlink::linked_hash_map::Entry::Vacant(entry) =
-      environment_variables.entry(env_var_key)
-    {
+    if let hashlink::linked_hash_map::Entry::Vacant(entry) = environment_variables.entry(env_var_key) {
       entry.insert(env_var_value);
     }
   }
@@ -755,9 +711,7 @@ async fn execute_cgi(
   let executable_params = match get_executable(&execute_pathbuf).await {
     Ok(params) => params,
     Err(err) => {
-      let contained_extension = execute_pathbuf
-        .extension()
-        .map(|a| format!(".{}", a.to_string_lossy()));
+      let contained_extension = execute_pathbuf.extension().map(|a| format!(".{}", a.to_string_lossy()));
       if let Some(contained_extension) = contained_extension {
         if let Some(params_init) = cgi_interpreters.get(&contained_extension) {
           let mut params: Vec<String> = params_init.iter().map(|s| s.to_owned()).collect();
@@ -801,16 +755,12 @@ async fn execute_cgi(
   #[cfg(feature = "runtime-monoio")]
   let stdin = match child.stdin.take() {
     Some(stdin) => stdin.compat_write(),
-    None => Err(anyhow::anyhow!(
-      "The CGI process doesn't have standard input"
-    ))?,
+    None => Err(anyhow::anyhow!("The CGI process doesn't have standard input"))?,
   };
   #[cfg(feature = "runtime-monoio")]
   let stdout = match child.stdout.take() {
     Some(stdout) => stdout.compat(),
-    None => Err(anyhow::anyhow!(
-      "The CGI process doesn't have standard output"
-    ))?,
+    None => Err(anyhow::anyhow!("The CGI process doesn't have standard output"))?,
   };
   #[cfg(feature = "runtime-monoio")]
   let stderr = child.stderr.take().map(|x| x.compat());
@@ -818,16 +768,12 @@ async fn execute_cgi(
   #[cfg(feature = "runtime-tokio")]
   let stdin = match child.stdin.take() {
     Some(stdin) => stdin,
-    None => Err(anyhow::anyhow!(
-      "The CGI process doesn't have standard input"
-    ))?,
+    None => Err(anyhow::anyhow!("The CGI process doesn't have standard input"))?,
   };
   #[cfg(feature = "runtime-tokio")]
   let stdout = match child.stdout.take() {
     Some(stdout) => stdout,
-    None => Err(anyhow::anyhow!(
-      "The CGI process doesn't have standard output"
-    ))?,
+    None => Err(anyhow::anyhow!("The CGI process doesn't have standard output"))?,
   };
   #[cfg(feature = "runtime-tokio")]
   let stderr = child.stderr.take();
@@ -898,10 +844,7 @@ async fn execute_cgi(
     if !exit_code.success() {
       if let Some(mut stderr) = stderr {
         let mut stderr_string = String::new();
-        stderr
-          .read_to_string(&mut stderr_string)
-          .await
-          .unwrap_or_default();
+        stderr.read_to_string(&mut stderr_string).await.unwrap_or_default();
         let stderr_string_trimmed = stderr_string.trim();
         if !stderr_string_trimmed.is_empty() {
           error_logger
@@ -924,10 +867,7 @@ async fn execute_cgi(
   crate::runtime::spawn(async move {
     if let Some(mut stderr) = stderr {
       let mut stderr_string = String::new();
-      stderr
-        .read_to_string(&mut stderr_string)
-        .await
-        .unwrap_or_default();
+      stderr.read_to_string(&mut stderr_string).await.unwrap_or_default();
       let stderr_string_trimmed = stderr_string.trim();
       if !stderr_string_trimmed.is_empty() {
         error_logger
@@ -948,9 +888,7 @@ async fn execute_cgi(
 
 #[allow(dead_code)]
 #[cfg(unix)]
-async fn get_executable(
-  execute_pathbuf: &PathBuf,
-) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
+async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
   use std::os::unix::fs::PermissionsExt;
 
   // `monoio::fs::metadata` is available on Unix
@@ -968,9 +906,7 @@ async fn get_executable(
 
 #[allow(dead_code)]
 #[cfg(all(feature = "runtime-monoio", not(unix)))]
-async fn get_executable(
-  execute_pathbuf: &PathBuf,
-) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
+async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
   use bytes::BytesMut;
 
   let magic_signature_buffer = BytesMut::with_capacity(2);
@@ -1027,18 +963,12 @@ async fn get_executable(
 
 #[allow(dead_code)]
 #[cfg(all(feature = "runtime-tokio", not(unix)))]
-async fn get_executable(
-  execute_pathbuf: &PathBuf,
-) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
+async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
   use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
 
   let mut magic_signature_buffer = [0u8; 2];
   let mut open_file = fs::File::open(&execute_pathbuf).await?;
-  if open_file
-    .read_exact(&mut magic_signature_buffer)
-    .await
-    .is_err()
-  {
+  if open_file.read_exact(&mut magic_signature_buffer).await.is_err() {
     Err(anyhow::anyhow!("Failed to read the CGI program signature"))?
   }
 

@@ -92,11 +92,7 @@ impl Decoder for FcgiDecoder {
                   match protocol_status {
                     0 => (),
                     1 => return Err(std::io::Error::other("FastCGI server overloaded")),
-                    2 => {
-                      return Err(std::io::Error::other(
-                        "Role not supported by the FastCGI application",
-                      ))
-                    }
+                    2 => return Err(std::io::Error::other("Role not supported by the FastCGI application")),
                     3 => {
                       return Err(std::io::Error::other(
                         "Multiplexed connections not supported by the FastCGI application",

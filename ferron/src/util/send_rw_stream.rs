@@ -98,10 +98,7 @@ impl SendRwStream {
       inner_rx.close();
     });
     let tx = futures_util::sink::unfold(SenderWrap { inner: tx }, async move |tx, data: Bytes| {
-      tx.send(data)
-        .await
-        .map_err(std::io::Error::other)
-        .map(|_| tx)
+      tx.send(data).await.map_err(std::io::Error::other).map(|_| tx)
     });
     Self {
       rx: Box::pin(rx),

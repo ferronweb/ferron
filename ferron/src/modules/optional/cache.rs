@@ -55,13 +55,7 @@ const HTTP_PREFIX: &str = "http://";
 const HTTPS_PREFIX: &str = "https://";
 
 type HeaderList = SmallVec<[String; MAX_SMALL_HEADER_COUNT]>;
-type CacheEntry = (
-  StatusCode,
-  HeaderMap,
-  Vec<u8>,
-  Instant,
-  Option<Arc<CacheControl>>,
-);
+type CacheEntry = (StatusCode, HeaderMap, Vec<u8>, Instant, Option<Arc<CacheControl>>);
 
 /// Optimized cache decision with bitflags for faster comparisons
 #[derive(Debug, Clone, Copy)]
@@ -153,10 +147,7 @@ impl ResponseBodyHandler {
   }
 
   #[inline]
-  async fn collect_body(
-    &mut self,
-    body: &mut BoxBody<Bytes, std::io::Error>,
-  ) -> Result<bool, Box<dyn Error>> {
+  async fn collect_body(&mut self, body: &mut BoxBody<Bytes, std::io::Error>) -> Result<bool, Box<dyn Error>> {
     while let Some(frame) = body.frame().await {
       let frame = frame?;
       if let Some(bytes) = frame.data_ref() {
@@ -200,12 +191,7 @@ impl VaryKeyBuilder {
     }
   }
 
-  fn build(
-    &mut self,
-    base_key: &str,
-    vary_headers: &[String],
-    request_headers: &HeaderMap,
-  ) -> &str {
+  fn build(&mut self, base_key: &str, vary_headers: &[String], request_headers: &HeaderMap) -> &str {
     self.buffer.clear();
     self.buffer.push_str(base_key);
     self.buffer.push('\n');
@@ -223,9 +209,7 @@ impl VaryKeyBuilder {
           self.buffer.push_str(str_val);
         } else {
           // Fallback to lossy conversion
-          self
-            .buffer
-            .push_str(&String::from_utf8_lossy(header_value.as_bytes()));
+          self.buffer.push_str(&String::from_utf8_lossy(header_value.as_bytes()));
         }
       }
     }
@@ -242,9 +226,7 @@ thread_local! {
 
 /// Fast cache key generation with minimal allocations
 #[inline]
-fn extract_uri_parts(
-  request: &Request<BoxBody<Bytes, std::io::Error>>,
-) -> (String, String, Option<String>) {
+fn extract_uri_parts(request: &Request<BoxBody<Bytes, std::io::Error>>) -> (String, String, Option<String>) {
   let host = request
     .headers()
     .get(&*HOST_HEADER)
@@ -260,13 +242,7 @@ fn extract_uri_parts(
 
 /// Optimized cache key building
 #[inline]
-fn build_cache_key(
-  method: &Method,
-  encrypted: bool,
-  host: &str,
-  path: &str,
-  query: Option<&str>,
-) -> String {
+fn build_cache_key(method: &Method, encrypted: bool, host: &str, path: &str, query: Option<&str>) -> String {
   let estimated_size = method.as_str().len()
     + if encrypted {
       HTTPS_PREFIX.len()
@@ -325,11 +301,7 @@ impl ModuleLoader for CacheModuleLoader {
               if v.is_null() {
                 None
               } else {
-                Some(
-                  v.as_i128()
-                    .map(|v| v as usize)
-                    .unwrap_or(DEFAULT_MAX_CACHE_ENTRIES),
-                )
+                Some(v.as_i128().map(|v| v as usize).unwrap_or(DEFAULT_MAX_CACHE_ENTRIES))
               }
             });
 
@@ -361,25 +333,18 @@ impl ModuleLoader for CacheModuleLoader {
     if let Some(entries) = get_entries_for_validation!("cache", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
-          return Err(
-            anyhow::anyhow!("The `cache` configuration property must have exactly one value")
-              .into(),
-          );
+          return Err(anyhow::anyhow!("The `cache` configuration property must have exactly one value").into());
         } else if !entry.values[0].is_bool() {
           return Err(anyhow::anyhow!("Invalid cache enabling option").into());
         }
       }
     }
 
-    if let Some(entries) = get_entries_for_validation!("cache_max_entries", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("cache_max_entries", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           return Err(
-            anyhow::anyhow!(
-              "The `cache_max_entries` configuration property must have exactly one value"
-            )
-            .into(),
+            anyhow::anyhow!("The `cache_max_entries` configuration property must have exactly one value").into(),
           );
         } else if (!entry.values[0].is_integer() && !entry.values[0].is_null())
           || entry.values[0].as_i128().is_some_and(|v| v < 0)
@@ -389,16 +354,11 @@ impl ModuleLoader for CacheModuleLoader {
       }
     }
 
-    if let Some(entries) =
-      get_entries_for_validation!("cache_max_response_size", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("cache_max_response_size", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           return Err(
-            anyhow::anyhow!(
-              "The `cache_max_response_size` configuration property must have exactly one value"
-            )
-            .into(),
+            anyhow::anyhow!("The `cache_max_response_size` configuration property must have exactly one value").into(),
           );
         } else if (!entry.values[0].is_integer() && !entry.values[0].is_null())
           || entry.values[0].as_i128().is_some_and(|v| v < 0)
@@ -422,9 +382,7 @@ impl ModuleLoader for CacheModuleLoader {
       for entry in &entries.inner {
         for value in &entry.values {
           if !value.is_string() {
-            return Err(
-              anyhow::anyhow!("Invalid ignored cache response headers configuration").into(),
-            );
+            return Err(anyhow::anyhow!("Invalid ignored cache response headers configuration").into());
           }
         }
       }
@@ -493,18 +451,13 @@ impl CacheModuleHandlers {
         .filter_map(|v| v.as_str().map(String::from)),
     );
 
-    self.maximum_cached_response_size =
-      get_value!("cache_max_response_size", config).and_then(|v| {
-        if v.is_null() {
-          None
-        } else {
-          Some(
-            v.as_i128()
-              .map(|f| f as u64)
-              .unwrap_or(DEFAULT_MAX_CACHE_RESPONSE_SIZE),
-          )
-        }
-      });
+    self.maximum_cached_response_size = get_value!("cache_max_response_size", config).and_then(|v| {
+      if v.is_null() {
+        None
+      } else {
+        Some(v.as_i128().map(|f| f as u64).unwrap_or(DEFAULT_MAX_CACHE_RESPONSE_SIZE))
+      }
+    });
   }
 
   /// Optimized cache cleanup with batching
@@ -528,11 +481,7 @@ impl CacheModuleHandlers {
 
   /// Fast cache control evaluation
   #[inline]
-  fn should_cache_response(
-    &self,
-    response_cache_control: &Option<CacheControl>,
-    has_authorization: bool,
-  ) -> bool {
+  fn should_cache_response(&self, response_cache_control: &Option<CacheControl>, has_authorization: bool) -> bool {
     match response_cache_control {
       Some(cache_control) => {
         if cache_control.no_store {
@@ -542,10 +491,7 @@ impl CacheModuleHandlers {
         match cache_control.cachability {
           Some(Cachability::Private) => false,
           Some(Cachability::Public) => true,
-          _ => {
-            !has_authorization
-              && (cache_control.max_age.is_some() || cache_control.s_max_age.is_some())
-          }
+          _ => !has_authorization && (cache_control.max_age.is_some() || cache_control.s_max_age.is_some()),
         }
       }
       None => false,
@@ -583,13 +529,7 @@ impl ModuleHandlers for CacheModuleHandlers {
     let (host, path, query) = extract_uri_parts(&request);
 
     // Build cache key
-    let cache_key = build_cache_key(
-      request.method(),
-      socket_data.encrypted,
-      &host,
-      &path,
-      query.as_deref(),
-    );
+    let cache_key = build_cache_key(request.method(), socket_data.encrypted, &host, &path, query.as_deref());
 
     // Check cache only if not no-cache
     if !cache_decision.no_cache() {
@@ -619,8 +559,8 @@ impl ModuleHandlers for CacheModuleHandlers {
               hyper_response_builder = hyper_response_builder.header(header_name, header_value);
             }
 
-            let hyper_response = hyper_response_builder
-              .body(Full::new(Bytes::from(body)).map_err(|e| match e {}).boxed())?;
+            let hyper_response =
+              hyper_response_builder.body(Full::new(Bytes::from(body)).map_err(|e| match e {}).boxed())?;
 
             return Ok(ResponseData {
               request: Some(request),
@@ -654,16 +594,12 @@ impl ModuleHandlers for CacheModuleHandlers {
   ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Box<dyn Error>> {
     // Fast path for common cases
     if self.no_store {
-      response
-        .headers_mut()
-        .insert(CACHE_HEADER_NAME, CACHE_BYPASS.clone());
+      response.headers_mut().insert(CACHE_HEADER_NAME, CACHE_BYPASS.clone());
       return Ok(response);
     }
 
     if self.cached {
-      response
-        .headers_mut()
-        .insert(CACHE_HEADER_NAME, CACHE_HIT.clone());
+      response.headers_mut().insert(CACHE_HEADER_NAME, CACHE_HIT.clone());
       return Ok(response);
     }
 
@@ -688,16 +624,13 @@ impl ModuleHandlers for CacheModuleHandlers {
 
       if !body_collected {
         // Size exceeded, stream response without caching
-        let cached_stream =
-          futures_util::stream::once(async move { Ok(Bytes::from(body_handler.into_bytes())) });
+        let cached_stream = futures_util::stream::once(async move { Ok(Bytes::from(body_handler.into_bytes())) });
         let response_stream = response_body.into_data_stream();
         let chained_stream = cached_stream.chain(response_stream);
         let stream_body = StreamBody::new(chained_stream.map_ok(Frame::data));
         let response_body = BodyExt::boxed(stream_body);
 
-        response_parts
-          .headers
-          .insert(CACHE_HEADER_NAME, CACHE_MISS.clone());
+        response_parts.headers.insert(CACHE_HEADER_NAME, CACHE_MISS.clone());
 
         return Ok(Response::from_parts(response_parts, response_body));
       }
@@ -756,20 +689,15 @@ impl ModuleHandlers for CacheModuleHandlers {
       }
 
       // Create response stream efficiently
-      let cached_stream =
-        futures_util::stream::once(async move { Ok(Bytes::from(response_body_buffer)) });
+      let cached_stream = futures_util::stream::once(async move { Ok(Bytes::from(response_body_buffer)) });
       let stream_body = StreamBody::new(cached_stream.map_ok(Frame::data));
       let response_body = BodyExt::boxed(stream_body);
 
-      response_parts
-        .headers
-        .insert(CACHE_HEADER_NAME, CACHE_MISS.clone());
+      response_parts.headers.insert(CACHE_HEADER_NAME, CACHE_MISS.clone());
 
       Ok(Response::from_parts(response_parts, response_body))
     } else {
-      response_parts
-        .headers
-        .insert(CACHE_HEADER_NAME, CACHE_MISS.clone());
+      response_parts.headers.insert(CACHE_HEADER_NAME, CACHE_MISS.clone());
 
       Ok(Response::from_parts(response_parts, response_body))
     }

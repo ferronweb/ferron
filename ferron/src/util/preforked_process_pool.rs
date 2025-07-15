@@ -200,8 +200,7 @@ impl PreforkedProcessPool {
         }
         Ok(ForkResult::Child) => {
           // Block all the signals
-          nix::sys::signal::sigprocmask(SigmaskHow::SIG_SETMASK, Some(&SigSet::all()), None)
-            .unwrap_or_default();
+          nix::sys::signal::sigprocmask(SigmaskHow::SIG_SETMASK, Some(&SigSet::all()), None).unwrap_or_default();
 
           #[cfg(target_os = "linux")]
           {
@@ -257,14 +256,10 @@ impl PreforkedProcessPool {
   /// ```
   pub async fn obtain_process(
     &self,
-  ) -> Result<
-    Arc<Mutex<(Compat<Async<SenderWrapped>>, Compat<Async<RecverWrapped>>)>>,
-    Box<dyn Error + Send + Sync>,
-  > {
+  ) -> Result<Arc<Mutex<(Compat<Async<SenderWrapped>>, Compat<Async<RecverWrapped>>)>>, Box<dyn Error + Send + Sync>>
+  {
     if self.inner.is_empty() {
-      Err(anyhow::anyhow!(
-        "The process pool doesn't have any processes"
-      ))?
+      Err(anyhow::anyhow!("The process pool doesn't have any processes"))?
     } else if self.inner.len() == 1 {
       Ok(self.inner[0].0.clone())
     } else {
@@ -364,9 +359,7 @@ pub fn read_ipc_message(rx: &mut Recver) -> Result<Vec<u8>, std::io::Error> {
 /// # Ok(())
 /// # }
 /// ```
-pub async fn read_ipc_message_async(
-  rx: &mut Compat<Async<RecverWrapped>>,
-) -> Result<Vec<u8>, std::io::Error> {
+pub async fn read_ipc_message_async(rx: &mut Compat<Async<RecverWrapped>>) -> Result<Vec<u8>, std::io::Error> {
   let mut message_size_buffer = [0u8; 4];
   rx.read_exact(&mut message_size_buffer).await?;
   let message_size = u32::from_be_bytes(message_size_buffer);
