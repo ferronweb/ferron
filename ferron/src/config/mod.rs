@@ -85,13 +85,24 @@ impl ServerConfigurations {
 
   /// Finds the global server configuration (host or non-host)
   pub fn find_global_configuration(&self) -> Option<Arc<ServerConfiguration>> {
-    self
-      .inner
-      .iter()
-      .find(|server_configuration| {
-        server_configuration.filters.is_global() || server_configuration.filters.is_global_non_host()
-      })
-      .cloned()
+    // The server configurations are pre-merged, so we can simply return the found global configuration
+    let mut iterator = self.inner.iter();
+    let first_found = iterator.find(|server_configuration| {
+      server_configuration.filters.is_global() || server_configuration.filters.is_global_non_host()
+    });
+    if let Some(first_found) = first_found {
+      if first_found.filters.is_global() {
+        return Some(first_found.clone());
+      }
+      for server_configuration in iterator {
+        if server_configuration.filters.is_global() {
+          return Some(server_configuration.clone());
+        } else if !server_configuration.filters.is_global_non_host() {
+          return Some(first_found.clone());
+        }
+      }
+    }
+    None
   }
 }
 
