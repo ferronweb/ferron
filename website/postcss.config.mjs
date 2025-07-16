@@ -297,6 +297,24 @@ const config = {
         return selector;
       }
     }),
+    postcssPrefixSelector({
+      // Fix for the polyfill conflicting with asciinema player
+      includeFiles: [/(?:$|\/)asciinema-player\.css$/],
+      transform(_prefix, selector, prefixedSelector, _filePath, _rule) {
+        if (selector.indexOf("body:not(#\\#)") !== -1) {
+          return selector;
+        }
+
+        if (
+          prefixedSelector.match(/\.ap-hud/) &&
+          prefixedSelector.match(/\.ap-control-bar[^ ]*$/)
+        ) {
+          return `body:not(#\\#):not(#\\#):not(#\\#) ${selector}`;
+        }
+
+        return `body:not(#\\#):not(#\\#) ${selector}`;
+      }
+    }),
     postcssCascadeLayers,
     propertyInjectPlugin(),
     colorMixVarResolverPlugin(),
