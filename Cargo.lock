@@ -236,9 +236,9 @@ dependencies = [
 
 [[package]]
 name = "async-compression"
-version = "0.4.26"
+version = "0.4.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "937f41778d8baa0b8984a101f48ec5d2e5b0d23a3f9235b2066eef29c3472bb9"
+checksum = "ddb939d66e4ae03cee6091612804ba446b12878410cfa17f785f4dd67d4014e8"
 dependencies = [
  "brotli",
  "flate2",
@@ -263,7 +263,7 @@ dependencies = [
  "futures-lite",
  "parking",
  "polling",
- "rustix 1.0.7",
+ "rustix 1.0.8",
  "slab",
  "tracing",
  "windows-sys 0.59.0",
@@ -295,7 +295,7 @@ dependencies = [
  "cfg-if",
  "event-listener",
  "futures-lite",
- "rustix 1.0.7",
+ "rustix 1.0.8",
  "tracing",
 ]
 
@@ -311,7 +311,7 @@ dependencies = [
  "cfg-if",
  "futures-core",
  "futures-io",
- "rustix 1.0.7",
+ "rustix 1.0.8",
  "signal-hook-registry",
  "slab",
  "windows-sys 0.59.0",
@@ -381,9 +381,9 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "aws-config"
-version = "1.8.1"
+version = "1.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c18d005c70d2b9c0c1ea8876c039db0ec7fb71164d25c73ccea21bf41fd02171"
+checksum = "ebd9b83179adf8998576317ce47785948bcff399ec5b15f4dfbdedd44ddf5b92"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -406,9 +406,9 @@ dependencies = [
 
 [[package]]
 name = "aws-credential-types"
-version = "1.2.3"
+version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "687bc16bc431a8533fe0097c7f0182874767f920989d7260950172ae8e3c4465"
+checksum = "b68c2194a190e1efc999612792e25b1ab3abfefe4306494efaaabc25933c0cbe"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
@@ -442,9 +442,9 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.5.8"
+version = "1.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f6c68419d8ba16d9a7463671593c54f81ba58cab466e9b759418da606dcc2e2"
+checksum = "b2090e664216c78e766b6bac10fe74d2f451c02441d43484cd76ac9a295075f7"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -466,9 +466,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-route53"
-version = "1.84.0"
+version = "1.86.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ec4589cb6721f5ec7b12bd1afef7521fd5509d3022a61b7e2ce7aed88473537"
+checksum = "ef2b3239c1444149b74f6f7ff3bc144f60e5d7569ccde530a08ea983fb429cff"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -488,9 +488,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sts"
-version = "1.76.0"
+version = "1.78.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb1cd79a3412751a341a28e2cd0d6fa4345241976da427b075a0c0cd5409f886"
+checksum = "37f7766d2344f56d10d12f3c32993da36d78217f32594fe4fb8e57a538c1cdea"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1135,9 +1135,9 @@ dependencies = [
 
 [[package]]
 name = "crc32fast"
-version = "1.4.2"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a97769d94ddab943e4510d138150169a2758b5ef3eb191a9ee688de3e23ef7b3"
+checksum = "9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511"
 dependencies = [
  "cfg-if",
 ]
@@ -2290,9 +2290,9 @@ dependencies = [
 
 [[package]]
 name = "instant-acme"
-version = "0.8.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eafa1ff693805da8c1e150c6e1f21c83b461c1a96f92716c068b76bed7a8ef5a"
+checksum = "5e49a0d5d5b4c21fd218ab511764a9e0c441e2c97b63a8e782ecc3784868b8f9"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
@@ -3189,7 +3189,7 @@ dependencies = [
  "concurrent-queue",
  "hermit-abi",
  "pin-project-lite",
- "rustix 1.0.7",
+ "rustix 1.0.8",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -3805,15 +3805,15 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "1.0.7"
+version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c71e83d6afe7ff64890ec6b71d6a69bb8a610ab78ce364b3352876bb4c801266"
+checksum = "11181fbabf243db407ef8df94a6ce0b2f9a733bd8be4ad02b4eda9602296cac8"
 dependencies = [
  "bitflags 2.9.1",
  "errno",
  "libc",
  "linux-raw-sys 0.9.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4337,7 +4337,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "45c6481c4829e4cc63825e62c49186a34538b7b2750b73b266581ffb612fb5ed"
 dependencies = [
- "rustix 1.0.7",
+ "rustix 1.0.8",
  "windows-sys 0.59.0",
 ]
 
