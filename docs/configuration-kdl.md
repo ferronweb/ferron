@@ -487,10 +487,10 @@ api.example.com {
     proxy_http2 #false
 
     // Proxy headers
-    proxy_request_header "X-Real-IP" "{client_ip}"
+    proxy_request_header "X-Custom-Header" "CustomValue"
 
     proxy_request_header_remove "X-Internal-Token"
-    proxy_request_header_replace "User-Agent" "Ferron-Proxy/1.0"
+    proxy_request_header_replace "X-Real-IP" "{client_ip}"
 }
 ```
 
@@ -822,7 +822,7 @@ api.example.com {
 
     // Proxy settings
     proxy_keepalive
-    proxy_request_header "X-Real-IP" "{client_ip}"
+    proxy_request_header_replace "X-Real-IP" "{client_ip}"
 
     // API-specific headers
     header "Access-Control-Allow-Origin" "*"
