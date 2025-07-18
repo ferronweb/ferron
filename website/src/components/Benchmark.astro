@@ -1,0 +1,135 @@
+---
+const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
+---
+
+<div
+  data-slot="card"
+  class="text-card-foreground flex flex-col gap-6 rounded-xl py-6 shadow-sm overflow-hidden border border-muted/60 bg-card/60 backdrop-blur-sm"
+>
+  <div
+    data-slot="card-header"
+    class="@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6 pb-2"
+  >
+    <div data-slot="card-title" class="leading-none font-semibold">
+      {Astro.props.title}
+    </div>
+    <div data-slot="card-description" class="text-muted-foreground text-sm">
+      {Astro.props.description}
+    </div>
+  </div>
+  <div data-slot="card-content" class="px-6">
+    <benchmark-chart
+      data-props={JSON.stringify({
+        data,
+        unit,
+        competitor1,
+        competitor2,
+        competitor3
+      })}
+    >
+      <!-- Had to use <div> elements for the chart to resize properly -->
+      <div class="relative h-80 w-full">
+        <canvas></canvas>
+      </div>
+    </benchmark-chart>
+    <div class="mt-4 text-center text-sm text-muted-foreground">
+      <p>
+        {Astro.props.higherIsBetter ? "Higher is better" : "Lower is better"} | Benchmarks
+        run on AMD Ryzen 5 8600G, 32GB RAM, with the{" "}
+        <code>{Astro.props.command}</code> command
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+  import {
+    BarController,
+    BarElement,
+    Chart,
+    CategoryScale,
+    LinearScale,
+    Legend,
+    Tooltip
+  } from "chart.js";
+
+  Chart.register([
+    BarController,
+    BarElement,
+    CategoryScale,
+    LinearScale,
+    Legend,
+    Tooltip
+  ]);
+
+  const style = getComputedStyle(document.body);
+  const mutedForegroundColor = style.getPropertyValue("--muted-foreground");
+  const borderColor = style.getPropertyValue("--border");
+  const primaryColor = style.getPropertyValue("--primary");
+  const chart3 = style.getPropertyValue("--chart-3");
+  const chart4 = style.getPropertyValue("--chart-4");
+  const chart5 = style.getPropertyValue("--chart-5");
+  const ibmPlexSans = style.getPropertyValue("--font-ibm-plex-sans");
+
+  class BenchmarkChart extends HTMLElement {
+    connectedCallback() {
+      const props = JSON.parse(this.dataset.props || "{}");
+      const canvas = this.querySelector("canvas");
+      Chart.defaults.font.family = ibmPlexSans;
+      Chart.defaults.font.size = 14;
+      Chart.defaults.color = `hsla(${mutedForegroundColor}, 1)`;
+      Chart.defaults.borderColor = `hsla(${borderColor}, 1)`;
+      new Chart(canvas as any, {
+        type: "bar",
+        data: {
+          labels: props.data.map((item: any) => item.name),
+          datasets: [
+            {
+              label: "Ferron",
+              data: props.data.map((item: any) => item.ferron),
+              backgroundColor: `hsla(${primaryColor}, 1)`
+            },
+            {
+              label: props.competitor1,
+              data: props.data.map((item: any) => item.competitor1),
+              backgroundColor: `hsla(${chart3}, 1)`
+            },
+            {
+              label: props.competitor2,
+              data: props.data.map((item: any) => item.competitor2),
+              backgroundColor: `hsla(${chart4}, 1)`
+            },
+            {
+              label: props.competitor3,
+              data: props.data.map((item: any) => item.competitor3),
+              backgroundColor: `hsla(${chart5}, 1)`
+            }
+          ]
+        },
+        options: {
+          maintainAspectRatio: false,
+
+          scales: {
+            x: {
+              grid: {
+                display: false
+              }
+            },
+            y: {
+              grid: {
+                display: false
+              },
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: props.unit
+              }
+            }
+          }
+        }
+      });
+    }
+  }
+
+  customElements.define("benchmark-chart", BenchmarkChart);
+</script>
