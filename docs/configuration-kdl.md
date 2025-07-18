@@ -336,9 +336,9 @@ This configuration reference organizes directives by both **scope** (where they 
 - `example_handler [enable_example_handler: bool]` (_example_ module)
   - This directive specifies whenever an example handler is enabled. This handler responds with "Hello World" for "/hello" request paths. Default: `example_handler #false`
 
-## Header name placeholders
+## Header value placeholders
 
-Ferron supports the following header name placeholders:
+Ferron supports the following header value placeholders:
 
 - `{path}` - the path part of the request URI
 - `{method}` (Ferron 2.0.0-beta.9 or newer) - the request method
