@@ -123,6 +123,21 @@ This configuration reference organizes directives by both **scope** (where they 
 - `auto_tls_on_demand_ask_no_verification [auto_tls_on_demand_ask_no_verification: bool]` (Ferron UNRELEASED or newer)
   - This directive specifies whenever the server should not verify the TLS certificate of the automatic TLS on demand asking endpoint. Default: `auto_tls_on_demand_ask_no_verification #false`
 
+**Configuration example:**
+
+```kdl
+* {
+    tls_cipher_suite "TLS_AES_256_GCM_SHA384" "TLS_AES_128_GCM_SHA256"
+    tls_ecdh_curves "secp256r1" "secp384r1"
+    tls_client_certificate #false
+    ocsp_stapling
+    block "192.168.1.100" "10.0.0.5"
+    allow "192.168.1.0/24" "10.0.0.0/8"
+    auto_tls_on_demand_ask "https://auth.example.com/check"
+    auto_tls_on_demand_ask_no_verification #false
+}
+```
+
 ### HTTP protocol & performance
 
 - `default_http_port <default_http_port: integer|null>`
@@ -146,15 +161,48 @@ This configuration reference organizes directives by both **scope** (where they 
 - `protocol_proxy [enable_proxy_protocol: bool]` (Ferron 2.0.0-beta.10 or newer)
   - This directive specifies whenever the PROXY protocol acceptation is enabled. If enabled, the server will expect the PROXY protocol header at the beginning of each connection. Default: `protocol_proxy #false`
 
+**Configuration example:**
+
+```kdl
+* {
+    default_http_port 80
+    default_https_port 443
+    protocols "h1" "h2" "h3"
+    timeout 300000
+    h2_initial_window_size 65536
+    h2_max_frame_size 16384
+    h2_max_concurrent_streams 100
+    h2_max_header_list_size 8192
+    h2_enable_connect_protocol
+    protocol_proxy #false
+}
+```
+
 ### Caching
 
 - `cache_max_entries <cache_max_entries: integer|null>` (_cache_ module)
   - This directive specifies the maximum number of entries that can be stored in the HTTP cache. If set as `cache_max_entries #null`, the cache can theoretically store an unlimited number of entries. The cache keys for entries depend on the request method, the rewritten request URL, the "Host" header value, and varying request headers. Default: `cache_max_entries 1024`
 
+**Configuration example:**
+
+```kdl
+* {
+    cache_max_entries 2048
+}
+```
+
 ### Load balancing
 
 - `lb_health_check_window <lb_health_check_window: integer>` (_rproxy_ module)
   - This directive specifies the window size (in milliseconds) for load balancer health checks. Default: `lb_health_check_window 5000`
+
+**Configuration example:**
+
+```kdl
+* {
+    lb_health_check_window 5000
+}
+```
 
 ### Networking & system
 
@@ -167,12 +215,32 @@ This configuration reference organizes directives by both **scope** (where they 
 - `tcp_recv_buffer <tcp_recv_buffer: integer>`
   - This directive specifies the receive buffer size in bytes for TCP listeners. Default: none
 
+**Configuration example:**
+
+```kdl
+* {
+    listen_ip "0.0.0.0"
+    io_uring
+    tcp_send_buffer 65536
+    tcp_recv_buffer 65536
+}
+```
+
 ### Application server configuration
 
 - `wsgi_clear_imports [wsgi_clear_imports: bool]` (_wsgi_ module)
   - This directive specifies whenever to enable Python module import path clearing. Setting this option as `wsgi_clear_imports #true` improves the compatiblity with setups involving multiple WSGI applications, however module imports inside functions must not be used in the WSGI application. Default: `wsgi_clear_imports #false`
 - `asgi_clear_imports [asgi_clear_imports: bool]` (_asgi_ module)
   - This directive specifies whenever to enable Python module import path clearing. Setting this option as `asgi_clear_imports #true` improves the compatiblity with setups involving multiple ASGI applications, however module imports inside functions must not be used in the ASGI application. Default: `asgi_clear_imports #false`
+
+**Configuration example:**
+
+```kdl
+* {
+    wsgi_clear_imports #false
+    asgi_clear_imports #false
+}
+```
 
 ## Global and virtual host directives
 
@@ -199,12 +267,39 @@ This configuration reference organizes directives by both **scope** (where they 
 - `auto_tls_on_demand <auto_tls_on_demand: bool>` (Ferron UNRELEASED or newer)
   - This directive specifies whenever to enable the automatic TLS on demand. The functionality obtains TLS certificates automatically when a website is accessed for the first time. It's recommended to use either HTTP-01 or TLS-ALPN-01 ACME challenges, as DNS-01 ACME challenges might be slower due to DNS propagation delays. It's also recommended to configure the `auto_tls_on_demand_ask` directive alongside this directive. Default: `auto_tls_on_demand #false`
 
+**Configuration example:**
+
+```kdl
+example.com {
+    auto_tls
+    auto_tls_contact "admin@example.com"
+    auto_tls_cache "/var/cache/ferron-acme"
+    auto_tls_letsencrypt_production
+    auto_tls_challenge "tls-alpn-01"
+    auto_tls_profile "default"
+    auto_tls_on_demand #false
+}
+
+manual-tls.example.com {
+    tls "/etc/ssl/certs/example.com.crt" "/etc/ssl/private/example.com.key"
+}
+```
+
 ### Logging
 
 - `log <log_file_path: string>`
   - This directive specifies the path to the access log file, which contains the HTTP response logs in Combined Log Format. This directive was global-only until Ferron 2.0.0-beta.3. Default: none
 - `error_log <error_log_file_path: string>`
   - This directive specifies the path to the error log file. This directive was global-only until Ferron 2.0.0-beta.3. Default: none
+
+**Configuration example:**
+
+```kdl
+example.com {
+    log "/var/log/ferron/example.com.access.log"
+    error_log "/var/log/ferron/example.com.error.log"
+}
+```
 
 ## Directives
 
@@ -221,6 +316,25 @@ This configuration reference organizes directives by both **scope** (where they 
 - `header_replace <header_name: string> <header_value: string>` (Ferron 2.0.0-beta.9 or newer)
   - This directive specifies a header to be added to HTTP responses, potentially replacing existing headers. The header values supports placeholders like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
 
+**Configuration example:**
+
+```kdl
+example.com {
+    header "X-Frame-Options" "DENY"
+    header "X-Content-Type-Options" "nosniff"
+    header "X-XSS-Protection" "1; mode=block"
+    header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+    header "X-Custom-Header" "Custom value with {path} placeholder"
+
+    header_remove "X-Header-To-Remove"
+    header_replace "X-Powered-By" "Ferron"
+
+    server_administrator_email "admin@example.com"
+    error_page 404 "/var/www/errors/404.html"
+    error_page 500 "/var/www/errors/500.html"
+}
+```
+
 ### Security & access control
 
 - `trust_x_forwarded_for [trust_x_forwarded_for: bool]`
@@ -229,6 +343,23 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the custom status code. This directive can be specified multiple times. The `url` prop specifies the request path for this status code. The `regex` prop specifies the regular expression (like `^/ferron(?:$|[/#?])`) for the custom status code. The `location` prop specifies the destination for the redirect. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whenever the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. The `allowed` prop is a comma-separated list of IP addresses applicable for the status code. The `not_allowed` prop is a comma-separated list of IP addresses not applicable for the status code. The `body` prop (Ferron 2.0.0-beta.5 or newer) specifies the response body to be sent. Default: none
 - `users [username: string] [password_hash: string]`
   - This directive specifies an user with a password hash used for the HTTP basic authentication (it can be either Argon2, PBKDF2, or `scrypt` one). It's recommended to use the `ferron-passwd` tool to generate the password hash. This directive can be specified multiple times. Default: none
+
+**Configuration example:**
+
+```kdl
+example.com {
+    trust_x_forwarded_for
+
+    // Basic authentication with custom status codes
+    status 401 url="/admin" realm="Admin Area" users="admin,moderator"
+    status 403 url="/restricted" allowed="192.168.1.0/24" body="Access denied"
+    status 301 url="/old-page" location="/new-page"
+
+    // User definitions for authentication (use `ferron-passwd` to generate password hashes)
+    users "admin" "$2b$10$hashedpassword12345"
+    users "moderator" "$2b$10$anotherhashedpassword"
+}
+```
 
 ### URL processing & routing
 
@@ -245,6 +376,24 @@ This configuration reference organizes directives by both **scope** (where they 
 - `no_trailing_redirect [no_trailing_redirect: bool]`
   - This directive specifies whenerver not to redirect the URL without a trailing slash to one with a trailing slash, if it refers to a directory. Default: `no_trailing_redirect #false`
 
+**Configuration example:**
+
+```kdl
+example.com {
+    allow_double_slashes #false
+    no_redirect_to_https #false
+    wwwredirect #false
+
+    // URL rewriting examples
+    rewrite "^/old-path/(.*)" "/new-path/$1" last=#true
+    rewrite "^/api/v1/(.*)" "/api/v2/$1" file=#false directory=#false
+    rewrite "^/blog/([^/]+)/?(?:$|[?#])" "/blog.php?slug=$1" last=#true
+
+    rewrite_log
+    no_trailing_redirect #false
+}
+```
+
 ### Static file serving
 
 - `root <webroot: string|null>`
@@ -255,6 +404,20 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies whenever the HTTP compression for static files is enabled. Default: `compressed #true`
 - `directory_listing [enable_directory_listing: bool]` (_static_ module)
   - This directive specifies whenever the directory listings are enabled. Default: `directory_listing #false`
+
+**Configuration example:**
+
+```kdl
+example.com {
+    root "/var/www/example.com"
+    etag
+    compressed
+    directory_listing #false
+
+    // Set "Cache-Control" header for static files
+    file_cache_control "public, max-age=3600"
+}
+```
 
 ### Caching
 
@@ -268,6 +431,17 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the response headers that are ignored when caching the response. This directive can be specified multiple times. Default: none
 - `file_cache_control <cache_control: string|null>` (_static_ module; Ferron 2.0.0-beta.9 or newer)
   - This directive specifies the Cache-Control header value for static files. If set as `file_cache_control #null`, the Cache-Control header is not set. Default: `file_cache_control #null`
+
+**Configuration example:**
+
+```kdl
+example.com {
+    cache
+    cache_max_response_size 2097152
+    cache_vary "Accept-Encoding" "Accept-Language"
+    cache_ignore "Set-Cookie" "Cache-Control"
+}
+```
 
 ### Reverse proxy & load balancing
 
@@ -292,10 +466,46 @@ This configuration reference organizes directives by both **scope** (where they 
 - `proxy_http2 [enable_proxy_http2: bool]` (_rproxy_ module; Ferron UNRELEASED)
   - This directive specifies whenever the reverse proxy can use HTTP/2 protocol when connecting to backend servers. Default: `proxy_http2 #false`
 
+**Configuration example:**
+
+```kdl
+api.example.com {
+    // Backends for load balancing
+    // (or you can also use a single backend by specifying only one `proxy` directive)
+    proxy "http://backend1:8080"
+    proxy "http://backend2:8080"
+    proxy "http://backend3:8080"
+
+    // Health check configuration
+    lb_health_check
+    lb_health_check_max_fails 3
+
+    // Proxy settings
+    proxy_no_verification #false
+    proxy_intercept_errors #false
+    proxy_keepalive
+    proxy_http2 #false
+
+    // Proxy headers
+    proxy_request_header "X-Real-IP" "{client_ip}"
+
+    proxy_request_header_remove "X-Internal-Token"
+    proxy_request_header_replace "User-Agent" "Ferron-Proxy/1.0"
+}
+```
+
 ### Forward proxy
 
 - `forward_proxy [enable_forward_proxy: bool]` (_fproxy_ module)
   - This directive specifies whenever the forward proxy functionality is enabled. Default: `forward_proxy #false`
+
+**Configuration example:**
+
+```kdl
+* {
+    forward_proxy
+}
+```
 
 ### Authentication forwarding
 
@@ -305,6 +515,17 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies whenever the server should not verify the TLS certificate of the backend authentication server. Default: `auth_to_no_verification #false`
 - `auth_to_copy <request_header_to_copy: string> [<request_header_to_copy: string> ...]` (_fauth_ module)
   - This directive specifies the request headers that will be copied and sent to the forwarded authentication backend server. This directive can be specified multiple times. Default: none
+
+**Configuration example:**
+
+```kdl
+app.example.com {
+    // Forward authentication to external service
+    auth_to "https://auth.example.com/validate"
+    auth_to_no_verification #false
+    auth_to_copy "Authorization" "X-User-Token" "X-Session-ID"
+}
+```
 
 ### CGI & application servers
 
@@ -335,6 +556,51 @@ This configuration reference organizes directives by both **scope** (where they 
 - `asgi <asgi_application_path: string|null>` (_asgi_ module)
   - This directive specifies whenever ASGI is enabled and the path to the ASGI application. The ASGI application must have an `application` entry point. Default: `asgi #null`
 
+**Configuration example:**
+
+```kdl
+cgi.example.com {
+    // CGI configuration
+    cgi
+    cgi_extension ".cgi" ".pl" ".py"
+    cgi_interpreter ".py" "/usr/bin/python3"
+    cgi_interpreter ".pl" "/usr/bin/perl"
+    cgi_environment "PATH" "/usr/bin:/bin"
+    cgi_environment "SCRIPT_ROOT" "/var/www/cgi-bin"
+}
+
+scgi.example.com {
+    // SCGI configuration
+    scgi "tcp://localhost:4000/"
+    scgi_environment "SCRIPT_NAME" "/app"
+    scgi_environment "SERVER_NAME" "example.com"
+}
+
+fastcgi.example.com {
+    // FastCGI configuration
+    fcgi "tcp://localhost:9000/" pass=#true
+    fcgi_php "tcp://localhost:9000/"
+    fcgi_extension ".php" ".php5"
+    fcgi_environment "SCRIPT_FILENAME" "/var/www/example.com{path}"
+    fcgi_environment "DOCUMENT_ROOT" "/var/www/example.com"
+}
+
+wsgi.example.com {
+    // WSGI configuration
+    wsgi "/var/www/myapp/app.py"
+}
+
+wsgid.example.com {
+    // WSGI with daemon mode
+    wsgid "/var/www/myapp/app.py"
+}
+
+asgi.example.com {
+    // ASGI configuration
+    asgi "/var/www/myapp/asgi.py"
+}
+```
+
 ### Content processing
 
 - `replace <searched_string: string> <replaced_string: string> [once=<replace_once: bool>]` (_replace_ module; Ferron 2.0.0-beta.2 or newer)
@@ -344,15 +610,66 @@ This configuration reference organizes directives by both **scope** (where they 
 - `replace_filter_types <filter_type: string> [<filter_type: string> ...]` (_replace_ module; Ferron 2.0.0-beta.2 or newer)
   - This directive specifies the response MIME type filters. The filter can be either a specific MIME type (like `text/html`) or a wildcard (`*`) specifying that responses with all MIME types are processed for replacement. This directive can be specified multiple times. Default: `replace_filter_types "text/html"`
 
+**Configuration example:**
+
+```kdl
+example.com {
+    // Disabling HTTP compression is required for string replacement
+    compressed #false
+
+    // String replacement in response bodies (works with HTTP compression disabled)
+    replace "old-company-name" "new-company-name" once=#false
+    replace "http://old-domain.com" "https://new-domain.com" once=#true
+
+    replace_last_modified
+    replace_filter_types "text/html" "text/css" "application/javascript"
+}
+```
+
 ### Rate limiting
 
 - `limit [enable_limit: bool] [rate=<rate: integer|float>] [burst=<rate: integer|float>]` (_limit_ module; Ferron 2.0.0-beta.2 or newer)
   - This directive specifies whenever the rate limiting is enabled. The `rate` prop specifies the maximum average amount of requests per second, defaults to 25 requests per second. The `burst` prop specifies the maximum peak amount of requests per second, defaults to 4 times the maximum average amount of requests per second. Default: `limit #false`
 
+**Configuration example:**
+
+```kdl
+example.com {
+    // Global rate limiting
+    limit rate=100 burst=200
+
+    // Different rate limits for different paths
+    location "/api" {
+        limit rate=10 burst=20
+    }
+
+    location "/login" {
+        limit rate=5 burst=10
+    }
+}
+```
+
 ### Development & testing
 
 - `example_handler [enable_example_handler: bool]` (_example_ module)
   - This directive specifies whenever an example handler is enabled. This handler responds with "Hello World" for "/hello" request paths. Default: `example_handler #false`
+
+**Configuration example:**
+
+```kdl
+dev.example.com {
+    // Enable example handler for testing
+    example_handler
+
+    // Enhanced logging for development
+    log "/var/log/ferron/dev.access.log"
+    error_log "/var/log/ferron/dev.error.log"
+
+    // Custom test endpoints
+    status 200 url="/test" body="Test endpoint working"
+    status 500 url="/test-error" body="Simulated error"
+}
+```
 
 ## Header name placeholders
 
@@ -368,100 +685,198 @@ Ferron supports the following header name placeholders:
 - `{server_ip}` (Ferron 2.0.0-beta.9 or newer) - the server IP address, applicable only for reverse proxying.
 - `{server_port}` (Ferron 2.0.0-beta.9 or newer) - the server port number, applicable only for reverse proxying.
 
-## Example configuration
+## Location block example
 
-Below is the example Ferron web server configuration:
+Below is an example of Ferron configuration involving location blocks:
 
 ```kdl
-* {
-    // Protocols
-    protocols h1 h2
+example.com {
+    root "/var/www/example.com"
 
-    // HTTP/2 settings
+    // Static assets with different settings
+    location "/static" remove_base=#true {
+        root "/var/www/static"
+        compressed
+        file_cache_control "public, max-age=31536000"
+    }
+
+    // API endpoints with proxy
+    location "/api" {
+        proxy "http://backend:8080"
+        proxy_request_header "X-Forwarded-For" "{client_ip}"
+        limit rate=50 burst=100
+    }
+
+    // Admin area with authentication
+    location "/admin" {
+        status 401 realm="Admin Access" users="admin"
+        root "/var/www/admin"
+    }
+
+    // PHP files
+    fcgi_php "tcp://localhost:9000/"
+}
+```
+
+## Complete example combining multiple sections
+
+Below is a complete example of Ferron configuration, combining multiple sections:
+
+```kdl
+// Global configuration
+* {
+    // Protocol and performance settings
+    protocols "h1" "h2"
     h2_initial_window_size 65536
-    h2_max_frame_size 16384
     h2_max_concurrent_streams 100
-    h2_max_header_list_size 8192
-    h2_enable_connect_protocol
+    timeout 300000
+
+    // Network settings
+    listen_ip "0.0.0.0"
+    default_http_port 80
+    default_https_port 443
+
+    // Security defaults
+    tls_cipher_suite "TLS_AES_256_GCM_SHA384" "TLS_AES_128_GCM_SHA256"
+    ocsp_stapling
+    block "192.168.1.100"
+
+    // Global caching
+    cache_max_entries 1024
+
+    // Load balancing settings
+    lb_health_check_window 5000
 
     // Logging
     log "/var/log/ferron/access.log"
     error_log "/var/log/ferron/error.log"
 
-    // Blocklist
-    block "192.168.1.100"
-    block "10.0.0.5"
-
-    // Static file serving settings
+    // Static file defaults
     compressed
-    directory_listing
-
-    // Environment variables
-    environment "APP_MODE" "production"
-    environment "MAX_THREADS" "16"
-
-    // TLS settings
-    tls "/etc/ssl/certs/fallback.crt" "/etc/ssl/private/fallback.key"
-    tls_min_version "TLSv1.2"
-    tls_max_version "TLSv1.3"
-    ocsp_stapling
+    etag
 }
 
+// Main website
 example.com {
-    // TLS settings
-    tls "/etc/ssl/certs/example-com.crt" "/etc/ssl/private/example-com.key"
-}
+    // TLS configuration
+    tls "/etc/ssl/certs/example.com.crt" "/etc/ssl/private/example.com.key"
+    auto_tls_contact "admin@example.com"
 
-*.example.com {
-    // TLS settings
-    tls "/etc/ssl/certs/example-com.crt" "/etc/ssl/private/example-com.key"
-}
-
-example.com {
-    // Server administrator email
+    // Basic settings
+    root "/var/www/example.com"
     server_administrator_email "admin@example.com"
 
-    // Headers
+    // Security headers
     header "X-Frame-Options" "DENY"
     header "X-Content-Type-Options" "nosniff"
+    header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+    header "X-Powered-By" "Ferron"
 
     // URL rewriting
-    rewrite "^/old-path/(.*)" "/new-path/$1" file=#false directory=#false last=#true
-
-    // Webroot
-    root "/var/www/example"
+    rewrite "^/old-section/(.*)" "/new-section/$1" last=#true
+    allow_double_slashes #false
 
     // Error pages
-    error_page 404 "/var/www/example/errors/404.html"
-    error_page 500 "/var/www/example/errors/500.html"
+    error_page 404 "/var/www/errors/404.html"
+    error_page 500 "/var/www/errors/500.html"
 
-    // Location configuration
-    location "/static" remove_base=#true {
-        root "/var/www/static"
+    // Rate limiting
+    limit rate=100 burst=200
+
+    // Caching
+    cache
+    cache_vary "Accept-Encoding" "Accept-Language"
+    file_cache_control "public, max-age=3600"
+
+    // Static assets
+    location "/assets" remove_base=#true {
+        root "/var/www/assets"
+        file_cache_control "public, max-age=31536000"
+        compressed
+    }
+
+    // PHP application
+    fcgi_php "tcp://localhost:9000/"
+
+    // Admin area
+    location "/admin" {
+        status 401 realm="Admin Area" users="admin"
+        users "admin" "$2b$10$hashedpassword12345"
+        limit rate=10 burst=20
     }
 }
 
+// API subdomain
 api.example.com {
-    // Server administrator email
-    server_administrator_email "api-admin@example.com"
+    // TLS configuration
+    tls "/etc/ssl/certs/api.example.com.crt" "/etc/ssl/private/api.example.com.key"
 
-    // Enable ETags
-    etag
+    // Load balanced backend
+    proxy "http://backend1:8080"
+    proxy "http://backend2:8080"
+    proxy "http://backend3:8080"
 
-    // Users
-    user "admin" "$2b$10$hashedpassword12345"
+    // Health checking
+    lb_health_check
+    lb_health_check_max_fails 3
 
-    // Enable HTTP authentication
-    status 401 url="/restricted.html"
+    // Proxy settings
+    proxy_keepalive
+    proxy_request_header "X-Real-IP" "{client_ip}"
 
-    proxy "http://backend-service:5000"
+    // API-specific headers
+    header "Access-Control-Allow-Origin" "*"
+    header "Access-Control-Allow-Methods" "GET, POST, PUT, DELETE, OPTIONS"
+    header "Access-Control-Allow-Headers" "Authorization, Content-Type"
 
-    // Uncomment to enable error configuration
-    // error_config 404 {
-    //     proxy "http://backend-fallback:5000"
-    // }
+    // Rate limiting for API
+    limit rate=1000 burst=2000
+
+    // Health check endpoint
+    status 200 url="/health" body="OK"
 }
 
-// Uncomment to enable configuration file includes
-// include "/etc/ferron.d/**/*.kdl"
+// Development subdomain
+dev.example.com {
+    // Basic TLS
+    auto_tls
+    auto_tls_contact "dev@example.com"
+
+    // Enhanced logging
+    log "/var/log/ferron/dev.access.log"
+    error_log "/var/log/ferron/dev.error.log"
+
+    // Test endpoints
+    status 200 url="/test" body="Development server is working"
+    status 500 url="/test-error" body="Simulated error for testing"
+
+    // Proxy to development backend
+    proxy "http://dev-backend:3000"
+    proxy_request_header "X-Dev-Mode" "true"
+
+    // Relaxed rate limiting
+    limit rate=1000 burst=5000
+}
+
+// Static content CDN
+cdn.example.com {
+    // TLS configuration
+    tls "/etc/ssl/certs/cdn.example.com.crt" "/etc/ssl/private/cdn.example.com.key"
+
+    // Static file serving
+    root "/var/www/cdn"
+    directory_listing #false
+    compressed
+    etag
+
+    // Aggressive caching
+    file_cache_control "public, max-age=31536000, immutable"
+
+    // No rate limiting for static content
+    limit #false
+
+    // CORS for web fonts and assets
+    header "Access-Control-Allow-Origin" "*"
+    header "Access-Control-Allow-Methods" "GET, HEAD, OPTIONS"
+}
 ```
