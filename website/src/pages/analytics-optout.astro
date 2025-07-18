@@ -1,5 +1,5 @@
 ---
-import AnalyticsOptOut from "../components/AnalyticsOptOut";
+import AnalyticsOptOut from "../components/AnalyticsOptOut.astro";
 import MainLayout from "../layouts/MainLayout.astro";
 ---
 
@@ -10,6 +10,6 @@ import MainLayout from "../layouts/MainLayout.astro";
     <h1 class="text-3xl md:text-5xl pb-1 md:pb-2 mb-2 font-bold">
       Opt-out from analytics
     </h1>
-    <AnalyticsOptOut client:load />
+    <AnalyticsOptOut />
   </main>
 </MainLayout>

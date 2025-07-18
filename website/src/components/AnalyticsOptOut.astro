@@ -1,0 +1,32 @@
+<div class="prose max-w-full md:prose-lg">
+  <p>You can choose to opt out of the analytics.</p>
+  <p>
+    <input type="checkbox" data-analytics-opt-out />{" "}
+    Opt out?
+  </p>
+</div>
+
+<script>
+  function initializeCheckbox() {
+    const checkbox: HTMLInputElement | null = document.querySelector(
+      "[data-analytics-opt-out]"
+    );
+    const optedOut = localStorage.getItem("plausible_ignore") === "true";
+
+    if (checkbox) {
+      checkbox.checked = optedOut;
+
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) {
+          localStorage.setItem("plausible_ignore", "true");
+        } else {
+          localStorage.removeItem("plausible_ignore");
+        }
+      });
+    }
+  }
+
+  document.addEventListener("astro:after-swap", initializeCheckbox);
+
+  initializeCheckbox();
+</script>

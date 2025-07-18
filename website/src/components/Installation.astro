@@ -1,6 +1,6 @@
 ---
 import FontAwesomeIcon from "./FontAwesomeIcon.astro";
-import InstallCommand from "./InstallCommand";
+import InstallCommand from "./InstallCommand.astro";
 import {
   faBox,
   faGaugeHigh,
@@ -18,7 +18,7 @@ import {
       </p>
     </div>
     <div class="max-w-3xl mx-auto">
-      <InstallCommand client:load />
+      <InstallCommand />
       <div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="bg-secondary/30 p-6 rounded-lg border border-muted/30">
           <FontAwesomeIcon

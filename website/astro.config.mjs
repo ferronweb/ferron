@@ -2,7 +2,6 @@
 import { defineConfig, fontProviders } from "astro/config";
 
 import tailwindcss from "@tailwindcss/vite";
-import react from "@astrojs/react";
 import sitemap from "@astrojs/sitemap";
 import pagefind from "astro-pagefind";
 
@@ -20,7 +19,6 @@ export default defineConfig({
     }
   },
   integrations: [
-    react(),
     sitemap(),
     pagefind(),
     (await import("astro-compress")).default({
