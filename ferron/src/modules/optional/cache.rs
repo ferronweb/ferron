@@ -640,7 +640,7 @@ impl ModuleHandlers for CacheModuleHandlers {
       // Optimized vary header processing
       let mut processed_vary = self.cache_vary_headers_configured.clone();
 
-      if let Some(vary_header) = response_parts.headers.get(&*VARY_HEADER) {
+      for vary_header in response_parts.headers.get_all(&*VARY_HEADER) {
         if let Ok(vary_str) = vary_header.to_str() {
           processed_vary.extend(vary_str.split(',').map(|s| s.trim().to_string()));
         }
