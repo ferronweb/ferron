@@ -6,6 +6,8 @@ pub mod desec;
 pub mod porkbun;
 #[cfg(feature = "acmedns-rfc2136")]
 pub mod rfc2136;
+#[cfg(feature = "acmedns-route53")]
+pub mod route53;
 
 use std::error::Error;
 
@@ -22,10 +24,7 @@ pub trait DnsProvider {
   ) -> Result<(), Box<dyn Error + Send + Sync>>;
 
   #[allow(unused_variables)]
-  async fn remove_acme_txt_record(
-    &self,
-    acme_challenge_identifier: &str,
-  ) -> Result<(), Box<dyn Error + Send + Sync>> {
+  async fn remove_acme_txt_record(&self, acme_challenge_identifier: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
   }
 }
@@ -38,11 +37,9 @@ pub async fn separate_subdomain_from_domain_name(domain_name: &str) -> (String, 
     .unwrap_or(domain_name)
     .split('.')
     .collect();
-  let resolver = hickory_resolver::Resolver::builder_with_config(
-    ResolverConfig::default(),
-    TokioConnectionProvider::default(),
-  )
-  .build();
+  let resolver =
+    hickory_resolver::Resolver::builder_with_config(ResolverConfig::default(), TokioConnectionProvider::default())
+      .build();
 
   for parts_index in 0..parts.len() {
     if resolver

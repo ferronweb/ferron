@@ -1,6 +1,8 @@
-* {
-  default_https_port #null
+globals {
   log "/var/log/ferron/error.log"
   error_log "/var/log/ferron/access.log"
+}
+
+:80 {
   root "/var/www/ferron"
 }

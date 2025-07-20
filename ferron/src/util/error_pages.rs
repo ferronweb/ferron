@@ -1,10 +1,7 @@
 use super::anti_xss;
 
 /// Generates a default error page
-pub fn generate_default_error_page(
-  status_code: hyper::StatusCode,
-  server_administrator_email: Option<&str>,
-) -> String {
+pub fn generate_default_error_page(status_code: hyper::StatusCode, server_administrator_email: Option<&str>) -> String {
   let status_code_name = match status_code.canonical_reason() {
     Some(reason) => format!("{} {}", status_code.as_u16(), reason),
     None => format!("{}", status_code.as_u16()),
@@ -51,9 +48,7 @@ pub fn generate_default_error_page(
     500 => &error_500,
     501 => "The server doesn't support the requested functionality.",
     502 => "The server, acting as a gateway, received an invalid response.",
-    503 => {
-      "The server is temporarily unavailable (e.g., maintenance or overload). Try again later."
-    }
+    503 => "The server is temporarily unavailable (e.g., maintenance or overload). Try again later.",
     504 => "The server, acting as a gateway, timed out waiting for a response.",
     505 => "The HTTP version used in the request isn't supported.",
     506 => "The Variant header caused a content negotiation loop.",

@@ -70,10 +70,7 @@ impl ModuleLoader for BlocklistModuleLoader {
             None
           };
 
-          Ok(Arc::new(BlocklistModule {
-            blocklist,
-            allowlist,
-          }))
+          Ok(Arc::new(BlocklistModule { blocklist, allowlist }))
         })?,
     )
   }
@@ -149,19 +146,18 @@ impl ModuleHandlers for BlocklistModuleHandlers {
     socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-    let blocked = self.blocklist.as_ref().map_or(false, |blocklist| {
-      blocklist.is_blocked(socket_data.remote_addr.ip())
-    }) || !self.allowlist.as_ref().map_or(true, |allowlist| {
-      allowlist.is_blocked(socket_data.remote_addr.ip())
-    });
+    let blocked = self
+      .blocklist
+      .as_ref()
+      .map_or(false, |blocklist| blocklist.is_blocked(socket_data.remote_addr.ip()))
+      || !self
+        .allowlist
+        .as_ref()
+        .map_or(true, |allowlist| allowlist.is_blocked(socket_data.remote_addr.ip()));
     Ok(ResponseData {
       request: Some(request),
       response: None,
-      response_status: if blocked {
-        Some(StatusCode::FORBIDDEN)
-      } else {
-        None
-      },
+      response_status: if blocked { Some(StatusCode::FORBIDDEN) } else { None },
       response_headers: None,
       new_remote_address: None,
     })

@@ -13,9 +13,7 @@ use super::{ServerConfiguration, ServerConfigurationFilters};
 /// This function takes a vector of server configurations and combines those that have matching
 /// filter criteria (hostname, IP, port, location prefix, and error handler status).
 /// For configurations with identical filters, their entries are merged.
-pub fn merge_duplicates(
-  mut server_configurations: Vec<ServerConfiguration>,
-) -> Vec<ServerConfiguration> {
+pub fn merge_duplicates(mut server_configurations: Vec<ServerConfiguration>) -> Vec<ServerConfiguration> {
   // The resulting list of unique configurations after merging
   let mut server_configurations_without_duplicates = Vec::new();
 
@@ -31,13 +29,12 @@ pub fn merge_duplicates(
       let server_configuration_source = &server_configurations[server_configurations_index];
 
       // Check if all filter criteria match exactly between the two configurations
-      if server_configuration_source.filters.hostname == server_configuration.filters.hostname
+      if server_configuration_source.filters.is_host == server_configuration.filters.is_host
+        && server_configuration_source.filters.hostname == server_configuration.filters.hostname
         && server_configuration_source.filters.ip == server_configuration.filters.ip
         && server_configuration_source.filters.port == server_configuration.filters.port
-        && server_configuration_source.filters.location_prefix
-          == server_configuration.filters.location_prefix
-        && server_configuration_source.filters.error_handler_status
-          == server_configuration.filters.error_handler_status
+        && server_configuration_source.filters.location_prefix == server_configuration.filters.location_prefix
+        && server_configuration_source.filters.error_handler_status == server_configuration.filters.error_handler_status
       {
         // Clone the entries from the matching configuration
         let mut cloned_hashmap = server_configuration_source.entries.clone();
@@ -86,28 +83,30 @@ pub fn remove_and_add_global_configuration(
 ) -> Vec<ServerConfiguration> {
   // The resulting list of server configurations
   let mut new_server_configurations = Vec::new();
-  // Flag to track if a global configuration exists
-  let mut has_global = false;
+  // Flag to track if a global non-host configuration exists
+  let mut has_global_non_host = false;
 
   // Process each server configuration
   for server_configuration in server_configurations {
     // Only keep non-empty configurations
     if !server_configuration.entries.is_empty() {
-      // Check if this is a global configuration
-      if server_configuration.filters.is_global() {
-        has_global = true;
+      // Check if this is a global non-host configuration
+      if server_configuration.filters.is_global_non_host() {
+        has_global_non_host = true;
       }
       // Add the configuration to the result list
       new_server_configurations.push(server_configuration);
     }
   }
-  // If no global configuration exists, add a default one at the beginning
-  if !has_global {
+
+  // If no global non-host configuration exists, add a default one at the beginning
+  if !has_global_non_host {
     new_server_configurations.insert(
       0,
       ServerConfiguration {
         entries: HashMap::new(),
         filters: ServerConfigurationFilters {
+          is_host: false,
           hostname: None,
           ip: None,
           port: None,
@@ -129,9 +128,7 @@ pub fn remove_and_add_global_configuration(
 /// This function implements a layered configuration system where more specific configurations
 /// inherit and override properties from less specific ones. It handles matching logic based
 /// on specificity of filters (error handlers, location prefixes, hostnames, IPs, ports).
-pub fn premerge_configuration(
-  mut server_configurations: Vec<ServerConfiguration>,
-) -> Vec<ServerConfiguration> {
+pub fn premerge_configuration(mut server_configurations: Vec<ServerConfiguration>) -> Vec<ServerConfiguration> {
   // Sort server configurations vector, based on the ascending specifity, to simplify the merging algorithm
   server_configurations.sort_by(|a, b| a.filters.cmp(&b.filters));
   let mut new_server_configurations = Vec::new();
@@ -149,11 +146,11 @@ pub fn premerge_configuration(
 
       // Determine if filter criteria match or if parent has wildcard (None) values
       // A None in parent (sc2) means it matches any value in child (sc1)
+      let is_host_match = !sc2.is_host || sc1.is_host == sc2.is_host;
       let ports_match = sc2.port.is_none() || sc1.port == sc2.port;
       let ips_match = sc2.ip.is_none() || sc1.ip == sc2.ip;
       let hostnames_match = sc2.hostname.is_none() || sc1.hostname == sc2.hostname;
-      let location_prefixes_match =
-        sc2.location_prefix.is_none() || sc1.location_prefix == sc2.location_prefix;
+      let location_prefixes_match = sc2.location_prefix.is_none() || sc1.location_prefix == sc2.location_prefix;
 
       // Case 1: Child has error handler but parent doesn't, and all other filters match
       // This is for error handler inheritance
@@ -162,7 +159,8 @@ pub fn premerge_configuration(
         && location_prefixes_match
         && hostnames_match
         && ips_match
-        && ports_match;
+        && ports_match
+        && is_host_match;
 
       // Case 2: Location prefix inheritance
       // Child has location prefix but parent doesn't, and all other filters match
@@ -172,7 +170,8 @@ pub fn premerge_configuration(
         && sc2.location_prefix.is_none()
         && hostnames_match
         && ips_match
-        && ports_match;
+        && ports_match
+        && is_host_match;
 
       // Case 3: Hostname inheritance
       // Child has hostname but parent doesn't, and all other filters match
@@ -183,7 +182,8 @@ pub fn premerge_configuration(
         && sc1.hostname.is_some()
         && sc2.hostname.is_none()
         && ips_match
-        && ports_match;
+        && ports_match
+        && is_host_match;
 
       // Case 4: IP address inheritance
       // Child has IP but parent doesn't, and all other filters match
@@ -195,7 +195,8 @@ pub fn premerge_configuration(
         && sc2.hostname.is_none()
         && sc1.ip.is_some()
         && sc2.ip.is_none()
-        && ports_match;
+        && ports_match
+        && is_host_match;
 
       // Case 5: Port inheritance
       // Child has port but parent doesn't, and all other filters are None
@@ -208,10 +209,26 @@ pub fn premerge_configuration(
         && sc1.ip.is_none()
         && sc2.ip.is_none()
         && sc1.port.is_some()
-        && sc2.port.is_none();
+        && sc2.port.is_none()
+        && is_host_match;
+
+      // Case 6: Host block flag inheritance
+      // Child has host block flag but parent doesn't, and all other filters are None
+      let case6 = sc1.error_handler_status.is_none()
+        && sc2.error_handler_status.is_none()
+        && sc1.location_prefix.is_none()
+        && sc2.location_prefix.is_none()
+        && sc1.hostname.is_none()
+        && sc2.hostname.is_none()
+        && sc1.ip.is_none()
+        && sc2.ip.is_none()
+        && sc1.port.is_none()
+        && sc2.port.is_none()
+        && sc1.is_host
+        && !sc2.is_host;
 
       // If any inheritance case matches, this configuration should inherit from the parent
-      if case1 || case2 || case3 || case4 || case5 {
+      if case1 || case2 || case3 || case4 || case5 || case6 {
         layers_indexes.push(sc2_index);
       }
     }
@@ -284,10 +301,7 @@ pub fn load_modules(
   let mut unused_properties = HashSet::new();
 
   // Find the global configuration to pass to modules
-  let global_configuration = server_configurations
-    .iter()
-    .find(|c| c.filters.is_global())
-    .cloned();
+  let global_configuration = find_global_configuration(&server_configurations);
 
   // Process each server configuration
   for mut server_configuration in server_configurations {
@@ -363,6 +377,28 @@ pub fn load_modules(
   )
 }
 
+/// Finds the global server configuration (host or non-host) from the given list of server configurations.
+fn find_global_configuration(server_configurations: &[ServerConfiguration]) -> Option<ServerConfiguration> {
+  // The server configurations are pre-merged, so we can simply return the found global configuration
+  let mut iterator = server_configurations.iter();
+  let first_found = iterator.find(|server_configuration| {
+    server_configuration.filters.is_global() || server_configuration.filters.is_global_non_host()
+  });
+  if let Some(first_found) = first_found {
+    if first_found.filters.is_global() {
+      return Some(first_found.clone());
+    }
+    for server_configuration in iterator {
+      if server_configuration.filters.is_global() {
+        return Some(server_configuration.clone());
+      } else if !server_configuration.filters.is_global_non_host() {
+        return Some(first_found.clone());
+      }
+    }
+  }
+  None
+}
+
 #[cfg(test)]
 mod tests {
   use crate::config::*;
@@ -372,6 +408,7 @@ mod tests {
   use std::net::{IpAddr, Ipv4Addr};
 
   fn make_filters(
+    is_host: bool,
     hostname: Option<&str>,
     ip: Option<IpAddr>,
     port: Option<u16>,
@@ -379,6 +416,7 @@ mod tests {
     error_handler_status: Option<ErrorHandlerStatus>,
   ) -> ServerConfigurationFilters {
     ServerConfigurationFilters {
+      is_host,
       hostname: hostname.map(String::from),
       ip,
       port,
@@ -396,21 +434,16 @@ mod tests {
     }
   }
 
-  fn make_entry_premerge(
-    key: &str,
-    value: ServerConfigurationValue,
-  ) -> (String, ServerConfigurationEntries) {
+  fn make_entry_premerge(key: &str, value: ServerConfigurationValue) -> (String, ServerConfigurationEntries) {
     let entry = ServerConfigurationEntry {
       values: vec![value],
       props: HashMap::new(),
     };
-    (
-      key.to_string(),
-      ServerConfigurationEntries { inner: vec![entry] },
-    )
+    (key.to_string(), ServerConfigurationEntries { inner: vec![entry] })
   }
 
   fn config_with_filters(
+    is_host: bool,
     hostname: Option<&str>,
     ip: Option<IpAddr>,
     port: Option<u16>,
@@ -420,6 +453,7 @@ mod tests {
   ) -> ServerConfiguration {
     ServerConfiguration {
       filters: ServerConfigurationFilters {
+        is_host,
         hostname: hostname.map(|s| s.to_string()),
         ip,
         port,
@@ -434,6 +468,7 @@ mod tests {
   #[test]
   fn merges_identical_filters_and_combines_entries() {
     let filters = make_filters(
+      true,
       Some("example.com"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(8080),
@@ -442,6 +477,7 @@ mod tests {
     );
 
     let filters_2 = make_filters(
+      true,
       Some("example.com"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(8080),
@@ -479,11 +515,7 @@ mod tests {
     let merged_entries = &merged[0].entries;
     assert!(merged_entries.contains_key("route"));
     let route_entry = merged_entries.get("route").unwrap();
-    let values: Vec<_> = route_entry
-      .inner
-      .iter()
-      .flat_map(|e| e.values.iter())
-      .collect();
+    let values: Vec<_> = route_entry.inner.iter().flat_map(|e| e.values.iter()).collect();
     assert_eq!(values.len(), 2);
     assert!(values.contains(&&ServerConfigurationValue::String("v1".into())));
     assert!(values.contains(&&ServerConfigurationValue::String("v2".into())));
@@ -492,6 +524,7 @@ mod tests {
   #[test]
   fn does_not_merge_different_filters() {
     let filters1 = make_filters(
+      true,
       Some("example.com"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(8080),
@@ -500,6 +533,7 @@ mod tests {
     );
 
     let filters2 = make_filters(
+      true,
       Some("example.org"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(8080),
@@ -538,6 +572,7 @@ mod tests {
   #[test]
   fn merges_entries_with_non_overlapping_keys() {
     let filters = make_filters(
+      true,
       Some("example.com"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(8080),
@@ -546,6 +581,7 @@ mod tests {
     );
 
     let filters_2 = make_filters(
+      true,
       Some("example.com"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(8080),
@@ -589,6 +625,7 @@ mod tests {
   #[test]
   fn test_no_merge_returns_all() {
     let config1 = config_with_filters(
+      true,
       Some("example.com"),
       Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
       Some(80),
@@ -601,6 +638,7 @@ mod tests {
     );
 
     let config2 = config_with_filters(
+      true,
       Some("example.org"),
       Some(IpAddr::V4(Ipv4Addr::new(192, 168, 0, 1))),
       Some(8080),
@@ -620,9 +658,10 @@ mod tests {
   }
 
   #[test]
-  fn test_merge_case5_port() {
+  fn test_merge_case6_is_host() {
     // Less specific config (no port)
     let base = config_with_filters(
+      false,
       None,
       None,
       None,
@@ -636,6 +675,45 @@ mod tests {
 
     // More specific config (with port)
     let specific = config_with_filters(
+      true,
+      None,
+      None,
+      None,
+      None,
+      None,
+      vec![make_entry_premerge(
+        "shared",
+        ServerConfigurationValue::String("specific".into()),
+      )],
+    );
+
+    let merged = premerge_configuration(vec![base, specific]);
+    assert_eq!(merged.len(), 2);
+
+    let entries = &merged[1].entries["shared"].inner;
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].values[0].as_str(), Some("specific"));
+  }
+
+  #[test]
+  fn test_merge_case5_port() {
+    // Less specific config (no port)
+    let base = config_with_filters(
+      true,
+      None,
+      None,
+      None,
+      None,
+      None,
+      vec![make_entry_premerge(
+        "shared",
+        ServerConfigurationValue::String("base".into()),
+      )],
+    );
+
+    // More specific config (with port)
+    let specific = config_with_filters(
+      true,
       None,
       None,
       Some(80),
@@ -658,6 +736,7 @@ mod tests {
   #[test]
   fn test_merge_case1_error_handler() {
     let base = config_with_filters(
+      true,
       Some("host"),
       Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
       Some(3000),
@@ -670,6 +749,7 @@ mod tests {
     );
 
     let specific = config_with_filters(
+      true,
       Some("host"),
       Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
       Some(3000),
@@ -693,37 +773,31 @@ mod tests {
   fn test_merge_preserves_specificity_order() {
     let configs = vec![
       config_with_filters(
+        true,
         None,
         None,
         None,
         None,
         None,
-        vec![make_entry_premerge(
-          "a",
-          ServerConfigurationValue::String("v1".into()),
-        )],
+        vec![make_entry_premerge("a", ServerConfigurationValue::String("v1".into()))],
       ),
       config_with_filters(
+        true,
         None,
         None,
         Some(80),
         None,
         None,
-        vec![make_entry_premerge(
-          "a",
-          ServerConfigurationValue::String("v2".into()),
-        )],
+        vec![make_entry_premerge("a", ServerConfigurationValue::String("v2".into()))],
       ),
       config_with_filters(
+        true,
         Some("host"),
         None,
         Some(80),
         None,
         None,
-        vec![make_entry_premerge(
-          "a",
-          ServerConfigurationValue::String("v3".into()),
-        )],
+        vec![make_entry_premerge("a", ServerConfigurationValue::String("v3".into()))],
       ),
     ];
 

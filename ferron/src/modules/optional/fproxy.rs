@@ -140,9 +140,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
                 Ok(stream) => stream,
                 Err(err) => {
                   error_logger
-                    .log(&format!(
-                      "Cannot convert the TCP stream into polled I/O: {err}"
-                    ))
+                    .log(&format!("Cannot convert the TCP stream into polled I/O: {err}"))
                     .await;
                   return;
                 }
@@ -161,9 +159,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
             }
             Err(err) => {
               error_logger
-                .log(&format!(
-                  "Error while upgrading HTTP CONNECT request: {err}"
-                ))
+                .log(&format!("Error while upgrading HTTP CONNECT request: {err}"))
                 .await;
             }
           }
@@ -229,9 +225,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
             tokio::io::ErrorKind::ConnectionRefused
             | tokio::io::ErrorKind::NotFound
             | tokio::io::ErrorKind::HostUnreachable => {
-              error_logger
-                .log(&format!("Service unavailable: {err}"))
-                .await;
+              error_logger.log(&format!("Service unavailable: {err}")).await;
               return Ok(ResponseData {
                 request: None,
                 response: None,
@@ -305,9 +299,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
       ))?;
 
       // Connection header to disable HTTP/1.1 keep-alive
-      request_parts
-        .headers
-        .insert(header::CONNECTION, "close".parse()?);
+      request_parts.headers.insert(header::CONNECTION, "close".parse()?);
 
       let proxy_request = Request::from_parts(request_parts, request_body);
 
@@ -368,9 +360,7 @@ async fn http_proxy(
 
   Ok(ResponseData {
     request: None,
-    response: Some(
-      proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed()),
-    ),
+    response: Some(proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed())),
     response_status: None,
     response_headers: None,
     new_remote_address: None,

@@ -10,9 +10,7 @@ use hyper::{header, Request, Response};
 use crate::config::ServerConfiguration;
 use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
-use crate::util::{
-  get_entries, get_entries_for_validation, get_value, get_values, BodyReplacer, ModuleCache,
-};
+use crate::util::{get_entries, get_entries_for_validation, get_value, get_values, BodyReplacer, ModuleCache};
 
 /// A response replacement module loader
 pub struct ReplaceModuleLoader {
@@ -48,10 +46,7 @@ impl ModuleLoader for ReplaceModuleLoader {
                     return Some(BodyReplacer::new(
                       searched.as_bytes(),
                       replacement.as_bytes(),
-                      e.props
-                        .get("once")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(true),
+                      e.props.get("once").and_then(|v| v.as_bool()).unwrap_or(true),
                     ));
                   }
                 }
@@ -81,44 +76,34 @@ impl ModuleLoader for ReplaceModuleLoader {
             "The `replace` configuration property must have exactly two values"
           ))?
         } else if !entry.values[0].is_string() {
-          Err(anyhow::anyhow!(
-            "The string to be replaced in a body must be a string"
-          ))?
+          Err(anyhow::anyhow!("The string to be replaced in a body must be a string"))?
         } else if !entry.values[1].is_string() {
-          Err(anyhow::anyhow!(
-            "The replacement string for a body must be a string"
-          ))?
+          Err(anyhow::anyhow!("The replacement string for a body must be a string"))?
         } else if !entry.props.get("once").is_none_or(|v| v.is_bool()) {
-          Err(anyhow::anyhow!(
-            "Invalid once body replacement enabling option"
-          ))?
+          Err(anyhow::anyhow!("Invalid once body replacement enabling option"))?
         }
       }
     }
 
-    if let Some(entries) =
-      get_entries_for_validation!("replace_last_modified", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("replace_last_modified", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
             "The `replace_last_modified` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_bool() {
-          Err(anyhow::anyhow!("Invalid \"Last-Modified\" header preserving during the body replacement enabling option"))?
+          Err(anyhow::anyhow!(
+            "Invalid \"Last-Modified\" header preserving during the body replacement enabling option"
+          ))?
         }
       }
     }
 
-    if let Some(entries) =
-      get_entries_for_validation!("replace_filter_types", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("replace_filter_types", config, used_properties) {
       for entry in &entries.inner {
         for value in &entry.values {
           if !value.is_string() {
-            Err(anyhow::anyhow!(
-              "Invalid body replacement enabled MIME type"
-            ))?
+            Err(anyhow::anyhow!("Invalid body replacement enabled MIME type"))?
           }
         }
       }
@@ -213,18 +198,10 @@ impl ModuleHandlers for ReplaceModuleHandlers {
     if can_replace {
       let (mut replaced_response_parts, mut replaced_response_body) = response.into_parts();
       if !self.preserve_last_modified {
-        while replaced_response_parts
-          .headers
-          .remove(header::LAST_MODIFIED)
-          .is_some()
-        {}
+        while replaced_response_parts.headers.remove(header::LAST_MODIFIED).is_some() {}
       }
 
-      while replaced_response_parts
-        .headers
-        .remove(header::CONTENT_LENGTH)
-        .is_some()
-      {}
+      while replaced_response_parts.headers.remove(header::CONTENT_LENGTH).is_some() {}
 
       for replacer in self.replacers.iter() {
         replaced_response_body = replacer.wrap(replaced_response_body).boxed();

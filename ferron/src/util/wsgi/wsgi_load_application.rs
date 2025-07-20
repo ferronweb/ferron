@@ -11,9 +11,7 @@ pub fn load_wsgi_application(
   file_path: &Path,
   clear_sys_path: bool,
 ) -> Result<Py<PyAny>, Box<dyn Error + Send + Sync>> {
-  let script_dirname = file_path
-    .parent()
-    .map(|path| path.to_string_lossy().to_string());
+  let script_dirname = file_path.parent().map(|path| path.to_string_lossy().to_string());
   let script_name = file_path.to_string_lossy().to_string();
   let script_name_cstring = CString::from_str(&script_name)?;
   let module_name = script_name
@@ -39,14 +37,9 @@ pub fn load_wsgi_application(
         }
       }
     }
-    let wsgi_application = PyModule::from_code(
-      py,
-      &script_data_cstring,
-      &script_name_cstring,
-      &module_name_cstring,
-    )?
-    .getattr("application")?
-    .unbind();
+    let wsgi_application = PyModule::from_code(py, &script_data_cstring, &script_name_cstring, &module_name_cstring)?
+      .getattr("application")?
+      .unbind();
     if clear_sys_path {
       if let Some(sys_path) = sys_path_old {
         if let Ok(sys_module) = PyModule::import(py, "sys") {

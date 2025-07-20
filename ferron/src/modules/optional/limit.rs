@@ -91,19 +91,11 @@ impl ModuleLoader for LimitModuleLoader {
           ))?
         } else if !entry.values[0].is_bool() {
           Err(anyhow::anyhow!("Invalid rate limit enabling option"))?
-        } else if !entry
-          .props
-          .get("rate")
-          .is_none_or(|v| v.is_integer() || v.is_float())
-        {
+        } else if !entry.props.get("rate").is_none_or(|v| v.is_integer() || v.is_float()) {
           Err(anyhow::anyhow!(
             "The maximum average rate per second must be an integer or a float"
           ))?
-        } else if !entry
-          .props
-          .get("burst")
-          .is_none_or(|v| v.is_integer() || v.is_float())
-        {
+        } else if !entry.props.get("burst").is_none_or(|v| v.is_integer() || v.is_float()) {
           Err(anyhow::anyhow!(
             "The maximum peak rate per second must be an integer or a float"
           ))?
@@ -149,21 +141,20 @@ impl ModuleHandlers for LimitModuleHandlers {
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     let token_buckets_read_locked = self.token_buckets.read().await;
-    let token_bucket_mutex =
-      if let Some(token_bucket) = token_buckets_read_locked.get(&socket_data.remote_addr.ip()) {
-        let token_bucket = token_bucket.clone();
-        drop(token_buckets_read_locked);
-        token_bucket
-      } else {
-        drop(token_buckets_read_locked);
-        let new_token_bucket = Arc::new(Mutex::new(TokenBucket::new(self.r, self.b)));
-        self
-          .token_buckets
-          .write()
-          .await
-          .insert(socket_data.remote_addr.ip(), new_token_bucket.clone());
-        new_token_bucket
-      };
+    let token_bucket_mutex = if let Some(token_bucket) = token_buckets_read_locked.get(&socket_data.remote_addr.ip()) {
+      let token_bucket = token_bucket.clone();
+      drop(token_buckets_read_locked);
+      token_bucket
+    } else {
+      drop(token_buckets_read_locked);
+      let new_token_bucket = Arc::new(Mutex::new(TokenBucket::new(self.r, self.b)));
+      self
+        .token_buckets
+        .write()
+        .await
+        .insert(socket_data.remote_addr.ip(), new_token_bucket.clone());
+      new_token_bucket
+    };
     let mut token_bucket = token_bucket_mutex.lock().await;
 
     if token_bucket.acquire(1.0).is_err() {

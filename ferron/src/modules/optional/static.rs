@@ -37,9 +37,7 @@ use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 #[cfg(feature = "runtime-monoio")]
 use crate::util::MonoioFileStream;
-use crate::util::{
-  anti_xss, get_entries_for_validation, get_entry, get_value, sizify, ModuleCache, TtlCache,
-};
+use crate::util::{anti_xss, get_entries_for_validation, get_entry, get_value, sizify, ModuleCache, TtlCache};
 
 const COMPRESSED_STREAM_READER_BUFFER_SIZE: usize = 16384;
 
@@ -304,15 +302,12 @@ impl ModuleLoader for StaticFileServingModuleLoader {
             "The `compressed` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_bool() {
-          Err(anyhow::anyhow!(
-            "Invalid static file compression enabling option"
-          ))?
+          Err(anyhow::anyhow!("Invalid static file compression enabling option"))?
         }
       }
     };
 
-    if let Some(entries) = get_entries_for_validation!("directory_listing", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("directory_listing", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -336,9 +331,7 @@ impl ModuleLoader for StaticFileServingModuleLoader {
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("file_cache_control", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("file_cache_control", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
@@ -721,8 +714,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               let file_extension = joined_pathbuf
                 .extension()
                 .map_or_else(|| "".to_string(), |ext| ext.to_string_lossy().to_string());
-              let file_extension_compressible =
-                !non_compressible_file_extensions.contains(&(&file_extension as &str));
+              let file_extension_compressible = !non_compressible_file_extensions.contains(&(&file_extension as &str));
 
               // Only compress files larger than 256 bytes and with compressible extensions
               if metadata.len() > 256 && file_extension_compressible {
@@ -736,10 +728,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
             // Generate and handle ETags for caching
             let mut etag_option = None;
             // Check if ETags are enabled in config (defaults to true)
-            if get_value!("etag", config)
-              .and_then(|v| v.as_bool())
-              .unwrap_or(true)
-            {
+            if get_value!("etag", config).and_then(|v| v.as_bool()).unwrap_or(true) {
               // Create ETag cache key based on file path, size, and modification time
               let etag_cache_key = format!(
                 "{}-{}-{}",
@@ -764,13 +753,10 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   let etag = crate::runtime::spawn_blocking(move || {
                     let mut hasher = Sha256::new();
                     hasher.update(etag_cache_key_clone);
-                    hasher
-                      .finalize()
-                      .iter()
-                      .fold(String::new(), |mut output, b| {
-                        let _ = write!(output, "{b:02x}");
-                        output
-                      })
+                    hasher.finalize().iter().fold(String::new(), |mut output, b| {
+                      let _ = write!(output, "{b:02x}");
+                      output
+                    })
                   })
                   .await
                   .map_err(|_| anyhow::anyhow!("Can't spawn a blocking task to hash an ETag"))?;
@@ -931,14 +917,9 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 });
               }
               // Parse the range header to get start and end positions
-              if let Some((range_begin, range_end)) =
-                parse_range_header(range_header, file_length - 1)
-              {
+              if let Some((range_begin, range_end)) = parse_range_header(range_header, file_length - 1) {
                 // Validate the requested range is within file bounds
-                if range_end > file_length - 1
-                  || range_begin > file_length - 1
-                  || range_begin > range_end
-                {
+                if range_end > file_length - 1 || range_begin > file_length - 1 || range_begin > range_end {
                   let mut header_map = HeaderMap::new();
                   if let Ok(vary) = HeaderValue::from_str(vary) {
                     header_map.insert(header::VARY, vary);
@@ -980,9 +961,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 response_builder = response_builder.header(header::VARY, vary);
 
                 let response = match request_method {
-                  &Method::HEAD => {
-                    response_builder.body(Empty::new().map_err(|e| match e {}).boxed())?
-                  }
+                  &Method::HEAD => response_builder.body(Empty::new().map_err(|e| match e {}).boxed())?,
                   _ => {
                     // Open file for reading
                     let file = match fs::File::open(joined_pathbuf).await {
@@ -1012,11 +991,8 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
                     // Construct a boxed body
                     #[cfg(feature = "runtime-monoio")]
-                    let file_stream = MonoioFileStream::new(
-                      file,
-                      Some(range_begin as usize),
-                      Some(range_end as usize + 1),
-                    );
+                    let file_stream =
+                      MonoioFileStream::new(file, Some(range_begin as usize), Some(range_end as usize + 1));
                     #[cfg(feature = "runtime-tokio")]
                     let file_stream = {
                       let mut file = file;
@@ -1080,10 +1056,9 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 // Some web browsers have broken HTTP compression handling
                 let is_netscape_4_broken_html_compression = user_agent.starts_with("Mozilla/4.");
                 let is_netscape_4_broken_compression = match user_agent.strip_prefix("Mozilla/4.") {
-                  Some(stripped_user_agent) => matches!(
-                    stripped_user_agent.chars().nth(0),
-                    Some('6') | Some('7') | Some('8')
-                  ),
+                  Some(stripped_user_agent) => {
+                    matches!(stripped_user_agent.chars().nth(0), Some('6') | Some('7') | Some('8'))
+                  }
                   None => false,
                 };
                 let is_w3m_broken_html_compression = user_agent.starts_with("w3m/");
@@ -1123,17 +1098,13 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               // Include ETag in response with suffix based on compression method
               if let Some(etag) = etag_option {
                 if use_brotli {
-                  response_builder =
-                    response_builder.header(header::ETAG, format!("W/\"{etag}-br\""));
+                  response_builder = response_builder.header(header::ETAG, format!("W/\"{etag}-br\""));
                 } else if use_zstd {
-                  response_builder =
-                    response_builder.header(header::ETAG, format!("W/\"{etag}-zstd\""));
+                  response_builder = response_builder.header(header::ETAG, format!("W/\"{etag}-zstd\""));
                 } else if use_deflate {
-                  response_builder =
-                    response_builder.header(header::ETAG, format!("W/\"{etag}-deflate\""));
+                  response_builder = response_builder.header(header::ETAG, format!("W/\"{etag}-deflate\""));
                 } else if use_gzip {
-                  response_builder =
-                    response_builder.header(header::ETAG, format!("W/\"{etag}-gzip\""));
+                  response_builder = response_builder.header(header::ETAG, format!("W/\"{etag}-gzip\""));
                 } else {
                   // Uncompressed content
                   response_builder = response_builder.header(header::ETAG, format!("W/\"{etag}\""));
@@ -1168,9 +1139,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               // Create the response based on the HTTP method
               let response = match request_method {
                 // HEAD requests only need headers, no body
-                &Method::HEAD => {
-                  response_builder.body(Empty::new().map_err(|e| match e {}).boxed())?
-                }
+                &Method::HEAD => response_builder.body(Empty::new().map_err(|e| match e {}).boxed())?,
                 // For GET and POST, include the file content
                 _ => {
                   // Open file for reading
@@ -1281,12 +1250,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               let joined_maindesc_pathbuf = joined_pathbuf.join(".maindesc");
               // Read the directory contents (using blocking task on Windows and with Monoio)
               #[cfg(feature = "runtime-monoio")]
-              let directory_result =
-                monoio::spawn_blocking(move || std::fs::read_dir(joined_pathbuf))
-                  .await
-                  .unwrap_or(Err(std::io::Error::other(
-                    "Can't spawn a blocking task to read the directory",
-                  )));
+              let directory_result = monoio::spawn_blocking(move || std::fs::read_dir(joined_pathbuf))
+                .await
+                .unwrap_or(Err(std::io::Error::other(
+                  "Can't spawn a blocking task to read the directory",
+                )));
               #[cfg(feature = "runtime-tokio")]
               let directory_result = fs::read_dir(joined_pathbuf).await;
               let directory = match directory_result {

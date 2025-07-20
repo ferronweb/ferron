@@ -17,8 +17,7 @@ use smallvec::SmallVec;
 // Lookup table for safe characters that don't need encoding
 static SAFE_CHARS: [bool; 256] = {
   let mut table = [false; 256];
-  let safe_bytes =
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!$&'()*+,-./:;=@[]_~";
+  let safe_bytes = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!$&'()*+,-./:;=@[]_~";
   let mut i = 0;
   while i < safe_bytes.len() {
     table[safe_bytes[i] as usize] = true;
@@ -349,8 +348,7 @@ mod tests {
   }
 
   #[test]
-  fn should_decode_url_encoded_alphanumeric_characters_while_preserving_certain_characters(
-  ) -> Result<()> {
+  fn should_decode_url_encoded_alphanumeric_characters_while_preserving_certain_characters() -> Result<()> {
     assert_eq!(sanitize_url("/conf%69g.json", false)?, "/config.json");
     assert_eq!(sanitize_url("/CONF%49G.JSON", false)?, "/CONFIG.JSON");
     assert_eq!(sanitize_url("/svr%32.js", false)?, "/svr2.js");
@@ -359,8 +357,7 @@ mod tests {
   }
 
   #[test]
-  fn should_decode_url_encoded_characters_regardless_of_the_letter_case_of_the_url_encoding(
-  ) -> Result<()> {
+  fn should_decode_url_encoded_characters_regardless_of_the_letter_case_of_the_url_encoding() -> Result<()> {
     assert_eq!(sanitize_url("/%5f", false)?, "/_");
     assert_eq!(sanitize_url("/%5F", false)?, "/_");
     Ok(())
@@ -472,15 +469,9 @@ mod tests {
   // Query parameters and fragments (if they should be handled)
   #[test]
   fn should_handle_query_and_fragment_characters() -> Result<()> {
-    assert_eq!(
-      sanitize_url("/path?query=value", false)?,
-      "/path?query=value"
-    );
+    assert_eq!(sanitize_url("/path?query=value", false)?, "/path?query=value");
     assert_eq!(sanitize_url("/path#fragment", false)?, "/path#fragment");
-    assert_eq!(
-      sanitize_url("/path?q=1&b=2#frag", false)?,
-      "/path?q=1&b=2#frag"
-    );
+    assert_eq!(sanitize_url("/path?q=1&b=2#frag", false)?, "/path?q=1&b=2#frag");
     Ok(())
   }
 
@@ -496,14 +487,8 @@ mod tests {
   // Mixed separators
   #[test]
   fn should_handle_mixed_separators() -> Result<()> {
-    assert_eq!(
-      sanitize_url("/test\\path/to\\file", false)?,
-      "/test/path/to/file"
-    );
-    assert_eq!(
-      sanitize_url("\\test/path\\to/file\\", false)?,
-      "/test/path/to/file/"
-    );
+    assert_eq!(sanitize_url("/test\\path/to\\file", false)?, "/test/path/to/file");
+    assert_eq!(sanitize_url("\\test/path\\to/file\\", false)?, "/test/path/to/file/");
     Ok(())
   }
 
@@ -537,14 +522,8 @@ mod tests {
   // Real-world examples
   #[test]
   fn should_handle_realistic_paths() -> Result<()> {
-    assert_eq!(
-      sanitize_url("/api/v1/users/123", false)?,
-      "/api/v1/users/123"
-    );
-    assert_eq!(
-      sanitize_url("/static/css/main.css", false)?,
-      "/static/css/main.css"
-    );
+    assert_eq!(sanitize_url("/api/v1/users/123", false)?, "/api/v1/users/123");
+    assert_eq!(sanitize_url("/static/css/main.css", false)?, "/static/css/main.css");
     assert_eq!(
       sanitize_url("/uploads/2023/12/image.jpg", false)?,
       "/uploads/2023/12/image.jpg"
@@ -557,10 +536,7 @@ mod tests {
   #[test]
   fn should_prevent_directory_traversal_attacks() -> Result<()> {
     assert_eq!(sanitize_url("/../../../etc/passwd", false)?, "/etc/passwd");
-    assert_eq!(
-      sanitize_url("/app/../../../etc/passwd", false)?,
-      "/etc/passwd"
-    );
+    assert_eq!(sanitize_url("/app/../../../etc/passwd", false)?, "/etc/passwd");
     assert_eq!(
       sanitize_url("/safe/path/../../../../../../etc/passwd", false)?,
       "/etc/passwd"
@@ -572,16 +548,10 @@ mod tests {
   #[test]
   fn should_handle_complex_combinations() -> Result<()> {
     // Null bytes + encoding + navigation + special chars
-    assert_eq!(
-      sanitize_url("/test%00/../path%3C%3E%7C", false)?,
-      "/path%3C%3E%7C"
-    );
+    assert_eq!(sanitize_url("/test%00/../path%3C%3E%7C", false)?, "/path%3C%3E%7C");
 
     // Backslashes + dots + encoding
-    assert_eq!(
-      sanitize_url("test\\..\\path%21\\file.txt", false)?,
-      "/path!/file.txt"
-    );
+    assert_eq!(sanitize_url("test\\..\\path%21\\file.txt", false)?, "/path!/file.txt");
     Ok(())
   }
 }

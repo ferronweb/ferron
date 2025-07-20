@@ -60,10 +60,7 @@ where
   type Data = Bytes;
   type Error = B::Error;
 
-  fn poll_frame(
-    self: Pin<&mut Self>,
-    cx: &mut Context<'_>,
-  ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+  fn poll_frame(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
     let this = self.project();
     let frame_raw = match this.inner.poll_frame(cx) {
       Poll::Ready(Some(Ok(frame))) => frame,
@@ -108,9 +105,7 @@ where
       if combined_bytes.len() - last_beg_index < this.searched.len() {
         *this.buffer = Some(combined_bytes[last_beg_index..].to_vec());
       } else {
-        replaced.extend_from_slice(
-          &combined_bytes[last_beg_index..combined_bytes.len() - this.searched.len()],
-        );
+        replaced.extend_from_slice(&combined_bytes[last_beg_index..combined_bytes.len() - this.searched.len()]);
         *this.buffer = Some(combined_bytes[combined_bytes.len() - this.searched.len()..].to_vec());
       }
 

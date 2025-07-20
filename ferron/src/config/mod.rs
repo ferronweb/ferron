@@ -48,10 +48,8 @@ impl ServerConfigurations {
       .rev()
       .find(|&server_configuration| {
         match_hostname(server_configuration.filters.hostname.as_deref(), hostname)
-          && (server_configuration.filters.ip.is_none()
-            || server_configuration.filters.ip == Some(ip))
-          && (server_configuration.filters.port.is_none()
-            || server_configuration.filters.port == Some(port))
+          && (server_configuration.filters.ip.is_none() || server_configuration.filters.ip == Some(ip))
+          && (server_configuration.filters.port.is_none() || server_configuration.filters.port == Some(port))
           && server_configuration
             .filters
             .location_prefix
@@ -73,26 +71,38 @@ impl ServerConfigurations {
       .iter()
       .rev()
       .find(|c| {
-        c.filters.hostname == filters.hostname
+        c.filters.is_host
+          && c.filters.hostname == filters.hostname
           && c.filters.ip == filters.ip
           && c.filters.port == filters.port
-          && (c.filters.location_prefix.is_none()
-            || c.filters.location_prefix == filters.location_prefix)
+          && (c.filters.location_prefix.is_none() || c.filters.location_prefix == filters.location_prefix)
           && !c.filters.error_handler_status.as_ref().is_none_or(|s| {
-            !(matches!(s, ErrorHandlerStatus::Any)
-              || matches!(s, ErrorHandlerStatus::Status(x) if *x == status_code))
+            !(matches!(s, ErrorHandlerStatus::Any) || matches!(s, ErrorHandlerStatus::Status(x) if *x == status_code))
           })
       })
       .cloned()
   }
 
-  /// Finds the global server configuration
+  /// Finds the global server configuration (host or non-host)
   pub fn find_global_configuration(&self) -> Option<Arc<ServerConfiguration>> {
-    self
-      .inner
-      .iter()
-      .find(|server_configuration| server_configuration.filters.is_global())
-      .cloned()
+    // The server configurations are pre-merged, so we can simply return the found global configuration
+    let mut iterator = self.inner.iter();
+    let first_found = iterator.find(|server_configuration| {
+      server_configuration.filters.is_global() || server_configuration.filters.is_global_non_host()
+    });
+    if let Some(first_found) = first_found {
+      if first_found.filters.is_global() {
+        return Some(first_found.clone());
+      }
+      for server_configuration in iterator {
+        if server_configuration.filters.is_global() {
+          return Some(server_configuration.clone());
+        } else if !server_configuration.filters.is_global_non_host() {
+          return Some(first_found.clone());
+        }
+      }
+    }
+    None
   }
 }
 
@@ -131,6 +141,9 @@ pub enum ErrorHandlerStatus {
 /// A Ferron server configuration filter
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ServerConfigurationFilters {
+  /// Whether the configuration represents a host block
+  pub is_host: bool,
+
   /// The hostname
   pub hostname: Option<String>,
 
@@ -150,28 +163,29 @@ pub struct ServerConfigurationFilters {
 impl ServerConfigurationFilters {
   /// Checks if the server configuration is global
   pub fn is_global(&self) -> bool {
-    self.hostname.is_none()
+    self.is_host
+      && self.hostname.is_none()
       && self.ip.is_none()
       && self.port.is_none()
       && self.location_prefix.is_none()
       && self.error_handler_status.is_none()
+  }
+
+  /// Checks if the server configuration is global and doesn't represent a host block
+  pub fn is_global_non_host(&self) -> bool {
+    !self.is_host
   }
 }
 
 impl Ord for ServerConfigurationFilters {
   fn cmp(&self, other: &Self) -> Ordering {
     self
-      .port
-      .is_some()
-      .cmp(&other.port.is_some())
+      .is_host
+      .cmp(&other.is_host)
+      .then_with(|| self.port.is_some().cmp(&other.port.is_some()))
       .then_with(|| self.ip.is_some().cmp(&other.ip.is_some()))
       .then_with(|| self.hostname.is_some().cmp(&other.hostname.is_some()))
-      .then_with(|| {
-        self
-          .location_prefix
-          .is_some()
-          .cmp(&other.location_prefix.is_some())
-      })
+      .then_with(|| self.location_prefix.is_some().cmp(&other.location_prefix.is_some()))
       .then_with(|| {
         self
           .error_handler_status
@@ -197,10 +211,7 @@ pub struct ServerConfigurationEntries {
 impl ServerConfigurationEntries {
   /// Extracts one value from the entry list
   pub fn get_value(&self) -> Option<&ServerConfigurationValue> {
-    self
-      .inner
-      .last()
-      .and_then(|last_vector| last_vector.values.first())
+    self.inner.last().and_then(|last_vector| last_vector.values.first())
   }
 
   /// Extracts one entry from the entry list
@@ -210,8 +221,7 @@ impl ServerConfigurationEntries {
 
   /// Extracts a vector of values from the entry list
   pub fn get_values(&self) -> Vec<&ServerConfigurationValue> {
-    let mut iterator: Box<dyn Iterator<Item = &ServerConfigurationValue>> =
-      Box::new(vec![].into_iter());
+    let mut iterator: Box<dyn Iterator<Item = &ServerConfigurationValue>> = Box::new(vec![].into_iter());
     for entry in &self.inner {
       iterator = Box::new(iterator.chain(entry.values.iter()));
     }

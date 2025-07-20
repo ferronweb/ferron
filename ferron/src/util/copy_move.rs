@@ -86,11 +86,7 @@ mod tests {
   }
 
   impl AsyncRead for MockReader {
-    fn poll_read(
-      self: Pin<&mut Self>,
-      _cx: &mut Context<'_>,
-      buf: &mut ReadBuf<'_>,
-    ) -> Poll<Result<()>> {
+    fn poll_read(self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<Result<()>> {
       let this = self.get_mut();
       let remaining = this.data.len() - this.position;
 

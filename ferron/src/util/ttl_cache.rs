@@ -44,9 +44,7 @@ where
 
   /// Cleans up the TTL cache
   pub fn cleanup(&mut self) {
-    self
-      .cache
-      .retain(|_, (_, timestamp)| timestamp.elapsed() < self.ttl);
+    self.cache.retain(|_, (_, timestamp)| timestamp.elapsed() < self.ttl);
   }
 }
 

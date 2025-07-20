@@ -187,11 +187,7 @@ where
       unsafe {
         let buffer = raw_value.to_le_bytes();
         let mut result = MaybeUninit::<T>::uninit();
-        ptr::copy_nonoverlapping(
-          buffer.as_ptr(),
-          result.as_mut_ptr() as *mut u8,
-          size_of::<T>(),
-        );
+        ptr::copy_nonoverlapping(buffer.as_ptr(), result.as_mut_ptr() as *mut u8, size_of::<T>());
         result.assume_init()
       }
     } else if let Some(ref lock) = self.value_fallback {
@@ -241,12 +237,9 @@ where
     if current_state == current {
       let new_version = current_version.wrapping_add(1);
       let new_sv = pack_state_version(new, new_version);
-      self.state_version.compare_exchange_weak(
-        current_sv,
-        new_sv,
-        Ordering::Relaxed,
-        Ordering::Relaxed,
-      )
+      self
+        .state_version
+        .compare_exchange_weak(current_sv, new_sv, Ordering::Relaxed, Ordering::Relaxed)
     } else {
       Err(current_sv)
     }
@@ -461,11 +454,7 @@ where
   /// }
   /// ```
   #[allow(clippy::type_complexity)]
-  pub fn force_insert(
-    &self,
-    key: K,
-    value: T,
-  ) -> Result<(bool, Vec<(u64, T, u64, u64)>), std::io::Error> {
+  pub fn force_insert(&self, key: K, value: T) -> Result<(bool, Vec<(u64, T, u64, u64)>), std::io::Error> {
     let mut removed_entries = Vec::new();
 
     // If we're at max capacity, remove oldest entries to make space
@@ -560,10 +549,7 @@ where
 
     match current_state {
       STATE_EMPTY | STATE_TOMBSTONE => {
-        if slot
-          .compare_exchange_state(current_state, STATE_RESERVED)
-          .is_ok()
-        {
+        if slot.compare_exchange_state(current_state, STATE_RESERVED).is_ok() {
           self.write_entry_data(slot, key_hash, value.clone(), timestamp)?;
           slot.set_state(STATE_WRITTEN);
           Ok(true)
@@ -572,10 +558,7 @@ where
         }
       }
       STATE_WRITTEN => {
-        if slot
-          .compare_exchange_state(STATE_WRITTEN, STATE_WRITING)
-          .is_ok()
-        {
+        if slot.compare_exchange_state(STATE_WRITTEN, STATE_WRITING).is_ok() {
           self.write_entry_data(slot, key_hash, value.clone(), timestamp)?;
           slot.set_state(STATE_WRITTEN);
           Ok(true)
@@ -598,18 +581,11 @@ where
   ///
   /// # Returns
   /// `true` if an existing entry was found and updated
-  fn try_update_existing(
-    &self,
-    key_hash: u64,
-    value: &T,
-    timestamp: u64,
-  ) -> Result<bool, std::io::Error> {
+  fn try_update_existing(&self, key_hash: u64, value: &T, timestamp: u64) -> Result<bool, std::io::Error> {
     for slot in self.entries.iter() {
       if slot.get_state() == STATE_WRITTEN
         && slot.key_hash.load(Ordering::Relaxed) == key_hash
-        && slot
-          .compare_exchange_state(STATE_WRITTEN, STATE_WRITING)
-          .is_ok()
+        && slot.compare_exchange_state(STATE_WRITTEN, STATE_WRITING).is_ok()
       {
         if slot.key_hash.load(Ordering::Relaxed) == key_hash {
           self.write_entry_data(slot, key_hash, value.clone(), timestamp)?;
@@ -634,13 +610,7 @@ where
   /// * `value` - Value to store
   /// * `timestamp` - UTC timestamp in nanoseconds
   #[inline]
-  fn write_entry_data(
-    &self,
-    slot: &AtomicEntry<K, T>,
-    key_hash: u64,
-    value: T,
-    timestamp: u64,
-  ) -> std::io::Result<()> {
+  fn write_entry_data(&self, slot: &AtomicEntry<K, T>, key_hash: u64, value: T, timestamp: u64) -> std::io::Result<()> {
     // Increment sequence for ordering
     slot.sequence.fetch_add(1, Ordering::Relaxed);
     slot.key_hash.store(key_hash, Ordering::Relaxed);
@@ -846,9 +816,7 @@ where
       if slot.get_state() == STATE_WRITTEN && slot.key_hash.load(Ordering::Relaxed) == key_hash {
         let value = slot.load_value();
 
-        if slot
-          .compare_exchange_state(STATE_WRITTEN, STATE_TOMBSTONE)
-          .is_ok()
+        if slot.compare_exchange_state(STATE_WRITTEN, STATE_TOMBSTONE).is_ok()
           && slot.key_hash.load(Ordering::Relaxed) == key_hash
         {
           return Some(value);
@@ -903,10 +871,7 @@ where
     let mut cleared = 0;
 
     for slot in self.entries.iter() {
-      if slot
-        .compare_exchange_state(STATE_WRITTEN, STATE_EMPTY)
-        .is_ok()
-      {
+      if slot.compare_exchange_state(STATE_WRITTEN, STATE_EMPTY).is_ok() {
         cleared += 1;
       }
     }
@@ -999,10 +964,7 @@ where
 
     for (slot, key_hash, value, timestamp, sequence) in candidates.into_iter().take(remove_count) {
       // Attempt to atomically transition from WRITTEN to TOMBSTONE
-      if slot
-        .compare_exchange_state(STATE_WRITTEN, STATE_TOMBSTONE)
-        .is_ok()
-      {
+      if slot.compare_exchange_state(STATE_WRITTEN, STATE_TOMBSTONE).is_ok() {
         // Double-check that this is still the same entry (sequence hasn't changed)
         let current_sequence = slot.sequence.load(Ordering::Relaxed);
         if current_sequence == sequence {
@@ -1099,9 +1061,7 @@ where
         // Verify consistency and try to remove
         if version_before == slot.get_version()
           && slot.get_state() == STATE_WRITTEN
-          && slot
-            .compare_exchange_state(STATE_WRITTEN, STATE_EMPTY)
-            .is_ok()
+          && slot.compare_exchange_state(STATE_WRITTEN, STATE_EMPTY).is_ok()
         {
           results.push((key, value, timestamp, sequence));
         }
@@ -1128,10 +1088,7 @@ where
   /// ```
   #[inline]
   pub fn is_empty(&self) -> bool {
-    !self
-      .entries
-      .iter()
-      .any(|slot| slot.get_state() == STATE_WRITTEN)
+    !self.entries.iter().any(|slot| slot.get_state() == STATE_WRITTEN)
   }
 
   /// Returns the total capacity of the cache.
@@ -1235,9 +1192,7 @@ where
         if version_before == slot.get_version()
           && slot.get_state() == STATE_WRITTEN
           && !predicate(&value, timestamp, sequence)
-          && slot
-            .compare_exchange_state(STATE_WRITTEN, STATE_TOMBSTONE)
-            .is_ok()
+          && slot.compare_exchange_state(STATE_WRITTEN, STATE_TOMBSTONE).is_ok()
         {
           removed_count += 1;
         }
@@ -1389,10 +1344,7 @@ where
   /// assert_eq!(cache.get("key1"), Some("value1".to_string()));
   /// assert_eq!(cache.get("key2"), Some("value2".to_string()));
   /// ```
-  pub fn from_hashmap_with_keys(
-    hashmap: HashMap<K, T>,
-    capacity: usize,
-  ) -> Result<Arc<Self>, std::io::Error> {
+  pub fn from_hashmap_with_keys(hashmap: HashMap<K, T>, capacity: usize) -> Result<Arc<Self>, std::io::Error> {
     let cache = Self::new(capacity, 0);
 
     for (key, value) in hashmap {
@@ -1917,9 +1869,7 @@ mod tests {
     let total_inserts = small_cache.capacity() * overflow_factor;
 
     for i in 0..total_inserts {
-      small_cache
-        .insert(format!("overflow_{i}"), i as u64)
-        .unwrap();
+      small_cache.insert(format!("overflow_{i}"), i as u64).unwrap();
     }
 
     // Cache should not exceed capacity
@@ -2013,15 +1963,9 @@ mod tests {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
     // Add test data
-    assert!(cache
-      .insert("key1".to_string(), "value1".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key2".to_string(), "value2".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key3".to_string(), "value3".to_string())
-      .unwrap());
+    assert!(cache.insert("key1".to_string(), "value1".to_string()).unwrap());
+    assert!(cache.insert("key2".to_string(), "value2".to_string()).unwrap());
+    assert!(cache.insert("key3".to_string(), "value3".to_string()).unwrap());
 
     assert_eq!(cache.len(), 3);
 
@@ -2036,17 +1980,10 @@ mod tests {
     assert_eq!(drained_entries.len(), 3);
 
     // Extract key hashes and values for verification
-    let mut drained_values: Vec<String> = drained_entries
-      .iter()
-      .map(|(_, value, _, _)| value.clone())
-      .collect();
+    let mut drained_values: Vec<String> = drained_entries.iter().map(|(_, value, _, _)| value.clone()).collect();
     drained_values.sort();
 
-    let mut expected_values = vec![
-      "value1".to_string(),
-      "value2".to_string(),
-      "value3".to_string(),
-    ];
+    let mut expected_values = vec!["value1".to_string(), "value2".to_string(), "value3".to_string()];
     expected_values.sort();
 
     assert_eq!(drained_values, expected_values);
@@ -2074,36 +2011,23 @@ mod tests {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
     // Insert entries with forced time gaps
-    assert!(cache
-      .insert("first".to_string(), "value1".to_string())
-      .unwrap());
+    assert!(cache.insert("first".to_string(), "value1".to_string()).unwrap());
     std::thread::sleep(std::time::Duration::from_millis(100)); // time gap
 
-    assert!(cache
-      .insert("second".to_string(), "value2".to_string())
-      .unwrap());
+    assert!(cache.insert("second".to_string(), "value2".to_string()).unwrap());
     std::thread::sleep(std::time::Duration::from_millis(100)); // time gap
 
-    assert!(cache
-      .insert("third".to_string(), "value3".to_string())
-      .unwrap());
+    assert!(cache.insert("third".to_string(), "value3".to_string()).unwrap());
 
     let drained_entries = cache.drain();
 
     // Verify we got all entries
     assert_eq!(drained_entries.len(), 3);
 
-    let mut values: Vec<String> = drained_entries
-      .iter()
-      .map(|(_, value, _, _)| value.clone())
-      .collect();
+    let mut values: Vec<String> = drained_entries.iter().map(|(_, value, _, _)| value.clone()).collect();
     values.sort();
 
-    let mut expected_values = vec![
-      "value1".to_string(),
-      "value2".to_string(),
-      "value3".to_string(),
-    ];
+    let mut expected_values = vec!["value1".to_string(), "value2".to_string(), "value3".to_string()];
     expected_values.sort();
 
     assert_eq!(values, expected_values);
@@ -2124,15 +2048,9 @@ mod tests {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
     // Add test data
-    assert!(cache
-      .insert("key1".to_string(), "value1".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key2".to_string(), "value2".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key3".to_string(), "value3".to_string())
-      .unwrap());
+    assert!(cache.insert("key1".to_string(), "value1".to_string()).unwrap());
+    assert!(cache.insert("key2".to_string(), "value2".to_string()).unwrap());
+    assert!(cache.insert("key3".to_string(), "value3".to_string()).unwrap());
 
     let entries = cache.entries();
 
@@ -2143,11 +2061,7 @@ mod tests {
     let mut values: Vec<String> = entries.iter().map(|(_, value)| value.clone()).collect();
     values.sort();
 
-    let mut expected_values = vec![
-      "value1".to_string(),
-      "value2".to_string(),
-      "value3".to_string(),
-    ];
+    let mut expected_values = vec!["value1".to_string(), "value2".to_string(), "value3".to_string()];
     expected_values.sort();
 
     assert_eq!(values, expected_values);
@@ -2175,15 +2089,9 @@ mod tests {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
     // Add test data
-    assert!(cache
-      .insert("key1".to_string(), "value1".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key2".to_string(), "value2".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key3".to_string(), "value3".to_string())
-      .unwrap());
+    assert!(cache.insert("key1".to_string(), "value1".to_string()).unwrap());
+    assert!(cache.insert("key2".to_string(), "value2".to_string()).unwrap());
+    assert!(cache.insert("key3".to_string(), "value3".to_string()).unwrap());
 
     // Remove mix of existing and non-existing keys
     let keys = vec![
@@ -2217,16 +2125,10 @@ mod tests {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
     // Add some data
-    assert!(cache
-      .insert("key1".to_string(), "value1".to_string())
-      .unwrap());
+    assert!(cache.insert("key1".to_string(), "value1".to_string()).unwrap());
 
     // Try to remove only non-existing keys
-    let keys = vec![
-      "missing1".to_string(),
-      "missing2".to_string(),
-      "missing3".to_string(),
-    ];
+    let keys = vec!["missing1".to_string(), "missing2".to_string(), "missing3".to_string()];
     let removed_values = cache.remove_existing(&keys);
 
     assert!(removed_values.is_empty());
@@ -2237,9 +2139,7 @@ mod tests {
   fn test_remove_existing_empty_keys() {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
-    assert!(cache
-      .insert("key1".to_string(), "value1".to_string())
-      .unwrap());
+    assert!(cache.insert("key1".to_string(), "value1".to_string()).unwrap());
 
     let removed_values = cache.remove_existing(&Vec::<String>::new());
 
@@ -2252,15 +2152,9 @@ mod tests {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
     // Add test data
-    assert!(cache
-      .insert("key1".to_string(), "value1".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key2".to_string(), "value2".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key3".to_string(), "value3".to_string())
-      .unwrap());
+    assert!(cache.insert("key1".to_string(), "value1".to_string()).unwrap());
+    assert!(cache.insert("key2".to_string(), "value2".to_string()).unwrap());
+    assert!(cache.insert("key3".to_string(), "value3".to_string()).unwrap());
 
     // Remove mix of existing and non-existing keys
     let keys = vec![
@@ -2287,22 +2181,11 @@ mod tests {
   fn test_remove_all_preserve_order() {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
-    assert!(cache
-      .insert("a".to_string(), "value_a".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("b".to_string(), "value_b".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("c".to_string(), "value_c".to_string())
-      .unwrap());
+    assert!(cache.insert("a".to_string(), "value_a".to_string()).unwrap());
+    assert!(cache.insert("b".to_string(), "value_b".to_string()).unwrap());
+    assert!(cache.insert("c".to_string(), "value_c".to_string()).unwrap());
 
-    let keys = vec![
-      "c".to_string(),
-      "a".to_string(),
-      "missing".to_string(),
-      "b".to_string(),
-    ];
+    let keys = vec!["c".to_string(), "a".to_string(), "missing".to_string(), "b".to_string()];
     let removed_values = cache.remove_all(&keys);
 
     // Verify order is preserved
@@ -2330,15 +2213,9 @@ mod tests {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
     // Add test data
-    assert!(cache
-      .insert("key1".to_string(), "value1".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key2".to_string(), "value2".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key3".to_string(), "value3".to_string())
-      .unwrap());
+    assert!(cache.insert("key1".to_string(), "value1".to_string()).unwrap());
+    assert!(cache.insert("key2".to_string(), "value2".to_string()).unwrap());
+    assert!(cache.insert("key3".to_string(), "value3".to_string()).unwrap());
 
     // Test with all existing keys
     let all_existing = vec!["key1".to_string(), "key2".to_string(), "key3".to_string()];
@@ -2349,11 +2226,7 @@ mod tests {
     assert!(cache.contains_all_keys(&subset_existing));
 
     // Test with one missing key
-    let one_missing = vec![
-      "key1".to_string(),
-      "key2".to_string(),
-      "missing".to_string(),
-    ];
+    let one_missing = vec!["key1".to_string(), "key2".to_string(), "missing".to_string()];
     assert!(!cache.contains_all_keys(&one_missing));
 
     // Test with all missing keys
@@ -2383,34 +2256,20 @@ mod tests {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
     // Add test data
-    assert!(cache
-      .insert("key1".to_string(), "value1".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key2".to_string(), "value2".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key3".to_string(), "value3".to_string())
-      .unwrap());
+    assert!(cache.insert("key1".to_string(), "value1".to_string()).unwrap());
+    assert!(cache.insert("key2".to_string(), "value2".to_string()).unwrap());
+    assert!(cache.insert("key3".to_string(), "value3".to_string()).unwrap());
 
     // Test with all existing keys
     let all_existing = vec!["key1".to_string(), "key2".to_string(), "key3".to_string()];
     assert!(cache.contains_any_key(&all_existing));
 
     // Test with one existing key
-    let one_existing = vec![
-      "missing1".to_string(),
-      "key2".to_string(),
-      "missing2".to_string(),
-    ];
+    let one_existing = vec!["missing1".to_string(), "key2".to_string(), "missing2".to_string()];
     assert!(cache.contains_any_key(&one_existing));
 
     // Test with no existing keys
-    let no_existing = vec![
-      "missing1".to_string(),
-      "missing2".to_string(),
-      "missing3".to_string(),
-    ];
+    let no_existing = vec!["missing1".to_string(), "missing2".to_string(), "missing3".to_string()];
     assert!(!cache.contains_any_key(&no_existing));
 
     // Test with empty vector (should return false)
@@ -2435,15 +2294,9 @@ mod tests {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
     // Add test data
-    assert!(cache
-      .insert("key1".to_string(), "value1".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key2".to_string(), "value2".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key3".to_string(), "value3".to_string())
-      .unwrap());
+    assert!(cache.insert("key1".to_string(), "value1".to_string()).unwrap());
+    assert!(cache.insert("key2".to_string(), "value2".to_string()).unwrap());
+    assert!(cache.insert("key3".to_string(), "value3".to_string()).unwrap());
 
     // Test with mix of existing and non-existing keys
     let keys = vec![
@@ -2468,15 +2321,9 @@ mod tests {
   fn test_get_all_by_keys_preserve_order() {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
-    assert!(cache
-      .insert("a".to_string(), "value_a".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("b".to_string(), "value_b".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("c".to_string(), "value_c".to_string())
-      .unwrap());
+    assert!(cache.insert("a".to_string(), "value_a".to_string()).unwrap());
+    assert!(cache.insert("b".to_string(), "value_b".to_string()).unwrap());
+    assert!(cache.insert("c".to_string(), "value_c".to_string()).unwrap());
 
     // Test different orderings
     let keys1 = vec!["c".to_string(), "a".to_string(), "b".to_string()];
@@ -2496,9 +2343,7 @@ mod tests {
   fn test_get_all_by_keys_empty_input() {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
-    assert!(cache
-      .insert("key1".to_string(), "value1".to_string())
-      .unwrap());
+    assert!(cache.insert("key1".to_string(), "value1".to_string()).unwrap());
 
     let empty_keys: Vec<String> = vec![];
     let values = cache.get_all_by_keys(&empty_keys);
@@ -2523,9 +2368,7 @@ mod tests {
   fn test_get_all_by_keys_duplicate_keys() {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
-    assert!(cache
-      .insert("key1".to_string(), "value1".to_string())
-      .unwrap());
+    assert!(cache.insert("key1".to_string(), "value1".to_string()).unwrap());
 
     // Test with duplicate keys
     let keys = vec![
@@ -2549,9 +2392,7 @@ mod tests {
 
     // Populate cache
     for i in 0..100 {
-      assert!(cache
-        .insert(format!("key{i}"), format!("value{i}"))
-        .unwrap());
+      assert!(cache.insert(format!("key{i}"), format!("value{i}")).unwrap());
     }
 
     let initial_len = cache.len();
@@ -2583,11 +2424,7 @@ mod tests {
     key_hashes.sort();
     let original_len = key_hashes.len();
     key_hashes.dedup();
-    assert_eq!(
-      key_hashes.len(),
-      original_len,
-      "Duplicate entries were drained"
-    );
+    assert_eq!(key_hashes.len(), original_len, "Duplicate entries were drained");
   }
 
   #[test]
@@ -2595,15 +2432,9 @@ mod tests {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
     // Add test data
-    assert!(cache
-      .insert("key1".to_string(), "value1".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key2".to_string(), "value2".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key3".to_string(), "value3".to_string())
-      .unwrap());
+    assert!(cache.insert("key1".to_string(), "value1".to_string()).unwrap());
+    assert!(cache.insert("key2".to_string(), "value2".to_string()).unwrap());
+    assert!(cache.insert("key3".to_string(), "value3".to_string()).unwrap());
 
     assert_eq!(cache.len(), 3);
 
@@ -2615,10 +2446,7 @@ mod tests {
 
     // Verify values are present (we can't easily verify keys since they're hashed)
     let values: HashSet<String> = hashmap.values().cloned().collect();
-    let expected_values: HashSet<String> = ["value1", "value2", "value3"]
-      .iter()
-      .map(|s| s.to_string())
-      .collect();
+    let expected_values: HashSet<String> = ["value1", "value2", "value3"].iter().map(|s| s.to_string()).collect();
 
     assert_eq!(values, expected_values);
   }
@@ -2628,15 +2456,9 @@ mod tests {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
     // Add test data
-    assert!(cache
-      .insert("key1".to_string(), "value1".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key2".to_string(), "value2".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("key3".to_string(), "value3".to_string())
-      .unwrap());
+    assert!(cache.insert("key1".to_string(), "value1".to_string()).unwrap());
+    assert!(cache.insert("key2".to_string(), "value2".to_string()).unwrap());
+    assert!(cache.insert("key3".to_string(), "value3".to_string()).unwrap());
 
     assert_eq!(cache.len(), 3);
 
@@ -2649,10 +2471,7 @@ mod tests {
 
     // Verify values are present
     let values: HashSet<String> = hashmap.values().cloned().collect();
-    let expected_values: HashSet<String> = ["value1", "value2", "value3"]
-      .iter()
-      .map(|s| s.to_string())
-      .collect();
+    let expected_values: HashSet<String> = ["value1", "value2", "value3"].iter().map(|s| s.to_string()).collect();
 
     assert_eq!(values, expected_values);
   }
@@ -2675,10 +2494,7 @@ mod tests {
 
     // Verify specific values are present
     let values: HashSet<String> = result_hashmap.values().cloned().collect();
-    let expected_values: HashSet<String> = ["value1", "value2", "value3"]
-      .iter()
-      .map(|s| s.to_string())
-      .collect();
+    let expected_values: HashSet<String> = ["value1", "value2", "value3"].iter().map(|s| s.to_string()).collect();
 
     assert_eq!(values, expected_values);
   }
@@ -2707,12 +2523,8 @@ mod tests {
     let cache = AtomicGenericCache::<String, String>::new(64, 0);
 
     // Add initial data
-    assert!(cache
-      .insert("existing".to_string(), "old_value".to_string())
-      .unwrap());
-    assert!(cache
-      .insert("keep".to_string(), "keep_value".to_string())
-      .unwrap());
+    assert!(cache.insert("existing".to_string(), "old_value".to_string()).unwrap());
+    assert!(cache.insert("keep".to_string(), "keep_value".to_string()).unwrap());
 
     // Create HashMap to merge
     let mut hashmap = HashMap::new();
@@ -2727,22 +2539,11 @@ mod tests {
     assert_eq!(cache.len(), 4); // 2 original + 1 overwrite + 2 new = 4 total
 
     // Verify values
-    assert_eq!(
-      cache.get(&"existing".to_string()),
-      Some("new_value".to_string())
-    ); // Overwritten
-    assert_eq!(
-      cache.get(&"keep".to_string()),
-      Some("keep_value".to_string())
-    ); // Preserved
-    assert_eq!(
-      cache.get(&"new_key".to_string()),
-      Some("new_value".to_string())
-    ); // Added
-    assert_eq!(
-      cache.get(&"another".to_string()),
-      Some("another_value".to_string())
-    ); // Added
+    assert_eq!(cache.get(&"existing".to_string()), Some("new_value".to_string())); // Overwritten
+    assert_eq!(cache.get(&"keep".to_string()), Some("keep_value".to_string())); // Preserved
+    assert_eq!(cache.get(&"new_key".to_string()), Some("new_value".to_string())); // Added
+    assert_eq!(cache.get(&"another".to_string()), Some("another_value".to_string()));
+    // Added
   }
 
   #[test]

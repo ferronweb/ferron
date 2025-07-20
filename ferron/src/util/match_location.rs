@@ -2,8 +2,7 @@
 pub fn match_location(path: &str, req_path: &str) -> bool {
   let mut path_without_trailing_slashes = path;
   while path_without_trailing_slashes.ends_with("/") {
-    path_without_trailing_slashes =
-      &path_without_trailing_slashes[..(path_without_trailing_slashes.len() - 1)];
+    path_without_trailing_slashes = &path_without_trailing_slashes[..(path_without_trailing_slashes.len() - 1)];
   }
 
   let mut path_prepared = path_without_trailing_slashes.to_owned();

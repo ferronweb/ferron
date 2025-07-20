@@ -38,6 +38,7 @@ use quinn::crypto::rustls::QuicServerConfig;
 #[cfg(feature = "runtime-monoio")]
 use quinn::{udp, AsyncTimer, AsyncUdpSocket, Runtime, UdpPoller};
 use rustls::ServerConfig;
+use tokio_util::sync::CancellationToken;
 
 use crate::listener_handler_communication::{Connection, ConnectionData};
 use crate::logging::LogMessage;
@@ -59,10 +60,7 @@ impl<MakeFut, Fut> UdpPollHelper<MakeFut, Fut> {
   /// it yields [`Poll::Ready`], then creating a new one on the next
   /// [`poll_writable`](UdpPoller::poll_writable)
   fn new(make_fut: MakeFut) -> Self {
-    Self {
-      make_fut,
-      fut: None,
-    }
+    Self { make_fut, fut: None }
   }
 }
 
@@ -216,8 +214,9 @@ pub fn create_quic_listener(
   enable_uring: bool,
   logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
-) -> Result<(Sender<()>, Sender<Arc<ServerConfig>>), Box<dyn Error + Send + Sync>> {
-  let (shutdown_tx, shutdown_rx) = async_channel::unbounded();
+) -> Result<(CancellationToken, Sender<Arc<ServerConfig>>), Box<dyn Error + Send + Sync>> {
+  let shutdown_tx = CancellationToken::new();
+  let shutdown_rx = shutdown_tx.clone();
   let (rustls_config_tx, rustls_config_rx) = async_channel::unbounded();
   let (listen_error_tx, listen_error_rx) = async_channel::unbounded();
   std::thread::Builder::new()
@@ -261,7 +260,7 @@ async fn quic_listener_fn(
   listen_error_tx: &Sender<Option<Box<dyn Error + Send + Sync>>>,
   logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
-  shutdown_rx: Receiver<()>,
+  shutdown_rx: CancellationToken,
   rustls_config_rx: Receiver<Arc<ServerConfig>>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   let quic_server_config = Arc::new(match QuicServerConfig::try_from(tls_config) {
@@ -288,36 +287,25 @@ async fn quic_listener_fn(
       break;
     }
     println!("HTTP/3 port is used at try #{tries}, retrying in {duration:?}...");
-    if shutdown_rx.try_recv().is_ok() {
+    if shutdown_rx.is_cancelled() {
       break;
     }
     crate::runtime::sleep(duration).await;
   }
   let udp_socket = match udp_socket_result {
     Ok(socket) => socket,
-    Err(err) => Err(anyhow::anyhow!(format!(
-      "Cannot listen to HTTP/3 port: {}",
-      err
-    )))?,
+    Err(err) => Err(anyhow::anyhow!(format!("Cannot listen to HTTP/3 port: {}", err)))?,
   };
-  let endpoint = match quinn::Endpoint::new(
-    quinn::EndpointConfig::default(),
-    Some(server_config),
-    udp_socket,
-    {
-      #[cfg(feature = "runtime-monoio")]
-      let runtime = Arc::new(MonoioAsyncioRuntime);
-      #[cfg(feature = "runtime-tokio")]
-      let runtime = Arc::new(quinn::TokioRuntime);
+  let endpoint = match quinn::Endpoint::new(quinn::EndpointConfig::default(), Some(server_config), udp_socket, {
+    #[cfg(feature = "runtime-monoio")]
+    let runtime = Arc::new(MonoioAsyncioRuntime);
+    #[cfg(feature = "runtime-tokio")]
+    let runtime = Arc::new(quinn::TokioRuntime);
 
-      runtime
-    },
-  ) {
+    runtime
+  }) {
     Ok(endpoint) => endpoint,
-    Err(err) => Err(anyhow::anyhow!(format!(
-      "Cannot listen to HTTP/3 port: {}",
-      err
-    )))?,
+    Err(err) => Err(anyhow::anyhow!(format!("Cannot listen to HTTP/3 port: {}", err)))?,
   };
   println!("HTTP/3 server is listening on {address}...");
   listen_error_tx.send(None).await.unwrap_or_default();
@@ -358,15 +346,13 @@ async fn quic_listener_fn(
           endpoint.set_server_config(Some(server_config));
           continue;
       }
-      _ = shutdown_rx.recv() => {
+      _ = shutdown_rx.cancelled() => {
           break;
       }
     };
     let remote_address = new_conn.remote_address();
     let local_address = SocketAddr::new(
-      new_conn
-        .local_ip()
-        .unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED)),
+      new_conn.local_ip().unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED)),
       udp_port,
     );
     let quic_data = ConnectionData {

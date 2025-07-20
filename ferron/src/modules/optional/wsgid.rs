@@ -29,13 +29,11 @@ use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use crate::util::wsgi::load_wsgi_application;
 use crate::util::wsgid::{
-  ProcessPoolToServerMessage, ServerToProcessPoolMessage, WsgidBodyReader, WsgidErrorStream,
-  WsgidInputStream,
+  ProcessPoolToServerMessage, ServerToProcessPoolMessage, WsgidBodyReader, WsgidErrorStream, WsgidInputStream,
 };
 use crate::util::{
-  get_entries, get_entries_for_validation, get_entry, get_value, read_ipc_message,
-  read_ipc_message_async, write_ipc_message, write_ipc_message_async, ModuleCache,
-  PreforkedProcessPool, SERVER_SOFTWARE,
+  get_entries, get_entries_for_validation, get_entry, get_value, read_ipc_message, read_ipc_message_async,
+  write_ipc_message, write_ipc_message_async, ModuleCache, PreforkedProcessPool, SERVER_SOFTWARE,
 };
 
 struct ResponseHead {
@@ -72,11 +70,10 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
       Err(_) => break,
     };
 
-    let received_message =
-      match postcard::from_bytes::<ServerToProcessPoolMessage>(&received_raw_message) {
-        Ok(message) => message,
-        Err(_) => continue,
-      };
+    let received_message = match postcard::from_bytes::<ServerToProcessPoolMessage>(&received_raw_message) {
+      Ok(message) => message,
+      Err(_) => continue,
+    };
 
     if let Some(error) = (|| -> Result<(), Box<dyn Error + Send + Sync>> {
       let wsgi_application = wsgi_application_result
@@ -146,22 +143,18 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
           )?;
           let mut environment: HashMap<String, Bound<'_, PyAny>> = HashMap::new();
           let is_https = environment_variables.contains_key("HTTPS");
-          let content_length =
-            if let Some(content_length) = environment_variables.get("CONTENT_LENGTH") {
-              content_length.parse::<u64>().ok()
-            } else {
-              None
-            };
+          let content_length = if let Some(content_length) = environment_variables.get("CONTENT_LENGTH") {
+            content_length.parse::<u64>().ok()
+          } else {
+            None
+          };
           for (environment_variable, environment_variable_value) in environment_variables {
             environment.insert(
               environment_variable,
               PyString::new(py, &environment_variable_value).into_any(),
             );
           }
-          environment.insert(
-            "wsgi.version".to_string(),
-            PyTuple::new(py, [1, 0])?.into_any(),
-          );
+          environment.insert("wsgi.version".to_string(), PyTuple::new(py, [1, 0])?.into_any());
           environment.insert(
             "wsgi.url_scheme".to_string(),
             PyString::new(py, if is_https { "https" } else { "http" }).into_any(),
@@ -170,11 +163,8 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
             "wsgi.input".to_string(),
             (if let Some(content_length) = content_length {
               WsgidInputStream::new(
-                BufReader::new(WsgidBodyReader::new(
-                  tx_mutex_clone.clone(),
-                  rx_mutex_clone.clone(),
-                ))
-                .take(content_length),
+                BufReader::new(WsgidBodyReader::new(tx_mutex_clone.clone(), rx_mutex_clone.clone()))
+                  .take(content_length),
               )
             } else {
               WsgidInputStream::new(BufReader::new(WsgidBodyReader::new(
@@ -191,23 +181,11 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
               .into_pyobject(py)?
               .into_any(),
           );
-          environment.insert(
-            "wsgi.multithread".to_string(),
-            PyBool::new(py, false).as_any().clone(),
-          );
-          environment.insert(
-            "wsgi.multiprocess".to_string(),
-            PyBool::new(py, true).as_any().clone(),
-          );
-          environment.insert(
-            "wsgi.run_once".to_string(),
-            PyBool::new(py, false).as_any().clone(),
-          );
+          environment.insert("wsgi.multithread".to_string(), PyBool::new(py, false).as_any().clone());
+          environment.insert("wsgi.multiprocess".to_string(), PyBool::new(py, true).as_any().clone());
+          environment.insert("wsgi.run_once".to_string(), PyBool::new(py, false).as_any().clone());
           let body_unknown = wsgi_application.call(py, (environment, start_response), None)?;
-          let body_iterator = body_unknown
-            .downcast_bound::<PyIterator>(py)?
-            .clone()
-            .unbind();
+          let body_iterator = body_unknown.downcast_bound::<PyIterator>(py)?.clone().unbind();
           Ok(body_iterator)
         })?;
         let current_application_id = application_id;
@@ -318,9 +296,7 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
 }
 
 /// Initializes a WSGI process pool
-fn init_wsgi_process_pool(
-  wsgi_script_path: PathBuf,
-) -> Result<PreforkedProcessPool, Box<dyn Error + Send + Sync>> {
+fn init_wsgi_process_pool(wsgi_script_path: PathBuf) -> Result<PreforkedProcessPool, Box<dyn Error + Send + Sync>> {
   let available_parallelism = thread::available_parallelism()?.get();
   // Safety: The function depends on `nix::unistd::fork`, which is executed before any threads are spawned.
   // The forking function is safe to call for single-threaded applications.
@@ -356,8 +332,7 @@ impl ModuleLoader for WsgidModuleLoader {
       self
         .cache
         .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |config| {
-          if let Some(wsgi_application_path) = get_value!("wsgid", config).and_then(|v| v.as_str())
-          {
+          if let Some(wsgi_application_path) = get_value!("wsgid", config).and_then(|v| v.as_str()) {
             Ok(Arc::new(WsgidModule {
               wsgi_process_pool: Some(Arc::new(
                 init_wsgi_process_pool(PathBuf::from_str(wsgi_application_path)?)
@@ -396,8 +371,7 @@ impl ModuleLoader for WsgidModuleLoader {
       }
     };
 
-    if let Some(entries) = get_entries_for_validation!("wsgid_environment", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("wsgid_environment", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 2 {
           Err(anyhow::anyhow!(
@@ -511,9 +485,7 @@ impl ModuleHandlers for WsgidModuleHandlers {
       let execute_path_info = request_path.strip_prefix("/").map(|s| s.to_string());
 
       let mut additional_environment_variables = HashMap::new();
-      if let Some(additional_environment_variables_config) =
-        get_entries!("wsgid_environment", config)
-      {
+      if let Some(additional_environment_variables_config) = get_entries!("wsgid_environment", config) {
         for additional_variable in additional_environment_variables_config.inner.iter() {
           if let Some(key) = additional_variable.values.first().and_then(|v| v.as_str()) {
             if let Some(value) = additional_variable.values.get(1).and_then(|v| v.as_str()) {
@@ -612,19 +584,13 @@ async fn execute_wsgi_with_environment_variables(
       _ => "HTTP/Unknown".to_string(),
     },
   );
-  environment_variables.insert(
-    "SERVER_PORT".to_string(),
-    socket_data.local_addr.port().to_string(),
-  );
+  environment_variables.insert("SERVER_PORT".to_string(), socket_data.local_addr.port().to_string());
   environment_variables.insert(
     "SERVER_ADDR".to_string(),
     socket_data.local_addr.ip().to_canonical().to_string(),
   );
   if let Some(server_administrator_email) = server_administrator_email {
-    environment_variables.insert(
-      "SERVER_ADMIN".to_string(),
-      server_administrator_email.to_string(),
-    );
+    environment_variables.insert("SERVER_ADMIN".to_string(), server_administrator_email.to_string());
   }
   if let Some(host) = request.headers().get(header::HOST) {
     environment_variables.insert(
@@ -633,10 +599,7 @@ async fn execute_wsgi_with_environment_variables(
     );
   }
 
-  environment_variables.insert(
-    "DOCUMENT_ROOT".to_string(),
-    wwwroot.to_string_lossy().to_string(),
-  );
+  environment_variables.insert("DOCUMENT_ROOT".to_string(), wwwroot.to_string_lossy().to_string());
   environment_variables.insert(
     "PATH_INFO".to_string(),
     match &path_info {
@@ -669,10 +632,7 @@ async fn execute_wsgi_with_environment_variables(
     ),
   );
 
-  environment_variables.insert(
-    "REMOTE_PORT".to_string(),
-    socket_data.remote_addr.port().to_string(),
-  );
+  environment_variables.insert("REMOTE_PORT".to_string(), socket_data.remote_addr.port().to_string());
   environment_variables.insert(
     "REMOTE_ADDR".to_string(),
     socket_data.remote_addr.ip().to_canonical().to_string(),
@@ -752,20 +712,12 @@ async fn execute_wsgi_with_environment_variables(
   }
 
   for (env_var_key, env_var_value) in additional_environment_variables {
-    if let hashlink::linked_hash_map::Entry::Vacant(entry) =
-      environment_variables.entry(env_var_key)
-    {
+    if let hashlink::linked_hash_map::Entry::Vacant(entry) = environment_variables.entry(env_var_key) {
       entry.insert(env_var_value);
     }
   }
 
-  execute_wsgi(
-    request,
-    error_logger,
-    wsgi_process_pool,
-    environment_variables,
-  )
-  .await
+  execute_wsgi(request, error_logger, wsgi_process_pool, environment_variables).await
 }
 
 async fn execute_wsgi(
@@ -793,8 +745,7 @@ async fn execute_wsgi(
 
     let application_id;
     loop {
-      let received_message =
-        postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message_async(rx).await?)?;
+      let received_message = postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message_async(rx).await?)?;
 
       if let Some(error_message) = received_message.error_message {
         Err(anyhow::anyhow!(error_message))?
@@ -845,96 +796,91 @@ async fn execute_wsgi(
   let wsgi_head_clone = wsgi_head.clone();
   let error_logger_arc = Arc::new(error_logger.clone());
   let body_stream_mutex = Arc::new(Mutex::new(body_stream));
-  let mut response_stream =
-    futures_util::stream::unfold(ipc_mutex, move |ipc_mutex: Arc<Mutex<_>>| {
-      let wsgi_head_clone = wsgi_head_clone.clone();
-      let error_logger_arc_clone = error_logger_arc.clone();
-      let body_stream_mutex_clone = body_stream_mutex.clone();
-      Box::pin(async move {
-        let ipc_mutex_borrowed = &ipc_mutex;
-        let chunk_result: Result<Option<Bytes>, Box<dyn Error + Send + Sync>> = async {
-          let (tx, rx) = &mut *ipc_mutex_borrowed.lock().await;
-          write_ipc_message_async(
-            tx,
-            &postcard::to_allocvec(&ServerToProcessPoolMessage {
-              application_id: Some(application_id),
-              environment_variables: None,
-              body_chunk: None,
-              body_error_message: None,
-              requests_body_chunk: true,
-            })?,
-          )
-          .await?;
+  let mut response_stream = futures_util::stream::unfold(ipc_mutex, move |ipc_mutex: Arc<Mutex<_>>| {
+    let wsgi_head_clone = wsgi_head_clone.clone();
+    let error_logger_arc_clone = error_logger_arc.clone();
+    let body_stream_mutex_clone = body_stream_mutex.clone();
+    Box::pin(async move {
+      let ipc_mutex_borrowed = &ipc_mutex;
+      let chunk_result: Result<Option<Bytes>, Box<dyn Error + Send + Sync>> = async {
+        let (tx, rx) = &mut *ipc_mutex_borrowed.lock().await;
+        write_ipc_message_async(
+          tx,
+          &postcard::to_allocvec(&ServerToProcessPoolMessage {
+            application_id: Some(application_id),
+            environment_variables: None,
+            body_chunk: None,
+            body_error_message: None,
+            requests_body_chunk: true,
+          })?,
+        )
+        .await?;
 
-          loop {
-            let received_message = postcard::from_bytes::<ProcessPoolToServerMessage>(
-              &read_ipc_message_async(rx).await?,
-            )?;
+        loop {
+          let received_message =
+            postcard::from_bytes::<ProcessPoolToServerMessage>(&read_ipc_message_async(rx).await?)?;
 
-            if let Some(error_message) = received_message.error_message {
-              Err(anyhow::anyhow!(error_message))?
-            } else if let Some(body_chunk) = received_message.body_chunk {
-              if let Some(status_code) = received_message.status_code {
-                let mut wsgi_head_locked = wsgi_head_clone.lock().await;
-                wsgi_head_locked.status = StatusCode::from_u16(status_code)?;
-                if let Some(headers) = received_message.headers {
-                  let mut header_map = HeaderMap::new();
-                  for (key, value) in headers {
-                    for value in value {
-                      header_map.append(
-                        HeaderName::from_str(&key)?,
-                        HeaderValue::from_bytes(value.as_bytes())?,
-                      );
-                    }
+          if let Some(error_message) = received_message.error_message {
+            Err(anyhow::anyhow!(error_message))?
+          } else if let Some(body_chunk) = received_message.body_chunk {
+            if let Some(status_code) = received_message.status_code {
+              let mut wsgi_head_locked = wsgi_head_clone.lock().await;
+              wsgi_head_locked.status = StatusCode::from_u16(status_code)?;
+              if let Some(headers) = received_message.headers {
+                let mut header_map = HeaderMap::new();
+                for (key, value) in headers {
+                  for value in value {
+                    header_map.append(HeaderName::from_str(&key)?, HeaderValue::from_bytes(value.as_bytes())?);
                   }
-                  wsgi_head_locked.headers = Some(header_map);
                 }
+                wsgi_head_locked.headers = Some(header_map);
               }
-              return Ok(Some(Bytes::from(body_chunk)));
-            } else if let Some(error_log_line) = received_message.error_log_line {
-              error_logger_arc_clone.log(&error_log_line).await;
-            } else if received_message.requests_body_chunk {
-              let body_chunk;
-              let body_error_message;
-              match body_stream_mutex_clone.lock().await.next().await {
-                None => {
-                  body_chunk = None;
-                  body_error_message = None;
-                }
-                Some(Err(err)) => {
-                  body_chunk = None;
-                  body_error_message = Some(err.to_string());
-                }
-                Some(Ok(chunk)) => {
-                  body_chunk = Some(chunk.to_vec());
-                  body_error_message = None;
-                }
-              };
-              write_ipc_message_async(
-                tx,
-                &postcard::to_allocvec(&ServerToProcessPoolMessage {
-                  application_id: None,
-                  environment_variables: None,
-                  body_chunk,
-                  body_error_message,
-                  requests_body_chunk: false,
-                })?,
-              )
-              .await?;
-            } else {
-              return Ok(None);
             }
+            return Ok(Some(Bytes::from(body_chunk)));
+          } else if let Some(error_log_line) = received_message.error_log_line {
+            error_logger_arc_clone.log(&error_log_line).await;
+          } else if received_message.requests_body_chunk {
+            let body_chunk;
+            let body_error_message;
+            match body_stream_mutex_clone.lock().await.next().await {
+              None => {
+                body_chunk = None;
+                body_error_message = None;
+              }
+              Some(Err(err)) => {
+                body_chunk = None;
+                body_error_message = Some(err.to_string());
+              }
+              Some(Ok(chunk)) => {
+                body_chunk = Some(chunk.to_vec());
+                body_error_message = None;
+              }
+            };
+            write_ipc_message_async(
+              tx,
+              &postcard::to_allocvec(&ServerToProcessPoolMessage {
+                application_id: None,
+                environment_variables: None,
+                body_chunk,
+                body_error_message,
+                requests_body_chunk: false,
+              })?,
+            )
+            .await?;
+          } else {
+            return Ok(None);
           }
         }
-        .await;
+      }
+      .await;
 
-        match chunk_result {
-          Err(error) => Some((Err(std::io::Error::other(error.to_string())), ipc_mutex)),
-          Ok(None) => None,
-          Ok(Some(chunk)) => Some((Ok(chunk), ipc_mutex)),
-        }
-      })
-    });
+      match chunk_result {
+        Err(error) => Some((Err(std::io::Error::other(error.to_string())), ipc_mutex)),
+        Ok(None) => None,
+        Ok(Some(chunk)) => Some((Ok(chunk), ipc_mutex)),
+      }
+    })
+  });
 
   let first_chunk = response_stream.next().await;
   let response_body = if let Some(Err(first_chunk_error)) = first_chunk {

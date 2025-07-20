@@ -53,9 +53,7 @@ impl ErrorLogger {
   ///
   /// A new `ErrorLogger` instance associated with the provided logger.
   pub fn new(logger: Sender<LogMessage>) -> Self {
-    Self {
-      logger: Some(logger),
-    }
+    Self { logger: Some(logger) }
   }
 
   /// Creates a new `ErrorLogger` instance without any underlying logger.
@@ -152,9 +150,7 @@ pub struct LoggersBuilder {
 impl LoggersBuilder {
   /// Creates a new `LoggersBuilder` instance.
   pub fn new() -> Self {
-    Self {
-      inner: HashMap::new(),
-    }
+    Self { inner: HashMap::new() }
   }
 
   /// Adds a new logger, if there isn't already a logger.
@@ -175,11 +171,7 @@ impl LoggersBuilder {
   /// Consumes the builder and returns a `Loggers` instance.
   #[allow(dead_code)]
   pub fn build(self) -> Loggers {
-    let mut inner_vector = self
-      .inner
-      .into_iter()
-      .map(|(k, v)| (k, v.0))
-      .collect::<Vec<_>>();
+    let mut inner_vector = self.inner.into_iter().map(|(k, v)| (k, v.0)).collect::<Vec<_>>();
     inner_vector.sort_by(|a, b| a.0.cmp(&b.0));
     Loggers {
       inner: Arc::new(inner_vector),
@@ -217,12 +209,7 @@ impl Loggers {
   }
 
   /// Finds a specific logger based on request parameters
-  pub fn find_logger(
-    &self,
-    hostname: Option<&str>,
-    ip: IpAddr,
-    port: u16,
-  ) -> Option<Sender<LogMessage>> {
+  pub fn find_logger(&self, hostname: Option<&str>, ip: IpAddr, port: u16) -> Option<Sender<LogMessage>> {
     // The inner array is sorted by specifity, so it's easier to find the configurations.
     // If it was not sorted, we would need to implement the specifity...
     // Also, the approach mentioned in the line above might be slower...

@@ -8,9 +8,7 @@ use yaml_rust2::Yaml;
 mod load_config;
 
 /// Converts Ferron 1.x YAML configuration to Ferron 2.x KDL configuration
-pub fn convert_yaml_to_kdl(
-  input_path: PathBuf,
-) -> Result<KdlDocument, Box<dyn Error + Send + Sync>> {
+pub fn convert_yaml_to_kdl(input_path: PathBuf) -> Result<KdlDocument, Box<dyn Error + Send + Sync>> {
   let yaml_configuration = load_config(input_path)?;
   let mut kdl_configuration = KdlDocument::new();
 
@@ -59,8 +57,7 @@ pub fn convert_yaml_to_kdl(
         host["ip"].as_str()
       };
       if let Some(hostname) = hostname {
-        let (host_configuration, secure_host_configuration) =
-          obtain_host_configuration(host, &load_server_modules);
+        let (host_configuration, secure_host_configuration) = obtain_host_configuration(host, &load_server_modules);
         if !host_configuration.is_empty() {
           let mut kdl_host_configuration = KdlNode::new(hostname);
           kdl_host_configuration.set_children(host_configuration);
@@ -229,10 +226,7 @@ pub fn obtain_host_configuration(
                     kdl_property.push(KdlEntry::new_prop("directory", KdlValue::Bool(!value)));
                   }
                   if let Some(value) = value["allowDoubleSlashes"].as_bool() {
-                    kdl_property.push(KdlEntry::new_prop(
-                      "allow_double_slashes",
-                      KdlValue::Bool(value),
-                    ));
+                    kdl_property.push(KdlEntry::new_prop("allow_double_slashes", KdlValue::Bool(value)));
                   }
                   if let Some(value) = value["last"].as_bool() {
                     kdl_property.push(KdlEntry::new_prop("last", KdlValue::Bool(value)));
@@ -289,57 +283,30 @@ pub fn obtain_host_configuration(
                 let mut kdl_property = KdlNode::new("status");
                 kdl_property.push(KdlValue::Integer(scode as i128));
                 if let Some(value) = value["url"].as_str() {
-                  kdl_property.push(KdlEntry::new_prop(
-                    "url",
-                    KdlValue::String(value.to_string()),
-                  ));
+                  kdl_property.push(KdlEntry::new_prop("url", KdlValue::String(value.to_string())));
                 }
                 if let Some(value) = value["regex"].as_str() {
-                  kdl_property.push(KdlEntry::new_prop(
-                    "regex",
-                    KdlValue::String(value.to_string()),
-                  ));
+                  kdl_property.push(KdlEntry::new_prop("regex", KdlValue::String(value.to_string())));
                 }
                 if let Some(value) = value["location"].as_str() {
-                  kdl_property.push(KdlEntry::new_prop(
-                    "location",
-                    KdlValue::String(value.to_string()),
-                  ));
+                  kdl_property.push(KdlEntry::new_prop("location", KdlValue::String(value.to_string())));
                 }
                 if let Some(value) = value["realm"].as_str() {
-                  kdl_property.push(KdlEntry::new_prop(
-                    "realm",
-                    KdlValue::String(value.to_string()),
-                  ));
+                  kdl_property.push(KdlEntry::new_prop("realm", KdlValue::String(value.to_string())));
                 }
                 if let Some(value) = value["disableBruteProtection"].as_bool() {
-                  kdl_property.push(KdlEntry::new_prop(
-                    "brute_protection",
-                    KdlValue::Bool(!value),
-                  ));
+                  kdl_property.push(KdlEntry::new_prop("brute_protection", KdlValue::Bool(!value)));
                 }
                 if let Some(value) = value["userList"].as_vec() {
                   kdl_property.push(KdlEntry::new_prop(
                     "users",
-                    KdlValue::String(
-                      value
-                        .iter()
-                        .filter_map(|v| v.as_str())
-                        .collect::<Vec<_>>()
-                        .join(","),
-                    ),
+                    KdlValue::String(value.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(",")),
                   ));
                 }
                 if let Some(value) = value["users"].as_vec() {
                   kdl_property.push(KdlEntry::new_prop(
                     "allowed",
-                    KdlValue::String(
-                      value
-                        .iter()
-                        .filter_map(|v| v.as_str())
-                        .collect::<Vec<_>>()
-                        .join(","),
-                    ),
+                    KdlValue::String(value.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(",")),
                   ));
                 }
                 kdl_config_nodes.push(kdl_property);
@@ -744,13 +711,9 @@ pub fn obtain_host_configuration(
   )
 }
 
-pub fn obtain_global_configuration(
-  yaml_configuration: &Yaml,
-) -> (KdlNode, Vec<KdlNode>, Vec<String>, u16) {
+pub fn obtain_global_configuration(yaml_configuration: &Yaml) -> (KdlNode, Vec<KdlNode>, Vec<String>, u16) {
   let empty_hashmap = yaml_rust2::yaml::Hash::new();
-  let yaml_global_properties = yaml_configuration["global"]
-    .as_hash()
-    .unwrap_or(&empty_hashmap);
+  let yaml_global_properties = yaml_configuration["global"].as_hash().unwrap_or(&empty_hashmap);
   let mut kdl_global_properties = KdlNode::new("*");
   let mut kdl_global_children_to_insert = KdlDocument::new();
   let kdl_global_children_nodes = kdl_global_children_to_insert.nodes_mut();

@@ -72,11 +72,7 @@ mod tests {
   }
 
   impl AsyncRead for MockReader {
-    fn poll_read(
-      mut self: Pin<&mut Self>,
-      _cx: &mut Context<'_>,
-      buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
+    fn poll_read(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
       if self.position >= self.data.len() {
         return Poll::Ready(Ok(()));
       }
@@ -108,11 +104,7 @@ mod tests {
   struct ErrorReader;
 
   impl AsyncRead for ErrorReader {
-    fn poll_read(
-      self: Pin<&mut Self>,
-      _cx: &mut Context<'_>,
-      _buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
+    fn poll_read(self: Pin<&mut Self>, _cx: &mut Context<'_>, _buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
       Poll::Ready(Err(io::Error::other("read error")))
     }
   }

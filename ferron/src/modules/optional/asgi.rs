@@ -32,16 +32,15 @@ use crate::config::ServerConfiguration;
 use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use crate::util::asgi::{
-  asgi_event_to_outgoing_struct, incoming_struct_to_asgi_event, AsgiHttpBody, AsgiHttpInitData,
-  AsgiInitData, AsgiWebsocketClose, AsgiWebsocketInitData, AsgiWebsocketMessage,
-  IncomingAsgiMessage, IncomingAsgiMessageInner, OutgoingAsgiMessage, OutgoingAsgiMessageInner,
+  asgi_event_to_outgoing_struct, incoming_struct_to_asgi_event, AsgiHttpBody, AsgiHttpInitData, AsgiInitData,
+  AsgiWebsocketClose, AsgiWebsocketInitData, AsgiWebsocketMessage, IncomingAsgiMessage, IncomingAsgiMessageInner,
+  OutgoingAsgiMessage, OutgoingAsgiMessageInner,
 };
 use crate::util::{get_entries_for_validation, ModuleCache};
 use crate::{get_entry, get_value};
 
 /// The ASGI channel `Result`
-type AsgiChannelResult =
-  Result<(Sender<IncomingAsgiMessage>, Receiver<OutgoingAsgiMessage>), anyhow::Error>;
+type AsgiChannelResult = Result<(Sender<IncomingAsgiMessage>, Receiver<OutgoingAsgiMessage>), anyhow::Error>;
 
 /// Channels used to communicate with the ASGI event loop
 type AsgiEventLoopCommunication = (Sender<()>, Receiver<AsgiChannelResult>);
@@ -55,11 +54,9 @@ async fn asgi_application_fn(
   let init_message = match rx.recv().await {
     Ok(IncomingAsgiMessage::Init(message)) => message,
     Err(err) => {
-      tx.send(OutgoingAsgiMessage::Error(PyErr::new::<PyIOError, _>(
-        err.to_string(),
-      )))
-      .await
-      .unwrap_or_default();
+      tx.send(OutgoingAsgiMessage::Error(PyErr::new::<PyIOError, _>(err.to_string())))
+        .await
+        .unwrap_or_default();
       return;
     }
     _ => {
@@ -87,12 +84,7 @@ async fn asgi_application_fn(
       }
       AsgiInitData::Http(http_init_data) => {
         let path = http_init_data.request_parts.uri.path().to_owned();
-        let query_string = http_init_data
-          .request_parts
-          .uri
-          .query()
-          .unwrap_or("")
-          .to_owned();
+        let query_string = http_init_data.request_parts.uri.query().unwrap_or("").to_owned();
         let original_request_uri = http_init_data
           .request_parts
           .extensions
@@ -152,36 +144,21 @@ async fn asgi_application_fn(
         scope.set_item(
           "client",
           (
-            http_init_data
-              .socket_data
-              .remote_addr
-              .ip()
-              .to_canonical()
-              .to_string(),
+            http_init_data.socket_data.remote_addr.ip().to_canonical().to_string(),
             http_init_data.socket_data.remote_addr.port(),
           ),
         )?;
         scope.set_item(
           "server",
           (
-            http_init_data
-              .socket_data
-              .local_addr
-              .ip()
-              .to_canonical()
-              .to_string(),
+            http_init_data.socket_data.local_addr.ip().to_canonical().to_string(),
             http_init_data.socket_data.local_addr.port(),
           ),
         )?;
       }
       AsgiInitData::Websocket(websocket_init_data) => {
         let path = websocket_init_data.request_parts.uri.path().to_owned();
-        let query_string = websocket_init_data
-          .request_parts
-          .uri
-          .query()
-          .unwrap_or("")
-          .to_owned();
+        let query_string = websocket_init_data.request_parts.uri.query().unwrap_or("").to_owned();
         let original_request_uri = websocket_init_data
           .request_parts
           .extensions
@@ -279,14 +256,11 @@ async fn asgi_application_fn(
             if client_disconnected.load(Ordering::Relaxed) {
               Err(PyErr::new::<PyOSError, _>("Client disconnected"))
             } else {
-              let message = rx
-                .recv()
-                .await
-                .map_err(|e| PyErr::new::<PyOSError, _>(e.to_string()))?;
+              let message = rx.recv().await.map_err(|e| PyErr::new::<PyOSError, _>(e.to_string()))?;
               match message {
-                IncomingAsgiMessage::Init(_) => Err(PyErr::new::<PyOSError, _>(
-                  "Unexpected ASGI initialization message",
-                )),
+                IncomingAsgiMessage::Init(_) => {
+                  Err(PyErr::new::<PyOSError, _>("Unexpected ASGI initialization message"))
+                }
                 IncomingAsgiMessage::Message(message) => {
                   if let IncomingAsgiMessageInner::HttpDisconnect = &message {
                     client_disconnected.store(true, Ordering::Relaxed);
@@ -325,19 +299,18 @@ async fn asgi_application_fn(
       },
     )?;
 
-    let asgi_coroutine =
-      match asgi_application.call(py, (scope.clone(), receive.clone(), send.clone()), None) {
-        Ok(coroutine) => coroutine,
-        Err(err) => {
-          if !err.get_type(py).is(&PyType::new::<PyTypeError>(py)) {
-            return Err(err);
-          } else {
-            asgi_application
-              .call(py, (scope,), None)?
-              .call(py, (receive, send), None)?
-          }
+    let asgi_coroutine = match asgi_application.call(py, (scope.clone(), receive.clone(), send.clone()), None) {
+      Ok(coroutine) => coroutine,
+      Err(err) => {
+        if !err.get_type(py).is(&PyType::new::<PyTypeError>(py)) {
+          return Err(err);
+        } else {
+          asgi_application
+            .call(py, (scope,), None)?
+            .call(py, (receive, send), None)?
         }
-      };
+      }
+    };
 
     pyo3_async_runtimes::tokio::into_future(asgi_coroutine.into_bound(py))
   }) {
@@ -348,14 +321,8 @@ async fn asgi_application_fn(
       .await
       .unwrap_or_default(),
     Ok(asgi_future) => match asgi_future.await {
-      Err(err) => tx
-        .send(OutgoingAsgiMessage::Error(err))
-        .await
-        .unwrap_or_default(),
-      Ok(_) => tx
-        .send(OutgoingAsgiMessage::Finished)
-        .await
-        .unwrap_or_default(),
+      Err(err) => tx.send(OutgoingAsgiMessage::Error(err)).await.unwrap_or_default(),
+      Ok(_) => tx.send(OutgoingAsgiMessage::Finished).await.unwrap_or_default(),
     },
   }
 }
@@ -379,11 +346,7 @@ async fn asgi_lifetime_init_fn(asgi_application: Arc<Py<PyAny>>) -> AsgiChannelR
 }
 
 /// The ASGI event loop function
-async fn asgi_event_loop_fn(
-  asgi_application: Arc<Py<PyAny>>,
-  tx: Sender<AsgiChannelResult>,
-  rx: Receiver<()>,
-) {
+async fn asgi_event_loop_fn(asgi_application: Arc<Py<PyAny>>, tx: Sender<AsgiChannelResult>, rx: Receiver<()>) {
   loop {
     if rx.recv().await.is_err() {
       continue;
@@ -417,17 +380,13 @@ async fn asgi_init_event_loop_fn(
     pyo3_async_runtimes::tokio::run::<_, ()>(py, async move {
       let asgi_lifetime_channel_result = asgi_lifetime_init_fn(asgi_application.clone()).await;
       if let Ok((tx, rx)) = asgi_lifetime_channel_result.as_ref() {
-        tx.send(IncomingAsgiMessage::Message(
-          IncomingAsgiMessageInner::LifespanStartup,
-        ))
-        .await
-        .unwrap_or_default();
+        tx.send(IncomingAsgiMessage::Message(IncomingAsgiMessageInner::LifespanStartup))
+          .await
+          .unwrap_or_default();
         loop {
           match rx.recv().await {
             Ok(OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::LifespanStartupComplete))
-            | Ok(OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::LifespanStartupFailed(
-              _,
-            )))
+            | Ok(OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::LifespanStartupFailed(_)))
             | Ok(OutgoingAsgiMessage::Finished)
             | Ok(OutgoingAsgiMessage::Error(_))
             | Err(_) => break,
@@ -452,19 +411,13 @@ async fn asgi_init_event_loop_fn(
         _ = init_closure => {}
       }
       if let Ok((tx, rx)) = asgi_lifetime_channel_result.as_ref() {
-        tx.send(IncomingAsgiMessage::Message(
-          IncomingAsgiMessageInner::LifespanShutdown,
-        ))
-        .await
-        .unwrap_or_default();
+        tx.send(IncomingAsgiMessage::Message(IncomingAsgiMessageInner::LifespanShutdown))
+          .await
+          .unwrap_or_default();
         loop {
           match rx.recv().await {
-            Ok(OutgoingAsgiMessage::Message(
-              OutgoingAsgiMessageInner::LifespanShutdownComplete,
-            ))
-            | Ok(OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::LifespanShutdownFailed(
-              _,
-            )))
+            Ok(OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::LifespanShutdownComplete))
+            | Ok(OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::LifespanShutdownFailed(_)))
             | Ok(OutgoingAsgiMessage::Finished)
             | Ok(OutgoingAsgiMessage::Error(_))
             | Err(_) => break,
@@ -483,9 +436,7 @@ pub fn load_asgi_application(
   file_path: &Path,
   clear_sys_path: bool,
 ) -> Result<Py<PyAny>, Box<dyn Error + Send + Sync>> {
-  let script_dirname = file_path
-    .parent()
-    .map(|path| path.to_string_lossy().to_string());
+  let script_dirname = file_path.parent().map(|path| path.to_string_lossy().to_string());
   let script_name = file_path.to_string_lossy().to_string();
   let script_name_cstring = CString::from_str(&script_name)?;
   let module_name = script_name
@@ -511,14 +462,9 @@ pub fn load_asgi_application(
         }
       }
     }
-    let asgi_application = PyModule::from_code(
-      py,
-      &script_data_cstring,
-      &script_name_cstring,
-      &module_name_cstring,
-    )?
-    .getattr("application")?
-    .unbind();
+    let asgi_application = PyModule::from_code(py, &script_data_cstring, &script_name_cstring, &module_name_cstring)?
+      .getattr("application")?
+      .unbind();
     if clear_sys_path {
       if let Some(sys_path) = sys_path_old {
         if let Ok(sys_module) = PyModule::import(py, "sys") {
@@ -638,25 +584,19 @@ impl ModuleLoader for AsgiModuleLoader {
             "The `asgi` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
-          Err(anyhow::anyhow!(
-            "The ASGI application path must be a string"
-          ))?
+          Err(anyhow::anyhow!("The ASGI application path must be a string"))?
         }
       }
     };
 
-    if let Some(entries) =
-      get_entries_for_validation!("asgi_clear_imports", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("asgi_clear_imports", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
             "The `asgi_clear_imports` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
-          Err(anyhow::anyhow!(
-            "Invalid ASGI Python import clearing option"
-          ))?
+          Err(anyhow::anyhow!("Invalid ASGI Python import clearing option"))?
         }
       }
     };
@@ -771,27 +711,9 @@ impl ModuleHandlers for AsgiModuleHandlers {
       };
 
       if hyper_tungstenite::is_upgrade_request(&request) {
-        return execute_asgi_websocket(
-          request,
-          socket_data,
-          error_logger,
-          wwwroot,
-          execute_pathbuf,
-          tx,
-          rx,
-        )
-        .await;
+        return execute_asgi_websocket(request, socket_data, error_logger, wwwroot, execute_pathbuf, tx, rx).await;
       } else {
-        return execute_asgi(
-          request,
-          socket_data,
-          error_logger,
-          wwwroot,
-          execute_pathbuf,
-          tx,
-          rx,
-        )
-        .await;
+        return execute_asgi(request, socket_data, error_logger, wwwroot, execute_pathbuf, tx, rx).await;
       }
     }
 
@@ -818,19 +740,17 @@ async fn execute_asgi(
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (request_parts, request_body) = request.into_parts();
   asgi_tx
-    .send(IncomingAsgiMessage::Init(AsgiInitData::Http(
-      AsgiHttpInitData {
-        request_parts,
-        socket_data: SocketData {
-          remote_addr: socket_data.remote_addr,
-          local_addr: socket_data.local_addr,
-          encrypted: socket_data.encrypted,
-        },
-        error_logger: error_logger.clone(),
-        wwwroot: wwwroot.to_path_buf(),
-        execute_pathbuf,
+    .send(IncomingAsgiMessage::Init(AsgiInitData::Http(AsgiHttpInitData {
+      request_parts,
+      socket_data: SocketData {
+        remote_addr: socket_data.remote_addr,
+        local_addr: socket_data.local_addr,
+        encrypted: socket_data.encrypted,
       },
-    )))
+      error_logger: error_logger.clone(),
+      wwwroot: wwwroot.to_path_buf(),
+      execute_pathbuf,
+    })))
     .await?;
 
   let mut request_body_stream = request_body.into_data_stream();
@@ -840,30 +760,28 @@ async fn execute_asgi(
     loop {
       match request_body_stream.next().await {
         Some(Ok(data)) => asgi_tx_clone
-          .send(IncomingAsgiMessage::Message(
-            IncomingAsgiMessageInner::HttpRequest(AsgiHttpBody {
+          .send(IncomingAsgiMessage::Message(IncomingAsgiMessageInner::HttpRequest(
+            AsgiHttpBody {
               body: data.to_vec(),
               more_body: true,
-            }),
-          ))
+            },
+          )))
           .await
           .unwrap_or_default(),
         Some(Err(_)) => {
           asgi_tx_clone
-            .send(IncomingAsgiMessage::Message(
-              IncomingAsgiMessageInner::HttpDisconnect,
-            ))
+            .send(IncomingAsgiMessage::Message(IncomingAsgiMessageInner::HttpDisconnect))
             .await
             .unwrap_or_default();
         }
         None => {
           asgi_tx_clone
-            .send(IncomingAsgiMessage::Message(
-              IncomingAsgiMessageInner::HttpRequest(AsgiHttpBody {
+            .send(IncomingAsgiMessage::Message(IncomingAsgiMessageInner::HttpRequest(
+              AsgiHttpBody {
                 body: b"".to_vec(),
                 more_body: false,
-              }),
-            ))
+              },
+            )))
             .await
             .unwrap_or_default();
           break;
@@ -880,9 +798,7 @@ async fn execute_asgi(
         "ASGI application returned before sending the HTTP response start event"
       ))?,
       OutgoingAsgiMessage::Error(err) => Err(err)?,
-      OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::HttpResponseStart(
-        http_response_start,
-      )) => {
+      OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::HttpResponseStart(http_response_start)) => {
         asgi_http_response_start = http_response_start;
         break;
       }
@@ -890,45 +806,30 @@ async fn execute_asgi(
     }
   }
 
-  let response_body_stream = futures_util::stream::unfold(
-    (asgi_tx, asgi_rx, false),
-    move |(asgi_tx, asgi_rx, request_end)| {
+  let response_body_stream =
+    futures_util::stream::unfold((asgi_tx, asgi_rx, false), move |(asgi_tx, asgi_rx, request_end)| {
       let has_trailers = asgi_http_response_start.trailers;
       async move {
         if request_end {
           asgi_tx
-            .send(IncomingAsgiMessage::Message(
-              IncomingAsgiMessageInner::HttpDisconnect,
-            ))
+            .send(IncomingAsgiMessage::Message(IncomingAsgiMessageInner::HttpDisconnect))
             .await
             .unwrap_or_default();
           return None;
         }
         loop {
           match asgi_rx.recv().await {
-            Err(err) => {
-              return Some((
-                Err(std::io::Error::other(err.to_string())),
-                (asgi_tx, asgi_rx, false),
-              ))
-            }
+            Err(err) => return Some((Err(std::io::Error::other(err.to_string())), (asgi_tx, asgi_rx, false))),
             Ok(OutgoingAsgiMessage::Finished) => return None,
             Ok(OutgoingAsgiMessage::Error(err)) => {
-              return Some((
-                Err(std::io::Error::other(err.to_string())),
-                (asgi_tx, asgi_rx, false),
-              ))
+              return Some((Err(std::io::Error::other(err.to_string())), (asgi_tx, asgi_rx, false)))
             }
-            Ok(OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::HttpResponseBody(
-              http_response_body,
-            ))) => {
+            Ok(OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::HttpResponseBody(http_response_body))) => {
               if !http_response_body.more_body {
                 if http_response_body.body.is_empty() {
                   if !has_trailers {
                     asgi_tx
-                      .send(IncomingAsgiMessage::Message(
-                        IncomingAsgiMessageInner::HttpDisconnect,
-                      ))
+                      .send(IncomingAsgiMessage::Message(IncomingAsgiMessageInner::HttpDisconnect))
                       .await
                       .unwrap_or_default();
                     return None;
@@ -952,9 +853,7 @@ async fn execute_asgi(
               if !http_response_trailers.more_trailers {
                 if http_response_trailers.headers.is_empty() {
                   asgi_tx
-                    .send(IncomingAsgiMessage::Message(
-                      IncomingAsgiMessageInner::HttpDisconnect,
-                    ))
+                    .send(IncomingAsgiMessage::Message(IncomingAsgiMessageInner::HttpDisconnect))
                     .await
                     .unwrap_or_default();
                   return None;
@@ -973,15 +872,8 @@ async fn execute_asgi(
                   }
                   .await
                   {
-                    Ok(headers) => {
-                      return Some((Ok(Frame::trailers(headers)), (asgi_tx, asgi_rx, true)))
-                    }
-                    Err(err) => {
-                      return Some((
-                        Err(std::io::Error::other(err.to_string())),
-                        (asgi_tx, asgi_rx, false),
-                      ))
-                    }
+                    Ok(headers) => return Some((Ok(Frame::trailers(headers)), (asgi_tx, asgi_rx, true))),
+                    Err(err) => return Some((Err(std::io::Error::other(err.to_string())), (asgi_tx, asgi_rx, false))),
                   }
                 }
               } else if !http_response_trailers.headers.is_empty() {
@@ -999,15 +891,8 @@ async fn execute_asgi(
                 }
                 .await
                 {
-                  Ok(headers) => {
-                    return Some((Ok(Frame::trailers(headers)), (asgi_tx, asgi_rx, true)))
-                  }
-                  Err(err) => {
-                    return Some((
-                      Err(std::io::Error::other(err.to_string())),
-                      (asgi_tx, asgi_rx, false),
-                    ))
-                  }
+                  Ok(headers) => return Some((Ok(Frame::trailers(headers)), (asgi_tx, asgi_rx, true))),
+                  Err(err) => return Some((Err(std::io::Error::other(err.to_string())), (asgi_tx, asgi_rx, false))),
                 }
               }
             }
@@ -1015,8 +900,7 @@ async fn execute_asgi(
           }
         }
       }
-    },
-  );
+    });
   let response_body = BodyExt::boxed(StreamBody::new(response_body_stream));
 
   let mut response = Response::new(response_body);
@@ -1069,9 +953,7 @@ async fn execute_asgi_websocket(
     .await?;
 
   asgi_tx
-    .send(IncomingAsgiMessage::Message(
-      IncomingAsgiMessageInner::WebsocketConnect,
-    ))
+    .send(IncomingAsgiMessage::Message(IncomingAsgiMessageInner::WebsocketConnect))
     .await?;
 
   loop {
@@ -1081,8 +963,7 @@ async fn execute_asgi_websocket(
       ))?,
       OutgoingAsgiMessage::Error(err) => Err(err)?,
       OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::WebsocketAccept(_)) => {
-        let (response, websocket) =
-          hyper_tungstenite::upgrade(Request::from_parts(request_parts, ()), None)?;
+        let (response, websocket) = hyper_tungstenite::upgrade(Request::from_parts(request_parts, ()), None)?;
 
         let error_logger = error_logger.clone();
         crate::runtime::spawn(async move {
@@ -1161,10 +1042,7 @@ async fn execute_asgi_websocket(
                     let (status_code, message) = if let Some(close_frame) = close_frame {
                       (close_frame.code.into(), close_frame.reason.to_string())
                     } else {
-                      (
-                        1005,
-                        "Websocket connection closed for unknown reason".to_string(),
-                      )
+                      (1005, "Websocket connection closed for unknown reason".to_string())
                     };
                     asgi_tx_clone
                       .send(IncomingAsgiMessage::Message(
@@ -1206,9 +1084,7 @@ async fn execute_asgi_websocket(
                   "ASGI application returned before sending the WebSocket accept event"
                 ))?,
                 OutgoingAsgiMessage::Error(err) => Err(err)?,
-                OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::WebsocketSend(
-                  websocket_message,
-                )) => {
+                OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::WebsocketSend(websocket_message)) => {
                   let frame_option = if let Some(bytes) = websocket_message.bytes {
                     Some(Message::binary(bytes))
                   } else {
@@ -1235,9 +1111,7 @@ async fn execute_asgi_websocket(
                     }
                   }
                 }
-                OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::WebsocketClose(
-                  websocket_close,
-                )) => {
+                OutgoingAsgiMessage::Message(OutgoingAsgiMessageInner::WebsocketClose(websocket_close)) => {
                   let client_disconnected = client_disconnected_mutex.lock().await;
                   if !client_disconnected.load(Ordering::Relaxed) {
                     client_disconnected.store(true, Ordering::Relaxed);
@@ -1293,8 +1167,7 @@ async fn execute_asgi_websocket(
           .send(IncomingAsgiMessage::Message(
             IncomingAsgiMessageInner::WebsocketDisconnect(AsgiWebsocketClose {
               code: 1005,
-              reason: "ASGI application closed the WebSocket connection before accepting it"
-                .to_string(),
+              reason: "ASGI application closed the WebSocket connection before accepting it".to_string(),
             }),
           ))
           .await

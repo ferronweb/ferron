@@ -8,15 +8,27 @@ use std::{collections::HashMap, sync::Arc};
 #[derive(Debug)]
 pub struct CustomSniResolver {
   fallback_resolver: Option<Arc<dyn ResolvesServerCert>>,
-  resolvers: HashMap<String, Arc<dyn ResolvesServerCert>>,
+  resolvers: Arc<tokio::sync::RwLock<HashMap<String, Arc<dyn ResolvesServerCert>>>>,
+  fallback_sender: Option<(async_channel::Sender<(String, u16)>, u16)>,
 }
 
 impl CustomSniResolver {
   /// Creates a custom SNI resolver
+  #[allow(dead_code)]
   pub fn new() -> Self {
     Self {
       fallback_resolver: None,
-      resolvers: HashMap::new(),
+      resolvers: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+      fallback_sender: None,
+    }
+  }
+
+  /// Creates a custom SNI resolver with provided resolvers lock
+  pub fn with_resolvers(resolvers: Arc<tokio::sync::RwLock<HashMap<String, Arc<dyn ResolvesServerCert>>>>) -> Self {
+    Self {
+      fallback_resolver: None,
+      resolvers,
+      fallback_sender: None,
     }
   }
 
@@ -27,7 +39,12 @@ impl CustomSniResolver {
 
   /// Loads a host certificate resolver for a specific host
   pub fn load_host_resolver(&mut self, host: &str, resolver: Arc<dyn ResolvesServerCert>) {
-    self.resolvers.insert(host.to_string(), resolver);
+    self.resolvers.blocking_write().insert(host.to_string(), resolver);
+  }
+
+  /// Loads a fallback sender used for sending SNI hostnames for a specific host
+  pub fn load_fallback_sender(&mut self, fallback_sender: async_channel::Sender<(String, u16)>, port: u16) {
+    self.fallback_sender = Some((fallback_sender, port));
   }
 }
 
@@ -35,20 +52,27 @@ impl ResolvesServerCert for CustomSniResolver {
   fn resolve(&self, client_hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
     let hostname = client_hello.server_name();
     if let Some(hostname) = hostname {
-      let keys_iterator = self.resolvers.keys();
+      let resolvers = self.resolvers.blocking_read();
+      let keys_iterator = resolvers.keys();
       for configured_hostname in keys_iterator {
         if match_hostname(Some(configured_hostname), Some(hostname)) {
-          return self
-            .resolvers
-            .get(configured_hostname)
-            .and_then(|r| r.resolve(client_hello));
+          return resolvers.get(configured_hostname).and_then(|r| r.resolve(client_hello));
         }
       }
     }
+    let hostname = hostname.map(|v| v.to_string());
     self
       .fallback_resolver
       .as_ref()
       .and_then(|r| r.resolve(client_hello))
+      .or_else(|| {
+        if let Some((sender, port)) = &self.fallback_sender {
+          if let Some(hostname) = hostname {
+            sender.send_blocking((hostname.to_string(), *port)).unwrap_or_default();
+          }
+        }
+        None
+      })
   }
 }
 

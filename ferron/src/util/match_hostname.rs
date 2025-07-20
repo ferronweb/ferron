@@ -8,8 +8,7 @@ pub fn match_hostname(hostname: Option<&str>, req_hostname: Option<&str>) -> boo
     if hostname.starts_with("*.") && hostname != "*." {
       let hostnames_root = &hostname[2..];
       if req_hostname == hostnames_root
-        || (req_hostname.len() > hostnames_root.len()
-          && req_hostname.ends_with(&format!(".{hostnames_root}")[..]))
+        || (req_hostname.len() > hostnames_root.len() && req_hostname.ends_with(&format!(".{hostnames_root}")[..]))
       {
         return true;
       }
@@ -47,15 +46,11 @@ mod tests {
 
   #[test]
   fn should_return_true_if_hostname_starts_with_star_dot_and_req_hostname_matches_the_root() {
-    assert!(match_hostname(
-      Some("*.example.com"),
-      Some("sub.example.com")
-    ));
+    assert!(match_hostname(Some("*.example.com"), Some("sub.example.com")));
   }
 
   #[test]
-  fn should_return_false_if_hostname_starts_with_star_dot_and_req_hostname_does_not_match_the_root()
-  {
+  fn should_return_false_if_hostname_starts_with_star_dot_and_req_hostname_does_not_match_the_root() {
     assert!(!match_hostname(Some("*.example.com"), Some("example.org")));
   }
 
@@ -75,29 +70,19 @@ mod tests {
   }
 
   #[test]
-  fn should_return_false_if_hostname_does_not_start_with_star_dot_and_req_hostname_does_not_match()
-  {
-    assert!(!match_hostname(
-      Some("sub.example.com"),
-      Some("example.com")
-    ));
+  fn should_return_false_if_hostname_does_not_start_with_star_dot_and_req_hostname_does_not_match() {
+    assert!(!match_hostname(Some("sub.example.com"), Some("example.com")));
   }
 
   #[test]
-  fn should_return_true_if_hostname_starts_with_star_dot_and_req_hostname_matches_the_root_with_additional_subdomains(
-  ) {
-    assert!(match_hostname(
-      Some("*.example.com"),
-      Some("sub.sub.example.com")
-    ));
+  fn should_return_true_if_hostname_starts_with_star_dot_and_req_hostname_matches_the_root_with_additional_subdomains()
+  {
+    assert!(match_hostname(Some("*.example.com"), Some("sub.sub.example.com")));
   }
 
   #[test]
   fn should_return_false_if_hostname_starts_with_star_dot_and_req_hostname_does_not_match_the_root_with_additional_subdomains(
   ) {
-    assert!(!match_hostname(
-      Some("*.example.com"),
-      Some("sub.sub.example.org")
-    ));
+    assert!(!match_hostname(Some("*.example.com"), Some("sub.sub.example.org")));
   }
 }

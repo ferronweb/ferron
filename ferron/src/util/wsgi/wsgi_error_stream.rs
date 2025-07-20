@@ -17,22 +17,14 @@ impl WsgiErrorStream {
 #[pymethods]
 impl WsgiErrorStream {
   fn write(&self, data: &str) -> PyResult<usize> {
-    futures_executor::block_on(
-      self
-        .error_logger
-        .log(&format!("There was a WSGI error: {}", data)),
-    );
+    futures_executor::block_on(self.error_logger.log(&format!("There was a WSGI error: {}", data)));
     Ok(data.len())
   }
 
   fn writelines(&self, lines: Vec<String>) -> PyResult<()> {
     for line in lines {
       // Each `log_blocking` call prints a separate line
-      futures_executor::block_on(
-        self
-          .error_logger
-          .log(&format!("There was a WSGI error: {}", line)),
-      );
+      futures_executor::block_on(self.error_logger.log(&format!("There was a WSGI error: {}", line)));
     }
     Ok(())
   }

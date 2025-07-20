@@ -273,13 +273,7 @@ mod tests {
   #[tokio::test]
   async fn test_split_by_map_basic() {
     let input_stream = stream::iter(vec![1, 2, 3, 4, 5, 6]);
-    let (evens, odds) = input_stream.split_by_map(|x| {
-      if x % 2 == 0 {
-        Either::Left(x)
-      } else {
-        Either::Right(x)
-      }
-    });
+    let (evens, odds) = input_stream.split_by_map(|x| if x % 2 == 0 { Either::Left(x) } else { Either::Right(x) });
 
     tokio::spawn(async move {
       let evens_collected: Vec<i32> = evens.collect().await;
@@ -295,13 +289,7 @@ mod tests {
   #[tokio::test]
   async fn test_split_by_map_empty_stream() {
     let input_stream = stream::iter(Vec::<i32>::new());
-    let (left, right) = input_stream.split_by_map(|x| {
-      if x % 2 == 0 {
-        Either::Left(x)
-      } else {
-        Either::Right(x)
-      }
-    });
+    let (left, right) = input_stream.split_by_map(|x| if x % 2 == 0 { Either::Left(x) } else { Either::Right(x) });
 
     tokio::spawn(async move {
       let left_collected: Vec<i32> = left.collect().await;

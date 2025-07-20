@@ -41,9 +41,7 @@ impl WsgiInputStream {
       }
       if let Some(eol_position) = reader_buffer.iter().position(|&char| char == b'\n') {
         buffer.extend_from_slice(
-          &reader_buffer[0..size.map_or(eol_position + 1, |size| {
-            std::cmp::min(size, eol_position + 1)
-          })],
+          &reader_buffer[0..size.map_or(eol_position + 1, |size| std::cmp::min(size, eol_position + 1))],
         );
         self.body_reader.consume(eol_position + 1);
         break;

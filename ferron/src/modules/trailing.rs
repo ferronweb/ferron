@@ -59,18 +59,14 @@ impl ModuleLoader for TrailingSlashRedirectsModuleLoader {
     config: &ServerConfiguration,
     used_properties: &mut HashSet<String>,
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    if let Some(entries) =
-      get_entries_for_validation!("no_trailing_redirect", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("no_trailing_redirect", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           Err(anyhow::anyhow!(
             "The `no_trailing_redirect` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_bool() {
-          Err(anyhow::anyhow!(
-            "Invalid trailing slashes redirect disabling option"
-          ))?
+          Err(anyhow::anyhow!("Invalid trailing slashes redirect disabling option"))?
         }
       }
     };

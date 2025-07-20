@@ -31,12 +31,11 @@ use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use crate::util::cgi::CgiResponse;
 use crate::util::fcgi::{
-  construct_fastcgi_name_value_pair, construct_fastcgi_record, FcgiDecodedData, FcgiDecoder,
-  FcgiEncoder,
+  construct_fastcgi_name_value_pair, construct_fastcgi_record, FcgiDecodedData, FcgiDecoder, FcgiEncoder,
 };
 use crate::util::{
-  get_entries, get_entries_for_validation, get_entry, get_value, Copier, ModuleCache,
-  ReadToEndFuture, SplitStreamByMapExt, TtlCache, SERVER_SOFTWARE,
+  get_entries, get_entries_for_validation, get_entry, get_value, Copier, ModuleCache, ReadToEndFuture,
+  SplitStreamByMapExt, TtlCache, SERVER_SOFTWARE,
 };
 
 const MAX_RESPONSE_CHANNEL_CAPACITY: usize = 2;
@@ -91,13 +90,9 @@ impl ModuleLoader for FcgiModuleLoader {
             "The `fcgi` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
-          Err(anyhow::anyhow!(
-            "The FastCGI server base URL must be a string"
-          ))?
+          Err(anyhow::anyhow!("The FastCGI server base URL must be a string"))?
         } else if !entry.props.get("pass").is_none_or(|v| v.is_bool()) {
-          Err(anyhow::anyhow!(
-            "The FastCGI passing option must be boolean"
-          ))?
+          Err(anyhow::anyhow!("The FastCGI passing option must be boolean"))?
         }
       }
     };
@@ -123,15 +118,12 @@ impl ModuleLoader for FcgiModuleLoader {
             "The `fcgi_extension` configuration property must have exactly one value"
           ))?
         } else if !entry.values[0].is_string() {
-          Err(anyhow::anyhow!(
-            "The FastCGI file extension must be a string"
-          ))?
+          Err(anyhow::anyhow!("The FastCGI file extension must be a string"))?
         }
       }
     };
 
-    if let Some(entries) = get_entries_for_validation!("fcgi_environment", config, used_properties)
-    {
+    if let Some(entries) = get_entries_for_validation!("fcgi_environment", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 2 {
           Err(anyhow::anyhow!(
@@ -186,9 +178,7 @@ impl ModuleHandlers for FcgiModuleHandlers {
     let fastcgi_entry = get_entry!("fcgi", config);
     let fastcgi_php_entry = get_entry!("fcgi_php", config);
 
-    let mut fastcgi_to = fastcgi_entry
-      .and_then(|e| e.values.first())
-      .and_then(|v| v.as_str());
+    let mut fastcgi_to = fastcgi_entry.and_then(|e| e.values.first()).and_then(|v| v.as_str());
     let mut fastcgi_pass = fastcgi_entry
       .and_then(|e| e.props.get("pass"))
       .and_then(|v| v.as_bool())
@@ -211,11 +201,7 @@ impl ModuleHandlers for FcgiModuleHandlers {
         let fcgi_script_exts_config = get_entries!("fcgi_extension", config);
         if let Some(fcgi_script_exts_obtained) = fcgi_script_exts_config {
           for fcgi_script_ext_config in fcgi_script_exts_obtained.inner.iter() {
-            if let Some(fcgi_script_ext) = fcgi_script_ext_config
-              .values
-              .first()
-              .and_then(|v| v.as_str())
-            {
+            if let Some(fcgi_script_ext) = fcgi_script_ext_config.values.first().and_then(|v| v.as_str()) {
               fastcgi_script_exts.push(fcgi_script_ext);
             }
           }
@@ -250,9 +236,7 @@ impl ModuleHandlers for FcgiModuleHandlers {
           true => format!("{request_path}/"),
           false => request_path.to_string(),
         };
-        if let Some(stripped_request_path) =
-          request_path_with_slashes.strip_prefix(canonical_fastcgi_path)
-        {
+        if let Some(stripped_request_path) = request_path_with_slashes.strip_prefix(canonical_fastcgi_path) {
           let wwwroot = get_entry!("root", config)
             .and_then(|e| e.values.first())
             .and_then(|v| v.as_str())
@@ -303,9 +287,7 @@ impl ModuleHandlers for FcgiModuleHandlers {
 
           let joined_pathbuf = wwwroot.join(decoded_relative_path);
           execute_pathbuf = Some(joined_pathbuf);
-          execute_path_info = stripped_request_path
-            .strip_prefix("/")
-            .map(|s| s.to_string());
+          execute_path_info = stripped_request_path.strip_prefix("/").map(|s| s.to_string());
         }
       }
 
@@ -406,9 +388,7 @@ impl ModuleHandlers for FcgiModuleHandlers {
               match metadata {
                 Ok(metadata) => {
                   if metadata.is_file() {
-                    let contained_extension = joined_pathbuf
-                      .extension()
-                      .map(|a| format!(".{}", a.to_string_lossy()));
+                    let contained_extension = joined_pathbuf.extension().map(|a| format!(".{}", a.to_string_lossy()));
                     if let Some(contained_extension) = contained_extension {
                       if fastcgi_script_exts.contains(&(&contained_extension as &str)) {
                         execute_pathbuf = Some(joined_pathbuf);
@@ -510,16 +490,14 @@ impl ModuleHandlers for FcgiModuleHandlers {
                             while request_path_normalized.contains("//") {
                               request_path_normalized = request_path_normalized.replace("//", "/");
                             }
-                            if request_path_normalized == "/cgi-bin"
-                              || request_path_normalized.starts_with("/cgi-bin/")
+                            if request_path_normalized == "/cgi-bin" || request_path_normalized.starts_with("/cgi-bin/")
                             {
                               execute_pathbuf = Some(temp_pathbuf);
                               execute_path_info = path_info;
                               break;
                             } else {
-                              let contained_extension = temp_pathbuf
-                                .extension()
-                                .map(|a| format!(".{}", a.to_string_lossy()));
+                              let contained_extension =
+                                temp_pathbuf.extension().map(|a| format!(".{}", a.to_string_lossy()));
                               if let Some(contained_extension) = contained_extension {
                                 if fastcgi_script_exts.contains(&(&contained_extension as &str)) {
                                   execute_pathbuf = Some(temp_pathbuf);
@@ -559,9 +537,7 @@ impl ModuleHandlers for FcgiModuleHandlers {
       if let Some(execute_pathbuf) = execute_pathbuf {
         if let Some(wwwroot_detected) = wwwroot_detected {
           let mut additional_environment_variables = HashMap::new();
-          if let Some(additional_environment_variables_config) =
-            get_entries!("fcgi_environment", config)
-          {
+          if let Some(additional_environment_variables_config) = get_entries!("fcgi_environment", config) {
             for additional_variable in additional_environment_variables_config.inner.iter() {
               if let Some(key) = additional_variable.values.first().and_then(|v| v.as_str()) {
                 if let Some(value) = additional_variable.values.get(1).and_then(|v| v.as_str()) {
@@ -648,19 +624,13 @@ async fn execute_fastcgi_with_environment_variables(
       _ => "HTTP/Unknown".to_string(),
     },
   );
-  environment_variables.insert(
-    "SERVER_PORT".to_string(),
-    socket_data.local_addr.port().to_string(),
-  );
+  environment_variables.insert("SERVER_PORT".to_string(), socket_data.local_addr.port().to_string());
   environment_variables.insert(
     "SERVER_ADDR".to_string(),
     socket_data.local_addr.ip().to_canonical().to_string(),
   );
   if let Some(server_administrator_email) = server_administrator_email {
-    environment_variables.insert(
-      "SERVER_ADMIN".to_string(),
-      server_administrator_email.to_string(),
-    );
+    environment_variables.insert("SERVER_ADMIN".to_string(), server_administrator_email.to_string());
   }
   if let Some(host) = request.headers().get(header::HOST) {
     environment_variables.insert(
@@ -669,10 +639,7 @@ async fn execute_fastcgi_with_environment_variables(
     );
   }
 
-  environment_variables.insert(
-    "DOCUMENT_ROOT".to_string(),
-    wwwroot.to_string_lossy().to_string(),
-  );
+  environment_variables.insert("DOCUMENT_ROOT".to_string(), wwwroot.to_string_lossy().to_string());
   environment_variables.insert(
     "PATH_INFO".to_string(),
     match &path_info {
@@ -705,10 +672,7 @@ async fn execute_fastcgi_with_environment_variables(
     ),
   );
 
-  environment_variables.insert(
-    "REMOTE_PORT".to_string(),
-    socket_data.remote_addr.port().to_string(),
-  );
+  environment_variables.insert("REMOTE_PORT".to_string(), socket_data.remote_addr.port().to_string());
   environment_variables.insert(
     "REMOTE_ADDR".to_string(),
     socket_data.remote_addr.ip().to_canonical().to_string(),
@@ -780,9 +744,7 @@ async fn execute_fastcgi_with_environment_variables(
   }
 
   for (env_var_key, env_var_value) in additional_environment_variables {
-    if let hashlink::linked_hash_map::Entry::Vacant(entry) =
-      environment_variables.entry(env_var_key)
-    {
+    if let hashlink::linked_hash_map::Entry::Vacant(entry) = environment_variables.entry(env_var_key) {
       entry.insert(env_var_value);
     }
   }
@@ -802,9 +764,7 @@ async fn execute_fastcgi(
   for (key, value) in env::vars_os() {
     let key_string = key.to_string_lossy().to_string();
     let value_string = value.to_string_lossy().to_string();
-    environment_variables
-      .entry(key_string)
-      .or_insert(value_string);
+    environment_variables.entry(key_string).or_insert(value_string);
   }
 
   let fastcgi_to_fixed = if let Some(stripped) = fastcgi_to.strip_prefix("unix:///") {
@@ -837,9 +797,7 @@ async fn execute_fastcgi(
           std::io::ErrorKind::ConnectionRefused
           | std::io::ErrorKind::NotFound
           | std::io::ErrorKind::HostUnreachable => {
-            error_logger
-              .log(&format!("Service unavailable: {err}"))
-              .await;
+            error_logger.log(&format!("Service unavailable: {err}")).await;
             return Ok(ResponseData {
               request: None,
               response: None,
@@ -860,9 +818,7 @@ async fn execute_fastcgi(
           std::io::ErrorKind::ConnectionRefused
           | std::io::ErrorKind::NotFound
           | std::io::ErrorKind::HostUnreachable => {
-            error_logger
-              .log(&format!("Service unavailable: {err}"))
-              .await;
+            error_logger.log(&format!("Service unavailable: {err}")).await;
             return Ok(ResponseData {
               request: None,
               response: None,
@@ -875,9 +831,7 @@ async fn execute_fastcgi(
         },
       }
     }
-    _ => Err(anyhow::anyhow!(
-      "Only HTTP and HTTPS reverse proxy URLs are supported."
-    ))?,
+    _ => Err(anyhow::anyhow!("Only HTTP and HTTPS reverse proxy URLs are supported."))?,
   };
 
   // Construct and send BEGIN_REQUEST record
@@ -888,8 +842,7 @@ async fn execute_fastcgi(
   // Construct and send PARAMS records
   let mut environment_variables_to_wrap = Vec::new();
   for (key, value) in environment_variables.iter() {
-    let mut environment_variable =
-      construct_fastcgi_name_value_pair(key.as_bytes(), value.as_bytes());
+    let mut environment_variable = construct_fastcgi_name_value_pair(key.as_bytes(), value.as_bytes());
     environment_variables_to_wrap.append(&mut environment_variable);
   }
   if !environment_variables_to_wrap.is_empty() {
@@ -1035,9 +988,7 @@ async fn execute_fastcgi(
 }
 
 #[cfg(feature = "runtime-monoio")]
-async fn connect_tcp(
-  addr: &str,
-) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
+async fn connect_tcp(addr: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
   let socket = TcpStream::connect(addr).await?;
   socket.set_nodelay(true)?;
 
@@ -1064,9 +1015,7 @@ async fn connect_tcp(
 
 #[allow(dead_code)]
 #[cfg(all(feature = "runtime-monoio", unix))]
-async fn connect_unix(
-  path: &str,
-) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
+async fn connect_unix(path: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
   use monoio::net::UnixStream;
 
   let socket = UnixStream::connect(path).await?;

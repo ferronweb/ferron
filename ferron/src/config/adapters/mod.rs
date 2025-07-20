@@ -11,8 +11,5 @@ pub mod yaml_legacy;
 /// A trait defining a Ferron server configuration file adapter
 pub trait ConfigurationAdapter {
   /// Loads a server configuration for processing from the file specified by the path
-  fn load_configuration(
-    &self,
-    path: &Path,
-  ) -> Result<Vec<ServerConfiguration>, Box<dyn Error + Send + Sync>>;
+  fn load_configuration(&self, path: &Path) -> Result<Vec<ServerConfiguration>, Box<dyn Error + Send + Sync>>;
 }

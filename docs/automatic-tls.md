@@ -47,6 +47,24 @@ example.com {
 }
 ```
 
+### Amazon Route 53 (`route53`)
+
+This DNS provider uses [Amazon Route 53 API](https://docs.aws.amazon.com/Route53/latest/APIReference/Welcome.html) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.0.0-beta.13.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="route53" access_key_id="your_key_id" secret_access_key="your_secret_access_key" region="aws-region" hosted_zone_id="your_hosted_zone_id"
+```
+
+#### Additional props
+
+- `access_key_id` - AWS access key ID (optional)
+- `secret_access_key` - AWS secret access key (optional)
+- `region` - AWS region (optional)
+- `profile_name` - AWS profile name (optional)
+- `hosted_zone_id` - Amazon Route 53 hosted zone ID (optional)
+
 ### Cloudflare (`cloudflare`)
 
 This DNS provider uses [Cloudflare API](https://developers.cloudflare.com/api/resources/dns/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.0.0-beta.9.
