@@ -38,6 +38,7 @@ use quinn::crypto::rustls::QuicServerConfig;
 #[cfg(feature = "runtime-monoio")]
 use quinn::{udp, AsyncTimer, AsyncUdpSocket, Runtime, UdpPoller};
 use rustls::ServerConfig;
+use tokio_util::sync::CancellationToken;
 
 use crate::listener_handler_communication::{Connection, ConnectionData};
 use crate::logging::LogMessage;
@@ -213,8 +214,9 @@ pub fn create_quic_listener(
   enable_uring: bool,
   logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
-) -> Result<(Sender<()>, Sender<Arc<ServerConfig>>), Box<dyn Error + Send + Sync>> {
-  let (shutdown_tx, shutdown_rx) = async_channel::unbounded();
+) -> Result<(CancellationToken, Sender<Arc<ServerConfig>>), Box<dyn Error + Send + Sync>> {
+  let shutdown_tx = CancellationToken::new();
+  let shutdown_rx = shutdown_tx.clone();
   let (rustls_config_tx, rustls_config_rx) = async_channel::unbounded();
   let (listen_error_tx, listen_error_rx) = async_channel::unbounded();
   std::thread::Builder::new()
@@ -258,7 +260,7 @@ async fn quic_listener_fn(
   listen_error_tx: &Sender<Option<Box<dyn Error + Send + Sync>>>,
   logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
-  shutdown_rx: Receiver<()>,
+  shutdown_rx: CancellationToken,
   rustls_config_rx: Receiver<Arc<ServerConfig>>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   let quic_server_config = Arc::new(match QuicServerConfig::try_from(tls_config) {
@@ -285,7 +287,7 @@ async fn quic_listener_fn(
       break;
     }
     println!("HTTP/3 port is used at try #{tries}, retrying in {duration:?}...");
-    if shutdown_rx.try_recv().is_ok() {
+    if shutdown_rx.is_cancelled() {
       break;
     }
     crate::runtime::sleep(duration).await;
@@ -344,7 +346,7 @@ async fn quic_listener_fn(
           endpoint.set_server_config(Some(server_config));
           continue;
       }
-      _ = shutdown_rx.recv() => {
+      _ = shutdown_rx.cancelled() => {
           break;
       }
     };

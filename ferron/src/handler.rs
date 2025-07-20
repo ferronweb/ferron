@@ -30,6 +30,7 @@ use tokio_rustls::server::TlsStream;
 use tokio_rustls::LazyConfigAcceptor;
 #[cfg(feature = "runtime-monoio")]
 use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
+use tokio_util::sync::CancellationToken;
 
 use crate::acme::ACME_TLS_ALPN_NAME;
 use crate::config::ServerConfigurations;
@@ -70,8 +71,9 @@ pub fn create_http_handler(
   acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
   acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   enable_proxy_protocol: bool,
-) -> Result<Sender<()>, Box<dyn Error + Send + Sync>> {
-  let (shutdown_tx, shutdown_rx) = async_channel::unbounded();
+) -> Result<CancellationToken, Box<dyn Error + Send + Sync>> {
+  let shutdown_tx = CancellationToken::new();
+  let shutdown_rx = shutdown_tx.clone();
   let (handler_init_tx, listen_error_rx) = async_channel::unbounded();
   std::thread::Builder::new()
     .name("Request handler".to_string())
@@ -115,7 +117,7 @@ async fn http_handler_fn(
   rx: Receiver<ConnectionData>,
   handler_init_tx: &Sender<Option<Box<dyn Error + Send + Sync>>>,
   loggers: Loggers,
-  shutdown_rx: Receiver<()>,
+  shutdown_rx: CancellationToken,
   tls_configs: HashMap<u16, Arc<ServerConfig>>,
   http3_enabled: bool,
   acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
@@ -135,7 +137,7 @@ async fn http_handler_fn(
                 break;
             }
         }
-        _ = shutdown_rx.recv() => {
+        _ = shutdown_rx.cancelled() => {
             break;
         }
     };

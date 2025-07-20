@@ -6,6 +6,7 @@ use async_channel::Sender;
 use monoio::net::{ListenerOpts, TcpListener};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpListener;
+use tokio_util::sync::CancellationToken;
 
 use crate::listener_handler_communication::{Connection, ConnectionData};
 use crate::logging::LogMessage;
@@ -19,8 +20,9 @@ pub fn create_tcp_listener(
   logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
   tcp_buffer_sizes: (Option<usize>, Option<usize>),
-) -> Result<Sender<()>, Box<dyn Error + Send + Sync>> {
-  let (shutdown_tx, shutdown_rx) = async_channel::unbounded();
+) -> Result<CancellationToken, Box<dyn Error + Send + Sync>> {
+  let shutdown_tx = CancellationToken::new();
+  let shutdown_rx = shutdown_tx.clone();
   let (listen_error_tx, listen_error_rx) = async_channel::unbounded();
   std::thread::Builder::new()
         .name(format!("TCP listener for {address}"))
@@ -32,7 +34,7 @@ pub fn create_tcp_listener(
               listen_error_tx.send(Some(error)).await.unwrap_or_default();
           }
         }
-        _ = shutdown_rx.recv() => {
+        _ = shutdown_rx.cancelled() => {
 
         }
       }

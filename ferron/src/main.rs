@@ -47,6 +47,7 @@ use rustls_native_certs::load_native_certs;
 use rustls_platform_verifier::BuilderVerifierExt;
 use tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
 use tokio::io::{AsyncWriteExt, BufWriter};
+use tokio_util::sync::CancellationToken;
 use util::{get_entry, get_value, get_values};
 use xxhash_rust::xxh3::xxh3_128;
 
@@ -65,10 +66,10 @@ static GLOBAL: MiMalloc = MiMalloc;
 static LISTENER_HANDLER_CHANNEL: LazyLock<Arc<(Sender<ConnectionData>, Receiver<ConnectionData>)>> =
   LazyLock::new(|| Arc::new(async_channel::unbounded()));
 #[allow(clippy::type_complexity)]
-static TCP_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, Sender<()>>>>> =
+static TCP_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, CancellationToken>>>> =
   LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
 #[allow(clippy::type_complexity)]
-static QUIC_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, (Sender<()>, Sender<Arc<ServerConfig>>)>>>> =
+static QUIC_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, (CancellationToken, Sender<Arc<ServerConfig>>)>>>> =
   LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
 static LOGGER_BUILDER: LazyLock<Arc<Mutex<LoggersBuilder>>> =
   LazyLock::new(|| Arc::new(Mutex::new(LoggersBuilder::new())));
@@ -1388,7 +1389,7 @@ fn before_starting_server(
         || (!listened_socket_addresses.contains(&(*key, true)) && !listened_socket_addresses.contains(&(*key, false)))
       {
         // Shut down the TCP listener
-        value.send_blocking(()).unwrap_or_default();
+        value.cancel();
 
         // Push the the TCP listener address to remove
         tcp_listener_socketaddrs_to_remove.push(*key);
@@ -1404,7 +1405,7 @@ fn before_starting_server(
       }
       if enable_uring != *uring_enabled_locked || !contains {
         // Shut down the QUIC listener
-        value.0.send_blocking(()).unwrap_or_default();
+        value.0.cancel();
 
         // Push the the QUIC listener address to remove
         quic_listener_socketaddrs_to_remove.push(*key);
@@ -1500,7 +1501,7 @@ fn before_starting_server(
 
     // Shut down request handler threads
     for shutdown in handler_shutdown_channels {
-      shutdown.send_blocking(()).unwrap_or_default();
+      shutdown.cancel();
     }
 
     #[allow(unreachable_code)]
