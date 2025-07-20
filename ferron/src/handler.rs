@@ -161,6 +161,7 @@ async fn http_handler_fn(
     let acme_http_01_resolvers = acme_http_01_resolvers.clone();
     let loggers = loggers.clone();
     let connections_references_cloned = connections_references.clone();
+    let shutdown_rx_clone = shutdown_rx.clone();
     crate::runtime::spawn(async move {
       match conn_data.connection {
         crate::listener_handler_communication::Connection::Tcp(tcp_stream) => {
@@ -190,6 +191,7 @@ async fn http_handler_fn(
             acme_tls_alpn_01_config,
             acme_http_01_resolvers,
             enable_proxy_protocol,
+            shutdown_rx_clone,
           )
           .await;
         }
@@ -201,6 +203,7 @@ async fn http_handler_fn(
             loggers,
             configurations,
             connections_references_cloned,
+            shutdown_rx_clone,
           )
           .await;
         }
@@ -250,6 +253,7 @@ async fn http_tcp_handler_fn(
   acme_tls_alpn_01_config: Option<Arc<ServerConfig>>,
   acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   enable_proxy_protocol: bool,
+  shutdown_rx: CancellationToken,
 ) {
   let _connection_reference = Arc::downgrade(&connection_reference);
   #[cfg(feature = "runtime-monoio")]
@@ -415,35 +419,42 @@ async fn http_tcp_handler_fn(
       }
 
       let loggers_clone = loggers.clone();
-      if let Err(err) = http2_builder
-        .serve_connection(
-          io,
-          service_fn(move |request: Request<Incoming>| {
-            let (request_parts, request_body) = request.into_parts();
-            let request = Request::from_parts(
-              request_parts,
-              request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
-            );
-            request_handler(
-              request,
-              client_address,
-              server_address,
-              true,
-              configurations.clone(),
-              loggers_clone.clone(),
-              if http3_enabled {
-                Some(server_address.port())
-              } else {
-                None
-              },
-              acme_http_01_resolvers.clone(),
-              proxy_protocol_client_address,
-              proxy_protocol_server_address,
-            )
-          }),
-        )
-        .await
-      {
+      let mut http_future = http2_builder.serve_connection(
+        io,
+        service_fn(move |request: Request<Incoming>| {
+          let (request_parts, request_body) = request.into_parts();
+          let request = Request::from_parts(
+            request_parts,
+            request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
+          );
+          request_handler(
+            request,
+            client_address,
+            server_address,
+            true,
+            configurations.clone(),
+            loggers_clone.clone(),
+            if http3_enabled {
+              Some(server_address.port())
+            } else {
+              None
+            },
+            acme_http_01_resolvers.clone(),
+            proxy_protocol_client_address,
+            proxy_protocol_server_address,
+          )
+        }),
+      );
+      let http_future_result = crate::runtime::select! {
+        result = &mut http_future => {
+          result
+        }
+        _ = shutdown_rx.cancelled() => {
+          std::pin::Pin::new(&mut http_future).graceful_shutdown();
+          http_future.await
+        }
+      };
+      if let Err(err) = http_future_result {
         if let Some(logging_tx) = loggers.find_global_logger() {
           logging_tx
             .send(LogMessage::new(format!("Error serving HTTPS connection: {err}"), true))
@@ -472,7 +483,7 @@ async fn http_tcp_handler_fn(
       };
 
       let loggers_clone = loggers.clone();
-      if let Err(err) = http1_builder
+      let mut http_future = http1_builder
         .serve_connection(
           io,
           service_fn(move |request: Request<Incoming>| {
@@ -499,9 +510,17 @@ async fn http_tcp_handler_fn(
             )
           }),
         )
-        .with_upgrades()
-        .await
-      {
+        .with_upgrades();
+      let http_future_result = crate::runtime::select! {
+        result = &mut http_future => {
+          result
+        }
+        _ = shutdown_rx.cancelled() => {
+          std::pin::Pin::new(&mut http_future).graceful_shutdown();
+          http_future.await
+        }
+      };
+      if let Err(err) = http_future_result {
         if let Some(logging_tx) = loggers.find_global_logger() {
           logging_tx
             .send(LogMessage::new(format!("Error serving HTTPS connection: {err}"), true))
@@ -544,7 +563,7 @@ async fn http_tcp_handler_fn(
     };
 
     let loggers_clone = loggers.clone();
-    if let Err(err) = http1_builder
+    let mut http_future = http1_builder
       .serve_connection(
         io,
         service_fn(move |request: Request<Incoming>| {
@@ -571,9 +590,17 @@ async fn http_tcp_handler_fn(
           )
         }),
       )
-      .with_upgrades()
-      .await
-    {
+      .with_upgrades();
+    let http_future_result = crate::runtime::select! {
+      result = &mut http_future => {
+        result
+      }
+      _ = shutdown_rx.cancelled() => {
+        std::pin::Pin::new(&mut http_future).graceful_shutdown();
+        http_future.await
+      }
+    };
+    if let Err(err) = http_future_result {
       if let Some(logging_tx) = loggers.find_global_logger() {
         logging_tx
           .send(LogMessage::new(format!("Error serving HTTP connection: {err}"), true))
@@ -593,9 +620,11 @@ async fn http_quic_handler_fn(
   loggers: Loggers,
   configurations: Arc<ServerConfigurations>,
   connection_reference: Arc<()>,
+  shutdown_rx: CancellationToken,
 ) {
   match connection_attempt.await {
     Ok(connection) => {
+      let _connection_reference = Arc::downgrade(&connection_reference);
       let mut h3_conn: h3::server::Connection<h3_quinn::Connection, Bytes> =
         match h3::server::Connection::new(h3_quinn::Connection::new(connection)).await {
           Ok(h3_conn) => h3_conn,
@@ -615,9 +644,7 @@ async fn http_quic_handler_fn(
           Ok(Some(resolver)) => {
             let configurations = configurations.clone();
             let loggers = loggers.clone();
-            let connection_reference = Arc::downgrade(&connection_reference);
             crate::runtime::spawn(async move {
-              let _connection_reference = connection_reference;
               let (request, stream) = match resolver.resolve_request().await {
                 Ok(resolved) => resolved,
                 Err(err) => {
@@ -786,6 +813,9 @@ async fn http_quic_handler_fn(
             }
             return;
           }
+        }
+        if shutdown_rx.is_cancelled() {
+          h3_conn.shutdown(0).await.unwrap_or_default();
         }
       }
     }
