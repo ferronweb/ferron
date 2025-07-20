@@ -301,10 +301,7 @@ pub fn load_modules(
   let mut unused_properties = HashSet::new();
 
   // Find the global configuration to pass to modules
-  let global_configuration = server_configurations
-    .iter()
-    .find(|c| c.filters.is_global() || c.filters.is_global_non_host())
-    .cloned();
+  let global_configuration = find_global_configuration(&server_configurations);
 
   // Process each server configuration
   for mut server_configuration in server_configurations {
@@ -378,6 +375,28 @@ pub fn load_modules(
     first_server_module_error,
     unused_properties.into_iter().collect(),
   )
+}
+
+/// Finds the global server configuration (host or non-host) from the given list of server configurations.
+fn find_global_configuration(server_configurations: &[ServerConfiguration]) -> Option<ServerConfiguration> {
+  // The server configurations are pre-merged, so we can simply return the found global configuration
+  let mut iterator = server_configurations.iter();
+  let first_found = iterator.find(|server_configuration| {
+    server_configuration.filters.is_global() || server_configuration.filters.is_global_non_host()
+  });
+  if let Some(first_found) = first_found {
+    if first_found.filters.is_global() {
+      return Some(first_found.clone());
+    }
+    for server_configuration in iterator {
+      if server_configuration.filters.is_global() {
+        return Some(server_configuration.clone());
+      } else if !server_configuration.filters.is_global_non_host() {
+        return Some(first_found.clone());
+      }
+    }
+  }
+  None
 }
 
 #[cfg(test)]
