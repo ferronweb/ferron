@@ -49,7 +49,7 @@ example.com {
 
 ### Amazon Route 53 (`route53`)
 
-This DNS provider uses [Amazon Route 53 API](https://docs.aws.amazon.com/Route53/latest/APIReference/Welcome.html) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron UNRELEASED.
+This DNS provider uses [Amazon Route 53 API](https://docs.aws.amazon.com/Route53/latest/APIReference/Welcome.html) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.0.0-beta.13.
 
 #### Example directive specification
 

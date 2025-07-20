@@ -4,6 +4,19 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.13
+
+**Released in July 20, 2025**
+
+- Added support for Amazon Route 53 DNS provider for DNS-01 ACME challenge
+- Added support for automatic TLS on demand
+- Added support for connecting to backend servers via HTTP/2 as a reverse proxy
+- Added support for global configurations that don't imply a host
+- Added support for host blocks that specify multiple hostnames
+- Fixed SNI hostname handling for non-default HTTPS ports
+- Improved graceful connection shutdowns while gracefully restarting the server
+- The server now can use multiple "Vary" response headers for caching
+
 ## Ferron 2.0.0-beta.12
 
 **Released in July 13, 2025**

@@ -10,7 +10,7 @@ At the top level of the server configration, the confguration blocks representin
 
 ```kdl
 globals {
-  // Global configuration that doesn't imply any virtual host (Ferron UNRELEASED or newer)
+  // Global configuration that doesn't imply any virtual host (Ferron 2.0.0-beta.13 or newer)
 }
 
 * {
@@ -60,7 +60,7 @@ api.example.com {
 }
 
 example.com,example.org {
-  // Configuration for example.com and example.org (Ferron UNRELEASED or newer)
+  // Configuration for example.com and example.org (Ferron 2.0.0-beta.13 or newer)
   // The virtual host identifiers (like example.com or "192.168.1.1") are comma-separated, but adding spaces will not be interpreted,
   // For example "example.com, example.org" will not work for "example.org", but "example.com,example.org" will work.
 }
@@ -118,9 +118,9 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies IP addresses to be blocked. This directive can be specified multiple times. Default: none
 - `allow <allowed_ip: string> [<allowed_ip: string> ...]` (Ferron 2.0.0-beta.9 or newer)
   - This directive specifies IP addresses to be allowed. This directive can be specified multiple times. Default: none
-- `auto_tls_on_demand_ask <auto_tls_on_demand_ask_url: string|null>` (Ferron UNRELEASED or newer)
+- `auto_tls_on_demand_ask <auto_tls_on_demand_ask_url: string|null>` (Ferron 2.0.0-beta.13 or newer)
   - This directive specifies the URL to be used for asking whenever to the hostname for automatic TLS on demand is allowed. The server will append the `domain` query parameter with the domain name for the certificate to issue as a value to the URL. It's recommended to configure this option when using automatic TLS on demand to prevent abuse. Default: `auto_tls_on_demand_ask #null`
-- `auto_tls_on_demand_ask_no_verification [auto_tls_on_demand_ask_no_verification: bool]` (Ferron UNRELEASED or newer)
+- `auto_tls_on_demand_ask_no_verification [auto_tls_on_demand_ask_no_verification: bool]` (Ferron 2.0.0-beta.13 or newer)
   - This directive specifies whenever the server should not verify the TLS certificate of the automatic TLS on demand asking endpoint. Default: `auto_tls_on_demand_ask_no_verification #false`
 
 **Configuration example:**
@@ -264,7 +264,7 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies whenever to disable the certificate verification of the ACME server. Default: `auto_tls_no_verification #false`
 - `auto_tls_profile <auto_tls_profile: string|null>` (Ferron 2.0.0-beta.9 or newer)
   - This directive specifies the ACME profile to use for the certificates. Default: `auto_tls_profile #null`
-- `auto_tls_on_demand <auto_tls_on_demand: bool>` (Ferron UNRELEASED or newer)
+- `auto_tls_on_demand <auto_tls_on_demand: bool>` (Ferron 2.0.0-beta.13 or newer)
   - This directive specifies whenever to enable the automatic TLS on demand. The functionality obtains TLS certificates automatically when a website is accessed for the first time. It's recommended to use either HTTP-01 or TLS-ALPN-01 ACME challenges, as DNS-01 ACME challenges might be slower due to DNS propagation delays. It's also recommended to configure the `auto_tls_on_demand_ask` directive alongside this directive. Default: `auto_tls_on_demand #false`
 
 **Configuration example:**
@@ -463,7 +463,7 @@ example.com {
   - This directive specifies whenever the reverse proxy should keep the connection to the backend alive. Default: `proxy_keepalive #true`
 - `proxy_request_header_replace <header_name: string> <header_value: string>` (_rproxy_ module; Ferron 2.0.0-beta.9 or newer)
   - This directive specifies a header to be added to HTTP requests sent by the reverse proxy, potentially replacing existing headers. The header values supports placeholders (on Ferron 2.0.0-beta.9 and newer) like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
-- `proxy_http2 [enable_proxy_http2: bool]` (_rproxy_ module; Ferron UNRELEASED)
+- `proxy_http2 [enable_proxy_http2: bool]` (_rproxy_ module; Ferron 2.0.0-beta.13)
   - This directive specifies whenever the reverse proxy can use HTTP/2 protocol when connecting to backend servers. Default: `proxy_http2 #false`
 
 **Configuration example:**
