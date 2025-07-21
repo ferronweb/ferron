@@ -1542,6 +1542,7 @@ fn obtain_module_loaders() -> Vec<Box<dyn ModuleLoader + Send + Sync>> {
   #[cfg(feature = "fproxy")]
   register_module_loader!(modules::optional::fproxy::ForwardProxyModuleLoader::new());
   register_module_loader!(modules::fproxy_fallback::ForwardProxyFallbackModuleLoader::new());
+  register_module_loader!(modules::buffer::BufferModuleLoader::new());
   register_module_loader!(modules::rewrite::RewriteModuleLoader::new());
   register_module_loader!(modules::status_codes::StatusCodesModuleLoader::new());
   register_module_loader!(modules::trailing::TrailingSlashRedirectsModuleLoader::new());

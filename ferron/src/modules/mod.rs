@@ -1,4 +1,5 @@
 pub mod blocklist;
+pub mod buffer;
 pub mod core;
 pub mod fproxy_fallback;
 pub mod optional;

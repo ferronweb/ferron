@@ -160,6 +160,10 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies whenever the CONNECT protocol in HTTP/2 is enabled. Default: Hyper defaults
 - `protocol_proxy [enable_proxy_protocol: bool]` (Ferron 2.0.0-beta.10 or newer)
   - This directive specifies whenever the PROXY protocol acceptation is enabled. If enabled, the server will expect the PROXY protocol header at the beginning of each connection. Default: `protocol_proxy #false`
+- `buffer_request <request_buffer_size: integer|null>` (Ferron UNRELEASED or newer)
+  - This directive specifies the buffer size in bytes for incoming requests. If set as `buffer_request #null`, the request buffer is disabled. The request buffer can serve as an additional protection for underlying backend servers against Slowloris-style attacks. Default: `buffer_request #null`
+- `buffer_response <response_buffer_size: integer|null>` (Ferron UNRELEASED or newer)
+  - This directive specifies the buffer size in bytes for outgoing responses. If set as `buffer_response #null`, the response buffer is disabled. Default: `buffer_response #null`
 
 **Configuration example:**
 
@@ -175,6 +179,8 @@ This configuration reference organizes directives by both **scope** (where they 
     h2_max_header_list_size 8192
     h2_enable_connect_protocol
     protocol_proxy #false
+    buffer_request #null
+    buffer_response #null
 }
 ```
 
