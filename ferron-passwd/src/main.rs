@@ -23,14 +23,14 @@ fn main() {
   let password = match prompt_password("Password: ") {
     Ok(pass) => pass,
     Err(e) => {
-      eprintln!("Error reading password: {}", e);
+      eprintln!("Error reading password: {e}");
       process::exit(1);
     }
   };
   let password2 = match prompt_password("Confirm password: ") {
     Ok(pass) => pass,
     Err(e) => {
-      eprintln!("Error reading password confirmation: {}", e);
+      eprintln!("Error reading password confirmation: {e}");
       process::exit(1);
     }
   };
@@ -56,10 +56,10 @@ fn main() {
 
   let mut output = String::new();
   if let Err(e) = YamlEmitter::new(&mut output).dump(&yaml_data) {
-    eprintln!("Error generating YAML output: {}", e);
+    eprintln!("Error generating YAML output: {e}");
     process::exit(1);
   }
 
   println!("Copy the user object below into \"users\" property of either global configuration or a virtual host in the \"ferron.yaml\" file. Remember about the indentation in the server configuration.");
-  println!("{}", output);
+  println!("{output}");
 }

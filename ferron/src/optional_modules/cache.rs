@@ -190,7 +190,7 @@ impl ServerModuleHandlers for CacheModuleHandlers {
         },
         hyper_request.uri().path(),
         match hyper_request.uri().query() {
-          Some(query) => format!("?{}", query),
+          Some(query) => format!("?{query}"),
           None => "".to_string(),
         }
       );

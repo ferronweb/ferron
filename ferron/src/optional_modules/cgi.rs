@@ -102,11 +102,11 @@ impl ServerModuleHandlers for CgiModuleHandlers {
         let cache_key = format!(
           "{}{}{}",
           match config["ip"].as_str() {
-            Some(ip) => format!("{}-", ip),
+            Some(ip) => format!("{ip}-"),
             None => String::from(""),
           },
           match config["domain"].as_str() {
-            Some(domain) => format!("{}-", domain),
+            Some(domain) => format!("{domain}-"),
             None => String::from(""),
           },
           request_path
@@ -469,7 +469,7 @@ async fn execute_cgi_with_environment_variables(
   environment_variables.insert(
     "PATH_INFO".to_string(),
     match &path_info {
-      Some(path_info) => format!("/{}", path_info),
+      Some(path_info) => format!("/{path_info}"),
       None => "".to_string(),
     },
   );
@@ -495,7 +495,7 @@ async fn execute_cgi_with_environment_variables(
       "{}{}",
       original_request_uri.path(),
       match original_request_uri.query() {
-        Some(query) => format!("?{}", query),
+        Some(query) => format!("?{query}"),
         None => String::from(""),
       }
     ),
@@ -754,7 +754,7 @@ async fn execute_cgi(
         let stderr_string_trimmed = stderr_string.trim();
         if !stderr_string_trimmed.is_empty() {
           error_logger
-            .log(&format!("There were CGI errors: {}", stderr_string_trimmed))
+            .log(&format!("There were CGI errors: {stderr_string_trimmed}"))
             .await;
         }
       }
@@ -785,7 +785,7 @@ async fn execute_cgi(
           let stderr_string_trimmed = stderr_string.trim();
           if !stderr_string_trimmed.is_empty() {
             error_logger
-              .log(&format!("There were CGI errors: {}", stderr_string_trimmed))
+              .log(&format!("There were CGI errors: {stderr_string_trimmed}"))
               .await;
           }
         }

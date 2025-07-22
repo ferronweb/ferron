@@ -158,7 +158,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
           _ => 80,
         });
 
-        let addr = format!("{}:{}", host, port);
+        let addr = format!("{host}:{port}");
         let authority = auth_request_url.authority().cloned();
 
         let hyper_request_path = hyper_request_parts.uri.path();
@@ -167,7 +167,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
           "{}{}",
           hyper_request_path,
           match hyper_request_parts.uri.query() {
-            Some(query) => format!("?{}", query),
+            Some(query) => format!("?{query}"),
             None => "".to_string(),
           }
         );
@@ -178,7 +178,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
           "{}{}",
           auth_request_url.path(),
           match auth_request_url.query() {
-            Some(query) => format!("?{}", query),
+            Some(query) => format!("?{query}"),
             None => "".to_string(),
           }
         ))?;
@@ -297,7 +297,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
               | tokio::io::ErrorKind::NotFound
               | tokio::io::ErrorKind::HostUnreachable => {
                 error_logger
-                  .log(&format!("Service unavailable: {}", err))
+                  .log(&format!("Service unavailable: {err}"))
                   .await;
                 return Ok(
                   ResponseData::builder_without_request()
@@ -306,7 +306,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
                 );
               }
               tokio::io::ErrorKind::TimedOut => {
-                error_logger.log(&format!("Gateway timeout: {}", err)).await;
+                error_logger.log(&format!("Gateway timeout: {err}")).await;
                 return Ok(
                   ResponseData::builder_without_request()
                     .status(StatusCode::GATEWAY_TIMEOUT)
@@ -314,7 +314,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
                 );
               }
               _ => {
-                error_logger.log(&format!("Bad gateway: {}", err)).await;
+                error_logger.log(&format!("Bad gateway: {err}")).await;
                 return Ok(
                   ResponseData::builder_without_request()
                     .status(StatusCode::BAD_GATEWAY)
@@ -328,7 +328,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
         match stream.set_nodelay(true) {
           Ok(_) => (),
           Err(err) => {
-            error_logger.log(&format!("Bad gateway: {}", err)).await;
+            error_logger.log(&format!("Bad gateway: {err}")).await;
             return Ok(
               ResponseData::builder_without_request()
                 .status(StatusCode::BAD_GATEWAY)
@@ -358,7 +358,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
           let tls_stream = match connector.connect(domain, stream).await {
             Ok(stream) => stream,
             Err(err) => {
-              error_logger.log(&format!("Bad gateway: {}", err)).await;
+              error_logger.log(&format!("Bad gateway: {err}")).await;
               return Ok(
                 ResponseData::builder_without_request()
                   .status(StatusCode::BAD_GATEWAY)
@@ -455,7 +455,7 @@ async fn http_forwarded_auth(
   let (mut sender, conn) = match hyper::client::conn::http1::handshake(io).await {
     Ok(data) => data,
     Err(err) => {
-      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      error_logger.log(&format!("Bad gateway: {err}")).await;
       return Ok(
         ResponseData::builder_without_request()
           .status(StatusCode::BAD_GATEWAY)
@@ -479,7 +479,7 @@ async fn http_forwarded_auth(
         let proxy_response = match proxy_response {
           Ok(response) => response,
           Err(err) => {
-            error_logger.log(&format!("Bad gateway: {}", err)).await;
+            error_logger.log(&format!("Bad gateway: {err}")).await;
             return Ok(ResponseData::builder_without_request().status(StatusCode::BAD_GATEWAY).build());
           }
         };
@@ -542,7 +542,7 @@ async fn http_forwarded_auth_kept_alive(
   let proxy_response = match sender.send_request(proxy_request).await {
     Ok(response) => response,
     Err(err) => {
-      error_logger.log(&format!("Bad gateway: {}", err)).await;
+      error_logger.log(&format!("Bad gateway: {err}")).await;
       return Ok(
         ResponseData::builder_without_request()
           .status(StatusCode::BAD_GATEWAY)

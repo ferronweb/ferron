@@ -90,7 +90,7 @@ impl ServerModuleHandlers for ScgiModuleHandlers {
         }
 
         let request_path_with_slashes = match request_path == canonical_scgi_path {
-          true => format!("{}/", request_path),
+          true => format!("{request_path}/"),
           false => request_path.to_string(),
         };
         if let Some(stripped_request_path) =
@@ -280,7 +280,7 @@ async fn execute_scgi_with_environment_variables(
   environment_variables.insert(
     "PATH_INFO".to_string(),
     match &path_info {
-      Some(path_info) => format!("/{}", path_info),
+      Some(path_info) => format!("/{path_info}"),
       None => "".to_string(),
     },
   );
@@ -307,7 +307,7 @@ async fn execute_scgi_with_environment_variables(
       "{}{}",
       original_request_uri.path(),
       match original_request_uri.query() {
-        Some(query) => format!("?{}", query),
+        Some(query) => format!("?{query}"),
         None => String::from(""),
       }
     ),
@@ -419,7 +419,7 @@ async fn execute_scgi(
 
   let scgi_to_fixed = if let Some(stripped) = scgi_to.strip_prefix("unix:///") {
     // hyper::Uri fails to parse a string if there is an empty authority, so add an "ignore" authority to Unix socket URLs
-    &format!("unix://ignore/{}", stripped)
+    &format!("unix://ignore/{stripped}")
   } else {
     scgi_to
   };
@@ -439,7 +439,7 @@ async fn execute_scgi(
         None => Err(anyhow::anyhow!("The SCGI URL doesn't include the port"))?,
       };
 
-      let addr = format!("{}:{}", host, port);
+      let addr = format!("{host}:{port}");
 
       match connect_tcp(&addr).await {
         Ok(data) => data,
@@ -448,7 +448,7 @@ async fn execute_scgi(
           | tokio::io::ErrorKind::NotFound
           | tokio::io::ErrorKind::HostUnreachable => {
             error_logger
-              .log(&format!("Service unavailable: {}", err))
+              .log(&format!("Service unavailable: {err}"))
               .await;
             return Ok(
               ResponseData::builder_without_request()
@@ -469,7 +469,7 @@ async fn execute_scgi(
           | tokio::io::ErrorKind::NotFound
           | tokio::io::ErrorKind::HostUnreachable => {
             error_logger
-              .log(&format!("Service unavailable: {}", err))
+              .log(&format!("Service unavailable: {err}"))
               .await;
             return Ok(
               ResponseData::builder_without_request()
