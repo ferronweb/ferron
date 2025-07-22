@@ -178,7 +178,7 @@ impl ModuleHandlers for WsgiModuleHandlers {
           #[cfg(feature = "runtime-monoio")]
           let canonicalize_result = {
             let wwwroot_unknown = wwwroot_unknown.clone();
-            monoio::runtime::spawn_blocking(move || std::fs::canonicalize(wwwroot_unknown))
+            monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot_unknown))
               .await
               .unwrap_or(Err(std::io::Error::other(
                 "Can't spawn a blocking task to obtain the canonical webroot path",
