@@ -74,7 +74,9 @@ import FontAwesomeIcon from "./FontAwesomeIcon.astro";
   class InstallCommand extends HTMLElement {
     connectedCallback() {
       const buttons = this.querySelectorAll("[data-install-command-button]");
-      const installCommand = this.querySelector("[data-install-command]");
+      const installCommand: HTMLElement | null = this.querySelector(
+        "[data-install-command]"
+      );
 
       let selectedPlatform = defaultPlatform;
 
@@ -101,13 +103,13 @@ import FontAwesomeIcon from "./FontAwesomeIcon.astro";
         };
 
         button.addEventListener("click", () => {
-          clickListener(button);
+          clickListener(button as HTMLElement);
         });
 
         if (
           button.getAttribute("data-install-command-button") === defaultPlatform
         ) {
-          clickListener(button);
+          clickListener(button as HTMLElement);
         }
       });
 
