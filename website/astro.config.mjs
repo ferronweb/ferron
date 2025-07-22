@@ -22,7 +22,7 @@ export default defineConfig({
     sitemap(),
     pagefind(),
     (await import("astro-compress")).default({
-      HTML: false
+      HTML: true // This setting wouldn't work with React (it would cause hydration errors), but since the website uses vanilla JS, it's safe to enable.
     })
   ],
   markdown: {
