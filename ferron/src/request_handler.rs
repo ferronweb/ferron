@@ -131,7 +131,7 @@ async fn log_combined(
         protocol,
         status_code,
         match content_length {
-          Some(content_length) => format!("{}", content_length),
+          Some(content_length) => format!("{content_length}"),
           None => String::from("-"),
         },
         match referrer {
@@ -183,7 +183,7 @@ async fn request_handler_wrapped(
       "{}{}",
       request.uri().path(),
       match request.uri().query() {
-        Some(query) => format!("?{}", query),
+        Some(query) => format!("?{query}"),
         None => String::from(""),
       }
     ),
@@ -263,7 +263,7 @@ async fn request_handler_wrapped(
               if error_log_enabled {
                 logger
                   .send(LogMessage::new(
-                    format!("Host header sanitation error: {}", err),
+                    format!("Host header sanitation error: {err}"),
                     true,
                   ))
                   .await
@@ -312,18 +312,18 @@ async fn request_handler_wrapped(
                   Some(value) => {
                     let header_value_old = String::from_utf8_lossy(value.as_bytes());
                     let header_value_new =
-                      format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                      format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
                     if header_value_old != header_value_new {
                       HeaderValue::from_bytes(
-                        format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                        format!("{header_value_old}, {header_value_new}").as_bytes(),
                       )
                     } else {
                       HeaderValue::from_bytes(header_value_old.as_bytes())
                     }
                   }
                   None => HeaderValue::from_bytes(
-                    format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+                    format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
                   ),
                 } {
                   response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -346,7 +346,7 @@ async fn request_handler_wrapped(
         if error_log_enabled {
           logger
             .send(LogMessage::new(
-              format!("Host header sanitation error: {}", err),
+              format!("Host header sanitation error: {err}"),
               true,
             ))
             .await
@@ -394,18 +394,18 @@ async fn request_handler_wrapped(
             Some(value) => {
               let header_value_old = String::from_utf8_lossy(value.as_bytes());
               let header_value_new =
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
               if header_value_old != header_value_new {
                 HeaderValue::from_bytes(
-                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                  format!("{header_value_old}, {header_value_new}").as_bytes(),
                 )
               } else {
                 HeaderValue::from_bytes(header_value_old.as_bytes())
               }
             }
             None => HeaderValue::from_bytes(
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+              format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
             ),
           } {
             response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -422,7 +422,7 @@ async fn request_handler_wrapped(
 
   // Combine the server configuration
   let mut combined_config = match combine_config(
-    config,
+    config.clone(),
     match is_proxy_request || is_connect_proxy_request {
       false => match request.headers().get(header::HOST) {
         Some(value) => value.to_str().ok(),
@@ -485,19 +485,16 @@ async fn request_handler_wrapped(
         if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
           Some(value) => {
             let header_value_old = String::from_utf8_lossy(value.as_bytes());
-            let header_value_new =
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+            let header_value_new = format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
             if header_value_old != header_value_new {
-              HeaderValue::from_bytes(
-                format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-              )
+              HeaderValue::from_bytes(format!("{header_value_old}, {header_value_new}").as_bytes())
             } else {
               HeaderValue::from_bytes(header_value_old.as_bytes())
             }
           }
           None => HeaderValue::from_bytes(
-            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+            format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
           ),
         } {
           response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -523,7 +520,7 @@ async fn request_handler_wrapped(
       if error_log_enabled {
         logger
           .send(LogMessage::new(
-            format!("URL sanitation error: {}", err),
+            format!("URL sanitation error: {err}"),
             true,
           ))
           .await
@@ -578,19 +575,16 @@ async fn request_handler_wrapped(
         if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
           Some(value) => {
             let header_value_old = String::from_utf8_lossy(value.as_bytes());
-            let header_value_new =
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+            let header_value_new = format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
             if header_value_old != header_value_new {
-              HeaderValue::from_bytes(
-                format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-              )
+              HeaderValue::from_bytes(format!("{header_value_old}, {header_value_new}").as_bytes())
             } else {
               HeaderValue::from_bytes(header_value_old.as_bytes())
             }
           }
           None => HeaderValue::from_bytes(
-            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+            format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
           ),
         } {
           response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -614,7 +608,7 @@ async fn request_handler_wrapped(
         match url_parts.path_and_query {
           Some(path_and_query) => {
             match path_and_query.query() {
-              Some(query) => format!("?{}", query),
+              Some(query) => format!("?{query}"),
               None => String::from(""),
             }
           }
@@ -628,7 +622,7 @@ async fn request_handler_wrapped(
           if error_log_enabled {
             logger
               .send(LogMessage::new(
-                format!("URL sanitation error: {}", err),
+                format!("URL sanitation error: {err}"),
                 true,
               ))
               .await
@@ -684,18 +678,18 @@ async fn request_handler_wrapped(
               Some(value) => {
                 let header_value_old = String::from_utf8_lossy(value.as_bytes());
                 let header_value_new =
-                  format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                  format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
                 if header_value_old != header_value_new {
                   HeaderValue::from_bytes(
-                    format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                    format!("{header_value_old}, {header_value_new}").as_bytes(),
                   )
                 } else {
                   HeaderValue::from_bytes(header_value_old.as_bytes())
                 }
               }
               None => HeaderValue::from_bytes(
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+                format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
               ),
             } {
               response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -715,7 +709,7 @@ async fn request_handler_wrapped(
         if error_log_enabled {
           logger
             .send(LogMessage::new(
-              format!("URL sanitation error: {}", err),
+              format!("URL sanitation error: {err}"),
               true,
             ))
             .await
@@ -771,18 +765,18 @@ async fn request_handler_wrapped(
             Some(value) => {
               let header_value_old = String::from_utf8_lossy(value.as_bytes());
               let header_value_new =
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
               if header_value_old != header_value_new {
                 HeaderValue::from_bytes(
-                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                  format!("{header_value_old}, {header_value_new}").as_bytes(),
                 )
               } else {
                 HeaderValue::from_bytes(header_value_old.as_bytes())
               }
             }
             None => HeaderValue::from_bytes(
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+              format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
             ),
           } {
             response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -796,7 +790,22 @@ async fn request_handler_wrapped(
       }
     };
     request = Request::from_parts(parts, body);
+    if let Some(new_combined_config) = combine_config(
+      config.clone(),
+      match is_proxy_request || is_connect_proxy_request {
+        false => match request.headers().get(header::HOST) {
+          Some(value) => value.to_str().ok(),
+          None => None,
+        },
+        true => None,
+      },
+      local_address.ip(),
+      request.uri().path(),
+    ) {
+      combined_config = new_combined_config;
+    }
   }
+  drop(config);
 
   if request.uri().path() == "*" {
     let response = match request.method() {
@@ -860,19 +869,16 @@ async fn request_handler_wrapped(
       if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
         Some(value) => {
           let header_value_old = String::from_utf8_lossy(value.as_bytes());
-          let header_value_new =
-            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+          let header_value_new = format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
           if header_value_old != header_value_new {
-            HeaderValue::from_bytes(
-              format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-            )
+            HeaderValue::from_bytes(format!("{header_value_old}, {header_value_new}").as_bytes())
           } else {
             HeaderValue::from_bytes(header_value_old.as_bytes())
           }
         }
         None => HeaderValue::from_bytes(
-          format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+          format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
         ),
       } {
         response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -930,18 +936,18 @@ async fn request_handler_wrapped(
             Some(value) => {
               let header_value_old = String::from_utf8_lossy(value.as_bytes());
               let header_value_new =
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
               if header_value_old != header_value_new {
                 HeaderValue::from_bytes(
-                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                  format!("{header_value_old}, {header_value_new}").as_bytes(),
                 )
               } else {
                 HeaderValue::from_bytes(header_value_old.as_bytes())
               }
             }
             None => HeaderValue::from_bytes(
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+              format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
             ),
           } {
             response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -1019,7 +1025,7 @@ async fn request_handler_wrapped(
                 Ok(_) => (),
                 Err(err) => {
                   error_logger
-                    .log(&format!("Unexpected error for CONNECT request: {}", err))
+                    .log(&format!("Unexpected error for CONNECT request: {err}"))
                     .await;
                 }
               }
@@ -1027,8 +1033,7 @@ async fn request_handler_wrapped(
             Err(err) => {
               error_logger
                 .log(&format!(
-                  "Error while upgrading HTTP CONNECT request: {}",
-                  err
+                  "Error while upgrading HTTP CONNECT request: {err}"
                 ))
                 .await
             }
@@ -1088,18 +1093,18 @@ async fn request_handler_wrapped(
             Some(value) => {
               let header_value_old = String::from_utf8_lossy(value.as_bytes());
               let header_value_new =
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
               if header_value_old != header_value_new {
                 HeaderValue::from_bytes(
-                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                  format!("{header_value_old}, {header_value_new}").as_bytes(),
                 )
               } else {
                 HeaderValue::from_bytes(header_value_old.as_bytes())
               }
             }
             None => HeaderValue::from_bytes(
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+              format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
             ),
           } {
             response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -1164,18 +1169,18 @@ async fn request_handler_wrapped(
             Some(value) => {
               let header_value_old = String::from_utf8_lossy(value.as_bytes());
               let header_value_new =
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
               if header_value_old != header_value_new {
                 HeaderValue::from_bytes(
-                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                  format!("{header_value_old}, {header_value_new}").as_bytes(),
                 )
               } else {
                 HeaderValue::from_bytes(header_value_old.as_bytes())
               }
             }
             None => HeaderValue::from_bytes(
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+              format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
             ),
           } {
             response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -1240,19 +1245,16 @@ async fn request_handler_wrapped(
         if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
           Some(value) => {
             let header_value_old = String::from_utf8_lossy(value.as_bytes());
-            let header_value_new =
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+            let header_value_new = format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
             if header_value_old != header_value_new {
-              HeaderValue::from_bytes(
-                format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-              )
+              HeaderValue::from_bytes(format!("{header_value_old}, {header_value_new}").as_bytes())
             } else {
               HeaderValue::from_bytes(header_value_old.as_bytes())
             }
           }
           None => HeaderValue::from_bytes(
-            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+            format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
           ),
         } {
           response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -1299,7 +1301,7 @@ async fn request_handler_wrapped(
           Ok(data) => data,
           Err(err) => {
             error_logger
-              .log(&format!("Error while upgrading WebSocket request: {}", err))
+              .log(&format!("Error while upgrading WebSocket request: {err}"))
               .await;
 
             let response = Response::builder()
@@ -1362,18 +1364,18 @@ async fn request_handler_wrapped(
                 Some(value) => {
                   let header_value_old = String::from_utf8_lossy(value.as_bytes());
                   let header_value_new =
-                    format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                    format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
                   if header_value_old != header_value_new {
                     HeaderValue::from_bytes(
-                      format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                      format!("{header_value_old}, {header_value_new}").as_bytes(),
                     )
                   } else {
                     HeaderValue::from_bytes(header_value_old.as_bytes())
                   }
                 }
                 None => HeaderValue::from_bytes(
-                  format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+                  format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
                 ),
               } {
                 response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -1402,7 +1404,7 @@ async fn request_handler_wrapped(
             Ok(_) => (),
             Err(err) => {
               error_logger
-                .log(&format!("Unexpected error for WebSocket request: {}", err))
+                .log(&format!("Unexpected error for WebSocket request: {err}"))
                 .await;
             }
           }
@@ -1459,18 +1461,18 @@ async fn request_handler_wrapped(
             Some(value) => {
               let header_value_old = String::from_utf8_lossy(value.as_bytes());
               let header_value_new =
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
               if header_value_old != header_value_new {
                 HeaderValue::from_bytes(
-                  format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                  format!("{header_value_old}, {header_value_new}").as_bytes(),
                 )
               } else {
                 HeaderValue::from_bytes(header_value_old.as_bytes())
               }
             }
             None => HeaderValue::from_bytes(
-              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+              format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
             ),
           } {
             response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -1546,18 +1548,18 @@ async fn request_handler_wrapped(
                   Some(value) => {
                     let header_value_old = String::from_utf8_lossy(value.as_bytes());
                     let header_value_new =
-                      format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                      format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
                     if header_value_old != header_value_new {
                       HeaderValue::from_bytes(
-                        format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                        format!("{header_value_old}, {header_value_new}").as_bytes(),
                       )
                     } else {
                       HeaderValue::from_bytes(header_value_old.as_bytes())
                     }
                   }
                   None => HeaderValue::from_bytes(
-                    format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+                    format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
                   ),
                 } {
                   response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -1584,7 +1586,7 @@ async fn request_handler_wrapped(
                     if error_log_enabled {
                       logger
                         .send(LogMessage::new(
-                          format!("Unexpected error while serving a request: {}", err),
+                          format!("Unexpected error while serving a request: {err}"),
                           true,
                         ))
                         .await
@@ -1645,18 +1647,18 @@ async fn request_handler_wrapped(
                         Some(value) => {
                           let header_value_old = String::from_utf8_lossy(value.as_bytes());
                           let header_value_new =
-                            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                            format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
                           if header_value_old != header_value_new {
                             HeaderValue::from_bytes(
-                              format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                              format!("{header_value_old}, {header_value_new}").as_bytes(),
                             )
                           } else {
                             HeaderValue::from_bytes(header_value_old.as_bytes())
                           }
                         }
                         None => HeaderValue::from_bytes(
-                          format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
+                          format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"")
                             .as_bytes(),
                         ),
                       } {
@@ -1749,19 +1751,18 @@ async fn request_handler_wrapped(
                     Some(value) => {
                       let header_value_old = String::from_utf8_lossy(value.as_bytes());
                       let header_value_new =
-                        format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                        format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
                       if header_value_old != header_value_new {
                         HeaderValue::from_bytes(
-                          format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                          format!("{header_value_old}, {header_value_new}").as_bytes(),
                         )
                       } else {
                         HeaderValue::from_bytes(header_value_old.as_bytes())
                       }
                     }
                     None => HeaderValue::from_bytes(
-                      format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
-                        .as_bytes(),
+                      format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
                     ),
                   } {
                     response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -1788,7 +1789,7 @@ async fn request_handler_wrapped(
                       if error_log_enabled {
                         logger
                           .send(LogMessage::new(
-                            format!("Unexpected error while serving a request: {}", err),
+                            format!("Unexpected error while serving a request: {err}"),
                             true,
                           ))
                           .await
@@ -1851,18 +1852,18 @@ async fn request_handler_wrapped(
                           Some(value) => {
                             let header_value_old = String::from_utf8_lossy(value.as_bytes());
                             let header_value_new =
-                              format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                              format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
                             if header_value_old != header_value_new {
                               HeaderValue::from_bytes(
-                                format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                                format!("{header_value_old}, {header_value_new}").as_bytes(),
                               )
                             } else {
                               HeaderValue::from_bytes(header_value_old.as_bytes())
                             }
                           }
                           None => HeaderValue::from_bytes(
-                            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
+                            format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"")
                               .as_bytes(),
                           ),
                         } {
@@ -1946,18 +1947,18 @@ async fn request_handler_wrapped(
               Some(value) => {
                 let header_value_old = String::from_utf8_lossy(value.as_bytes());
                 let header_value_new =
-                  format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                  format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
                 if header_value_old != header_value_new {
                   HeaderValue::from_bytes(
-                    format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                    format!("{header_value_old}, {header_value_new}").as_bytes(),
                   )
                 } else {
                   HeaderValue::from_bytes(header_value_old.as_bytes())
                 }
               }
               None => HeaderValue::from_bytes(
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+                format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
               ),
             } {
               response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -1984,7 +1985,7 @@ async fn request_handler_wrapped(
                 if error_log_enabled {
                   logger
                     .send(LogMessage::new(
-                      format!("Unexpected error while serving a request: {}", err),
+                      format!("Unexpected error while serving a request: {err}"),
                       true,
                     ))
                     .await
@@ -2045,19 +2046,18 @@ async fn request_handler_wrapped(
                     Some(value) => {
                       let header_value_old = String::from_utf8_lossy(value.as_bytes());
                       let header_value_new =
-                        format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                        format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
                       if header_value_old != header_value_new {
                         HeaderValue::from_bytes(
-                          format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                          format!("{header_value_old}, {header_value_new}").as_bytes(),
                         )
                       } else {
                         HeaderValue::from_bytes(header_value_old.as_bytes())
                       }
                     }
                     None => HeaderValue::from_bytes(
-                      format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port)
-                        .as_bytes(),
+                      format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
                     ),
                   } {
                     response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -2075,7 +2075,7 @@ async fn request_handler_wrapped(
           if error_log_enabled {
             logger
               .send(LogMessage::new(
-                format!("Unexpected error while serving a request: {}", err),
+                format!("Unexpected error while serving a request: {err}"),
                 true,
               ))
               .await
@@ -2136,19 +2136,16 @@ async fn request_handler_wrapped(
       if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
         Some(value) => {
           let header_value_old = String::from_utf8_lossy(value.as_bytes());
-          let header_value_new =
-            format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+          let header_value_new = format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
           if header_value_old != header_value_new {
-            HeaderValue::from_bytes(
-              format!("{}, {}", header_value_old, header_value_new).as_bytes(),
-            )
+            HeaderValue::from_bytes(format!("{header_value_old}, {header_value_new}").as_bytes())
           } else {
             HeaderValue::from_bytes(header_value_old.as_bytes())
           }
         }
         None => HeaderValue::from_bytes(
-          format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+          format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
         ),
       } {
         response_parts.headers.insert(header::ALT_SVC, header_value);
@@ -2175,7 +2172,7 @@ async fn request_handler_wrapped(
           if error_log_enabled {
             logger
               .send(LogMessage::new(
-                format!("Unexpected error while serving a request: {}", err),
+                format!("Unexpected error while serving a request: {err}"),
                 true,
               ))
               .await
@@ -2233,18 +2230,18 @@ async fn request_handler_wrapped(
               Some(value) => {
                 let header_value_old = String::from_utf8_lossy(value.as_bytes());
                 let header_value_new =
-                  format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port);
+                  format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
 
                 if header_value_old != header_value_new {
                   HeaderValue::from_bytes(
-                    format!("{}, {}", header_value_old, header_value_new).as_bytes(),
+                    format!("{header_value_old}, {header_value_new}").as_bytes(),
                   )
                 } else {
                   HeaderValue::from_bytes(header_value_old.as_bytes())
                 }
               }
               None => HeaderValue::from_bytes(
-                format!("h3=\":{}\", h3-29=\":{}\"", http3_alt_port, http3_alt_port).as_bytes(),
+                format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
               ),
             } {
               response_parts.headers.insert(header::ALT_SVC, header_value);
