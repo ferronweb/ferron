@@ -6,7 +6,7 @@ description: Discover security vulnerabilities of outdated Ferron versions. Stay
 
 Some older versions of Ferron may contain security vulnerabilities. It's recommended to keep Ferron up-to-date.
 
-## Fixed in Ferron 1.3.4
+## Fixed in Ferron 1.3.4 and Ferron 2.0.0-beta.14
 
 - An attacker could request a resource with a URL that would be replaced with a sanitized one, to possibly bypass security restrictions, if they're configured in location configurations. (CWE-20; introduced in Ferron 1.0.0-beta2)
 

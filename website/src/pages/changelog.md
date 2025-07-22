@@ -4,6 +4,13 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.14
+
+**Released in July 22, 2025**
+
+- Added support for buffering request and response bodies
+- The server now determines the server configuration again (with changed location) after replacing the URL with a sanitized one.
+
 ## Ferron 1.3.4
 
 **Released in July 22, 2025**

@@ -622,12 +622,12 @@ async fn request_handler_wrapped(
     Some(value) => value.to_str().ok().map(|h| {
       if let Some((left, right)) = h.rsplit_once(':') {
         if right.parse::<u16>().is_ok() {
-          left
+          left.to_string()
         } else {
-          h
+          h.to_string()
         }
       } else {
-        h
+        h.to_string()
       }
     }),
     None => None,
@@ -636,7 +636,7 @@ async fn request_handler_wrapped(
   // Find the server configuration
   let mut configuration = match configurations.find_configuration(
     request.uri().path(),
-    hostname_determinant,
+    hostname_determinant.as_deref(),
     socket_data.local_addr.ip(),
     socket_data.local_addr.port(),
   ) {
@@ -719,7 +719,7 @@ async fn request_handler_wrapped(
 
   // Determine the logger
   let logger = loggers.find_logger(
-    hostname_determinant,
+    hostname_determinant.as_deref(),
     socket_data.local_addr.ip(),
     socket_data.local_addr.port(),
   );
@@ -1000,6 +1000,14 @@ async fn request_handler_wrapped(
       }
     };
     request = Request::from_parts(parts, body);
+    if let Some(new_configuration) = configurations.find_configuration(
+      request.uri().path(),
+      hostname_determinant.as_deref(),
+      socket_data.local_addr.ip(),
+      socket_data.local_addr.port(),
+    ) {
+      configuration = new_configuration;
+    }
   }
 
   // Determine headers to add/remove/replace
