@@ -6,6 +6,10 @@ description: Discover security vulnerabilities of outdated Ferron versions. Stay
 
 Some older versions of Ferron may contain security vulnerabilities. It's recommended to keep Ferron up-to-date.
 
+## Fixed in Ferron 1.3.4
+
+- An attacker could request a resource with a URL that would be replaced with a sanitized one, to possibly bypass security restrictions, if they're configured in location configurations. (CWE-20; introduced in Ferron 1.0.0-beta2)
+
 ## Fixed in Ferron 1.3.2
 
 - An attacker could connect to the server acting as a reverse proxy via HTTP/3 to cause a Rust panic in the server, and in effect crash the server. (CWE-248; _fauth_ module; introduced in Ferron 1.1.0)
