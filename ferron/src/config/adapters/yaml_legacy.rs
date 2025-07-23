@@ -9,7 +9,7 @@ use ferron_yaml2kdl_core::convert_yaml_to_kdl;
 use kdl::{KdlDocument, KdlNode, KdlValue};
 
 use crate::config::{
-  ErrorHandlerStatus, ServerConfiguration, ServerConfigurationEntries, ServerConfigurationEntry,
+  Conditions, ErrorHandlerStatus, ServerConfiguration, ServerConfigurationEntries, ServerConfigurationEntry,
   ServerConfigurationFilters, ServerConfigurationValue,
 };
 
@@ -152,7 +152,10 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                                   hostname: hostname.clone(),
                                   ip,
                                   port,
-                                  location_prefix: Some(location_str.to_string()),
+                                  condition: Some(Conditions {
+                                    location_prefix: location_str.to_string(),
+                                    conditionals: vec![],
+                                  }),
                                   error_handler_status: Some(ErrorHandlerStatus::Status(error_status_code as u16)),
                                 },
                                 modules: vec![],
@@ -180,7 +183,10 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                                 hostname: hostname.clone(),
                                 ip,
                                 port,
-                                location_prefix: Some(location_str.to_string()),
+                                condition: Some(Conditions {
+                                  location_prefix: location_str.to_string(),
+                                  conditionals: vec![],
+                                }),
                                 error_handler_status: Some(ErrorHandlerStatus::Any),
                               },
                               modules: vec![],
@@ -225,7 +231,10 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                         hostname: hostname.clone(),
                         ip,
                         port,
-                        location_prefix: Some(location_str.to_string()),
+                        condition: Some(Conditions {
+                          location_prefix: location_str.to_string(),
+                          conditionals: vec![],
+                        }),
                         error_handler_status: None,
                       },
                       modules: vec![],
@@ -263,7 +272,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                         hostname: hostname.clone(),
                         ip,
                         port,
-                        location_prefix: None,
+                        condition: None,
                         error_handler_status: Some(ErrorHandlerStatus::Status(error_status_code as u16)),
                       },
                       modules: vec![],
@@ -291,7 +300,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                       hostname: hostname.clone(),
                       ip,
                       port,
-                      location_prefix: None,
+                      condition: None,
                       error_handler_status: Some(ErrorHandlerStatus::Any),
                     },
                     modules: vec![],
@@ -321,7 +330,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
               hostname,
               ip,
               port,
-              location_prefix: None,
+              condition: None,
               error_handler_status: None,
             },
             modules: vec![],

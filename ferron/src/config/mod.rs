@@ -7,8 +7,249 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::{cmp::Ordering, collections::HashMap};
 
-use crate::modules::Module;
-use crate::util::{match_hostname, match_location};
+use fancy_regex::{Regex, RegexBuilder};
+
+use crate::modules::{Module, SocketData};
+use crate::util::{match_hostname, match_location, replace_header_placeholders};
+
+/// Conditional data
+#[derive(Clone, Debug)]
+pub enum ConditionalData {
+  IsRemoteIp(Vec<IpAddr>),
+  IsForwardedFor(Vec<IpAddr>),
+  IsNotRemoteIp(Vec<IpAddr>),
+  IsNotForwardedFor(Vec<IpAddr>),
+  IsEqual(String, String),
+  IsNotEqual(String, String),
+  IsRegex(String, Regex),
+  IsNotRegex(String, Regex),
+  Invalid,
+}
+
+impl PartialEq for ConditionalData {
+  fn eq(&self, other: &Self) -> bool {
+    match (self, other) {
+      (Self::IsRemoteIp(v1), Self::IsRemoteIp(v2)) => v1 == v2,
+      (Self::IsForwardedFor(v1), Self::IsForwardedFor(v2)) => v1 == v2,
+      (Self::IsNotRemoteIp(v1), Self::IsNotRemoteIp(v2)) => v1 == v2,
+      (Self::IsNotForwardedFor(v1), Self::IsNotForwardedFor(v2)) => v1 == v2,
+      (Self::IsEqual(v1, v2), Self::IsEqual(v3, v4)) => v1 == v3 && v2 == v4,
+      (Self::IsNotEqual(v1, v2), Self::IsNotEqual(v3, v4)) => v1 == v3 && v2 == v4,
+      (Self::IsRegex(v1, v2), Self::IsRegex(v3, v4)) => v1 == v3 && v2.as_str() == v4.as_str(),
+      (Self::IsNotRegex(v1, v2), Self::IsNotRegex(v3, v4)) => v1 == v3 && v2.as_str() == v4.as_str(),
+      _ => false,
+    }
+  }
+}
+
+impl Eq for ConditionalData {}
+
+/// Parses conditional data
+pub fn parse_conditional_data(name: &str, value: ServerConfigurationEntry) -> ConditionalData {
+  match name {
+    "is_remote_ip" => ConditionalData::IsRemoteIp(
+      value
+        .values
+        .iter()
+        .filter_map(|v| v.as_str())
+        .filter_map(|v| v.parse::<IpAddr>().ok())
+        .collect(),
+    ),
+    "is_forwarded_for" => ConditionalData::IsForwardedFor(
+      value
+        .values
+        .iter()
+        .filter_map(|v| v.as_str())
+        .filter_map(|v| v.parse::<IpAddr>().ok())
+        .collect(),
+    ),
+    "is_not_remote_ip" => ConditionalData::IsNotRemoteIp(
+      value
+        .values
+        .iter()
+        .filter_map(|v| v.as_str())
+        .filter_map(|v| v.parse::<IpAddr>().ok())
+        .collect(),
+    ),
+    "is_not_forwarded_for" => ConditionalData::IsNotForwardedFor(
+      value
+        .values
+        .iter()
+        .filter_map(|v| v.as_str())
+        .filter_map(|v| v.parse::<IpAddr>().ok())
+        .collect(),
+    ),
+    "is_equal" => {
+      if let Some(left_side) = value.values.first().and_then(|v| v.as_str()) {
+        if let Some(right_side) = value.values.get(1).and_then(|v| v.as_str()) {
+          ConditionalData::IsEqual(left_side.to_string(), right_side.to_string())
+        } else {
+          ConditionalData::Invalid
+        }
+      } else {
+        ConditionalData::Invalid
+      }
+    }
+    "is_not_equal" => {
+      if let Some(left_side) = value.values.first().and_then(|v| v.as_str()) {
+        if let Some(right_side) = value.values.get(1).and_then(|v| v.as_str()) {
+          ConditionalData::IsNotEqual(left_side.to_string(), right_side.to_string())
+        } else {
+          ConditionalData::Invalid
+        }
+      } else {
+        ConditionalData::Invalid
+      }
+    }
+    "is_regex" => {
+      if let Some(left_side) = value.values.first().and_then(|v| v.as_str()) {
+        if let Some(right_side) = value.values.get(1).and_then(|v| v.as_str()).and_then(|v| {
+          RegexBuilder::new(v)
+            .case_insensitive(
+              value
+                .props
+                .get("case_insensitive")
+                .and_then(|p| p.as_bool())
+                .unwrap_or(false),
+            )
+            .build()
+            .ok()
+        }) {
+          ConditionalData::IsRegex(left_side.to_string(), right_side)
+        } else {
+          ConditionalData::Invalid
+        }
+      } else {
+        ConditionalData::Invalid
+      }
+    }
+    "is_not_regex" => {
+      if let Some(left_side) = value.values.first().and_then(|v| v.as_str()) {
+        if let Some(right_side) = value.values.get(1).and_then(|v| v.as_str()).and_then(|v| {
+          RegexBuilder::new(v)
+            .case_insensitive(
+              value
+                .props
+                .get("case_insensitive")
+                .and_then(|p| p.as_bool())
+                .unwrap_or(false),
+            )
+            .build()
+            .ok()
+        }) {
+          ConditionalData::IsNotRegex(left_side.to_string(), right_side)
+        } else {
+          ConditionalData::Invalid
+        }
+      } else {
+        ConditionalData::Invalid
+      }
+    }
+    _ => ConditionalData::Invalid,
+  }
+}
+
+/// Matches conditions
+fn match_conditions(conditions: &Conditions, request: &hyper::http::request::Parts, socket_data: &SocketData) -> bool {
+  match_location(&conditions.location_prefix, request.uri.path())
+    && conditions.conditionals.iter().all(|cond| match cond {
+      Conditional::If(data) => match_condition(data, request, socket_data),
+      Conditional::IfNot(data) => !match_condition(data, request, socket_data),
+    })
+}
+
+/// Matches a condition
+fn match_condition(
+  condition: &ConditionalData,
+  request: &hyper::http::request::Parts,
+  socket_data: &SocketData,
+) -> bool {
+  match condition {
+    ConditionalData::IsRemoteIp(values) => values
+      .iter()
+      .any(|v| v.to_canonical() == socket_data.remote_addr.ip().to_canonical()),
+    ConditionalData::IsForwardedFor(values) => {
+      let client_ip =
+        if let Some(x_forwarded_for) = request.headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+          let prepared_remote_ip_str = match x_forwarded_for.split(",").next() {
+            Some(ip_address_str) => ip_address_str.replace(" ", ""),
+            None => return false,
+          };
+
+          let prepared_remote_ip: IpAddr = match prepared_remote_ip_str.parse() {
+            Ok(ip_address) => ip_address,
+            Err(_) => return false,
+          };
+
+          prepared_remote_ip.to_canonical()
+        } else {
+          socket_data.remote_addr.ip().to_canonical()
+        };
+
+      values.iter().any(|v| v.to_canonical() == client_ip)
+    }
+    ConditionalData::IsNotRemoteIp(values) => !values
+      .iter()
+      .any(|v| v.to_canonical() == socket_data.remote_addr.ip().to_canonical()),
+    ConditionalData::IsNotForwardedFor(values) => {
+      let client_ip =
+        if let Some(x_forwarded_for) = request.headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+          let prepared_remote_ip_str = match x_forwarded_for.split(",").next() {
+            Some(ip_address_str) => ip_address_str.replace(" ", ""),
+            None => return false,
+          };
+
+          let prepared_remote_ip: IpAddr = match prepared_remote_ip_str.parse() {
+            Ok(ip_address) => ip_address,
+            Err(_) => return false,
+          };
+
+          prepared_remote_ip.to_canonical()
+        } else {
+          socket_data.remote_addr.ip().to_canonical()
+        };
+
+      !values.iter().any(|v| v.to_canonical() == client_ip)
+    }
+    ConditionalData::IsEqual(v1, v2) => {
+      replace_header_placeholders(v1, request, Some(socket_data))
+        == replace_header_placeholders(v2, request, Some(socket_data))
+    }
+    ConditionalData::IsNotEqual(v1, v2) => {
+      replace_header_placeholders(v1, request, Some(socket_data))
+        != replace_header_placeholders(v2, request, Some(socket_data))
+    }
+    ConditionalData::IsRegex(v1, regex) => regex
+      .is_match(&replace_header_placeholders(v1, request, Some(socket_data)))
+      .unwrap_or(false),
+    ConditionalData::IsNotRegex(v1, regex) => {
+      !(regex
+        .is_match(&replace_header_placeholders(v1, request, Some(socket_data)))
+        .unwrap_or(true))
+    }
+    _ => false,
+  }
+}
+
+/// The struct containing conditions
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Conditions {
+  /// The location prefix
+  pub location_prefix: String,
+
+  /// The conditionals
+  pub conditionals: Vec<Conditional>,
+}
+
+/// The enum containing a conditional
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Conditional {
+  /// "if" condition
+  If(ConditionalData),
+
+  /// "if_not" condition
+  IfNot(ConditionalData),
+}
 
 /// The struct containing all the Ferron server configurations
 #[derive(Debug)]
@@ -33,10 +274,9 @@ impl ServerConfigurations {
   /// Finds a specific server configuration based on request parameters
   pub fn find_configuration(
     &self,
-    request_path: &str,
+    request: &hyper::http::request::Parts,
     hostname: Option<&str>,
-    ip: IpAddr,
-    port: u16,
+    socket_data: &SocketData,
   ) -> Option<Arc<ServerConfiguration>> {
     // The inner array is sorted by specifity, so it's easier to find the configurations.
     // If it was not sorted, we would need to implement the specifity...
@@ -48,13 +288,15 @@ impl ServerConfigurations {
       .rev()
       .find(|&server_configuration| {
         match_hostname(server_configuration.filters.hostname.as_deref(), hostname)
-          && (server_configuration.filters.ip.is_none() || server_configuration.filters.ip == Some(ip))
-          && (server_configuration.filters.port.is_none() || server_configuration.filters.port == Some(port))
+          && (server_configuration.filters.ip.is_none()
+            || server_configuration.filters.ip == Some(socket_data.local_addr.ip()))
+          && (server_configuration.filters.port.is_none()
+            || server_configuration.filters.port == Some(socket_data.local_addr.port()))
           && server_configuration
             .filters
-            .location_prefix
-            .as_deref()
-            .is_none_or(|lp| match_location(lp, request_path))
+            .condition
+            .as_ref()
+            .is_none_or(|c| match_conditions(c, request, socket_data))
           && server_configuration.filters.error_handler_status.is_none()
       })
       .cloned()
@@ -75,7 +317,7 @@ impl ServerConfigurations {
           && c.filters.hostname == filters.hostname
           && c.filters.ip == filters.ip
           && c.filters.port == filters.port
-          && (c.filters.location_prefix.is_none() || c.filters.location_prefix == filters.location_prefix)
+          && (c.filters.condition.is_none() || c.filters.condition == filters.condition)
           && !c.filters.error_handler_status.as_ref().is_none_or(|s| {
             !(matches!(s, ErrorHandlerStatus::Any) || matches!(s, ErrorHandlerStatus::Status(x) if *x == status_code))
           })
@@ -153,8 +395,8 @@ pub struct ServerConfigurationFilters {
   /// The port
   pub port: Option<u16>,
 
-  /// The location prefix
-  pub location_prefix: Option<String>,
+  /// The conditions
+  pub condition: Option<Conditions>,
 
   /// The error handler status code
   pub error_handler_status: Option<ErrorHandlerStatus>,
@@ -167,7 +409,7 @@ impl ServerConfigurationFilters {
       && self.hostname.is_none()
       && self.ip.is_none()
       && self.port.is_none()
-      && self.location_prefix.is_none()
+      && self.condition.is_none()
       && self.error_handler_status.is_none()
   }
 
@@ -185,7 +427,7 @@ impl Ord for ServerConfigurationFilters {
       .then_with(|| self.port.is_some().cmp(&other.port.is_some()))
       .then_with(|| self.ip.is_some().cmp(&other.ip.is_some()))
       .then_with(|| self.hostname.is_some().cmp(&other.hostname.is_some()))
-      .then_with(|| self.location_prefix.is_some().cmp(&other.location_prefix.is_some()))
+      .then_with(|| self.condition.is_some().cmp(&other.condition.is_some()))
       .then_with(|| {
         self
           .error_handler_status

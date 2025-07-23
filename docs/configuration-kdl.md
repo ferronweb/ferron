@@ -64,6 +64,22 @@ example.com,example.org {
   // The virtual host identifiers (like example.com or "192.168.1.1") are comma-separated, but adding spaces will not be interpreted,
   // For example "example.com, example.org" will not work for "example.org", but "example.com,example.org" will work.
 }
+
+with-conditions.example.com {
+  condition "SOME_CONDITION" {
+    // Here are defined subconditions in the condition. The condition will pass if all subconditions will also pass
+  }
+
+  if "SOME_CONDITION" {
+    // Conditional configuration (Ferron UNRELEASED or newer)
+    // Conditions can be nested
+  }
+
+  if_not "SOME_CONDITION" {
+    // Configuration, in case of condition not being met (Ferron UNRELEASED or newer)
+  }
+}
+
 ```
 
 Also, it's possible to include other configuration files using an `include <included_configuration_path: string>` directive, like this:
@@ -680,19 +696,42 @@ dev.example.com {
 }
 ```
 
-## Header value placeholders
+## Subconditions
 
-Ferron supports the following header value placeholders:
+Ferron UNRELEASED and newer supports conditional configuration based on conditions. This allows you to configure different settings based on the request method, path, or other conditions.
+
+Below is the list of supported subconditions:
+
+- `is_remote_ip <remote_ip: string> [<remote_ip: string> ...]` (Ferron UNRELEASED or newer)
+  - This subcondition checks if the request is coming from a specific remote IP address or a list of IP addresses.
+- `is_forwarded_for <remote_ip: string> [<remote_ip: string> ...]` (Ferron UNRELEASED or newer)
+  - This subcondition checks if the request (with respect for `X-Forwarded-For` header) is coming from a specific forwarded IP address or a list of IP addresses.
+- `is_not_remote_ip <remote_ip: string> [<remote_ip: string> ...]` (Ferron UNRELEASED or newer)
+  - This subcondition checks if the request is not coming from a specific remote IP address or a list of IP addresses.
+- `is_not_forwarded_for <remote_ip: string> [<remote_ip: string> ...]` (Ferron UNRELEASED or newer)
+  - This subcondition checks if the request (with respect for `X-Forwarded-For` header) is not coming from a specific forwarded IP address or a list of IP addresses.
+- `is_equal <left_side: string> <right_side: string>` (Ferron UNRELEASED or newer)
+  - This subcondition checks if the left side is equal to the right side.
+- `is_not_equal <left_side: string> <right_side: string>` (Ferron UNRELEASED or newer)
+  - This subcondition checks if the left side is not equal to the right side.
+- `is_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]` (Ferron UNRELEASED or newer)
+  - This subcondition checks if the value matches the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
+- `is_not_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]` (Ferron UNRELEASED or newer)
+  - This subcondition checks if the value does not match the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
+
+## Header value and subcondition placeholders
+
+Ferron supports the following header value and subcondition placeholders:
 
 - `{path}` - the path part of the request URI
 - `{method}` (Ferron 2.0.0-beta.9 or newer) - the request method
 - `{version}` (Ferron 2.0.0-beta.9 or newer) - the HTTP version of the request
 - `{header:<header_name>}` (Ferron 2.0.0-beta.9 or newer) - the header value of the request URI
-- `{scheme}` (Ferron 2.0.0-beta.9 or newer) - the scheme of the request URI (`http` or `https`), applicable only for reverse proxying.
-- `{client_ip}` (Ferron 2.0.0-beta.9 or newer) - the client IP address, applicable only for reverse proxying.
-- `{client_port}` (Ferron 2.0.0-beta.9 or newer) - the client port number, applicable only for reverse proxying.
-- `{server_ip}` (Ferron 2.0.0-beta.9 or newer) - the server IP address, applicable only for reverse proxying.
-- `{server_port}` (Ferron 2.0.0-beta.9 or newer) - the server port number, applicable only for reverse proxying.
+- `{scheme}` (Ferron 2.0.0-beta.9 or newer) - the scheme of the request URI (`http` or `https`), applicable only for subconditions and reverse proxying.
+- `{client_ip}` (Ferron 2.0.0-beta.9 or newer) - the client IP address, applicable only for subconditions and reverse proxying.
+- `{client_port}` (Ferron 2.0.0-beta.9 or newer) - the client port number, applicable only for subconditions and reverse proxying.
+- `{server_ip}` (Ferron 2.0.0-beta.9 or newer) - the server IP address, applicable only for subconditions and reverse proxying.
+- `{server_port}` (Ferron 2.0.0-beta.9 or newer) - the server port number, applicable only for subconditions and reverse proxying.
 
 ## Location block example
 
