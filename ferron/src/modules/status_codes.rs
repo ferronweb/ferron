@@ -85,11 +85,6 @@ impl ModuleLoader for StatusCodesModuleLoader {
                 .get("url")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
-              if regex.is_none() && url.is_none() {
-                Err(anyhow::anyhow!(
-                  "Non-standard codes must either include URL or a matching regular expression"
-                ))?
-              }
               let location = non_standard_code_config_entry
                 .props
                 .get("location")
@@ -178,10 +173,6 @@ impl ModuleLoader for StatusCodesModuleLoader {
           ))?
         } else if !entry.values[0].is_integer() {
           Err(anyhow::anyhow!("The custom status code must be a string"))?
-        } else if !entry.props.contains_key("url") && !entry.props.contains_key("regex") {
-          Err(anyhow::anyhow!(
-            "Non-standard codes must either include URL or a matching regular expression"
-          ))?
         } else if !entry.props.get("url").is_none_or(|v| v.is_string()) {
           Err(anyhow::anyhow!("The custom status code URL must be a string"))?
         } else if !entry.props.get("regex").is_none_or(|v| v.is_string()) {
@@ -305,18 +296,24 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
         continue;
       }
 
-      if let Some(regex) = &non_standard_code.regex {
-        let regex_match_option = regex.find(&request_url)?;
-        if let Some(regex_match) = regex_match_option {
-          url_matched = true;
-          if non_standard_code.status_code == 301
-            || non_standard_code.status_code == 302
-            || non_standard_code.status_code == 307
-            || non_standard_code.status_code == 308
-          {
-            let matched_text = regex_match.as_str();
-            if let Some(location) = &non_standard_code.location {
-              redirect_url = Some(regex.replace(matched_text, location).to_string());
+      if non_standard_code.regex.is_none() && non_standard_code.url.is_none() {
+        url_matched = true;
+      }
+
+      if !url_matched {
+        if let Some(regex) = &non_standard_code.regex {
+          let regex_match_option = regex.find(&request_url)?;
+          if let Some(regex_match) = regex_match_option {
+            url_matched = true;
+            if non_standard_code.status_code == 301
+              || non_standard_code.status_code == 302
+              || non_standard_code.status_code == 307
+              || non_standard_code.status_code == 308
+            {
+              let matched_text = regex_match.as_str();
+              if let Some(location) = &non_standard_code.location {
+                redirect_url = Some(regex.replace(matched_text, location).to_string());
+              }
             }
           }
         }
