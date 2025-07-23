@@ -29,7 +29,7 @@ use config::processing::{load_modules, merge_duplicates, premerge_configuration,
 use config::ServerConfigurations;
 use handler::create_http_handler;
 use human_panic::{setup_panic, Metadata};
-use instant_acme::{ChallengeType, LetsEncrypt};
+use instant_acme::{ChallengeType, ExternalAccountKey, LetsEncrypt};
 use listener_handler_communication::ConnectionData;
 use listener_quic::create_quic_listener;
 use listener_tcp::create_tcp_listener;
@@ -928,6 +928,24 @@ fn before_starting_server(
                 } else {
                   LetsEncrypt::Staging.url().to_string()
                 },
+                eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab_key", server_configuration) {
+                  if let Some(eab_key_id) = eab_key_entry.values.first().and_then(|v| v.as_str()) {
+                    if let Some(eab_key_hmac) = eab_key_entry.values.get(1).and_then(|v| v.as_str()) {
+                      match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(eab_key_hmac) {
+                        Ok(decoded_key) => {
+                          Some(Arc::new(ExternalAccountKey::new(eab_key_id.to_string(), &decoded_key)))
+                        }
+                        Err(err) => Err(anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
+                      }
+                    } else {
+                      None
+                    }
+                  } else {
+                    None
+                  }
+                } else {
+                  None
+                },
                 profile: get_value!("auto_tls_profile", server_configuration)
                   .and_then(|v| v.as_str().map(|s| s.to_string())),
                 cache_path: if let Some(acme_cache_path) = acme_cache_path_option.clone() {
@@ -993,6 +1011,24 @@ fn before_starting_server(
                   LetsEncrypt::Production.url().to_string()
                 } else {
                   LetsEncrypt::Staging.url().to_string()
+                },
+                eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab_key", server_configuration) {
+                  if let Some(eab_key_id) = eab_key_entry.values.first().and_then(|v| v.as_str()) {
+                    if let Some(eab_key_hmac) = eab_key_entry.values.get(1).and_then(|v| v.as_str()) {
+                      match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(eab_key_hmac) {
+                        Ok(decoded_key) => {
+                          Some(Arc::new(ExternalAccountKey::new(eab_key_id.to_string(), &decoded_key)))
+                        }
+                        Err(err) => Err(anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
+                      }
+                    } else {
+                      None
+                    }
+                  } else {
+                    None
+                  }
+                } else {
+                  None
                 },
                 profile: get_value!("auto_tls_profile", server_configuration)
                   .and_then(|v| v.as_str().map(|s| s.to_string())),

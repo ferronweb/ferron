@@ -272,6 +272,8 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the ACME profile to use for the certificates. Default: `auto_tls_profile #null`
 - `auto_tls_on_demand <auto_tls_on_demand: bool>` (Ferron 2.0.0-beta.13 or newer)
   - This directive specifies whenever to enable the automatic TLS on demand. The functionality obtains TLS certificates automatically when a website is accessed for the first time. It's recommended to use either HTTP-01 or TLS-ALPN-01 ACME challenges, as DNS-01 ACME challenges might be slower due to DNS propagation delays. It's also recommended to configure the `auto_tls_on_demand_ask` directive alongside this directive. Default: `auto_tls_on_demand #false`
+- `auto_tls_eab (<auto_tls_eab_key_id: string> <auto_tls_eab_key_hmac: string>)|<auto_tls_eab_disabled: null>` (Ferron UNRELEASED or newer)
+  - This directive specifies the EAB key ID and HMAC for the ACME External Account Binding. The HMAC key value is encoded in a URL-safe Base64 encoding. If set as `auto_tls_eab_disabled #null`, the EAB is disabled. Default: `auto_tls_eab_disabled #null`
 
 **Configuration example:**
 
@@ -284,6 +286,7 @@ example.com {
     auto_tls_challenge "tls-alpn-01"
     auto_tls_profile "default"
     auto_tls_on_demand #false
+    auto_tls_eab #null
 }
 
 manual-tls.example.com {

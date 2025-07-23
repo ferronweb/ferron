@@ -609,6 +609,24 @@ impl ModuleLoader for CoreModuleLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("auto_tls_eab", config, used_properties) {
+      for entry in &entries.inner {
+        if (1..=2).contains(&entry.values.len()) {
+          Err(anyhow::anyhow!(
+            "The `auto_tls_eab` configuration property must have one (if disabled) or two values"
+          ))?
+        } else if !entry.values[0].is_null() && entry.values.len() != 2 {
+          Err(anyhow::anyhow!(
+            "The `auto_tls_eab` configuration property must have exactly two values if enabled"
+          ))?
+        } else if !entry.values[0].is_string() {
+          Err(anyhow::anyhow!("Invalid ACME EAB key ID"))?
+        } else if !entry.values[1].is_string() {
+          Err(anyhow::anyhow!("Invalid ACME EAB key"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }

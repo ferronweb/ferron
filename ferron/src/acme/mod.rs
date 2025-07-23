@@ -18,8 +18,8 @@ use hyper::Request;
 use hyper_util::client::legacy::Client as HyperClient;
 use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
 use instant_acme::{
-  Account, AccountCredentials, AuthorizationStatus, BodyWrapper, BytesResponse, ChallengeType, HttpClient, Identifier,
-  NewAccount, NewOrder, OrderStatus, RetryPolicy,
+  Account, AccountCredentials, AuthorizationStatus, BodyWrapper, BytesResponse, ChallengeType, ExternalAccountKey,
+  HttpClient, Identifier, NewAccount, NewOrder, OrderStatus, RetryPolicy,
 };
 use rcgen::{CertificateParams, CustomExtension, KeyPair};
 use rustls::{
@@ -54,6 +54,8 @@ pub struct AcmeConfig {
   pub contact: Vec<String>,
   /// The directory URL for the ACME server.
   pub directory: String,
+  /// The optional EAB key
+  pub eab_key: Option<Arc<ExternalAccountKey>>,
   /// The optional ACME profile name
   pub profile: Option<String>,
   /// The cache for storing ACME account information.
@@ -102,6 +104,8 @@ pub struct AcmeOnDemandConfig {
   pub contact: Vec<String>,
   /// The directory URL for the ACME server.
   pub directory: String,
+  /// The optional EAB key
+  pub eab_key: Option<Arc<ExternalAccountKey>>,
   /// The optional ACME profile name
   pub profile: Option<String>,
   /// The path to the cache directory for storing ACME information.
@@ -272,7 +276,7 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
             only_return_existing: false,
           },
           config.directory.clone(),
-          None,
+          config.eab_key.as_deref(),
         )
         .await?;
 
@@ -512,6 +516,7 @@ pub async fn convert_on_demand_config(
     challenge_type: config.challenge_type.clone(),
     contact: config.contact.clone(),
     directory: config.directory.clone(),
+    eab_key: config.eab_key.clone(),
     profile: config.profile.clone(),
     account_cache: if let Some(account_cache_path) = account_cache_path {
       AcmeCache::File(account_cache_path)
