@@ -10,15 +10,15 @@ use std::{cmp::Ordering, collections::HashMap};
 use fancy_regex::{Regex, RegexBuilder};
 
 use crate::modules::{Module, SocketData};
-use crate::util::{match_hostname, match_location, replace_header_placeholders};
+use crate::util::{match_hostname, match_location, replace_header_placeholders, IpBlockList};
 
 /// Conditional data
 #[derive(Clone, Debug)]
 pub enum ConditionalData {
-  IsRemoteIp(Vec<IpAddr>),
-  IsForwardedFor(Vec<IpAddr>),
-  IsNotRemoteIp(Vec<IpAddr>),
-  IsNotForwardedFor(Vec<IpAddr>),
+  IsRemoteIp(IpBlockList),
+  IsForwardedFor(IpBlockList),
+  IsNotRemoteIp(IpBlockList),
+  IsNotForwardedFor(IpBlockList),
   IsEqual(String, String),
   IsNotEqual(String, String),
   IsRegex(String, Regex),
@@ -47,38 +47,26 @@ impl Eq for ConditionalData {}
 /// Parses conditional data
 pub fn parse_conditional_data(name: &str, value: ServerConfigurationEntry) -> ConditionalData {
   match name {
-    "is_remote_ip" => ConditionalData::IsRemoteIp(
-      value
-        .values
-        .iter()
-        .filter_map(|v| v.as_str())
-        .filter_map(|v| v.parse::<IpAddr>().ok())
-        .collect(),
-    ),
-    "is_forwarded_for" => ConditionalData::IsForwardedFor(
-      value
-        .values
-        .iter()
-        .filter_map(|v| v.as_str())
-        .filter_map(|v| v.parse::<IpAddr>().ok())
-        .collect(),
-    ),
-    "is_not_remote_ip" => ConditionalData::IsNotRemoteIp(
-      value
-        .values
-        .iter()
-        .filter_map(|v| v.as_str())
-        .filter_map(|v| v.parse::<IpAddr>().ok())
-        .collect(),
-    ),
-    "is_not_forwarded_for" => ConditionalData::IsNotForwardedFor(
-      value
-        .values
-        .iter()
-        .filter_map(|v| v.as_str())
-        .filter_map(|v| v.parse::<IpAddr>().ok())
-        .collect(),
-    ),
+    "is_remote_ip" => {
+      let mut list = IpBlockList::new();
+      list.load_from_vec(value.values.iter().filter_map(|v| v.as_str()).collect());
+      ConditionalData::IsRemoteIp(list)
+    }
+    "is_forwarded_for" => {
+      let mut list = IpBlockList::new();
+      list.load_from_vec(value.values.iter().filter_map(|v| v.as_str()).collect());
+      ConditionalData::IsForwardedFor(list)
+    }
+    "is_not_remote_ip" => {
+      let mut list = IpBlockList::new();
+      list.load_from_vec(value.values.iter().filter_map(|v| v.as_str()).collect());
+      ConditionalData::IsNotRemoteIp(list)
+    }
+    "is_not_forwarded_for" => {
+      let mut list = IpBlockList::new();
+      list.load_from_vec(value.values.iter().filter_map(|v| v.as_str()).collect());
+      ConditionalData::IsNotForwardedFor(list)
+    }
     "is_equal" => {
       if let Some(left_side) = value.values.first().and_then(|v| v.as_str()) {
         if let Some(right_side) = value.values.get(1).and_then(|v| v.as_str()) {
@@ -165,10 +153,8 @@ fn match_condition(
   socket_data: &SocketData,
 ) -> bool {
   match condition {
-    ConditionalData::IsRemoteIp(values) => values
-      .iter()
-      .any(|v| v.to_canonical() == socket_data.remote_addr.ip().to_canonical()),
-    ConditionalData::IsForwardedFor(values) => {
+    ConditionalData::IsRemoteIp(list) => list.is_blocked(socket_data.remote_addr.ip()),
+    ConditionalData::IsForwardedFor(list) => {
       let client_ip =
         if let Some(x_forwarded_for) = request.headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
           let prepared_remote_ip_str = match x_forwarded_for.split(",").next() {
@@ -181,17 +167,15 @@ fn match_condition(
             Err(_) => return false,
           };
 
-          prepared_remote_ip.to_canonical()
+          prepared_remote_ip
         } else {
-          socket_data.remote_addr.ip().to_canonical()
+          socket_data.remote_addr.ip()
         };
 
-      values.iter().any(|v| v.to_canonical() == client_ip)
+      list.is_blocked(client_ip)
     }
-    ConditionalData::IsNotRemoteIp(values) => !values
-      .iter()
-      .any(|v| v.to_canonical() == socket_data.remote_addr.ip().to_canonical()),
-    ConditionalData::IsNotForwardedFor(values) => {
+    ConditionalData::IsNotRemoteIp(list) => !list.is_blocked(socket_data.remote_addr.ip()),
+    ConditionalData::IsNotForwardedFor(list) => {
       let client_ip =
         if let Some(x_forwarded_for) = request.headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
           let prepared_remote_ip_str = match x_forwarded_for.split(",").next() {
@@ -204,12 +188,12 @@ fn match_condition(
             Err(_) => return false,
           };
 
-          prepared_remote_ip.to_canonical()
+          prepared_remote_ip
         } else {
-          socket_data.remote_addr.ip().to_canonical()
+          socket_data.remote_addr.ip()
         };
 
-      !values.iter().any(|v| v.to_canonical() == client_ip)
+      !list.is_blocked(client_ip)
     }
     ConditionalData::IsEqual(v1, v2) => {
       replace_header_placeholders(v1, request, Some(socket_data))

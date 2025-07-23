@@ -4,6 +4,7 @@ use std::net::{IpAddr, Ipv6Addr};
 use cidr::IpCidr;
 
 /// The IP blocklist
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IpBlockList {
   blocked_ips: HashSet<IpAddr>,
   blocked_cidrs: HashSet<IpCidr>,
