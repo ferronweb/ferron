@@ -91,7 +91,7 @@ impl ModuleLoader for BlocklistModuleLoader {
           if !value.is_string() {
             Err(anyhow::anyhow!("Invalid blocked IP address"))?
           } else if let Some(value) = value.as_str() {
-            if value.parse::<IpAddr>().is_err() || value.parse::<IpCidr>().is_err() {
+            if value.parse::<IpAddr>().is_err() && value.parse::<IpCidr>().is_err() {
               Err(anyhow::anyhow!("Invalid blocked IP address"))?
             }
           }
@@ -105,7 +105,7 @@ impl ModuleLoader for BlocklistModuleLoader {
           if !value.is_string() {
             Err(anyhow::anyhow!("Invalid allowed IP address"))?
           } else if let Some(value) = value.as_str() {
-            if value.parse::<IpAddr>().is_err() || value.parse::<IpCidr>().is_err() {
+            if value.parse::<IpAddr>().is_err() && value.parse::<IpCidr>().is_err() {
               Err(anyhow::anyhow!("Invalid allowed IP address"))?
             }
           }
