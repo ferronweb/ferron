@@ -169,6 +169,7 @@ aws-sdk-route53 = { version = "1.84.0", optional = true, default-features = fals
 # Performance & Utilities
 mimalloc = { workspace = true }
 memchr = { version = "2.7.4", optional = true }
+cidr = "0.3.1"
 itertools = { version = "0.14.0", optional = true }
 smallvec = { version = "1.15.0", features = [
     "write",
