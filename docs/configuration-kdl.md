@@ -265,7 +265,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `auto_tls_challenge <acme_challenge_type: string> [provider=<acme_challenge_provider: string>] [...]`
   - This directive specifies the used ACME challenge type. The supported types are `"http-01"` (HTTP-01 ACME challenge), `"tls-alpn-01"` (TLS-ALPN-01 ACME challenge) and `"dns-01"` (DNS-01 ACME challenge; Ferron 2.0.0-beta.9 or newer). The `provider` prop defines the DNS provider to use for DNS-01 challenges. Additional props can be passed as parameters for the DNS provider, see automatic TLS documentation. Default: `auto_tls_challenge "tls-alpn-01"`
 - `auto_tls_directory <auto_tls_directory: string>` (Ferron 2.0.0-beta.3 or newer)
-  - This directive specifies the ACME directory from which the certificates are obtained. Overrides `auto_tls_letsencrypt_production` directive. Default: none
+  - This directive specifies the ACME directory URL from which the certificates are obtained. Overrides `auto_tls_letsencrypt_production` directive. Default: none
 - `auto_tls_no_verification [auto_tls_no_verification: bool]` (Ferron 2.0.0-beta.3 or newer)
   - This directive specifies whenever to disable the certificate verification of the ACME server. Default: `auto_tls_no_verification #false`
 - `auto_tls_profile <auto_tls_profile: string|null>` (Ferron 2.0.0-beta.9 or newer)
