@@ -6,8 +6,6 @@ use std::time::{Duration, SystemTime};
 
 use async_channel::{Receiver, Sender};
 use bytes::{Buf, Bytes};
-#[cfg(feature = "runtime-monoio")]
-use futures_util::StreamExt;
 use http_body_util::{BodyExt, StreamBody};
 use hyper::body::{Frame, Incoming};
 use hyper::service::service_fn;
@@ -28,8 +26,6 @@ use rustls::ServerConfig;
 use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::LazyConfigAcceptor;
-#[cfg(feature = "runtime-monoio")]
-use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
 use tokio_util::sync::CancellationToken;
 
 use crate::acme::ACME_TLS_ALPN_NAME;
@@ -40,7 +36,7 @@ use crate::logging::{LogMessage, Loggers};
 use crate::request_handler::request_handler;
 use crate::util::read_proxy_header;
 #[cfg(feature = "runtime-monoio")]
-use crate::util::SendRwStream;
+use crate::util::SendAsyncIo;
 
 // Tokio local executor
 #[cfg(feature = "runtime-tokio")]
@@ -459,14 +455,7 @@ async fn http_tcp_handler_fn(
       }
     } else {
       #[cfg(feature = "runtime-monoio")]
-      let io = {
-        let send_rw_stream = SendRwStream::new(tls_stream);
-        let (sink, stream) = send_rw_stream.split();
-        let reader = StreamReader::new(stream);
-        let writer = SinkWriter::new(CopyToBytes::new(sink));
-        let rw = tokio::io::join(reader, writer);
-        MonoioIo::new(rw)
-      };
+      let io = MonoioIo::new(SendAsyncIo::new(tls_stream));
 
       #[cfg(feature = "runtime-monoio")]
       let http1_builder = {
@@ -536,15 +525,7 @@ async fn http_tcp_handler_fn(
     }
   } else if let MaybeTlsStream::Plain(stream) = maybe_tls_stream {
     #[cfg(feature = "runtime-monoio")]
-    let io = {
-      // Some pesky code...
-      let send_rw_stream = SendRwStream::new(stream);
-      let (sink, stream) = send_rw_stream.split();
-      let reader = StreamReader::new(stream);
-      let writer = SinkWriter::new(CopyToBytes::new(sink));
-      let rw = tokio::io::join(reader, writer);
-      MonoioIo::new(rw)
-    };
+    let io = MonoioIo::new(SendAsyncIo::new(stream));
     #[cfg(feature = "runtime-tokio")]
     let io = TokioIo::new(stream);
 

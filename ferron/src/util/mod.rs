@@ -26,6 +26,8 @@ mod preforked_process_pool;
 mod proxy_protocol;
 #[cfg(feature = "fcgi")]
 mod read_to_end_move;
+#[cfg(feature = "runtime-monoio")]
+mod send_async_io;
 #[cfg(all(feature = "scgi", feature = "runtime-monoio"))]
 mod send_read_stream;
 #[cfg(feature = "runtime-monoio")]
@@ -63,6 +65,8 @@ pub use preforked_process_pool::*;
 pub use proxy_protocol::*;
 #[cfg(feature = "fcgi")]
 pub use read_to_end_move::*;
+#[cfg(feature = "runtime-monoio")]
+pub use send_async_io::*;
 #[cfg(all(feature = "scgi", feature = "runtime-monoio"))]
 pub use send_read_stream::*;
 #[cfg(feature = "runtime-monoio")]
