@@ -8,7 +8,7 @@ Ferron 2.0.0-beta.1 and newer can be configured in a [KDL-format](https://kdl.de
 
 At the top level of the server configration, the confguration blocks representing specific virtual host are specified. Below are the examples of such configuration blocks:
 
-```kdl
+````kdl
 globals {
   // Global configuration that doesn't imply any virtual host (Ferron 2.0.0-beta.13 or newer)
 }
@@ -80,13 +80,26 @@ with-conditions.example.com {
   }
 }
 
-```
+snippet "EXAMPLE" {
+  // Example snippet configuration (Ferron UNRELEASED or newer)
+}
+
+with-snippet.example.com {
+  // Import from snippet (Ferron UNRELEASED or newer)
+  use "EXAMPLE"
+}
+
+with-snippet.example.org {
+  // Snippets can be reusable
+  use "EXAMPLE"
+}
+``
 
 Also, it's possible to include other configuration files using an `include <included_configuration_path: string>` directive, like this:
 
 ```kdl
 include "/etc/ferron.d/**/*.kdl"
-```
+````
 
 ## Directive categories overview
 

@@ -92,11 +92,24 @@ fn load_configuration_inner(
   // Loaded conditions
   let mut loaded_conditions: HashMap<String, Vec<ConditionalData>> = HashMap::new();
 
+  // KDL configuration snippets
+  let mut snippets: HashMap<String, KdlDocument> = HashMap::new();
+
   // Iterate over KDL nodes
   for kdl_node in kdl_document {
     let global_name = kdl_node.name().value();
     let children = kdl_node.children();
-    if let Some(children) = children {
+    if global_name == "snippet" {
+      if let Some(snippet_name) = kdl_node.get(0).and_then(|v| v.as_string()) {
+        if let Some(children) = children {
+          snippets.insert(snippet_name.to_string(), children.to_owned());
+        } else {
+          Err(anyhow::anyhow!("Snippet \"{snippet_name}\" is missing children"))?
+        }
+      } else {
+        Err(anyhow::anyhow!("Invalid or missing snippet name"))?
+      }
+    } else if let Some(children) = children {
       for global_name in global_name.split(",") {
         let host_filter = if global_name == "globals" {
           (None, None, None, false)
@@ -159,11 +172,36 @@ fn load_configuration_inner(
             conditions: &mut Option<&mut Conditions>,
             is_error_config: bool,
             loaded_conditions: &mut HashMap<String, Vec<ConditionalData>>,
+            snippets: &HashMap<String, KdlDocument>,
           ) -> Result<(), Box<dyn Error + Send + Sync>> {
             let (hostname, ip, port, is_host) = host_filter;
             let kdl_node_name = kdl_node.name().value();
             let children = kdl_node.children();
-            if kdl_node_name == "location" {
+            if kdl_node_name == "use" {
+              if let Some(snippet_name) = kdl_node.entry(0).and_then(|e| e.value().as_string()) {
+                if let Some(snippet) = snippets.get(snippet_name) {
+                  for kdl_node in snippet.nodes() {
+                    kdl_iterate_fn(
+                      canonical_pathbuf,
+                      host_filter,
+                      configurations,
+                      configuration_entries,
+                      kdl_node,
+                      conditions,
+                      is_error_config,
+                      loaded_conditions,
+                      snippets,
+                    )?;
+                  }
+                } else {
+                  Err(anyhow::anyhow!(
+                    "Snippet not defined: {snippet_name}. You might need to define it before using it"
+                  ))?;
+                }
+              } else {
+                Err(anyhow::anyhow!("Invalid `use` statement"))?;
+              }
+            } else if kdl_node_name == "location" {
               if is_error_config {
                 Err(anyhow::anyhow!("Locations in error configurations aren't allowed"))?;
               } else if conditions.is_some() {
@@ -190,6 +228,7 @@ fn load_configuration_inner(
                         &mut Some(&mut conditions),
                         is_error_config,
                         &mut loaded_conditions,
+                        snippets,
                       )?;
                     }
                     if kdl_node
@@ -316,6 +355,7 @@ fn load_configuration_inner(
                         &mut Some(&mut new_conditions),
                         is_error_config,
                         &mut loaded_conditions,
+                        snippets,
                       )?;
                     }
 
@@ -389,6 +429,7 @@ fn load_configuration_inner(
                         &mut Some(&mut new_conditions),
                         is_error_config,
                         &mut loaded_conditions,
+                        snippets,
                       )?;
                     }
 
@@ -441,6 +482,7 @@ fn load_configuration_inner(
                         conditions,
                         true,
                         &mut loaded_conditions,
+                        snippets,
                       )?;
                     }
                     configurations.push(ServerConfiguration {
@@ -519,6 +561,7 @@ fn load_configuration_inner(
             &mut None,
             false,
             &mut loaded_conditions,
+            &snippets,
           )?;
         }
         let (hostname, ip, port, is_host) = host_filter;
