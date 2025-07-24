@@ -352,19 +352,14 @@ async fn http_tcp_handler_fn(
     let alpn_protocol = tls_stream.get_ref().1.alpn_protocol();
     let is_http2 = alpn_protocol == Some("h2".as_bytes());
 
-    #[cfg(feature = "runtime-monoio")]
-    let io = {
-      let send_rw_stream = SendRwStream::new(tls_stream);
-      let (sink, stream) = send_rw_stream.split();
-      let reader = StreamReader::new(stream);
-      let writer = SinkWriter::new(CopyToBytes::new(sink));
-      let rw = tokio::io::join(reader, writer);
-      MonoioIo::new(rw)
-    };
     #[cfg(feature = "runtime-tokio")]
     let io = TokioIo::new(tls_stream);
 
     if is_http2 {
+      // Hyper's HTTP/2 connection doesn't require underlying I/O to be `Send`.
+      #[cfg(feature = "runtime-monoio")]
+      let io = MonoioIo::new(tls_stream);
+
       #[cfg(feature = "runtime-monoio")]
       let mut http2_builder = {
         let mut http2_builder = hyper::server::conn::http2::Builder::new(MonoioExecutor);
@@ -463,6 +458,16 @@ async fn http_tcp_handler_fn(
         }
       }
     } else {
+      #[cfg(feature = "runtime-monoio")]
+      let io = {
+        let send_rw_stream = SendRwStream::new(tls_stream);
+        let (sink, stream) = send_rw_stream.split();
+        let reader = StreamReader::new(stream);
+        let writer = SinkWriter::new(CopyToBytes::new(sink));
+        let rw = tokio::io::join(reader, writer);
+        MonoioIo::new(rw)
+      };
+
       #[cfg(feature = "runtime-monoio")]
       let http1_builder = {
         let mut http1_builder = hyper::server::conn::http1::Builder::new();
