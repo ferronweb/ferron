@@ -513,10 +513,11 @@ impl ModuleLoader for AsgiModuleLoader {
             } else {
               let available_parallelism = thread::available_parallelism()?.get();
 
-              // Initialize a single-threaded (due to Python's GIL) Tokio runtime to be used as an intermediary event loop for asynchronous Python
+              // Initialize a two-threaded (due to Python's GIL; single-threaded would fail to shutdown)
+              // Tokio runtime to be used as an intermediary event loop for asynchronous Python
               let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
               runtime_builder
-                .worker_threads(1)
+                .worker_threads(2)
                 .enable_all()
                 .thread_name("python-async-pool");
               pyo3_async_runtimes::tokio::init(runtime_builder);
