@@ -14,6 +14,7 @@ cache_control = { git = "https://github.com/DorianNiemiecSVRJS/rust-cache-contro
 libc = { git = "https://github.com/DorianNiemiecSVRJS/rust-libc.git", branch = "libc-0.2" } # This is needed for the web server to be able to be compiled for musl libc targets
 desec_api = { git = "https://github.com/DorianNiemiecSVRJS/desec_api.git" }                 # This is a fork of "desec_api" crate, with updated dependencies and crypto provider requirement removed
 dns-update = { git = "https://github.com/DorianNiemiecSVRJS/dns-update.git" }               # This is a fork of "dns-update" crate, with updated dependencies and crypto provider requirement removed
+async-compression = { git = "https://github.com/DorianNiemiecSVRJS/async-compression.git" } # This is a fork of "async-compression" crate that uses "zlib-rs" backend for "flate2" instead of "miniz_oxide"
 
 [profile.release]
 strip = true
