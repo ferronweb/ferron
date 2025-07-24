@@ -1,4 +1,5 @@
 use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::{collections::HashSet, error::Error};
 
@@ -17,6 +18,7 @@ use super::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, Soc
 /// A core module loader
 pub struct CoreModuleLoader {
   cache: ModuleCache<CoreModule>,
+  has_https: Arc<AtomicBool>,
 }
 
 impl CoreModuleLoader {
@@ -24,6 +26,7 @@ impl CoreModuleLoader {
   pub fn new() -> Self {
     Self {
       cache: ModuleCache::new(vec![]),
+      has_https: Arc::new(AtomicBool::new(false)),
     }
   }
 }
@@ -34,10 +37,18 @@ impl ModuleLoader for CoreModuleLoader {
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
+    if !config.filters.is_global_non_host()
+      && (get_value!("auto_tls", config)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(config.filters.port.is_none())
+        || config.entries.contains_key("tls"))
+    {
+      self.has_https.store(true, Ordering::Relaxed);
+    }
     Ok(
       self
         .cache
-        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |_| {
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
           Ok(Arc::new(CoreModule {
             default_http_port: global_config
               .and_then(|c| get_entry!("default_http_port", c))
@@ -59,6 +70,7 @@ impl ModuleLoader for CoreModuleLoader {
                   Some(v.as_i128().unwrap_or(443) as u16)
                 }
               }),
+            has_https: self.has_https.clone(),
           }))
         })?,
     )
@@ -635,6 +647,7 @@ impl ModuleLoader for CoreModuleLoader {
 struct CoreModule {
   default_http_port: Option<u16>,
   default_https_port: Option<u16>,
+  has_https: Arc<AtomicBool>,
 }
 
 impl Module for CoreModule {
@@ -642,6 +655,7 @@ impl Module for CoreModule {
     Box::new(CoreModuleHandlers {
       default_http_port: self.default_http_port,
       default_https_port: self.default_https_port,
+      has_https: self.has_https.load(Ordering::Relaxed),
     })
   }
 }
@@ -650,6 +664,7 @@ impl Module for CoreModule {
 struct CoreModuleHandlers {
   default_http_port: Option<u16>,
   default_https_port: Option<u16>,
+  has_https: bool,
 }
 
 #[async_trait(?Send)]
@@ -764,6 +779,7 @@ impl ModuleHandlers for CoreModuleHandlers {
       if !get_value!("no_redirect_to_https", config)
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
+        && self.has_https
       {
         if let Some(default_http_port) = self.default_http_port {
           if let Some(default_https_port) = self.default_https_port {
