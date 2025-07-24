@@ -215,6 +215,34 @@ fn match_condition(
   }
 }
 
+fn count_logical_slashes(s: &str) -> usize {
+  if s.is_empty() {
+    // Input is empty, zero slashes
+    return 0;
+  }
+  let trimmed = s.trim_end_matches('/');
+  if trimmed.is_empty() {
+    // Trimmed input is empty, but the original wasn't, probably input with only slashes
+    return 1;
+  }
+
+  let mut count = 0;
+  let mut prev_was_slash = false;
+
+  for ch in trimmed.chars() {
+    if ch == '/' {
+      if !prev_was_slash {
+        count += 1;
+        prev_was_slash = true;
+      }
+    } else {
+      prev_was_slash = false;
+    }
+  }
+
+  count
+}
+
 /// The struct containing conditions
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Conditions {
@@ -223,6 +251,20 @@ pub struct Conditions {
 
   /// The conditionals
   pub conditionals: Vec<Conditional>,
+}
+
+impl Ord for Conditions {
+  fn cmp(&self, other: &Self) -> Ordering {
+    count_logical_slashes(&self.location_prefix)
+      .cmp(&count_logical_slashes(&other.location_prefix))
+      .then_with(|| self.conditionals.len().cmp(&other.conditionals.len()))
+  }
+}
+
+impl PartialOrd for Conditions {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
+  }
 }
 
 /// The enum containing a conditional
@@ -411,7 +453,7 @@ impl Ord for ServerConfigurationFilters {
       .then_with(|| self.port.is_some().cmp(&other.port.is_some()))
       .then_with(|| self.ip.is_some().cmp(&other.ip.is_some()))
       .then_with(|| self.hostname.is_some().cmp(&other.hostname.is_some()))
-      .then_with(|| self.condition.is_some().cmp(&other.condition.is_some()))
+      .then_with(|| self.condition.cmp(&other.condition)) // Use `cmp` method for `Ord` trait implemented for `Condition`
       .then_with(|| {
         self
           .error_handler_status

@@ -48,7 +48,8 @@ api.example.com {
     }
   }
 
-  // The location configuration order is important; in this host configuration, first the "/v1" location is checked, then the "/" location.
+  // In Ferron 2.0.0-beta.14 and earlier, the location configuration order was important; in this host configuration, first the "/v1" location is checked, then the "/" location.
+  // In Ferron UNRELEASED and newer, the location and conditionals' configuration order is automatically determined based on the location and conditionals' depth
   location "/" {
     // ...
   }
