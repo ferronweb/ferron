@@ -333,11 +333,7 @@ fn load_configuration_inner(
                     };
 
                     if let Some(conditionals) = loaded_conditions.get(condition_name_str) {
-                      for conditional_data in conditionals {
-                        new_conditions
-                          .conditionals
-                          .push(Conditional::If(conditional_data.clone()));
-                      }
+                      new_conditions.conditionals.push(Conditional::If(conditionals.clone()));
                     } else {
                       Err(anyhow::anyhow!(
                         "Condition not defined: {condition_name_str}. You might need to define it before using it"
@@ -407,11 +403,9 @@ fn load_configuration_inner(
                     };
 
                     if let Some(conditionals) = loaded_conditions.get(condition_name_str) {
-                      for conditional_data in conditionals {
-                        new_conditions
-                          .conditionals
-                          .push(Conditional::IfNot(conditional_data.clone()));
-                      }
+                      new_conditions
+                        .conditionals
+                        .push(Conditional::IfNot(conditionals.clone()));
                     } else {
                       Err(anyhow::anyhow!(
                         "Condition not defined: {condition_name_str}. You might need to define it before using it"

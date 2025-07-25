@@ -141,8 +141,8 @@ pub fn parse_conditional_data(name: &str, value: ServerConfigurationEntry) -> Co
 fn match_conditions(conditions: &Conditions, request: &hyper::http::request::Parts, socket_data: &SocketData) -> bool {
   match_location(&conditions.location_prefix, request.uri.path())
     && conditions.conditionals.iter().all(|cond| match cond {
-      Conditional::If(data) => match_condition(data, request, socket_data),
-      Conditional::IfNot(data) => !match_condition(data, request, socket_data),
+      Conditional::If(data) => data.iter().all(|d| match_condition(d, request, socket_data)),
+      Conditional::IfNot(data) => !data.iter().all(|d| match_condition(d, request, socket_data)),
     })
 }
 
@@ -271,10 +271,10 @@ impl PartialOrd for Conditions {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Conditional {
   /// "if" condition
-  If(ConditionalData),
+  If(Vec<ConditionalData>),
 
   /// "if_not" condition
-  IfNot(ConditionalData),
+  IfNot(Vec<ConditionalData>),
 }
 
 /// The struct containing all the Ferron server configurations
