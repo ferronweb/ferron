@@ -512,7 +512,7 @@ fn before_starting_server(
 
     let mut tls_ports: HashMap<u16, CustomSniResolver> = HashMap::new();
     #[allow(clippy::type_complexity)]
-    let mut tls_port_locks: HashMap<u16, Arc<tokio::sync::RwLock<HashMap<String, Arc<dyn ResolvesServerCert>>>>> =
+    let mut tls_port_locks: HashMap<u16, Arc<tokio::sync::RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>> =
       HashMap::new();
     let mut nonencrypted_ports = HashSet::new();
     let mut certified_keys_to_preload: HashMap<u16, Vec<Arc<CertifiedKey>>> = HashMap::new();
@@ -644,7 +644,7 @@ fn before_starting_server(
                       sni_resolver.load_fallback_resolver(resolver);
                     }
                   } else {
-                    let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+                    let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
                     tls_port_locks.insert(https_port, sni_resolver_list.clone());
                     let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
                     if let Some(sni_hostname) = &sni_hostname {
@@ -899,7 +899,7 @@ fn before_starting_server(
               if let Some(sni_resolver) = tls_ports.get_mut(&automatic_tls_port) {
                 sni_resolver.load_fallback_sender(acme_on_demand_tx.clone(), automatic_tls_port);
               } else {
-                let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+                let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
                 tls_port_locks.insert(automatic_tls_port, sni_resolver_list.clone());
                 let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
                 sni_resolver.load_fallback_sender(acme_on_demand_tx.clone(), automatic_tls_port);
@@ -959,7 +959,7 @@ fn before_starting_server(
                 sni_resolver_lock: tls_port_locks
                   .get(&automatic_tls_port)
                   .cloned()
-                  .unwrap_or(Arc::new(tokio::sync::RwLock::new(HashMap::new()))),
+                  .unwrap_or(Arc::new(tokio::sync::RwLock::new(Vec::new()))),
                 tls_alpn_01_resolver_lock: acme_tls_alpn_01_resolver_locks
                   .get(&automatic_tls_port)
                   .cloned()
@@ -1069,7 +1069,7 @@ fn before_starting_server(
               if let Some(sni_resolver) = tls_ports.get_mut(&automatic_tls_port) {
                 sni_resolver.load_host_resolver(&sni_hostname, acme_resolver);
               } else {
-                let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+                let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
                 tls_port_locks.insert(automatic_tls_port, sni_resolver_list.clone());
                 let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
                 sni_resolver.load_host_resolver(&sni_hostname, acme_resolver);

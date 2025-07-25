@@ -34,7 +34,7 @@ use tokio::sync::RwLock;
 use x509_parser::prelude::{FromDer, X509Certificate};
 use xxhash_rust::xxh3::xxh3_128;
 
-use crate::acme::dns::DnsProvider;
+use crate::{acme::dns::DnsProvider, tls_util::load_host_resolver};
 
 pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 const SECONDS_BEFORE_RENEWAL: u64 = 86400; // 1 day before expiration
@@ -111,7 +111,7 @@ pub struct AcmeOnDemandConfig {
   /// The path to the cache directory for storing ACME information.
   pub cache_path: Option<PathBuf>,
   /// The lock for managing the SNI resolver.
-  pub sni_resolver_lock: Arc<RwLock<HashMap<String, Arc<dyn ResolvesServerCert>>>>,
+  pub sni_resolver_lock: Arc<RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>,
   /// The lock for managing the TLS-ALPN-01 resolver.
   pub tls_alpn_01_resolver_lock: Arc<RwLock<Vec<TlsAlpn01DataLock>>>,
   /// The lock for managing the HTTP-01 resolver.
@@ -488,8 +488,9 @@ pub async fn convert_on_demand_config(
   let http_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
 
   // Insert new locked data
-  config.sni_resolver_lock.write().await.insert(
-    sni_hostname.clone(),
+  load_host_resolver(
+    &mut *config.sni_resolver_lock.write().await,
+    &sni_hostname,
     Arc::new(AcmeResolver::new(certified_key_lock.clone())),
   );
   match config.challenge_type {
