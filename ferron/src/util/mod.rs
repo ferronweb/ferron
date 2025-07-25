@@ -10,6 +10,7 @@ pub mod cgi;
 mod config_macros;
 #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
 mod copy_move;
+mod default_html_page;
 mod error_pages;
 #[cfg(feature = "fcgi")]
 pub mod fcgi;
@@ -51,6 +52,7 @@ pub use body_replacer::*;
 pub(crate) use config_macros::*;
 #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
 pub use copy_move::*;
+pub(crate) use default_html_page::*;
 pub use error_pages::*;
 pub use header_placeholders::*;
 pub use ip_blocklist::*;

@@ -37,7 +37,9 @@ use crate::logging::ErrorLogger;
 use crate::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 #[cfg(feature = "runtime-monoio")]
 use crate::util::MonoioFileStream;
-use crate::util::{anti_xss, get_entries_for_validation, get_entry, get_value, sizify, ModuleCache, TtlCache};
+use crate::util::{
+  anti_xss, format_page, get_entries_for_validation, get_entry, get_value, sizify, ModuleCache, TtlCache,
+};
 
 const COMPRESSED_STREAM_READER_BUFFER_SIZE: usize = 16384;
 
@@ -62,7 +64,7 @@ pub async fn generate_directory_listing(
   let mut table_rows = Vec::new();
   if !request_path_without_trailing_slashes.is_empty() {
     table_rows.push(format!(
-      "<tr><td><a href=\"{}\">Return</a></td><td></td><td></td></tr>",
+      "<tr><td>⬆️ <a href=\"{}\">Return</a></td><td></td><td></td></tr>",
       anti_xss(return_path)
     ));
   }
@@ -116,7 +118,14 @@ pub async fn generate_directory_listing(
     match metadata_obt {
       Ok(metadata) => {
         let filename_link = format!(
-          "<a href=\"{}/{}{}\">{}</a>",
+          "{} <a href=\"{}/{}{}\">{}</a>",
+          if metadata.is_dir() {
+            "📁"
+          } else if metadata.is_file() {
+            "📄"
+          } else {
+            "❓"
+          },
           request_path_without_trailing_slashes,
           anti_xss(urlencoding::encode(&filename).as_ref()),
           match metadata.is_dir() {
@@ -127,7 +136,7 @@ pub async fn generate_directory_listing(
         );
 
         let row = format!(
-          "<tr><td>{}</td><td>{}</td><td>{}</td></tr>",
+          "<tr><td class=\"directory-filename\">{}</td><td class=\"directory-size\">{}</td><td class=\"directory-date\">{}</td></tr>",
           filename_link,
           match metadata.is_file() {
             true => anti_xss(&sizify(metadata.len(), false)),
@@ -147,52 +156,40 @@ pub async fn generate_directory_listing(
       }
       Err(_) => {
         let filename_link = format!(
-          "<a href=\"{}{}{}\">{}</a>",
-          "{}{}",
+          "⚠️ <a href=\"{}/{}\">{}</a>",
           request_path_without_trailing_slashes,
           anti_xss(urlencoding::encode(&filename).as_ref()),
           anti_xss(&filename)
         );
-        let row = format!("<tr><td>{filename_link}</td><td>-</td><td>-</td></tr>");
+        let row = format!("<tr><td class=\"directory-filename\">{filename_link}</td><td class=\"directory-size\">-</td><td class=\"directory-date\">-</td></tr>");
         table_rows.push(row);
       }
     };
   }
 
-  if table_rows.len() < min_table_rows_length {
-    table_rows.push("<tr><td>No files found</td><td></td><td></td></tr>".to_string());
+  if table_rows.len() <= min_table_rows_length {
+    table_rows.push("<tr><td class=\"directory-filename\">🤷 No files found</td><td class=\"directory-size\"></td><td class=\"directory-date\"></td></tr>".to_string());
   }
 
-  Ok(format!(
-    "<!DOCTYPE html>
-<html lang=\"en\">
-<head>
-    <meta charset=\"UTF-8\">
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
-    <title>Directory: {}</title>
-</head>
-<body>
-    <h1>Directory: {}</h1>
-    <table>
-      <tr><th>Filename</th><th>Size</th><th>Date</th></tr>
+  Ok(format_page!(
+    format!(
+      "<h1>Directory: {}</h1>
+      <table>
+      <tr><th class=\"directory-filename\">Filename</th><th class=\"directory-size\">Size</th><th class=\"directory-date\">Date</th></tr>
       {}
-      {}
-    </table>
-</body>
-</html>",
-    anti_xss(request_path),
-    anti_xss(request_path),
-    table_rows.join(""),
-    match description {
-      Some(description) => format!(
-        "<hr>{}",
-        anti_xss(&description)
-          .replace("\r\n", "\n")
-          .replace("\r", "\n")
-          .replace("\n", "<br>")
-      ),
-      None => "".to_string(),
-    }
+    </table>{}",
+      anti_xss(request_path),
+      table_rows.join(""),
+      match description {
+        Some(description) => format!("<hr><pre class=\"directory-description\">{}</pre>", anti_xss(&description)),
+        None => "".to_string(),
+      }
+    ),
+    &format!("Directory: {request_path}"),
+    vec![
+      include_str!("../../res/common.css"),
+      include_str!("../../res/directory.css")
+    ]
   ))
 }
 

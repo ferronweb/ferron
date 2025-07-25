@@ -1,3 +1,5 @@
+use crate::util::format_page;
+
 use super::anti_xss;
 
 /// Generates a default error page
@@ -11,7 +13,7 @@ pub fn generate_default_error_page(status_code: hyper::StatusCode, server_admini
         Some(email_address) => format!(" at {email_address}"),
         None => String::from("")
     });
-  let status_code_description = String::from(match status_code.as_u16() {
+  let status_code_description = match status_code.as_u16() {
     200 => "The request was successful!",
     201 => "A new resource was successfully created.",
     202 => "The request was accepted but hasn't been fully processed yet.",
@@ -60,23 +62,25 @@ pub fn generate_default_error_page(status_code: hyper::StatusCode, server_admini
     598 => "The proxy server didn't receive a response in time.",
     599 => "The proxy server couldn't establish a connection in time.",
     _ => "No description found for the status code.",
-  });
+  };
 
-  format!(
-    "<!DOCTYPE html>
-<html lang=\"en\">
-<head>
-    <meta charset=\"UTF-8\">
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
-    <title>{}</title>
-</head>
-<body>
-    <h1>{}</h1>
-    <p>{}</p>
-</body>
-</html>",
-    anti_xss(&status_code_name),
-    anti_xss(&status_code_name),
-    anti_xss(&status_code_description)
+  format_page!(
+    format!(
+      "<main class=\"error-container\">
+      <h1>
+          <span class=\"error-code\">{}</span>
+          {}
+      </h1>
+      <p class=\"error-description\">{}</p>
+  </main>",
+      status_code.as_u16(),
+      status_code.canonical_reason().map_or("".to_string(), |r| format!(
+        "<span class=\"error-message\">{}</span>",
+        anti_xss(r)
+      )),
+      status_code_description
+    ),
+    &status_code_name,
+    vec![include_str!("../res/common.css"), include_str!("../res/error.css")]
   )
 }
