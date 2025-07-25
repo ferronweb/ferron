@@ -8,6 +8,7 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub struct CustomSniResolver {
   fallback_resolver: Option<Arc<dyn ResolvesServerCert>>,
+  #[allow(clippy::type_complexity)]
   resolvers: Arc<tokio::sync::RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>,
   fallback_sender: Option<(async_channel::Sender<(String, u16)>, u16)>,
 }
@@ -24,6 +25,7 @@ impl CustomSniResolver {
   }
 
   /// Creates a custom SNI resolver with provided resolvers lock
+  #[allow(clippy::type_complexity)]
   pub fn with_resolvers(resolvers: Arc<tokio::sync::RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>) -> Self {
     Self {
       fallback_resolver: None,

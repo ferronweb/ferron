@@ -111,6 +111,7 @@ pub struct AcmeOnDemandConfig {
   /// The path to the cache directory for storing ACME information.
   pub cache_path: Option<PathBuf>,
   /// The lock for managing the SNI resolver.
+  #[allow(clippy::type_complexity)]
   pub sni_resolver_lock: Arc<RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>,
   /// The lock for managing the TLS-ALPN-01 resolver.
   pub tls_alpn_01_resolver_lock: Arc<RwLock<Vec<TlsAlpn01DataLock>>>,
