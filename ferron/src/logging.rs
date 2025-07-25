@@ -125,7 +125,25 @@ impl Ord for LoggerFilter {
       .is_some()
       .cmp(&other.port.is_some())
       .then_with(|| self.ip.is_some().cmp(&other.ip.is_some()))
-      .then_with(|| self.hostname.is_some().cmp(&other.hostname.is_some()))
+      .then_with(|| {
+        self
+          .hostname
+          .as_ref()
+          .map(|h| !h.starts_with("*."))
+          .cmp(&other.hostname.as_ref().map(|h| !h.starts_with("*.")))
+      }) // Take wildcard hostnames into account
+      .then_with(|| {
+        self
+          .hostname
+          .as_ref()
+          .map(|h| h.trim_end_matches('.').chars().filter(|c| *c == '.').count())
+          .cmp(
+            &other
+              .hostname
+              .as_ref()
+              .map(|h| h.trim_end_matches('.').chars().filter(|c| *c == '.').count()),
+          )
+      }) // Take also amount of dots in hostnames (domain level) into account
   }
 }
 
