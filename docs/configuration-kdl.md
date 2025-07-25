@@ -762,7 +762,7 @@ Below is the list of supported subconditions:
 
 Ferron supports the following header value and subcondition placeholders:
 
-- `{path}` - the path part of the request URI
+- `{path}` - the request URI with path and query string (for example, `/index.html?param=value`)
 - `{method}` (Ferron 2.0.0-beta.9 or newer) - the request method
 - `{version}` (Ferron 2.0.0-beta.9 or newer) - the HTTP version of the request
 - `{header:<header_name>}` (Ferron 2.0.0-beta.9 or newer) - the header value of the request URI
