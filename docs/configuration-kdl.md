@@ -94,6 +94,31 @@ with-snippet.example.org {
   // Snippets can be reusable
   use "EXAMPLE"
 }
+
+inheritance.example.com {
+  // The "proxy" directive is used as an example for demonstrating inheritance.
+  proxy "http://10.0.0.2:3000"
+  proxy "http://10.0.0.3:3000"
+
+  // Here, these directives take effect:
+  //   proxy "http://10.0.0.2:3000"
+  //   proxy "http://10.0.0.3:3000"
+
+  location "/somelocation" {
+    // Here, `some_directive` directives are inherited from the parent block.
+    // These directives take effect:
+    //   proxy "http://10.0.0.2:3000"
+    //   proxy "http://10.0.0.3:3000"
+  }
+
+  location "/anotherlocation" {
+    // The directives from the parent block are not inherited if there are other directives with the same name in the block.
+    // Here, these directives take effect:
+    //   proxy "http://10.0.0.4:3000"
+    proxy "http://10.0.0.4:3000"
+  }
+}
+
 ``
 
 Also, it's possible to include other configuration files using an `include <included_configuration_path: string>` directive, like this:
