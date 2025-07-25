@@ -527,8 +527,10 @@ example.com {
   - This directive specifies whenever the reverse proxy should keep the connection to the backend alive. Default: `proxy_keepalive #true`
 - `proxy_request_header_replace <header_name: string> <header_value: string>` (_rproxy_ module; Ferron 2.0.0-beta.9 or newer)
   - This directive specifies a header to be added to HTTP requests sent by the reverse proxy, potentially replacing existing headers. The header values supports placeholders (on Ferron 2.0.0-beta.9 and newer) like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
-- `proxy_http2 [enable_proxy_http2: bool]` (_rproxy_ module; Ferron 2.0.0-beta.13)
+- `proxy_http2 [enable_proxy_http2: bool]` (_rproxy_ module; Ferron 2.0.0-beta.13 or newer)
   - This directive specifies whenever the reverse proxy can use HTTP/2 protocol when connecting to backend servers. Default: `proxy_http2 #false`
+- `lb_retry_connection [enable_lb_retry_connection: bool]` (_rproxy_ module; Ferron UNRELEASED or newer)
+  - This directive specifies whenever the load balancer should retry connections to another backend server, in case of TCP connection or TLS handshake failure. Default: `lb_retry_connection #true`
 
 **Configuration example:**
 
