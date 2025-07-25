@@ -288,6 +288,7 @@ pub fn premerge_configuration(mut server_configurations: Vec<ServerConfiguration
 pub fn load_modules(
   server_configurations: Vec<ServerConfiguration>,
   server_modules: &mut [Box<dyn ModuleLoader + Send + Sync>],
+  secondary_runtime: &tokio::runtime::Runtime,
 ) -> (
   Vec<ServerConfiguration>,
   Option<Box<dyn Error + Send + Sync>>,
@@ -342,7 +343,7 @@ pub fn load_modules(
       // Only load module if its requirements are met
       if requirements_met {
         // Load the module with current configuration and global configuration
-        match server_module.load_module(&server_configuration, global_configuration.as_ref()) {
+        match server_module.load_module(&server_configuration, global_configuration.as_ref(), secondary_runtime) {
           Ok(loaded_module) => server_configuration.modules.push(loaded_module),
           Err(error) => {
             // Store the first error encountered

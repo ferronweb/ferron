@@ -27,6 +27,7 @@ pub trait ModuleLoader {
     &mut self,
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
+    secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>>;
 
   /// Determines configuration properties required to load a module

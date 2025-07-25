@@ -298,8 +298,7 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
 /// Initializes a WSGI process pool
 fn init_wsgi_process_pool(wsgi_script_path: PathBuf) -> Result<PreforkedProcessPool, Box<dyn Error + Send + Sync>> {
   let available_parallelism = thread::available_parallelism()?.get();
-  // Safety: The function depends on `nix::unistd::fork`, which is executed before any threads are spawned.
-  // The forking function is safe to call for single-threaded applications.
+  // Safety: The execution of child processes is passed into the WSGI pool function. (?)
   unsafe {
     PreforkedProcessPool::new(available_parallelism, move |tx, rx| {
       let wsgi_script_path_clone = wsgi_script_path.clone();
@@ -327,6 +326,7 @@ impl ModuleLoader for WsgidModuleLoader {
     &mut self,
     config: &ServerConfiguration,
     _global_config: Option<&ServerConfiguration>,
+    _secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
     Ok(
       self

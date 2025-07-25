@@ -52,6 +52,7 @@ impl ModuleLoader for ExampleModuleLoader {
     &mut self,
     config: &ServerConfiguration,
     _global_config: Option<&ServerConfiguration>,
+    _secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
     // Either get an existing module from cache or create a new one
     Ok(

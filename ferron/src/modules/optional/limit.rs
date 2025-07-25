@@ -35,6 +35,7 @@ impl ModuleLoader for LimitModuleLoader {
     &mut self,
     config: &ServerConfiguration,
     _global_config: Option<&ServerConfiguration>,
+    _secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
     Ok(
       self

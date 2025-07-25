@@ -242,19 +242,6 @@ fn before_starting_server(
       configuration_adapter
     ))?;
 
-  // Load the configuration
-  let configs_to_process = configuration_adapter.load_configuration(configuration_path)?;
-
-  // Process the configurations
-  let configs_to_process = merge_duplicates(configs_to_process);
-  let configs_to_process = remove_and_add_global_configuration(configs_to_process);
-  let configs_to_process = premerge_configuration(configs_to_process);
-  let (configs_to_process, first_module_error, unused_properties) =
-    load_modules(configs_to_process, &mut module_loaders);
-
-  // Finalize the configurations
-  let server_configurations = Arc::new(ServerConfigurations::new(configs_to_process));
-
   // Determine the available parallelism
   let available_parallelism = thread::available_parallelism()?.get();
 
@@ -267,6 +254,19 @@ fn before_starting_server(
     .thread_name("Secondary runtime")
     .enable_all()
     .build()?;
+
+  // Load the configuration
+  let configs_to_process = configuration_adapter.load_configuration(configuration_path)?;
+
+  // Process the configurations
+  let configs_to_process = merge_duplicates(configs_to_process);
+  let configs_to_process = remove_and_add_global_configuration(configs_to_process);
+  let configs_to_process = premerge_configuration(configs_to_process);
+  let (configs_to_process, first_module_error, unused_properties) =
+    load_modules(configs_to_process, &mut module_loaders, &secondary_runtime);
+
+  // Finalize the configurations
+  let server_configurations = Arc::new(ServerConfigurations::new(configs_to_process));
 
   let global_configuration = server_configurations.find_global_configuration();
 

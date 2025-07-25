@@ -36,6 +36,7 @@ impl ModuleLoader for CoreModuleLoader {
     &mut self,
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
+    _secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
     if !config.filters.is_global_non_host()
       && (get_value!("auto_tls", config)

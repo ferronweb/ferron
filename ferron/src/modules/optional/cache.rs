@@ -289,6 +289,7 @@ impl ModuleLoader for CacheModuleLoader {
     &mut self,
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
+    _secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
     Ok(
       self
