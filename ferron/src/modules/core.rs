@@ -10,7 +10,9 @@ use hyper::{header, Request, Response, StatusCode, Uri};
 
 use crate::config::ServerConfiguration;
 use crate::logging::ErrorLogger;
-use crate::util::{get_entries_for_validation, get_entry, get_value, get_values_for_validation, ModuleCache};
+use crate::util::{
+  get_entries_for_validation, get_entry, get_value, get_values_for_validation, is_localhost, ModuleCache,
+};
 
 use super::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 
@@ -768,7 +770,7 @@ impl ModuleHandlers for CoreModuleHandlers {
         && config.filters.port.is_none() // Port is set implicitly
         && (get_value!("auto_tls", config) // TLS is enabled
           .and_then(|v| v.as_bool())
-          .unwrap_or(true)
+          .unwrap_or(!is_localhost(&config.filters))
           || config.entries.contains_key("tls"))
       {
         if let Some(default_http_port) = self.default_http_port {

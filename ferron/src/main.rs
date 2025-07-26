@@ -57,7 +57,7 @@ use crate::acme::{
   ACME_TLS_ALPN_NAME,
 };
 use crate::logging::{LoggerFilter, LoggersBuilder};
-use crate::util::{match_hostname, NoServerVerifier};
+use crate::util::{is_localhost, match_hostname, NoServerVerifier};
 
 // Set the global allocator to use mimalloc for performance optimization
 #[global_allocator]
@@ -587,7 +587,7 @@ fn before_starting_server(
       if server_configuration.filters.port.is_none() {
         if get_value!("auto_tls", server_configuration)
           .and_then(|v| v.as_bool())
-          .unwrap_or(true)
+          .unwrap_or(!is_localhost(&server_configuration.filters))
         {
           automatic_tls_port = default_https_port;
         }
