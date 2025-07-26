@@ -2,7 +2,7 @@ use std::{cmp::Ordering, collections::HashMap, net::IpAddr, sync::Arc};
 
 use async_channel::{Receiver, Sender};
 
-use crate::util::match_hostname;
+use crate::util::{is_localhost, match_hostname};
 
 /// Represents a log message with its content and error status.
 pub struct LogMessage {
@@ -238,7 +238,9 @@ impl Loggers {
       .rev()
       .find(|&logger| {
         match_hostname(logger.0.hostname.as_deref(), hostname)
-          && (logger.0.ip.is_none() || logger.0.ip == Some(ip))
+          && ((logger.0.ip.is_none() && (!is_localhost(logger.0.ip.as_ref(), logger.0.hostname.as_deref())
+            || ip.to_canonical().is_loopback()))  // With special `localhost` check
+          || logger.0.ip == Some(ip))
           && (logger.0.port.is_none() || logger.0.port == Some(port))
       })
       .map(|logger| &logger.1)

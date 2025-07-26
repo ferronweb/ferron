@@ -10,7 +10,7 @@ use std::{cmp::Ordering, collections::HashMap};
 use fancy_regex::{Regex, RegexBuilder};
 
 use crate::modules::{Module, SocketData};
-use crate::util::{match_hostname, match_location, replace_header_placeholders, IpBlockList};
+use crate::util::{is_localhost, match_hostname, match_location, replace_header_placeholders, IpBlockList};
 
 /// Conditional data
 #[derive(Clone, Debug)]
@@ -314,7 +314,8 @@ impl ServerConfigurations {
       .rev()
       .find(|&server_configuration| {
         match_hostname(server_configuration.filters.hostname.as_deref(), hostname)
-          && (server_configuration.filters.ip.is_none()
+          && ((server_configuration.filters.ip.is_none() && (!is_localhost(server_configuration.filters.ip.as_ref(), server_configuration.filters.hostname.as_deref())
+            || socket_data.local_addr.ip().to_canonical().is_loopback()))  // With special `localhost` check
             || server_configuration.filters.ip == Some(socket_data.local_addr.ip()))
           && (server_configuration.filters.port.is_none()
             || server_configuration.filters.port == Some(socket_data.local_addr.port()))

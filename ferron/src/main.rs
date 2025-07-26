@@ -587,7 +587,10 @@ fn before_starting_server(
       if server_configuration.filters.port.is_none() {
         if get_value!("auto_tls", server_configuration)
           .and_then(|v| v.as_bool())
-          .unwrap_or(!is_localhost(&server_configuration.filters))
+          .unwrap_or(!is_localhost(
+            server_configuration.filters.ip.as_ref(),
+            server_configuration.filters.hostname.as_deref(),
+          ))
         {
           automatic_tls_port = default_https_port;
         }
