@@ -69,13 +69,13 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
   const chart3 = style.getPropertyValue("--chart-3");
   const chart4 = style.getPropertyValue("--chart-4");
   const chart5 = style.getPropertyValue("--chart-5");
-  const ibmPlexSans = style.getPropertyValue("--font-ibm-plex-sans");
+  const fontFamily = style.getPropertyValue("--font-spline-sans");
 
   class BenchmarkChart extends HTMLElement {
     connectedCallback() {
       const props = JSON.parse(this.dataset.props || "{}");
       const canvas = this.querySelector("canvas");
-      Chart.defaults.font.family = ibmPlexSans;
+      Chart.defaults.font.family = fontFamily;
       Chart.defaults.font.size = 14;
       Chart.defaults.color = `hsla(${mutedForegroundColor}, 1)`;
       Chart.defaults.borderColor = `hsla(${borderColor}, 1)`;

@@ -39,17 +39,19 @@ export default defineConfig({
     fonts: [
       {
         provider: fontProviders.fontsource(),
-        name: "IBM Plex Sans",
-        weights: [400, 500, 700],
-        cssVariable: "--font-ibm-plex-sans",
-        fallbacks: ["sans-serif"]
+        name: "Spline Sans",
+        weights: [400, 500, 600, 700],
+        cssVariable: "--font-spline-sans",
+        fallbacks: ["sans-serif"],
+        subsets: ["latin", "latin-ext"]
       },
       {
         provider: fontProviders.fontsource(),
-        name: "IBM Plex Mono",
-        weights: [400, 500, 700],
-        cssVariable: "--font-ibm-plex-mono",
-        fallbacks: ["monospace"]
+        name: "Spline Sans Mono",
+        weights: [400, 600],
+        cssVariable: "--font-spline-sans-mono",
+        fallbacks: ["monospace"],
+        subsets: ["latin", "latin-ext"]
       }
     ]
   }

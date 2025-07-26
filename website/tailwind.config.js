@@ -99,7 +99,8 @@ export default {
               color: "inherit"
             },
             code: {
-              color: "inherit"
+              color: "inherit",
+              fontWeight: 600
             },
             img: {
               marginLeft: "auto",
