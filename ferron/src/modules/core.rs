@@ -787,7 +787,8 @@ impl ModuleHandlers for CoreModuleHandlers {
         && config.filters.port.is_none() // Port is set implicitly
         && (get_value!("auto_tls", config) // TLS is enabled
           .and_then(|v| v.as_bool())
-          .unwrap_or(!is_localhost(config.filters.ip.as_ref(), config.filters.hostname.as_deref()))
+          .unwrap_or((config.filters.hostname.is_some() || config.filters.ip.is_some()) &&
+              !is_localhost(config.filters.ip.as_ref(), config.filters.hostname.as_deref()))
           || config.entries.contains_key("tls"))
       {
         if let Some(default_http_port) = self.default_http_port {
