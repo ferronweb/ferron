@@ -19,6 +19,10 @@ else
 	BUILD_RELEASE = build-release
 endif
 
+ifdef NO_MONOIO
+    CARGO_FINAL_EXTRA_ARGS = --no-default-features -F ferron/runtime-tokio $(CARGO_FINAL_EXTRA_ARGS)
+endif
+
 ifndef CARGO_FINAL
 	CARGO_FINAL = cargo
 endif

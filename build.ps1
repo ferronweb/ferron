@@ -29,6 +29,9 @@ if ($env:TARGET) {
     $buildRelease = "build-release"
 }
 
+# There would be a static file serving performance degradation when using Monoio, so we're compiling with Tokio
+$cargoFinalExtraArgs = "--no-default-features -F ferron/runtime-tokio $cargoFinalExtraArgs"
+
 # Set cargo executable if not set
 if (-not $env:CARGO_FINAL) {
     $cargoFinal = "cargo"
