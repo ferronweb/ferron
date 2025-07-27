@@ -4,7 +4,7 @@ use std::io::Write;
 use std::path::Path;
 
 use toml::Table;
-use yaml_rust2::YamlLoader;
+use yaml_rust2::{YamlEmitter, YamlLoader};
 
 fn main() {
   println!("cargo:rerun-if-changed=../ferron-build.yaml");
@@ -114,4 +114,15 @@ fn main() {
     .as_bytes(),
   )
   .unwrap();
+
+  let dest_path = Path::new(&out_dir).join("ferron-build.yaml");
+  let mut f = File::create(&dest_path).unwrap();
+  let mut ferron_build_yaml_normalized = String::new();
+  YamlEmitter::new(&mut ferron_build_yaml_normalized)
+    .dump(ferron_build_yaml)
+    .unwrap();
+  if let Some(ferron_build_yaml_normalized_stripped) = ferron_build_yaml_normalized.strip_prefix("---\n") {
+    ferron_build_yaml_normalized = ferron_build_yaml_normalized_stripped.to_string();
+  }
+  f.write_all(ferron_build_yaml_normalized.as_bytes()).unwrap();
 }

@@ -1516,6 +1516,12 @@ fn parse_arguments(all_adapters: Vec<&'static str>) -> ArgMatches {
         .required(false)
         .value_parser(all_adapters),
     )
+    .arg(
+      Arg::new("module-config")
+        .long("module-config")
+        .help("Prints the used compile-time module configuration (`ferron-build.yaml` or `ferron-build-override.yaml` in the Ferron source) and exits")
+        .action(ArgAction::SetTrue)
+    )
     .get_matches()
 }
 
@@ -1531,6 +1537,12 @@ fn main() {
 
   // Parse command-line arguments
   let args = parse_arguments(all_adapters);
+
+  if args.get_flag("module-config") {
+    // Dump the used compile-time module configuration and exit
+    println!("{}", ferron_load_modules::FERRON_BUILD_YAML);
+    return;
+  }
 
   // Start the server!
   let mut first_startup = true;

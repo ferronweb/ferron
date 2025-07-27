@@ -2,6 +2,8 @@ use std::{collections::HashMap, error::Error, sync::Arc};
 
 use ferron_common::{dns::DnsProvider, modules::ModuleLoader};
 
+pub const FERRON_BUILD_YAML: &str = include_str!(concat!(env!("OUT_DIR"), "/ferron-build.yaml"));
+
 /// Obtains the module loaders
 pub fn obtain_module_loaders() -> Vec<Box<dyn ModuleLoader + Send + Sync>> {
   // Module loaders
