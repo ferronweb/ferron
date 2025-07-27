@@ -48,7 +48,7 @@ fn main() {
         modules_block_inside.push_str(&format!("register_module_loader!({});\n", module_loader));
       } else if let Some(crate_name) = module["crate"].as_str() {
         let module_loader_name = module["loader"].as_str().unwrap();
-        let module_loader = format!("{}::{}::new()", crate_name, module_loader_name);
+        let module_loader = format!("{}::{}::new()", crate_name.replace("-", "_"), module_loader_name);
         modules_block_inside.push_str(&format!("register_module_loader!({});\n", module_loader));
       } else {
         println!(
