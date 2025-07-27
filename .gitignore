@@ -1,3 +1,6 @@
+# Cargo lockfiles
+Cargo.lock
+
 # Compiled binaries and generated documentation
 /target/
 /build-prepare/target/
