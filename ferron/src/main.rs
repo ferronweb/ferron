@@ -22,7 +22,7 @@ use std::time::Duration;
 use async_channel::{Receiver, Sender};
 use base64::Engine;
 use chrono::{DateTime, Local};
-use clap::{crate_version, Arg, ArgAction, ArgMatches, Command};
+use clap::{Arg, ArgAction, ArgMatches, Command};
 use config::adapters::ConfigurationAdapter;
 use config::processing::{load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration};
 use config::ServerConfigurations;
@@ -45,6 +45,7 @@ use rustls::version::{TLS12, TLS13};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use rustls_native_certs::load_native_certs;
 use rustls_platform_verifier::BuilderVerifierExt;
+use shadow_rs::shadow;
 use tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio_util::sync::CancellationToken;
@@ -61,6 +62,8 @@ use crate::util::{is_localhost, match_hostname, NoServerVerifier};
 // Set the global allocator to use mimalloc for performance optimization
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
+
+shadow!(build);
 
 static LISTENER_HANDLER_CHANNEL: LazyLock<Arc<(Sender<ConnectionData>, Receiver<ConnectionData>)>> =
   LazyLock::new(|| Arc::new(async_channel::unbounded()));
@@ -1497,7 +1500,6 @@ fn determine_default_configuration_adapter(_path: &Path) -> &'static str {
 /// Parses the command-line arguments
 fn parse_arguments(all_adapters: Vec<&'static str>) -> ArgMatches {
   Command::new("Ferron")
-    .version(crate_version!())
     .about("A fast, memory-safe web server written in Rust")
     .arg(
       Arg::new("config")
@@ -1522,6 +1524,13 @@ fn parse_arguments(all_adapters: Vec<&'static str>) -> ArgMatches {
         .help("Prints the used compile-time module configuration (`ferron-build.yaml` or `ferron-build-override.yaml` in the Ferron source) and exits")
         .action(ArgAction::SetTrue)
     )
+    .arg(
+      Arg::new("version")
+        .long("version")
+        .short('V')
+        .help("Print version and build information")
+        .action(ArgAction::SetTrue)
+    )
     .get_matches()
 }
 
@@ -1541,6 +1550,18 @@ fn main() {
   if args.get_flag("module-config") {
     // Dump the used compile-time module configuration and exit
     println!("{}", ferron_load_modules::FERRON_BUILD_YAML);
+    return;
+  } else if args.get_flag("version") {
+    // Print the server version and build information
+    println!("Ferron {}", build::PKG_VERSION);
+    println!("  Compiled on: {}", build::BUILD_TIME);
+    println!("  Git commit: {}", build::COMMIT_HASH);
+    println!("  Build target: {}", build::BUILD_TARGET);
+    println!("  Rust version: {}", build::RUST_VERSION);
+    println!("  Rust channel: {}", build::RUST_CHANNEL);
+    if shadow_rs::is_debug() {
+      println!("WARNING: This is a debug build. It is not recommended for production use.");
+    }
     return;
   }
 

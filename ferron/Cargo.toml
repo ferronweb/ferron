@@ -114,11 +114,22 @@ smallvec = { version = "1.15.0", features = [
     "const_generics",
 ] }
 
+# Build information
+shadow-rs = { version = "1.2.0", default-features = false, features = [
+    "metadata",
+    "tzdb",
+] }
+
 [dev-dependencies]
 shiba = { workspace = true }
 
 [build-dependencies]
 winresource = "0.1.19"
+shadow-rs = { version = "1.2.0", default-features = false, features = [
+    "build",
+    "metadata",
+    "tzdb",
+] }
 
 [features]
 default = ["config-yaml-legacy", "runtime-monoio"]
