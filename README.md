@@ -72,10 +72,34 @@ make run-dev # Run the web server, for development and debugging
 make package # Package the web server to a ZIP archive (run it after building it)
 ```
 
+Or a `build.ps1` build script, if you're on Windows:
+```batch
+REM Build the web server
+powershell -ExecutionPolicy Bypass .\build.ps1 Build
+
+REM Build the web server, for development and debugging
+powershell -ExecutionPolicy Bypass .\build.ps1 BuildDev
+
+REM Run the web server
+powershell -ExecutionPolicy Bypass .\build.ps1 Run
+
+REM Run the web server, for development and debugging
+powershell -ExecutionPolicy Bypass .\build.ps1 RunDev
+
+REM Package the web server to a ZIP archive (run it after building it)
+powershell -ExecutionPolicy Bypass .\build.ps1 Package
+```
+
 You can also create a ZIP archive that can be used by the Ferron installer:
 
 ```sh
 make build-with-package
+```
+
+Or if you're on Windows:
+
+```batch
+powershell -ExecutionPolicy Bypass .\build.ps1 BuildWithPackage
 ```
 
 The ZIP archive will be located in the `dist` directory.
