@@ -58,7 +58,7 @@ You can then build and run the web server using Cargo:
 cargo run --manifest-path build-prepare/Cargo.toml
 cd build-workspace
 cargo build -r --target-dir ../target
-cargo run -r --bin ferron
+../target/release/ferron
 ```
 
 You can also, for convenience, use `make`:
@@ -89,7 +89,7 @@ make build TARGET="i686-unknown-linux-gnu" CARGO_FINAL="cross"
 It's also possible to use only Cargo to build the web server, although you wouldn't be able to use external modules:
 ```sh
 cargo build -r
-cargo run -r --bin ferron
+./target/release/ferron
 ```
 
 For compilation notes, see the [compilation notes page](./COMPILATION.md).
