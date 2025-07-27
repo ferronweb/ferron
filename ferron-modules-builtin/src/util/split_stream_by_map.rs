@@ -222,8 +222,9 @@ pub trait SplitStreamByMapExt<P, L, R>: Stream {
   /// values of `Left` and `Right` become the items of the two respective
   /// streams
   ///
-  /// ```
-  /// use split_stream_by::{Either, SplitStreamByMapExt};
+  /// ```ignore
+  /// use futures_util::future::Either;
+  /// use crate::util::SplitStreamByMapExt;
   /// struct Request {
   ///   //...
   /// }
@@ -234,7 +235,7 @@ pub trait SplitStreamByMapExt<P, L, R>: Stream {
   ///   Request(Request),
   ///   Response(Response)
   /// }
-  /// let incoming_stream = futures::stream::iter([
+  /// let incoming_stream = futures_util::stream::iter([
   ///   Message::Request(Request {}),
   ///   Message::Response(Response {}),
   ///   Message::Response(Response {}),

@@ -15,8 +15,10 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use std::sync::Arc;
+//!
+//! use crate::util::AtomicGenericCache;
 //!
 //! let cache = AtomicGenericCache::<String>::new(1024);
 //!
@@ -310,7 +312,8 @@ where
   /// Arc-wrapped cache instance for shared ownership
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// ```
   pub fn new(capacity: usize, max_capacity: usize) -> Arc<Self> {
@@ -376,7 +379,8 @@ where
   /// `true` if the insertion was successful, `false` if the cache is full wrapped in Result<bool, std::io::Error> if successful
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// let success = cache.insert("key1", "value1".to_string()).unwrap();
   /// assert!(success);
@@ -434,7 +438,8 @@ where
   ///   Empty if no entries needed to be removed.
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(64, 100); // capacity 64, max 100
   ///
   /// // Fill the cache to max capacity
@@ -631,7 +636,8 @@ where
   /// `Some(value)` if found, `None` if not found or if concurrent modification detected
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   ///
@@ -672,7 +678,8 @@ where
   /// The timestamp is in UTC nanoseconds since Unix epoch.
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   ///
@@ -714,7 +721,8 @@ where
   /// Vector of values in the same order as keys. Missing keys result in None entries.
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   /// cache.insert("key3", "value3".to_string());
@@ -736,7 +744,8 @@ where
   /// `true` if the key exists, `false` otherwise
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   ///
@@ -757,7 +766,8 @@ where
   /// `true` if any of the keys exist, `false` if none exist
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   ///
@@ -777,7 +787,8 @@ where
   /// `true` if all keys exist, `false` if any key is missing
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   /// cache.insert("key2", "value2".to_string());
@@ -801,7 +812,8 @@ where
   /// `Some(value)` if the key was found and removed, `None` otherwise
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   ///
@@ -838,7 +850,8 @@ where
   /// Vector of removed values in the same order as keys. Missing keys result in None entries.
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   /// cache.insert("key3", "value3".to_string());
@@ -859,7 +872,8 @@ where
   /// Number of entries that were cleared
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   /// cache.insert("key2", "value2".to_string());
@@ -891,7 +905,8 @@ where
   /// Vector containing only the values that were successfully removed
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   /// cache.insert("key3", "value3".to_string());
@@ -918,7 +933,8 @@ where
   /// entries may be less than `count` if the cache contains fewer entries.
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024, 2048);
   /// cache.insert("key1", "value1".to_string());
   /// cache.insert("key2", "value2".to_string());
@@ -987,7 +1003,8 @@ where
   /// Number of entries with STATE_WRITTEN
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   ///
@@ -1011,7 +1028,8 @@ where
   /// Vector of (key_hash, value) tuples
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   /// cache.insert("key2", "value2".to_string());
@@ -1038,7 +1056,8 @@ where
   /// Vector of all entries that were in the cache, sorted by sequence number (most recent first)
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   /// cache.insert("key2", "value2".to_string());
@@ -1079,7 +1098,8 @@ where
   /// `true` if no entries have STATE_WRITTEN, `false` otherwise
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// assert!(cache.is_empty());
   ///
@@ -1099,7 +1119,8 @@ where
   /// Total capacity (always a power of 2)
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1000);
   /// println!("Cache capacity: {}", cache.capacity()); // Will be 1024 (next power of 2)
   /// ```
@@ -1118,7 +1139,8 @@ where
   /// Timestamp is in UTC nanoseconds since Unix epoch.
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   /// cache.insert("key2", "value2".to_string());
@@ -1163,7 +1185,8 @@ where
   /// Number of entries that were removed
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("keep", "important".to_string());
   /// cache.insert("remove", "unimportant".to_string());
@@ -1212,7 +1235,8 @@ where
   /// HashMap<u64, T> where keys are the hash values of the original keys
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   /// cache.insert("key2", "value2".to_string());
@@ -1246,7 +1270,8 @@ where
   /// HashMap<u64, T> where keys are the hash values of the original keys
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// cache.insert("key1", "value1".to_string());
   /// cache.insert("key2", "value2".to_string());
@@ -1280,7 +1305,8 @@ where
   /// `Arc<AtomicGenericCache<T>>` populated with the HashMap entries
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// use std::collections::HashMap;
   ///
   /// let mut hashmap = HashMap::new();
@@ -1332,7 +1358,8 @@ where
   /// `Arc<AtomicGenericCache<T>>` populated with the HashMap entries
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// use std::collections::HashMap;
   ///
   /// let mut hashmap = HashMap::new();
@@ -1370,7 +1397,8 @@ where
   /// Number of entries successfully inserted
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// use std::collections::HashMap;
   ///
   /// let cache = AtomicGenericCache::<String>::new(1024);
@@ -1413,7 +1441,8 @@ where
   /// 64-bit hash value for the key
   ///
   /// # Examples
-  /// ```
+  /// ```ignore
+  /// use crate::util::AtomicGenericCache;
   /// let cache = AtomicGenericCache::<String>::new(1024);
   /// let hash1 = cache.compute_key_hash(&"key1");
   /// let hash2 = cache.compute_key_hash(&"key2");

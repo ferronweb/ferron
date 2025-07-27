@@ -70,7 +70,7 @@ impl ErrorLogger {
   /// # Examples
   ///
   /// ```
-  /// # use crate::ferron_common::ErrorLogger;
+  /// # use ferron_common::logging::ErrorLogger;
   /// # #[tokio::main]
   /// # async fn main() {
   /// let (tx, mut rx) = async_channel::bounded(100);
