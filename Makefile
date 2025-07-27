@@ -26,16 +26,10 @@ endif
 .PHONY: build
 
 run: build
-	ifneq ($(TARGET),$(HOST_TARGET_TRIPLE))
-	    $(error "Cannot run cross-compiled binaries.")
-	endif
-	target/release/ferron
+	$(CARGO_TARGET_ROOT)/release/ferron
 
 run-dev: build-dev
-	ifneq ($(TARGET),$(HOST_TARGET_TRIPLE))
-	    $(error "Cannot run cross-compiled binaries.")
-	endif
-	target/debug/ferron
+	$(CARGO_TARGET_ROOT)/debug/ferron
 
 build: prepare-build
 	cd build-workspace && cargo update && $(CARGO_FINAL) build --target-dir ../target -r $(CARGO_FINAL_EXTRA_ARGS)
