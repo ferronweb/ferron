@@ -139,7 +139,8 @@ jobs:
         run: |
           cargo run --manifest-path build-prepare/Cargo.toml
           cd build-workspace
-          ${{ matrix.command }} build --verbose --locked --release --target ${{ matrix.target }} ${{ matrix.options }}
+          cargo update
+          ${{ matrix.command }} build --verbose --release --target ${{ matrix.target }} ${{ matrix.options }}
 
       - name: Prepare for packaging
         shell: bash

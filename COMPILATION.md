@@ -10,6 +10,8 @@ The modules are defined in the `modules` section, which is a list of modules to 
   - The Cargo feature for `ferron-modules-builtin` crate to enable for this module. Used with built-in modules. Default: none
 - **git** (_String_)
   - The Git repository URL for the module. Default: none
+- **branch** (_String_)
+  - The Git branch for the module. Used with Git repositories. Default: none
 - **path** (_String_)
   - The local path (absolute paths are recommended) to the module. Default: none
 - **crate** (_String_)

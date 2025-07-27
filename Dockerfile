@@ -13,6 +13,7 @@ RUN --mount=type=cache,sharing=locked,target=/usr/local/cargo/git \
     --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
     cargo run --manifest-path build-prepare/Cargo.toml && \
     cd build-workspace && \
+    cargo update && \
     cargo build --target-dir ../target --release --features ferron/config-docker-auto && \
     cd .. && \
     # Copy executables out of the cache

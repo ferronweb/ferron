@@ -118,9 +118,7 @@ fn process_cargo_workspace() -> Result<Vec<String>> {
           copied_members.push(workspace_member_str.to_string());
           println!("Copied workspace member: {workspace_member_str}");
         } else {
-          eprintln!(
-            "Warning: Workspace member '{workspace_member_str}' does not exist, skipping"
-          );
+          eprintln!("Warning: Workspace member '{workspace_member_str}' does not exist, skipping");
         }
       }
     }
@@ -230,6 +228,9 @@ fn process_ferron_load_modules(build_config: &yaml_rust2::Yaml) -> Result<()> {
 
       let mut property: HashMap<String, Value> = HashMap::new();
       property.insert("git".to_string(), git_url.into());
+      if let Some(branch) = module["branch"].as_str() {
+        property.insert("branch".to_string(), branch.into());
+      }
       property.insert("default-features".to_string(), Value::Boolean(false));
 
       dependencies.insert(crate_name.to_string(), property.into());

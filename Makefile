@@ -38,10 +38,10 @@ run-dev: build-dev
 	target/debug/ferron
 
 build: prepare-build
-	cd build-workspace && $(CARGO_FINAL) build --target-dir ../target -r $(CARGO_FINAL_EXTRA_ARGS)
+	cd build-workspace && cargo update && $(CARGO_FINAL) build --target-dir ../target -r $(CARGO_FINAL_EXTRA_ARGS)
 
 build-dev: prepare-build
-	cd build-workspace && $(CARGO_FINAL) build --target-dir ../target $(CARGO_FINAL_EXTRA_ARGS)
+	cd build-workspace && cargo update && $(CARGO_FINAL) build --target-dir ../target $(CARGO_FINAL_EXTRA_ARGS)
 
 prepare-build:
 	cargo run --manifest-path build-prepare/Cargo.toml
