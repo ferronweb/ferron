@@ -125,3 +125,7 @@ auto_tls_challenge "dns-01" provider="rfc2136" server="udp://127.0.0.1:53" key_n
 - `key_name` - DNS server key name (required)
 - `key_secret` - DNS server key secret, encoded in Base64 (required)
 - `key_algorithm` - DNS server key algorithm. Supported values are `hmac-md5`, `gss`, `hmac-sha1`, `hmac-sha224`, `hmac-sha256`, `hmac-sha256-128`, `hmac-sha384`, `hmac-sha384-192`, `hmac-sha512` and `hmac-sha512-256` (required)
+
+## Additional DNS providers
+
+If you would like to use Ferron with additional DNS providers, you can check the [compilation notes](https://github.com/ferronweb/ferron/blob/develop-2.x/COMPILATION.md).
