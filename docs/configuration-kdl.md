@@ -151,7 +151,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - **Reverse proxy & load balancing** - proxy configuration and backend management
 - **Forward proxy** - forward proxy functionality
 - **Authentication forwarding** - external authentication integration
-- **CGI & application servers** - CGI, FastCGI, SCGI, WSGI, and ASGI configuration
+- **CGI & application servers** - CGI, FastCGI, SCGI, and other gateway interfaces configuration
 - **Content processing** - response body modification and filtering
 - **Rate limiting** - request rate limiting and throttling
 - **Logging** - access and error logging configuration
