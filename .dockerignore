@@ -32,9 +32,6 @@ Thumbs.db
 /build-release*
 /dist
 
-# Ferron build override
-/ferron-build-override.yaml
-
 # Temporary files used by the editor
 *.swp
 *.swo
