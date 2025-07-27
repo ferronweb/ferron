@@ -1,14 +1,3 @@
-#[cfg(feature = "acmedns-cloudflare")]
-pub mod cloudflare;
-#[cfg(feature = "acmedns-desec")]
-pub mod desec;
-#[cfg(feature = "acmedns-porkbun")]
-pub mod porkbun;
-#[cfg(feature = "acmedns-rfc2136")]
-pub mod rfc2136;
-#[cfg(feature = "acmedns-route53")]
-pub mod route53;
-
 use std::error::Error;
 
 use async_trait::async_trait;
@@ -29,8 +18,7 @@ pub trait DnsProvider {
   }
 }
 
-/// Separate subdomain from domain name.
-#[allow(dead_code)]
+/// Separates subdomain from domain name.
 pub async fn separate_subdomain_from_domain_name(domain_name: &str) -> (String, String) {
   let parts: Vec<&str> = domain_name
     .strip_suffix(".")

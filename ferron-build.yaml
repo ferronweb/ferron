@@ -55,3 +55,25 @@ modules:
   - builtin: true
     cargo_feature: static
     loader: StaticFileServingModuleLoader
+
+dns:
+  - builtin: true
+    id: cloudflare
+    cargo_feature: cloudflare
+    provider: CloudflareDnsProvider
+  - builtin: true
+    id: desec
+    cargo_feature: desec
+    provider: DesecDnsProvider
+  - builtin: true
+    id: porkbun
+    cargo_feature: porkbun
+    provider: PorkbunDnsProvider
+  - builtin: true
+    id: rfc2136
+    cargo_feature: rfc2136
+    provider: Rfc2136DnsProvider
+  - builtin: true
+    id: route53
+    cargo_feature: route53
+    provider: Route53DnsProvider

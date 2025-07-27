@@ -17,6 +17,14 @@ ferron-modules-builtin = { workspace = true, features = [
     "scgi",
     "static",
 ] }
+ferron-dns-builtin = { workspace = true, features = [
+    "cloudflare",
+    "desec",
+    "porkbun",
+    "rfc2136",
+    "route53",
+] }
+anyhow = "1.0.98"
 
 [dev-dependencies]
 shiba = { workspace = true }
@@ -26,6 +34,7 @@ yaml-rust2 = "0.10.2"
 toml = "0.9.2"
 
 [features]
+default = ["runtime-monoio"]
 runtime-monoio = [
     "ferron-common/runtime-monoio",
     "ferron-modules-builtin/runtime-monoio",

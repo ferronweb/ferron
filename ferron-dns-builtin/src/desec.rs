@@ -1,8 +1,8 @@
-use std::error::Error;
+use std::{collections::HashMap, error::Error};
 
 use async_trait::async_trait;
 
-use crate::acme::dns::{separate_subdomain_from_domain_name, DnsProvider};
+use ferron_common::dns::{separate_subdomain_from_domain_name, DnsProvider};
 
 /// deSEC DNS provider
 pub struct DesecDnsProvider {
@@ -11,10 +11,18 @@ pub struct DesecDnsProvider {
 
 impl DesecDnsProvider {
   /// Create a new deSEC DNS provider
-  pub fn new(api_token: &str) -> Result<Self, desec_api::Error> {
+  fn new(api_token: &str) -> Result<Self, desec_api::Error> {
     Ok(Self {
       client: desec_api::Client::new(api_token.to_string())?,
     })
+  }
+
+  /// Load a deSEC DNS provider from ACME challenge parameters
+  pub fn from_parameters(challenge_params: &HashMap<String, String>) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    let api_token = challenge_params
+      .get("api_token")
+      .ok_or_else(|| anyhow::anyhow!("Missing deSEC API token"))?;
+    Ok(Self::new(api_token).map_err(|e| anyhow::anyhow!("Failed to initalize deSEC DNS provider: {}", e))?)
   }
 }
 

@@ -1,9 +1,9 @@
-use std::error::Error;
+use std::{collections::HashMap, error::Error};
 
 use async_trait::async_trait;
 use dns_update::DnsUpdater;
 
-use crate::acme::dns::{separate_subdomain_from_domain_name, DnsProvider};
+use ferron_common::dns::{separate_subdomain_from_domain_name, DnsProvider};
 
 /// Cloudflare DNS provider
 pub struct CloudflareDnsProvider {
@@ -12,10 +12,19 @@ pub struct CloudflareDnsProvider {
 
 impl CloudflareDnsProvider {
   /// Create a new Cloudflare DNS provider
-  pub fn new(api_key: &str, email: Option<&str>) -> dns_update::Result<Self> {
+  fn new(api_key: &str, email: Option<&str>) -> dns_update::Result<Self> {
     Ok(Self {
       client: DnsUpdater::new_cloudflare(api_key, email, None)?,
     })
+  }
+
+  /// Load a Cloudflare DNS provider from ACME challenge parameters
+  pub fn from_parameters(challenge_params: &HashMap<String, String>) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    let api_key = challenge_params
+      .get("api_key")
+      .ok_or_else(|| anyhow::anyhow!("Missing Cloudflare API key"))?;
+    let email = challenge_params.get("email").map(|x| x as &str);
+    Ok(Self::new(api_key, email).map_err(|e| anyhow::anyhow!("Failed to initalize Cloudflare DNS provider: {}", e))?)
   }
 }
 

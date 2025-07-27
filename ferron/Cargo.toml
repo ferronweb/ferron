@@ -106,25 +106,6 @@ ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core", optional = true }
 clap = { version = "4.5.38", features = ["cargo"] }
 dirs = "6.0.0"
 
-# Automatic TLS DNS-01 challenge
-hickory-resolver = "0.25.2"
-porkbun-api = { version = "1.0.1", optional = true }
-dns-update = { version = "0.1.2", optional = true, default-features = false, features = [
-    "hickory-aws-lc-rs",
-] }
-desec_api = { version = "0.4.0", optional = true }
-aws-config = { version = "1.8.1", optional = true, default-features = false, features = [
-    "default-https-client", # This feature flag enables aws-lc-rs crypto provider
-    "rt-tokio",
-] } # Needed for Route53
-aws-credential-types = { version = "1.2.3", optional = true, features = [
-    "hardcoded-credentials",
-] } # Needed for Route53
-aws-sdk-route53 = { version = "1.84.0", optional = true, default-features = false, features = [
-    "default-https-client", # This feature flag enables aws-lc-rs crypto provider
-    "rt-tokio",
-] }
-
 # Performance & Utilities
 mimalloc = { workspace = true }
 smallvec = { version = "1.15.0", features = [
@@ -140,29 +121,8 @@ shiba = { workspace = true }
 winresource = "0.1.19"
 
 [features]
-default = [
-    "acmedns-cloudflare",
-    "acmedns-desec",
-    "acmedns-porkbun",
-    "acmedns-rfc2136",
-    "acmedns-route53",
-    "config-yaml-legacy",
-    "runtime-monoio",
-]
-default-tokio = [
-    "acmedns-cloudflare",
-    "acmedns-desec",
-    "acmedns-porkbun",
-    "acmedns-rfc2136",
-    "acmedns-route53",
-    "config-yaml-legacy",
-    "runtime-tokio",
-]
-acmedns-cloudflare = ["dns-update"]
-acmedns-desec = ["desec_api"]
-acmedns-porkbun = ["porkbun-api"]
-acmedns-rfc2136 = ["dns-update"]
-acmedns-route53 = ["aws-config", "aws-credential-types", "aws-sdk-route53"]
+default = ["config-yaml-legacy", "runtime-monoio"]
+default-tokio = ["config-yaml-legacy", "runtime-tokio"]
 config-docker-auto = []
 config-yaml-legacy = ["ferron-yaml2kdl-core"]
 runtime-monoio = [

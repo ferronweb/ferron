@@ -27,7 +27,7 @@ use config::adapters::ConfigurationAdapter;
 use config::processing::{load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration};
 use config::ServerConfigurations;
 use ferron_common::{get_entry, get_value, get_values};
-use ferron_load_modules::obtain_module_loaders;
+use ferron_load_modules::{get_dns_provider, obtain_module_loaders};
 use handler::create_http_handler;
 use human_panic::{setup_panic, Metadata};
 use instant_acme::{ChallengeType, ExternalAccountKey, LetsEncrypt};
@@ -738,129 +738,11 @@ fn before_starting_server(
               "DNS-01" => ChallengeType::Dns01,
               unsupported => Err(anyhow::anyhow!("Unsupported ACME challenge type: {}", unsupported))?,
             };
-            let dns_provider: Option<Arc<dyn crate::acme::dns::DnsProvider + Send + Sync>> =
+            let dns_provider: Option<Arc<dyn ferron_common::dns::DnsProvider + Send + Sync>> =
               if &*challenge_type_str.to_uppercase() != "DNS-01" {
                 None
               } else if let Some(provider_name) = challenge_params.get("provider") {
-                match provider_name.as_str() {
-                  #[cfg(feature = "acmedns-porkbun")]
-                  "porkbun" => {
-                    let api_key = challenge_params
-                      .get("api_key")
-                      .ok_or_else(|| anyhow::anyhow!("Missing Porkbun API key"))?;
-                    let secret_key = challenge_params
-                      .get("secret_key")
-                      .ok_or_else(|| anyhow::anyhow!("Missing Porkbun secret key"))?;
-                    Some(Arc::new(crate::acme::dns::porkbun::PorkbunDnsProvider::new(
-                      api_key, secret_key,
-                    )))
-                  }
-                  #[cfg(feature = "acmedns-rfc2136")]
-                  "rfc2136" => {
-                    use std::net::ToSocketAddrs;
-
-                    let addr_str = challenge_params
-                      .get("server")
-                      .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 server address"))?;
-                    let addr_uri = addr_str
-                      .parse::<hyper::Uri>()
-                      .map_err(|e| anyhow::anyhow!("Invalid RFC 2136 server address: {}", e))?;
-                    let addr = match addr_uri.scheme_str() {
-                      Some("tcp") => dns_update::providers::rfc2136::DnsAddress::Tcp(
-                        addr_uri
-                          .authority()
-                          .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 server address hostname"))?
-                          .as_str()
-                          .to_socket_addrs()
-                          .map_err(|e| anyhow::anyhow!("Failed to resolve RFC 2136 server address: {}", e))?
-                          .next()
-                          .ok_or_else(|| anyhow::anyhow!("No RFC 2136 server addresses found"))?,
-                      ),
-                      Some("udp") => dns_update::providers::rfc2136::DnsAddress::Udp(
-                        addr_uri
-                          .authority()
-                          .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 server address hostname"))?
-                          .as_str()
-                          .to_socket_addrs()
-                          .map_err(|e| anyhow::anyhow!("Failed to resolve RFC 2136 server address: {}", e))?
-                          .next()
-                          .ok_or_else(|| anyhow::anyhow!("No RFC 2136 server addresses found"))?,
-                      ),
-                      _ => Err(anyhow::anyhow!("Invalid RFC 2136 server address scheme"))?,
-                    };
-                    let key_name = challenge_params
-                      .get("key_name")
-                      .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 key name"))?;
-                    let key = base64::engine::general_purpose::STANDARD
-                      .decode(
-                        challenge_params
-                          .get("key_secret")
-                          .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 key name"))?,
-                      )
-                      .map_err(|e| anyhow::anyhow!("Failed to decode RFC 2136 key: {}", e))?;
-                    let tsig_algorithm = match &challenge_params
-                      .get("key_algorithm")
-                      .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 TSIG algorithm"))?
-                      .to_uppercase() as &str
-                    {
-                      "HMAC-MD5" => dns_update::TsigAlgorithm::HmacMd5,
-                      "GSS" => dns_update::TsigAlgorithm::Gss,
-                      "HMAC-SHA1" => dns_update::TsigAlgorithm::HmacSha1,
-                      "HMAC-SHA224" => dns_update::TsigAlgorithm::HmacSha224,
-                      "HMAC-SHA256" => dns_update::TsigAlgorithm::HmacSha256,
-                      "HMAC-SHA256-128" => dns_update::TsigAlgorithm::HmacSha256_128,
-                      "HMAC-SHA384" => dns_update::TsigAlgorithm::HmacSha384,
-                      "HMAC-SHA384-192" => dns_update::TsigAlgorithm::HmacSha384_192,
-                      "HMAC-SHA512" => dns_update::TsigAlgorithm::HmacSha512,
-                      "HMAC-SHA512-256" => dns_update::TsigAlgorithm::HmacSha512_256,
-                      _ => Err(anyhow::anyhow!("Unsupported RFC 2136 TSIG algorithm"))?,
-                    };
-                    Some(Arc::new(
-                      crate::acme::dns::rfc2136::Rfc2136DnsProvider::new(addr, key_name, key, tsig_algorithm)
-                        .map_err(|e| anyhow::anyhow!("Failed to initalize RFC 2136 DNS provider: {}", e))?,
-                    ))
-                  }
-                  #[cfg(feature = "acmedns-cloudflare")]
-                  "cloudflare" => {
-                    let api_key = challenge_params
-                      .get("api_key")
-                      .ok_or_else(|| anyhow::anyhow!("Missing Cloudflare API key"))?;
-                    let email = challenge_params.get("email").map(|x| x as &str);
-                    Some(Arc::new(
-                      crate::acme::dns::cloudflare::CloudflareDnsProvider::new(api_key, email)
-                        .map_err(|e| anyhow::anyhow!("Failed to initalize Cloudflare DNS provider: {}", e))?,
-                    ))
-                  }
-                  #[cfg(feature = "acmedns-desec")]
-                  "desec" => {
-                    let api_token = challenge_params
-                      .get("api_token")
-                      .ok_or_else(|| anyhow::anyhow!("Missing deSEC API token"))?;
-                    Some(Arc::new(
-                      crate::acme::dns::desec::DesecDnsProvider::new(api_token)
-                        .map_err(|e| anyhow::anyhow!("Failed to initalize deSEC DNS provider: {}", e))?,
-                    ))
-                  }
-                  #[cfg(feature = "acmedns-route53")]
-                  "route53" => {
-                    let access_key_id = challenge_params.get("access_key_id").map(|v| v as &str);
-                    let secret_access_key = challenge_params.get("secret_access_key").map(|v| v as &str);
-                    let region = challenge_params.get("region").map(|v| v as &str);
-                    let profile_name = challenge_params.get("profile_name").map(|v| v as &str);
-                    let hosted_zone_id = challenge_params.get("hosted_zone_id").map(|v| v as &str);
-                    Some(Arc::new(
-                      crate::acme::dns::route53::Route53DnsProvider::new(
-                        region,
-                        profile_name,
-                        access_key_id,
-                        secret_access_key,
-                        hosted_zone_id,
-                      )
-                      .map_err(|e| anyhow::anyhow!("Failed to initalize Route53 DNS provider: {}", e))?,
-                    ))
-                  }
-                  _ => Err(anyhow::anyhow!("Unsupported DNS provider: {}", provider_name))?,
-                }
+                Some(get_dns_provider(provider_name, &challenge_params)?)
               } else {
                 Err(anyhow::anyhow!("No DNS provider specified"))?
               };

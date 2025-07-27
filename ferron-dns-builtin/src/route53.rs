@@ -1,4 +1,4 @@
-use std::{error::Error, sync::Arc};
+use std::{collections::HashMap, error::Error, sync::Arc};
 
 use async_trait::async_trait;
 use aws_config::{BehaviorVersion, Region};
@@ -9,7 +9,7 @@ use aws_sdk_route53::{
 };
 use tokio::sync::Mutex;
 
-use crate::acme::dns::{separate_subdomain_from_domain_name, DnsProvider};
+use ferron_common::dns::{separate_subdomain_from_domain_name, DnsProvider};
 
 /// Amazon Route 53 DNS provider
 pub struct Route53DnsProvider {
@@ -22,7 +22,7 @@ pub struct Route53DnsProvider {
 
 impl Route53DnsProvider {
   /// Create a new Route53 DNS provider
-  pub fn new(
+  fn new(
     region: Option<&str>,
     profile_name: Option<&str>,
     access_key_id: Option<&str>,
@@ -51,6 +51,19 @@ impl Route53DnsProvider {
       hosted_zone_id: hosted_zone_id.map(|h| h.to_string()),
       client: Mutex::new(None),
     })
+  }
+
+  /// Load a Route53 DNS provider from ACME challenge parameters
+  pub fn from_parameters(challenge_params: &HashMap<String, String>) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    let access_key_id = challenge_params.get("access_key_id").map(|v| v as &str);
+    let secret_access_key = challenge_params.get("secret_access_key").map(|v| v as &str);
+    let region = challenge_params.get("region").map(|v| v as &str);
+    let profile_name = challenge_params.get("profile_name").map(|v| v as &str);
+    let hosted_zone_id = challenge_params.get("hosted_zone_id").map(|v| v as &str);
+    Ok(
+      Self::new(region, profile_name, access_key_id, secret_access_key, hosted_zone_id)
+        .map_err(|e| anyhow::anyhow!("Failed to initalize Route53 DNS provider: {}", e))?,
+    )
   }
 }
 

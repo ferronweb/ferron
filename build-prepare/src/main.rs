@@ -193,6 +193,13 @@ fn process_ferron_load_modules(build_config: &yaml_rust2::Yaml) -> Result<()> {
     .ok_or_else(|| BuildError::ConfigError("ferron-modules-builtin dependency is not a table".to_string()))?
     .insert("features".to_string(), Value::Array(Vec::new()));
 
+  dependencies
+    .get_mut("ferron-dns-builtin")
+    .ok_or_else(|| BuildError::ConfigError("ferron-dns-builtin dependency not found".to_string()))?
+    .as_table_mut()
+    .ok_or_else(|| BuildError::ConfigError("ferron-dns-builtin dependency is not a table".to_string()))?
+    .insert("features".to_string(), Value::Array(Vec::new()));
+
   let mut additional_crates = Vec::new();
 
   // Process modules from build config
@@ -250,6 +257,64 @@ fn process_ferron_load_modules(build_config: &yaml_rust2::Yaml) -> Result<()> {
       println!("  Added path dependency: {crate_name} from {path}");
     } else {
       eprintln!("Warning: A module has no valid source (builtin, git, or path)");
+    }
+  }
+
+  // Process DNS provider from build config
+  let dns_providers = build_config["dns"]
+    .as_vec()
+    .ok_or_else(|| BuildError::ConfigError("'dns' is missing or not an array".to_string()))?;
+
+  for module in dns_providers.iter() {
+    let id = module["id"]
+      .as_str()
+      .ok_or_else(|| BuildError::ConfigError("DNS provider missing 'id' field".to_string()))?;
+
+    println!("Processing '{id}' DNS provider");
+
+    let is_builtin = module["builtin"].as_bool().unwrap_or(false);
+
+    if is_builtin {
+      if let Some(cargo_feature) = module["cargo_feature"].as_str() {
+        dependencies
+          .get_mut("ferron-dns-builtin")
+          .ok_or_else(|| BuildError::ConfigError("ferron-dns-builtin dependency not found".to_string()))?
+          .as_table_mut()
+          .ok_or_else(|| BuildError::ConfigError("ferron-dns-builtin dependency is not a table".to_string()))?
+          .get_mut("features")
+          .unwrap()
+          .as_array_mut()
+          .unwrap()
+          .push(cargo_feature.into());
+        println!("  Added builtin feature: {cargo_feature}");
+      }
+    } else if let Some(git_url) = module["git"].as_str() {
+      let crate_name = module["crate"]
+        .as_str()
+        .ok_or_else(|| BuildError::ConfigError("DNS provider missing 'crate' field".to_string()))?;
+
+      let mut property: HashMap<String, Value> = HashMap::new();
+      property.insert("git".to_string(), git_url.into());
+      if let Some(branch) = module["branch"].as_str() {
+        property.insert("branch".to_string(), branch.into());
+      }
+      property.insert("default-features".to_string(), Value::Boolean(false));
+
+      dependencies.insert(crate_name.to_string(), property.into());
+      println!("  Added git dependency: {crate_name} from {git_url}");
+    } else if let Some(path) = module["path"].as_str() {
+      let crate_name = module["crate"]
+        .as_str()
+        .ok_or_else(|| BuildError::ConfigError("DNS provider missing 'crate' field".to_string()))?;
+
+      let mut property: HashMap<String, Value> = HashMap::new();
+      property.insert("path".to_string(), path.into());
+      property.insert("default-features".to_string(), Value::Boolean(false));
+
+      dependencies.insert(crate_name.to_string(), property.into());
+      println!("  Added path dependency: {crate_name} from {path}");
+    } else {
+      eprintln!("Warning: A DNS provider has no valid source (builtin, git, or path)");
     }
   }
 

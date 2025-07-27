@@ -15,6 +15,7 @@ async-channel = "2.3.1"
 rustls = { version = "0.23.27", default-features = false, features = ["std"] }
 rustls-pki-types = "1.12.0"
 monoio = { version = "0.2.4", optional = true, features = ["sync"] }
+hickory-resolver = "0.25.2"
 
 [dev-dependencies]
 shiba = { workspace = true }

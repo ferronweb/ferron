@@ -1,4 +1,6 @@
-use ferron_common::modules::ModuleLoader;
+use std::{collections::HashMap, error::Error, sync::Arc};
+
+use ferron_common::{dns::DnsProvider, modules::ModuleLoader};
 
 /// Obtains the module loaders
 pub fn obtain_module_loaders() -> Vec<Box<dyn ModuleLoader + Send + Sync>> {
@@ -17,4 +19,11 @@ pub fn obtain_module_loaders() -> Vec<Box<dyn ModuleLoader + Send + Sync>> {
 
   // Return the module loaders vector
   module_loaders
+}
+
+pub fn get_dns_provider(
+  provider_name: &str,
+  challenge_params: &HashMap<String, String>,
+) -> Result<Arc<dyn DnsProvider + Send + Sync>, Box<dyn Error + Send + Sync>> {
+  Ok(include!(concat!(env!("OUT_DIR"), "/match_dns_providers.rs")))
 }

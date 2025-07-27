@@ -1,5 +1,3 @@
-pub mod dns;
-
 use std::{
   collections::HashMap,
   error::Error,
@@ -34,7 +32,8 @@ use tokio::sync::RwLock;
 use x509_parser::prelude::{FromDer, X509Certificate};
 use xxhash_rust::xxh3::xxh3_128;
 
-use crate::{acme::dns::DnsProvider, tls_util::load_host_resolver};
+use crate::tls_util::load_host_resolver;
+use ferron_common::dns::DnsProvider;
 
 pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 const SECONDS_BEFORE_RENEWAL: u64 = 86400; // 1 day before expiration

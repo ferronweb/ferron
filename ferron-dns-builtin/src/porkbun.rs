@@ -1,9 +1,9 @@
-use std::error::Error;
+use std::{collections::HashMap, error::Error};
 
 use async_trait::async_trait;
 use porkbun_api::{CreateOrEditDnsRecord, DnsRecordType};
 
-use crate::acme::dns::{separate_subdomain_from_domain_name, DnsProvider};
+use ferron_common::dns::{separate_subdomain_from_domain_name, DnsProvider};
 
 /// Porkbun DNS provider
 pub struct PorkbunDnsProvider {
@@ -12,10 +12,21 @@ pub struct PorkbunDnsProvider {
 
 impl PorkbunDnsProvider {
   /// Create a new Porkbun DNS provider
-  pub fn new(api_key: &str, secret_key: &str) -> Self {
+  fn new(api_key: &str, secret_key: &str) -> Self {
     let api_key = porkbun_api::ApiKey::new(secret_key, api_key);
     let client = porkbun_api::Client::new(api_key);
     Self { client }
+  }
+
+  /// Load a Porkbun DNS provider from ACME challenge parameters
+  pub fn from_parameters(challenge_params: &HashMap<String, String>) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    let api_key = challenge_params
+      .get("api_key")
+      .ok_or_else(|| anyhow::anyhow!("Missing Porkbun API key"))?;
+    let secret_key = challenge_params
+      .get("secret_key")
+      .ok_or_else(|| anyhow::anyhow!("Missing Porkbun secret key"))?;
+    Ok(Self::new(api_key, secret_key))
   }
 }
 
