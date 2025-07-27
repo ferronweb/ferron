@@ -14,7 +14,7 @@ use password_auth::verify_password;
 use tokio::sync::RwLock;
 
 use ferron_common::logging::ErrorLogger;
-use ferron_common::util::{IpBlockList, TtlCache};
+use ferron_common::util::{replace_header_placeholders, IpBlockList, TtlCache};
 use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 use ferron_common::{get_entries, get_entries_for_validation};
 
@@ -271,15 +271,17 @@ struct StatusCodesModuleHandlers {
 impl ModuleHandlers for StatusCodesModuleHandlers {
   async fn request_handler(
     &mut self,
-    mut request: Request<BoxBody<Bytes, std::io::Error>>,
+    request: Request<BoxBody<Bytes, std::io::Error>>,
     config: &ServerConfiguration,
     socket_data: &SocketData,
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
+    let (request_parts, request_body) = request.into_parts();
+
     let request_url = format!(
       "{}{}",
-      request.uri().path(),
-      match request.uri().query() {
+      request_parts.uri.path(),
+      match request_parts.uri.query() {
         Some(query) => format!("?{query}"),
         None => String::from(""),
       }
@@ -320,7 +322,11 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
             {
               let matched_text = regex_match.as_str();
               if let Some(location) = &non_standard_code.location {
-                redirect_url = Some(regex.replace(matched_text, location).to_string());
+                redirect_url = Some(replace_header_placeholders(
+                  &regex.replace(matched_text, location),
+                  &request_parts,
+                  Some(socket_data),
+                ));
               }
             }
           }
@@ -329,7 +335,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
 
       if !url_matched {
         if let Some(url) = &non_standard_code.url {
-          if url == request.uri().path() {
+          if url == request_parts.uri.path() {
             url_matched = true;
             if non_standard_code.status_code == 301
               || non_standard_code.status_code == 302
@@ -340,7 +346,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
                 redirect_url = Some(format!(
                   "{}{}",
                   location,
-                  match request.uri().query() {
+                  match request_parts.uri.query() {
                     Some(query) => format!("?{query}"),
                     None => String::from(""),
                   }
@@ -355,7 +361,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
         match non_standard_code.status_code {
           301 | 302 | 307 | 308 => {
             return Ok(ResponseData {
-              request: Some(request),
+              request: Some(Request::from_parts(request_parts, request_body)),
               response: Some(
                 Response::builder()
                   .status(StatusCode::from_u16(non_standard_code.status_code)?)
@@ -385,7 +391,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
                   .await;
 
                 return Ok(ResponseData {
-                  request: Some(request),
+                  request: Some(Request::from_parts(request_parts, request_body)),
                   response: None,
                   response_status: Some(StatusCode::TOO_MANY_REQUESTS),
                   response_headers: None,
@@ -407,12 +413,12 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
               ))?,
             );
 
-            if let Some(authorization_header_value) = request.headers().get(header::AUTHORIZATION) {
+            if let Some(authorization_header_value) = request_parts.headers.get(header::AUTHORIZATION) {
               let authorization_str = match authorization_header_value.to_str() {
                 Ok(str) => str,
                 Err(_) => {
                   return Ok(ResponseData {
-                    request: Some(request),
+                    request: Some(Request::from_parts(request_parts, request_body)),
                     response: None,
                     response_status: Some(StatusCode::BAD_REQUEST),
                     response_headers: None,
@@ -481,7 +487,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
               let response =
                 response_builder.body(Full::new(Bytes::from(body.clone())).map_err(|e| match e {}).boxed())?;
               return Ok(ResponseData {
-                request: Some(request),
+                request: Some(Request::from_parts(request_parts, request_body)),
                 response: Some(response),
                 response_status: None,
                 response_headers: None,
@@ -489,7 +495,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
               });
             } else {
               return Ok(ResponseData {
-                request: Some(request),
+                request: Some(Request::from_parts(request_parts, request_body)),
                 response: None,
                 response_status: Some(StatusCode::UNAUTHORIZED),
                 response_headers: Some(header_map),
@@ -504,7 +510,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
                 .status(status_code)
                 .body(Full::new(Bytes::from(body.clone())).map_err(|e| match e {}).boxed())?;
               return Ok(ResponseData {
-                request: Some(request),
+                request: Some(Request::from_parts(request_parts, request_body)),
                 response: Some(response),
                 response_status: None,
                 response_headers: None,
@@ -512,7 +518,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
               });
             } else {
               return Ok(ResponseData {
-                request: Some(request),
+                request: Some(Request::from_parts(request_parts, request_body)),
                 response: None,
                 response_status: Some(status_code),
                 response_headers: None,
@@ -523,6 +529,8 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
         }
       }
     }
+
+    let mut request = Request::from_parts(request_parts, request_body);
 
     if auth_user.is_some() {
       let request_data = request.extensions_mut().get_mut::<RequestData>();
