@@ -56,37 +56,15 @@ monoio-compat = { version = "0.2.2", optional = true, features = ["hyper"] }
 async-channel = "2.3.1"
 async-io = "2.4.0"
 async-trait = "0.1.88"
-futures-executor = { version = "0.3.31", optional = true }
 futures-util = { version = "0.3.31", features = ["sink"] }
 pin-project-lite = "0.2.16"
 tokio-util = { version = "0.7.15", features = ["compat"] }
 
-# WebSocket Support
-tokio-tungstenite = { version = "0.27.0", optional = true }
-hyper-tungstenite = { version = "0.18.0", optional = true }
-
-# Python Integration (WSGI/ASGI)
-pyo3 = { version = "0.25.0", optional = true, features = [
-    "anyhow",
-    "auto-initialize",
-] }
-pyo3-async-runtimes = { version = "0.25.0", features = [
-    "tokio",
-    "tokio-runtime",
-], optional = true }
-
 # Process & System Integration
 async-process = { version = "2.3.0", optional = true }
-nix = { version = "0.30.1", optional = true, features = ["process", "signal"] }
-interprocess = { version = "2.2.3", optional = true }
 
 # Data Handling & Serialization
 bytes = { version = "1.10.1" }
-serde = { version = "1.0.219", features = ["derive"] }
-serde_bytes = { version = "0.11.17", optional = true }
-postcard = { version = "1.1.1", optional = true, default-features = false, features = [
-    "use-std",
-] }
 
 # File Serving & Compression
 new_mime_guess = { version = "4.0.4", optional = true }
@@ -146,7 +124,6 @@ default-tokio = [
     "scgi",
     "static",
 ]
-asgi = ["pyo3", "pyo3-async-runtimes", "tokio-tungstenite", "hyper-tungstenite"]
 cache = ["cache_control", "papaya", "ahash"]
 cgi = ["async-process", "httparse", "memchr"]
 fauth = ["rand"]
@@ -159,14 +136,3 @@ runtime-monoio = ["monoio", "monoio-compat"]
 runtime-tokio = ["hyper-util/tokio"]
 scgi = ["httparse", "memchr"]
 static = ["new_mime_guess", "async-compression", "sha2"]
-wsgi = ["pyo3", "futures-executor"]
-wsgid = [
-    "pyo3",
-    "nix",
-    "interprocess",
-    "serde_bytes",
-    "postcard",
-    "hashlink/serde",
-    "hashlink/serde_impl",
-    "rand",
-]

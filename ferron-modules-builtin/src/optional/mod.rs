@@ -1,5 +1,3 @@
-#[cfg(feature = "asgi")]
-mod asgi;
 #[cfg(feature = "cache")]
 mod cache;
 #[cfg(feature = "cgi")]
@@ -20,13 +18,7 @@ mod rproxy;
 mod scgi;
 #[cfg(feature = "static")]
 mod r#static;
-#[cfg(feature = "wsgi")]
-mod wsgi;
-#[cfg(feature = "wsgid")]
-mod wsgid;
 
-#[cfg(feature = "asgi")]
-pub use asgi::*;
 #[cfg(feature = "cache")]
 pub use cache::*;
 #[cfg(feature = "cgi")]
@@ -47,7 +39,3 @@ pub use replace::*;
 pub use rproxy::*;
 #[cfg(feature = "scgi")]
 pub use scgi::*;
-#[cfg(feature = "wsgi")]
-pub use wsgi::*;
-#[cfg(feature = "wsgid")]
-pub use wsgid::*;

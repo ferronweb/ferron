@@ -155,7 +155,6 @@ This configuration reference organizes directives by both **scope** (where they 
 - **Content processing** - response body modification and filtering
 - **Rate limiting** - request rate limiting and throttling
 - **Logging** - access and error logging configuration
-- **Development & testing** - development and testing utilities
 
 ## Global-only directives
 
@@ -284,22 +283,6 @@ This configuration reference organizes directives by both **scope** (where they 
     io_uring
     tcp_send_buffer 65536
     tcp_recv_buffer 65536
-}
-```
-
-### Application server configuration
-
-- `wsgi_clear_imports [wsgi_clear_imports: bool]` (_wsgi_ module)
-  - This directive specifies whenever to enable Python module import path clearing. Setting this option as `wsgi_clear_imports #true` improves the compatiblity with setups involving multiple WSGI applications, however module imports inside functions must not be used in the WSGI application. Default: `wsgi_clear_imports #false`
-- `asgi_clear_imports [asgi_clear_imports: bool]` (_asgi_ module)
-  - This directive specifies whenever to enable Python module import path clearing. Setting this option as `asgi_clear_imports #true` improves the compatiblity with setups involving multiple ASGI applications, however module imports inside functions must not be used in the ASGI application. Default: `asgi_clear_imports #false`
-
-**Configuration example:**
-
-```kdl
-* {
-    wsgi_clear_imports #false
-    asgi_clear_imports #false
 }
 ```
 
@@ -615,12 +598,6 @@ app.example.com {
   - This directive specifies file extensions, which will be handled via the FastCGI handle. This directive can be specified multiple times. Default: none
 - `fcgi_environment <environment_variable_name: string> <environment_variable_value: string>` (_fcgi_ module)
   - This directive specifies an environment variable passed into FastCGI server. Default: none
-- `wsgi <wsgi_application_path: string|null>` (_wsgi_ module)
-  - This directive specifies whenever WSGI is enabled and the path to the WSGI application. The WSGI application must have an `application` entry point. Default: `wsgi #null`
-- `wsgid <wsgi_application_path: string|null>` (_wsgid_ module)
-  - This directive specifies whenever WSGI with pre-forked process pool is enabled and the path to the WSGI application. The WSGI application must have an `application` entry point. Default: `wsgid #null`
-- `asgi <asgi_application_path: string|null>` (_asgi_ module)
-  - This directive specifies whenever ASGI is enabled and the path to the ASGI application. The ASGI application must have an `application` entry point. Default: `asgi #null`
 
 **Configuration example:**
 
@@ -649,21 +626,6 @@ fastcgi.example.com {
     fcgi_extension ".php" ".php5"
     fcgi_environment "SCRIPT_FILENAME" "/var/www/example.com{path}"
     fcgi_environment "DOCUMENT_ROOT" "/var/www/example.com"
-}
-
-wsgi.example.com {
-    // WSGI configuration
-    wsgi "/var/www/myapp/app.py"
-}
-
-wsgid.example.com {
-    // WSGI with daemon mode
-    wsgid "/var/www/myapp/app.py"
-}
-
-asgi.example.com {
-    // ASGI configuration
-    asgi "/var/www/myapp/asgi.py"
 }
 ```
 

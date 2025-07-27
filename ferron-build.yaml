@@ -35,14 +35,14 @@ modules:
   # - git: https://github.com/ferronweb/ferron-module-example.git
   #   crate: ferron-module-example
   #   loader: ExampleModuleLoader
-  # - builtin: true
-  #   cargo_feature: asgi
+  # - git: https://github.com/ferronweb/ferron-modules-python.git
+  #   crate: ferron-module-asgi
   #   loader: AsgiModuleLoader
-  # - builtin: true
-  #   cargo_feature: wsgid
+  # - git: https://github.com/ferronweb/ferron-modules-python.git
+  #   crate: ferron-module-wsgid
   #   loader: WsgidModuleLoader
-  # - builtin: true
-  #   cargo_feature: wsgi
+  # - git: https://github.com/ferronweb/ferron-modules-python.git
+  #   crate: ferron-module-wsgi
   #   loader: WsgiModuleLoader
   - builtin: true
     cargo_feature: fcgi
