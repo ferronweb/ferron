@@ -20,13 +20,13 @@ use tokio_util::io::ReaderStream;
 use crate::config::{ServerConfiguration, ServerConfigurations};
 use crate::get_value;
 use crate::logging::{ErrorLogger, LogMessage, Loggers};
-use crate::modules::{ModuleHandlers, RequestData, SocketData};
 use crate::runtime::timeout;
 #[cfg(feature = "runtime-monoio")]
 use crate::util::MonoioFileStream;
-use crate::util::{
-  generate_default_error_page, get_entries, get_entry, replace_header_placeholders, sanitize_url, SERVER_SOFTWARE,
-};
+use crate::util::{generate_default_error_page, replace_header_placeholders, sanitize_url, SERVER_SOFTWARE};
+
+use ferron_common::modules::{ModuleHandlers, RequestData, SocketData};
+use ferron_common::{get_entries, get_entry};
 
 /// Generates an error response
 async fn generate_error_response(

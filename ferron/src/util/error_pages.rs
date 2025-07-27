@@ -1,4 +1,4 @@
-use crate::util::format_page;
+use ferron_common::format_page;
 
 use super::anti_xss;
 
@@ -81,6 +81,9 @@ pub fn generate_default_error_page(status_code: hyper::StatusCode, server_admini
       status_code_description
     ),
     &status_code_name,
-    vec![include_str!("../res/common.css"), include_str!("../res/error.css")]
+    vec![
+      include_str!("../../../assets/common.css"),
+      include_str!("../../../assets/error.css")
+    ]
   )
 }

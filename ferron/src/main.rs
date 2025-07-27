@@ -5,7 +5,6 @@ mod listener_handler_communication;
 mod listener_quic;
 mod listener_tcp;
 mod logging;
-mod modules;
 mod request_handler;
 mod runtime;
 mod tls_util;
@@ -27,6 +26,8 @@ use clap::{crate_version, Arg, ArgAction, ArgMatches, Command};
 use config::adapters::ConfigurationAdapter;
 use config::processing::{load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration};
 use config::ServerConfigurations;
+use ferron_common::{get_entry, get_value, get_values};
+use ferron_load_modules::obtain_module_loaders;
 use handler::create_http_handler;
 use human_panic::{setup_panic, Metadata};
 use instant_acme::{ChallengeType, ExternalAccountKey, LetsEncrypt};
@@ -35,7 +36,6 @@ use listener_quic::create_quic_listener;
 use listener_tcp::create_tcp_listener;
 use logging::LogMessage;
 use mimalloc::MiMalloc;
-use modules::ModuleLoader;
 use rustls::crypto::aws_lc_rs::cipher_suite::*;
 use rustls::crypto::aws_lc_rs::default_provider;
 use rustls::crypto::aws_lc_rs::kx_group::*;
@@ -48,7 +48,6 @@ use rustls_platform_verifier::BuilderVerifierExt;
 use tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio_util::sync::CancellationToken;
-use util::{get_entry, get_value, get_values};
 use xxhash_rust::xxh3::xxh3_128;
 
 use crate::acme::{
@@ -1559,60 +1558,6 @@ fn before_starting_server(
       Err(err)?
     }
   }
-}
-
-/// Obtains the module loaders
-fn obtain_module_loaders() -> Vec<Box<dyn ModuleLoader + Send + Sync>> {
-  // Module loaders
-  let mut module_loaders: Vec<Box<dyn ModuleLoader + Send + Sync>> = Vec::new();
-
-  // Module loader registration macro
-  macro_rules! register_module_loader {
-    ($moduleloader:expr) => {
-      module_loaders.push(Box::new($moduleloader));
-    };
-  }
-
-  // Register module loaders
-  register_module_loader!(modules::core::CoreModuleLoader::new());
-  register_module_loader!(modules::blocklist::BlocklistModuleLoader::new());
-  #[cfg(feature = "limit")]
-  register_module_loader!(modules::optional::limit::LimitModuleLoader::new());
-  #[cfg(feature = "fproxy")]
-  register_module_loader!(modules::optional::fproxy::ForwardProxyModuleLoader::new());
-  register_module_loader!(modules::fproxy_fallback::ForwardProxyFallbackModuleLoader::new());
-  register_module_loader!(modules::buffer::BufferModuleLoader::new());
-  register_module_loader!(modules::rewrite::RewriteModuleLoader::new());
-  register_module_loader!(modules::status_codes::StatusCodesModuleLoader::new());
-  register_module_loader!(modules::trailing::TrailingSlashRedirectsModuleLoader::new());
-  #[cfg(feature = "fauth")]
-  register_module_loader!(modules::optional::fauth::ForwardedAuthenticationModuleLoader::new());
-  #[cfg(feature = "cache")]
-  register_module_loader!(modules::optional::cache::CacheModuleLoader::new());
-  #[cfg(feature = "replace")]
-  register_module_loader!(modules::optional::replace::ReplaceModuleLoader::new());
-  #[cfg(feature = "rproxy")]
-  register_module_loader!(modules::optional::rproxy::ReverseProxyModuleLoader::new());
-  #[cfg(feature = "example")]
-  register_module_loader!(modules::optional::example::ExampleModuleLoader::new());
-  #[cfg(feature = "asgi")]
-  register_module_loader!(modules::optional::asgi::AsgiModuleLoader::new());
-  #[cfg(feature = "wsgid")]
-  register_module_loader!(modules::optional::wsgid::WsgidModuleLoader::new());
-  #[cfg(feature = "wsgi")]
-  register_module_loader!(modules::optional::wsgi::WsgiModuleLoader::new());
-  #[cfg(feature = "fcgi")]
-  register_module_loader!(modules::optional::fcgi::FcgiModuleLoader::new());
-  #[cfg(feature = "scgi")]
-  register_module_loader!(modules::optional::scgi::ScgiModuleLoader::new());
-  #[cfg(feature = "cgi")]
-  register_module_loader!(modules::optional::cgi::CgiModuleLoader::new());
-
-  #[cfg(feature = "static")]
-  register_module_loader!(modules::optional::r#static::StaticFileServingModuleLoader::new());
-
-  // Return the module loaders vector
-  module_loaders
 }
 
 fn obtain_configuration_adapters() -> (

@@ -1,0 +1,57 @@
+modules:
+  - builtin: true
+    loader: CoreModuleLoader
+  - builtin: true
+    loader: BlocklistModuleLoader
+  - builtin: true
+    cargo_feature: limit
+    loader: LimitModuleLoader
+  - builtin: true
+    cargo_feature: fproxy
+    loader: ForwardProxyModuleLoader
+  - builtin: true
+    loader: ForwardProxyFallbackModuleLoader
+  - builtin: true
+    loader: BufferModuleLoader
+  - builtin: true
+    loader: RewriteModuleLoader
+  - builtin: true
+    loader: StatusCodesModuleLoader
+  - builtin: true
+    loader: TrailingSlashRedirectsModuleLoader
+  - builtin: true
+    cargo_feature: fauth
+    loader: ForwardedAuthenticationModuleLoader
+  - builtin: true
+    cargo_feature: cache
+    loader: CacheModuleLoader
+  - builtin: true
+    cargo_feature: replace
+    loader: ReplaceModuleLoader
+  - builtin: true
+    cargo_feature: rproxy
+    loader: ReverseProxyModuleLoader
+  # - builtin: true
+  #   cargo_feature: example
+  #   loader: ExampleModuleLoader
+  # - builtin: true
+  #   cargo_feature: asgi
+  #   loader: AsgiModuleLoader
+  # - builtin: true
+  #   cargo_feature: wsgid
+  #   loader: WsgidModuleLoader
+  # - builtin: true
+  #   cargo_feature: wsgi
+  #   loader: WsgiModuleLoader
+  - builtin: true
+    cargo_feature: fcgi
+    loader: FcgiModuleLoader
+  - builtin: true
+    cargo_feature: scgi
+    loader: ScgiModuleLoader
+  - builtin: true
+    cargo_feature: cgi
+    loader: CgiModuleLoader
+  - builtin: true
+    cargo_feature: static
+    loader: StaticFileServingModuleLoader

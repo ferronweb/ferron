@@ -1,5 +1,14 @@
 [workspace]
-members = ["ferron", "ferron-passwd", "ferron-yaml2kdl-core", "ferron-yaml2kdl"]
+members = [
+    "ferron",
+    "ferron-common",
+    "ferron-load-modules",
+    "ferron-modules-builtin",
+    "ferron-passwd",
+    "ferron-yaml2kdl-core",
+    "ferron-yaml2kdl",
+]
+exclude = ["build-prepare"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -7,6 +16,9 @@ kdl = "6.3.4"
 mimalloc = "0.1.46"
 password-auth = { version = "1.0.0", features = ["pbkdf2", "argon2", "scrypt"] }
 shiba = "0.1.1"
+ferron-common = { path = "./ferron-common", default-features = false }
+ferron-load-modules = { path = "./ferron-load-modules", default-features = false }
+ferron-modules-builtin = { path = "./ferron-modules-builtin", default-features = false }
 
 [patch.crates-io]
 monoio = { git = "https://github.com/DorianNiemiecSVRJS/monoio.git" }                       # This is needed for the web server to be able to accept more than one connection on Windows, and to be able to be compiled correctly on FreeBSD
@@ -15,6 +27,9 @@ libc = { git = "https://github.com/DorianNiemiecSVRJS/rust-libc.git", branch = "
 desec_api = { git = "https://github.com/DorianNiemiecSVRJS/desec_api.git" }                 # This is a fork of "desec_api" crate, with updated dependencies and crypto provider requirement removed
 dns-update = { git = "https://github.com/DorianNiemiecSVRJS/dns-update.git" }               # This is a fork of "dns-update" crate, with updated dependencies and crypto provider requirement removed
 async-compression = { git = "https://github.com/DorianNiemiecSVRJS/async-compression.git" } # This is a fork of "async-compression" crate that uses "zlib-rs" backend for "flate2" instead of "miniz_oxide"
+
+[patch.'https://github.com/ferronweb/ferron']
+ferron-common = { path = "./ferron-common" }
 
 [profile.release]
 strip = true

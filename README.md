@@ -31,9 +31,17 @@
 
 Ferron consists of multiple components:
 
-- **`ferron`**: The main web server.
-- **`ferron-passwd`**: A tool for generating hashed passwords, which can be copied into the web server's configuration file.
-- **`ferron-yaml2kdl`**: A tool for attempting to convert the Ferron 1.x YAML configuration to Ferron 2.x KDL configuration.
+- **`ferron`** - the main web server.
+- **`ferron-passwd`** - a tool for generating hashed passwords, which can be copied into the web server's configuration file.
+- **`ferron-yaml2kdl`** - a tool for attempting to convert the Ferron 1.x YAML configuration to Ferron 2.x KDL configuration.
+
+Ferron also consists of:
+
+- **`build-prepare`** - internal tool for preparation when building Ferron with modules.
+- **`ferron-common`** - code common for Ferron and its modules.
+- **`ferron-load-modules`** - functions for loading Ferron modules.
+- **`ferron-modules-builtin`** - built-in Ferron modules.
+- **`ferron-yaml2kdl-core`** - the core library behind the `ferron-yaml2kdl` tool.
 
 ## Building Ferron from source
 
@@ -47,11 +55,50 @@ cd ferron
 You can then build and run the web server using Cargo:
 
 ```sh
+cargo run --manifest-path build-prepare/Cargo.toml
+cd build-workspace
+cargo build -r --target-dir ../target
+cargo run -r --bin ferron
+```
+
+You can also, for convenience, use `make`:
+
+```sh
+make build # Build the web server
+make build-dev # Build the web server, for development and debugging
+make run # Run the web server
+make run-dev # Run the web server, for development and debugging
+make package # Package the web server to a ZIP archive (run it after building it)
+```
+
+You can also create a ZIP archive that can be used by the Ferron installer:
+
+```sh
+make build-with-package
+```
+
+The ZIP archive will be located in the `dist` directory.
+
+You can also cross-compile the web server for a different target:
+
+```sh
+# Replace "i686-unknown-linux-gnu" with the target (as defined by the Rust target triple) you want to build for
+make build TARGET="i686-unknown-linux-gnu" CARGO_FINAL="cross"
+```
+
+It's also possible to use only Cargo to build the web server, although you wouldn't be able to use external modules:
+```sh
 cargo build -r
 cargo run -r --bin ferron
 ```
 
-You can also use [Ferron Forge](https://github.com/ferronweb/ferron-forge) to build the web server. Ferron Forge outputs a ZIP archive that can be used by the Ferron installer.
+For compilation notes, see the [compilation notes page](./COMPILATION.md).
+
+~~You can also use [Ferron Forge](https://github.com/ferronweb/ferron-forge) to build the web server. Ferron Forge outputs a ZIP archive that can be used by the Ferron installer.~~
+
+## Modules
+
+If you would like to develop Ferron modules, you can find the [Ferron module development notes](./MODULES.md).
 
 ## Server configuration
 

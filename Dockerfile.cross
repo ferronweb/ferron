@@ -46,7 +46,10 @@ RUN --mount=type=cache,sharing=locked,target=/usr/local/cargo/git \
     echo "[target.$TARGET_TRIPLE]\nlinker = \"$TARGET_GCC\"" >> /usr/local/cargo/config && \
     TARGET_PATH="target/$TARGET_TRIPLE/release" && TARGET_ARG="--target $TARGET_TRIPLE"; \
     fi && \
-    cargo build --release --features ferron/config-docker-auto $TARGET_ARG && \
+    cargo run --manifest-path build-prepare/Cargo.toml && \
+    cd build-workspace && \
+    cargo build --target-dir ../target --release --features ferron/config-docker-auto $TARGET_ARG && \
+    cd .. && \
     # Copy executables out of the cache
     mkdir .dist && cp $TARGET_PATH/ferron $TARGET_PATH/ferron-passwd $TARGET_PATH/ferron-yaml2kdl .dist
 

@@ -68,15 +68,15 @@ jobs:
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             command: cargo
-            options: "--no-default-features -F default-tokio"
+            options: "--no-default-features -F ferron/default-tokio"
           - target: i686-pc-windows-msvc
             runner: windows-latest
             command: cargo
-            options: "--no-default-features -F default-tokio"
+            options: "--no-default-features -F ferron/default-tokio"
           - target: aarch64-pc-windows-msvc
             runner: windows-latest
             command: cargo
-            options: "--no-default-features -F default-tokio"
+            options: "--no-default-features -F ferron/default-tokio"
           - target: x86_64-apple-darwin
             runner: macos-latest
             command: cargo
@@ -135,7 +135,11 @@ jobs:
           cargo binstall --no-confirm bindgen-cli --force
 
       - name: Build binaries
-        run: "${{ matrix.command }} build --verbose --locked --release --target ${{ matrix.target }} ${{ matrix.options }}"
+        shell: bash
+        run: |
+          cargo run --manifest-path build-prepare/Cargo.toml
+          cd build-workspace
+          ${{ matrix.command }} build --verbose --locked --release --target ${{ matrix.target }} ${{ matrix.options }}
 
       - name: Prepare for packaging
         shell: bash

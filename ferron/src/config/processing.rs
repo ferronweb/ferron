@@ -3,7 +3,7 @@ use std::{
   error::Error,
 };
 
-use crate::modules::ModuleLoader;
+use ferron_common::modules::ModuleLoader;
 
 use super::{ServerConfiguration, ServerConfigurationFilters};
 
