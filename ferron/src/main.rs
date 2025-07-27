@@ -1558,7 +1558,7 @@ fn main() {
     println!("  Git commit: {}", build::COMMIT_HASH);
     println!("  Build target: {}", build::BUILD_TARGET);
     println!("  Rust version: {}", build::RUST_VERSION);
-    println!("  Rust channel: {}", build::RUST_CHANNEL);
+    println!("  Build host: {}", build::BUILD_OS);
     if shadow_rs::is_debug() {
       println!("WARNING: This is a debug build. It is not recommended for production use.");
     }
