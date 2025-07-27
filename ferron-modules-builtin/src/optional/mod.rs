@@ -4,8 +4,6 @@ mod asgi;
 mod cache;
 #[cfg(feature = "cgi")]
 mod cgi;
-#[cfg(feature = "example")]
-mod example;
 #[cfg(feature = "fauth")]
 mod fauth;
 #[cfg(feature = "fcgi")]
@@ -33,8 +31,6 @@ pub use asgi::*;
 pub use cache::*;
 #[cfg(feature = "cgi")]
 pub use cgi::*;
-#[cfg(feature = "example")]
-pub use example::*;
 #[cfg(feature = "fauth")]
 pub use fauth::*;
 #[cfg(feature = "fcgi")]

@@ -149,7 +149,6 @@ default-tokio = [
 asgi = ["pyo3", "pyo3-async-runtimes", "tokio-tungstenite", "hyper-tungstenite"]
 cache = ["cache_control", "papaya", "ahash"]
 cgi = ["async-process", "httparse", "memchr"]
-example = []
 fauth = ["rand"]
 fcgi = ["tokio-util/codec", "httparse", "memchr"]
 fproxy = []
