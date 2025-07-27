@@ -1,4 +1,5 @@
 modules:
+  # If you want to use external modules, copy `ferron-build.yaml` to `ferron-build-override.yaml` and uncomment the lines corresponding to modules
   - builtin: true
     loader: CoreModuleLoader
   - builtin: true
@@ -31,8 +32,8 @@ modules:
   - builtin: true
     cargo_feature: rproxy
     loader: ReverseProxyModuleLoader
-  # - builtin: true
-  #   cargo_feature: example
+  # - git: https://github.com/ferronweb/ferron-module-example.git
+  #   crate: ferron-module-example
   #   loader: ExampleModuleLoader
   # - builtin: true
   #   cargo_feature: asgi
@@ -77,3 +78,9 @@ dns:
     id: route53
     cargo_feature: route53
     provider: Route53DnsProvider
+  # Mock DNS provider
+  # Copy `ferron-build.yaml` to `ferron-build-override.yaml` and uncomment the lines
+  # - git: https://github.com/ferronweb/ferron-dns-mock.git
+  #   id: mock
+  #   crate: ferron-dns-mock
+  #   provider: MockDnsProvider
