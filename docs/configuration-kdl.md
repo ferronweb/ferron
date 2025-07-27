@@ -715,28 +715,6 @@ example.com {
 }
 ```
 
-### Development & testing
-
-- `example_handler [enable_example_handler: bool]` (_example_ module)
-  - This directive specifies whenever an example handler is enabled. This handler responds with "Hello World" for "/hello" request paths. Default: `example_handler #false`
-
-**Configuration example:**
-
-```kdl
-dev.example.com {
-    // Enable example handler for testing
-    example_handler
-
-    // Enhanced logging for development
-    log "/var/log/ferron/dev.access.log"
-    error_log "/var/log/ferron/dev.error.log"
-
-    // Custom test endpoints
-    status 200 url="/test" body="Test endpoint working"
-    status 500 url="/test-error" body="Simulated error"
-}
-```
-
 ## Subconditions
 
 Ferron UNRELEASED and newer supports conditional configuration based on conditions. This allows you to configure different settings based on the request method, path, or other conditions.

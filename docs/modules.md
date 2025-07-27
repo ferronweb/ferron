@@ -20,9 +20,10 @@ The following modules are built into Ferron and are enabled by default:
 The following modules are built into Ferron, but are disabled by default:
 
 - _asgi_ (Ferron 1.1.0 and newer) - this module enables the support for ASGI web applications.
-- _example_ - this module responds with "Hello World!" for "/hello" request paths.
 - _wsgi_ (Ferron 1.1.0 and newer) - this module enables the support for WSGI web applications.
 - _wsgid_ (Ferron 1.1.0 and newer) - this module enables the support for WSGI web applications running on a pre-forked worker pool.
+
+If you would like to use Ferron with additional modules, you can check the [compilation notes](https://github.com/ferronweb/ferron/blob/develop-2.x/COMPILATION.md).
 
 ## Module notes
 
