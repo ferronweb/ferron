@@ -39,6 +39,7 @@ Ferron also consists of:
 
 - **`build-prepare`** - internal tool for preparation when building Ferron with modules.
 - **`ferron-common`** - code common for Ferron and its modules.
+- **`ferron-dns-builtin`** - built-in Ferron DNS providers.
 - **`ferron-load-modules`** - functions for loading Ferron modules.
 - **`ferron-modules-builtin`** - built-in Ferron modules.
 - **`ferron-yaml2kdl-core`** - the core library behind the `ferron-yaml2kdl` tool.
