@@ -784,17 +784,20 @@ impl ModuleHandlers for CoreModuleHandlers {
         }
       }
 
-      // Redirect from HTTP to HTTPS
+      // Redirect from HTTP to HTTPS when there are configurations with HTTPS, port is set implicitly, and TLS is enabled
       if !get_value!("no_redirect_to_https", config)
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
         && self.has_https
-        && config.filters.port.is_none() // Port is set implicitly
-        && (get_value!("auto_tls", config) // TLS is enabled
-          .and_then(|v| v.as_bool())
-          .unwrap_or((config.filters.hostname.is_some() || config.filters.ip.is_some()) &&
-              !is_localhost(config.filters.ip.as_ref(), config.filters.hostname.as_deref()))
-          || config.entries.contains_key("tls"))
+        && config.filters.port.is_none()
+        && (get_value!("auto_tls", config).and_then(|v| v.as_bool()).unwrap_or(
+          (config.filters.hostname.is_some()
+            || config.filters.ip.is_some()
+            || get_value!("auto_tls_on_demand", config)
+              .and_then(|v| v.as_bool())
+              .unwrap_or(false))
+            && !is_localhost(config.filters.ip.as_ref(), config.filters.hostname.as_deref()),
+        ) || config.entries.contains_key("tls"))
       {
         if let Some(default_http_port) = self.default_http_port {
           if let Some(default_https_port) = self.default_https_port {
