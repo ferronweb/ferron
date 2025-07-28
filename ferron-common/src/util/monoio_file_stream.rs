@@ -19,14 +19,14 @@ pub struct MonoioFileStream {
 
 impl MonoioFileStream {
   /// Creates a new stream from Monoio's `File`, with specified start and end positions
-  pub fn new(file: File, start: Option<usize>, end: Option<usize>) -> Self {
+  pub fn new(file: File, start: Option<u64>, end: Option<u64>) -> Self {
     let (tx, rx) = async_channel::bounded(MAX_CHANNEL_CAPACITY);
     let read_cancel = CancellationToken::new();
     let read_cancel_clone = read_cancel.clone();
     monoio::spawn(async move {
       let mut current_pos = start.unwrap_or(0);
       loop {
-        let buffer_sz = end.map_or(MAX_BUFFER_SIZE, |n| (n - current_pos).min(MAX_BUFFER_SIZE));
+        let buffer_sz = end.map_or(MAX_BUFFER_SIZE, |n| ((n - current_pos) as usize).min(MAX_BUFFER_SIZE));
         if buffer_sz == 0 {
           break;
         }
@@ -37,7 +37,7 @@ impl MonoioFileStream {
           _ = read_cancel_clone.cancelled() => {
             break;
           }
-          result = file.read_at(buffer, current_pos as u64) => {
+          result = file.read_at(buffer, current_pos) => {
             result
           }
         };
@@ -45,7 +45,7 @@ impl MonoioFileStream {
           if n == &0 {
             break;
           }
-          current_pos += *n;
+          current_pos += *n as u64;
         }
         let is_err = io_result.is_err();
         if tx

@@ -84,7 +84,7 @@ async fn generate_error_response(
           };
 
           #[cfg(feature = "runtime-monoio")]
-          let file_stream = MonoioFileStream::new(file, None, None);
+          let file_stream = MonoioFileStream::new(file, None, content_length);
           #[cfg(feature = "runtime-tokio")]
           let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
