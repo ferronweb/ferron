@@ -47,7 +47,11 @@ impl ModuleLoader for CoreModuleLoader {
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
     if !config.filters.is_global_non_host()
       && (get_value!("auto_tls", config).and_then(|v| v.as_bool()).unwrap_or(
-        (config.filters.hostname.is_some() || config.filters.ip.is_some())
+        (config.filters.hostname.is_some()
+          || config.filters.ip.is_some()
+          || get_value!("auto_tls_on_demand", config)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false))
           && config.filters.port.is_none()
           && !is_localhost(config.filters.ip.as_ref(), config.filters.hostname.as_deref()),
       ) || config.entries.contains_key("tls"))
