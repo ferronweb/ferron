@@ -30,10 +30,10 @@ use tokio_rustls::TlsConnector;
 #[cfg(feature = "runtime-monoio")]
 use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
 
-#[cfg(feature = "runtime-monoio")]
-use crate::util::SendRwStream;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
+#[cfg(feature = "runtime-monoio")]
+use ferron_common::util::SendRwStream;
 use ferron_common::util::{NoServerVerifier, TtlCache};
 use ferron_common::{
   config::ServerConfiguration,

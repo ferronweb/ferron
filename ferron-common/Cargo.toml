@@ -16,6 +16,8 @@ rustls = { version = "0.23.27", default-features = false, features = ["std"] }
 rustls-pki-types = "1.12.0"
 monoio = { version = "0.2.4", optional = true, features = ["sync"] }
 hickory-resolver = "0.25.2"
+tokio-util = "0.7.15"
+futures-util = { version = "0.3.31", features = ["sink"] }
 
 [dev-dependencies]
 shiba = { workspace = true }

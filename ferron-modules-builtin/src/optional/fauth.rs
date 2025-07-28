@@ -29,11 +29,11 @@ use tokio_rustls::TlsConnector;
 #[cfg(feature = "runtime-monoio")]
 use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
 
-#[cfg(feature = "runtime-monoio")]
-use crate::util::SendRwStream;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
 use ferron_common::util::NoServerVerifier;
+#[cfg(feature = "runtime-monoio")]
+use ferron_common::util::SendRwStream;
 use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value, get_values};
 
