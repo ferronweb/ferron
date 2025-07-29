@@ -308,6 +308,15 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
 
       if non_standard_code.regex.is_none() && non_standard_code.url.is_none() {
         url_matched = true;
+        if non_standard_code.status_code == 301
+          || non_standard_code.status_code == 302
+          || non_standard_code.status_code == 307
+          || non_standard_code.status_code == 308
+        {
+          if let Some(location) = &non_standard_code.location {
+            redirect_url = Some(replace_header_placeholders(location, &request_parts, Some(socket_data)));
+          }
+        }
       }
 
       if !url_matched {
