@@ -145,7 +145,20 @@ jobs:
         run: |
           cargo run --manifest-path build-prepare/Cargo.toml
           cd build-workspace
-          cargo update
+          while [ "$OLD_CONFLICTING_PACKAGES" != "$CONFLICTING_PACKAGES" ] || [ "$OLD_CONFLICTING_PACKAGES" = "" ]; do \
+              OLD_CONFLICTING_PACKAGES=$CONFLICTING_PACKAGES; \
+              CONFLICTING_PACKAGES=$( (cargo update -w --dry-run 2>&1 || true) | grep -E '^error: failed to select a version for (the requirement )?`[^ `]+' | sed -E 's|[^`]*`([^ `]+).*|\1|' | xargs); \
+              if [ "$CONFLICTING_PACKAGES" = "" ]; then \
+                  break; \
+              fi; \
+              if [ "$OLD_CONFLICTING_PACKAGES" = "$CONFLICTING_PACKAGES" ]; then \
+                  echo "Couldn't resolve Cargo conflicts" >&2; \
+                  exit 1; \
+              fi; \
+              if [ "$CONFLICTING_PACKAGES" != "" ]; then \
+                  cargo update $CONFLICTING_PACKAGES || true; \
+              fi; \
+          done
           ${{ matrix.command }} build --verbose --release --target ${{ matrix.target }} ${{ matrix.options }}
 
       - name: Prepare for packaging
@@ -205,7 +218,7 @@ jobs:
   #       uses: Swatinem/rust-cache@v2
 
   #     - name: Generate the Rust crate documentation
-  #       run: "cargo doc --verbose --release --document-private-items"
+  #       run: "cargo doc --verbose --locked --release --document-private-items"
 
   #     - name: Create the documentation ZIP archive
   #       uses: thedoctor0/zip-release@0.7.6

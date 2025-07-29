@@ -1,6 +1,3 @@
-# Cargo lockfiles
-Cargo.lock
-
 # Ferron website files
 /blog/
 /docs/

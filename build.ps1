@@ -54,22 +54,35 @@ function RunDev {
 
 function Build {
     PrepareBuild
+    FixConflicts
     Push-Location build-workspace
-    & cargo update
     & $cargoFinal build --target-dir ../target -r $cargoFinalExtraArgs
     Pop-Location
 }
 
 function BuildDev {
     PrepareBuild
+    FixConflicts
     Push-Location build-workspace
-    & cargo update
     & $cargoFinal build --target-dir ../target $cargoFinalExtraArgs
     Pop-Location
 }
 
 function PrepareBuild {
     & cargo run --manifest-path build-prepare/Cargo.toml
+}
+
+function FixConflicts {
+    Push-Location build-workspace
+    while (($oldConflictingPackages -ne $conflictingPackages) -or (-not $oldConflictingPackages)) {
+        $oldConflictingPackages = $conflictingPackages
+        $conflictingPackages = (cargo update -w --dry-run 2>&1) | Select-String -Pattern '^error: failed to select a version for (?:the requirement )?`([^ `]+)' | ForEach-Object { $_.Matches.Groups[1].Value }
+        $conflictingPackages = $conflictingPackages -Split ' '
+        if (-not $conflictingPackages) { break }
+        if ($oldConflictingPackages -eq $conflictingPackages) { throw "Couldn't resolve Cargo conflicts" }
+        if ($conflictingPackages) { & cargo update $conflictingPackages }
+    }
+    Pop-Location
 }
 
 function Package {
@@ -86,7 +99,8 @@ function Package {
     Copy-Item wwwroot -Destination $buildRelease -Recurse -Force
 
     if (-not (Test-Path "dist")) { New-Item -ItemType Directory -Path "dist" | Out-Null }
-	if (Test-Path "dist/ferron-$ferronVersion-$destTargetTriple.zip") { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "dist/ferron-$ferronVersion-$destTargetTriple.zip" }
+    if (Test-Path "dist/ferron-$ferronVersion-$destTargetTriple.zip") { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "dist/ferron-$ferronVersion-$destTargetTriple.zip" }
+
     Compress-Archive -Path "$buildRelease\*" -DestinationPath "dist/ferron-$ferronVersion-$destTargetTriple.zip"
 
     Remove-Item -Recurse -Force $buildRelease
@@ -105,5 +119,5 @@ function Clean {
 if ($args.Count -gt 0) {
     & $args[0]
 } else {
-    Write-Host "Available commands: Run, RunDev, Build, BuildDev, PrepareBuild, Package, BuildWithPackage, Clean"
+    Write-Host "Available commands: Run, RunDev, Build, BuildDev, PrepareBuild, FixConflicts, Package, BuildWithPackage, Clean"
 }

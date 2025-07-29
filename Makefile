@@ -35,14 +35,31 @@ run: build
 run-dev: build-dev
 	$(CARGO_TARGET_ROOT)/debug/ferron
 
-build: prepare-build
-	cd build-workspace && cargo update && $(CARGO_FINAL) build --target-dir ../target -r $(CARGO_FINAL_EXTRA_ARGS)
+build: prepare-build fix-conflicts
+	cd build-workspace && $(CARGO_FINAL) build --target-dir ../target -r $(CARGO_FINAL_EXTRA_ARGS)
 
-build-dev: prepare-build
-	cd build-workspace && cargo update && $(CARGO_FINAL) build --target-dir ../target $(CARGO_FINAL_EXTRA_ARGS)
+build-dev: prepare-build fix-conflicts
+	cd build-workspace && $(CARGO_FINAL) build --target-dir ../target $(CARGO_FINAL_EXTRA_ARGS)
 
 prepare-build:
 	cargo run --manifest-path build-prepare/Cargo.toml
+
+fix-conflicts:
+	cd build-workspace && \
+	while [ "$$OLD_CONFLICTING_PACKAGES" != "$$CONFLICTING_PACKAGES" ] || [ "$$OLD_CONFLICTING_PACKAGES" = "" ]; do \
+	    OLD_CONFLICTING_PACKAGES=$$CONFLICTING_PACKAGES; \
+		CONFLICTING_PACKAGES=$$( (cargo update -w --dry-run 2>&1 || true) | grep -E '^error: failed to select a version for (the requirement )?`[^ `]+' | sed -E 's|[^`]*`([^ `]+).*|\1|' | xargs); \
+		if [ "$$CONFLICTING_PACKAGES" = "" ]; then \
+			break; \
+		fi; \
+		if [ "$$OLD_CONFLICTING_PACKAGES" = "$$CONFLICTING_PACKAGES" ]; then \
+			echo "Couldn't resolve Cargo conflicts" >&2; \
+			exit 1; \
+		fi; \
+		if [ "$$CONFLICTING_PACKAGES" != "" ]; then \
+			cargo update $$CONFLICTING_PACKAGES || true; \
+		fi; \
+	done
 
 package:
 	rm -rf $(BUILD_RELEASE); mkdir $(BUILD_RELEASE)

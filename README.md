@@ -58,6 +58,7 @@ You can then build and run the web server using Cargo:
 ```sh
 cargo run --manifest-path build-prepare/Cargo.toml
 cd build-workspace
+cargo update # If you experience crate conflicts
 cargo build -r --target-dir ../target
 ../target/release/ferron
 ```
