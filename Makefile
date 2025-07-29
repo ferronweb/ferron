@@ -75,3 +75,4 @@ build-with-package: build package
 clean:
 	rm -rf build-workspace build-release dist
 	cargo clean
+	cd build-prepare && cargo clean

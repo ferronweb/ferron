@@ -114,6 +114,9 @@ function BuildWithPackage {
 function Clean {
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build-workspace, build-release, dist
     & cargo clean
+    Push-Location build-prepare
+    & cargo clean
+    Pop-Location
 }
 
 if ($args.Count -gt 0) {
