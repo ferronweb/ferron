@@ -68,7 +68,7 @@ package:
 	cp -a ferron-release.kdl $(BUILD_RELEASE)/ferron.kdl
 	cp -a wwwroot $(BUILD_RELEASE)
 	mkdir -p dist
-	zip -r dist/ferron-$(FERRON_VERSION)-$(DEST_TARGET_TRIPLE).zip $(BUILD_RELEASE)/*
+	rm -f dist/ferron-$(FERRON_VERSION)-$(DEST_TARGET_TRIPLE).zip; cd $(BUILD_RELEASE) && zip -r ../dist/ferron-$(FERRON_VERSION)-$(DEST_TARGET_TRIPLE).zip *
 	rm -rf $(BUILD_RELEASE)
 
 build-with-package: build package
