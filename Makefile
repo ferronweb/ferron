@@ -67,6 +67,7 @@ package:
 	find $(CARGO_TARGET_ROOT)/release -mindepth 1 -maxdepth 1 -type f ! -name "*.*" -o -name "*.exe" -o -name "*.dll" -o -name "*.dylib" -o -name "*.so" | sed -E "s|(.*)|cp -a \1 $(BUILD_RELEASE)|" | sh
 	cp -a ferron-release.kdl $(BUILD_RELEASE)/ferron.kdl
 	cp -a wwwroot $(BUILD_RELEASE)
+	mkdir -p dist
 	zip -r dist/ferron-$(FERRON_VERSION)-$(DEST_TARGET_TRIPLE).zip $(BUILD_RELEASE)/*
 	rm -rf $(BUILD_RELEASE)
 
