@@ -19,3 +19,19 @@ example.org {
     status 302 regex="^/(.*)" location="https://www.example.com/$1" // Replace "www.example.com" with your desired domain. Also, replace 302 with 301 if you want a permanent redirect.
 }
 ```
+
+### Redirecting from URL without "www." to URL with "www."
+
+If you want to redirect all requests from an URL without "www." to URL with "www.", you can use this configuration:
+
+```kdl
+// Example configuration with a redirect from URL without "www." to URL with "www.". Replace "example.com" with your domain name.
+example.com {
+    status 301 regex="^/(.*)" location="https://www.example.com/$1"
+}
+
+www.example.com {
+    // For this example, let's serve static files
+    root "/var/www/example"
+}
+```
