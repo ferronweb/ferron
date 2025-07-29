@@ -11,11 +11,8 @@ COPY . .
 RUN --mount=type=cache,sharing=locked,target=/usr/local/cargo/git \
     --mount=type=cache,sharing=locked,target=/usr/local/cargo/registry \
     --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
-    cargo run --manifest-path build-prepare/Cargo.toml && \
-    cd build-workspace && \
-    cargo update && \
-    cargo build --target-dir ../target --release --features ferron/config-docker-auto && \
-    cd .. && \
+    CARGO_FINAL_EXTRA_ARGS="--features ferron/config-docker-auto" \
+    make build && \
     # Copy executables out of the cache
     mkdir .dist && cp target/release/ferron target/release/ferron-passwd target/release/ferron-yaml2kdl .dist
 
