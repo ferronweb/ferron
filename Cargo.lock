@@ -1551,7 +1551,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-dns-builtin"
-version = "1.0.0-beta.4"
+version = "2.0.0-beta.14"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1569,7 +1569,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-load-modules"
-version = "1.0.0-beta.4"
+version = "2.0.0-beta.14"
 dependencies = [
  "anyhow",
  "ferron-common",
@@ -1582,7 +1582,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-modules-builtin"
-version = "0.1.0"
+version = "2.0.0-beta.14"
 dependencies = [
  "ahash",
  "anyhow",
