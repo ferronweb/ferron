@@ -354,7 +354,7 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
               if let Some(location) = &non_standard_code.location {
                 redirect_url = Some(format!(
                   "{}{}",
-                  location,
+                  replace_header_placeholders(location, &request_parts, Some(socket_data)),
                   match request_parts.uri.query() {
                     Some(query) => format!("?{query}"),
                     None => String::from(""),
