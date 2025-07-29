@@ -45,7 +45,7 @@ prepare-build:
 	cargo run --manifest-path build-prepare/Cargo.toml
 
 fix-conflicts:
-	cd build-workspace && \
+	@ cd build-workspace && \
 	while [ "$$OLD_CONFLICTING_PACKAGES" != "$$CONFLICTING_PACKAGES" ] || [ "$$OLD_CONFLICTING_PACKAGES" = "" ]; do \
 	    OLD_CONFLICTING_PACKAGES=$$CONFLICTING_PACKAGES; \
 		CONFLICTING_PACKAGES=$$( (cargo update -w --dry-run 2>&1 || true) | grep -E '^error: failed to select a version for (the requirement )?`[^ `]+' | sed -E 's|[^`]*`([^ `]+).*|\1|' | xargs); \
