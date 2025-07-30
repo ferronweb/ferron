@@ -2,26 +2,50 @@
 @plugin "@tailwindcss/typography";
 @config "../../tailwind.config.js";
 
-html {
-  scroll-behavior: smooth;
-}
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
 
-html,
-body {
-  margin: 0;
-  width: 100%;
-  font-family: var(--font-spline-sans);
-  background-color: hsla(var(--background), 1);
-  color: hsla(var(--foreground), 1);
-}
+  html,
+  body {
+    margin: 0;
+    width: 100%;
+    font-family: var(--font-spline-sans);
+    background-color: hsla(var(--background), 1);
+    color: hsla(var(--foreground), 1);
+  }
 
-code,
-pre {
-  font-family: var(--font-spline-sans-mono);
-}
+  code,
+  pre {
+    font-family: var(--font-spline-sans-mono);
+  }
 
-* {
-  border-color: hsla(var(--border), 1);
+  * {
+    border-color: hsla(var(--border), 1);
+  }
+
+  /* Custom scrollbar styles for Chromium, because the default ones inside the body are light style, which may not match the website's dark style. */
+  @media (width >= 48rem) {
+    /* Equivalent to `md:<class>` in Tailwind CSS */
+    @supports selector(::-webkit-scrollbar) {
+      body ::-webkit-scrollbar {
+        @apply h-2 w-2;
+      }
+
+      body ::-webkit-scrollbar-track {
+        @apply bg-background;
+      }
+
+      body ::-webkit-scrollbar-thumb {
+        @apply bg-foreground/30 rounded-full;
+      }
+
+      body ::-webkit-scrollbar-thumb:hover {
+        @apply bg-foreground/50;
+      }
+    }
+  }
 }
 
 :root {
@@ -50,28 +74,6 @@ pre {
   --chart-3: 220, 70%, 50%;
   --chart-4: 200, 80%, 50%;
   --chart-5: 180, 70%, 45%;
-}
-
-/* Custom scrollbar styles for Chromium, because the default ones inside the body are light style, which may not match the website's dark style. */
-@media (width >= 48rem) {
-  /* Equivalent to `md:<class>` in Tailwind CSS */
-  @supports selector(::-webkit-scrollbar) {
-    body ::-webkit-scrollbar {
-      @apply h-2 w-2;
-    }
-
-    body ::-webkit-scrollbar-track {
-      @apply bg-background;
-    }
-
-    body ::-webkit-scrollbar-thumb {
-      @apply bg-foreground/30 rounded-full;
-    }
-
-    body ::-webkit-scrollbar-thumb:hover {
-      @apply bg-foreground/50;
-    }
-  }
 }
 
 @layer utilities {

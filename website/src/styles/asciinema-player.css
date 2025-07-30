@@ -1,10 +1,5 @@
 @import "asciinema-player/dist/bundle/asciinema-player.css";
 
-/* Fix border around the terminal in asciinema player */
-pre.ap-terminal {
-  border-color: var(--term-color-background) !important;
-}
-
 /* Fix asciinema play button not being centered */
 .ap-player .ap-overlay-start .ap-play-button div span {
   display: inline-block;
