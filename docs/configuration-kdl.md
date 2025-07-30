@@ -8,7 +8,7 @@ Ferron 2.0.0-beta.1 and newer can be configured in a [KDL-format](https://kdl.de
 
 At the top level of the server configration, the confguration blocks representing specific virtual host are specified. Below are the examples of such configuration blocks:
 
-```kdl
+````kdl
 globals {
   // Global configuration that doesn't imply any virtual host (Ferron 2.0.0-beta.13 or newer)
 }
@@ -48,7 +48,8 @@ api.example.com {
     }
   }
 
-  // The location configuration order is important; in this host configuration, first the "/v1" location is checked, then the "/" location.
+  // In Ferron 2.0.0-beta.14 and earlier, the location configuration order was important; in this host configuration, first the "/v1" location is checked, then the "/" location.
+  // In Ferron 2.0.0-beta.15 and newer, the location and conditionals' configuration order is automatically determined based on the location and conditionals' depth
   location "/" {
     // ...
   }
@@ -64,13 +65,67 @@ example.com,example.org {
   // The virtual host identifiers (like example.com or "192.168.1.1") are comma-separated, but adding spaces will not be interpreted,
   // For example "example.com, example.org" will not work for "example.org", but "example.com,example.org" will work.
 }
-```
+
+with-conditions.example.com {
+  condition "SOME_CONDITION" {
+    // Here are defined subconditions in the condition. The condition will pass if all subconditions will also pass
+  }
+
+  if "SOME_CONDITION" {
+    // Conditional configuration (Ferron 2.0.0-beta.15 or newer)
+    // Conditions can be nested
+  }
+
+  if_not "SOME_CONDITION" {
+    // Configuration, in case of condition not being met (Ferron 2.0.0-beta.15 or newer)
+  }
+}
+
+snippet "EXAMPLE" {
+  // Example snippet configuration (Ferron 2.0.0-beta.15 or newer)
+}
+
+with-snippet.example.com {
+  // Import from snippet (Ferron 2.0.0-beta.15 or newer)
+  use "EXAMPLE"
+}
+
+with-snippet.example.org {
+  // Snippets can be reusable
+  use "EXAMPLE"
+}
+
+inheritance.example.com {
+  // The "proxy" directive is used as an example for demonstrating inheritance.
+  proxy "http://10.0.0.2:3000"
+  proxy "http://10.0.0.3:3000"
+
+  // Here, these directives take effect:
+  //   proxy "http://10.0.0.2:3000"
+  //   proxy "http://10.0.0.3:3000"
+
+  location "/somelocation" {
+    // Here, `some_directive` directives are inherited from the parent block.
+    // These directives take effect:
+    //   proxy "http://10.0.0.2:3000"
+    //   proxy "http://10.0.0.3:3000"
+  }
+
+  location "/anotherlocation" {
+    // The directives from the parent block are not inherited if there are other directives with the same name in the block.
+    // Here, these directives take effect:
+    //   proxy "http://10.0.0.4:3000"
+    proxy "http://10.0.0.4:3000"
+  }
+}
+
+``
 
 Also, it's possible to include other configuration files using an `include <included_configuration_path: string>` directive, like this:
 
 ```kdl
 include "/etc/ferron.d/**/*.kdl"
-```
+````
 
 ## Directive categories overview
 
@@ -96,11 +151,10 @@ This configuration reference organizes directives by both **scope** (where they 
 - **Reverse proxy & load balancing** - proxy configuration and backend management
 - **Forward proxy** - forward proxy functionality
 - **Authentication forwarding** - external authentication integration
-- **CGI & application servers** - CGI, FastCGI, SCGI, WSGI, and ASGI configuration
+- **CGI & application servers** - CGI, FastCGI, SCGI, and other gateway interfaces configuration
 - **Content processing** - response body modification and filtering
 - **Rate limiting** - request rate limiting and throttling
 - **Logging** - access and error logging configuration
-- **Development & testing** - development and testing utilities
 
 ## Global-only directives
 
@@ -232,22 +286,6 @@ This configuration reference organizes directives by both **scope** (where they 
 }
 ```
 
-### Application server configuration
-
-- `wsgi_clear_imports [wsgi_clear_imports: bool]` (_wsgi_ module)
-  - This directive specifies whenever to enable Python module import path clearing. Setting this option as `wsgi_clear_imports #true` improves the compatiblity with setups involving multiple WSGI applications, however module imports inside functions must not be used in the WSGI application. Default: `wsgi_clear_imports #false`
-- `asgi_clear_imports [asgi_clear_imports: bool]` (_asgi_ module)
-  - This directive specifies whenever to enable Python module import path clearing. Setting this option as `asgi_clear_imports #true` improves the compatiblity with setups involving multiple ASGI applications, however module imports inside functions must not be used in the ASGI application. Default: `asgi_clear_imports #false`
-
-**Configuration example:**
-
-```kdl
-* {
-    wsgi_clear_imports #false
-    asgi_clear_imports #false
-}
-```
-
 ## Global and virtual host directives
 
 ### TLS/SSL & security
@@ -255,7 +293,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `tls <certificate_path: string> <private_key_path: string>`
   - This directive specifies the path to the TLS certificate and private key. Default: none
 - `auto_tls [enable_automatic_tls: bool]`
-  - This directive specifies whenever automatic TLS is enabled. Default: `auto_tls #true` when port isn't explicitly specified, otherwise `auto_tls #false`
+  - This directive specifies whenever automatic TLS is enabled. Default: `auto_tls #true` when port isn't explicitly specified and if the hostname doesn't look like a local address (`127.0.0.1`, `::1`, `localhost`), otherwise `auto_tls #false`
 - `auto_tls_contact <auto_tls_contact: string|null>`
   - This directive specifies the email address used to register an ACME account for automatic TLS. Default: `auto_tls_contact #null`
 - `auto_tls_cache <auto_tls_cache: string|null>`
@@ -265,13 +303,15 @@ This configuration reference organizes directives by both **scope** (where they 
 - `auto_tls_challenge <acme_challenge_type: string> [provider=<acme_challenge_provider: string>] [...]`
   - This directive specifies the used ACME challenge type. The supported types are `"http-01"` (HTTP-01 ACME challenge), `"tls-alpn-01"` (TLS-ALPN-01 ACME challenge) and `"dns-01"` (DNS-01 ACME challenge; Ferron 2.0.0-beta.9 or newer). The `provider` prop defines the DNS provider to use for DNS-01 challenges. Additional props can be passed as parameters for the DNS provider, see automatic TLS documentation. Default: `auto_tls_challenge "tls-alpn-01"`
 - `auto_tls_directory <auto_tls_directory: string>` (Ferron 2.0.0-beta.3 or newer)
-  - This directive specifies the ACME directory from which the certificates are obtained. Overrides `auto_tls_letsencrypt_production` directive. Default: none
+  - This directive specifies the ACME directory URL from which the certificates are obtained. Overrides `auto_tls_letsencrypt_production` directive. Default: none
 - `auto_tls_no_verification [auto_tls_no_verification: bool]` (Ferron 2.0.0-beta.3 or newer)
   - This directive specifies whenever to disable the certificate verification of the ACME server. Default: `auto_tls_no_verification #false`
 - `auto_tls_profile <auto_tls_profile: string|null>` (Ferron 2.0.0-beta.9 or newer)
   - This directive specifies the ACME profile to use for the certificates. Default: `auto_tls_profile #null`
 - `auto_tls_on_demand <auto_tls_on_demand: bool>` (Ferron 2.0.0-beta.13 or newer)
   - This directive specifies whenever to enable the automatic TLS on demand. The functionality obtains TLS certificates automatically when a website is accessed for the first time. It's recommended to use either HTTP-01 or TLS-ALPN-01 ACME challenges, as DNS-01 ACME challenges might be slower due to DNS propagation delays. It's also recommended to configure the `auto_tls_on_demand_ask` directive alongside this directive. Default: `auto_tls_on_demand #false`
+- `auto_tls_eab (<auto_tls_eab_key_id: string> <auto_tls_eab_key_hmac: string>)|<auto_tls_eab_disabled: null>` (Ferron 2.0.0-beta.15 or newer)
+  - This directive specifies the EAB key ID and HMAC for the ACME External Account Binding. The HMAC key value is encoded in a URL-safe Base64 encoding. If set as `auto_tls_eab_disabled #null`, the EAB is disabled. Default: `auto_tls_eab_disabled #null`
 
 **Configuration example:**
 
@@ -284,6 +324,7 @@ example.com {
     auto_tls_challenge "tls-alpn-01"
     auto_tls_profile "default"
     auto_tls_on_demand #false
+    auto_tls_eab #null
 }
 
 manual-tls.example.com {
@@ -345,8 +386,8 @@ example.com {
 
 - `trust_x_forwarded_for [trust_x_forwarded_for: bool]`
   - This directive specifies whenever to trust the value of the `X-Forwarded-For` header. It's recommended to configure this directive if behind a reverse proxy. Default: `trust_x_forwarded_for #false`
-- `status <status_code: integer> url=<url: string>|regex=<regex: string> [location=<location: string>] [realm=<realm: string>] [brute_protection=<enable_brute_protection: bool>] [users=<users: string>] [allowed=<allowed: string>] [not_allowed=<not_allowed: string>] [body=<response_body: string>]`
-  - This directive specifies the custom status code. This directive can be specified multiple times. The `url` prop specifies the request path for this status code. The `regex` prop specifies the regular expression (like `^/ferron(?:$|[/#?])`) for the custom status code. The `location` prop specifies the destination for the redirect. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whenever the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. The `allowed` prop is a comma-separated list of IP addresses applicable for the status code. The `not_allowed` prop is a comma-separated list of IP addresses not applicable for the status code. The `body` prop (Ferron 2.0.0-beta.5 or newer) specifies the response body to be sent. Default: none
+- `status <status_code: integer> [url=<url: string>|regex=<regex: string>] [location=<location: string>] [realm=<realm: string>] [brute_protection=<enable_brute_protection: bool>] [users=<users: string>] [allowed=<allowed: string>] [not_allowed=<not_allowed: string>] [body=<response_body: string>]`
+  - This directive specifies the custom status code. This directive can be specified multiple times. The `url` prop specifies the request path for this status code. The `regex` prop specifies the regular expression (like `^/ferron(?:$|[/#?])`) for the custom status code. The `location` prop specifies the destination for the redirect; it supports placeholders (on Ferron 2.0.0-beta.15 and newer) like `{path}` which will be replaced with the request path. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whenever the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. The `allowed` prop is a comma-separated list of IP addresses applicable for the status code. The `not_allowed` prop is a comma-separated list of IP addresses not applicable for the status code. The `body` prop (Ferron 2.0.0-beta.5 or newer) specifies the response body to be sent. Default: none
 - `user [username: string] [password_hash: string]`
   - This directive specifies an user with a password hash used for the HTTP basic authentication (it can be either Argon2, PBKDF2, or `scrypt` one). It's recommended to use the `ferron-passwd` tool to generate the password hash. This directive can be specified multiple times. Default: none
 
@@ -469,8 +510,10 @@ example.com {
   - This directive specifies whenever the reverse proxy should keep the connection to the backend alive. Default: `proxy_keepalive #true`
 - `proxy_request_header_replace <header_name: string> <header_value: string>` (_rproxy_ module; Ferron 2.0.0-beta.9 or newer)
   - This directive specifies a header to be added to HTTP requests sent by the reverse proxy, potentially replacing existing headers. The header values supports placeholders (on Ferron 2.0.0-beta.9 and newer) like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
-- `proxy_http2 [enable_proxy_http2: bool]` (_rproxy_ module; Ferron 2.0.0-beta.13)
+- `proxy_http2 [enable_proxy_http2: bool]` (_rproxy_ module; Ferron 2.0.0-beta.13 or newer)
   - This directive specifies whenever the reverse proxy can use HTTP/2 protocol when connecting to backend servers. Default: `proxy_http2 #false`
+- `lb_retry_connection [enable_lb_retry_connection: bool]` (_rproxy_ module; Ferron 2.0.0-beta.15 or newer)
+  - This directive specifies whenever the load balancer should retry connections to another backend server, in case of TCP connection or TLS handshake failure. Default: `lb_retry_connection #true`
 
 **Configuration example:**
 
@@ -555,12 +598,6 @@ app.example.com {
   - This directive specifies file extensions, which will be handled via the FastCGI handle. This directive can be specified multiple times. Default: none
 - `fcgi_environment <environment_variable_name: string> <environment_variable_value: string>` (_fcgi_ module)
   - This directive specifies an environment variable passed into FastCGI server. Default: none
-- `wsgi <wsgi_application_path: string|null>` (_wsgi_ module)
-  - This directive specifies whenever WSGI is enabled and the path to the WSGI application. The WSGI application must have an `application` entry point. Default: `wsgi #null`
-- `wsgid <wsgi_application_path: string|null>` (_wsgid_ module)
-  - This directive specifies whenever WSGI with pre-forked process pool is enabled and the path to the WSGI application. The WSGI application must have an `application` entry point. Default: `wsgid #null`
-- `asgi <asgi_application_path: string|null>` (_asgi_ module)
-  - This directive specifies whenever ASGI is enabled and the path to the ASGI application. The ASGI application must have an `application` entry point. Default: `asgi #null`
 
 **Configuration example:**
 
@@ -589,21 +626,6 @@ fastcgi.example.com {
     fcgi_extension ".php" ".php5"
     fcgi_environment "SCRIPT_FILENAME" "/var/www/example.com{path}"
     fcgi_environment "DOCUMENT_ROOT" "/var/www/example.com"
-}
-
-wsgi.example.com {
-    // WSGI configuration
-    wsgi "/var/www/myapp/app.py"
-}
-
-wsgid.example.com {
-    // WSGI with daemon mode
-    wsgid "/var/www/myapp/app.py"
-}
-
-asgi.example.com {
-    // ASGI configuration
-    asgi "/var/www/myapp/asgi.py"
 }
 ```
 
@@ -655,41 +677,42 @@ example.com {
 }
 ```
 
-### Development & testing
+## Subconditions
 
-- `example_handler [enable_example_handler: bool]` (_example_ module)
-  - This directive specifies whenever an example handler is enabled. This handler responds with "Hello World" for "/hello" request paths. Default: `example_handler #false`
+Ferron 2.0.0-beta.15 and newer supports conditional configuration based on conditions. This allows you to configure different settings based on the request method, path, or other conditions.
 
-**Configuration example:**
+Below is the list of supported subconditions:
 
-```kdl
-dev.example.com {
-    // Enable example handler for testing
-    example_handler
+- `is_remote_ip <remote_ip: string> [<remote_ip: string> ...]` (Ferron 2.0.0-beta.15 or newer)
+  - This subcondition checks if the request is coming from a specific remote IP address or a list of IP addresses.
+- `is_forwarded_for <remote_ip: string> [<remote_ip: string> ...]` (Ferron 2.0.0-beta.15 or newer)
+  - This subcondition checks if the request (with respect for `X-Forwarded-For` header) is coming from a specific forwarded IP address or a list of IP addresses.
+- `is_not_remote_ip <remote_ip: string> [<remote_ip: string> ...]` (Ferron 2.0.0-beta.15 or newer)
+  - This subcondition checks if the request is not coming from a specific remote IP address or a list of IP addresses.
+- `is_not_forwarded_for <remote_ip: string> [<remote_ip: string> ...]` (Ferron 2.0.0-beta.15 or newer)
+  - This subcondition checks if the request (with respect for `X-Forwarded-For` header) is not coming from a specific forwarded IP address or a list of IP addresses.
+- `is_equal <left_side: string> <right_side: string>` (Ferron 2.0.0-beta.15 or newer)
+  - This subcondition checks if the left side is equal to the right side.
+- `is_not_equal <left_side: string> <right_side: string>` (Ferron 2.0.0-beta.15 or newer)
+  - This subcondition checks if the left side is not equal to the right side.
+- `is_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]` (Ferron 2.0.0-beta.15 or newer)
+  - This subcondition checks if the value matches the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
+- `is_not_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]` (Ferron 2.0.0-beta.15 or newer)
+  - This subcondition checks if the value does not match the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
 
-    // Enhanced logging for development
-    log "/var/log/ferron/dev.access.log"
-    error_log "/var/log/ferron/dev.error.log"
+## Placeholders
 
-    // Custom test endpoints
-    status 200 url="/test" body="Test endpoint working"
-    status 500 url="/test-error" body="Simulated error"
-}
-```
+Ferron supports the following placeholders for header values, subconditions, reverse proxying, and redirect destinations:
 
-## Header value placeholders
-
-Ferron supports the following header value placeholders:
-
-- `{path}` - the path part of the request URI
+- `{path}` - the request URI with path and query string (for example, `/index.html?param=value`)
 - `{method}` (Ferron 2.0.0-beta.9 or newer) - the request method
 - `{version}` (Ferron 2.0.0-beta.9 or newer) - the HTTP version of the request
 - `{header:<header_name>}` (Ferron 2.0.0-beta.9 or newer) - the header value of the request URI
-- `{scheme}` (Ferron 2.0.0-beta.9 or newer) - the scheme of the request URI (`http` or `https`), applicable only for reverse proxying.
-- `{client_ip}` (Ferron 2.0.0-beta.9 or newer) - the client IP address, applicable only for reverse proxying.
-- `{client_port}` (Ferron 2.0.0-beta.9 or newer) - the client port number, applicable only for reverse proxying.
-- `{server_ip}` (Ferron 2.0.0-beta.9 or newer) - the server IP address, applicable only for reverse proxying.
-- `{server_port}` (Ferron 2.0.0-beta.9 or newer) - the server port number, applicable only for reverse proxying.
+- `{scheme}` (Ferron 2.0.0-beta.9 or newer) - the scheme of the request URI (`http` or `https`), applicable only for subconditions, reverse proxying and redirect destinations.
+- `{client_ip}` (Ferron 2.0.0-beta.9 or newer) - the client IP address, applicable only for subconditions, reverse proxying and redirect destinations.
+- `{client_port}` (Ferron 2.0.0-beta.9 or newer) - the client port number, applicable only for subconditions, reverse proxying and redirect destinations.
+- `{server_ip}` (Ferron 2.0.0-beta.9 or newer) - the server IP address, applicable only for subconditions, reverse proxying and redirect destinations.
+- `{server_port}` (Ferron 2.0.0-beta.9 or newer) - the server port number, applicable only for subconditions, reverse proxying and redirect destinations.
 
 ## Location block example
 
@@ -762,7 +785,69 @@ Below is a complete example of Ferron configuration, combining multiple sections
     etag
 }
 
-// Main website
+// Define reusable snippets
+snippet "security_headers" {
+    // Common security headers
+    header "X-Frame-Options" "DENY"
+    header "X-Content-Type-Options" "nosniff"
+    header "X-XSS-Protection" "1; mode=block"
+    header "Referrer-Policy" "strict-origin-when-cross-origin"
+}
+
+snippet "cors_headers" {
+    // CORS headers for API endpoints
+    header "Access-Control-Allow-Origin" "*"
+    header "Access-Control-Allow-Methods" "GET, POST, PUT, DELETE, OPTIONS"
+    header "Access-Control-Allow-Headers" "Authorization, Content-Type, X-Requested-With"
+    header "Access-Control-Max-Age" "86400"
+}
+
+snippet "static_caching" {
+    // Aggressive caching for static assets
+    file_cache_control "public, max-age=31536000, immutable"
+    compressed
+    etag
+}
+
+snippet "admin_protection" {
+    // Admin area protection
+    status 401 realm="Admin Area" users="admin,superuser"
+    users "admin" "$2b$10$hashedpassword12345"
+    users "superuser" "$2b$10$anotherhashpassword67890"
+    limit rate=10 burst=20
+}
+
+snippet "mobile_condition" {
+    condition "is_mobile" {
+        is_regex "{header:User-Agent}" "(Mobile|Android|iPhone|iPad)" case_insensitive=#true
+    }
+}
+
+snippet "admin_ip_condition" {
+    condition "is_admin_ip" {
+        is_remote_ip "192.168.1.10" "10.0.0.5"
+    }
+}
+
+snippet "api_request_condition" {
+    condition "is_api_request" {
+        is_regex "{path}" "^/api/"
+    }
+}
+
+snippet "static_asset_condition" {
+    condition "is_static_asset" {
+        is_regex "{path}" "\\.(css|js|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico)(?:$|[?#])" case_insensitive=#true
+    }
+}
+
+snippet "development_condition" {
+    condition "is_development" {
+        is_equal "{header:X-Environment}" "development"
+    }
+}
+
+// Main website with conditional configuration
 example.com {
     // TLS configuration
     tls "/etc/ssl/certs/example.com.crt" "/etc/ssl/private/example.com.key"
@@ -772,55 +857,247 @@ example.com {
     root "/var/www/example.com"
     server_administrator_email "admin@example.com"
 
-    // Security headers
-    header "X-Frame-Options" "DENY"
-    header "X-Content-Type-Options" "nosniff"
+    // Use security headers snippet
+    use "security_headers"
+
+    // Import condition snippets
+    use "mobile_condition"
+    use "admin_ip_condition"
+    use "api_request_condition"
+    use "static_asset_condition"
+    use "development_condition"
+
+    // Additional security header
     header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
-    header "X-Powered-By" "Ferron"
+
+    // Conditional configuration based on mobile detection
+    if "is_mobile" {
+        // Add headers that aren't inherited
+        use "security_headers"
+        header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+
+        // Mobile-specific settings
+        header "X-Mobile-Detected" "true"
+        root "/var/www/example.com/mobile"
+
+        // Lighter rate limiting for mobile
+        limit rate=50 burst=100
+    }
+
+    if_not "is_mobile" {
+        // Add headers that aren't inherited
+        use "security_headers"
+        header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+
+        // Desktop settings
+        header "X-Mobile-Detected" "false"
+        limit rate=100 burst=200
+    }
+
+    // Admin IP gets special treatment
+    if "is_admin_ip" {
+        // Add headers that aren't inherited
+        use "security_headers"
+        header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+
+        // No rate limiting for admin IPs
+        limit #false
+
+        // Additional debug headers
+        header "X-Admin-Access" "true"
+        header "X-Client-IP" "{client_ip}"
+
+        // Enhanced logging for admin access
+        log "/var/log/ferron/admin-access.log"
+    }
+
+    // Development environment conditional settings
+    if "is_development" {
+        // Add headers that aren't inherited
+        use "security_headers"
+        header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+
+        // Development-specific headers
+        header "X-Environment" "development"
+        header "X-Debug-Mode" "enabled"
+
+        // Disable caching in development
+        header "Cache-Control" "no-cache, no-store, must-revalidate"
+        header "Pragma" "no-cache"
+        header "Expires" "0"
+    }
+
+    if_not "is_development" {
+        // Add headers that aren't inherited
+        use "security_headers"
+        header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+
+        // Production caching
+        cache
+        cache_vary "Accept-Encoding" "Accept-Language"
+        file_cache_control "public, max-age=3600"
+    }
 
     // URL rewriting
     rewrite "^/old-section/(.*)" "/new-section/$1" last=#true
-    allow_double_slashes #false
 
     // Error pages
     error_page 404 "/var/www/errors/404.html"
     error_page 500 "/var/www/errors/500.html"
 
-    // Rate limiting
-    limit rate=100 burst=200
-
-    // Caching
-    cache
-    cache_vary "Accept-Encoding" "Accept-Language"
-    file_cache_control "public, max-age=3600"
-
-    // Static assets
+    // Static assets location with conditional caching
     location "/assets" remove_base=#true {
         root "/var/www/assets"
-        file_cache_control "public, max-age=31536000"
-        compressed
+
+        if "is_static_asset" {
+            // Add headers that aren't inherited
+            use "security_headers"
+            header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+
+            use "static_caching"
+        }
+
+        // CORS for web fonts
+        if_not "is_static_asset" {
+            // Add headers that aren't inherited
+            use "security_headers"
+            header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+
+            header "Access-Control-Allow-Origin" "*"
+        }
+    }
+
+    // API endpoints
+    location "/api" {
+        if "is_api_request"
+            // Add headers that aren't inherited
+            use "security_headers"
+            header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+
+            use "cors_headers"
+
+            // API-specific rate limiting
+            limit rate=1000 burst=2000
+
+            // Proxy to API backend
+            proxy "http://api-backend:8080"
+            proxy_request_header_replace "X-Real-IP" "{client_ip}"
+            proxy_request_header "X-Forwarded-Proto" "{scheme}"
+        }
+    }
+
+    // Admin area with conditional access
+    location "/admin" {
+        if "is_admin_ip" {
+            // Add headers that aren't inherited
+            use "security_headers"
+            header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+
+            // Admin IPs get direct access
+            root "/var/www/admin"
+
+            // Special admin headers
+            header "X-Admin-Direct-Access" "true"
+        }
+
+        if_not "is_admin_ip" {
+            // Add headers that aren't inherited
+            use "security_headers"
+            header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
+
+            // Non-admin IPs require authentication
+            use "admin_protection"
+        }
     }
 
     // PHP application
     fcgi_php "tcp://localhost:9000/"
-
-    // Admin area
-    location "/admin" {
-        status 401 realm="Admin Area" users="admin"
-        users "admin" "$2b$10$hashedpassword12345"
-        limit rate=10 burst=20
-    }
 }
 
-// API subdomain
+// API subdomain with extensive conditional logic
 api.example.com {
     // TLS configuration
     tls "/etc/ssl/certs/api.example.com.crt" "/etc/ssl/private/api.example.com.key"
 
-    // Load balanced backend
-    proxy "http://backend1:8080"
-    proxy "http://backend2:8080"
-    proxy "http://backend3:8080"
+    // Use CORS headers snippet
+    use "cors_headers"
+
+    // Import reusable condition
+    use "admin_ip_condition"
+
+    // Conditional backend selection based on request path
+    condition "is_v1_api" {
+        is_regex "{path}" "^/v1/"
+    }
+
+    condition "is_v2_api" {
+        is_regex "{path}" "^/v2/"
+    }
+
+    condition "is_auth_request" {
+        is_regex "{path}" "^/(login|register|refresh|logout)"
+    }
+
+    // Version-specific backend routing
+    if "is_v1_api" {
+        // Use CORS headers snippet (again, since it's not inherited)
+        use "cors_headers"
+
+        proxy "http://api-v1-backend1:8080"
+        proxy "http://api-v1-backend2:8080"
+
+        // V1 specific headers
+        header "X-API-Version" "1.0"
+
+        // More restrictive rate limiting for legacy API
+        limit rate=500 burst=1000
+    }
+
+    if "is_v2_api" {
+        // Use CORS headers snippet (again, since it's not inherited)
+        use "cors_headers"
+
+        proxy "http://api-v2-backend1:8080"
+        proxy "http://api-v2-backend2:8080"
+        proxy "http://api-v2-backend3:8080"
+
+        // V2 specific headers
+        header "X-API-Version" "2.0"
+
+        // Higher rate limits for new API
+        limit rate=2000 burst=4000
+    }
+
+    // Authentication endpoints get special treatment
+    if "is_auth_request" {
+        // Use CORS headers snippet (again, since it's not inherited)
+        use "cors_headers"
+
+        // Route to dedicated auth service
+        proxy "http://auth-service:9090"
+
+        // Stricter rate limiting for auth endpoints
+        limit rate=100 burst=200
+
+        // Additional security headers
+        header "X-Auth-Endpoint" "true"
+        header "Strict-Transport-Security" "max-age=31536000; includeSubDomains; preload"
+    }
+
+    // Admin IP gets enhanced access
+    if "is_admin_ip" {
+        // Use CORS headers snippet (again, since it's not inherited)
+        use "cors_headers"
+
+        // No rate limiting for admin IPs
+        limit #false
+
+        // Admin-specific headers
+        header "X-Admin-API-Access" "true"
+
+        // Enhanced logging
+        log "/var/log/ferron/api-admin.log"
+    }
 
     // Health checking
     lb_health_check
@@ -829,42 +1106,91 @@ api.example.com {
     // Proxy settings
     proxy_keepalive
     proxy_request_header_replace "X-Real-IP" "{client_ip}"
-
-    // API-specific headers
-    header "Access-Control-Allow-Origin" "*"
-    header "Access-Control-Allow-Methods" "GET, POST, PUT, DELETE, OPTIONS"
-    header "Access-Control-Allow-Headers" "Authorization, Content-Type"
-
-    // Rate limiting for API
-    limit rate=1000 burst=2000
+    proxy_request_header "X-Forwarded-Proto" "{scheme}"
 
     // Health check endpoint
     status 200 url="/health" body="OK"
+
+    // Version info endpoint
+    status 200 url="/version" body="{\"api_versions\":[\"v1\",\"v2\"],\"server\":\"Ferron\"}"
 }
 
-// Development subdomain
+// Development subdomain with environment-based configuration
 dev.example.com {
     // Basic TLS
     auto_tls
     auto_tls_contact "dev@example.com"
 
+    // Use security headers but with relaxed settings
+    use "security_headers"
+
+    // Import reusable condition
+    use "admin_ip_condition"
+
+    // Override some security headers for development
+    header "X-Frame-Options" "SAMEORIGIN"
+
     // Enhanced logging
     log "/var/log/ferron/dev.access.log"
     error_log "/var/log/ferron/dev.error.log"
 
-    // Test endpoints
-    status 200 url="/test" body="Development server is working"
-    status 500 url="/test-error" body="Simulated error for testing"
+    // Development-specific conditions
+    condition "is_hot_reload" {
+        is_regex "{path}" "^/(sockjs-node|__webpack_hmr)"
+    }
 
-    // Proxy to development backend
+    condition "is_source_map" {
+        is_regex "{path}" "\\.map(?:$|[?#])"
+    }
+
+    // Hot reload support
+    if "is_hot_reload" {
+        // Non-inherited headers, again
+        use "security_headers"
+        header "X-Frame-Options" "SAMEORIGIN"
+
+        proxy "http://dev-hmr:3001"
+
+        // WebSocket support
+        proxy_request_header "Connection" "Upgrade"
+        proxy_request_header "Upgrade" "websocket"
+
+        // No caching for hot reload
+        header "Cache-Control" "no-cache"
+    }
+
+    // Source maps handling
+    if "is_source_map" {
+        // Only allow source maps for admin IPs
+        if "is_admin_ip" {
+            root "/var/www/dev/sourcemaps"
+        }
+
+        if_not "is_admin_ip" {
+            status 404 body="Not found"
+        }
+    }
+
+    // Test endpoints with conditional responses
+    if "is_admin_ip" {
+        status 200 url="/test" body="Development server is working (Admin Access)"
+        status 200 url="/debug" body="{\"client_ip\":\"{client_ip}\",\"method\":\"{method}\",\"path\":\"{path}\"}"
+    }
+
+    if_not "is_admin_ip" {
+        status 200 url="/test" body="Development server is working"
+    }
+
+    // Default proxy to development backend
     proxy "http://dev-backend:3000"
     proxy_request_header "X-Dev-Mode" "true"
+    proxy_request_header "X-Environment" "development"
 
     // Relaxed rate limiting
     limit rate=1000 burst=5000
 }
 
-// Static content CDN
+// Static content CDN with intelligent caching
 cdn.example.com {
     // TLS configuration
     tls "/etc/ssl/certs/cdn.example.com.crt" "/etc/ssl/private/cdn.example.com.key"
@@ -872,17 +1198,78 @@ cdn.example.com {
     // Static file serving
     root "/var/www/cdn"
     directory_listing #false
-    compressed
-    etag
 
-    // Aggressive caching
-    file_cache_control "public, max-age=31536000, immutable"
+    // Use static caching snippet
+    use "static_caching"
 
-    // No rate limiting for static content
+    // Import reusable condition
+    use "admin_ip_condition"
+
+    // Conditional caching based on file type
+    condition "is_image" {
+        is_regex "{path}" "\\.(png|jpg|jpeg|gif|webp|svg)(?:$|[?#])" case_insensitive=#true
+    }
+
+    condition "is_font" {
+        is_regex "{path}" "\\.(woff|woff2|ttf|eot|otf)(?:$|[?#])" case_insensitive=#true
+    }
+
+    condition "is_media" {
+        is_regex "{path}" "\\.(mp4|webm|ogg|mp3|wav)(?:$|[?#])" case_insensitive=#true
+    }
+
+    // Image-specific settings
+    if "is_image" {
+        // Extra long caching for images
+        file_cache_control "public, max-age=2592000, immutable"
+
+        // Image-specific headers
+        header "X-Content-Type" "image"
+    }
+
+    // Font-specific settings
+    if "is_font" {
+        // CORS for web fonts
+        header "Access-Control-Allow-Origin" "*"
+        header "Access-Control-Allow-Methods" "GET, HEAD, OPTIONS"
+
+        // Font-specific caching
+        file_cache_control "public, max-age=31536000, immutable"
+    }
+
+    // Media-specific settings
+    if "is_media" {
+        // Partial content support for media
+        header "Accept-Ranges" "bytes"
+
+        // Media-specific caching
+        file_cache_control "public, max-age=604800"
+    }
+
+    // Admin IP gets special access
+    if "is_admin_ip" {
+        // Allow directory listing for admin IPs
+        directory_listing #true
+
+        // Admin headers
+        header "X-Admin-CDN-Access" "true"
+    }
+
+    // No rate limiting for CDN
     limit #false
 
-    // CORS for web fonts and assets
-    header "Access-Control-Allow-Origin" "*"
-    header "Access-Control-Allow-Methods" "GET, HEAD, OPTIONS"
+    // Geographic optimization (example condition)
+    condition "is_european_request" {
+        is_regex "{header:CF-IPCountry}" "^(DE|FR|GB|IT|ES|NL|BE|CH|AT|SE|NO|DK|FI|PL)$"
+    }
+
+    if "is_european_request" {
+        header "X-CDN-Region" "Europe"
+        // Could proxy to European CDN nodes here
+    }
+
+    if_not "is_european_request" {
+        header "X-CDN-Region" "Global"
+    }
 }
 ```

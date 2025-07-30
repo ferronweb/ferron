@@ -1,109 +1,10 @@
+pub use ferron_common::logging::*;
+
 use std::{cmp::Ordering, collections::HashMap, net::IpAddr, sync::Arc};
 
 use async_channel::{Receiver, Sender};
 
-use crate::util::match_hostname;
-
-/// Represents a log message with its content and error status.
-pub struct LogMessage {
-  is_error: bool,
-  message: String,
-}
-
-impl LogMessage {
-  /// Creates a new `LogMessage` instance.
-  ///
-  /// # Parameters
-  ///
-  /// - `message`: The content of the log message.
-  /// - `is_error`: A boolean indicating whether the message is an error (`true`) or not (`false`).
-  ///
-  /// # Returns
-  ///
-  /// A `LogMessage` object containing the specified message and error status.
-  pub fn new(message: String, is_error: bool) -> Self {
-    Self { is_error, message }
-  }
-
-  /// Consumes the `LogMessage` and returns its components.
-  ///
-  /// # Returns
-  ///
-  /// A tuple containing:
-  /// - `String`: The content of the log message.
-  /// - `bool`: A boolean indicating whether the message is an error.
-  pub fn get_message(self) -> (String, bool) {
-    (self.message, self.is_error)
-  }
-}
-
-/// Facilitates logging of error messages through a provided logger sender.
-pub struct ErrorLogger {
-  logger: Option<Sender<LogMessage>>,
-}
-
-impl ErrorLogger {
-  /// Creates a new `ErrorLogger` instance.
-  ///
-  /// # Parameters
-  ///
-  /// - `logger`: A `Sender<LogMessage>` used for sending log messages.
-  ///
-  /// # Returns
-  ///
-  /// A new `ErrorLogger` instance associated with the provided logger.
-  pub fn new(logger: Sender<LogMessage>) -> Self {
-    Self { logger: Some(logger) }
-  }
-
-  /// Creates a new `ErrorLogger` instance without any underlying logger.
-  ///
-  /// # Returns
-  ///
-  /// A new `ErrorLogger` instance not associated with any logger.
-  pub fn without_logger() -> Self {
-    Self { logger: None }
-  }
-
-  /// Logs an error message asynchronously.
-  ///
-  /// # Parameters
-  ///
-  /// - `message`: A string slice containing the error message to be logged.
-  ///
-  /// # Examples
-  ///
-  /// ```
-  /// # use crate::ferron_common::ErrorLogger;
-  /// # #[tokio::main]
-  /// # async fn main() {
-  /// let (tx, mut rx) = async_channel::bounded(100);
-  /// let logger = ErrorLogger::new(tx);
-  /// logger.log("An error occurred").await;
-  /// # }
-  /// ```
-  pub async fn log(&self, message: &str) {
-    if let Some(logger) = &self.logger {
-      logger
-        .send(LogMessage::new(String::from(message), true))
-        .await
-        .unwrap_or_default();
-    }
-  }
-}
-
-impl Clone for ErrorLogger {
-  /// Clone a `ErrorLogger`.
-  ///
-  /// # Returns
-  ///
-  /// A cloned `ErrorLogger` instance
-  fn clone(&self) -> Self {
-    Self {
-      logger: self.logger.clone(),
-    }
-  }
-}
+use crate::util::{is_localhost, match_hostname};
 
 /// A logger filter
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -125,7 +26,25 @@ impl Ord for LoggerFilter {
       .is_some()
       .cmp(&other.port.is_some())
       .then_with(|| self.ip.is_some().cmp(&other.ip.is_some()))
-      .then_with(|| self.hostname.is_some().cmp(&other.hostname.is_some()))
+      .then_with(|| {
+        self
+          .hostname
+          .as_ref()
+          .map(|h| !h.starts_with("*."))
+          .cmp(&other.hostname.as_ref().map(|h| !h.starts_with("*.")))
+      }) // Take wildcard hostnames into account
+      .then_with(|| {
+        self
+          .hostname
+          .as_ref()
+          .map(|h| h.trim_end_matches('.').chars().filter(|c| *c == '.').count())
+          .cmp(
+            &other
+              .hostname
+              .as_ref()
+              .map(|h| h.trim_end_matches('.').chars().filter(|c| *c == '.').count()),
+          )
+      }) // Take also amount of dots in hostnames (domain level) into account
   }
 }
 
@@ -220,7 +139,9 @@ impl Loggers {
       .rev()
       .find(|&logger| {
         match_hostname(logger.0.hostname.as_deref(), hostname)
-          && (logger.0.ip.is_none() || logger.0.ip == Some(ip))
+          && ((logger.0.ip.is_none() && (!is_localhost(logger.0.ip.as_ref(), logger.0.hostname.as_deref())
+            || ip.to_canonical().is_loopback()))  // With special `localhost` check
+          || logger.0.ip == Some(ip))
           && (logger.0.port.is_none() || logger.0.port == Some(port))
       })
       .map(|logger| &logger.1)

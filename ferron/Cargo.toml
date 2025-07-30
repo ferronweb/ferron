@@ -1,9 +1,13 @@
 [package]
 name = "ferron"
-version = "2.0.0-beta.14"
+version = "2.0.0-beta.15"
 edition = "2021"
 
 [dependencies]
+# Ferron internal dependencies
+ferron-common = { workspace = true }
+ferron-load-modules = { workspace = true }
+
 # Error Handling & Utilities
 anyhow = "1.0.98"
 human-panic = "2.0.2"
@@ -24,7 +28,6 @@ quinn = { version = "0.11.8", default-features = false, features = [
     "rustls-aws-lc-rs",
 ] }
 http-body-util = "0.1.3"
-httparse = { version = "1.10.1", optional = true }
 httpdate = "1.0.3"
 socket2 = "0.6.0"
 ppp = "2.3.0"
@@ -64,10 +67,7 @@ rcgen = { version = "0.14.1", default-features = false, features = [
     "aws_lc_rs",
     "pem",
 ] }
-password-auth = { workspace = true }
-sha2 = { version = "0.10.9", optional = true }
 base64 = "0.22.1"
-rand = { version = "0.9.1", optional = true }
 xxhash-rust = { version = "0.8.15", features = ["std", "xxh3"] }
 
 # Async Runtime & Concurrency
@@ -90,171 +90,63 @@ monoio-compat = { version = "0.2.2", optional = true, features = ["hyper"] }
 async-channel = "2.3.1"
 async-io = "2.4.0"
 async-trait = "0.1.88"
-futures-executor = { version = "0.3.31", optional = true }
 futures-util = { version = "0.3.31", features = ["sink"] }
 pin-project-lite = "0.2.16"
 blocking = { version = "1.6.1", optional = true }
 tokio-util = "0.7.15"
 
-# WebSocket Support
-tokio-tungstenite = { version = "0.27.0", optional = true }
-hyper-tungstenite = { version = "0.18.0", optional = true }
-
-# Python Integration (WSGI/ASGI)
-pyo3 = { version = "0.25.0", optional = true, features = [
-    "anyhow",
-    "auto-initialize",
-] }
-pyo3-async-runtimes = { version = "0.25.0", features = [
-    "tokio",
-    "tokio-runtime",
-], optional = true }
-
-# Process & System Integration
-async-process = { version = "2.3.0", optional = true }
-nix = { version = "0.30.1", optional = true, features = ["process", "signal"] }
-interprocess = { version = "2.2.3", optional = true }
-
 # Data Handling & Serialization
 bytes = { version = "1.10.1" }
 serde = { version = "1.0.219", features = ["derive"] }
-serde_bytes = { version = "0.11.17", optional = true }
-postcard = { version = "1.1.1", optional = true, default-features = false, features = [
-    "use-std",
-] }
 serde_json = "1.0.140"
 kdl = { workspace = true }
 ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core", optional = true }
-
-# File Serving & Compression
-new_mime_guess = { version = "4.0.4", optional = true }
-async-compression = { version = "0.4.23", optional = true, features = [
-    "tokio",
-    "gzip",
-    "brotli",
-    "deflate",
-    "zstd",
-] }
-
-# Caching
-cache_control = { version = "0.2.0", optional = true }
-hashlink = "0.10.0"
 
 # CLI & Configuration
 clap = { version = "4.5.38", features = ["cargo"] }
 dirs = "6.0.0"
 
-# Rate limitation
-tokenbucket = { version = "0.1.6", optional = true }
-
-# Automatic TLS DNS-01 challenge
-hickory-resolver = "0.25.2"
-porkbun-api = { version = "1.0.1", optional = true }
-dns-update = { version = "0.1.2", optional = true, default-features = false, features = [
-    "hickory-aws-lc-rs",
-] }
-desec_api = { version = "0.4.0", optional = true }
-aws-config = { version = "1.8.1", optional = true, default-features = false, features = [
-    "default-https-client", # This feature flag enables aws-lc-rs crypto provider
-    "rt-tokio",
-] } # Needed for Route53
-aws-credential-types = { version = "1.2.3", optional = true, features = [
-    "hardcoded-credentials",
-] } # Needed for Route53
-aws-sdk-route53 = { version = "1.84.0", optional = true, default-features = false, features = [
-    "default-https-client", # This feature flag enables aws-lc-rs crypto provider
-    "rt-tokio",
-] }
-
 # Performance & Utilities
 mimalloc = { workspace = true }
-memchr = { version = "2.7.4", optional = true }
-itertools = { version = "0.14.0", optional = true }
 smallvec = { version = "1.15.0", features = [
     "write",
     "union",
     "const_generics",
 ] }
-papaya = { version = "0.2.1", optional = true }
-ahash = { version = "0.8.12", optional = true }
+
+# Build information
+shadow-rs = { version = "1.2.0", default-features = false, features = [
+    "metadata",
+    "tzdb",
+] }
 
 [dev-dependencies]
-tokio-test = "0.4.4"
 shiba = { workspace = true }
-fastrand = "2.3.0"
 
 [build-dependencies]
 winresource = "0.1.19"
+shadow-rs = { version = "1.2.0", default-features = false, features = [
+    "build",
+    "metadata",
+    "tzdb",
+] }
 
 [features]
-default = [
-    "acmedns-cloudflare",
-    "acmedns-desec",
-    "acmedns-porkbun",
-    "acmedns-rfc2136",
-    "acmedns-route53",
-    "cache",
-    "config-yaml-legacy",
-    "cgi",
-    "fauth",
-    "fcgi",
-    "fproxy",
-    "limit",
-    "replace",
-    "rproxy",
-    "runtime-monoio",
-    "scgi",
-    "static",
-]
-default-tokio = [
-    "acmedns-cloudflare",
-    "acmedns-desec",
-    "acmedns-porkbun",
-    "acmedns-rfc2136",
-    "acmedns-route53",
-    "cache",
-    "config-yaml-legacy",
-    "cgi",
-    "fauth",
-    "fcgi",
-    "fproxy",
-    "limit",
-    "replace",
-    "rproxy",
-    "runtime-tokio",
-    "scgi",
-    "static",
-]
-acmedns-cloudflare = ["dns-update"]
-acmedns-desec = ["desec_api"]
-acmedns-porkbun = ["porkbun-api"]
-acmedns-rfc2136 = ["dns-update"]
-acmedns-route53 = ["aws-config", "aws-credential-types", "aws-sdk-route53"]
-asgi = ["pyo3", "pyo3-async-runtimes", "tokio-tungstenite", "hyper-tungstenite"]
-cache = ["cache_control", "itertools", "papaya", "ahash"]
-cgi = ["async-process", "httparse", "memchr"]
+default = ["config-yaml-legacy", "runtime-monoio"]
+default-tokio = ["config-yaml-legacy", "runtime-tokio"]
 config-docker-auto = []
 config-yaml-legacy = ["ferron-yaml2kdl-core"]
-example = []
-fauth = ["rand"]
-fcgi = ["tokio-util/codec", "httparse", "memchr"]
-fproxy = []
-limit = ["tokenbucket"]
-replace = ["memchr"]
-rproxy = ["rand"]
-runtime-monoio = ["monoio", "monoio-compat", "blocking"]
-runtime-tokio = ["tokio/full", "quinn/runtime-tokio", "hyper-util/tokio"]
-scgi = ["httparse", "memchr"]
-static = ["new_mime_guess", "async-compression", "sha2"]
-wsgi = ["pyo3", "futures-executor"]
-wsgid = [
-    "pyo3",
-    "nix",
-    "interprocess",
-    "itertools",
-    "serde_bytes",
-    "postcard",
-    "hashlink/serde",
-    "hashlink/serde_impl",
-    "rand",
+runtime-monoio = [
+    "monoio",
+    "monoio-compat",
+    "blocking",
+    "ferron-common/runtime-monoio",
+    "ferron-load-modules/runtime-monoio",
+]
+runtime-tokio = [
+    "tokio/full",
+    "quinn/runtime-tokio",
+    "hyper-util/tokio",
+    "ferron-common/runtime-tokio",
+    "ferron-load-modules/runtime-tokio",
 ]

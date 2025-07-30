@@ -5,7 +5,6 @@ mod listener_handler_communication;
 mod listener_quic;
 mod listener_tcp;
 mod logging;
-mod modules;
 mod request_handler;
 mod runtime;
 mod tls_util;
@@ -23,19 +22,20 @@ use std::time::Duration;
 use async_channel::{Receiver, Sender};
 use base64::Engine;
 use chrono::{DateTime, Local};
-use clap::{crate_version, Arg, ArgAction, ArgMatches, Command};
+use clap::{Arg, ArgAction, ArgMatches, Command};
 use config::adapters::ConfigurationAdapter;
 use config::processing::{load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration};
 use config::ServerConfigurations;
+use ferron_common::{get_entry, get_value, get_values};
+use ferron_load_modules::{get_dns_provider, obtain_module_loaders};
 use handler::create_http_handler;
 use human_panic::{setup_panic, Metadata};
-use instant_acme::{ChallengeType, LetsEncrypt};
+use instant_acme::{ChallengeType, ExternalAccountKey, LetsEncrypt};
 use listener_handler_communication::ConnectionData;
 use listener_quic::create_quic_listener;
 use listener_tcp::create_tcp_listener;
 use logging::LogMessage;
 use mimalloc::MiMalloc;
-use modules::ModuleLoader;
 use rustls::crypto::aws_lc_rs::cipher_suite::*;
 use rustls::crypto::aws_lc_rs::default_provider;
 use rustls::crypto::aws_lc_rs::kx_group::*;
@@ -45,10 +45,10 @@ use rustls::version::{TLS12, TLS13};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use rustls_native_certs::load_native_certs;
 use rustls_platform_verifier::BuilderVerifierExt;
+use shadow_rs::shadow;
 use tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio_util::sync::CancellationToken;
-use util::{get_entry, get_value, get_values};
 use xxhash_rust::xxh3::xxh3_128;
 
 use crate::acme::{
@@ -57,11 +57,13 @@ use crate::acme::{
   ACME_TLS_ALPN_NAME,
 };
 use crate::logging::{LoggerFilter, LoggersBuilder};
-use crate::util::{match_hostname, NoServerVerifier};
+use crate::util::{is_localhost, match_hostname, NoServerVerifier};
 
 // Set the global allocator to use mimalloc for performance optimization
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
+
+shadow!(build);
 
 static LISTENER_HANDLER_CHANNEL: LazyLock<Arc<(Sender<ConnectionData>, Receiver<ConnectionData>)>> =
   LazyLock::new(|| Arc::new(async_channel::unbounded()));
@@ -242,19 +244,6 @@ fn before_starting_server(
       configuration_adapter
     ))?;
 
-  // Load the configuration
-  let configs_to_process = configuration_adapter.load_configuration(configuration_path)?;
-
-  // Process the configurations
-  let configs_to_process = merge_duplicates(configs_to_process);
-  let configs_to_process = remove_and_add_global_configuration(configs_to_process);
-  let configs_to_process = premerge_configuration(configs_to_process);
-  let (configs_to_process, first_module_error, unused_properties) =
-    load_modules(configs_to_process, &mut module_loaders);
-
-  // Finalize the configurations
-  let server_configurations = Arc::new(ServerConfigurations::new(configs_to_process));
-
   // Determine the available parallelism
   let available_parallelism = thread::available_parallelism()?.get();
 
@@ -267,6 +256,19 @@ fn before_starting_server(
     .thread_name("Secondary runtime")
     .enable_all()
     .build()?;
+
+  // Load the configuration
+  let configs_to_process = configuration_adapter.load_configuration(configuration_path)?;
+
+  // Process the configurations
+  let configs_to_process = merge_duplicates(configs_to_process);
+  let configs_to_process = remove_and_add_global_configuration(configs_to_process);
+  let configs_to_process = premerge_configuration(configs_to_process);
+  let (configs_to_process, first_module_error, unused_properties) =
+    load_modules(configs_to_process, &mut module_loaders, &secondary_runtime);
+
+  // Finalize the configurations
+  let server_configurations = Arc::new(ServerConfigurations::new(configs_to_process));
 
   let global_configuration = server_configurations.find_global_configuration();
 
@@ -512,7 +514,7 @@ fn before_starting_server(
 
     let mut tls_ports: HashMap<u16, CustomSniResolver> = HashMap::new();
     #[allow(clippy::type_complexity)]
-    let mut tls_port_locks: HashMap<u16, Arc<tokio::sync::RwLock<HashMap<String, Arc<dyn ResolvesServerCert>>>>> =
+    let mut tls_port_locks: HashMap<u16, Arc<tokio::sync::RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>> =
       HashMap::new();
     let mut nonencrypted_ports = HashSet::new();
     let mut certified_keys_to_preload: HashMap<u16, Vec<Arc<CertifiedKey>>> = HashMap::new();
@@ -587,7 +589,10 @@ fn before_starting_server(
       if server_configuration.filters.port.is_none() {
         if get_value!("auto_tls", server_configuration)
           .and_then(|v| v.as_bool())
-          .unwrap_or(true)
+          .unwrap_or(!is_localhost(
+            server_configuration.filters.ip.as_ref(),
+            server_configuration.filters.hostname.as_deref(),
+          ))
         {
           automatic_tls_port = default_https_port;
         }
@@ -644,7 +649,7 @@ fn before_starting_server(
                       sni_resolver.load_fallback_resolver(resolver);
                     }
                   } else {
-                    let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+                    let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
                     tls_port_locks.insert(https_port, sni_resolver_list.clone());
                     let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
                     if let Some(sni_hostname) = &sni_hostname {
@@ -736,129 +741,11 @@ fn before_starting_server(
               "DNS-01" => ChallengeType::Dns01,
               unsupported => Err(anyhow::anyhow!("Unsupported ACME challenge type: {}", unsupported))?,
             };
-            let dns_provider: Option<Arc<dyn crate::acme::dns::DnsProvider + Send + Sync>> =
+            let dns_provider: Option<Arc<dyn ferron_common::dns::DnsProvider + Send + Sync>> =
               if &*challenge_type_str.to_uppercase() != "DNS-01" {
                 None
               } else if let Some(provider_name) = challenge_params.get("provider") {
-                match provider_name.as_str() {
-                  #[cfg(feature = "acmedns-porkbun")]
-                  "porkbun" => {
-                    let api_key = challenge_params
-                      .get("api_key")
-                      .ok_or_else(|| anyhow::anyhow!("Missing Porkbun API key"))?;
-                    let secret_key = challenge_params
-                      .get("secret_key")
-                      .ok_or_else(|| anyhow::anyhow!("Missing Porkbun secret key"))?;
-                    Some(Arc::new(crate::acme::dns::porkbun::PorkbunDnsProvider::new(
-                      api_key, secret_key,
-                    )))
-                  }
-                  #[cfg(feature = "acmedns-rfc2136")]
-                  "rfc2136" => {
-                    use std::net::ToSocketAddrs;
-
-                    let addr_str = challenge_params
-                      .get("server")
-                      .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 server address"))?;
-                    let addr_uri = addr_str
-                      .parse::<hyper::Uri>()
-                      .map_err(|e| anyhow::anyhow!("Invalid RFC 2136 server address: {}", e))?;
-                    let addr = match addr_uri.scheme_str() {
-                      Some("tcp") => dns_update::providers::rfc2136::DnsAddress::Tcp(
-                        addr_uri
-                          .authority()
-                          .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 server address hostname"))?
-                          .as_str()
-                          .to_socket_addrs()
-                          .map_err(|e| anyhow::anyhow!("Failed to resolve RFC 2136 server address: {}", e))?
-                          .next()
-                          .ok_or_else(|| anyhow::anyhow!("No RFC 2136 server addresses found"))?,
-                      ),
-                      Some("udp") => dns_update::providers::rfc2136::DnsAddress::Udp(
-                        addr_uri
-                          .authority()
-                          .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 server address hostname"))?
-                          .as_str()
-                          .to_socket_addrs()
-                          .map_err(|e| anyhow::anyhow!("Failed to resolve RFC 2136 server address: {}", e))?
-                          .next()
-                          .ok_or_else(|| anyhow::anyhow!("No RFC 2136 server addresses found"))?,
-                      ),
-                      _ => Err(anyhow::anyhow!("Invalid RFC 2136 server address scheme"))?,
-                    };
-                    let key_name = challenge_params
-                      .get("key_name")
-                      .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 key name"))?;
-                    let key = base64::engine::general_purpose::STANDARD
-                      .decode(
-                        challenge_params
-                          .get("key_secret")
-                          .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 key name"))?,
-                      )
-                      .map_err(|e| anyhow::anyhow!("Failed to decode RFC 2136 key: {}", e))?;
-                    let tsig_algorithm = match &challenge_params
-                      .get("key_algorithm")
-                      .ok_or_else(|| anyhow::anyhow!("Missing RFC 2136 TSIG algorithm"))?
-                      .to_uppercase() as &str
-                    {
-                      "HMAC-MD5" => dns_update::TsigAlgorithm::HmacMd5,
-                      "GSS" => dns_update::TsigAlgorithm::Gss,
-                      "HMAC-SHA1" => dns_update::TsigAlgorithm::HmacSha1,
-                      "HMAC-SHA224" => dns_update::TsigAlgorithm::HmacSha224,
-                      "HMAC-SHA256" => dns_update::TsigAlgorithm::HmacSha256,
-                      "HMAC-SHA256-128" => dns_update::TsigAlgorithm::HmacSha256_128,
-                      "HMAC-SHA384" => dns_update::TsigAlgorithm::HmacSha384,
-                      "HMAC-SHA384-192" => dns_update::TsigAlgorithm::HmacSha384_192,
-                      "HMAC-SHA512" => dns_update::TsigAlgorithm::HmacSha512,
-                      "HMAC-SHA512-256" => dns_update::TsigAlgorithm::HmacSha512_256,
-                      _ => Err(anyhow::anyhow!("Unsupported RFC 2136 TSIG algorithm"))?,
-                    };
-                    Some(Arc::new(
-                      crate::acme::dns::rfc2136::Rfc2136DnsProvider::new(addr, key_name, key, tsig_algorithm)
-                        .map_err(|e| anyhow::anyhow!("Failed to initalize RFC 2136 DNS provider: {}", e))?,
-                    ))
-                  }
-                  #[cfg(feature = "acmedns-cloudflare")]
-                  "cloudflare" => {
-                    let api_key = challenge_params
-                      .get("api_key")
-                      .ok_or_else(|| anyhow::anyhow!("Missing Cloudflare API key"))?;
-                    let email = challenge_params.get("email").map(|x| x as &str);
-                    Some(Arc::new(
-                      crate::acme::dns::cloudflare::CloudflareDnsProvider::new(api_key, email)
-                        .map_err(|e| anyhow::anyhow!("Failed to initalize Cloudflare DNS provider: {}", e))?,
-                    ))
-                  }
-                  #[cfg(feature = "acmedns-desec")]
-                  "desec" => {
-                    let api_token = challenge_params
-                      .get("api_token")
-                      .ok_or_else(|| anyhow::anyhow!("Missing deSEC API token"))?;
-                    Some(Arc::new(
-                      crate::acme::dns::desec::DesecDnsProvider::new(api_token)
-                        .map_err(|e| anyhow::anyhow!("Failed to initalize deSEC DNS provider: {}", e))?,
-                    ))
-                  }
-                  #[cfg(feature = "acmedns-route53")]
-                  "route53" => {
-                    let access_key_id = challenge_params.get("access_key_id").map(|v| v as &str);
-                    let secret_access_key = challenge_params.get("secret_access_key").map(|v| v as &str);
-                    let region = challenge_params.get("region").map(|v| v as &str);
-                    let profile_name = challenge_params.get("profile_name").map(|v| v as &str);
-                    let hosted_zone_id = challenge_params.get("hosted_zone_id").map(|v| v as &str);
-                    Some(Arc::new(
-                      crate::acme::dns::route53::Route53DnsProvider::new(
-                        region,
-                        profile_name,
-                        access_key_id,
-                        secret_access_key,
-                        hosted_zone_id,
-                      )
-                      .map_err(|e| anyhow::anyhow!("Failed to initalize Route53 DNS provider: {}", e))?,
-                    ))
-                  }
-                  _ => Err(anyhow::anyhow!("Unsupported DNS provider: {}", provider_name))?,
-                }
+                Some(get_dns_provider(provider_name, &challenge_params)?)
               } else {
                 Err(anyhow::anyhow!("No DNS provider specified"))?
               };
@@ -899,7 +786,7 @@ fn before_starting_server(
               if let Some(sni_resolver) = tls_ports.get_mut(&automatic_tls_port) {
                 sni_resolver.load_fallback_sender(acme_on_demand_tx.clone(), automatic_tls_port);
               } else {
-                let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+                let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
                 tls_port_locks.insert(automatic_tls_port, sni_resolver_list.clone());
                 let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
                 sni_resolver.load_fallback_sender(acme_on_demand_tx.clone(), automatic_tls_port);
@@ -928,6 +815,24 @@ fn before_starting_server(
                 } else {
                   LetsEncrypt::Staging.url().to_string()
                 },
+                eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab_key", server_configuration) {
+                  if let Some(eab_key_id) = eab_key_entry.values.first().and_then(|v| v.as_str()) {
+                    if let Some(eab_key_hmac) = eab_key_entry.values.get(1).and_then(|v| v.as_str()) {
+                      match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(eab_key_hmac) {
+                        Ok(decoded_key) => {
+                          Some(Arc::new(ExternalAccountKey::new(eab_key_id.to_string(), &decoded_key)))
+                        }
+                        Err(err) => Err(anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
+                      }
+                    } else {
+                      None
+                    }
+                  } else {
+                    None
+                  }
+                } else {
+                  None
+                },
                 profile: get_value!("auto_tls_profile", server_configuration)
                   .and_then(|v| v.as_str().map(|s| s.to_string())),
                 cache_path: if let Some(acme_cache_path) = acme_cache_path_option.clone() {
@@ -941,7 +846,7 @@ fn before_starting_server(
                 sni_resolver_lock: tls_port_locks
                   .get(&automatic_tls_port)
                   .cloned()
-                  .unwrap_or(Arc::new(tokio::sync::RwLock::new(HashMap::new()))),
+                  .unwrap_or(Arc::new(tokio::sync::RwLock::new(Vec::new()))),
                 tls_alpn_01_resolver_lock: acme_tls_alpn_01_resolver_locks
                   .get(&automatic_tls_port)
                   .cloned()
@@ -994,6 +899,24 @@ fn before_starting_server(
                 } else {
                   LetsEncrypt::Staging.url().to_string()
                 },
+                eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab_key", server_configuration) {
+                  if let Some(eab_key_id) = eab_key_entry.values.first().and_then(|v| v.as_str()) {
+                    if let Some(eab_key_hmac) = eab_key_entry.values.get(1).and_then(|v| v.as_str()) {
+                      match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(eab_key_hmac) {
+                        Ok(decoded_key) => {
+                          Some(Arc::new(ExternalAccountKey::new(eab_key_id.to_string(), &decoded_key)))
+                        }
+                        Err(err) => Err(anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
+                      }
+                    } else {
+                      None
+                    }
+                  } else {
+                    None
+                  }
+                } else {
+                  None
+                },
                 profile: get_value!("auto_tls_profile", server_configuration)
                   .and_then(|v| v.as_str().map(|s| s.to_string())),
                 account_cache: if let Some(account_cache_path) = account_cache_path {
@@ -1033,7 +956,7 @@ fn before_starting_server(
               if let Some(sni_resolver) = tls_ports.get_mut(&automatic_tls_port) {
                 sni_resolver.load_host_resolver(&sni_hostname, acme_resolver);
               } else {
-                let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+                let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
                 tls_port_locks.insert(automatic_tls_port, sni_resolver_list.clone());
                 let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
                 sni_resolver.load_host_resolver(&sni_hostname, acme_resolver);
@@ -1522,60 +1445,6 @@ fn before_starting_server(
   }
 }
 
-/// Obtains the module loaders
-fn obtain_module_loaders() -> Vec<Box<dyn ModuleLoader + Send + Sync>> {
-  // Module loaders
-  let mut module_loaders: Vec<Box<dyn ModuleLoader + Send + Sync>> = Vec::new();
-
-  // Module loader registration macro
-  macro_rules! register_module_loader {
-    ($moduleloader:expr) => {
-      module_loaders.push(Box::new($moduleloader));
-    };
-  }
-
-  // Register module loaders
-  register_module_loader!(modules::core::CoreModuleLoader::new());
-  register_module_loader!(modules::blocklist::BlocklistModuleLoader::new());
-  #[cfg(feature = "limit")]
-  register_module_loader!(modules::optional::limit::LimitModuleLoader::new());
-  #[cfg(feature = "fproxy")]
-  register_module_loader!(modules::optional::fproxy::ForwardProxyModuleLoader::new());
-  register_module_loader!(modules::fproxy_fallback::ForwardProxyFallbackModuleLoader::new());
-  register_module_loader!(modules::buffer::BufferModuleLoader::new());
-  register_module_loader!(modules::rewrite::RewriteModuleLoader::new());
-  register_module_loader!(modules::status_codes::StatusCodesModuleLoader::new());
-  register_module_loader!(modules::trailing::TrailingSlashRedirectsModuleLoader::new());
-  #[cfg(feature = "fauth")]
-  register_module_loader!(modules::optional::fauth::ForwardedAuthenticationModuleLoader::new());
-  #[cfg(feature = "cache")]
-  register_module_loader!(modules::optional::cache::CacheModuleLoader::new());
-  #[cfg(feature = "replace")]
-  register_module_loader!(modules::optional::replace::ReplaceModuleLoader::new());
-  #[cfg(feature = "rproxy")]
-  register_module_loader!(modules::optional::rproxy::ReverseProxyModuleLoader::new());
-  #[cfg(feature = "example")]
-  register_module_loader!(modules::optional::example::ExampleModuleLoader::new());
-  #[cfg(feature = "asgi")]
-  register_module_loader!(modules::optional::asgi::AsgiModuleLoader::new());
-  #[cfg(feature = "wsgid")]
-  register_module_loader!(modules::optional::wsgid::WsgidModuleLoader::new());
-  #[cfg(feature = "wsgi")]
-  register_module_loader!(modules::optional::wsgi::WsgiModuleLoader::new());
-  #[cfg(feature = "fcgi")]
-  register_module_loader!(modules::optional::fcgi::FcgiModuleLoader::new());
-  #[cfg(feature = "scgi")]
-  register_module_loader!(modules::optional::scgi::ScgiModuleLoader::new());
-  #[cfg(feature = "cgi")]
-  register_module_loader!(modules::optional::cgi::CgiModuleLoader::new());
-
-  #[cfg(feature = "static")]
-  register_module_loader!(modules::optional::r#static::StaticFileServingModuleLoader::new());
-
-  // Return the module loaders vector
-  module_loaders
-}
-
 fn obtain_configuration_adapters() -> (
   HashMap<String, Box<dyn ConfigurationAdapter + Send + Sync>>,
   Vec<&'static str>,
@@ -1631,7 +1500,6 @@ fn determine_default_configuration_adapter(_path: &Path) -> &'static str {
 /// Parses the command-line arguments
 fn parse_arguments(all_adapters: Vec<&'static str>) -> ArgMatches {
   Command::new("Ferron")
-    .version(crate_version!())
     .about("A fast, memory-safe web server written in Rust")
     .arg(
       Arg::new("config")
@@ -1650,6 +1518,19 @@ fn parse_arguments(all_adapters: Vec<&'static str>) -> ArgMatches {
         .required(false)
         .value_parser(all_adapters),
     )
+    .arg(
+      Arg::new("module-config")
+        .long("module-config")
+        .help("Prints the used compile-time module configuration (`ferron-build.yaml` or `ferron-build-override.yaml` in the Ferron source) and exits")
+        .action(ArgAction::SetTrue)
+    )
+    .arg(
+      Arg::new("version")
+        .long("version")
+        .short('V')
+        .help("Print version and build information")
+        .action(ArgAction::SetTrue)
+    )
     .get_matches()
 }
 
@@ -1665,6 +1546,24 @@ fn main() {
 
   // Parse command-line arguments
   let args = parse_arguments(all_adapters);
+
+  if args.get_flag("module-config") {
+    // Dump the used compile-time module configuration and exit
+    println!("{}", ferron_load_modules::FERRON_BUILD_YAML);
+    return;
+  } else if args.get_flag("version") {
+    // Print the server version and build information
+    println!("Ferron {}", build::PKG_VERSION);
+    println!("  Compiled on: {}", build::BUILD_TIME);
+    println!("  Git commit: {}", build::COMMIT_HASH);
+    println!("  Build target: {}", build::BUILD_TARGET);
+    println!("  Rust version: {}", build::RUST_VERSION);
+    println!("  Build host: {}", build::BUILD_OS);
+    if shadow_rs::is_debug() {
+      println!("WARNING: This is a debug build. It is not recommended for production use.");
+    }
+    return;
+  }
 
   // Start the server!
   let mut first_startup = true;

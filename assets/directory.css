@@ -1,0 +1,63 @@
+body {
+    max-width: 1024px;
+}
+
+table {
+    border-collapse: collapse;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #e2e8f0;
+    width: 100%;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-all;
+    word-break: break-word;
+}
+
+tr {
+    border-width: 1px;
+    border-style: solid;
+    border-color: #e2e8f0;
+}
+
+th {
+    background-color: #fbf1ee;
+}
+
+th,
+td {
+    padding: 0.5em 0.75em;
+}
+
+table th.directory-filename,
+table td.directory-filename {
+    text-align: left;
+}
+
+table th.directory-size,
+table td.directory-size {
+    text-align: center;
+}
+
+table th.directory-date,
+table td.directory-date {
+    text-align: right;
+}
+
+pre.directory-description {
+    font-size: 1.1em;
+}
+
+@media screen and (prefers-color-scheme: dark) {
+    table {
+        border-color: #2b303b;
+    }
+
+    tr {
+        border-color: #2b303b;
+    }
+
+    th {
+        background-color: #1b1f26;
+    }
+}

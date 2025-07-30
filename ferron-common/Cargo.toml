@@ -1,0 +1,28 @@
+[package]
+name = "ferron-common"
+version = "2.0.0-beta.15"
+edition = "2021"
+
+[dependencies]
+fancy-regex = "0.15.0"
+hyper = { version = "1.6.0", features = ["full"] }
+cidr = "0.3.1"
+async-trait = "0.1.88"
+bytes = { version = "1.10.1" }
+http-body-util = "0.1.3"
+tokio = { version = "1.45.0", features = ["rt"] }
+async-channel = "2.3.1"
+rustls = { version = "0.23.27", default-features = false, features = ["std"] }
+rustls-pki-types = "1.12.0"
+monoio = { version = "0.2.4", optional = true, features = ["sync"] }
+hickory-resolver = "0.25.2"
+tokio-util = "0.7.15"
+futures-util = { version = "0.3.31", features = ["sink"] }
+
+[dev-dependencies]
+shiba = { workspace = true }
+
+[features]
+default = ["runtime-monoio"]
+runtime-monoio = ["monoio"]
+runtime-tokio = []

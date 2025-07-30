@@ -4,6 +4,26 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.15
+
+**Released in July 29, 2025**
+
+- Added support for ACME EAB (External Account Binding)
+- Added support for CIDR ranges for `block` and `allow` directives
+- Added support for conditional configurations
+- Added support for external Ferron modules and DNS providers
+- Added support for load balancer connection retries to other backend servers in case of TCP connection or TLS handshake errors
+- Added support for reusable snippets in KDL configuration
+- Added support for `status` directives without `url` nor `regex` props
+- Changed the styling of default error pages and directory listings
+- Fixed graceful shutdowns with ASGI enabled
+- Fixed several erroneous HTTP to HTTPS redirects
+- Improved overall server performance, including static file serving
+- The server now determines the host configuration order automatically based on the hostname specificity
+- The server now determines the location order automatically based on the location and conditionals’ depth
+- The server now disables automatic TLS by default for "localhost" and other loopback addresses
+- The YAML to KDL configuration translator now inherits header values from higher configuration levels in YAML configuration to the KDL configuration
+
 ## Ferron 2.0.0-beta.14
 
 **Released in July 22, 2025**

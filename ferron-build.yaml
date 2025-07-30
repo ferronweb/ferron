@@ -1,0 +1,86 @@
+modules:
+  # If you want to use external modules, copy `ferron-build.yaml` to `ferron-build-override.yaml` and uncomment the lines corresponding to modules
+  - builtin: true
+    loader: CoreModuleLoader
+  - builtin: true
+    loader: BlocklistModuleLoader
+  - builtin: true
+    cargo_feature: limit
+    loader: LimitModuleLoader
+  - builtin: true
+    cargo_feature: fproxy
+    loader: ForwardProxyModuleLoader
+  - builtin: true
+    loader: ForwardProxyFallbackModuleLoader
+  - builtin: true
+    loader: BufferModuleLoader
+  - builtin: true
+    loader: RewriteModuleLoader
+  - builtin: true
+    loader: StatusCodesModuleLoader
+  - builtin: true
+    loader: TrailingSlashRedirectsModuleLoader
+  - builtin: true
+    cargo_feature: fauth
+    loader: ForwardedAuthenticationModuleLoader
+  - builtin: true
+    cargo_feature: cache
+    loader: CacheModuleLoader
+  - builtin: true
+    cargo_feature: replace
+    loader: ReplaceModuleLoader
+  - builtin: true
+    cargo_feature: rproxy
+    loader: ReverseProxyModuleLoader
+  # - git: https://github.com/ferronweb/ferron-module-example.git
+  #   crate: ferron-module-example
+  #   loader: ExampleModuleLoader
+  # - git: https://github.com/ferronweb/ferron-modules-python.git
+  #   crate: ferron-module-asgi
+  #   loader: AsgiModuleLoader
+  # - git: https://github.com/ferronweb/ferron-modules-python.git
+  #   crate: ferron-module-wsgid
+  #   loader: WsgidModuleLoader
+  # - git: https://github.com/ferronweb/ferron-modules-python.git
+  #   crate: ferron-module-wsgi
+  #   loader: WsgiModuleLoader
+  - builtin: true
+    cargo_feature: fcgi
+    loader: FcgiModuleLoader
+  - builtin: true
+    cargo_feature: scgi
+    loader: ScgiModuleLoader
+  - builtin: true
+    cargo_feature: cgi
+    loader: CgiModuleLoader
+  - builtin: true
+    cargo_feature: static
+    loader: StaticFileServingModuleLoader
+
+dns:
+  - builtin: true
+    id: cloudflare
+    cargo_feature: cloudflare
+    provider: CloudflareDnsProvider
+  - builtin: true
+    id: desec
+    cargo_feature: desec
+    provider: DesecDnsProvider
+  - builtin: true
+    id: porkbun
+    cargo_feature: porkbun
+    provider: PorkbunDnsProvider
+  - builtin: true
+    id: rfc2136
+    cargo_feature: rfc2136
+    provider: Rfc2136DnsProvider
+  - builtin: true
+    id: route53
+    cargo_feature: route53
+    provider: Route53DnsProvider
+  # Mock DNS provider
+  # Copy `ferron-build.yaml` to `ferron-build-override.yaml` and uncomment the lines
+  # - git: https://github.com/ferronweb/ferron-dns-mock.git
+  #   id: mock
+  #   crate: ferron-dns-mock
+  #   provider: MockDnsProvider

@@ -3,7 +3,7 @@ use std::{
   error::Error,
 };
 
-use crate::modules::ModuleLoader;
+use ferron_common::modules::ModuleLoader;
 
 use super::{ServerConfiguration, ServerConfigurationFilters};
 
@@ -33,7 +33,7 @@ pub fn merge_duplicates(mut server_configurations: Vec<ServerConfiguration>) -> 
         && server_configuration_source.filters.hostname == server_configuration.filters.hostname
         && server_configuration_source.filters.ip == server_configuration.filters.ip
         && server_configuration_source.filters.port == server_configuration.filters.port
-        && server_configuration_source.filters.location_prefix == server_configuration.filters.location_prefix
+        && server_configuration_source.filters.condition == server_configuration.filters.condition
         && server_configuration_source.filters.error_handler_status == server_configuration.filters.error_handler_status
       {
         // Clone the entries from the matching configuration
@@ -110,7 +110,7 @@ pub fn remove_and_add_global_configuration(
           hostname: None,
           ip: None,
           port: None,
-          location_prefix: None,
+          condition: None,
           error_handler_status: None,
         },
         modules: vec![],
@@ -150,24 +150,24 @@ pub fn premerge_configuration(mut server_configurations: Vec<ServerConfiguration
       let ports_match = sc2.port.is_none() || sc1.port == sc2.port;
       let ips_match = sc2.ip.is_none() || sc1.ip == sc2.ip;
       let hostnames_match = sc2.hostname.is_none() || sc1.hostname == sc2.hostname;
-      let location_prefixes_match = sc2.location_prefix.is_none() || sc1.location_prefix == sc2.location_prefix;
+      let conditions_match = sc2.condition.is_none() || sc1.condition == sc2.condition;
 
       // Case 1: Child has error handler but parent doesn't, and all other filters match
       // This is for error handler inheritance
       let case1 = sc1.error_handler_status.is_some()
         && sc2.error_handler_status.is_none()
-        && location_prefixes_match
+        && conditions_match
         && hostnames_match
         && ips_match
         && ports_match
         && is_host_match;
 
-      // Case 2: Location prefix inheritance
-      // Child has location prefix but parent doesn't, and all other filters match
+      // Case 2: Condition inheritance
+      // Child has condition but parent doesn't, and all other filters match
       let case2 = sc1.error_handler_status.is_none()
         && sc2.error_handler_status.is_none()
-        && sc1.location_prefix.is_some()
-        && sc2.location_prefix.is_none()
+        && sc1.condition.is_some()
+        && sc2.condition.is_none()
         && hostnames_match
         && ips_match
         && ports_match
@@ -177,8 +177,8 @@ pub fn premerge_configuration(mut server_configurations: Vec<ServerConfiguration
       // Child has hostname but parent doesn't, and all other filters match
       let case3 = sc1.error_handler_status.is_none()
         && sc2.error_handler_status.is_none()
-        && sc1.location_prefix.is_none()
-        && sc2.location_prefix.is_none()
+        && sc1.condition.is_none()
+        && sc2.condition.is_none()
         && sc1.hostname.is_some()
         && sc2.hostname.is_none()
         && ips_match
@@ -189,8 +189,8 @@ pub fn premerge_configuration(mut server_configurations: Vec<ServerConfiguration
       // Child has IP but parent doesn't, and all other filters match
       let case4 = sc1.error_handler_status.is_none()
         && sc2.error_handler_status.is_none()
-        && sc1.location_prefix.is_none()
-        && sc2.location_prefix.is_none()
+        && sc1.condition.is_none()
+        && sc2.condition.is_none()
         && sc1.hostname.is_none()
         && sc2.hostname.is_none()
         && sc1.ip.is_some()
@@ -202,8 +202,8 @@ pub fn premerge_configuration(mut server_configurations: Vec<ServerConfiguration
       // Child has port but parent doesn't, and all other filters are None
       let case5 = sc1.error_handler_status.is_none()
         && sc2.error_handler_status.is_none()
-        && sc1.location_prefix.is_none()
-        && sc2.location_prefix.is_none()
+        && sc1.condition.is_none()
+        && sc2.condition.is_none()
         && sc1.hostname.is_none()
         && sc2.hostname.is_none()
         && sc1.ip.is_none()
@@ -216,8 +216,8 @@ pub fn premerge_configuration(mut server_configurations: Vec<ServerConfiguration
       // Child has host block flag but parent doesn't, and all other filters are None
       let case6 = sc1.error_handler_status.is_none()
         && sc2.error_handler_status.is_none()
-        && sc1.location_prefix.is_none()
-        && sc2.location_prefix.is_none()
+        && sc1.condition.is_none()
+        && sc2.condition.is_none()
         && sc1.hostname.is_none()
         && sc2.hostname.is_none()
         && sc1.ip.is_none()
@@ -288,6 +288,7 @@ pub fn premerge_configuration(mut server_configurations: Vec<ServerConfiguration
 pub fn load_modules(
   server_configurations: Vec<ServerConfiguration>,
   server_modules: &mut [Box<dyn ModuleLoader + Send + Sync>],
+  secondary_runtime: &tokio::runtime::Runtime,
 ) -> (
   Vec<ServerConfiguration>,
   Option<Box<dyn Error + Send + Sync>>,
@@ -342,7 +343,7 @@ pub fn load_modules(
       // Only load module if its requirements are met
       if requirements_met {
         // Load the module with current configuration and global configuration
-        match server_module.load_module(&server_configuration, global_configuration.as_ref()) {
+        match server_module.load_module(&server_configuration, global_configuration.as_ref(), secondary_runtime) {
           Ok(loaded_module) => server_configuration.modules.push(loaded_module),
           Err(error) => {
             // Store the first error encountered
@@ -420,7 +421,10 @@ mod tests {
       hostname: hostname.map(String::from),
       ip,
       port,
-      location_prefix: location_prefix.map(String::from),
+      condition: location_prefix.map(|prefix| Conditions {
+        location_prefix: prefix.to_string(),
+        conditionals: vec![],
+      }),
       error_handler_status,
     }
   }
@@ -457,7 +461,10 @@ mod tests {
         hostname: hostname.map(|s| s.to_string()),
         ip,
         port,
-        location_prefix: location_prefix.map(|s| s.to_string()),
+        condition: location_prefix.map(|prefix| Conditions {
+          location_prefix: prefix.to_string(),
+          conditionals: vec![],
+        }),
         error_handler_status,
       },
       entries: entries.into_iter().collect(),

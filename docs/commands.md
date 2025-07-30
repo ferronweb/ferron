@@ -18,10 +18,12 @@ Options:
           The path to the server configuration file [default: ./ferron.kdl]
       --config-adapter <config-adapter>
           The configuration adapter to use [possible values: kdl, yaml-legacy]
+      --module-config
+          Prints the used compile-time module configuration (`ferron-build.yaml` or `ferron-build-override.yaml` in the Ferron source) and exits
+  -V, --version
+          Print version and build information
   -h, --help
           Print help
-  -V, --version
-          Print version
 ```
 
 ### `ferron-passwd`

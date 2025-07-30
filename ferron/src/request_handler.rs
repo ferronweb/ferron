@@ -20,13 +20,13 @@ use tokio_util::io::ReaderStream;
 use crate::config::{ServerConfiguration, ServerConfigurations};
 use crate::get_value;
 use crate::logging::{ErrorLogger, LogMessage, Loggers};
-use crate::modules::{ModuleHandlers, RequestData, SocketData};
 use crate::runtime::timeout;
 #[cfg(feature = "runtime-monoio")]
 use crate::util::MonoioFileStream;
-use crate::util::{
-  generate_default_error_page, get_entries, get_entry, replace_header_placeholders, sanitize_url, SERVER_SOFTWARE,
-};
+use crate::util::{generate_default_error_page, replace_header_placeholders, sanitize_url, SERVER_SOFTWARE};
+
+use ferron_common::modules::{ModuleHandlers, RequestData, SocketData};
+use ferron_common::{get_entries, get_entry};
 
 /// Generates an error response
 async fn generate_error_response(
@@ -84,7 +84,7 @@ async fn generate_error_response(
           };
 
           #[cfg(feature = "runtime-monoio")]
-          let file_stream = MonoioFileStream::new(file, None, None);
+          let file_stream = MonoioFileStream::new(file, None, content_length);
           #[cfg(feature = "runtime-tokio")]
           let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
@@ -634,12 +634,11 @@ async fn request_handler_wrapped(
   };
 
   // Find the server configuration
-  let mut configuration = match configurations.find_configuration(
-    request.uri().path(),
-    hostname_determinant.as_deref(),
-    socket_data.local_addr.ip(),
-    socket_data.local_addr.port(),
-  ) {
+  let (request_parts, request_body) = request.into_parts();
+  let configuration_option =
+    configurations.find_configuration(&request_parts, hostname_determinant.as_deref(), &socket_data);
+  let mut request = Request::from_parts(request_parts, request_body);
+  let mut configuration = match configuration_option {
     Some(configuration) => configuration,
     None => {
       if error_log_enabled {
@@ -999,13 +998,9 @@ async fn request_handler_wrapped(
         );
       }
     };
+    let configuration_option = configurations.find_configuration(&parts, hostname_determinant.as_deref(), &socket_data);
     request = Request::from_parts(parts, body);
-    if let Some(new_configuration) = configurations.find_configuration(
-      request.uri().path(),
-      hostname_determinant.as_deref(),
-      socket_data.local_addr.ip(),
-      socket_data.local_addr.port(),
-    ) {
+    if let Some(new_configuration) = configuration_option {
       configuration = new_configuration;
     }
   }
@@ -1163,7 +1158,7 @@ async fn request_handler_wrapped(
       && c.filters.hostname == configuration.filters.hostname
       && c.filters.ip == configuration.filters.ip
       && c.filters.port == configuration.filters.port
-      && (c.filters.location_prefix.is_none() || c.filters.location_prefix == configuration.filters.location_prefix)
+      && (c.filters.condition.is_none() || c.filters.condition == configuration.filters.condition)
       && c.filters.error_handler_status.is_some()
   }) {
     let mut request_parts_cloned = request_parts.clone();

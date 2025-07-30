@@ -17,28 +17,16 @@ The following modules are built into Ferron and are enabled by default:
 - _scgi_ - this module enables the support for connecting to SCGI servers.
 - _static_ (Ferron 2.0.0-beta.1 and newer) - this module enables static file serving.
 
-The following modules are built into Ferron, but are disabled by default:
+Ferron also supports additional modules that can be enabled at compile-time.
 
-- _asgi_ (Ferron 1.1.0 and newer) - this module enables the support for ASGI web applications.
-- _example_ - this module responds with "Hello World!" for "/hello" request paths.
-- _wsgi_ (Ferron 1.1.0 and newer) - this module enables the support for WSGI web applications.
-- _wsgid_ (Ferron 1.1.0 and newer) - this module enables the support for WSGI web applications running on a pre-forked worker pool.
+Additional modules provided by Ferron are from these repositories:
+
+- [ferron-modules-python](https://github.com/ferronweb/ferron-modules-python.git) - provides gateway interfaces (ASGI, WSGI) utilizing Python.
+- [ferron-module-example](https://github.com/ferronweb/ferron-module-example.git) - responds with "Hello World!" for "/hello" request paths.
+
+If you would like to use Ferron with additional modules, you can check the [compilation notes](https://github.com/ferronweb/ferron/blob/2.x/COMPILATION.md).
 
 ## Module notes
-
-### _asgi_ module
-
-The _asgi_ module runs ASGI applications on a single worker process. Due to Python's GIL (Global Interpreter Lock), the performance might be lower than what it would be run on multiple worker processes.
-
-This module expects the ASGI application to have `application` as the ASGI callback. If you're using some other callback name, you can create the file below (assuming that the callback name is `app` and the main application Python file is `app.py`):
-
-```python
-from app import app
-
-application = app
-```
-
-This module requires that Ferron links to the Python library.
 
 ### _cache_ module
 
@@ -87,31 +75,3 @@ The following request headers are provided to the backend server:
 - **X-Forwarded-Proto** - if the original request is encrypted, it's `"https"`, otherwise it's `"http"`.
 - **X-Forwarded-Host** - the value of the _Host_ header from the original request
 - **X-Forwarded-For** - the client's IP address
-
-### _wsgi_ module
-
-The _wsgi_ module runs WSGI applications on a single worker process. Due to Python's GIL (Global Interpreter Lock), the performance might be lower than what it would be run on multiple worker processes. If you are using Unix or a Unix-like system, it's recommended to use the _wsgid_ module instead.
-
-This module expects the WSGI application to have `application` as the WSGI callback. If you're using some other callback name, you can create the file below (assuming that the callback name is `app` and the main application Python file is `app.py`):
-
-```python
-from app import app
-
-application = app
-```
-
-This module requires that Ferron links to the Python library.
-
-### _wsgid_ module
-
-The _wsgid_ module runs WSGI applications on a pre-forked process pool. This module can be enabled only on Unix and a Unix-like systems. Additionaly, it's recommended to stop the processes in the process pool in addition to the main process, as the server will not automatically stop the processes in the process pool (except on Linux systems, where the processes in the process pool are automatically stopped when the server is stopped).
-
-This module expects the WSGI application to have `application` as the WSGI callback. If you're using some other callback name, you can create the file below (assuming that the callback name is `app` and the main application Python file is `app.py`):
-
-```python
-from app import app
-
-application = app
-```
-
-This module requires that Ferron links to the Python library.

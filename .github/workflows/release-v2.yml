@@ -12,9 +12,15 @@ on:
       - "Dockerfile.*"
       - "ferron*.kdl"
       - "ferron/**"
+      - "ferron-common/**"
+      - "ferron-dns-builtin/**"
+      - "ferron-load-modules/**"
+      - "ferron-modules-builtin/**"
       - "ferron-passwd/**"
       - "ferron-yaml2kdl/**"
       - "ferron-yaml2kdl-core/**"
+      - "ferron-build.yaml"
+      - "ferron-build-override.yaml"
       - "wwwroot/**"
       - ".github/workflows/release-v2.yml"
 
@@ -68,15 +74,15 @@ jobs:
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             command: cargo
-            options: "--no-default-features -F default-tokio"
+            options: "--no-default-features -F ferron/default-tokio"
           - target: i686-pc-windows-msvc
             runner: windows-latest
             command: cargo
-            options: "--no-default-features -F default-tokio"
+            options: "--no-default-features -F ferron/default-tokio"
           - target: aarch64-pc-windows-msvc
             runner: windows-latest
             command: cargo
-            options: "--no-default-features -F default-tokio"
+            options: "--no-default-features -F ferron/default-tokio"
           - target: x86_64-apple-darwin
             runner: macos-latest
             command: cargo
@@ -135,7 +141,26 @@ jobs:
           cargo binstall --no-confirm bindgen-cli --force
 
       - name: Build binaries
-        run: "${{ matrix.command }} build --verbose --locked --release --target ${{ matrix.target }} ${{ matrix.options }}"
+        shell: bash
+        run: |
+          cargo run --manifest-path build-prepare/Cargo.toml
+          cd build-workspace
+          while [ "$OLD_CONFLICTING_PACKAGES" != "$CONFLICTING_PACKAGES" ] || [ "$OLD_CONFLICTING_PACKAGES" = "" ]; do \
+              OLD_CONFLICTING_PACKAGES=$CONFLICTING_PACKAGES; \
+              CONFLICTING_PACKAGES=$( (cargo update -w --dry-run 2>&1 || true) | grep -E '^error: failed to select a version for (the requirement )?`[^ `]+' | sed -E 's|[^`]*`([^ `]+).*|\1|' | xargs); \
+              if [ "$CONFLICTING_PACKAGES" = "" ]; then \
+                  break; \
+              fi; \
+              if [ "$OLD_CONFLICTING_PACKAGES" = "$CONFLICTING_PACKAGES" ]; then \
+                  echo "Couldn't resolve Cargo conflicts" >&2; \
+                  exit 1; \
+              fi; \
+              if [ "$CONFLICTING_PACKAGES" != "" ]; then \
+                  cargo update $CONFLICTING_PACKAGES || true; \
+              fi; \
+          done
+          ${{ matrix.command }} build --verbose --release --target-dir ../target --target ${{ matrix.target }} ${{ matrix.options }}
+          cd ..
 
       - name: Prepare for packaging
         shell: bash
@@ -194,7 +219,7 @@ jobs:
   #       uses: Swatinem/rust-cache@v2
 
   #     - name: Generate the Rust crate documentation
-  #       run: "cargo doc --verbose --locked --release"
+  #       run: "cargo doc --verbose --locked --release --document-private-items"
 
   #     - name: Create the documentation ZIP archive
   #       uses: thedoctor0/zip-release@0.7.6

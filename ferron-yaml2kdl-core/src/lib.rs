@@ -1,4 +1,4 @@
-use std::{error::Error, path::PathBuf};
+use std::{collections::HashMap, error::Error, path::PathBuf};
 
 use hashlink::LinkedHashMap;
 use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue};
@@ -20,8 +20,9 @@ pub fn convert_yaml_to_kdl(input_path: PathBuf) -> Result<KdlDocument, Box<dyn E
     kdl_configuration_nodes.push(sni_configuration);
   }
 
+  let mut custom_headers = HashMap::new();
   let (global_configuration, secure_global_configuration) =
-    obtain_host_configuration(&yaml_configuration["global"], &load_server_modules);
+    obtain_host_configuration(&yaml_configuration["global"], &load_server_modules, &mut custom_headers);
   if !global_configuration.is_empty() {
     let mut kdl_global_configuration = KdlNode::new("*");
     kdl_global_configuration.set_children(global_configuration);
@@ -57,7 +58,8 @@ pub fn convert_yaml_to_kdl(input_path: PathBuf) -> Result<KdlDocument, Box<dyn E
         host["ip"].as_str()
       };
       if let Some(hostname) = hostname {
-        let (host_configuration, secure_host_configuration) = obtain_host_configuration(host, &load_server_modules);
+        let (host_configuration, secure_host_configuration) =
+          obtain_host_configuration(host, &load_server_modules, &mut custom_headers.clone());
         if !host_configuration.is_empty() {
           let mut kdl_host_configuration = KdlNode::new(hostname);
           kdl_host_configuration.set_children(host_configuration);
@@ -88,6 +90,7 @@ pub fn convert_yaml_to_kdl(input_path: PathBuf) -> Result<KdlDocument, Box<dyn E
 pub fn obtain_host_configuration(
   yaml_subconfiguration: &Yaml,
   loaded_modules: &[String],
+  custom_headers: &mut HashMap<String, String>,
 ) -> (KdlDocument, Option<KdlDocument>) {
   let empty_hashmap = yaml_rust2::yaml::Hash::new();
   let yaml_properties = yaml_subconfiguration.as_hash().unwrap_or(&empty_hashmap);
@@ -117,7 +120,7 @@ pub fn obtain_host_configuration(
             for location in locations.iter().rev() {
               if let Some(location_path) = location["path"].as_str() {
                 let (location_config, secure_location_config_option) =
-                  obtain_host_configuration(location, loaded_modules);
+                  obtain_host_configuration(location, loaded_modules, &mut custom_headers.clone());
                 let mut kdl_location = KdlNode::new("location");
                 kdl_location.push(KdlValue::String(location_path.to_string()));
                 kdl_location.set_children(location_config);
@@ -136,7 +139,7 @@ pub fn obtain_host_configuration(
           if let Some(error_configs) = value.as_vec() {
             for error_config in error_configs.iter().rev() {
               let (error_config_d, secure_error_config_d_option) =
-                obtain_host_configuration(error_config, loaded_modules);
+                obtain_host_configuration(error_config, loaded_modules, &mut custom_headers.clone());
               let mut kdl_error_config = KdlNode::new("error_config");
               if let Some(status_code) = error_config["scode"].as_i64() {
                 kdl_error_config.push(KdlValue::Integer(status_code as i128));
@@ -166,10 +169,7 @@ pub fn obtain_host_configuration(
             for (header_name, header_value) in value {
               if let Some(header_name) = header_name.as_str() {
                 if let Some(header_value) = header_value.as_str() {
-                  let mut kdl_property = KdlNode::new("header");
-                  kdl_property.push(KdlValue::String(header_name.to_string()));
-                  kdl_property.push(KdlValue::String(header_value.to_string()));
-                  kdl_config_nodes.push(kdl_property);
+                  custom_headers.insert(header_name.to_string(), header_value.to_string());
                 }
               }
             }
@@ -606,6 +606,13 @@ pub fn obtain_host_configuration(
     } else {
       kdl_config_nodes.push(kdl_scgi);
     }
+  }
+
+  for custom_header in custom_headers.iter() {
+    let mut kdl_property = KdlNode::new("header");
+    kdl_property.push(KdlValue::String(custom_header.0.to_string()));
+    kdl_property.push(KdlValue::String(custom_header.1.to_string()));
+    kdl_config_nodes.push(kdl_property);
   }
 
   if loaded_modules.contains(&"fcgi".to_string()) {

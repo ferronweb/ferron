@@ -7,9 +7,15 @@ on:
       - "Cargo.lock"
       - "Cargo.toml"
       - "ferron/**"
+      - "ferron-common/**"
+      - "ferron-dns-builtin/**"
+      - "ferron-load-modules/**"
+      - "ferron-modules-builtin/**"
       - "ferron-passwd/**"
       - "ferron-yaml2kdl/**"
       - "ferron-yaml2kdl-core/**"
+      - "ferron-build.yaml"
+      - "ferron-build-override.yaml"
       - ".github/workflows/rust-v2.yml"
   pull_request:
     branches: ["develop-2.x"]
@@ -17,9 +23,15 @@ on:
       - "Cargo.lock"
       - "Cargo.toml"
       - "ferron/**"
+      - "ferron-common/**"
+      - "ferron-dns-builtin/**"
+      - "ferron-load-modules/**"
+      - "ferron-modules-builtin/**"
       - "ferron-passwd/**"
       - "ferron-yaml2kdl/**"
       - "ferron-yaml2kdl-core/**"
+      - "ferron-build.yaml"
+      - "ferron-build-override.yaml"
       - ".github/workflows/rust-v2.yml"
 
 env:
