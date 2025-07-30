@@ -49,7 +49,7 @@ fix-conflicts:
 	@ cd build-workspace && \
 	while [ "$$OLD_CONFLICTING_PACKAGES" != "$$CONFLICTING_PACKAGES" ] || [ "$$OLD_CONFLICTING_PACKAGES" = "" ]; do \
 	    OLD_CONFLICTING_PACKAGES=$$CONFLICTING_PACKAGES; \
-		CONFLICTING_PACKAGES=$$( (cargo update -w --dry-run 2>&1 || true) | grep -E '^error: failed to select a version for (the requirement )?`[^ `]+' | sed -E 's|[^`]*`([^ `]+).*|\1|' | xargs); \
+		CONFLICTING_PACKAGES=$$( (cargo update -w --dry-run 2>&1 || true) | (grep -E '^error: failed to select a version for (the requirement )?`[^ `]+' || true) | sed -E 's|[^`]*`([^ `]+).*|\1|' | xargs); \
 		if [ "$$CONFLICTING_PACKAGES" = "" ]; then \
 			break; \
 		fi; \
@@ -64,7 +64,7 @@ fix-conflicts:
 
 package:
 	rm -rf $(BUILD_RELEASE); mkdir $(BUILD_RELEASE)
-	find $(CARGO_TARGET_ROOT)/release -mindepth 1 -maxdepth 1 -type f ! -name "*.*" -o -name "*.exe" -o -name "*.dll" -o -name "*.dylib" -o -name "*.so" | sed -E "s|(.*)|cp -a \1 $(BUILD_RELEASE)|" | sh
+	(find $(CARGO_TARGET_ROOT)/release -mindepth 1 -maxdepth 1 -type f ! -name "*.*" -o -name "*.exe" -o -name "*.dll" -o -name "*.dylib" -o -name "*.so" || true) | sed -E "s|(.*)|cp -a \1 $(BUILD_RELEASE)|" | sh
 	cp -a ferron-release.kdl $(BUILD_RELEASE)/ferron.kdl
 	cp -a wwwroot $(BUILD_RELEASE)
 	mkdir -p dist
