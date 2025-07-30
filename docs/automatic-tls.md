@@ -128,4 +128,4 @@ auto_tls_challenge "dns-01" provider="rfc2136" server="udp://127.0.0.1:53" key_n
 
 ## Additional DNS providers
 
-If you would like to use Ferron with additional DNS providers, you can check the [compilation notes](https://github.com/ferronweb/ferron/blob/develop-2.x/COMPILATION.md).
+If you would like to use Ferron with additional DNS providers, you can check the [compilation notes](https://github.com/ferronweb/ferron/blob/2.x/COMPILATION.md).

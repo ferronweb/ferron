@@ -49,7 +49,7 @@ api.example.com {
   }
 
   // In Ferron 2.0.0-beta.14 and earlier, the location configuration order was important; in this host configuration, first the "/v1" location is checked, then the "/" location.
-  // In Ferron UNRELEASED and newer, the location and conditionals' configuration order is automatically determined based on the location and conditionals' depth
+  // In Ferron 2.0.0-beta.15 and newer, the location and conditionals' configuration order is automatically determined based on the location and conditionals' depth
   location "/" {
     // ...
   }
@@ -72,21 +72,21 @@ with-conditions.example.com {
   }
 
   if "SOME_CONDITION" {
-    // Conditional configuration (Ferron UNRELEASED or newer)
+    // Conditional configuration (Ferron 2.0.0-beta.15 or newer)
     // Conditions can be nested
   }
 
   if_not "SOME_CONDITION" {
-    // Configuration, in case of condition not being met (Ferron UNRELEASED or newer)
+    // Configuration, in case of condition not being met (Ferron 2.0.0-beta.15 or newer)
   }
 }
 
 snippet "EXAMPLE" {
-  // Example snippet configuration (Ferron UNRELEASED or newer)
+  // Example snippet configuration (Ferron 2.0.0-beta.15 or newer)
 }
 
 with-snippet.example.com {
-  // Import from snippet (Ferron UNRELEASED or newer)
+  // Import from snippet (Ferron 2.0.0-beta.15 or newer)
   use "EXAMPLE"
 }
 
@@ -310,7 +310,7 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the ACME profile to use for the certificates. Default: `auto_tls_profile #null`
 - `auto_tls_on_demand <auto_tls_on_demand: bool>` (Ferron 2.0.0-beta.13 or newer)
   - This directive specifies whenever to enable the automatic TLS on demand. The functionality obtains TLS certificates automatically when a website is accessed for the first time. It's recommended to use either HTTP-01 or TLS-ALPN-01 ACME challenges, as DNS-01 ACME challenges might be slower due to DNS propagation delays. It's also recommended to configure the `auto_tls_on_demand_ask` directive alongside this directive. Default: `auto_tls_on_demand #false`
-- `auto_tls_eab (<auto_tls_eab_key_id: string> <auto_tls_eab_key_hmac: string>)|<auto_tls_eab_disabled: null>` (Ferron UNRELEASED or newer)
+- `auto_tls_eab (<auto_tls_eab_key_id: string> <auto_tls_eab_key_hmac: string>)|<auto_tls_eab_disabled: null>` (Ferron 2.0.0-beta.15 or newer)
   - This directive specifies the EAB key ID and HMAC for the ACME External Account Binding. The HMAC key value is encoded in a URL-safe Base64 encoding. If set as `auto_tls_eab_disabled #null`, the EAB is disabled. Default: `auto_tls_eab_disabled #null`
 
 **Configuration example:**
@@ -387,7 +387,7 @@ example.com {
 - `trust_x_forwarded_for [trust_x_forwarded_for: bool]`
   - This directive specifies whenever to trust the value of the `X-Forwarded-For` header. It's recommended to configure this directive if behind a reverse proxy. Default: `trust_x_forwarded_for #false`
 - `status <status_code: integer> [url=<url: string>|regex=<regex: string>] [location=<location: string>] [realm=<realm: string>] [brute_protection=<enable_brute_protection: bool>] [users=<users: string>] [allowed=<allowed: string>] [not_allowed=<not_allowed: string>] [body=<response_body: string>]`
-  - This directive specifies the custom status code. This directive can be specified multiple times. The `url` prop specifies the request path for this status code. The `regex` prop specifies the regular expression (like `^/ferron(?:$|[/#?])`) for the custom status code. The `location` prop specifies the destination for the redirect; it supports placeholders (on Ferron UNRELEASED and newer) like `{path}` which will be replaced with the request path. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whenever the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. The `allowed` prop is a comma-separated list of IP addresses applicable for the status code. The `not_allowed` prop is a comma-separated list of IP addresses not applicable for the status code. The `body` prop (Ferron 2.0.0-beta.5 or newer) specifies the response body to be sent. Default: none
+  - This directive specifies the custom status code. This directive can be specified multiple times. The `url` prop specifies the request path for this status code. The `regex` prop specifies the regular expression (like `^/ferron(?:$|[/#?])`) for the custom status code. The `location` prop specifies the destination for the redirect; it supports placeholders (on Ferron 2.0.0-beta.15 and newer) like `{path}` which will be replaced with the request path. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whenever the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. The `allowed` prop is a comma-separated list of IP addresses applicable for the status code. The `not_allowed` prop is a comma-separated list of IP addresses not applicable for the status code. The `body` prop (Ferron 2.0.0-beta.5 or newer) specifies the response body to be sent. Default: none
 - `user [username: string] [password_hash: string]`
   - This directive specifies an user with a password hash used for the HTTP basic authentication (it can be either Argon2, PBKDF2, or `scrypt` one). It's recommended to use the `ferron-passwd` tool to generate the password hash. This directive can be specified multiple times. Default: none
 
@@ -512,7 +512,7 @@ example.com {
   - This directive specifies a header to be added to HTTP requests sent by the reverse proxy, potentially replacing existing headers. The header values supports placeholders (on Ferron 2.0.0-beta.9 and newer) like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
 - `proxy_http2 [enable_proxy_http2: bool]` (_rproxy_ module; Ferron 2.0.0-beta.13 or newer)
   - This directive specifies whenever the reverse proxy can use HTTP/2 protocol when connecting to backend servers. Default: `proxy_http2 #false`
-- `lb_retry_connection [enable_lb_retry_connection: bool]` (_rproxy_ module; Ferron UNRELEASED or newer)
+- `lb_retry_connection [enable_lb_retry_connection: bool]` (_rproxy_ module; Ferron 2.0.0-beta.15 or newer)
   - This directive specifies whenever the load balancer should retry connections to another backend server, in case of TCP connection or TLS handshake failure. Default: `lb_retry_connection #true`
 
 **Configuration example:**
@@ -679,25 +679,25 @@ example.com {
 
 ## Subconditions
 
-Ferron UNRELEASED and newer supports conditional configuration based on conditions. This allows you to configure different settings based on the request method, path, or other conditions.
+Ferron 2.0.0-beta.15 and newer supports conditional configuration based on conditions. This allows you to configure different settings based on the request method, path, or other conditions.
 
 Below is the list of supported subconditions:
 
-- `is_remote_ip <remote_ip: string> [<remote_ip: string> ...]` (Ferron UNRELEASED or newer)
+- `is_remote_ip <remote_ip: string> [<remote_ip: string> ...]` (Ferron 2.0.0-beta.15 or newer)
   - This subcondition checks if the request is coming from a specific remote IP address or a list of IP addresses.
-- `is_forwarded_for <remote_ip: string> [<remote_ip: string> ...]` (Ferron UNRELEASED or newer)
+- `is_forwarded_for <remote_ip: string> [<remote_ip: string> ...]` (Ferron 2.0.0-beta.15 or newer)
   - This subcondition checks if the request (with respect for `X-Forwarded-For` header) is coming from a specific forwarded IP address or a list of IP addresses.
-- `is_not_remote_ip <remote_ip: string> [<remote_ip: string> ...]` (Ferron UNRELEASED or newer)
+- `is_not_remote_ip <remote_ip: string> [<remote_ip: string> ...]` (Ferron 2.0.0-beta.15 or newer)
   - This subcondition checks if the request is not coming from a specific remote IP address or a list of IP addresses.
-- `is_not_forwarded_for <remote_ip: string> [<remote_ip: string> ...]` (Ferron UNRELEASED or newer)
+- `is_not_forwarded_for <remote_ip: string> [<remote_ip: string> ...]` (Ferron 2.0.0-beta.15 or newer)
   - This subcondition checks if the request (with respect for `X-Forwarded-For` header) is not coming from a specific forwarded IP address or a list of IP addresses.
-- `is_equal <left_side: string> <right_side: string>` (Ferron UNRELEASED or newer)
+- `is_equal <left_side: string> <right_side: string>` (Ferron 2.0.0-beta.15 or newer)
   - This subcondition checks if the left side is equal to the right side.
-- `is_not_equal <left_side: string> <right_side: string>` (Ferron UNRELEASED or newer)
+- `is_not_equal <left_side: string> <right_side: string>` (Ferron 2.0.0-beta.15 or newer)
   - This subcondition checks if the left side is not equal to the right side.
-- `is_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]` (Ferron UNRELEASED or newer)
+- `is_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]` (Ferron 2.0.0-beta.15 or newer)
   - This subcondition checks if the value matches the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
-- `is_not_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]` (Ferron UNRELEASED or newer)
+- `is_not_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]` (Ferron 2.0.0-beta.15 or newer)
   - This subcondition checks if the value does not match the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
 
 ## Placeholders

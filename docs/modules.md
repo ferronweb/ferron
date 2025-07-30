@@ -24,7 +24,7 @@ Additional modules provided by Ferron are from these repositories:
 - [ferron-modules-python](https://github.com/ferronweb/ferron-modules-python.git) - provides gateway interfaces (ASGI, WSGI) utilizing Python.
 - [ferron-module-example](https://github.com/ferronweb/ferron-module-example.git) - responds with "Hello World!" for "/hello" request paths.
 
-If you would like to use Ferron with additional modules, you can check the [compilation notes](https://github.com/ferronweb/ferron/blob/develop-2.x/COMPILATION.md).
+If you would like to use Ferron with additional modules, you can check the [compilation notes](https://github.com/ferronweb/ferron/blob/2.x/COMPILATION.md).
 
 ## Module notes
 
