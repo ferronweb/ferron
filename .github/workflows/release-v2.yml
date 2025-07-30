@@ -159,7 +159,8 @@ jobs:
                   cargo update $CONFLICTING_PACKAGES || true; \
               fi; \
           done
-          ${{ matrix.command }} build --verbose --release --target ${{ matrix.target }} ${{ matrix.options }}
+          ${{ matrix.command }} build --verbose --release --target-dir ../target --target ${{ matrix.target }} ${{ matrix.options }}
+          cd ..
 
       - name: Prepare for packaging
         shell: bash
