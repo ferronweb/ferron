@@ -83,44 +83,7 @@
   }
 
   .card-hover {
-    transition-property: all;
-    transition-timing-function: var(
-      --tw-ease,
-      var(--default-transition-timing-function)
-    );
-    transition-duration: var(--tw-duration, var(--default-transition-duration));
-    --tw-duration: 0.3s;
-    transition-duration: 0.3s;
-    animation-duration: 0.3s;
-  }
-
-  @media (hover: hover) {
-    .card-hover:hover {
-      --tw-translate-y: -4px;
-      translate: var(--tw-translate-x) var(--tw-translate-y);
-      --tw-shadow:
-        0 20px 25px -5px var(--tw-shadow-color, #0000001a),
-        0 8px 10px -6px var(--tw-shadow-color, #0000001a);
-      box-shadow:
-        var(--tw-inset-shadow), var(--tw-inset-ring-shadow),
-        var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-      --tw-shadow-color: color-mix(
-        in srgb,
-        hsl(var(--primary)) 10%,
-        transparent
-      );
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .card-hover:hover {
-        --tw-shadow-color: color-mix(
-          in oklab,
-          color-mix(in oklab, hsla(var(--primary), 1) 10%, transparent)
-            var(--tw-shadow-alpha),
-          transparent
-        );
-      }
-    }
+    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10;
   }
 }
 
