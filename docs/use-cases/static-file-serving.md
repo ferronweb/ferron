@@ -56,6 +56,6 @@ Ferron supports in-memory caching for speeding up websites. To enable in-memory 
 example.com {
     root "/var/www/html" // Replace "/var/www/html" with the directory containing your static files
     cache
-    header "Cache-Control" "max-age=3600"
+    file_cache_control "max-age=3600"
 }
 ```
