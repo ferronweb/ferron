@@ -6,6 +6,10 @@ description: Discover security vulnerabilities of outdated Ferron versions. Stay
 
 Some older versions of Ferron may contain security vulnerabilities. It's recommended to keep Ferron up-to-date.
 
+## Fixed in Ferron 1.3.5
+
+- An attacker could send a lot of concurrent requests that have a header defining accepted compression algorithm to be Brotli (for example using `ferrbench -c 20000 -d 1h -t 12 -H "Cache-Control: no-cache" -H "Accept-Encoding: br" -h https://victim.example --http2` command) to cause the server to consume too much memory. (CWE-400)
+
 ## Fixed in Ferron 1.3.4 and Ferron 2.0.0-beta.14
 
 - An attacker could request a resource with a URL that would be replaced with a sanitized one, to possibly bypass security restrictions, if they're configured in location configurations. (CWE-20; introduced in Ferron 1.0.0-beta2)
