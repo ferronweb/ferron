@@ -19,7 +19,7 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
       {Astro.props.description}
     </div>
   </div>
-  <div data-slot="card-content" class="px-6">
+  <div data-slot="card-content" class="px-6 grow flex flex-col">
     <benchmark-chart
       data-props={JSON.stringify({
         data,
@@ -28,9 +28,10 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
         competitor2,
         competitor3
       })}
+      class="min-h-80 grow"
     >
       <!-- Had to use <div> elements for the chart to resize properly -->
-      <div class="relative h-80 w-full">
+      <div class="relative min-h-80 h-full w-full">
         <canvas></canvas>
       </div>
     </benchmark-chart>
