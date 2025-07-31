@@ -1,4 +1,6 @@
 ---
+import { format } from "date-fns";
+
 const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
 ---
 
@@ -36,7 +38,11 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
       <p>
         {Astro.props.higherIsBetter ? "Higher is better" : "Lower is better"} | Benchmarks
         run on AMD Ryzen 5 8600G, 32GB RAM, with the{" "}
-        <code>{Astro.props.command}</code> command
+        <code>{Astro.props.command}</code> command{
+          Astro.props.date
+            ? ` | Benchmarks performed on ${format(Astro.props.date, "MMMM d, yyyy")}`
+            : ""
+        }
       </p>
     </div>
   </div>

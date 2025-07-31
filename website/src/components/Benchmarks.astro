@@ -44,6 +44,7 @@ import Benchmark from "./Benchmark.astro";
         competitor2={"Apache httpd"}
         competitor3={"Caddy"}
         command="ferrbench -c 1000 -d 60s -t 12 -h https://localhost --http2"
+        date={new Date("2025-06-13")}
       />
       <Benchmark
         title="Reverse Proxy Performance"
@@ -63,6 +64,7 @@ import Benchmark from "./Benchmark.astro";
         competitor2={"Apache httpd"}
         competitor3={"Caddy"}
         command="ferrbench -c 1000 -d 60s -t 12 -h https://localhost --http2"
+        date={new Date("2025-06-13")}
       />
       <Benchmark
         title="Latency Under Load (Reverse Proxy)"
@@ -96,6 +98,7 @@ import Benchmark from "./Benchmark.astro";
         competitor2={"Apache httpd"}
         competitor3={"Caddy"}
         command="ferrbench -c $CONCURRENCY -d 60s -t 12 -h https://localhost --http2"
+        date={new Date("2025-06-13")}
       />
       <Benchmark
         title="PHP Performance"
@@ -122,6 +125,7 @@ import Benchmark from "./Benchmark.astro";
         competitor2={"Apache httpd"}
         competitor3={"Caddy"}
         command="ferrbench -c 100 -d 60s -t 12 -h https://localhost --http2"
+        date={new Date("2025-06-13")}
       />
     </div>
   </div>
