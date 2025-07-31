@@ -39,28 +39,27 @@ const { Content } = await render(Astro.props.post);
         <span class="align-middle">Back</span>
       </a>
     </div>
-    <header class="text-start mb-8 w-full">
+    <header class="text-start mb-6 pb-2 w-full border-b-2">
       <div class="mb-2">
-        <h1 class="text-3xl md:text-5xl mb-8 py-4 font-bold">
+        <h1 class="text-3xl md:text-5xl py-4 font-bold">
           {data.title}
         </h1>
-        <Image
-          src={data.cover || blogMissing}
-          alt={data.title || null}
-          width={1200}
-          height={800}
-          class="w-full h-auto object-cover rounded-lg md:rounded-xl border"
-        />
-        <p class="mt-4 text-lg md:text-xl text-muted-foreground">
+        <p class="mb-4 text-base md:text-lg text-muted-foreground">
           Published on: {
             data.date === undefined
               ? "Unknown date"
               : format(data.date, "MMMM d, yyyy")
           }
         </p>
+        <Image
+          src={data.cover || blogMissing}
+          alt={data.title || null}
+          width={1200}
+          height={800}
+          class="w-full h-auto object-cover rounded-lg md:rounded-xl border border-muted/30"
+        />
       </div>
     </header>
-    <div class="mb-6 w-full border-border border"></div>
     <article class="prose w-full max-w-full md:prose-lg">
       <Content />
     </article>
