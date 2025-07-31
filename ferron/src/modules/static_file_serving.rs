@@ -11,6 +11,7 @@ use crate::ferron_common::{
   ServerModuleHandlers, SocketData,
 };
 use crate::ferron_common::{HyperUpgraded, WithRuntime};
+use async_compression::brotli::EncoderParams;
 use async_compression::tokio::bufread::{BrotliEncoder, DeflateEncoder, GzipEncoder, ZstdEncoder};
 use async_compression::zstd::CParameter;
 use async_compression::Level;
@@ -751,19 +752,23 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
 
                     // Construct a boxed body
                     let boxed_body = if use_brotli {
-                      // Brotli compression quality of 4
-                      let reader_stream = ReaderStream::new(BrotliEncoder::with_quality(
-                        file_bufreader,
-                        Level::Precise(4),
-                      ));
+                      // Use Brotli compression with moderate quality (4) for good compression/speed balance
+                      // Also, set the window size and block size to optimize compression, and reduce memory usage
+                      let reader_stream =
+                        ReaderStream::new(BrotliEncoder::with_quality_and_params(
+                          file_bufreader,
+                          Level::Precise(4),
+                          EncoderParams::default().window_size(17).block_size(18),
+                        ));
                       let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
                       stream_body.boxed()
                     } else if use_zstd {
                       // Limit the Zstandard window size to 128K (2^17 bytes) to support many HTTP clients
+                      // Also, set the size of the initial probe table to reduce memory usage
                       let reader_stream = ReaderStream::new(ZstdEncoder::with_quality_and_params(
                         file_bufreader,
                         Level::Default,
-                        &[CParameter::window_log(17)],
+                        &[CParameter::window_log(17), CParameter::hash_log(10)],
                       ));
                       let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
                       stream_body.boxed()
