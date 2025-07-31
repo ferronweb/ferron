@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.16
+
+**Released in July 31, 2025**
+
+- Adjusted the Brotli and Zstandard compression parameters for lower memory usage
+
 ## Ferron 1.3.5
 
 **Released in July 31, 2025**

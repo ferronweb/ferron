@@ -10,6 +10,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_compression::brotli::EncoderParams;
 use async_compression::tokio::bufread::{BrotliEncoder, DeflateEncoder, GzipEncoder, ZstdEncoder};
 use async_compression::zstd::CParameter;
 use async_compression::Level;
@@ -1184,8 +1185,13 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     let file_bufreader = StreamReader::new(file_stream);
 
                     // Use Brotli compression with moderate quality (4) for good compression/speed balance
+                    // Also, set the window size and block size to optimize compression, and reduce memory usage
                     let reader_stream = ReaderStream::with_capacity(
-                      BrotliEncoder::with_quality(file_bufreader, Level::Precise(4)),
+                      BrotliEncoder::with_quality_and_params(
+                        file_bufreader,
+                        Level::Precise(4),
+                        EncoderParams::default().window_size(17).block_size(18),
+                      ),
                       COMPRESSED_STREAM_READER_BUFFER_SIZE,
                     );
                     let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
@@ -1195,11 +1201,12 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     let file_bufreader = StreamReader::new(file_stream);
 
                     // Limit the Zstandard window size to 128K (2^17 bytes) to support many HTTP clients
+                    // Also, set the size of the initial probe table to reduce memory usage
                     let reader_stream = ReaderStream::with_capacity(
                       ZstdEncoder::with_quality_and_params(
                         file_bufreader,
                         Level::Default,
-                        &[CParameter::window_log(17)],
+                        &[CParameter::window_log(17), CParameter::hash_log(10)],
                       ),
                       COMPRESSED_STREAM_READER_BUFFER_SIZE,
                     );
