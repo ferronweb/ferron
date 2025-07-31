@@ -8,7 +8,7 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
 >
   <div
     data-slot="card-header"
-    class="@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6 pb-2"
+    class="grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6 pb-2"
   >
     <div data-slot="card-title" class="leading-none font-semibold">
       {Astro.props.title}
