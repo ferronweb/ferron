@@ -41,10 +41,10 @@ const { Content } = await render(Astro.props.post);
     </div>
     <header class="text-start mb-6 pb-2 w-full border-b-2">
       <div class="mb-2">
-        <h1 class="text-3xl md:text-5xl py-4 font-bold">
+        <h1 class="text-3xl md:text-5xl pt-4 pb-3 font-bold">
           {data.title}
         </h1>
-        <p class="mb-4 text-base md:text-lg text-muted-foreground">
+        <p class="mb-5 text-base md:text-lg text-muted-foreground">
           Published on: {
             data.date === undefined
               ? "Unknown date"
