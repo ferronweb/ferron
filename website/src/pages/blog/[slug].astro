@@ -30,13 +30,13 @@ const { Content } = await render(Astro.props.post);
     <div class="w-full mx-auto flex flex-row justify-between items-center">
       <a
         href="/blog"
-        class="group text-primary transition-all flex items-center justify-center mx-0 px-2 hover:bg-accent hover:text-accent-foreground h-11 rounded-lg"
+        class="group text-primary transition-all inline-block mx-0 px-2 py-2.5 hover:bg-accent hover:text-accent-foreground rounded-lg"
       >
         <FontAwesomeIcon
           icon={faArrowLeft}
-          class="mr-2 w-5 h-5 group-hover:translate-x-1 transition-all align-top"
+          class="mr-1.5 w-5 h-5 group-hover:translate-x-1 transition-all align-middle inline-block"
         />
-        <span class="align-middle">Back</span>
+        <span class="align-text-top">Back</span>
       </a>
     </div>
     <header class="text-start mb-6 pb-2 w-full border-b-2">
