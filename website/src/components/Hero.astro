@@ -6,13 +6,22 @@ import InstallCommand from "./InstallCommand.astro";
 
 <section class="relative overflow-hidden">
   <!-- Background Elements -->
-  <div class="absolute inset-0 z-0">
+  <div class="absolute inset-0 z-0 blur-3xl">
+    <div class="absolute w-full h-full bg-primary/5"></div>
     <div
-      class="absolute top-0 -left-4 w-72 h-72 bg-primary/15 rounded-full filter blur-3xl opacity-70"
+      class="absolute -top-24 -left-30 w-112 h-112 bg-primary/15 rounded-full blur-3xl opacity-70"
     >
     </div>
     <div
-      class="absolute bottom-0 right-0 w-96 h-96 bg-accent/15 rounded-full filter blur-3xl opacity-70"
+      class="absolute -bottom-24 -right-30 w-112 h-112 bg-accent/15 rounded-full blur-3xl opacity-70"
+    >
+    </div>
+    <div
+      class="absolute -bottom-8 -left-8 w-144 h-144 bg-background/80 rounded-full blur-3xl opacity-70 md:opacity-100"
+    >
+    </div>
+    <div
+      class="absolute -top-8 -right-8 w-144 h-144 bg-background/80 rounded-full blur-3xl opacity-70 md:opacity-100"
     >
     </div>
   </div>
@@ -21,7 +30,7 @@ import InstallCommand from "./InstallCommand.astro";
   >
     <div class="flex flex-col items-center text-center gap-4 max-w-4xl mx-auto">
       <div
-        class="inline-block px-4 py-1 bg-primary/10 rounded-full text-primary font-medium text-sm mb-3"
+        class="inline-block px-4 py-1 bg-primary/10 rounded-full text-primary font-medium text-sm mb-3 backdrop-blur-sm"
       >
         Built for sysadmins &mdash; fast, secure, and easy to configure
       </div>
