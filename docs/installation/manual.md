@@ -58,12 +58,19 @@ Modify the `ferron.yaml` configuration file to suit your server's requirements. 
 
 By default, Ferron serves content from the `wwwroot` directory. Open a web browser and navigate to `http://localhost` to verify that the server is running and serving the default `index.html` file.
 
+## Reloading the configuration (Unix-like systems)
+
+To reload the configuration without restarting the service, send a `SIGHUP` signal to the `ferron` process:
+
+```bash
+kill -HUP $(pidof ferron)
+```
+
 ## Additional tools
 
 - **Ferron password tool**:
 
   The `ferron-passwd` tool assists in generating user entries with hashed passwords for secure configurations. To use it:
-
   - **Unix-like Systems**:
     ```bash
     ./ferron-passwd someuser

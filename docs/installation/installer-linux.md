@@ -61,3 +61,12 @@ To restart the service:
 sudo /etc/init.d/ferron restart # For non-systemd systems
 sudo systemctl restart ferron # For systemd systems
 ```
+
+### Reloading the configuration
+
+To reload the configuration without restarting the service:
+
+```sh
+sudo /etc/init.d/ferron reload # For non-systemd systems
+sudo systemctl reload ferron # For systemd systems
+```
