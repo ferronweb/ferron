@@ -37,8 +37,10 @@ import FontAwesomeIcon from "./FontAwesomeIcon.astro";
       </button>
     </div>
     <div class="bg-secondary/50 p-4 relative">
-      <pre
-        class="text-sm sm:text-base overflow-x-auto p-2 rounded-md bg-muted/30"><code class="text-foreground" data-install-command>Command unavailable</code></pre>
+      <div class="bg-muted/30 rounded-md pe-10">
+        <pre
+          class="text-sm sm:text-base overflow-x-auto p-2"><code class="text-foreground" data-install-command>Command unavailable</code></pre>
+      </div>
       <button
         class="bg-secondary/50 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent absolute top-5 right-5 h-8 w-8 text-muted-foreground hover:text-accent-foreground cursor-pointer"
         data-install-command-copy-button
