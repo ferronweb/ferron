@@ -27,7 +27,9 @@ const { Content } = await render(Astro.props.post);
   <main
     class="max-w-5xl container mx-auto pt-4 pb-8 md:pt-24 md:pb-28 flex flex-col items-center !px-4"
   >
-    <div class="w-full mx-auto flex flex-row justify-between items-center">
+    <div
+      class="w-full mx-auto flex flex-row justify-between items-center print:hidden"
+    >
       <a
         href="/blog"
         class="group text-primary transition-all inline-block mx-0 px-2 py-2 md:py-2.5 hover:bg-accent hover:text-accent-foreground rounded-lg"
@@ -39,12 +41,12 @@ const { Content } = await render(Astro.props.post);
         <span class="align-text-top">Back</span>
       </a>
     </div>
-    <header class="text-start mb-6 pb-2 w-full border-b-2">
+    <header class="text-start mb-6 pb-2 w-full border-b-2 print:pb-0">
       <div class="mb-2">
         <h1 class="text-4xl md:text-5xl py-3 font-bold">
           {data.title}
         </h1>
-        <p class="mb-6 text-base md:text-lg text-muted-foreground">
+        <p class="mb-6 text-base md:text-lg text-muted-foreground print:mb-4">
           Published on: {
             data.date === undefined
               ? "Unknown date"
@@ -56,7 +58,7 @@ const { Content } = await render(Astro.props.post);
           alt={data.title || null}
           width={1200}
           height={800}
-          class="w-full h-auto object-cover rounded-lg md:rounded-xl border border-muted/30"
+          class="w-full h-auto object-cover rounded-lg md:rounded-xl border border-muted/30 print:hidden"
         />
       </div>
     </header>
