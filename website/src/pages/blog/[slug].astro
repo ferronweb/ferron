@@ -62,7 +62,9 @@ const { Content } = await render(Astro.props.post);
         />
       </div>
     </header>
-    <article class="prose w-full max-w-full md:prose-lg">
+    <article
+      class="prose w-full max-w-full md:prose-lg print:prose-pre:!whitespace-pre-wrap print:prose-pre:!overflow-x-visible"
+    >
       <Content />
     </article>
   </main>

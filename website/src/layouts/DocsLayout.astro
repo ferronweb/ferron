@@ -35,7 +35,9 @@ const pathname = Astro.url.pathname;
       <h1 class="text-4xl md:text-5xl pb-1 md:pb-2 mb-2 font-bold">
         {Astro.props.title}
       </h1>
-      <div class="prose max-w-full md:prose-lg">
+      <div
+        class="prose max-w-full md:prose-lg print:prose-pre:!whitespace-pre-wrap print:prose-pre:!overflow-x-visible"
+      >
         <slot />
       </div>
     </main>
