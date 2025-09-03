@@ -13,7 +13,7 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
     class="grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6 pb-2"
   >
     <div data-slot="card-title" class="leading-none font-semibold">
-      {Astro.props.title}
+      <h3 class="text-lg">{Astro.props.title}</h3>
     </div>
     <div data-slot="card-description" class="text-muted-foreground text-sm">
       {Astro.props.description}
@@ -76,7 +76,7 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
   const chart3 = style.getPropertyValue("--chart-3");
   const chart4 = style.getPropertyValue("--chart-4");
   const chart5 = style.getPropertyValue("--chart-5");
-  const fontFamily = style.getPropertyValue("--font-spline-sans");
+  const fontFamily = style.getPropertyValue("--font-funnel-sans");
 
   class BenchmarkChart extends HTMLElement {
     connectedCallback() {

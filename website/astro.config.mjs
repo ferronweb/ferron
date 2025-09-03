@@ -39,17 +39,17 @@ export default defineConfig({
     fonts: [
       {
         provider: fontProviders.fontsource(),
-        name: "Spline Sans",
-        weights: [400, 500, 600, 700],
-        cssVariable: "--font-spline-sans",
+        name: "Funnel Sans",
+        weights: [400, 500, 600, 700, 800],
+        cssVariable: "--font-funnel-sans",
         fallbacks: ["sans-serif"],
         subsets: ["latin", "latin-ext"]
       },
       {
         provider: fontProviders.fontsource(),
-        name: "Spline Sans Mono",
+        name: "JetBrains Mono",
         weights: [400, 600],
-        cssVariable: "--font-spline-sans-mono",
+        cssVariable: "--font-jetbrains-mono",
         fallbacks: ["monospace"],
         subsets: ["latin", "latin-ext"]
       }

@@ -11,14 +11,14 @@
   body {
     margin: 0;
     width: 100%;
-    font-family: var(--font-spline-sans);
+    font-family: var(--font-funnel-sans);
     background-color: hsla(var(--background), 1);
     color: hsla(var(--foreground), 1);
   }
 
   code,
   pre {
-    font-family: var(--font-spline-sans-mono);
+    font-family: var(--font-jetbrains-mono);
   }
 
   * {
@@ -125,7 +125,7 @@
   --pagefind-ui-border: hsla(var(--border), 1);
   --pagefind-ui-border-width: 1px;
   --pagefind-ui-border-radius: 0.25rem;
-  --pagefind-ui-font: var(--font-spline-sans);
+  --pagefind-ui-font: var(--font-funnel-sans);
 
   width: 100%;
 }
