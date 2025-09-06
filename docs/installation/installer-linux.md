@@ -9,7 +9,7 @@ title: Installation via installer (GNU/Linux)
 To install Ferron web server, run the following command:
 
 ```bash
-sudo bash -c "$(curl -fsSL https://downloads.ferronweb.org/install-v2.sh)"
+sudo bash -c "$(curl -fsSL https://get.ferron.sh/v2)"
 ```
 
 You will be prompted to choose the installation type, and possibly whenever to install packages containing `unzip` and `setcap`.
@@ -39,7 +39,7 @@ You can update Ferron to the latest version using the `ferron-updater` command.
 To upgrade Ferron from 1.x to 2.x, run the following command:
 
 ```bash
-sudo bash -c "$(curl -fsSL https://downloads.ferronweb.org/upgrade-v1-to-v2.sh)"
+sudo bash -c "$(curl -fsSL https://get.ferron.sh/v1-to-v2)"
 ```
 
 ## Managing the Ferron service

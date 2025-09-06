@@ -64,10 +64,8 @@ import FontAwesomeIcon from "./FontAwesomeIcon.astro";
 
 <script>
   const commands: Record<string, string> = {
-    linux:
-      'sudo bash -c "$(curl -fsSL https://downloads.ferronweb.org/install-v2.sh)"',
-    windows:
-      'powershell -c "irm https://downloads.ferronweb.org/install-v2.ps1 | iex"',
+    linux: 'sudo bash -c "$(curl -fsSL https://get.ferron.sh/v2)"',
+    windows: 'powershell -c "irm https://get.ferron.sh/v2-win | iex"',
     docker:
       "docker pull ferronserver/ferron:2 && docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:2"
   };
