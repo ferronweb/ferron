@@ -4,7 +4,7 @@ version = "2.0.0-beta.16"
 edition = "2021"
 
 [dependencies]
-fancy-regex = "0.15.0"
+fancy-regex = "0.16.1"
 hyper = { version = "1.6.0", features = ["full"] }
 cidr = "0.3.1"
 async-trait = "0.1.88"
