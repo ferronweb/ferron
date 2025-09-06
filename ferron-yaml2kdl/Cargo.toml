@@ -3,6 +3,9 @@ name = "ferron-yaml2kdl"
 version = "2.0.0-beta.16"
 edition = "2021"
 
+[package.metadata.winresource]
+ProductName = "Ferron YAML to KDL configuration converter"
+
 [dependencies]
 clap = { version = "4.5.38", features = ["cargo"] }
 mimalloc = { workspace = true }
@@ -10,3 +13,6 @@ ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core" }
 
 [dev-dependencies]
 shiba = { workspace = true }
+
+[build-dependencies]
+winresource = "0.1.19"

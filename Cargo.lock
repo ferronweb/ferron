@@ -1647,6 +1647,7 @@ dependencies = [
  "ferron-yaml2kdl-core",
  "mimalloc",
  "shiba",
+ "winresource",
 ]
 
 [[package]]
