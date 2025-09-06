@@ -68,7 +68,7 @@ bytes = { version = "1.10.1" }
 
 # File Serving & Compression
 new_mime_guess = { version = "4.0.4", optional = true }
-async-compression = { version = "0.4.23", optional = true, features = [
+async-compression = { version = "0.4.30", optional = true, features = [
     "tokio",
     "gzip",
     "brotli",

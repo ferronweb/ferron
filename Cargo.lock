@@ -236,17 +236,14 @@ dependencies = [
 
 [[package]]
 name = "async-compression"
-version = "0.4.27"
-source = "git+https://github.com/DorianNiemiecSVRJS/async-compression.git#57c336a541e86270eb63ded50635ae65b4ba1a89"
+version = "0.4.30"
+source = "git+https://github.com/DorianNiemiecSVRJS/async-compression.git?branch=0.4.28#d210ef1a5ded94d657a27427ed51ccca02ff7fef"
 dependencies = [
- "brotli",
- "flate2",
+ "compression-codecs",
+ "compression-core",
  "futures-core",
- "memchr",
  "pin-project-lite",
  "tokio",
- "zstd",
- "zstd-safe",
 ]
 
 [[package]]
@@ -1097,6 +1094,24 @@ dependencies = [
  "bytes",
  "memchr",
 ]
+
+[[package]]
+name = "compression-codecs"
+version = "0.4.30"
+source = "git+https://github.com/DorianNiemiecSVRJS/async-compression.git?branch=0.4.28#d210ef1a5ded94d657a27427ed51ccca02ff7fef"
+dependencies = [
+ "brotli",
+ "compression-core",
+ "flate2",
+ "memchr",
+ "zstd",
+ "zstd-safe",
+]
+
+[[package]]
+name = "compression-core"
+version = "0.4.29"
+source = "git+https://github.com/DorianNiemiecSVRJS/async-compression.git?branch=0.4.28#d210ef1a5ded94d657a27427ed51ccca02ff7fef"
 
 [[package]]
 name = "concurrent-queue"
