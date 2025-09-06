@@ -19,10 +19,8 @@ function HeroCTA() {
 
   useEffect(() => {
     const commands = {
-      linux:
-        'sudo bash -c "$(curl -fsSL https://downloads.ferronweb.org/install.sh)"',
-      windows:
-        'powershell -c "irm https://downloads.ferronweb.org/install.ps1 | iex"',
+      linux: 'sudo bash -c "$(curl -fsSL https://get.ferron.sh/v1)"',
+      windows: 'powershell -c "irm https://get.ferron.sh/v1-win | iex"',
       docker:
         "docker pull ferronserver/ferron:1 && docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:1"
     };

@@ -9,7 +9,7 @@ title: Installation via installer (GNU/Linux)
 To install Ferron web server, run the following command:
 
 ```bash
-sudo bash -c "$(curl -fsSL https://downloads.ferronweb.org/install.sh)"
+sudo bash -c "$(curl -fsSL https://get.ferron.sh/v1)"
 ```
 
 You will be prompted to choose the installation type, and possibly whenever to install packages containing `unzip` and `setcap`.
