@@ -27,53 +27,88 @@ import InstallCommand from "./InstallCommand.astro";
       </div>
     </div>
   </div>
-  <div
-    class="container relative z-10 py-16 md:pt-28 md:pb-20 flex flex-col items-center gap-6"
-  >
-    <div class="flex flex-col items-center text-center gap-4 max-w-4xl mx-auto">
+  <div class="container relative z-10 py-16 md:pt-28 md:pb-20 gap-6">
+    <div class="flex flex-col xl:flex-row xl:items-center">
       <div
-        class="inline-block px-4 py-1 bg-primary/10 rounded-full text-primary font-medium text-sm mb-3 backdrop-blur-sm"
+        class="flex flex-col items-center text-center xl:text-start xl:items-start gap-4 xl:w-11/20 xl:min-w-11/20 xl:max-w-11/20"
       >
-        Built for sysadmins &mdash; fast, secure, and easy to configure
-      </div>
-      <h1
-        class="text-[3.5rem] md:text-[4.25rem] lg:text-[5.125rem] font-extrabold tracking-tight leading-none mb-4"
-      >
-        Serve your website in&nbsp;minutes, <span
-          class="bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent"
-          >not&nbsp;hours</span
+        <div
+          class="inline-block px-4 py-1 bg-primary/10 rounded-full text-primary font-medium text-sm mb-2 backdrop-blur-sm"
         >
-      </h1>
-      <p class="text-xl text-muted-foreground max-w-[800px] mb-8">
-        Ferron is a fast web server with automatic TLS certificate management,
-        easy configuration, and rock-solid security &mdash; so you can go live
-        in minutes.
-      </p>
+          Built for sysadmins &mdash; fast, secure, and easy to configure
+        </div>
+        <h1
+          class="text-[3.25rem] md:text-[4.25rem] 2xl:text-[4.825rem] font-extrabold tracking-tight leading-none mb-4"
+        >
+          Serve your website in&nbsp;minutes, <span
+            class="bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent"
+            >not&nbsp;hours</span
+          >
+        </h1>
+        <p class="text-lg md:text-xl text-muted-foreground max-w-[800px] mb-8">
+          Ferron is a fast web server with automatic TLS certificate management,
+          easy configuration, and rock-solid security &mdash; so you can go live
+          in minutes.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4 max-w-md w-full xl:w-auto">
+          <a
+            href="#install"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-8 group"
+          >
+            <FontAwesomeIcon icon={faDownload} class="mr-2 !h-5 w-5" />
+            Start installation
+            <FontAwesomeIcon
+              icon={faArrowRight}
+              class="ml-2 !h-4 w-4 transition-transform group-hover:translate-x-1"
+            />
+          </a>
+          <a
+            href="/docs"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-10 px-8"
+          >
+            Documentation
+          </a>
+        </div>
+        <div class="mt-12 w-9/10">
+          <InstallCommand />
+        </div>
+      </div>
       <div
-        class="flex flex-col sm:flex-row gap-4 justify-center w-full max-w-md mx-auto"
+        class="py-10 xl:py-6 xl:pe-3 xl:ps-6 xl:w-9/20 xl:min-w-9/20 xl:max-w-9/20"
       >
-        <a
-          href="#install"
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-8 group"
-        >
-          <FontAwesomeIcon icon={faDownload} class="mr-2 !h-5 w-5" />
-          Start installation
-          <FontAwesomeIcon
-            icon={faArrowRight}
-            class="ml-2 !h-4 w-4 transition-transform group-hover:translate-x-1"
-          />
-        </a>
-        <a
-          href="/docs"
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-10 px-8"
-        >
-          Documentation
-        </a>
+        <div class="w-full h-auto aspect-3/2">
+          <div data-hero-demo></div>
+        </div>
+        <p class="md:text-lg text-muted-foreground text-center mt-2">
+          Watch, as Ferron serves a website with automatic TLS setup in minutes.
+        </p>
       </div>
-    </div>
-    <!-- Install Command Preview -->
-    <div class="mt-12 max-w-4xl mx-auto w-full">
-      <InstallCommand />
     </div>
   </div>
 </section>
+
+<script>
+  import heroRecording from "../assets/ferron-demo.cast?url";
+  import * as AsciinemaPlayer from "asciinema-player";
+
+  function loadPlayer() {
+    const heroElement = document.querySelector("[data-hero-demo]");
+    if (!heroElement) return;
+
+    AsciinemaPlayer.create(heroRecording, heroElement, {
+      cols: 80,
+      rows: 23,
+      autoplay: true,
+      loop: true,
+      poster: "npt:0:0",
+      theme: "nord",
+      terminalFontFamily: "var(--font-jetbrains-mono)"
+    });
+  }
+
+  document.addEventListener("astro:after-swap", () => {
+    loadPlayer();
+  });
+
+  loadPlayer();
+</script>
