@@ -1,8 +1,8 @@
 ---
 title: "Ferron 2.0.0-beta.17 has been released"
 description: We are excited to announce the release of Ferron 2.0.0-beta.17. This release brings a fix for a crash when resolving a TLS certificate.
-date: 2025-07-31 09:36:00
-cover: ./covers/ferron-2-0-0-beta-16-has-been-released.png
+date: 2025-09-08 16:40:00
+cover: ./covers/ferron-2-0-0-beta-17-has-been-released.png
 ---
 
 We are excited to introduce Ferron 2.0.0-beta.17, with a fix for a crash when resolving a TLS certificate.
