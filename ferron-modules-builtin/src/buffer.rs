@@ -141,7 +141,7 @@ impl ModuleHandlers for BufferModuleHandlers {
       request = Request::from_parts(
         request_parts,
         BodyExt::boxed(StreamBody::new(
-          futures_util::stream::iter(request_body_buffer.into_iter())
+          futures_util::stream::iter(request_body_buffer)
             .map(Ok)
             .chain(BodyStream::new(request_body)),
         )),
@@ -188,7 +188,7 @@ impl ModuleHandlers for BufferModuleHandlers {
       response = Response::from_parts(
         response_parts,
         BodyExt::boxed(StreamBody::new(
-          futures_util::stream::iter(response_body_buffer.into_iter())
+          futures_util::stream::iter(response_body_buffer)
             .map(Ok)
             .chain(BodyStream::new(response_body)),
         )),

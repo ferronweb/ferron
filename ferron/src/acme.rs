@@ -610,9 +610,19 @@ impl TlsAlpn01Resolver {
 impl ResolvesServerCert for TlsAlpn01Resolver {
   fn resolve(&self, client_hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
     let hostname = client_hello.server_name();
-    for resolver_lock in &*self.resolvers.blocking_read() {
+
+    // If blocking_read() method is used when only Tokio is used, the program would panic on resolving a TLS certificate.
+    #[cfg(feature = "runtime-monoio")]
+    let resolver_locks = self.resolvers.blocking_read();
+    #[cfg(feature = "runtime-tokio")]
+    let resolver_locks = futures_executor::block_on(async { self.resolvers.read().await });
+
+    for resolver_lock in &*resolver_locks {
       if let Some(hostname) = hostname {
+        #[cfg(feature = "runtime-monoio")]
         let resolver_data = resolver_lock.blocking_read().clone();
+        #[cfg(feature = "runtime-tokio")]
+        let resolver_data = futures_executor::block_on(async { resolver_lock.read().await }).clone();
         if let Some(resolver_data) = resolver_data {
           let (cert, host) = resolver_data;
           if host == hostname {

@@ -1187,10 +1187,12 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     // Use Brotli compression with moderate quality (4) for good compression/speed balance
                     // Also, set the window size and block size to optimize compression, and reduce memory usage
                     let reader_stream = ReaderStream::with_capacity(
-                      BrotliEncoder::with_quality_and_params(
+                      BrotliEncoder::with_params(
                         file_bufreader,
-                        Level::Precise(4),
-                        EncoderParams::default().window_size(17).block_size(18),
+                        EncoderParams::default()
+                          .quality(Level::Precise(4))
+                          .window_size(17)
+                          .block_size(18),
                       ),
                       COMPRESSED_STREAM_READER_BUFFER_SIZE,
                     );

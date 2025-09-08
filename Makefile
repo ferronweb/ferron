@@ -21,7 +21,8 @@ else
 endif
 
 ifdef NO_MONOIO
-    CARGO_FINAL_EXTRA_ARGS = --no-default-features -F ferron/runtime-tokio $(CARGO_FINAL_EXTRA_ARGS)
+    CARGO_FINAL_EXTRA_ARGS_NO_MONOIO_ENV := $(CARGO_FINAL_EXTRA_ARGS)
+    CARGO_FINAL_EXTRA_ARGS = --no-default-features -F ferron/runtime-tokio $(CARGO_FINAL_EXTRA_ARGS_NO_MONOIO_ENV)
 endif
 
 ifndef CARGO_FINAL

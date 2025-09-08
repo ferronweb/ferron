@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.17
+
+**Released in September 8, 2025**
+
+- Fixed the server crashing when resolving a TLS certificate when a client connects to the server via HTTPS (versions compiled with Tokio only were affected)
+
 ## Ferron 2.0.0-beta.16
 
 **Released in July 31, 2025**
