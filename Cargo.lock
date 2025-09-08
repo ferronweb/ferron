@@ -1495,6 +1495,7 @@ dependencies = [
  "ferron-common",
  "ferron-load-modules",
  "ferron-yaml2kdl-core",
+ "futures-executor",
  "futures-util",
  "glob",
  "h3",
