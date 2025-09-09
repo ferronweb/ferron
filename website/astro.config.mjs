@@ -42,7 +42,7 @@ export default defineConfig({
         name: "Funnel Sans",
         weights: [400, 500, 600, 700, 800],
         cssVariable: "--font-funnel-sans",
-        fallbacks: ["sans-serif"],
+        fallbacks: ["Tahoma", "Arial", "Helvetica", "sans-serif"],
         subsets: ["latin", "latin-ext"]
       },
       {
