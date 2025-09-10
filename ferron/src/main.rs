@@ -1539,7 +1539,7 @@ fn main() {
   // Set the panic handler
   setup_panic!(Metadata::new("Ferron", env!("CARGO_PKG_VERSION"))
     .homepage("www.ferronweb.org")
-    .support("- Send an email message to hello@ferronweb.org"));
+    .support("- Send an email message to hello@ferron.sh"));
 
   // Obtain the configuration adapters
   let (configuration_adapters, all_adapters) = obtain_configuration_adapters();
