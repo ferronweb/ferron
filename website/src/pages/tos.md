@@ -57,4 +57,4 @@ These Terms are governed by and construed in accordance with the laws of Poland,
 
 ## 11. Contact Information
 
-If you have any questions about these Terms, please contact us at [hello@ferronweb.org](mailto:hello@ferronweb.org).
+If you have any questions about these Terms, please contact us at [hello@ferron.sh](mailto:hello@ferron.sh).

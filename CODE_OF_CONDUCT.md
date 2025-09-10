@@ -20,7 +20,7 @@ Maintainers reserve the right to remove comments, reject contributions, or ban u
 
 ## Reporting issues
 
-To report abuse or violations of this Code of Conduct, please contact either via email (dorian.niemiec@ferronweb.org), or a direct message on X/Twitter ([@JaDorianNiemiec](https://x.com/JaDorianNiemiec)). Reports will be handled confidentially and promptly.
+To report abuse or violations of this Code of Conduct, please contact either via email (dorian@ferron.sh), or a direct message on X/Twitter ([@JaDorianNiemiec](https://x.com/JaDorianNiemiec)). Reports will be handled confidentially and promptly.
 
 ---
 
