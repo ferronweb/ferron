@@ -38,10 +38,10 @@ You can opt out from analytics using [this form](/analytics-optout).
 
 ## Your Rights
 
-Since we collect minimal data, most traditional privacy rights (such as the right to access, delete, or modify data) may not apply. However, if you have concerns about your data, you may contact us at [privacy@ferronweb.org](mailto:privacy@ferronweb.org).
+Since we collect minimal data, most traditional privacy rights (such as the right to access, delete, or modify data) may not apply. However, if you have concerns about your data, you may contact us at [privacy@ferron.sh](mailto:privacy@ferron.sh).
 
 ## Changes to This Privacy Policy
 
 We may update this Privacy Policy from time to time. Any changes will be reflected on this page with an updated revision date.
 
-For any questions or concerns, please contact us at [privacy@ferronweb.org](mailto:privacy@ferronweb.org).
+For any questions or concerns, please contact us at [privacy@ferron.sh](mailto:privacy@ferron.sh).

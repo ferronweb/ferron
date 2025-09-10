@@ -7,7 +7,7 @@ Ferron is a fast, memory-safe web server written in Rust, designed for performan
 Ferron actively supports the latest stable release and provides security updates for the most recent minor versions. Users are encouraged to upgrade promptly to receive security patches.
 
 ## Reporting security issues
-Security is a top priority for Ferron. If you discover a vulnerability, please report it responsibly by sending an email message to [security@ferronweb.org](mailto:security@ferronweb.org).
+Security is a top priority for Ferron. If you discover a vulnerability, please report it responsibly by sending an email message to [security@ferron.sh](mailto:security@ferron.sh).
 
 We strongly discourage public disclosure of vulnerabilities before a fix is released.
 
@@ -35,6 +35,6 @@ In the event of a security breach or vulnerability:
 4. **Update users** - notify users via release notes and security mailing lists.
 
 ## Contact information
-For any security concerns, contact us at [security@ferronweb.org](mailto:security@ferronweb.org). Stay updated on security patches via [our website](https://www.ferronweb.org).
+For any security concerns, contact us at [security@ferron.sh](mailto:security@ferron.sh). Stay updated on security patches via [our website](https://www.ferronweb.org).
 
 By following this policy, we ensure Ferron remains a secure and trustworthy web server for all users.
