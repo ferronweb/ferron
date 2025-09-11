@@ -1,0 +1,33 @@
+---
+import Root from "../layouts/Root.astro";
+import NotFoundImage from "../components/NotFoundImage.astro";
+import FontAwesomeIcon from "../components/FontAwesomeIcon.astro";
+import { faArrowRight } from "@fortawesome/free-solid-svg-icons";
+import Footer from "../components/Footer.astro";
+import Header from "../components/Header.astro";
+---
+
+<Root title="404 Not Found" description="404 Not Found">
+  <Header />
+  <main
+    class="grow max-w-screen-sm mx-auto px-4 py-12 text-center flex flex-col items-center justify-center"
+  >
+    <h1 class="sr-only">404 Not Found</h1>
+    <NotFoundImage class="inline-block h-auto w-full max-w-108 mb-4 mx-16" />
+    <p class="text-muted-foreground mb-4 text-lg sm:text-xl">
+      The requested resource wasn't found. Double-check the URL if entered
+      manually.
+    </p>
+    <a
+      href="/"
+      class="inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-6 group"
+    >
+      Return home
+      <FontAwesomeIcon
+        icon={faArrowRight}
+        class="ml-2 !h-4 w-4 transition-transform group-hover:translate-x-1"
+      />
+    </a>
+  </main>
+  <Footer />
+</Root>
