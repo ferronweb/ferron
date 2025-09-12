@@ -1,5 +1,5 @@
 # Use the official Rust image as a build stage
-FROM rust AS builder
+FROM rust:bookworm AS builder
 
 # Set the working directory
 WORKDIR /usr/src/ferron

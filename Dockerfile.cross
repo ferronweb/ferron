@@ -1,5 +1,5 @@
 # Use the official Rust image as a build stage
-FROM --platform=$BUILDPLATFORM rust AS builder
+FROM --platform=$BUILDPLATFORM rust:bookworm AS builder
 
 # Define ARGs for target and build platforms
 ARG TARGETPLATFORM
