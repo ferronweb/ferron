@@ -26,6 +26,29 @@ example.com {
 }
 ```
 
+## Note about Cloudflare proxies (and other HTTPS proxies)
+
+Ferron uses TLS-ALPN-01 ACME challenge for automatic TLS by default, however this wouldn't work if your website is behind a proxy that terminates TLS, as TLS-ALPN-01 challenge works on TLS handshake level.
+
+You can use HTTP-01 challenge instead, which works on HTTP level. You can add a `auto_tls_challenge "http-01"` global configuration directive, for example like this:
+
+```kdl
+* {
+    auto_tls
+    auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
+    auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory. Optional property, but recommended
+    auto_tls_letsencrypt_production
+
+    // Use HTTP-01 challenge instead of TLS-ALPN-01, because the server is behind an HTTPS proxy.
+    auto_tls_challenge "http-01"
+}
+
+// Replace "example.com" with your website's domain name
+example.com {
+    root "/var/www/html"
+}
+```
+
 ## DNS providers
 
 Ferron 2.0.0-beta.9 and newer supports DNS-01 ACME challenge for automatic TLS. The DNS-01 ACME challenge requires a DNS provider to be configured in the `provider` prop in the `auto_tls_challenge` directive.
