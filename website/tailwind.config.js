@@ -104,6 +104,15 @@ export default {
             img: {
               marginLeft: "auto",
               marginRight: "auto"
+            },
+            tr: {
+              borderColor: "hsla(var(--border), 1)"
+            },
+            th: {
+              color: "inherit"
+            },
+            td: {
+              color: "inherit"
             }
           }
         }

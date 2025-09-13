@@ -3,8 +3,9 @@ import { defineConfig, fontProviders } from "astro/config";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@astrojs/react";
-
 import sitemap from "@astrojs/sitemap";
+
+import rehypeWrap from "rehype-wrap";
 
 // https://astro.build/config
 export default defineConfig({
@@ -22,7 +23,10 @@ export default defineConfig({
   markdown: {
     shikiConfig: {
       theme: "nord"
-    }
+    },
+    rehypePlugins: [
+      [rehypeWrap, { wrapper: "div.overflow-x-auto", selector: "table" }]
+    ]
   },
   prefetch: {
     prefetchAll: true,
