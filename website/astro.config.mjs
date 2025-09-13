@@ -27,8 +27,12 @@ export default defineConfig({
   ],
   markdown: {
     shikiConfig: {
-      theme: "nord",
-      langs: [kdl]
+      themes: {
+        light: "catppuccin-latte",
+        dark: "catppuccin-mocha"
+      },
+      langs: [kdl],
+      defaultColor: false
     }
   },
   prefetch: {

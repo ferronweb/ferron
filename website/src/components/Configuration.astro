@@ -56,7 +56,11 @@ import kdl from "../../kdl.tmLanguage.json";
     }
 }`}
               lang="nginx"
-              theme="nord"
+              themes={{
+                light: "catppuccin-latte",
+                dark: "catppuccin-mocha"
+              }}
+              defaultColor={false}
               class="p-4 rounded-lg text-sm md:text-base"
             />
           </div>
@@ -68,7 +72,11 @@ example.com {
     root "/var/www/html"
 }`}
               lang={kdl}
-              theme="nord"
+              themes={{
+                light: "catppuccin-latte",
+                dark: "catppuccin-mocha"
+              }}
+              defaultColor={false}
               class="p-4 rounded-lg text-sm md:text-base"
             />
           </div>
@@ -107,7 +115,11 @@ server {
     }
 }`}
               lang="nginx"
-              theme="nord"
+              themes={{
+                light: "catppuccin-latte",
+                dark: "catppuccin-mocha"
+              }}
+              defaultColor={false}
               class="p-4 rounded-lg text-sm md:text-base"
             />
           </div>
@@ -119,7 +131,11 @@ example.com {
     proxy "http://localhost:3000"
 }`}
               lang={kdl}
-              theme="nord"
+              themes={{
+                light: "catppuccin-latte",
+                dark: "catppuccin-mocha"
+              }}
+              defaultColor={false}
               class="p-4 rounded-lg text-sm md:text-base"
             />
           </div>
@@ -162,7 +178,11 @@ example.com {
     }
 }`}
               lang="nginx"
-              theme="nord"
+              themes={{
+                light: "catppuccin-latte",
+                dark: "catppuccin-mocha"
+              }}
+              defaultColor={false}
               class="p-4 rounded-lg text-sm md:text-base"
             />
           </div>
@@ -176,7 +196,11 @@ example.com {
     fcgi_php "unix:///var/run/php/php-fpm.sock"
 }`}
               lang={kdl}
-              theme="nord"
+              themes={{
+                light: "catppuccin-latte",
+                dark: "catppuccin-mocha"
+              }}
+              defaultColor={false}
               class="p-4 rounded-lg text-sm md:text-base"
             />
           </div>
