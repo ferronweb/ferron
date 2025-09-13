@@ -7,6 +7,8 @@ import pagefind from "astro-pagefind";
 
 import kdl from "./kdl.tmLanguage.json";
 
+import rehypeWrap from "rehype-wrap";
+
 // https://astro.build/config
 export default defineConfig({
   site: "https://v2.ferronweb.org",
@@ -33,7 +35,10 @@ export default defineConfig({
       },
       langs: [kdl],
       defaultColor: false
-    }
+    },
+    rehypePlugins: [
+      [rehypeWrap, { wrapper: "div.overflow-x-auto", selector: "table" }]
+    ]
   },
   prefetch: {
     prefetchAll: true,

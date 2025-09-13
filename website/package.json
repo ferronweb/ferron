@@ -33,6 +33,7 @@
     "postcss-nesting": "^13.0.1",
     "postcss-prefix-selector": "^2.1.1",
     "postcss-value-parser": "^4.2.0",
+    "rehype-wrap": "^1.1.0",
     "tailwindcss": "^4.1.5"
   },
   "devDependencies": {
