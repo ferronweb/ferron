@@ -90,7 +90,7 @@ const { Content } = await render(Astro.props.post);
     >
       <Content />
     </article>
-    <div class="mt-6 pt-6 w-full text-lg print:hidden">
+    <div class="mt-6 pt-6 border-t-2 w-full text-lg print:hidden">
       <div
         class="flex flex-col sm:flex-row text-center sm:text-start gap-4 items-center"
       >
@@ -141,7 +141,7 @@ const { Content } = await render(Astro.props.post);
         </div>
       </div>
     </div>
-    <div class="mt-6 pt-6 border-t-2 w-full text-lg print:hidden">
+    <div class="mt-6 pt-6 w-full text-lg print:hidden">
       <div class="flex flex-col md:flex-row md:text-lg">
         {
           Astro.props.previousPost ? (
