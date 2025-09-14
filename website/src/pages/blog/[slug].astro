@@ -2,17 +2,40 @@
 import { getCollection, render } from "astro:content";
 import MainLayout from "../../layouts/MainLayout.astro";
 import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
-import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faArrowRight } from "@fortawesome/free-solid-svg-icons";
 import { format } from "date-fns";
 import blogMissing from "../../assets/blog-missing.png";
 import { Image } from "astro:assets";
+import {
+  faThreads,
+  faXTwitter,
+  faFacebook,
+  faLinkedin
+} from "@fortawesome/free-brands-svg-icons";
 
 export async function getStaticPaths() {
   const posts = await getCollection("blog");
-  return posts.map((post) => ({
-    params: { slug: post.id },
-    props: { post }
-  }));
+  return posts
+    .sort((a, b) => {
+      if (a.data.date === undefined || b.data.date === undefined) {
+        return 0;
+      }
+      if (a.data.date < b.data.date) {
+        return 1;
+      } else if (a.data.date > b.data.date) {
+        return -1;
+      } else {
+        return 0;
+      }
+    })
+    .map((post, index) => ({
+      params: { slug: post.id },
+      props: {
+        post,
+        previousPost: posts[index - 1] || null,
+        nextPost: posts[index + 1] || null
+      }
+    }));
 }
 
 const { data } = Astro.props.post;
@@ -67,5 +90,114 @@ const { Content } = await render(Astro.props.post);
     >
       <Content />
     </article>
+    <div class="my-6 pt-6 w-full text-lg print:hidden">
+      <div
+        class="flex flex-col sm:flex-row text-center sm:text-start gap-4 items-center"
+      >
+        <span class="block font-semibold text-lg md:text-xl"
+          >Share this post!</span
+        >
+        <div class="flex flex-wrap gap-3 items-center">
+          <a
+            href={`https://x.com/intent/tweet?text=${encodeURIComponent(data.title)}&url=${encodeURIComponent(Astro.url.href)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <FontAwesomeIcon
+              icon={faXTwitter}
+              class="w-6 h-6 text-muted-foreground hover:text-primary transition-colors"
+            />
+          </a>
+          <a
+            href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(Astro.url.href)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <FontAwesomeIcon
+              icon={faFacebook}
+              class="w-6 h-6 text-muted-foreground hover:text-primary transition-colors"
+            />
+          </a>
+          <a
+            href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(Astro.url.href)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <FontAwesomeIcon
+              icon={faLinkedin}
+              class="w-6 h-6 text-muted-foreground hover:text-primary transition-colors"
+            />
+          </a>
+          <a
+            href={`https://threads.com/intent/post?text=${encodeURIComponent(`${data.title} - ${Astro.url.href}`)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <FontAwesomeIcon
+              icon={faThreads}
+              class="w-6 h-6 text-muted-foreground hover:text-primary transition-colors"
+            />
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="mt-6 pt-6 border-t-2 w-full text-lg print:hidden">
+      <div class="flex flex-col md:flex-row md:text-lg">
+        {
+          Astro.props.previousPost ? (
+            <a
+              href={`/blog/${Astro.props.previousPost.id}`}
+              class="group transition-all flex mx-0 pb-1 md:pb-0 md:pe-1 w-full md:w-1/2 justify-start text-start"
+            >
+              <div class="self-start text-primary hover:text-accent">
+                <FontAwesomeIcon
+                  icon={faArrowLeft}
+                  class="me-2 w-5 h-5 group-hover:translate-x-1 transition-all align-middle inline-block"
+                />
+              </div>
+              <span class="inline-block self-center">
+                <>
+                  <span class="block align-text-top text-primary group-hover:text-accent transition-colors">
+                    Newer
+                  </span>
+                  <span class="block font-bold">
+                    {Astro.props.previousPost.data.title}
+                  </span>
+                </>
+              </span>
+            </a>
+          ) : (
+            <div class="w-1/2" />
+          )
+        }
+        {
+          Astro.props.nextPost ? (
+            <a
+              href={`/blog/${Astro.props.nextPost.id}`}
+              class="group transition-all flex mx-0 pb-1 md:pb-0 md:ps-1 w-full md:w-1/2 justify-end text-end"
+            >
+              <span class="inline-block self-center">
+                <>
+                  <span class="block align-text-top text-primary group-hover:text-accent transition-colors">
+                    Older
+                  </span>
+                  <span class="block font-bold">
+                    {Astro.props.nextPost.data.title}
+                  </span>
+                </>
+              </span>
+              <div class="self-start text-primary hover:text-accent">
+                <FontAwesomeIcon
+                  icon={faArrowRight}
+                  class="ms-2 w-5 h-5 group-hover:-translate-x-1 transition-all align-middle inline-block"
+                />
+              </div>
+            </a>
+          ) : (
+            <div class="w-1/2" />
+          )
+        }
+      </div>
+    </div>
   </main>
 </MainLayout>
