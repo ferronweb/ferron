@@ -115,6 +115,17 @@
   .card-hover {
     @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10;
   }
+
+  .blur-fix-performance {
+    /* Utility class for fixing performance issues on Safari */
+    /* Had to use CSS variables, since without them, "trasform: translate3d(0,0,0)" gets converted to "transform: translate(0)"... */
+    --blur-fix-performance: 0;
+    transform: translate3d(
+      var(--blur-fix-performance),
+      var(--blur-fix-performance),
+      var(--blur-fix-performance)
+    );
+  }
 }
 
 .pagefind-ui {
