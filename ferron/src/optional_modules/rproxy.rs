@@ -135,6 +135,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
       let disable_certificate_verification = config["disableProxyCertificateVerification"]
         .as_bool()
         .unwrap_or(false);
+      let set_host_header = config["proxyHostHeader"].as_bool().unwrap_or(false);
       let proxy_intercept_errors = config["proxyInterceptErrors"].as_bool().unwrap_or(false);
       if let Some(proxy_to) = determine_proxy_to(
         config,
@@ -245,7 +246,10 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
         if let Some(original_host) = original_host {
           hyper_request_parts
             .headers
-            .insert("x-forwarded-host", original_host);
+            .insert("x-forwarded-host", original_host.clone());
+          if set_host_header {
+            hyper_request_parts.headers.insert("Host", original_host);
+          }
         }
 
         hyper_request_parts.version = Version::HTTP_11;
