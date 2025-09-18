@@ -1,0 +1,40 @@
+---
+import {
+  faShieldVirus,
+  faTrafficLight,
+  faWrench
+} from "@fortawesome/free-solid-svg-icons";
+import ProblemPoint from "./ProblemPoint.astro";
+---
+
+<section id="problem" class="py-20 relative">
+  <div class="container">
+    <div class="text-center mb-16">
+      <h2 class="text-3xl md:text-4xl font-bold mb-4">
+        The problem with popular web servers
+      </h2>
+      <p class="text-muted-foreground text-lg max-w-2xl mx-auto">
+        Despite powering much of the internet, popular web servers (such as
+        Apache and NGINX) weren't designed for ease of use, security, or modern
+        developer experience.
+      </p>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <ProblemPoint
+        icon={faWrench}
+        title="Complex configurations"
+        description="NGINX configurations can become verbose, even for something as common as a high-performance reverse proxy. Apache's directives can be also hard to navigate, with many options that can make simple tasks unnecessarily hard."
+      />
+      <ProblemPoint
+        icon={faShieldVirus}
+        title="Security concerns"
+        description="Many popular web servers (including Apache and NGINX) are written in programming languages and use libraries that aren't designed for memory safety. This caused many issues, such as Heartbleed in OpenSSL, putting servers at unnecessary risk."
+      />
+      <ProblemPoint
+        icon={faTrafficLight}
+        title="Performance bottlenecks"
+        description="Apache's architecture can struggle under modern workloads, often underperforming compared to newer, leaner servers. This means wasted resources and slower response times for your website visitors."
+      />
+    </div>
+  </div>
+</section>

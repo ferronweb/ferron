@@ -1,0 +1,21 @@
+---
+import FontAwesomeIcon from "../FontAwesomeIcon.astro";
+---
+
+<div
+  class="bg-card/60 text-card-foreground backdrop-blur-sm border border-muted/60 p-6 rounded-lg flex flex-col md:flex-row md:gap-4 lg:flex-col lg:gap-0"
+>
+  <div
+    class="bg-primary/10 w-12 h-12 rounded-lg flex items-center justify-center mb-4 shrink-0"
+  >
+    <FontAwesomeIcon icon={Astro.props.icon} class="!h-6 w-6 text-primary" />
+  </div>
+  <div class="grow">
+    <h3 class="text-lg md:text-xl font-semibold mb-2">
+      {Astro.props.title}
+    </h3>
+    <p class="text-muted-foreground">
+      {Astro.props.description}
+    </p>
+  </div>
+</div>
