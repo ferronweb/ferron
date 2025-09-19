@@ -18,24 +18,24 @@ import Benchmark from "./Benchmark.astro";
         data={[
           {
             name: "1KB file",
-            ferron: 107347.97,
-            competitor1: 80257.53,
-            competitor2: 27745.4,
-            competitor3: 84987.46
+            ferron: 124552.78,
+            competitor1: 100983.17,
+            competitor2: 25384.9,
+            competitor3: 93459.1
           },
           {
             name: "100KB file",
-            ferron: 22048.26,
-            competitor1: 12507.0,
-            competitor2: 19923.47,
-            competitor3: 27982.26
+            ferron: 26228.44,
+            competitor1: 11720.13,
+            competitor2: 17797.22,
+            competitor3: 29259.29
           },
           {
             name: "1MB file",
-            ferron: 2158.65,
-            competitor1: 1452.11,
-            competitor2: 5917.18,
-            competitor3: 3271.92
+            ferron: 2537.57,
+            competitor1: 1278.84,
+            competitor2: 4618.48,
+            competitor3: 3306.1
           }
         ]}
         unit={"req/s"}
@@ -44,7 +44,7 @@ import Benchmark from "./Benchmark.astro";
         competitor2={"Apache httpd"}
         competitor3={"Caddy"}
         command="ferrbench -c 1000 -d 60s -t 12 -h https://localhost --http2"
-        date={new Date("2025-06-13")}
+        date={new Date("2025-09-19")}
       />
       <Benchmark
         title="Reverse proxy performance"
