@@ -1,6 +1,19 @@
 ---
 import { format } from "date-fns";
 
+interface Props {
+  data: object[];
+  command: string;
+  unit: string;
+  competitor1: string;
+  competitor2: string;
+  competitor3: string;
+  description: string;
+  title: string;
+  date: Date;
+  higherIsBetter: boolean;
+}
+
 const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
 ---
 
@@ -57,8 +70,17 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
     CategoryScale,
     LinearScale,
     Legend,
-    Tooltip
+    Tooltip,
+    type ChartItem
   } from "chart.js";
+
+  interface BenchmarkData {
+    name: string;
+    ferron: number;
+    competitor1: number;
+    competitor2: number;
+    competitor3: number;
+  }
 
   Chart.register([
     BarController,
@@ -86,29 +108,29 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
       Chart.defaults.font.size = 14;
       Chart.defaults.color = `hsla(${mutedForegroundColor}, 1)`;
       Chart.defaults.borderColor = `hsla(${borderColor}, 1)`;
-      new Chart(canvas as any, {
+      new Chart(canvas as ChartItem, {
         type: "bar",
         data: {
-          labels: props.data.map((item: any) => item.name),
+          labels: props.data.map((item: BenchmarkData) => item.name),
           datasets: [
             {
               label: "Ferron",
-              data: props.data.map((item: any) => item.ferron),
+              data: props.data.map((item: BenchmarkData) => item.ferron),
               backgroundColor: `hsla(${primaryColor}, 1)`
             },
             {
               label: props.competitor1,
-              data: props.data.map((item: any) => item.competitor1),
+              data: props.data.map((item: BenchmarkData) => item.competitor1),
               backgroundColor: `hsla(${chart3}, 1)`
             },
             {
               label: props.competitor2,
-              data: props.data.map((item: any) => item.competitor2),
+              data: props.data.map((item: BenchmarkData) => item.competitor2),
               backgroundColor: `hsla(${chart4}, 1)`
             },
             {
               label: props.competitor3,
-              data: props.data.map((item: any) => item.competitor3),
+              data: props.data.map((item: BenchmarkData) => item.competitor3),
               backgroundColor: `hsla(${chart5}, 1)`
             }
           ]

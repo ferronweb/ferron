@@ -253,10 +253,10 @@ const docLinks = Astro.props.docLinks;
 
 <script>
   function initializeHeader() {
-    let menuButton = document.querySelector("[data-mobile-menu-button]");
-    let menuClose = document.querySelector("[data-mobile-menu-close-button]");
-    let menu = document.querySelector("[data-mobile-menu]");
-    let menuLinks = document.querySelectorAll("[data-mobile-menu] a");
+    const menuButton = document.querySelector("[data-mobile-menu-button]");
+    const menuClose = document.querySelector("[data-mobile-menu-close-button]");
+    const menu = document.querySelector("[data-mobile-menu]");
+    const menuLinks = document.querySelectorAll("[data-mobile-menu] a");
     if (menuButton) {
       menuButton.addEventListener("click", (e) => {
         e.preventDefault();
@@ -286,9 +286,9 @@ const docLinks = Astro.props.docLinks;
       });
     }
 
-    let searchButton = document.querySelector("[data-search-button]");
-    let searchClose = document.querySelector("[data-search-close-button]");
-    let search = document.querySelector("[data-search-menu]");
+    const searchButton = document.querySelector("[data-search-button]");
+    const searchClose = document.querySelector("[data-search-close-button]");
+    const search = document.querySelector("[data-search-menu]");
     if (searchButton) {
       searchButton.addEventListener("click", (e) => {
         e.preventDefault();
