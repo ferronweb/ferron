@@ -1,3 +1,4 @@
+@reference "./global.css";
 @import "asciinema-player/dist/bundle/asciinema-player.css";
 
 /* Fix asciinema play button not being centered */
