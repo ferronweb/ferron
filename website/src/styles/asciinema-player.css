@@ -5,6 +5,10 @@
   display: inline-block;
 }
 
+.ap-player {
+  @apply shadow-sm;
+}
+
 /* Ferron code syntax highlighting theme, based on Catpuccin Mocha and Catpuccin Latte themes */
 /* Based on https://github.com/catppuccin/asciinema */
 /*

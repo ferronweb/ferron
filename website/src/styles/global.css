@@ -190,3 +190,7 @@
     text-decoration: var(--shiki-light-text-decoration) !important;
   }
 }
+
+.astro-code {
+  @apply shadow-sm;
+}
