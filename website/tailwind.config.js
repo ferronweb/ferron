@@ -105,6 +105,9 @@ export default {
               marginLeft: "auto",
               marginRight: "auto"
             },
+            thead: {
+              borderColor: "hsla(var(--foreground), 1)"
+            },
             tr: {
               borderColor: "hsla(var(--border), 1)"
             },
