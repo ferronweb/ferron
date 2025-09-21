@@ -2,13 +2,9 @@
 import FontAwesomeIcon from "../FontAwesomeIcon.astro";
 ---
 
-<div
-  class="bg-secondary/50 backdrop-blur-sm border border-muted/30 p-6 rounded-lg card-hover shadow-sm"
->
-  <div
-    class="bg-primary/10 w-12 h-12 rounded-lg flex items-center justify-center mb-4"
-  >
-    <FontAwesomeIcon icon={Astro.props.icon} class="!h-6 w-6 text-primary" />
+<div class="card card-hover">
+  <div class="icon-badge mb-4">
+    <FontAwesomeIcon icon={Astro.props.icon} />
   </div>
   <h3 class="text-lg font-semibold mb-2">{Astro.props.title}</h3>
   <p class="text-muted-foreground">

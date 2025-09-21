@@ -33,9 +33,7 @@ import InstallCommand from "./InstallCommand.astro";
       <div
         class="flex flex-col items-center text-center xl:text-start xl:items-start gap-4 xl:w-9/16 xl:min-w-9/16 xl:max-w-9/16 2xl:w-11/20 2xl:min-w-11/20 2xl:max-w-11/20"
       >
-        <div
-          class="inline-block px-4 py-1 bg-primary/10 rounded-full text-primary font-medium text-sm mb-2 backdrop-blur-sm"
-        >
+        <div class="badge mb-2">
           Built for sysadmins &mdash; fast, secure, and easy to configure
         </div>
         <h1
@@ -54,10 +52,7 @@ import InstallCommand from "./InstallCommand.astro";
           in minutes.
         </p>
         <div class="flex flex-col sm:flex-row gap-4 max-w-md w-full xl:w-auto">
-          <a
-            href="#install"
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-8 group"
-          >
+          <a href="#install" class="btn btn-primary group">
             <FontAwesomeIcon icon={faDownload} class="mr-2 !h-5 w-5" />
             Start installation
             <FontAwesomeIcon
@@ -65,12 +60,7 @@ import InstallCommand from "./InstallCommand.astro";
               class="ml-2 !h-4 w-4 transition-transform group-hover:translate-x-1"
             />
           </a>
-          <a
-            href="/docs"
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-10 px-8"
-          >
-            Documentation
-          </a>
+          <a href="/docs" class="btn btn-secondary"> Documentation </a>
         </div>
         <div class="mt-12 w-full xl:w-37/40 2xl:w-9/10">
           <InstallCommand />

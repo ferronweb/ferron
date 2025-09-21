@@ -23,17 +23,16 @@ import {
         <div
           class="bg-secondary/30 p-6 rounded-lg border border-muted/30 shadow-sm"
         >
-          <FontAwesomeIcon
-            icon={faServer}
-            class="!h-10 w-10 text-primary mb-4"
-          />
+          <div class="icon-badge icon-badge-large mb-4">
+            <FontAwesomeIcon icon={faServer} />
+          </div>
           <h3 class="text-lg font-semibold mb-2">Manual download</h3>
           <p class="text-muted-foreground mb-4">
             Download the binary directly from our releases page.
           </p>
           <a
             href="/download"
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-8 px-3 w-full"
+            class="btn btn-secondary shadow-sm h-8 px-3 w-full"
           >
             Download releases
           </a>
@@ -41,17 +40,16 @@ import {
         <div
           class="bg-secondary/30 p-6 rounded-lg border border-muted/30 shadow-sm"
         >
-          <FontAwesomeIcon
-            icon={faGaugeHigh}
-            class="!h-10 w-10 text-primary mb-4"
-          />
+          <div class="icon-badge icon-badge-large mb-4">
+            <FontAwesomeIcon icon={faGaugeHigh} />
+          </div>
           <h3 class="text-lg font-semibold mb-2">Build from source</h3>
           <p class="text-muted-foreground mb-4">
             Compile Ferron from source for maximum customization.
           </p>
           <a
             href="https://github.com/ferronweb/ferron?tab=readme-ov-file#building-ferron-from-source"
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-8 px-3 w-full"
+            class="btn btn-secondary shadow-sm h-8 px-3 w-full"
           >
             Build instructions
           </a>
@@ -59,14 +57,16 @@ import {
         <div
           class="bg-secondary/30 p-6 rounded-lg border border-muted/30 shadow-sm"
         >
-          <FontAwesomeIcon icon={faBox} class="!h-10 w-10 text-primary mb-4" />
+          <div class="icon-badge icon-badge-large mb-4">
+            <FontAwesomeIcon icon={faBox} />
+          </div>
           <h3 class="text-lg font-semibold mb-2">Package managers</h3>
           <p class="text-muted-foreground mb-4">
             Install via popular package managers on any platform.
           </p>
           <a
             href="/docs/installation/package-managers"
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-8 px-3 w-full"
+            class="btn btn-secondary shadow-sm h-8 px-3 w-full"
           >
             View instructions
           </a>
