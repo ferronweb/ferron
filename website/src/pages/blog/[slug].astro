@@ -149,7 +149,7 @@ const { Content } = await render(Astro.props.post);
               href={`/blog/${Astro.props.previousPost.id}`}
               class="group transition-all flex mx-0 pb-1 md:pb-0 md:pe-1 w-full md:w-1/2 justify-start text-start"
             >
-              <div class="self-start text-primary hover:text-accent">
+              <div class="self-start text-primary group-hover:text-accent">
                 <FontAwesomeIcon
                   icon={faArrowLeft}
                   class="me-2 w-5 h-5 group-hover:-translate-x-1 transition-all align-middle inline-block"
@@ -186,7 +186,7 @@ const { Content } = await render(Astro.props.post);
                   </span>
                 </>
               </span>
-              <div class="self-start text-primary hover:text-accent">
+              <div class="self-start text-primary group-hover:text-accent">
                 <FontAwesomeIcon
                   icon={faArrowRight}
                   class="ms-2 w-5 h-5 group-hover:translate-x-1 transition-all align-middle inline-block"
