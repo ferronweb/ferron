@@ -25,6 +25,10 @@
     border-color: hsla(var(--border), 1);
   }
 
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring;
+  }
+
   /* Custom scrollbar styles for Chromium, because the default ones inside the body are light style, which may not match the website's dark style. */
   @media (width >= 48rem) {
     /* Equivalent to `md:<class>` in Tailwind CSS */
@@ -67,7 +71,7 @@
   --destructive-foreground: 0, 0%, 98%;
   --border: 220, 15%, 20%;
   --input: 220, 15%, 20%;
-  --ring: 24, 90%, 55%;
+  --ring: 0, 0%, 95%;
   --radius: 0.5rem;
   --chart-1: 24, 90%, 55%;
   --chart-2: 30, 80%, 50%;
@@ -96,7 +100,7 @@
     --destructive-foreground: 0, 0%, 98%;
     --border: 0, 0%, 85%;
     --input: 0, 0%, 85%;
-    --ring: 24, 90%, 55%;
+    --ring: 220, 47%, 11%;
     --radius: 0.5rem;
     --chart-1: 24, 90%, 55%;
     --chart-2: 30, 80%, 50%;
