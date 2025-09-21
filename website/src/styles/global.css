@@ -23,6 +23,7 @@
 
   * {
     border-color: hsla(var(--border), 1);
+    accent-color: hsla(var(--accent), 1);
   }
 
   *:focus-visible {
