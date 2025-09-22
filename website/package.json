@@ -14,7 +14,7 @@
     "@astrojs/react": "^4.2.5",
     "@astrojs/sitemap": "^3.3.1",
     "@csstools/postcss-cascade-layers": "^5.0.1",
-    "@csstools/postcss-color-mix-function": "^3.0.8",
+    "@csstools/postcss-color-mix-function": "^3.0.12",
     "@csstools/postcss-oklab-function": "^4.0.8",
     "@tailwindcss/typography": "^0.5.16",
     "@tailwindcss/vite": "^4.0.9",
