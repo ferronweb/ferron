@@ -113,7 +113,7 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
       new Chart(canvas as ChartItem, {
         type: "line",
         data: {
-          labels: props.data.map((item: BenchmarkData) => item.name),
+          labels: props.data.map((item: BenchmarkData) => item.concurrency),
           datasets: [
             {
               label: "Ferron",
@@ -149,6 +149,12 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
           maintainAspectRatio: false,
 
           scales: {
+            x: {
+              title: {
+                display: true,
+                text: "Concurrent requests"
+              }
+            },
             y: {
               beginAtZero: true,
               title: {
