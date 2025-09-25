@@ -1,5 +1,8 @@
 ---
 import Benchmark from "./Benchmark.astro";
+import BenchmarkLine from "./BenchmarkLine.astro";
+import reverseProxyThroughput from "../../assets/benchmarks/reverseProxyThroughput";
+import reverseProxyLatency from "../../assets/benchmarks/reverseProxyLatency";
 ---
 
 <section id="benchmarks" class="py-20">
@@ -46,59 +49,29 @@ import Benchmark from "./Benchmark.astro";
         command="ferrbench -c 1000 -d 60s -t 12 -h https://localhost --http2"
         date={new Date("2025-09-19")}
       />
-      <Benchmark
+      <BenchmarkLine
         title="Reverse proxy performance"
         description="Requests per second when proxying to backend services (higher is better)"
-        data={[
-          {
-            name: "Hello World Axum app",
-            ferron: 132548.87,
-            competitor1: 61586.79,
-            competitor2: 26061.17,
-            competitor3: 31339.37
-          }
-        ]}
+        data={reverseProxyThroughput}
         unit={"req/s"}
         higherIsBetter={true}
         competitor1={"Traefik"}
-        competitor2={"Apache httpd"}
+        competitor2={"NGINX"}
         competitor3={"Caddy"}
-        command="ferrbench -c 1000 -d 60s -t 12 -h https://localhost --http2"
-        date={new Date("2025-06-13")}
+        command="ferrbench -c $CONCURRENCY -d 5s -t 12 -h https://localhost --http2"
+        date={new Date("2025-09-25")}
       />
-      <Benchmark
+      <BenchmarkLine
         title="Latency under load (reverse proxy)"
         description={'Average response time under high concurrency proxying to a "Hello World" Axum application (lower is better)'}
-        data={[
-          {
-            name: "100 conn.",
-            ferron: 0.76,
-            competitor1: 1.5,
-            competitor2: 1.32,
-            competitor3: 1.75
-          },
-          {
-            name: "1K conn.",
-            ferron: 14.81,
-            competitor1: 16.12,
-            competitor2: 29.34,
-            competitor3: 31.56
-          },
-          {
-            name: "10K conn.",
-            ferron: 89.64,
-            competitor1: 191.82,
-            competitor2: 59.58,
-            competitor3: 543.49
-          }
-        ]}
+        data={reverseProxyLatency}
         unit={"ms"}
         higherIsBetter={false}
         competitor1={"Traefik"}
-        competitor2={"Apache httpd"}
+        competitor2={"NGINX"}
         competitor3={"Caddy"}
-        command="ferrbench -c $CONCURRENCY -d 60s -t 12 -h https://localhost --http2"
-        date={new Date("2025-06-13")}
+        command="ferrbench -c $CONCURRENCY -d 5s -t 12 -h https://localhost --http2"
+        date={new Date("2025-09-25")}
       />
       <Benchmark
         title="PHP performance"
