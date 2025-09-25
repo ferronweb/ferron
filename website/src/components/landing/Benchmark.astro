@@ -95,9 +95,9 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
   const mutedForegroundColor = style.getPropertyValue("--muted-foreground");
   const borderColor = style.getPropertyValue("--border");
   const primaryColor = style.getPropertyValue("--primary");
+  const chart1 = style.getPropertyValue("--chart-1");
+  const chart2 = style.getPropertyValue("--chart-2");
   const chart3 = style.getPropertyValue("--chart-3");
-  const chart4 = style.getPropertyValue("--chart-4");
-  const chart5 = style.getPropertyValue("--chart-5");
   const fontFamily = style.getPropertyValue("--font-funnel-sans");
 
   class BenchmarkChart extends HTMLElement {
@@ -121,17 +121,17 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
             {
               label: props.competitor1,
               data: props.data.map((item: BenchmarkData) => item.competitor1),
-              backgroundColor: `hsla(${chart3}, 1)`
+              backgroundColor: `hsla(${chart1}, 1)`
             },
             {
               label: props.competitor2,
               data: props.data.map((item: BenchmarkData) => item.competitor2),
-              backgroundColor: `hsla(${chart4}, 1)`
+              backgroundColor: `hsla(${chart2}, 1)`
             },
             {
               label: props.competitor3,
               data: props.data.map((item: BenchmarkData) => item.competitor3),
-              backgroundColor: `hsla(${chart5}, 1)`
+              backgroundColor: `hsla(${chart3}, 1)`
             }
           ]
         },
