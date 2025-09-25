@@ -51,7 +51,7 @@ import reverseProxyLatency from "../../assets/benchmarks/reverseProxyLatency";
       />
       <BenchmarkLine
         title="Reverse proxy performance"
-        description="Requests per second when proxying to backend services (higher is better)"
+        description={'Requests per second when proxying to a "Hello World" Axum application (higher is better)'}
         data={reverseProxyThroughput}
         unit={"req/s"}
         higherIsBetter={true}
