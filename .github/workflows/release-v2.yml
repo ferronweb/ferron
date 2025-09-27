@@ -259,10 +259,14 @@ jobs:
       matrix:
         include:
           - group: latest
-            dockerfile: ./Dockerfile.cross
-            platforms: linux/amd64,linux/arm64
+            dockerfile: ./Dockerfile
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
           - group: alpine
             dockerfile: ./Dockerfile.alpine
+            platforms: linux/386,linux/amd64,linux/arm64,linux/arm/v7
+          - group: debian
+            dockerfile: ./Dockerfile.debian
+            platforms: linux/386,linux/amd64,linux/arm64,linux/arm/v7
 
     steps:
       - name: Checkout
@@ -321,7 +325,6 @@ jobs:
         id: push
         uses: docker/build-push-action@1dc73863535b631f98b2378be8619f83b136f4a0
         with:
-          context: .
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platforms }}
           push: true
