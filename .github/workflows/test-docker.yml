@@ -41,6 +41,12 @@ jobs:
           - group: latest
             dockerfile: ./Dockerfile.static
             platforms: linux/amd64,linux/arm64,linux/arm/v7
+          - group: alpine
+            dockerfile: ./Dockerfile.alpine
+            platforms: linux/386,linux/amd64,linux/arm64,linux/arm/v7
+          - group: debian
+            dockerfile: ./Dockerfile.debian
+            platforms: linux/386,linux/amd64,linux/arm64,linux/arm/v7
 
     steps:
       - name: Checkout
