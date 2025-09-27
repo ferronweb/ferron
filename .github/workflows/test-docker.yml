@@ -39,7 +39,7 @@ jobs:
       matrix:
         include:
           - group: latest
-            dockerfile: ./Dockerfile.static
+            dockerfile: ./Dockerfile
             platforms: linux/amd64,linux/arm64,linux/arm/v7
           - group: alpine
             dockerfile: ./Dockerfile.alpine
