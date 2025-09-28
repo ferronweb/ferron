@@ -9,14 +9,14 @@ openssl req -new -newkey rsa:4096 -nodes `
 openssl x509 -req -days 3650 -in certs/server.csr -signkey certs/server.key -out certs/server.crt
 
 # Start Ferron in the background
-$FerronProcess = Start-Process -FilePath $env:FERRON -PassThru
+$FerronProcess = Start-Process -FilePath $env:FERRON -PassThru -NoNewWindow
 
 # Wait for Ferron to start
 Start-Sleep -Seconds 5
 
 # Perform the smoke test
 $Got = curl.exe -sk https://localhost:8443/test.txt
-$Expected = Get-Content -Raw "wwwroot/test.txt"
+$Expected = Get-Content "wwwroot/test.txt"
 
 if ($Got -eq $Expected) {
     Write-Output "Test passed"
