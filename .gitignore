@@ -33,3 +33,6 @@ Thumbs.db
 
 # Editor-specific files
 /.idea
+
+# Generated certificates for smoke testing
+/smoketest/certs/

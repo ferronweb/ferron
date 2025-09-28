@@ -46,3 +46,6 @@ Dockerfile*
 /*.kdl
 # except
 !/ferron-docker.kdl
+
+# Smoke test (they're not needed when building a Docker image)
+/smoketest/

@@ -1,0 +1,8 @@
+:443 {
+  tls "certs/server.crt" "certs/server.key"
+  proxy "http://localhost:3000"
+}
+
+localhost:3000 {
+  root "wwwroot"
+}
