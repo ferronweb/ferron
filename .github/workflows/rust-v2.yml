@@ -17,7 +17,7 @@ on:
       - "ferron-build.yaml"
       - "ferron-build-override.yaml"
       - "smoketest/**"
-      - ".github/workflows/develop-test-v2.yml"
+      - ".github/workflows/rust-v2.yml"
   pull_request:
     branches: ["develop-2.x"]
     paths:
