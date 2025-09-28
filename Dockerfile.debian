@@ -63,6 +63,15 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
 # Use a Debian base image for the final image
 FROM debian:trixie
 
+# Install CA certificates
+RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
+    --mount=type=cache,sharing=private,target=/var/lib/apt \
+    apt update && \
+    apt install -y ca-certificates && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/cache/apt/*
+
 # Copy the compiled binaries from the builder stage
 COPY --from=builder /usr/src/ferron/.dist /usr/sbin
 

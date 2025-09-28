@@ -71,6 +71,9 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
 # Use an Alpine Linux base image for the final image
 FROM alpine
 
+# Install CA certificates
+RUN apk add --no-cache ca-certificates
+
 # Copy the compiled binaries from the builder stage
 COPY --from=builder /usr/src/ferron/.dist /usr/sbin
 
