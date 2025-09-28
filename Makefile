@@ -31,6 +31,14 @@ endif
 
 .PHONY: build
 
+smoketest-dev: build-dev
+	export FERRON="$(CARGO_TARGET_ROOT)/debug/ferron"
+	smoketest/smoketest.sh
+
+smoketest: build
+	export FERRON="$(CARGO_TARGET_ROOT)/release/ferron"
+	smoketest/smoketest.sh
+
 run: build
 	$(CARGO_TARGET_ROOT)/release/ferron
 

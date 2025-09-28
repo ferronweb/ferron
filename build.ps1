@@ -52,6 +52,18 @@ function RunDev {
     & "$cargoTargetRoot/debug/ferron"
 }
 
+function Smoketest {
+    Build
+    $env:FERRON = $PWD.Path + '\' + $cargoTargetRoot + '\release\ferron'
+    & powershell.exe -ExecutionPolicy Bypass ".\smoketest\smoketest.ps1"
+}
+
+function SmoketestDev {
+    BuildDev
+    $env:FERRON = $PWD.Path + '\' + $cargoTargetRoot + '\debug\ferron'
+    & powershell.exe -ExecutionPolicy Bypass ".\smoketest\smoketest.ps1"
+}
+
 function Build {
     PrepareBuild
     FixConflicts
@@ -122,5 +134,5 @@ function Clean {
 if ($args.Count -gt 0) {
     & $args[0]
 } else {
-    Write-Host "Available commands: Run, RunDev, Build, BuildDev, PrepareBuild, FixConflicts, Package, BuildWithPackage, Clean"
+    Write-Host "Available commands: Run, RunDev, Build, BuildDev, Smoketest, SmoketestDev, PrepareBuild, FixConflicts, Package, BuildWithPackage, Clean"
 }
