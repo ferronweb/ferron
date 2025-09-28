@@ -36,6 +36,7 @@ use listener_quic::create_quic_listener;
 use listener_tcp::create_tcp_listener;
 use logging::LogMessage;
 use mimalloc::MiMalloc;
+use rustls::client::WebPkiServerVerifier;
 use rustls::crypto::aws_lc_rs::cipher_suite::*;
 use rustls::crypto::aws_lc_rs::default_provider;
 use rustls::crypto::aws_lc_rs::kx_group::*;
@@ -450,24 +451,26 @@ fn before_starting_server(
       .and_then(|v| v.as_bool())
       .unwrap_or(false)
     {
-      let mut roots = RootCertStore::empty();
-      let certs_result = load_native_certs();
-      if !certs_result.errors.is_empty() {
-        Err(anyhow::anyhow!(format!(
-          "Couldn't load the native certificate store: {}",
-          certs_result.errors[0]
-        )))?
-      }
-      let certs = certs_result.certs;
-
-      for cert in certs {
-        if let Err(err) = roots.add(cert) {
-          Err(anyhow::anyhow!(format!(
-            "Couldn't add a certificate to the certificate store: {}",
-            err
-          )))?
+      let roots = (|| {
+        let certs_result = load_native_certs();
+        if !certs_result.errors.is_empty() {
+          return None;
         }
-      }
+        let certs = certs_result.certs;
+
+        let mut roots = RootCertStore::empty();
+        for cert in certs {
+          if roots.add(cert).is_err() {
+            return None;
+          }
+        }
+
+        Some(roots)
+      })()
+      .unwrap_or(RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+      });
+
       tls_config_builder_wants_verifier
         .with_client_cert_verifier(WebPkiClientVerifier::builder(Arc::new(roots)).build()?)
     } else {
@@ -768,10 +771,19 @@ fn before_starting_server(
                 .with_safe_default_protocol_versions()?
                 .dangerous()
                 .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
+            } else if let Ok(client_config) = BuilderVerifierExt::with_platform_verifier(
+              ClientConfig::builder_with_provider(crypto_provider.clone()).with_safe_default_protocol_versions()?,
+            ) {
+              client_config
             } else {
               ClientConfig::builder_with_provider(crypto_provider.clone())
                 .with_safe_default_protocol_versions()?
-                .with_platform_verifier()?
+                .with_webpki_verifier(
+                  WebPkiServerVerifier::builder(Arc::new(rustls::RootCertStore {
+                    roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+                  }))
+                  .build()?,
+                )
             })
             .with_no_client_auth();
             if on_demand_tls {
@@ -1093,10 +1105,20 @@ fn before_starting_server(
                             .with_safe_default_protocol_versions()?
                             .dangerous()
                             .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
+                        } else if let Ok(client_config) = BuilderVerifierExt::with_platform_verifier(
+                          ClientConfig::builder_with_provider(crypto_provider.clone())
+                            .with_safe_default_protocol_versions()?,
+                        ) {
+                          client_config
                         } else {
                           ClientConfig::builder_with_provider(crypto_provider.clone())
                             .with_safe_default_protocol_versions()?
-                            .with_platform_verifier()?
+                            .with_webpki_verifier(
+                              WebPkiServerVerifier::builder(Arc::new(rustls::RootCertStore {
+                                roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+                              }))
+                              .build()?,
+                            )
                         })
                         .with_no_client_auth(),
                       )

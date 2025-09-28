@@ -31,6 +31,7 @@ tokio-rustls = { version = "0.26.2", default-features = false, features = [
 ] }
 rustls-pki-types = "1.12.0"
 rustls-platform-verifier = "0.6.0"
+webpki-roots = "1.0.2"
 password-auth = { workspace = true }
 sha2 = { version = "0.10.9", optional = true }
 base64 = "0.22.1"

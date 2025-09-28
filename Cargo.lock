@@ -1524,6 +1524,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "urlencoding",
+ "webpki-roots 1.0.2",
  "winresource",
  "x509-parser 0.18.0",
  "xxhash-rust",
@@ -1626,6 +1627,7 @@ dependencies = [
  "tokio-test",
  "tokio-util",
  "urlencoding",
+ "webpki-roots 1.0.2",
 ]
 
 [[package]]
@@ -3330,7 +3332,6 @@ dependencies = [
  "rustc-hash",
  "rustls",
  "rustls-pki-types",
- "rustls-platform-verifier 0.6.1",
  "slab",
  "thiserror 2.0.16",
  "tinyvec",
