@@ -24,6 +24,9 @@ on:
       - "wwwroot/**"
       - ".github/workflows/release-v2.yml"
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   release:
     runs-on: ${{ matrix.runner }}
