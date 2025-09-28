@@ -21,6 +21,7 @@ on:
       - "ferron-yaml2kdl-core/**"
       - "ferron-build.yaml"
       - "ferron-build-override.yaml"
+      - "smoketest/**"
       - "wwwroot/**"
       - ".github/workflows/release-v2.yml"
 
@@ -41,9 +42,11 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             command: cross
+            smoketest: true
           - target: x86_64-unknown-linux-musl
             runner: ubuntu-latest
             command: cross
+            smoketest: true
           - target: i686-unknown-linux-gnu
             runner: ubuntu-latest
             command: cross
@@ -78,6 +81,7 @@ jobs:
             runner: windows-latest
             command: cargo
             options: "--no-default-features -F ferron/default-tokio"
+            smoketest: true
           - target: i686-pc-windows-msvc
             runner: windows-latest
             command: cargo
@@ -92,6 +96,7 @@ jobs:
           - target: aarch64-apple-darwin
             runner: macos-latest
             command: cargo
+            smoketest: true
 
     steps:
       - name: Checkout
@@ -164,6 +169,19 @@ jobs:
           done
           ${{ matrix.command }} build --verbose --release --target-dir ../target --target ${{ matrix.target }} ${{ matrix.options }}
           cd ..
+
+      - name: Smoke test the binary (Unix-like)
+        if: matrix.runner != 'windows-latest' && matrix.smoketest == true
+        shell: bash
+        run: |
+          FERRON="$(pwd)/target/${{ matrix.target }}/release/ferron" bash smoketest/smoketest.sh
+
+      - name: Smoke test the  binary (Windows)
+        if: matrix.runner == 'windows-latest' && matrix.smoketest == true
+        shell: powershell
+        run: |
+          $env:FERRON = $PWD.Path + '\target\${{ matrix.target }}\release\ferron'
+          powershell -ExecutionPolicy Bypass .\smoketest\smoketest.ps1
 
       - name: Prepare for packaging
         shell: bash
@@ -323,6 +341,21 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Build and export to Docker
+        uses: docker/build-push-action@1dc73863535b631f98b2378be8619f83b136f4a0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          tags: ${{ env.DOCKER_TAGS }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test the Docker image
+        shell: bash
+        run: |
+          FERRON_IMAGE="$(echo $DOCKER_TAGS | cut -d',' -f1)" bash smoketest/smoketest-docker.sh
 
       - name: Build and push Docker image
         id: push
