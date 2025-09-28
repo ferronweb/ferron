@@ -16,7 +16,8 @@ on:
       - "ferron-yaml2kdl-core/**"
       - "ferron-build.yaml"
       - "ferron-build-override.yaml"
-      - ".github/workflows/rust-v2.yml"
+      - "smoketest/**"
+      - ".github/workflows/develop-test-v2.yml"
   pull_request:
     branches: ["develop-2.x"]
     paths:
@@ -38,26 +39,45 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
-      - name: Build
-        run: cargo build --verbose
-      - name: Run tests
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run Cargo tests
         run: cargo test --workspace --verbose
+
+      - name: Build binaries
+        shell: bash
+        run: |
+          CARGO_FINAL_EXTRA_ARGS="--verbose" make build
+
+      - name: Smoke test the binary
+        shell: bash
+        run: |
+          FERRON="$(pwd)/target/${{ matrix.target }}/release/ferron" bash smoketest/smoketest.sh
 
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
-      - name: rustfmt
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
         run: cargo fmt --all -- --check
-      - name: clippy
+
+      - name: Check linting
         run: cargo clippy --workspace -- -D warnings
