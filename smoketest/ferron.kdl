@@ -1,4 +1,4 @@
-:443 {
+:8443 {
   tls "certs/server.crt" "certs/server.key"
   proxy "http://localhost:3000"
 }

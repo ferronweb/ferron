@@ -12,7 +12,7 @@ openssl x509 -req -days 3650 -in certs/server.csr -signkey certs/server.key -out
 chmod a+r certs/*
 
 # Start Ferron in the background and capture its PID
-FERRON_CONTAINER="$(docker run --rm -d -p 80:80 -p 443:443 \
+FERRON_CONTAINER="$(docker run --rm -d -p 8443:8443 \
     --hostname ferron-smoketest \
     -v ./wwwroot:/var/www/test \
     -v ./certs:/etc/certs \
@@ -20,7 +20,7 @@ FERRON_CONTAINER="$(docker run --rm -d -p 80:80 -p 443:443 \
     $FERRON_IMAGE)"
 
 # Perform the smoke test
-GOT=$(curl -sk https://localhost/test.txt)
+GOT=$(curl -sk https://localhost:8443/test.txt)
 EXPECTED=$(cat wwwroot/test.txt)
 sleep 5
 if [ "$GOT" = "$EXPECTED" ]; then

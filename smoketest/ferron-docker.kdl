@@ -1,4 +1,4 @@
-:443 {
+:8443 {
   tls "/etc/certs/server.crt" "/etc/certs/server.key"
   proxy "http://ferron-smoketest:3000"
 }
