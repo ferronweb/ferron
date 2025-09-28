@@ -81,10 +81,7 @@ impl ModuleLoader for StatusCodesModuleLoader {
               {
                 Some(regex_str) => match RegexBuilder::new(regex_str).case_insensitive(cfg!(windows)).build() {
                   Ok(regex) => Some(regex),
-                  Err(err) => Err(anyhow::anyhow!(
-                    "Invalid non-standard code regular expression: {}",
-                    err.to_string()
-                  ))?,
+                  Err(err) => Err(anyhow::anyhow!("Invalid non-standard code regular expression: {}", err))?,
                 },
                 None => None,
               };
