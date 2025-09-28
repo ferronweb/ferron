@@ -23,7 +23,7 @@ on:
       - "ferron-build-override.yaml"
       - "smoketest/**"
       - "wwwroot/**"
-      - ".github/workflows/release-v2.yml"
+      - ".github/workflows/smoketest.yml"
 
 env:
   CARGO_TERM_COLOR: always
