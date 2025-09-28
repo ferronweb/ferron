@@ -84,6 +84,9 @@ COPY --chown=nobody ferron-docker.kdl /etc/ferron.kdl
 # Copy the web root contents
 COPY --chown=nobody wwwroot /var/www/ferron/
 
+# Create an ACME cache directory
+WORKDIR /var/cache/ferron-acme
+
 # Create a directory where Ferron logs are stored
 WORKDIR /var/log/ferron
 

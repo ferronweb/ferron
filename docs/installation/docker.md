@@ -59,8 +59,9 @@ Ferron on Docker has following file structure:
 - _/usr/sbin/ferron_ - Ferron web server
 - _/usr/sbin/ferron-passwd_ - Ferron user password generation tool
 - _/usr/sbin/ferron-yaml2kdl_ - Ferron configuration conversion tool
-- _/var/log/ferron/access.log_ - Ferron access log in Combined Log Format
-- _/var/log/ferron/error.log_ - Ferron error log
+- _/var/cache/ferron-acme_ - Ferron's ACME cache directory (if not explicitly specified in the server configuration)
+- _/var/log/ferron/access.log_ - Ferron access log in Combined Log Format (default configuration)
+- _/var/log/ferron/error.log_ - Ferron error log (default configuration)
 - _/var/www/ferron_ - Ferron's web root
 - _/etc/ferron.kdl_ - Ferron configuration
 
@@ -123,19 +124,8 @@ services:
       - "443:443"
     volumes:
       - "./ferron.kdl:/etc/ferron.kdl" # Ferron configuration file
-      - "ferron-acme:/var/cache/acme-cache" # This volume is needed for persistent automatic TLS cache, otherwise the web server will obtain a new certificate on each restart
+      - "ferron-acme:/var/cache/ferron-acme" # This volume is needed for persistent automatic TLS cache, otherwise the web server will obtain a new certificate on each restart
     restart: always
-    depends_on:
-      ferron-acme-change-vol-ownership:
-        condition: service_completed_successfully
-
-  # Container to change ownership of the volume, necessary for the ACME cache to work properly
-  ferron-acme-change-vol-ownership:
-    image: alpine
-    user: "root"
-    volumes:
-      - ferron-acme:/tmp/change-ownership
-    command: chown nobody:nogroup /tmp/change-ownership
 
 volumes:
   ferron-acme:
@@ -144,10 +134,6 @@ volumes:
 You might also configure Ferron in a "ferron.kdl" file like this:
 
 ```kdl
-* {
-    auto_tls_cache "/var/cache/acme-cache"
-}
-
 // Replace "example.com" with your website's domain name
 example.com {
     root "/var/www/ferron"

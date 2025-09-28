@@ -133,7 +133,7 @@ shadow-rs = { version = "1.2.0", default-features = false, features = [
 ] }
 
 [features]
-default = ["config-yaml-legacy", "runtime-monoio"]
+default = ["config-yaml-legacy", "runtime-monoio", "config-docker-auto"]
 default-tokio = ["config-yaml-legacy", "runtime-tokio"]
 config-docker-auto = []
 config-yaml-legacy = ["ferron-yaml2kdl-core"]
