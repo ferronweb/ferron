@@ -355,7 +355,7 @@ jobs:
       - name: Smoke test the Docker image
         shell: bash
         run: |
-          FERRON_IMAGE="$(echo $DOCKER_HUB_TAGS | cut -d',' -f1)" bash smoketest/smoketest-docker.sh
+          FERRON_IMAGE="$(echo $DOCKER_TAGS | cut -d',' -f1)" bash smoketest/smoketest-docker.sh
 
       - name: Build and push Docker image
         id: push
