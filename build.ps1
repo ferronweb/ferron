@@ -29,6 +29,11 @@ if ($env:TARGET) {
     $buildRelease = "build-release"
 }
 
+# Append extra arguments if set
+if ($env:CARGO_FINAL_EXTRA_ARGS) {
+    $cargoFinalExtraArgs = "$cargoFinalExtraArgs $env:CARGO_FINAL_EXTRA_ARGS"
+}
+
 # There would be a static file serving performance degradation when using Monoio, so we're compiling with Tokio
 $cargoFinalExtraArgs = "--no-default-features -F ferron/runtime-tokio $cargoFinalExtraArgs"
 
