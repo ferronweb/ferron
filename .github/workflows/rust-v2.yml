@@ -71,13 +71,13 @@ jobs:
                   cargo update $CONFLICTING_PACKAGES || true; \
               fi; \
           done
-          ${{ matrix.command }} build --verbose --release --target-dir ../target --target ${{ matrix.target }} ${{ matrix.options }}
+          ${{ matrix.command }} build --verbose --target-dir ../target --target ${{ matrix.target }} ${{ matrix.options }}
           cd ..
 
       - name: Smoke test the binary
         shell: bash
         run: |
-          FERRON="$(pwd)/target/${{ matrix.target }}/release/ferron" bash smoketest/smoketest.sh
+          FERRON="$(pwd)/target/${{ matrix.target }}/debug/ferron" bash smoketest/smoketest.sh
 
   check:
     runs-on: ubuntu-latest
