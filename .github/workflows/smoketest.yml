@@ -93,10 +93,10 @@ jobs:
           - target: x86_64-apple-darwin
             runner: macos-latest
             command: cargo
-            smoketest: true
           - target: aarch64-apple-darwin
             runner: macos-latest
             command: cargo
+            smoketest: true
 
     steps:
       - name: Checkout
@@ -176,7 +176,7 @@ jobs:
         run: |
           FERRON="$(pwd)/target/${{ matrix.target }}/release/ferron" bash smoketest/smoketest.sh
 
-      - name: Smoke test the binary (Windows)
+      - name: Smoke test the  binary (Windows)
         if: matrix.runner == 'windows-latest' && matrix.smoketest == true
         shell: powershell
         run: |
