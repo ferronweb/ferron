@@ -1,6 +1,6 @@
 globals {
-  log "/var/log/ferron/error.log"
-  error_log "/var/log/ferron/access.log"
+  log "/var/log/ferron/access.log"
+  error_log "/var/log/ferron/error.log"
 }
 
 :80 {
