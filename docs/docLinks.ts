@@ -28,6 +28,12 @@ export default [
     label: "Installer (Windows Server)",
   },
   {
+    href: "/docs/installation/debian",
+    target: "_self",
+    sub: true,
+    label: "Debian/Ubuntu",
+  },
+  {
     href: "/docs/installation/docker",
     target: "_self",
     sub: true,
@@ -37,7 +43,7 @@ export default [
     href: "/docs/installation/package-managers",
     target: "_self",
     sub: true,
-    label: "Package managers",
+    label: "Package managers (community)",
   },
   {
     href: "/docs/installation/manual",
