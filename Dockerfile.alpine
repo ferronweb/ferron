@@ -52,18 +52,18 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     TARGET_TRIPLE="$(rustc --print host-tuple | sed 's/gnu/musl/')" && COMPILER_PREFIX="" && LIB_PATH="/usr/lib/$(gcc -dumpmachine | sed 's/gnu/musl/')"; \
     fi && \
     # Create a GCC wrapper script
-    echo "#!/bin/sh\n${COMPILER_PREFIX}gcc \"\$@\" -specs \"${LIB_PATH}/musl-gcc.specs\"" > /usr/local/bin/musl-gcc && chmod +x /usr/local/bin/musl-gcc && \
+    echo "#!/bin/sh\n${COMPILER_PREFIX}gcc \"\$@\" -specs \"${LIB_PATH}/musl-gcc.specs\"" > /tmp/musl-gcc && chmod +x /tmp/musl-gcc && \
     # Install the Rustup target
     rustup target add $TARGET_TRIPLE && \
     # Copy self-contained libunwind
     mkdir -p /tmp/lib && cp $(rustc --print target-libdir --target $TARGET_TRIPLE)/self-contained/libunwind.a /tmp/lib && \
     # Configure Cargo
-    echo "[target.$TARGET_TRIPLE]\nlinker = \"/usr/local/bin/musl-gcc\"\nrustflags = [\"-Clink-args=-L$LIB_PATH\", \"-Clink-args=-L/tmp/lib\", \"-Clink-self-contained=no\"]" >> /usr/local/cargo/config.toml && \
+    echo "[target.$TARGET_TRIPLE]\nlinker = \"/tmp/musl-gcc\"\nrustflags = [\"-Clink-args=-L$LIB_PATH\", \"-Clink-args=-L/tmp/lib\", \"-Clink-self-contained=no\"]" >> /usr/local/cargo/config.toml && \
     TARGET_PATH="target/$TARGET_TRIPLE/release" && \
     # Build Ferron
     CARGO_FINAL_EXTRA_ARGS="--features ferron/config-docker-auto" \
     TARGET="$TARGET_TRIPLE" \
-    CC="/usr/local/bin/musl-gcc" \
+    CC="/tmp/musl-gcc" \
     make build && \
     # Copy executables out of the cache
     mkdir .dist && cp $TARGET_PATH/ferron $TARGET_PATH/ferron-passwd $TARGET_PATH/ferron-yaml2kdl .dist
