@@ -8,7 +8,7 @@ Ferron has official packages available for Debian, Ubuntu, and derivatives. Belo
 
 ### 1. Add Ferron's repository
 
-To add Ferron's repository, run the following commands (applicable for Debian and Ubuntu, if you're using a derivative, replace `$(lsb_release -cs)` with the closest matching Debian version codename):
+To add Ferron's repository, run the following commands (applicable for Debian and Ubuntu, if you're using a derivative, replace `$(lsb_release -cs)` with the closest matching Debian or Ubuntu version codename):
 
 ```bash
 # Install packages required for adding a new repository
@@ -24,7 +24,7 @@ echo "deb [signed-by=/usr/share/keyrings/ferron-keyring.gpg] https://deb.ferron.
 sudo apt update
 ```
 
-### 2. Run the installer
+### 2. Install Ferron
 
 To install Ferron web server, run the following command:
 
