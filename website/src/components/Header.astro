@@ -139,7 +139,7 @@ const docLinks = Astro.props.docLinks;
         <FontAwesomeIcon icon={faX} class="self-center w-5 !h-5" />
       </button>
     </div>
-    <div
+    <nav
       class={`${docLinks ? "whitespace-nowrap overflow-x-auto flex items-center" : "space-y-1"} px-2 pt-2 pb-3`}
     >
       <a
@@ -192,29 +192,31 @@ const docLinks = Astro.props.docLinks;
           <FontAwesomeIcon icon={faComments} class="w-5 !h-5" />
         </a>
       </div>
-    </div>
+    </nav>
     {
       docLinks ? (
-        <ul class={`flex flex-col my-3 list-none`}>
-          {docLinks.map(
-            (docLink: {
-              href: string;
-              target: string;
-              sub: boolean;
-              label: string;
-            }) => (
-              <li class="block my-1">
-                <a
-                  href={docLink.href}
-                  target={docLink.target || "_self"}
-                  class={`${docLink.sub ? "ml-4" : ""} block align-middle ${Astro.url.pathname == docLink.href ? "bg-secondary" : ""} text-inherit px-2 py-1 mx-1 rounded-sm hover:bg-accent transition-colors`}
-                >
-                  {docLink.label}
-                </a>
-              </li>
-            )
-          )}
-        </ul>
+        <nav>
+          <ul class={`flex flex-col my-3 list-none`}>
+            {docLinks.map(
+              (docLink: {
+                href: string;
+                target: string;
+                sub: boolean;
+                label: string;
+              }) => (
+                <li class="block my-1">
+                  <a
+                    href={docLink.href}
+                    target={docLink.target || "_self"}
+                    class={`${docLink.sub ? "ml-4" : ""} block align-middle ${Astro.url.pathname == docLink.href ? "bg-secondary" : ""} text-inherit px-2 py-1 mx-1 rounded-sm hover:bg-accent transition-colors`}
+                  >
+                    {docLink.label}
+                  </a>
+                </li>
+              )
+            )}
+          </ul>
+        </nav>
       ) : (
         ""
       )
