@@ -73,6 +73,7 @@ make run-dev # Run the web server, for development and debugging
 make smoketest # Perform a smoke test
 make smoketest-dev # Perform a smoke test, for development and debugging
 make package # Package the web server to a ZIP archive (run it after building it)
+make package-deb # Package the web server to a Debian package (run it after building it)
 ```
 
 Or a `build.ps1` build script, if you're on Windows:
