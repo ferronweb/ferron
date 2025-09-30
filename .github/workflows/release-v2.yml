@@ -21,6 +21,7 @@ on:
       - "ferron-yaml2kdl-core/**"
       - "ferron-build.yaml"
       - "ferron-build-override.yaml"
+      - "packaging/**"
       - "smoketest/**"
       - "wwwroot/**"
       - ".github/workflows/release-v2.yml"
