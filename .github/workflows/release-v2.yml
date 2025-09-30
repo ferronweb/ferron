@@ -224,6 +224,21 @@ jobs:
       #     tag: "${{ env.FERRON_VERSION }}"
       #     commit: "main"
 
+      - name: Build and release Debian package
+        if: matrix.runner == 'ubuntu-latest' && contains(matrix.target, 'linux-gnu')
+        shell: bash
+        run: |
+          packaging/deb/build.sh ${{ matrix.target }} ${{ env.FERRON_VERSION }} target/${{ matrix.target }}/release
+
+          DEB_FILE_NAME_WO_DEB=$(ls dist/*.deb | head -n 1 | sed -E 's|^dist/||' | sed -E 's/\.deb$//')
+          DEB_PACKAGE_VERSION=$(echo $DEB_FILE_NAME_WO_DEB | cut -d'_' -f2)
+          DEB_ARCHITECTURE=$(echo $DEB_FILE_NAME_WO_DEB | cut -d'_' -f3)
+          ssh ferron-servers "mkdir -p deb || true"
+          scp dist/ferron_${DEB_PACKAGE_VERSION}_${DEB_ARCHITECTURE}.deb ferron-servers:deb/ferron_${DEB_PACKAGE_VERSION}_${DEB_ARCHITECTURE}.deb
+
+          # The "update-ferron-deb-repo" is a custom command that updates the Debian repository
+          ssh ferron-servers "sudo update-ferron-deb-repo $DEB_PACKAGE_VERSION $DEB_ARCHITECTURE"
+
   # docs:
   #   runs-on: ubuntu-latest
 

@@ -36,3 +36,7 @@ Thumbs.db
 
 # Generated certificates for smoke testing
 /smoketest/certs/
+
+# Temporary files used during packaging
+/packaging/deb/ferron_*
+/packaging/deb/md5sums.tmp

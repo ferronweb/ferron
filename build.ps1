@@ -129,7 +129,7 @@ function BuildWithPackage {
 }
 
 function Clean {
-    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build-workspace, build-release, dist
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build-workspace, build-release, dist, packaging/deb/ferron_* packaging/deb/md5sums.tmp,
     & cargo clean
     Push-Location build-prepare
     & cargo clean
