@@ -39,8 +39,11 @@ if [ "$FERRON_VERSION" = "" ]; then
     exit 1
 fi
 
+# Determine the version for a Debian package
+DEB_VERSION="$(echo $FERRON_VERSION | sed 's/-/~/g')"
+
 # Create the directory, from which the .deb package is built
-DEB_BUILD_DIRECTORY_NAME="ferron_${FERRON_VERSION}_${DEB_ARCHITECTURE}"
+DEB_BUILD_DIRECTORY_NAME="ferron_${DEB_VERSION}_${DEB_ARCHITECTURE}"
 mkdir $DEB_BUILD_DIRECTORY_NAME
 
 # Move the webroot
@@ -71,11 +74,11 @@ cp -r debian $DEB_BUILD_DIRECTORY_NAME/DEBIAN
 mv md5sums.tmp $DEB_BUILD_DIRECTORY_NAME/DEBIAN/md5sums
 
 # Replace the version and architecture in the control file
-sed -i "s/^Version: .*/Version: $FERRON_VERSION/" $DEB_BUILD_DIRECTORY_NAME/DEBIAN/control
+sed -i "s/^Version: .*/Version: $DEB_VERSION/" $DEB_BUILD_DIRECTORY_NAME/DEBIAN/control
 sed -i "s/^Architecture: .*/Architecture: $DEB_ARCHITECTURE/" $DEB_BUILD_DIRECTORY_NAME/DEBIAN/control
 
 # Build the Debian package
-dpkg-deb --root-owner-group --build $DEB_BUILD_DIRECTORY_NAME "$PROJECT_ROOT_DIR/dist/ferron_${FERRON_VERSION}_${DEB_ARCHITECTURE}.deb"
+dpkg-deb --root-owner-group --build $DEB_BUILD_DIRECTORY_NAME "$PROJECT_ROOT_DIR/dist/ferron_${DEB_VERSION}_${DEB_ARCHITECTURE}.deb"
 
 # Pop the working directory
 popd
