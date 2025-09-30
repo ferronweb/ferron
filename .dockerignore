@@ -51,4 +51,4 @@ Dockerfile*
 /smoketest/
 
 # Packaging files (they're not needed when building a Docker image)
-/packaging
+/packaging/
