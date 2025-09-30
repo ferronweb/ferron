@@ -145,3 +145,11 @@ Then, you can start Ferron using:
 ```sh
 docker-compose up -d
 ```
+
+## Ferron image tags
+
+Ferron provides the following tags for the Ferron image (for Ferron 2.x):
+
+- `2` - Based on Distroless, statically-linked binaries
+- `2-alpine` - Based on Alpine Linux, statically-linked binaries
+- `2-debian` - Based on Debian GNU/Linux, dynamically-linked binaries (GNU libc required)
