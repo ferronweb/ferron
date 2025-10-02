@@ -70,11 +70,13 @@ const { Content } = await render(Astro.props.post);
           {data.title}
         </h1>
         <p class="mb-6 text-base md:text-lg text-muted-foreground print:mb-4">
-          Published on: {
-            data.date === undefined
-              ? "Unknown date"
-              : format(data.date, "MMMM d, yyyy")
-          }
+          Published on: <time
+            >{
+              data.date === undefined
+                ? "Unknown date"
+                : format(data.date, "MMMM d, yyyy")
+            }</time
+          >
         </p>
         <Image
           src={data.cover || blogMissing}
