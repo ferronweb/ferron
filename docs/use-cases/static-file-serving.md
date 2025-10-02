@@ -59,3 +59,17 @@ example.com {
     file_cache_control "max-age=3600"
 }
 ```
+
+## Serving precompressed static files
+
+Ferron supports serving precompressed static files. To enable this feature, you can use this configuration:
+
+```kdl
+// Example configuration with static file serving and precompressed files enabled. Replace "example.com" with your domain name.
+example.com {
+    root "/var/www/html" // Replace "/var/www/html" with the directory containing your static files
+    precompressed
+}
+```
+
+In this configuration, Ferron will serve precompressed versions of static files if they exist. The precompressed static files would additionally have `.gz` extension for gzip, `.deflate` for Deflate, `.br` for Brotli, or `.zst` for Zstandard.

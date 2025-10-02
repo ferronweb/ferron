@@ -450,6 +450,8 @@ example.com {
   - This directive specifies whenever the HTTP compression for static files is enabled. Default: `compressed #true`
 - `directory_listing [enable_directory_listing: bool]` (_static_ module)
   - This directive specifies whenever the directory listings are enabled. Default: `directory_listing #false`
+- `precompressed [enable_precompression: bool]` (_static_ module)
+  - This directive specifies whenever serving the precompressed static files is enabled. The precompressed static files would additionally have `.gz` extension for gzip, `.deflate` for Deflate, `.br` for Brotli, or `.zst` for Zstandard. Default: `precompressed #false`
 
 **Configuration example:**
 
