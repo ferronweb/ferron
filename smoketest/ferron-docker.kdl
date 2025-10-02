@@ -3,6 +3,11 @@
   proxy "http://ferron-smoketest:3000"
 }
 
+acme-test.test:8443 {
+  auto_tls_directory "https://ferron-smoketest:8443"
+  auto_tls #true
+}
+
 ferron-smoketest:3000 {
   root "/var/www/test"
 }

@@ -3,6 +3,11 @@
   proxy "http://localhost:3000"
 }
 
+acme-test.test:8443 {
+  auto_tls_directory "https://localhost:8443"
+  auto_tls #true
+}
+
 localhost:3000 {
   root "wwwroot"
 }
