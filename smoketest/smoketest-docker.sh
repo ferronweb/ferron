@@ -31,13 +31,13 @@ GOT=$(curl -sk https://localhost:8443/test.txt)
 EXPECTED=$(cat wwwroot/test.txt)
 if [ "$GOT" = "$EXPECTED" ]; then
     echo "Test passed"
-    docker kill -s SIGKILL $FERRON_CONTAINER
-    docker container rm $FERRON_CONTAINER
-    kill $FERRON_LOG_PID
+    docker kill -s SIGKILL $FERRON_CONTAINER > /dev/null
+    docker container rm $FERRON_CONTAINER > /dev/null
+    kill $FERRON_LOG_PID > /dev/null 2>&1 || true
 else
     echo "Test failed" >&2
-    docker kill -s SIGKILL $FERRON_CONTAINER
-    docker container rm $FERRON_CONTAINER
-    kill $FERRON_LOG_PID
+    docker kill -s SIGKILL $FERRON_CONTAINER > /dev/null
+    docker container rm $FERRON_CONTAINER > /dev/null
+    kill $FERRON_LOG_PID > /dev/null 2>&1 || true
     exit 1
 fi
