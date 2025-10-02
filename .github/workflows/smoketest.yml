@@ -1,0 +1,254 @@
+name: Smoke test test 2.
+
+on:
+  push:
+    branches: ["develop-2.x"]
+    paths:
+      - ".dockerignore"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "Cross.toml"
+      - "Dockerfile"
+      - "Dockerfile.*"
+      - "ferron*.kdl"
+      - "ferron/**"
+      - "ferron-common/**"
+      - "ferron-dns-builtin/**"
+      - "ferron-load-modules/**"
+      - "ferron-modules-builtin/**"
+      - "ferron-passwd/**"
+      - "ferron-yaml2kdl/**"
+      - "ferron-yaml2kdl-core/**"
+      - "ferron-build.yaml"
+      - "ferron-build-override.yaml"
+      - "packaging/**"
+      - "smoketest/**"
+      - "wwwroot/**"
+      - ".github/workflows/smoketest.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+            smoketest: true
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+            command: cross
+            smoketest: true
+          - target: i686-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: i686-unknown-linux-musl
+            runner: ubuntu-latest
+            command: cross
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-latest
+            command: cross
+          - target: armv7-unknown-linux-gnueabihf
+            runner: ubuntu-latest
+            command: cross
+          - target: armv7-unknown-linux-musleabihf
+            runner: ubuntu-latest
+            command: cross
+          - target: riscv64gc-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: s390x-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: powerpc64le-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: x86_64-unknown-freebsd
+            runner: ubuntu-latest
+            command: cross
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            command: cargo
+            options: "--no-default-features -F ferron/default-tokio"
+            smoketest: true
+          - target: i686-pc-windows-msvc
+            runner: windows-latest
+            command: cargo
+            options: "--no-default-features -F ferron/default-tokio"
+          - target: aarch64-pc-windows-msvc
+            runner: windows-latest
+            command: cargo
+            options: "--no-default-features -F ferron/default-tokio"
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            command: cargo
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            command: cargo
+            smoketest: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: develop-2.x
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: "${{ matrix.target }}"
+
+      - name: Setup cache
+        if: matrix.command != 'cross'
+        uses: Swatinem/rust-cache@v2
+
+      - name: Determine Ferron version
+        shell: bash
+        run: |
+          FERRON_VERSION_CARGO="$(cat ferron/Cargo.toml | grep -E '^version' | sed -E 's|.*"([0-9a-zA-Z.+-]+)"$|\1|g')"
+          FERRON_VERSION_GIT="$(git tag --sort=-committerdate | head -n 1 | sed s/[^0-9a-zA-Z.+-]//g)"
+          if [ "$FERRON_VERSION_CARGO" != "" ]; then
+            echo "Version determined from Cargo.toml file"
+            echo "FERRON_VERSION=$FERRON_VERSION_CARGO" >> $GITHUB_ENV
+          elif  [ "$FERRON_VERSION_GIT" != "" ]; then
+            echo "Version determined from the Git tag"
+            echo "FERRON_VERSION=$FERRON_VERSION_GIT" >> $GITHUB_ENV
+          else
+            echo "Can't determine the server version!" 2>&1
+            exit 1
+          fi
+
+      - name: Setup NASM
+        if: matrix.runner == 'windows-latest'
+        uses: ilammy/setup-nasm@v1
+
+      - name: Install Cross
+        if: matrix.command == 'cross'
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cross --force
+
+      - name: Install bindgen-cli
+        if: matrix.command != 'cross'
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm bindgen-cli --force
+
+      - name: Build binaries
+        shell: bash
+        run: |
+          cargo run --manifest-path build-prepare/Cargo.toml
+          cd build-workspace
+          while [ "$OLD_CONFLICTING_PACKAGES" != "$CONFLICTING_PACKAGES" ] || [ "$OLD_CONFLICTING_PACKAGES" = "" ]; do \
+              OLD_CONFLICTING_PACKAGES=$CONFLICTING_PACKAGES; \
+              CONFLICTING_PACKAGES=$( (cargo update -w --dry-run 2>&1 || true) | (grep -E '^error: failed to select a version for (the requirement )?`[^ `]+' || true) | sed -E 's|[^`]*`([^ `]+).*|\1|' | xargs); \
+              if [ "$CONFLICTING_PACKAGES" = "" ]; then \
+                  break; \
+              fi; \
+              if [ "$OLD_CONFLICTING_PACKAGES" = "$CONFLICTING_PACKAGES" ]; then \
+                  echo "Couldn't resolve Cargo conflicts" >&2; \
+                  exit 1; \
+              fi; \
+              if [ "$CONFLICTING_PACKAGES" != "" ]; then \
+                  cargo update $CONFLICTING_PACKAGES || true; \
+              fi; \
+          done
+          ${{ matrix.command }} build --verbose --release --target-dir ../target --target ${{ matrix.target }} ${{ matrix.options }}
+          cd ..
+
+      - name: Smoke test the binary (Unix-like)
+        if: matrix.runner != 'windows-latest' && matrix.smoketest == true
+        shell: bash
+        run: |
+          FERRON="$(pwd)/target/${{ matrix.target }}/release/ferron" bash smoketest/smoketest.sh
+
+      - name: Smoke test the  binary (Windows)
+        if: matrix.runner == 'windows-latest' && matrix.smoketest == true
+        shell: powershell
+        run: |
+          $env:FERRON = $PWD.Path + '\target\${{ matrix.target }}\release\ferron'
+          powershell -ExecutionPolicy Bypass .\smoketest\smoketest.ps1
+
+  docker:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: latest
+            dockerfile: ./Dockerfile
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
+          - group: alpine
+            dockerfile: ./Dockerfile.alpine
+            platforms: linux/386,linux/amd64,linux/arm64,linux/arm/v7
+          - group: debian
+            dockerfile: ./Dockerfile.debian
+            platforms: linux/386,linux/amd64,linux/arm64,linux/arm/v7
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: 2.x
+          fetch-depth: 0
+
+      - name: Determine Ferron version
+        shell: bash
+        run: |
+          FERRON_VERSION_CARGO="$(cat ferron/Cargo.toml | grep -E '^version' | sed -E 's|.*"([0-9a-zA-Z.+-]+)"$|\1|g')"
+          FERRON_VERSION_GIT="$(git tag --sort=-committerdate | head -n 1 | sed s/[^0-9a-zA-Z.+-]//g)"
+          if [ "$FERRON_VERSION_CARGO" != "" ]; then
+            echo "Version determined from Cargo.toml file"
+            echo "FERRON_VERSION=$FERRON_VERSION_CARGO" >> $GITHUB_ENV
+          elif  [ "$FERRON_VERSION_GIT" != "" ]; then
+            echo "Version determined from the Git tag"
+            echo "FERRON_VERSION=$FERRON_VERSION_GIT" >> $GITHUB_ENV
+          else
+            echo "Can't determine the server version!" 2>&1
+            exit 1
+          fi
+
+      - name: Determine Docker tags
+        shell: bash
+        run: |
+          TAG_TYPE=${{ matrix.group }}
+          FERRON_MAJOR_VERSION=$(echo "$FERRON_VERSION" | cut -d '.' -f 1)
+          if [ "$TAG_TYPE" = "latest" ] || [ "$TAG_TYPE" = "" ]; then
+            DOCKER_HUB_TAGS="ferronserver/ferron:$FERRON_VERSION,ferronserver/ferron:$FERRON_MAJOR_VERSION"
+            DOCKER_GHCR_TAGS="ghcr.io/ferronweb/ferron:$FERRON_VERSION,ghcr.io/ferronweb/ferron:$FERRON_MAJOR_VERSION"
+          else
+            DOCKER_HUB_TAGS="ferronserver/ferron:$FERRON_VERSION-$TAG_TYPE,ferronserver/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE"
+            DOCKER_GHCR_TAGS="ghcr.io/ferronweb/ferron:$FERRON_VERSION-$TAG_TYPE,ghcr.io/ferronweb/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE"
+          fi
+          echo "DOCKER_TAGS=$DOCKER_HUB_TAGS,$DOCKER_GHCR_TAGS" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and export to Docker
+        uses: docker/build-push-action@1dc73863535b631f98b2378be8619f83b136f4a0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          tags: ${{ env.DOCKER_TAGS }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test the Docker image
+        shell: bash
+        run: |
+          FERRON_IMAGE="$(echo $DOCKER_TAGS | cut -d',' -f1)" bash smoketest/smoketest-docker.sh
