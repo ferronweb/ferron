@@ -52,3 +52,6 @@ Dockerfile*
 
 # Packaging files (they're not needed when building a Docker image)
 /packaging/
+
+# Test suite files
+/dockertest/

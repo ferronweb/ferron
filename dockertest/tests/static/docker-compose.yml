@@ -1,0 +1,16 @@
+services:
+  # The web server to test
+  ferron:
+    build:
+      context: ../../..
+    volumes:
+      - ./ferron.kdl:/etc/ferron.kdl
+      - ./wwwroot:/var/www/ferron
+
+  # A container to run tests
+  test-runner:
+    build:
+      context: ../../runner
+    volumes:
+      - ./wwwroot:/var/www/ferron
+    command: "tail -f /dev/null"

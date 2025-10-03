@@ -1,0 +1,14 @@
+globals {
+  auto_tls_directory "https://pebble:14000/dir"
+  auto_tls_no_verification
+  auto_tls_challenge "http-01"
+}
+
+ferron {
+  root "/var/www/ferron" // Serve "Ferron is installed successfully" page
+}
+
+ferron-ondemand {
+  auto_tls_on_demand
+  root "/var/www/ferron" // Serve "Ferron is installed successfully" page
+}

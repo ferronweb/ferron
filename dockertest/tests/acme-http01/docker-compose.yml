@@ -1,0 +1,41 @@
+services:
+  # The web server to test
+  ferron:
+    networks:
+      default:
+        aliases:
+          - ferron-ondemand
+    build:
+      context: ../../..
+    volumes:
+      - ./ferron.kdl:/etc/ferron.kdl
+      - ./cache:/var/lib/ferron-acme
+    depends_on:
+      pebble-health-check:
+        condition: service_healthy
+
+  # The ACME server for testing
+  pebble:
+    image: ghcr.io/letsencrypt/pebble:latest
+    command: -config /etc/pebble-config.json
+    volumes:
+      - ./pebble-config.json:/etc/pebble-config.json
+    #ports:
+    #  - 14000:14000 # HTTPS ACME API
+    #  - 15000:15000 # HTTPS Management API
+
+  # The Pebble health check container
+  pebble-health-check:
+    image: alpine
+    command: "tail -f /dev/null"
+    healthcheck:
+      test: "wget --no-check-certificate -q -O /dev/null https://pebble:14000/dir"
+      interval: 3s
+      timeout: 5s
+      retries: 3
+
+  # A container to run tests
+  test-runner:
+    build:
+      context: ../../runner
+    command: "tail -f /dev/null"

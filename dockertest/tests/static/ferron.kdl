@@ -1,0 +1,11 @@
+:80 {
+  root "/var/www/ferron"
+
+  location "/precompressed" {
+    precompressed
+  }
+
+  location "/dirlisting" {
+    directory_listing
+  }
+}

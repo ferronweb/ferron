@@ -1,0 +1,4 @@
+:80 {
+  root "/var/www/html"
+  fcgi_php "tcp://php-fpm:9000/"
+}

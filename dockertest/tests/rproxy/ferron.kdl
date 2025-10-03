@@ -1,0 +1,7 @@
+:80 {
+  proxy "http://backend:3000"
+
+  location "/header" {
+    proxy_request_header_replace "X-Some-Header" "something"
+  }
+}

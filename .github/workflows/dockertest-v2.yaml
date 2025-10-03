@@ -1,0 +1,65 @@
+name: Run test suite (Ferron 2.x)
+
+on:
+  push:
+    branches: ["develop-2.x"]
+    paths:
+      - ".dockerignore"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "Dockerfile"
+      - "ferron-docker.kdl"
+      - "ferron/**"
+      - "ferron-common/**"
+      - "ferron-dns-builtin/**"
+      - "ferron-load-modules/**"
+      - "ferron-modules-builtin/**"
+      - "ferron-passwd/**"
+      - "ferron-yaml2kdl/**"
+      - "ferron-yaml2kdl-core/**"
+      - "ferron-build.yaml"
+      - "ferron-build-override.yaml"
+      - "wwwroot/**"
+      - ".github/workflows/dockertest-v2.yml"
+  pull_request:
+    branches: ["develop-2.x"]
+    paths:
+      - ".dockerignore"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "Dockerfile"
+      - "ferron-docker.kdl"
+      - "ferron/**"
+      - "ferron-common/**"
+      - "ferron-dns-builtin/**"
+      - "ferron-load-modules/**"
+      - "ferron-modules-builtin/**"
+      - "ferron-passwd/**"
+      - "ferron-yaml2kdl/**"
+      - "ferron-yaml2kdl-core/**"
+      - "ferron-build.yaml"
+      - "ferron-build-override.yaml"
+      - "wwwroot/**"
+      - ".github/workflows/dockertest-v2.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v1
+
+      - name: Run the test suite
+        shell: bash
+        run: |
+          bash ./dockertest/test.sh
