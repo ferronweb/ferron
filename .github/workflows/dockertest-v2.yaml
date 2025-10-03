@@ -62,4 +62,5 @@ jobs:
       - name: Run the test suite
         shell: bash
         run: |
+          bash ./dockertest/smoketest.sh
           bash ./dockertest/test.sh

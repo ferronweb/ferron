@@ -55,7 +55,7 @@ Example `test.sh` file (referenced from the `run.sh` example):
 
 TEST_FAILED=0
 
-TEST_RESULTS="$(curl -fsL -w %{http_code} -o /dev/null http://ferron/test.txt || true)"
+TEST_RESULTS="$(curl -fsL -w %{http_code} -o /dev/null http://ferron || true)"
 TEST_EXIT_CODE=$?
 TEST_EXPECTED="200"
 if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
