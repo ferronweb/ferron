@@ -2,6 +2,7 @@
 
 TEST_FAILED=0
 
+sleep 0.5 # Sleep before making requests to allow backend to start
 TEST_RESULTS="$(curl -fsSLk https://backend:3000/)"
 TEST_EXIT_CODE=$?
 TEST_EXPECTED="Hello, World!"
