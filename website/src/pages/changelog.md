@@ -4,6 +4,15 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.18
+
+**Released in October 4, 2025**
+
+- Added default ACME cache directory path to the Docker image
+- Added support for serving precompressed static files
+- Fixed flipped access and error log filenames in the default server configuration for Docker images
+- The server now uses an embedded certificate store as a fallback when native TLS is not available
+
 ## Ferron 2.0.0-beta.17
 
 **Released in September 8, 2025**
