@@ -40,6 +40,7 @@ services:
   ferron:
     build:
       context: ../../..
+      dockerfile: Dockerfile.test
 
   # A container to run tests
   test-runner:

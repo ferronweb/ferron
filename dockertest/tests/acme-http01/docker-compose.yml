@@ -7,6 +7,7 @@ services:
           - ferron-ondemand
     build:
       context: ../../..
+      dockerfile: Dockerfile.test
     volumes:
       - ./ferron.kdl:/etc/ferron.kdl
       - ./cache:/var/lib/ferron-acme

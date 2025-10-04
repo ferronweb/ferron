@@ -3,6 +3,7 @@ services:
   ferron:
     build:
       context: ../../..
+      dockerfile: Dockerfile.test
     volumes:
       - ./ferron.kdl:/etc/ferron.kdl
       - ./wwwroot:/var/www/html

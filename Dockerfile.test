@@ -1,0 +1,100 @@
+# This Dockerfile is intended for testing purposes only!
+
+# Use the official Rust image as a build stage
+FROM --platform=$BUILDPLATFORM rust:trixie AS builder
+
+# Define ARGs for target and build platforms
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+
+# Set the working directory
+WORKDIR /usr/src/ferron
+
+# Copy the source code
+COPY . .
+
+# Install packages for cross-compiling software
+RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
+    --mount=type=cache,sharing=private,target=/var/lib/apt \
+    --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
+    # Install packages for cross-compiling software with musl libc
+    apt update && \
+    if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
+    case "$TARGETPLATFORM" in \
+    "linux/386") apt install -y gcc-i686-linux-gnu ;; \
+    "linux/amd64") apt install -y gcc-x86-64-linux-gnu ;; \
+    "linux/arm64") apt install -y gcc-aarch64-linux-gnu ;; \
+    "linux/arm/v7") apt install -y gcc-arm-linux-gnueabihf ;; \
+    "*") echo "Unsupported target platform for cross-compilation: $TARGETPLATFORM" && exit 1 ;; \
+    esac \
+    fi && \
+    # Install cmake, bindgen CLI, and required dependencies
+    apt install -y cmake clang libclang-dev && \
+    cargo install bindgen-cli
+
+# Build the actual application (cache dependencies with BuildKit)
+RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
+    --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
+    --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
+    --mount=type=cache,sharing=private,target=/usr/src/ferron/build-prepare/target \
+    # Determine the target
+    TARGET_MAKEFILE= && \
+    TARGET_PATH="target/debug" && \
+    if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
+    TARGET_TRIPLE="" && \
+    TARGET_GCC="" && \
+    case "$TARGETPLATFORM" in \
+    "linux/386") TARGET_TRIPLE="i686-unknown-linux-gnu" && TARGET_GCC="i686-linux-gnu-gcc" ;; \
+    "linux/amd64") TARGET_TRIPLE="x86_64-unknown-linux-gnu" && TARGET_GCC="x86-64-linux-gnu-gcc" ;; \
+    "linux/arm64") TARGET_TRIPLE="aarch64-unknown-linux-gnu" && TARGET_GCC="aarch64-linux-gnu-gcc" ;; \
+    "linux/arm/v7") TARGET_TRIPLE="armv7-unknown-linux-gnueabihf" && TARGET_GCC="arm-linux-gnueabihf-gcc" ;; \
+    "*") echo "Unsupported target platform for cross-compilation: $TARGETPLATFORM" && exit 1 ;; \
+    esac && \
+    # Install the Rustup target
+    rustup target add $TARGET_TRIPLE && \
+    # Configure Cargo
+    echo "[target.$TARGET_TRIPLE]\nlinker = \"$TARGET_GCC\"" >> /usr/local/cargo/config.toml && \
+    TARGET_PATH="target/$TARGET_TRIPLE/debug" && TARGET_MAKEFILE="$TARGET_TRIPLE"; \
+    fi && \
+    # Build binaries (use "build-dev" instead of "build" recipe, to build faster, and because the Dockerfile is for testing)
+    CARGO_FINAL_EXTRA_ARGS="--features ferron/config-docker-auto" \
+    TARGET="$TARGET_MAKEFILE" \
+    make build-dev && \
+    # Copy executables out of the cache
+    mkdir .dist && cp $TARGET_PATH/ferron $TARGET_PATH/ferron-passwd $TARGET_PATH/ferron-yaml2kdl .dist
+
+# Use a Debian base image for the final image
+FROM debian:trixie
+
+# Install CA certificates
+RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
+    --mount=type=cache,sharing=private,target=/var/lib/apt \
+    apt update && \
+    apt install -y ca-certificates && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/cache/apt/*
+
+# Copy the compiled binaries from the builder stage
+COPY --from=builder /usr/src/ferron/.dist /usr/sbin
+
+# Switch to "nobody" user to make commands like WORKDIR use the correct owner
+USER nobody
+
+# Copy the web server configuration
+COPY --chown=nobody ferron-docker.kdl /etc/ferron.kdl
+
+# Copy the web root contents
+COPY --chown=nobody wwwroot /var/www/ferron/
+
+# Create an ACME cache directory
+WORKDIR /var/cache/ferron-acme
+
+# Create a directory where Ferron logs are stored
+WORKDIR /var/log/ferron
+
+# Expose the port 80 (used for HTTP)
+EXPOSE 80
+
+# Set the command to run the binary
+CMD ["/usr/sbin/ferron", "--config-adapter", "docker-auto"]
