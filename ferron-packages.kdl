@@ -1,0 +1,13 @@
+// See https://v2.ferronweb.org/docs/configuration-kdl for the configuration reference
+* {
+  // Set implicit HTTP port, and disable HTTPS
+  default_http_port 80
+  default_https_port #null
+
+  // Webroot, from where static files are served
+  root "/var/www/ferron"
+
+  // Server logs
+  log "/var/log/ferron/access.log"
+  error_log "/var/log/ferron/error.log"
+}

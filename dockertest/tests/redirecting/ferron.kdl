@@ -1,0 +1,4 @@
+:80 {
+  root "/var/www/ferron"
+  status 301 url="/" location="/basic.txt"
+}

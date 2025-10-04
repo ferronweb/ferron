@@ -70,7 +70,10 @@ make build # Build the web server
 make build-dev # Build the web server, for development and debugging
 make run # Run the web server
 make run-dev # Run the web server, for development and debugging
+make smoketest # Perform a smoke test
+make smoketest-dev # Perform a smoke test, for development and debugging
 make package # Package the web server to a ZIP archive (run it after building it)
+make package-deb # Package the web server to a Debian package (run it after building it)
 ```
 
 Or a `build.ps1` build script, if you're on Windows:
@@ -86,6 +89,12 @@ powershell -ExecutionPolicy Bypass .\build.ps1 Run
 
 REM Run the web server, for development and debugging
 powershell -ExecutionPolicy Bypass .\build.ps1 RunDev
+
+REM Perform a smoke test
+powershell -ExecutionPolicy Bypass .\build.ps1 Smoketest
+
+REM Perform a smoke test, for development and debugging
+powershell -ExecutionPolicy Bypass .\build.ps1 SmoketestDev
 
 REM Package the web server to a ZIP archive (run it after building it)
 powershell -ExecutionPolicy Bypass .\build.ps1 Package

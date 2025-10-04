@@ -29,6 +29,11 @@ if ($env:TARGET) {
     $buildRelease = "build-release"
 }
 
+# Append extra arguments if set
+if ($env:CARGO_FINAL_EXTRA_ARGS) {
+    $cargoFinalExtraArgs = "$cargoFinalExtraArgs $env:CARGO_FINAL_EXTRA_ARGS"
+}
+
 # There would be a static file serving performance degradation when using Monoio, so we're compiling with Tokio
 $cargoFinalExtraArgs = "--no-default-features -F ferron/runtime-tokio $cargoFinalExtraArgs"
 
@@ -50,6 +55,18 @@ function Run {
 function RunDev {
     BuildDev
     & "$cargoTargetRoot/debug/ferron"
+}
+
+function Smoketest {
+    Build
+    $env:FERRON = $PWD.Path + '\' + $cargoTargetRoot + '\release\ferron'
+    & powershell.exe -ExecutionPolicy Bypass ".\smoketest\smoketest.ps1"
+}
+
+function SmoketestDev {
+    BuildDev
+    $env:FERRON = $PWD.Path + '\' + $cargoTargetRoot + '\debug\ferron'
+    & powershell.exe -ExecutionPolicy Bypass ".\smoketest\smoketest.ps1"
 }
 
 function Build {
@@ -112,7 +129,7 @@ function BuildWithPackage {
 }
 
 function Clean {
-    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build-workspace, build-release, dist
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build-workspace, build-release, dist, packaging/deb/ferron_* packaging/deb/md5sums.tmp,
     & cargo clean
     Push-Location build-prepare
     & cargo clean
@@ -122,5 +139,5 @@ function Clean {
 if ($args.Count -gt 0) {
     & $args[0]
 } else {
-    Write-Host "Available commands: Run, RunDev, Build, BuildDev, PrepareBuild, FixConflicts, Package, BuildWithPackage, Clean"
+    Write-Host "Available commands: Run, RunDev, Build, BuildDev, Smoketest, SmoketestDev, PrepareBuild, FixConflicts, Package, BuildWithPackage, Clean"
 }

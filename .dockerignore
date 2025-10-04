@@ -46,3 +46,12 @@ Dockerfile*
 /*.kdl
 # except
 !/ferron-docker.kdl
+
+# Smoke test (they're not needed when building a Docker image)
+/smoketest/
+
+# Packaging files (they're not needed when building a Docker image)
+/packaging/
+
+# Test suite files
+/dockertest/

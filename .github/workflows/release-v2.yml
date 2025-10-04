@@ -21,8 +21,13 @@ on:
       - "ferron-yaml2kdl-core/**"
       - "ferron-build.yaml"
       - "ferron-build-override.yaml"
+      - "packaging/**"
+      - "smoketest/**"
       - "wwwroot/**"
       - ".github/workflows/release-v2.yml"
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   release:
@@ -38,9 +43,11 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             command: cross
+            smoketest: true
           - target: x86_64-unknown-linux-musl
             runner: ubuntu-latest
             command: cross
+            smoketest: true
           - target: i686-unknown-linux-gnu
             runner: ubuntu-latest
             command: cross
@@ -75,6 +82,7 @@ jobs:
             runner: windows-latest
             command: cargo
             options: "--no-default-features -F ferron/default-tokio"
+            smoketest: true
           - target: i686-pc-windows-msvc
             runner: windows-latest
             command: cargo
@@ -89,6 +97,7 @@ jobs:
           - target: aarch64-apple-darwin
             runner: macos-latest
             command: cargo
+            smoketest: true
 
     steps:
       - name: Checkout
@@ -162,6 +171,19 @@ jobs:
           ${{ matrix.command }} build --verbose --release --target-dir ../target --target ${{ matrix.target }} ${{ matrix.options }}
           cd ..
 
+      - name: Smoke test the binary (Unix-like)
+        if: matrix.runner != 'windows-latest' && matrix.smoketest == true
+        shell: bash
+        run: |
+          FERRON="$(pwd)/target/${{ matrix.target }}/release/ferron" bash smoketest/smoketest.sh
+
+      - name: Smoke test the  binary (Windows)
+        if: matrix.runner == 'windows-latest' && matrix.smoketest == true
+        shell: powershell
+        run: |
+          $env:FERRON = $PWD.Path + '\target\${{ matrix.target }}\release\ferron'
+          powershell -ExecutionPolicy Bypass .\smoketest\smoketest.ps1
+
       - name: Prepare for packaging
         shell: bash
         run: |
@@ -202,6 +224,21 @@ jobs:
       #     artifacts: "ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip"
       #     tag: "${{ env.FERRON_VERSION }}"
       #     commit: "main"
+
+      - name: Build and release Debian package
+        if: matrix.runner == 'ubuntu-latest' && contains(matrix.target, 'linux-gnu')
+        shell: bash
+        run: |
+          packaging/deb/build.sh ${{ matrix.target }} ${{ env.FERRON_VERSION }} target/${{ matrix.target }}/release
+
+          DEB_FILE_NAME_WO_DEB=$(ls dist/*.deb | head -n 1 | sed -E 's|^dist/||' | sed -E 's/\.deb$//')
+          DEB_PACKAGE_VERSION=$(echo $DEB_FILE_NAME_WO_DEB | cut -d'_' -f2)
+          DEB_ARCHITECTURE=$(echo $DEB_FILE_NAME_WO_DEB | cut -d'_' -f3)
+          ssh ferron-servers "mkdir -p deb || true"
+          scp dist/ferron_${DEB_PACKAGE_VERSION}_${DEB_ARCHITECTURE}.deb ferron-servers:deb/ferron_${DEB_PACKAGE_VERSION}_${DEB_ARCHITECTURE}.deb
+
+          # The "update-ferron-deb-repo" is a custom command that updates the Debian repository
+          ssh ferron-servers "sudo update-ferron-deb-repo $DEB_PACKAGE_VERSION $DEB_ARCHITECTURE"
 
   # docs:
   #   runs-on: ubuntu-latest
@@ -259,10 +296,14 @@ jobs:
       matrix:
         include:
           - group: latest
-            dockerfile: ./Dockerfile.cross
-            platforms: linux/amd64,linux/arm64
+            dockerfile: ./Dockerfile
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
           - group: alpine
             dockerfile: ./Dockerfile.alpine
+            platforms: linux/386,linux/amd64,linux/arm64,linux/arm/v7
+          - group: debian
+            dockerfile: ./Dockerfile.debian
+            platforms: linux/386,linux/amd64,linux/arm64,linux/arm/v7
 
     steps:
       - name: Checkout
@@ -316,6 +357,21 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Build and export to Docker
+        uses: docker/build-push-action@1dc73863535b631f98b2378be8619f83b136f4a0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          tags: ${{ env.DOCKER_TAGS }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test the Docker image
+        shell: bash
+        run: |
+          FERRON_IMAGE="$(echo $DOCKER_TAGS | cut -d',' -f1)" bash smoketest/smoketest-docker.sh
 
       - name: Build and push Docker image
         id: push

@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "express": "^5.1.0",
+    "express-ws": "^5.0.2"
+  }
+}

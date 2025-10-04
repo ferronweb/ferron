@@ -296,7 +296,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `auto_tls_contact <auto_tls_contact: string|null>`
   - This directive specifies the email address used to register an ACME account for automatic TLS. Default: `auto_tls_contact #null`
 - `auto_tls_cache <auto_tls_cache: string|null>`
-  - This directive specifies the directory to store cached ACME data, such as cached account data and certifies. Default: OS-specific directory, for example on GNU/Linux it can be `/home/user/.local/share/ferron-acme` for the "user" user, on macOS it can be `/Users/user/Library/Application Support/ferron-acme` for the "user" user, on Windows it can be `C:\Users\user\AppData\Local\ferron-acme` for the "user" user.
+  - This directive specifies the directory to store cached ACME data, such as cached account data and certifies. Default: OS-specific directory, for example on GNU/Linux it can be `/home/user/.local/share/ferron-acme` for the "user" user, on macOS it can be `/Users/user/Library/Application Support/ferron-acme` for the "user" user, on Windows it can be `C:\Users\user\AppData\Local\ferron-acme` for the "user" user. On Docker, it would be `/var/lib/ferron-acme`.
 - `auto_tls_letsencrypt_production [enable_auto_tls_letsencrypt_production: bool]`
   - This directive specifies whenever the production Let's Encrypt ACME endpoint is used. If set as `auto_tls_letsencrypt_production #false`, the staging Let's Encrypt ACME endpoint is used. Default: `auto_tls_letsencrypt_production #true`
 - `auto_tls_challenge <acme_challenge_type: string> [provider=<acme_challenge_provider: string>] [...]`
@@ -450,6 +450,8 @@ example.com {
   - This directive specifies whenever the HTTP compression for static files is enabled. Default: `compressed #true`
 - `directory_listing [enable_directory_listing: bool]` (_static_ module)
   - This directive specifies whenever the directory listings are enabled. Default: `directory_listing #false`
+- `precompressed [enable_precompression: bool]` (_static_ module; Ferron 2.0.0-beta.18 or newer)
+  - This directive specifies whenever serving the precompressed static files is enabled. The precompressed static files would additionally have `.gz` extension for gzip, `.deflate` for Deflate, `.br` for Brotli, or `.zst` for Zstandard. Default: `precompressed #false`
 
 **Configuration example:**
 

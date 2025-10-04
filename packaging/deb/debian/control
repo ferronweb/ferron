@@ -1,0 +1,9 @@
+Package: ferron
+Version: $VERSION
+Architecture: $ARCHITECTURE
+Essential: no
+Priority: optional
+Depends: libc6 (>= 2.31), ca-certificates
+Maintainer: Dorian Niemiec
+Section: httpd
+Description: A fast, modern, and easily configurable web server with automatic TLS.

@@ -69,10 +69,7 @@ impl ModuleLoader for RewriteModuleLoader {
               };
               let regex = match RegexBuilder::new(regex_str).case_insensitive(cfg!(windows)).build() {
                 Ok(regex) => regex,
-                Err(err) => Err(anyhow::anyhow!(
-                  "Invalid URL rewrite regular expression: {}",
-                  err.to_string()
-                ))?,
+                Err(err) => Err(anyhow::anyhow!("Invalid URL rewrite regular expression: {}", err))?,
               };
               let replacement = match rewrite_config_entry.values.get(1).and_then(|v| v.as_str()) {
                 Some(replacement) => String::from(replacement),

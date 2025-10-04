@@ -19,6 +19,7 @@ use monoio::io::IntoPollIo;
 use monoio::net::TcpStream;
 #[cfg(feature = "runtime-monoio")]
 use monoio_compat::hyper::{MonoioExecutor, MonoioIo};
+use rustls::client::WebPkiServerVerifier;
 use rustls_pki_types::ServerName;
 use rustls_platform_verifier::BuilderVerifierExt;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -421,8 +422,15 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           rustls::ClientConfig::builder()
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
+        } else if let Ok(client_config) = BuilderVerifierExt::with_platform_verifier(rustls::ClientConfig::builder()) {
+          client_config
         } else {
-          rustls::ClientConfig::builder().with_platform_verifier()?
+          rustls::ClientConfig::builder().with_webpki_verifier(
+            WebPkiServerVerifier::builder(Arc::new(rustls::RootCertStore {
+              roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+            }))
+            .build()?,
+          )
         })
         .with_no_client_auth();
         tls_client_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];

@@ -1,0 +1,38 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+  # Copy over the default Ferron directory
+  if ! [ -e /var/www/ferron ]; then
+    mkdir -p /var/www
+    cp -r /usr/share/ferron/wwwroot /var/www/ferron
+  fi
+
+  # Create the user for running Ferron
+  useradd -d /var/lib/ferron -m -s /usr/sbin/nologin ferron || true
+  chown -hR ferron:ferron /var/log/ferron
+  chown -hR ferron:ferron /var/lib/ferron
+  chown -hR ferron:ferron /var/www/ferron
+  find /var/log/ferron -type d -exec chmod 755 {} \;
+  find /var/log/ferron -type f -exec chmod 644 {} \;
+  find /var/www/ferron -type d -exec chmod 755 {} \;
+  find /var/www/ferron -type f -exec chmod 644 {} \;
+fi
+
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	deb-systemd-helper unmask ferron.service >/dev/null || true
+
+	if deb-systemd-helper --quiet was-enabled ferron.service; then
+		deb-systemd-helper enable ferron.service >/dev/null || true
+		deb-systemd-invoke start ferron.service >/dev/null || true
+	else
+		deb-systemd-helper update-state ferron.service >/dev/null || true
+	fi
+
+	if [ -d /run/systemd/system ]; then
+		systemctl --system daemon-reload >/dev/null || true
+		if [ -n "$2" ]; then
+			deb-systemd-invoke try-restart ferron.service >/dev/null || true
+		fi
+	fi
+fi

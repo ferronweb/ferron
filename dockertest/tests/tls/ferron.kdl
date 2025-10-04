@@ -1,0 +1,4 @@
+* {
+  tls "/etc/certs/server.crt" "/etc/certs/server.key"
+  root "/var/www/ferron" // Serve "Ferron is installed successfully" page
+}

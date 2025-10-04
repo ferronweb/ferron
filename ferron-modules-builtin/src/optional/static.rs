@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::error::Error;
+use std::ffi::OsStr;
 use std::fmt::Write;
 #[cfg(feature = "runtime-monoio")]
 use std::fs::ReadDir;
@@ -349,6 +350,18 @@ impl ModuleLoader for StaticFileServingModuleLoader {
       }
     };
 
+    if let Some(entries) = get_entries_for_validation!("precompressed", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `precompressed` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_bool() {
+          Err(anyhow::anyhow!("Invalid static file precompression enabling option"))?
+        }
+      }
+    };
+
     Ok(())
   }
 }
@@ -583,13 +596,19 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
             // Obtain the "Cache-Control" header value
             let cache_control = get_value!("file_cache_control", config).and_then(|v| v.as_str());
 
+            // Determine if precompression is enabled
+            let enable_precompression = get_value!("precompressed", config)
+              .and_then(|v| v.as_bool())
+              .unwrap_or(false);
+
             // Determine if compression should be used
             let mut compression_possible = false;
 
             // Check if compression is enabled in config (defaults to true)
-            if get_value!("compressed", config)
-              .and_then(|v| v.as_bool())
-              .unwrap_or(true)
+            if enable_precompression
+              || get_value!("compressed", config)
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true)
             {
               // A hard-coded list of non-compressible file extension
               let non_compressible_file_extensions = vec![
@@ -1081,12 +1100,80 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   // Check for supported compression algorithms in order of preference
                   if accept_encoding.contains("br") {
                     use_brotli = true;
-                  } else if accept_encoding.contains("zstd") {
+                  }
+                  if (enable_precompression || !use_brotli) && accept_encoding.contains("zstd") {
                     use_zstd = true;
-                  } else if accept_encoding.contains("deflate") {
+                  }
+                  if (enable_precompression || !(use_brotli || use_zstd)) && accept_encoding.contains("deflate") {
                     use_deflate = true;
-                  } else if accept_encoding.contains("gzip") {
+                  }
+                  if (enable_precompression || !(use_brotli || use_zstd || use_deflate))
+                    && accept_encoding.contains("gzip")
+                  {
                     use_gzip = true;
+                  }
+                }
+              }
+
+              // Handle precompression
+              if enable_precompression {
+                // Find the precompressed file
+                let mut extensions = Vec::new();
+                if use_brotli {
+                  extensions.push("br");
+                }
+                if use_zstd {
+                  extensions.push("zst");
+                }
+                if use_deflate {
+                  extensions.push("deflate");
+                }
+                if use_gzip {
+                  extensions.push("gz");
+                }
+                for extension in extensions {
+                  let mut joined_pathbuf_with_extension = joined_pathbuf.clone();
+                  joined_pathbuf_with_extension.set_extension(format!(
+                    "{}.{}",
+                    joined_pathbuf
+                      .extension()
+                      .map_or(OsStr::new(""), |ext| ext)
+                      .to_string_lossy(),
+                    extension
+                  ));
+                  // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
+                  #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
+                  let metadata_obt = fs::metadata(&joined_pathbuf_with_extension).await;
+                  #[cfg(all(feature = "runtime-monoio", windows))]
+                  let metadata_obt = {
+                    let joined_pathbuf_with_extension = joined_pathbuf_with_extension.clone();
+                    monoio::spawn_blocking(move || std::fs::metadata(joined_pathbuf_with_extension))
+                      .await
+                      .unwrap_or(Err(std::io::Error::other(
+                        "Can't spawn a blocking task to obtain the file metadata",
+                      )))
+                  };
+                  if let Ok(metadata_obt_ok) = metadata_obt {
+                    if metadata_obt_ok.is_file() {
+                      joined_pathbuf = joined_pathbuf_with_extension;
+                      metadata = metadata_obt_ok;
+                      break;
+                    }
+                  }
+                  match extension {
+                    "br" => {
+                      use_brotli = false;
+                    }
+                    "zst" => {
+                      use_zstd = false;
+                    }
+                    "deflate" => {
+                      use_deflate = false;
+                    }
+                    "gz" => {
+                      use_gzip = false;
+                    }
+                    _ => {}
                   }
                 }
               }
@@ -1179,8 +1266,8 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   #[cfg(feature = "runtime-tokio")]
                   let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
-                  // Create the appropriate response body based on compression method
-                  let boxed_body = if use_brotli {
+                  // Create the appropriate response body based on compression method, if precompression is disabled
+                  let boxed_body = if !enable_precompression && use_brotli {
                     // Wrap the stream as a `AsyncRead`
                     let file_bufreader = StreamReader::new(file_stream);
 
@@ -1198,7 +1285,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     );
                     let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
                     stream_body.boxed()
-                  } else if use_zstd {
+                  } else if !enable_precompression && use_zstd {
                     // Wrap the stream as a `AsyncRead`
                     let file_bufreader = StreamReader::new(file_stream);
 
@@ -1214,7 +1301,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     );
                     let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
                     stream_body.boxed()
-                  } else if use_deflate {
+                  } else if !enable_precompression && use_deflate {
                     // Wrap the stream as a `AsyncRead`
                     let file_bufreader = StreamReader::new(file_stream);
 
@@ -1224,7 +1311,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     );
                     let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
                     stream_body.boxed()
-                  } else if use_gzip {
+                  } else if !enable_precompression && use_gzip {
                     // Wrap the stream as a `AsyncRead`
                     let file_bufreader = StreamReader::new(file_stream);
 
