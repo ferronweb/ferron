@@ -61,8 +61,8 @@ httparse = { version = "1.10.0", optional = true }
 pin-project-lite = "0.2.16"
 hashlink = "0.10.0"
 glob = "0.3.2"
-hyper-tungstenite = "0.18.0"
-tokio-tungstenite = { version = "0.27.0", features = [
+hyper-tungstenite = "0.19.0"
+tokio-tungstenite = { version = "0.28.0", features = [
     "rustls-tls-native-roots",
 ] }
 http = "1.2.0"
