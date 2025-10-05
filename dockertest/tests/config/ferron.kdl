@@ -6,7 +6,7 @@ ferron:80 {
   root "/var/www/ferron"
 
   condition "WORDPRESS_SCAN" {
-    is_regex "{path}" "^/wp-(?:login\\.php|admin/?)(?:$|[?#])" case_insensitive=#true
+    is_regex "{path_and_query}" "^/wp-(?:login\\.php|admin/?)(?:$|[?#])" case_insensitive=#true
   }
 
   // Deny phpMyAdmin scan
