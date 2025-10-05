@@ -2,6 +2,15 @@
 
 TEST_FAILED=0
 
+# Wait for the HTTP server to start
+for i in $(seq 1 3)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    nc -z ferron 443 >/dev/null 2>&1 && break || true
+done
+
 TEST_RESULTS="$(curl -fsSLk -o /dev/null https://ferron-ondemand/)"
 TEST_EXIT_CODE=$?
 if [ "$TEST_EXIT_CODE" -eq 0 ]; then

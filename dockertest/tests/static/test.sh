@@ -2,6 +2,15 @@
 
 TEST_FAILED=0
 
+# Wait for the backend server to start
+for i in $(seq 1 3)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    nc -z backend 3000 >/dev/null 2>&1 && break || true
+done
+
 TEST_RESULTS="$(curl -fsSL http://ferron/basic.txt)"
 TEST_EXIT_CODE=$?
 TEST_EXPECTED="$(cat /var/www/ferron/basic.txt)"

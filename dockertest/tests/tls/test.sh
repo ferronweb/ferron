@@ -2,6 +2,15 @@
 
 TEST_FAILED=0
 
+# Wait for the backend server to start
+for i in $(seq 1 3)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    nc -z backend 3000 >/dev/null 2>&1 && break || true
+done
+
 TEST_RESULTS="$(curl -fsSLk --http1.1 -o /dev/null https://ferron/)"
 TEST_EXIT_CODE=$?
 if [ "$TEST_EXIT_CODE" -eq 0 ]; then

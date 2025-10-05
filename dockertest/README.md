@@ -56,6 +56,15 @@ Example `test.sh` file (referenced from the `run.sh` example):
 
 TEST_FAILED=0
 
+# Wait for the HTTP server to start
+for i in $(seq 1 3)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    nc -z ferron 80 >/dev/null 2>&1 && break || true
+done
+
 TEST_RESULTS="$(curl -fsL -w %{http_code} -o /dev/null http://ferron || true)"
 TEST_EXIT_CODE=$?
 TEST_EXPECTED="200"

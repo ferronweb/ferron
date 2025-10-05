@@ -2,7 +2,24 @@
 
 TEST_FAILED=0
 
-sleep 0.5 # Sleep before making requests to allow backend to start
+# Wait for the backend server to start
+for i in $(seq 1 3)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    nc -z backend 3000 >/dev/null 2>&1 && break || true
+done
+
+# Wait for the HTTP server to start
+for i in $(seq 1 3)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    nc -z ferron 80 >/dev/null 2>&1 && break || true
+done
+
 TEST_RESULTS="$(curl -fsSLk https://backend:3000/)"
 TEST_EXIT_CODE=$?
 TEST_EXPECTED="Hello, World!"

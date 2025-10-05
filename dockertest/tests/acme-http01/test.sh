@@ -5,7 +5,9 @@ TEST_FAILED=0
 # Wait for the TLS certificate to be issued
 for i in $(seq 1 60)
 do
-    sleep 1
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
     curl -fsLk -o /dev/null https://ferron/ && break || true
 done
 
@@ -25,7 +27,9 @@ curl -fsLk -o /dev/null https://ferron-ondemand || true
 # Wait for the TLS certificate to be issued
 for i in $(seq 1 60)
 do
-    sleep 1
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
     curl -fsLk -o /dev/null https://ferron-ondemand/ && break || true
 done
 
