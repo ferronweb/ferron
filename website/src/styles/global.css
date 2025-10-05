@@ -107,7 +107,7 @@
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground shadow hover:bg-primary/90 h-10 px-8 cursor-pointer;
+    @apply inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground shadow hover:bg-primary/90 hover:text-primary-foreground h-10 px-8 cursor-pointer;
   }
 
   .btn-primary {
