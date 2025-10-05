@@ -1,8 +1,8 @@
-name: Test release with WarpBuild runners (Ferron 2.x)
+name: Test release with WarpBuild runners
 
 on:
   push:
-    branches: ["2.x"]
+    branches: ["develop-2.x"]
     paths:
       - ".dockerignore"
       - "Cargo.lock"
