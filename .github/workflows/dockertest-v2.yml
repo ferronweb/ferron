@@ -59,7 +59,7 @@ jobs:
         uses: Warpbuilds/docker-configure@v1
         with:
           api-key: ${{ secrets.WARPBUILD_API_KEY }}
-          profile-name: warp-docker-builder
+          profile-name: warp-dockertest
           timeout: 300000
 
       - name: Set up Docker Compose
