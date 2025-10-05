@@ -39,7 +39,11 @@
 /* Based on Catppuccin Mocha */
 .asciinema-player-theme-ferron {
   --term-color-foreground: #cdd6f4;
-  --term-color-background: hsla(var(--secondary), 1);
+  --term-color-background: color-mix(
+    in hsl,
+    hsla(var(--secondary), 1),
+    hsla(var(--background), 1) 50%
+  );
   /*--term-color-background: #1e1e2e;*/
 
   --term-color-0: #45475a;

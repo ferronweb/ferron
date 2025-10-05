@@ -210,7 +210,11 @@
 .astro-code span {
   color: var(--shiki-dark) !important;
   /* Don't use theme's background ("var(--shiki-dark-bg)") */
-  background-color: hsla(var(--secondary), 1) !important;
+  background-color: color-mix(
+    in hsl,
+    hsla(var(--secondary), 1),
+    hsla(var(--background), 1) 50%
+  ) !important;
   font-style: var(--shiki-dark-font-style) !important;
   font-weight: var(--shiki-dark-font-weight) !important;
   text-decoration: var(--shiki-dark-text-decoration) !important;
@@ -221,7 +225,11 @@
   .astro-code span {
     color: var(--shiki-light) !important;
     /* Don't use theme's background ("var(--shiki-light-bg)") */
-    background-color: hsla(var(--secondary), 1) !important;
+    background-color: color-mix(
+      in hsl,
+      hsla(var(--secondary), 1),
+      hsla(var(--background), 1) 50%
+    ) !important;
     font-style: var(--shiki-light-font-style) !important;
     font-weight: var(--shiki-light-font-weight) !important;
     text-decoration: var(--shiki-light-text-decoration) !important;
