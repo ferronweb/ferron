@@ -101,7 +101,7 @@ const { Content } = await render(Astro.props.post);
         >
         <div class="flex flex-wrap gap-3 items-center">
           <a
-            href={`https://x.com/intent/tweet?text=${encodeURIComponent(data.title)}&url=${encodeURIComponent(Astro.url.href)}`}
+            href={`https://x.com/intent/tweet?text=${encodeURIComponent(data.title || "")}&url=${encodeURIComponent(Astro.url.href)}`}
             target="_blank"
             rel="noopener noreferrer"
           >
