@@ -103,6 +103,9 @@ jobs:
           fi
           echo "DOCKER_TAGS=$DOCKER_HUB_TAGS,$DOCKER_GHCR_TAGS" >> $GITHUB_ENV
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
