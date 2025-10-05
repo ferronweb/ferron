@@ -129,6 +129,19 @@ else
     TEST_FAILED=1
 fi
 
+TEST_RESULTS="$(curl -fsSL -w %{http_code} -H "Accept-Encoding: gzip" -H "If-None-Match: $(curl -fsSLI -H "Accept-Encoding: gzip" http://ferron/basic.txt | grep -i 'etag:' | cut -d ':' -f 2 | tr -d '[:space:]')" http://ferron/basic.txt)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="304"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "ETag with gzip compression test passed!"
+else
+    echo "ETag with gzip compression test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
 TEST_RESULTS="$(curl -fsL -w %{http_code} --path-as-is http://ferron/../../../../../../../../etc/passwd || true)"
 TEST_EXIT_CODE=$?
 TEST_UNEXPECTED="200"
