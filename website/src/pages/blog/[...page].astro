@@ -143,7 +143,7 @@ if (begPage < 1) {
                 {currentPage > 1 && (
                   <li>
                     <a
-                      class="btn p-0 h-10 w-10"
+                      class="btn p-0 h-10 w-10 shadow-none"
                       href={
                         currentPage - 1 == 1
                           ? "/blog"
@@ -158,7 +158,7 @@ if (begPage < 1) {
                   (_, i) => (
                     <li>
                       <a
-                        class={`btn p-0 h-10 w-10 ${currentPage === begPage + i ? "btn-primary" : ""}`}
+                        class={`btn p-0 h-10 w-10 shadow-none ${currentPage === begPage + i ? "btn-primary" : ""}`}
                         href={
                           begPage + i == 1 ? "/blog" : `/blog/${begPage + i}`
                         }
@@ -171,7 +171,7 @@ if (begPage < 1) {
                 {currentPage < lastPage && (
                   <li>
                     <a
-                      class="btn p-0 h-10 w-10"
+                      class="btn p-0 h-10 w-10 shadow-none"
                       href={
                         currentPage + 1 == 1
                           ? "/blog"
