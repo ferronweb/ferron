@@ -2,13 +2,13 @@
 
 TEST_FAILED=0
 
-# Wait for the backend server to start
+# Wait for the HTTP server to start
 for i in $(seq 1 3)
 do
     if [ "$i" -gt 1 ]; then
         sleep 1
     fi
-    nc -z backend 3000 >/dev/null 2>&1 && break || true
+    nc -z ferron 80 >/dev/null 2>&1 && break || true
 done
 
 TEST_RESULTS="$(curl -fsSL http://ferron/basic.txt)"
