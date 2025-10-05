@@ -55,3 +55,6 @@ Dockerfile*
 
 # Test suite files
 /dockertest/
+
+# GitHub-related files
+/.github/
