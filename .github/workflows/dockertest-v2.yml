@@ -55,8 +55,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Configure WarpBuild Docker Builders
+        uses: Warpbuilds/docker-configure@v1
+        with:
+          api-key: ${{ secrets.WARPBUILD_API_KEY }}
+          profile-name: warp-docker-builder
+          timeout: 300000
 
       - name: Set up Docker Compose
         uses: docker/setup-compose-action@v1
