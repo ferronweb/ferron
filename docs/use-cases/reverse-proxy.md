@@ -20,8 +20,8 @@ Ferron supports serving static files and reverse proxying at once. You can use t
 example.com {
     // The "/api" location is used for reverse proxying
     // For example, the "/api/login" endpoint is proxied to "http://localhost:3000/api/login"
-    location "/api" {
-        proxy "http://localhost:3000" // Replace "http://localhost:3000" with the backend server URL
+    location "/api" remove_base=#true {
+        proxy "http://localhost:3000/api" // Replace "http://localhost:3000/api" with the backend API URL
     }
 
     // The "/" location is used for serving static files
@@ -40,8 +40,8 @@ Ferron supports serving a single-page application and reverse proxying at once. 
 example.com {
     // The "/api" location is used for reverse proxying
     // For example, the "/api/login" endpoint is proxied to "http://localhost:3000/api/login"
-    location "/api" {
-        proxy "http://localhost:3000" // Replace "http://localhost:3000" with the backend server URL
+    location "/api" remove_base=#true {
+        proxy "http://localhost:3000/api" // Replace "http://localhost:3000/api" with the backend API URL
     }
 
     // The "/" location is used for serving static files
