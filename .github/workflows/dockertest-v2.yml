@@ -49,7 +49,7 @@ env:
 
 jobs:
   dockertest:
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
