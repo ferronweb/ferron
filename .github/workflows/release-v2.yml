@@ -283,7 +283,7 @@ jobs:
   #         ssh ferron-servers "sudo deploy-ferron2-rustdocs ferron2-rustdocs.zip && rm ferron2-rustdocs.zip"
 
   docker:
-    runs-on: warp-ubuntu-latest-x64-8x
+    runs-on: warp-ubuntu-latest-arm64-8x
 
     permissions:
       packages: write
@@ -354,6 +354,9 @@ jobs:
             DOCKER_GHCR_TAGS="ghcr.io/ferronweb/ferron:$FERRON_VERSION-$TAG_TYPE,ghcr.io/ferronweb/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE"
           fi
           echo "DOCKER_TAGS=$DOCKER_HUB_TAGS,$DOCKER_GHCR_TAGS" >> $GITHUB_ENV
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
