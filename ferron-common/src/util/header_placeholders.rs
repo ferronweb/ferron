@@ -17,7 +17,12 @@ pub fn replace_header_placeholders(
         output.push_str(&input[index_rb_saved..index_rb_saved + index_lb]);
         match placeholder_value {
           "path" => output.push_str(request_parts.uri.path()),
-          "path_and_query" => output.push_str(request_parts.uri.path_and_query().map_or("", |p| p.as_str())),
+          "path_and_query" => output.push_str(
+            request_parts
+              .uri
+              .path_and_query()
+              .map_or(request_parts.uri.path(), |p| p.as_str()),
+          ),
           "method" => output.push_str(request_parts.method.as_str()),
           "version" => output.push_str(match request_parts.version {
             hyper::Version::HTTP_09 => "HTTP/0.9",
