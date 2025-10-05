@@ -41,61 +41,61 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: warp-ubuntu-latest-x64-8x
             command: cross
             smoketest: true
           - target: x86_64-unknown-linux-musl
-            runner: ubuntu-latest
+            runner: warp-ubuntu-latest-x64-8x
             command: cross
             smoketest: true
           - target: i686-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: warp-ubuntu-latest-x64-8x
             command: cross
           - target: i686-unknown-linux-musl
-            runner: ubuntu-latest
+            runner: warp-ubuntu-latest-x64-8x
             command: cross
           - target: aarch64-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: warp-ubuntu-latest-x64-8x
             command: cross
           - target: aarch64-unknown-linux-musl
-            runner: ubuntu-latest
+            runner: warp-ubuntu-latest-x64-8x
             command: cross
           - target: armv7-unknown-linux-gnueabihf
-            runner: ubuntu-latest
+            runner: warp-ubuntu-latest-x64-8x
             command: cross
           - target: armv7-unknown-linux-musleabihf
-            runner: ubuntu-latest
+            runner: warp-ubuntu-latest-x64-8x
             command: cross
           - target: riscv64gc-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: warp-ubuntu-latest-x64-8x
             command: cross
           - target: s390x-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: warp-ubuntu-latest-x64-8x
             command: cross
           - target: powerpc64le-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: warp-ubuntu-latest-x64-8x
             command: cross
           - target: x86_64-unknown-freebsd
-            runner: ubuntu-latest
+            runner: warp-ubuntu-latest-x64-8x
             command: cross
           - target: x86_64-pc-windows-msvc
-            runner: windows-latest
+            runner: warp-windows-latest-x64-8x
             command: cargo
             options: "--no-default-features -F ferron/default-tokio"
             smoketest: true
           - target: i686-pc-windows-msvc
-            runner: windows-latest
+            runner: warp-windows-latest-x64-8x
             command: cargo
             options: "--no-default-features -F ferron/default-tokio"
           - target: aarch64-pc-windows-msvc
-            runner: windows-latest
+            runner: warp-windows-latest-x64-8x
             command: cargo
             options: "--no-default-features -F ferron/default-tokio"
           - target: x86_64-apple-darwin
-            runner: macos-latest
+            runner: warp-macos-latest-arm64-6x
             command: cargo
           - target: aarch64-apple-darwin
-            runner: macos-latest
+            runner: warp-macos-latest-arm64-6x
             command: cargo
             smoketest: true
 
@@ -132,7 +132,7 @@ jobs:
           fi
 
       - name: Setup NASM
-        if: matrix.runner == 'windows-latest'
+        if: matrix.runner == 'warp-windows-latest-x64-8x'
         uses: ilammy/setup-nasm@v1
 
       - name: Install Cross
@@ -172,13 +172,13 @@ jobs:
           cd ..
 
       - name: Smoke test the binary (Unix-like)
-        if: matrix.runner != 'windows-latest' && matrix.smoketest == true
+        if: matrix.runner != 'warp-windows-latest-x64-8x' && matrix.smoketest == true
         shell: bash
         run: |
           FERRON="$(pwd)/target/${{ matrix.target }}/release/ferron" bash smoketest/smoketest.sh
 
       - name: Smoke test the  binary (Windows)
-        if: matrix.runner == 'windows-latest' && matrix.smoketest == true
+        if: matrix.runner == 'warp-windows-latest-x64-8x' && matrix.smoketest == true
         shell: powershell
         run: |
           $env:FERRON = $PWD.Path + '\target\${{ matrix.target }}\release\ferron'
@@ -226,7 +226,7 @@ jobs:
       #     commit: "main"
 
       # - name: Build and release Debian package
-      #   if: matrix.runner == 'ubuntu-latest' && contains(matrix.target, 'linux-gnu')
+      #   if: matrix.runner == 'warp-ubuntu-latest-x64-8x' && contains(matrix.target, 'linux-gnu')
       #   shell: bash
       #   run: |
       #     packaging/deb/build.sh ${{ matrix.target }} ${{ env.FERRON_VERSION }} target/${{ matrix.target }}/release
@@ -241,7 +241,7 @@ jobs:
       #     ssh ferron-servers "sudo update-ferron-deb-repo $DEB_PACKAGE_VERSION $DEB_ARCHITECTURE"
 
   # docs:
-  #   runs-on: ubuntu-latest
+  #   runs-on: warp-ubuntu-latest-x64-8x
 
   #   steps:
   #     - name: Checkout
@@ -283,7 +283,7 @@ jobs:
   #         ssh ferron-servers "sudo deploy-ferron2-rustdocs ferron2-rustdocs.zip && rm ferron2-rustdocs.zip"
 
   docker:
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-8x
 
     permissions:
       packages: write
