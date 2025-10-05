@@ -9,3 +9,4 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-8x
     steps:
       - uses: actions/checkout@v2
+      - run: echo "Hello, World!"
