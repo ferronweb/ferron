@@ -4,7 +4,9 @@ services:
     networks:
       default:
         aliases:
+          - ferron-http01
           - ferron-ondemand
+          - ferron-http01-ondemand
     build:
       context: ../../..
       dockerfile: Dockerfile.test
