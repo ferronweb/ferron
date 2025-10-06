@@ -1,5 +1,5 @@
 use std::convert::Infallible;
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,7 +23,9 @@ use crate::logging::{ErrorLogger, LogMessage, Loggers};
 use crate::runtime::timeout;
 #[cfg(feature = "runtime-monoio")]
 use crate::util::MonoioFileStream;
-use crate::util::{generate_default_error_page, replace_header_placeholders, sanitize_url, SERVER_SOFTWARE};
+use crate::util::{
+  generate_default_error_page, replace_header_placeholders, replace_log_placeholders, sanitize_url, SERVER_SOFTWARE,
+};
 
 use ferron_common::modules::{ModuleHandlers, RequestData, SocketData};
 use ferron_common::{get_entries, get_entry};
@@ -120,46 +122,31 @@ async fn generate_error_response(
 
 /// Sends a log message formatted according to the Combined Log Format
 #[allow(clippy::too_many_arguments)]
-async fn log_combined(
+async fn log_access(
   logger: &Sender<LogMessage>,
-  client_ip: IpAddr,
-  auth_user: Option<String>,
-  method: String,
-  request_path: String,
-  protocol: String,
+  request_parts: &hyper::http::request::Parts,
+  socket_data: &SocketData,
+  auth_user: Option<&str>,
   status_code: u16,
   content_length: Option<u64>,
-  referrer: Option<String>,
-  user_agent: Option<String>,
+  date_format: Option<&str>,
+  log_format: Option<&str>,
 ) {
   let now: DateTime<Local> = Local::now();
-  let formatted_time = now.format("%d/%b/%Y:%H:%M:%S %z").to_string();
+  let formatted_time = now.format(date_format.unwrap_or("%d/%b/%Y:%H:%M:%S %z")).to_string();
   logger
     .send(LogMessage::new(
-      format!(
-        "{} - {} [{}] \"{} {} {}\" {} {} {} {}",
-        client_ip,
-        match auth_user {
-          Some(auth_user) => auth_user,
-          None => String::from("-"),
-        },
-        formatted_time,
-        method,
-        request_path,
-        protocol,
+      replace_log_placeholders(
+        log_format.unwrap_or(
+          "{server_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" \
+           {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\"",
+        ),
+        request_parts,
+        socket_data,
+        auth_user,
+        &formatted_time,
         status_code,
-        match content_length {
-          Some(content_length) => format!("{content_length}"),
-          None => String::from("-"),
-        },
-        match referrer {
-          Some(referrer) => format!("\"{}\"", referrer.replace("\\", "\\\\").replace("\"", "\\\"")),
-          None => String::from("-"),
-        },
-        match user_agent {
-          Some(user_agent) => format!("\"{}\"", user_agent.replace("\\", "\\\\").replace("\"", "\\\"")),
-          None => String::from("-"),
-        },
+        content_length,
       ),
       false,
     ))
@@ -242,14 +229,11 @@ async fn finalize_response_and_log(
   headers_to_replace: HeaderMap,
   headers_to_remove: Vec<HeaderName>,
   logger: &Option<Sender<LogMessage>>,
-  log_enabled: bool,
+  request_parts: &Option<hyper::http::request::Parts>,
   socket_data: &SocketData,
-  latest_auth_data: Option<String>,
-  log_method: String,
-  log_request_path: String,
-  log_protocol: String,
-  log_referrer: Option<String>,
-  log_user_agent: Option<String>,
+  latest_auth_data: Option<&str>,
+  date_format: Option<&str>,
+  log_format: Option<&str>,
 ) -> Response<BoxBody<Bytes, std::io::Error>> {
   let (mut response_parts, response_body) = response.into_parts();
 
@@ -264,19 +248,17 @@ async fn finalize_response_and_log(
 
   let response = Response::from_parts(response_parts, response_body);
 
-  if log_enabled {
+  if let Some(request_parts) = request_parts {
     if let Some(logger) = &logger {
-      log_combined(
+      log_access(
         logger,
-        socket_data.remote_addr.ip(),
+        request_parts,
+        socket_data,
         latest_auth_data,
-        log_method,
-        log_request_path,
-        log_protocol,
         response.status().as_u16(),
         extract_content_length(&response),
-        log_referrer,
-        log_user_agent,
+        date_format,
+        log_format,
       )
       .await;
     }
@@ -297,14 +279,11 @@ async fn execute_response_modifying_handlers(
   headers_to_remove: Vec<HeaderName>,
   logger: &Option<Sender<LogMessage>>,
   error_log_enabled: bool,
-  log_enabled: bool,
+  request_parts: &Option<hyper::http::request::Parts>,
   socket_data: &SocketData,
-  latest_auth_data: Option<String>,
-  log_method: String,
-  log_request_path: String,
-  log_protocol: String,
-  log_referrer: Option<String>,
-  log_user_agent: Option<String>,
+  latest_auth_data: Option<&str>,
+  date_format: Option<&str>,
+  log_format: Option<&str>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Response<BoxBody<Bytes, std::io::Error>>> {
   while let Some(mut executed_handler) = executed_handlers.pop() {
     let response_status = executed_handler.response_modifying_handler(response).await;
@@ -332,14 +311,11 @@ async fn execute_response_modifying_handlers(
           headers_to_replace,
           headers_to_remove,
           logger,
-          log_enabled,
+          request_parts,
           socket_data,
           latest_auth_data,
-          log_method,
-          log_request_path,
-          log_protocol,
-          log_referrer,
-          log_user_agent,
+          date_format,
+          log_format,
         )
         .await;
 
@@ -367,47 +343,7 @@ async fn request_handler_wrapped(
   // Global configuration
   let global_configuration = configurations.find_global_configuration();
 
-  // Collect request data for logging
-  let is_proxy_request = match request.version() {
-    hyper::Version::HTTP_2 | hyper::Version::HTTP_3 => {
-      request.method() == hyper::Method::CONNECT && request.uri().host().is_some()
-    }
-    _ => request.uri().host().is_some(),
-  };
-  let log_method = String::from(request.method().as_str());
-  let log_request_path = match is_proxy_request {
-    true => request.uri().to_string(),
-    false => format!(
-      "{}{}",
-      request.uri().path(),
-      match request.uri().query() {
-        Some(query) => format!("?{query}"),
-        None => String::from(""),
-      }
-    ),
-  };
-  let log_protocol = String::from(match request.version() {
-    hyper::Version::HTTP_09 => "HTTP/0.9",
-    hyper::Version::HTTP_10 => "HTTP/1.0",
-    hyper::Version::HTTP_11 => "HTTP/1.1",
-    hyper::Version::HTTP_2 => "HTTP/2.0",
-    hyper::Version::HTTP_3 => "HTTP/3.0",
-    _ => "HTTP/Unknown",
-  });
-  let log_referrer = match request.headers().get(header::REFERER) {
-    Some(header_value) => match header_value.to_str() {
-      Ok(header_value) => Some(String::from(header_value)),
-      Err(_) => None,
-    },
-    None => None,
-  };
-  let log_user_agent = match request.headers().get(header::USER_AGENT) {
-    Some(header_value) => match header_value.to_str() {
-      Ok(header_value) => Some(String::from(header_value)),
-      Err(_) => None,
-    },
-    None => None,
-  };
+  // Check if logging is enabled
   let log_enabled = !global_configuration
     .as_deref()
     .and_then(|c| get_value!("log", c))
@@ -489,14 +425,13 @@ async fn request_handler_wrapped(
                 .unwrap_or_default();
 
               if log_enabled {
+                let (request_parts, _) = request.into_parts();
                 if let Some(logger) = loggers.find_global_logger() {
-                  log_combined(
+                  log_access(
                     &logger,
-                    socket_data.remote_addr.ip(),
+                    &request_parts,
+                    &socket_data,
                     None,
-                    log_method,
-                    log_request_path,
-                    log_protocol,
                     response.status().as_u16(),
                     match response.headers().get(header::CONTENT_LENGTH) {
                       Some(header_value) => match header_value.to_str() {
@@ -508,8 +443,14 @@ async fn request_handler_wrapped(
                       },
                       None => response.body().size_hint().exact(),
                     },
-                    log_referrer,
-                    log_user_agent,
+                    global_configuration
+                      .as_deref()
+                      .and_then(|c| get_value!("log_date_format", c))
+                      .and_then(|v| v.as_str()),
+                    global_configuration
+                      .as_deref()
+                      .and_then(|c| get_value!("log_format", c))
+                      .and_then(|v| v.as_str()),
                   )
                   .await;
                 }
@@ -564,14 +505,13 @@ async fn request_handler_wrapped(
           )
           .unwrap_or_default();
         if log_enabled {
+          let (request_parts, _) = request.into_parts();
           if let Some(logger) = loggers.find_global_logger() {
-            log_combined(
+            log_access(
               &logger,
-              socket_data.remote_addr.ip(),
+              &request_parts,
+              &socket_data,
               None,
-              log_method,
-              log_request_path,
-              log_protocol,
               response.status().as_u16(),
               match response.headers().get(header::CONTENT_LENGTH) {
                 Some(header_value) => match header_value.to_str() {
@@ -583,8 +523,14 @@ async fn request_handler_wrapped(
                 },
                 None => response.body().size_hint().exact(),
               },
-              log_referrer,
-              log_user_agent,
+              global_configuration
+                .as_deref()
+                .and_then(|c| get_value!("log_date_format", c))
+                .and_then(|v| v.as_str()),
+              global_configuration
+                .as_deref()
+                .and_then(|c| get_value!("log_format", c))
+                .and_then(|v| v.as_str()),
             )
             .await;
           }
@@ -633,6 +579,10 @@ async fn request_handler_wrapped(
     None => None,
   };
 
+  let (request_parts, request_body) = request.into_parts();
+  let log_request_parts = if log_enabled { Some(request_parts.clone()) } else { None };
+  let request = Request::from_parts(request_parts, request_body);
+
   // Find the server configuration
   let (request_parts, request_body) = request.into_parts();
   let configuration_option =
@@ -665,14 +615,13 @@ async fn request_handler_wrapped(
         )
         .unwrap_or_default();
       if log_enabled {
+        let (request_parts, _) = request.into_parts();
         if let Some(logger) = loggers.find_global_logger() {
-          log_combined(
+          log_access(
             &logger,
-            socket_data.remote_addr.ip(),
+            &request_parts,
+            &socket_data,
             None,
-            log_method,
-            log_request_path,
-            log_protocol,
             response.status().as_u16(),
             match response.headers().get(header::CONTENT_LENGTH) {
               Some(header_value) => match header_value.to_str() {
@@ -684,8 +633,14 @@ async fn request_handler_wrapped(
               },
               None => response.body().size_hint().exact(),
             },
-            log_referrer,
-            log_user_agent,
+            global_configuration
+              .as_deref()
+              .and_then(|c| get_value!("log_date_format", c))
+              .and_then(|v| v.as_str()),
+            global_configuration
+              .as_deref()
+              .and_then(|c| get_value!("log_format", c))
+              .and_then(|v| v.as_str()),
           )
           .await;
         }
@@ -715,6 +670,10 @@ async fn request_handler_wrapped(
       return Ok(Response::from_parts(response_parts, response_body));
     }
   };
+
+  // Determine the log formats
+  let mut log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
+  let mut log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
 
   // Determine the logger
   let logger = loggers.find_logger(
@@ -800,14 +759,11 @@ async fn request_handler_wrapped(
           headers_to_replace,
           headers_to_remove,
           &logger,
-          log_enabled,
+          &log_request_parts,
           &socket_data,
           None,
-          log_method,
-          log_request_path,
-          log_protocol,
-          log_referrer,
-          log_user_agent,
+          log_date_format,
+          log_format,
         )
         .await,
       );
@@ -902,14 +858,11 @@ async fn request_handler_wrapped(
               headers_to_replace,
               headers_to_remove,
               &logger,
-              log_enabled,
+              &log_request_parts,
               &socket_data,
               None,
-              log_method,
-              log_request_path,
-              log_protocol,
-              log_referrer,
-              log_user_agent,
+              log_date_format,
+              log_format,
             )
             .await,
           );
@@ -985,14 +938,11 @@ async fn request_handler_wrapped(
             headers_to_replace,
             headers_to_remove,
             &logger,
-            log_enabled,
+            &log_request_parts,
             &socket_data,
             None,
-            log_method,
-            log_request_path,
-            log_protocol,
-            log_referrer,
-            log_user_agent,
+            log_date_format,
+            log_format,
           )
           .await,
         );
@@ -1002,6 +952,8 @@ async fn request_handler_wrapped(
     request = Request::from_parts(parts, body);
     if let Some(new_configuration) = configuration_option {
       configuration = new_configuration;
+      log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
+      log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
     }
   }
 
@@ -1076,14 +1028,11 @@ async fn request_handler_wrapped(
         headers_to_replace,
         headers_to_remove,
         &logger,
-        log_enabled,
+        &log_request_parts,
         &socket_data,
         None,
-        log_method,
-        log_request_path,
-        log_protocol,
-        log_referrer,
-        log_user_agent,
+        log_date_format,
+        log_format,
       )
       .await,
     );
@@ -1114,14 +1063,11 @@ async fn request_handler_wrapped(
                 headers_to_replace,
                 headers_to_remove,
                 &logger,
-                log_enabled,
+                &log_request_parts,
                 &socket_data,
                 None,
-                log_method,
-                log_request_path,
-                log_protocol,
-                log_referrer,
-                log_user_agent,
+                log_date_format,
+                log_format,
               )
               .await,
             );
@@ -1221,33 +1167,30 @@ async fn request_handler_wrapped(
               headers_to_remove,
               &logger,
               error_log_enabled,
-              log_enabled,
+              &log_request_parts,
               &socket_data,
-              latest_auth_data.clone(),
-              log_method.clone(),
-              log_request_path.clone(),
-              log_protocol.clone(),
-              log_referrer.clone(),
-              log_user_agent.clone(),
+              latest_auth_data.as_deref(),
+              log_date_format,
+              log_format,
             )
             .await
             {
               Ok(response) => {
                 if log_enabled {
-                  if let Some(logger) = &logger {
-                    log_combined(
-                      logger,
-                      socket_data.remote_addr.ip(),
-                      latest_auth_data,
-                      log_method,
-                      log_request_path,
-                      log_protocol,
-                      response.status().as_u16(),
-                      extract_content_length(&response),
-                      log_referrer,
-                      log_user_agent,
-                    )
-                    .await;
+                  if let Some(request_parts) = log_request_parts {
+                    if let Some(logger) = loggers.find_global_logger() {
+                      log_access(
+                        &logger,
+                        &request_parts,
+                        &socket_data,
+                        latest_auth_data.as_deref(),
+                        response.status().as_u16(),
+                        extract_content_length(&response),
+                        log_date_format,
+                        log_format,
+                      )
+                      .await;
+                    }
                   }
                 }
                 return Ok(response);
@@ -1279,6 +1222,8 @@ async fn request_handler_wrapped(
                       request_data.error_status_code = Some(status);
                     }
                     is_error_handler = true;
+                    log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
+                    log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
                     continue;
                   }
                 }
@@ -1307,33 +1252,30 @@ async fn request_handler_wrapped(
                 headers_to_remove,
                 &logger,
                 error_log_enabled,
-                log_enabled,
+                &log_request_parts,
                 &socket_data,
-                latest_auth_data.clone(),
-                log_method.clone(),
-                log_request_path.clone(),
-                log_protocol.clone(),
-                log_referrer.clone(),
-                log_user_agent.clone(),
+                latest_auth_data.as_deref(),
+                log_date_format,
+                log_format,
               )
               .await
               {
                 Ok(response) => {
                   if log_enabled {
-                    if let Some(logger) = &logger {
-                      log_combined(
-                        logger,
-                        socket_data.remote_addr.ip(),
-                        latest_auth_data,
-                        log_method,
-                        log_request_path,
-                        log_protocol,
-                        response.status().as_u16(),
-                        extract_content_length(&response),
-                        log_referrer,
-                        log_user_agent,
-                      )
-                      .await;
+                    if let Some(request_parts) = log_request_parts {
+                      if let Some(logger) = loggers.find_global_logger() {
+                        log_access(
+                          &logger,
+                          &request_parts,
+                          &socket_data,
+                          latest_auth_data.as_deref(),
+                          response.status().as_u16(),
+                          extract_content_length(&response),
+                          log_date_format,
+                          log_format,
+                        )
+                        .await;
+                      }
                     }
                   }
                   return Ok(response);
@@ -1392,33 +1334,30 @@ async fn request_handler_wrapped(
           headers_to_remove,
           &logger,
           error_log_enabled,
-          log_enabled,
+          &log_request_parts,
           &socket_data,
-          latest_auth_data.clone(),
-          log_method.clone(),
-          log_request_path.clone(),
-          log_protocol.clone(),
-          log_referrer.clone(),
-          log_user_agent.clone(),
+          latest_auth_data.as_deref(),
+          log_date_format,
+          log_format,
         )
         .await
         {
           Ok(response) => {
             if log_enabled {
-              if let Some(logger) = &logger {
-                log_combined(
-                  logger,
-                  socket_data.remote_addr.ip(),
-                  latest_auth_data,
-                  log_method,
-                  log_request_path,
-                  log_protocol,
-                  response.status().as_u16(),
-                  extract_content_length(&response),
-                  log_referrer,
-                  log_user_agent,
-                )
-                .await;
+              if let Some(request_parts) = log_request_parts {
+                if let Some(logger) = loggers.find_global_logger() {
+                  log_access(
+                    &logger,
+                    &request_parts,
+                    &socket_data,
+                    latest_auth_data.as_deref(),
+                    response.status().as_u16(),
+                    extract_content_length(&response),
+                    log_date_format,
+                    log_format,
+                  )
+                  .await;
+                }
               }
             }
             return Ok(response);
@@ -1455,33 +1394,30 @@ async fn request_handler_wrapped(
     headers_to_remove,
     &logger,
     error_log_enabled,
-    log_enabled,
+    &log_request_parts,
     &socket_data,
-    latest_auth_data.clone(),
-    log_method.clone(),
-    log_request_path.clone(),
-    log_protocol.clone(),
-    log_referrer.clone(),
-    log_user_agent.clone(),
+    latest_auth_data.as_deref(),
+    log_date_format,
+    log_format,
   )
   .await
   {
     Ok(response) => {
       if log_enabled {
-        if let Some(logger) = &logger {
-          log_combined(
-            logger,
-            socket_data.remote_addr.ip(),
-            latest_auth_data,
-            log_method,
-            log_request_path,
-            log_protocol,
-            response.status().as_u16(),
-            extract_content_length(&response),
-            log_referrer,
-            log_user_agent,
-          )
-          .await;
+        if let Some(request_parts) = log_request_parts {
+          if let Some(logger) = &logger {
+            log_access(
+              logger,
+              &request_parts,
+              &socket_data,
+              latest_auth_data.as_deref(),
+              response.status().as_u16(),
+              extract_content_length(&response),
+              log_date_format,
+              log_format,
+            )
+            .await;
+          }
         }
       }
       Ok(response)

@@ -678,6 +678,22 @@ example.com {
 }
 ```
 
+### Logging
+
+- `log_date_format <log_date_format: string>` (Ferron UNRELEASED or newer)
+  - This directive specifies the date format (according to POSIX) for the access log file. Default: `"%d/%b/%Y:%H:%M:%S %z"`
+- `log_format <log_format: string>` (Ferron UNRELEASED or newer)
+  - This directive specifies the entry format for the access log file. The placeholders can be found in the reference below the section specifying. Default: `"{server_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""` (Combined Log Format)
+
+**Configuration example:**
+
+```kdl
+* {
+    log_date_format "%d/%b/%Y:%H:%M:%S %z"
+    log_format "{server_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""
+}
+```
+
 ## Subconditions
 
 Ferron 2.0.0-beta.15 and newer supports conditional configuration based on conditions. This allows you to configure different settings based on the request method, path, or other conditions.
@@ -715,6 +731,25 @@ Ferron supports the following placeholders for header values, subconditions, rev
 - `{client_port}` (Ferron 2.0.0-beta.9 or newer) - the client port number, applicable only for subconditions, reverse proxying and redirect destinations.
 - `{server_ip}` (Ferron 2.0.0-beta.9 or newer) - the server IP address, applicable only for subconditions, reverse proxying and redirect destinations.
 - `{server_port}` (Ferron 2.0.0-beta.9 or newer) - the server port number, applicable only for subconditions, reverse proxying and redirect destinations.
+
+## Log placeholders
+
+Ferron UNRELEASED and newer supports the following placeholders for access logs:
+
+- `{path}` - the request URI with path (for example, `/index.html`)
+- `{path_and_query}` - the request URI with path and query string (for example, `/index.html?param=value`)
+- `{method}` - the request method
+- `{version}` - the HTTP version of the request
+- `{header:<header_name>}` - the header value of the request URI (`-`, if header is missing)
+- `{scheme}` - the scheme of the request URI (`http` or `https`).
+- `{client_ip}` - the client IP address.
+- `{client_port}` - the client port number.
+- `{server_ip}` - the server IP address.
+- `{server_port}` - the server port number.
+- `{auth_user}` - the username of the authenticated user (`-`, if not authenticated)
+- `{timestamp}` - the formatted timestamp of the entry
+- `{status_code}` - the HTTP status code of the response
+- `{content_length}` - the content length of the response (`-`, if not available)
 
 ## Location block example
 

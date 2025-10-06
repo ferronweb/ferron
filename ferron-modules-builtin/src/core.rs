@@ -652,6 +652,30 @@ impl ModuleLoader for CoreModuleLoader {
       }
     }
 
+    if let Some(log_entries) = get_entries_for_validation!("log_date_format", config, used_properties) {
+      for log_entry in &log_entries.inner {
+        if log_entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `log_date_format` configuration property must have exactly one value"
+          ))?
+        } else if !log_entry.values[0].is_string() {
+          Err(anyhow::anyhow!("The date format for access logs must be a string"))?
+        }
+      }
+    };
+
+    if let Some(log_entries) = get_entries_for_validation!("log_format", config, used_properties) {
+      for log_entry in &log_entries.inner {
+        if log_entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `log_date_format` configuration property must have exactly one value"
+          ))?
+        } else if !log_entry.values[0].is_string() {
+          Err(anyhow::anyhow!("The access log format must be a string"))?
+        }
+      }
+    };
+
     Ok(())
   }
 }
