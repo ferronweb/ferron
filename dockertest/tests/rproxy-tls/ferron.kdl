@@ -1,4 +1,0 @@
-:80 {
-  proxy "https://backend:3000"
-  proxy_no_verification
-}

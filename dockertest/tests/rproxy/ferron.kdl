@@ -4,4 +4,9 @@
   location "/header" {
     proxy_request_header_replace "X-Some-Header" "something"
   }
+
+  location "/tls" {
+    proxy "https://backend:3001"
+    proxy_no_verification
+  }
 }

@@ -11,6 +11,8 @@ services:
   backend:
     build:
       context: ./backend
+    volumes:
+      - ./certs:/etc/certs
 
   # A container to run tests
   test-runner:
