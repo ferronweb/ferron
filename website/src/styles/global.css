@@ -205,6 +205,11 @@
   color: var(--pagefind-ui-text);
 }
 
+/* Hide the filter panel */
+.pagefind-ui .pagefind-ui__filter-panel {
+  display: none;
+}
+
 /* Ferron code syntax highlighting theme, based on Catpuccin Mocha and Catpuccin Latte themes */
 .astro-code,
 .astro-code span {
