@@ -92,7 +92,22 @@ const docLinks = Astro.props.docLinks;
         </nav>
       </div>
       <!-- Mobile Menu Button -->
-      <div class="flex md:hidden">
+      <nav class="gap-1 flex md:hidden">
+        {
+          docLinks ? (
+            <button
+              class="inline-flex items-center justify-center rounded-md p-2 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none cursor-pointer"
+              aria-label="Search"
+              aria-controls="search-menu"
+              aria-expanded="false"
+              data-mobile-search-button
+            >
+              <FontAwesomeIcon icon={faSearch} class="w-5 !h-5" />
+            </button>
+          ) : (
+            ""
+          )
+        }
         <button
           type="button"
           class="inline-flex items-center justify-center rounded-md p-2 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none cursor-pointer"
@@ -116,7 +131,7 @@ const docLinks = Astro.props.docLinks;
               d="M4 6h16M4 12h16M4 18h16"></path>
           </svg>
         </button>
-      </div>
+      </nav>
     </div>
   </div>
   <!-- Mobile Menu -->
@@ -225,13 +240,13 @@ const docLinks = Astro.props.docLinks;
 
   <!-- Search Menu -->
   <div
-    class="hidden max-md:hidden bg-background supports-[backdrop-filter]:bg-background/60 backdrop-blur w-full h-full overflow-auto z-70 fixed top-0 shrink-0"
+    class="hidden bg-background supports-[backdrop-filter]:bg-background/60 backdrop-blur w-full h-full overflow-auto z-70 fixed top-0 shrink-0"
     data-search-menu
   >
     <div class="flex p-2">
       <button
         type="button"
-        class="rounded-md ml-auto p-2 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none transition-colors cursor-pointer"
+        class="rounded-md ml-auto p-4 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none transition-colors cursor-pointer"
         aria-controls="close-search-menu"
         aria-expanded="false"
         data-search-close-button
@@ -289,10 +304,22 @@ const docLinks = Astro.props.docLinks;
     }
 
     const searchButton = document.querySelector("[data-search-button]");
+    const searchButtonMobile = document.querySelector(
+      "[data-mobile-search-button]"
+    );
     const searchClose = document.querySelector("[data-search-close-button]");
     const search = document.querySelector("[data-search-menu]");
     if (searchButton) {
       searchButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (search) {
+          search.classList.remove("hidden");
+          document.documentElement.classList.add("max-md:overflow-hidden");
+        }
+      });
+    }
+    if (searchButtonMobile) {
+      searchButtonMobile.addEventListener("click", (e) => {
         e.preventDefault();
         if (search) {
           search.classList.remove("hidden");
