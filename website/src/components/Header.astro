@@ -136,10 +136,10 @@ const docLinks = Astro.props.docLinks;
   </div>
   <!-- Mobile Menu -->
   <div
-    class="md:hidden py-4 bg-background w-full h-full overflow-auto z-60 fixed top-0 left-full transition-[left] shrink-0 duration-1000"
+    class="hidden md:hidden bg-background supports-[backdrop-filter]:bg-background/90 backdrop-blur w-full h-full overflow-auto z-60 fixed top-0 shrink-0 duration-1000"
     data-mobile-menu
   >
-    <div class="flex flex-row justify-between px-4 md:gap-10">
+    <div class="flex flex-row justify-between px-4 pt-4 md:gap-10">
       <a href="/" class="flex items-center space-x-2" aria-label="Ferron logo">
         <Logo class="h-8 w-auto" />
       </a>
@@ -154,64 +154,66 @@ const docLinks = Astro.props.docLinks;
         <FontAwesomeIcon icon={faX} class="self-center w-5 !h-5" />
       </button>
     </div>
-    <nav
-      class={`${docLinks ? "whitespace-nowrap overflow-x-auto flex items-center" : "space-y-1"} px-2 pt-2 pb-3`}
-    >
-      <a
-        href="/#features"
-        class={`${docLinks ? "inline-block" : "block"} px-3 py-2 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
+    <nav class={`${docLinks ? "whitespace-nowrap p-2" : ""} block`}>
+      <div
+        class={`${docLinks ? "whitespace-nowrap overflow-x-auto flex items-center pb-1" : "space-y-1 px-2 pt-2 pb-1"}`}
       >
-        Features
-      </a>
-      <a
-        href="/#benchmarks"
-        class={`${docLinks ? "inline-block" : "block"} px-3 py-2 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
-      >
-        Benchmarks
-      </a>
-      <a
-        href="/#install"
-        class={`${docLinks ? "inline-block" : "block"} px-3 py-2 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
-      >
-        Install
-      </a>
-      <a
-        href="/blog"
-        class={`${docLinks ? "inline-block" : "block"} px-3 py-2 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
-      >
-        Blog
-      </a>
-      <a
-        href="/docs"
-        class={`${docLinks ? "inline-block" : "block"} px-3 py-2 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
-      >
-        Docs
-      </a>
-      <div class=`${docLinks ? "inline-flex" : "flex mt-4"} space-x-2 px-3`>
         <a
-          href={githubLink}
-          target="_blank"
-          rel="noreferrer"
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground hover:bg-accent hover:text-accent-foreground h-9 w-9"
-          aria-label="GitHub"
+          href="/#features"
+          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
         >
-          <FontAwesomeIcon icon={faGithub} class="w-5 !h-5" />
+          Features
         </a>
         <a
-          href={chatLink}
-          target="_blank"
-          rel="noreferrer"
-          class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground hover:bg-accent hover:text-accent-foreground h-9 w-9"
-          aria-label="Chat"
+          href="/#benchmarks"
+          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
         >
-          <FontAwesomeIcon icon={faComments} class="w-5 !h-5" />
+          Benchmarks
         </a>
+        <a
+          href="/#install"
+          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
+        >
+          Install
+        </a>
+        <a
+          href="/blog"
+          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
+        >
+          Blog
+        </a>
+        <a
+          href="/docs"
+          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
+        >
+          Docs
+        </a>
+        <div class={`${docLinks ? "inline-flex" : "flex mt-4"} space-x-2 px-3`}>
+          <a
+            href={githubLink}
+            target="_blank"
+            rel="noreferrer"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground hover:bg-accent hover:text-accent-foreground h-9 w-9"
+            aria-label="GitHub"
+          >
+            <FontAwesomeIcon icon={faGithub} class="w-5 !h-5" />
+          </a>
+          <a
+            href={chatLink}
+            target="_blank"
+            rel="noreferrer"
+            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground hover:bg-accent hover:text-accent-foreground h-9 w-9"
+            aria-label="Chat"
+          >
+            <FontAwesomeIcon icon={faComments} class="w-5 !h-5" />
+          </a>
+        </div>
       </div>
     </nav>
     {
       docLinks ? (
         <nav>
-          <ul class={`flex flex-col my-3 list-none`}>
+          <ul class={`flex flex-col mt-3 mx-2 list-none`}>
             {docLinks.map(
               (docLink: {
                 href: string;
@@ -223,7 +225,7 @@ const docLinks = Astro.props.docLinks;
                   <a
                     href={docLink.href}
                     target={docLink.target || "_self"}
-                    class={`${docLink.sub ? "ml-4" : ""} block align-middle ${Astro.url.pathname == docLink.href ? "bg-secondary" : ""} text-inherit px-2 py-1 mx-1 rounded-sm hover:bg-accent transition-colors`}
+                    class={`${docLink.sub ? "ml-4" : ""} block align-middle ${Astro.url.pathname == docLink.href ? "bg-primary text-primary-foreground" : ""} text-inherit px-2 py-1 mx-1 rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors`}
                   >
                     {docLink.label}
                   </a>
@@ -240,7 +242,7 @@ const docLinks = Astro.props.docLinks;
 
   <!-- Search Menu -->
   <div
-    class="hidden bg-background supports-[backdrop-filter]:bg-background/60 backdrop-blur w-full h-full overflow-auto z-70 fixed top-0 shrink-0"
+    class="hidden bg-background supports-[backdrop-filter]:bg-background/80 backdrop-blur w-full h-full overflow-auto z-70 fixed top-0 shrink-0"
     data-search-menu
   >
     <div class="flex p-2">
@@ -255,7 +257,7 @@ const docLinks = Astro.props.docLinks;
         <FontAwesomeIcon icon={faX} class="self-center w-5 !h-5" />
       </button>
     </div>
-    <div class="p-4">
+    <div class="px-4 py-2 md:py-4">
       <Search
         className="max-w-screen-xl mx-auto pagefind-ui"
         uiOptions={{
@@ -266,79 +268,83 @@ const docLinks = Astro.props.docLinks;
       />
     </div>
   </div>
-</header>
 
-<script>
-  function initializeHeader() {
-    const menuButton = document.querySelector("[data-mobile-menu-button]");
-    const menuClose = document.querySelector("[data-mobile-menu-close-button]");
-    const menu = document.querySelector("[data-mobile-menu]");
-    const menuLinks = document.querySelectorAll("[data-mobile-menu] a");
-    if (menuButton) {
-      menuButton.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (menu) {
-          menu.classList.replace("left-full", "left-0");
-          document.documentElement.classList.add("max-md:overflow-hidden");
-        }
-      });
-    }
-    if (menuClose) {
-      menuClose.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (menu) {
-          menu.classList.replace("left-0", "left-full");
-          document.documentElement.classList.remove("max-md:overflow-hidden");
-        }
-      });
-    }
-    if (menuLinks) {
-      menuLinks.forEach((menuLink) => {
-        menuLink.addEventListener("click", () => {
+  <script>
+    function initializeHeader() {
+      const menuButton = document.querySelector("[data-mobile-menu-button]");
+      const menuClose = document.querySelector(
+        "[data-mobile-menu-close-button]"
+      );
+      const menu = document.querySelector("[data-mobile-menu]");
+      const menuLinks = document.querySelectorAll("[data-mobile-menu] a");
+      if (menuButton) {
+        menuButton.addEventListener("click", (e) => {
+          e.preventDefault();
           if (menu) {
-            menu.classList.replace("left-0", "left-full");
+            menu.classList.remove("hidden");
+            document.documentElement.classList.add("max-md:overflow-hidden");
+          }
+        });
+      }
+      if (menuClose) {
+        menuClose.addEventListener("click", (e) => {
+          e.preventDefault();
+          if (menu) {
+            menu.classList.add("hidden");
             document.documentElement.classList.remove("max-md:overflow-hidden");
           }
         });
-      });
+      }
+      if (menuLinks) {
+        menuLinks.forEach((menuLink) => {
+          menuLink.addEventListener("click", () => {
+            if (menu) {
+              menu.classList.add("hidden");
+              document.documentElement.classList.remove(
+                "max-md:overflow-hidden"
+              );
+            }
+          });
+        });
+      }
+
+      const searchButton = document.querySelector("[data-search-button]");
+      const searchButtonMobile = document.querySelector(
+        "[data-mobile-search-button]"
+      );
+      const searchClose = document.querySelector("[data-search-close-button]");
+      const search = document.querySelector("[data-search-menu]");
+      if (searchButton) {
+        searchButton.addEventListener("click", (e) => {
+          e.preventDefault();
+          if (search) {
+            search.classList.remove("hidden");
+            document.documentElement.classList.add("max-md:overflow-hidden");
+          }
+        });
+      }
+      if (searchButtonMobile) {
+        searchButtonMobile.addEventListener("click", (e) => {
+          e.preventDefault();
+          if (search) {
+            search.classList.remove("hidden");
+            document.documentElement.classList.add("max-md:overflow-hidden");
+          }
+        });
+      }
+      if (searchClose) {
+        searchClose.addEventListener("click", (e) => {
+          e.preventDefault();
+          if (search) {
+            search.classList.add("hidden");
+            document.documentElement.classList.remove("max-md:overflow-hidden");
+          }
+        });
+      }
     }
 
-    const searchButton = document.querySelector("[data-search-button]");
-    const searchButtonMobile = document.querySelector(
-      "[data-mobile-search-button]"
-    );
-    const searchClose = document.querySelector("[data-search-close-button]");
-    const search = document.querySelector("[data-search-menu]");
-    if (searchButton) {
-      searchButton.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (search) {
-          search.classList.remove("hidden");
-          document.documentElement.classList.add("max-md:overflow-hidden");
-        }
-      });
-    }
-    if (searchButtonMobile) {
-      searchButtonMobile.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (search) {
-          search.classList.remove("hidden");
-          document.documentElement.classList.add("max-md:overflow-hidden");
-        }
-      });
-    }
-    if (searchClose) {
-      searchClose.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (search) {
-          search.classList.add("hidden");
-          document.documentElement.classList.remove("max-md:overflow-hidden");
-        }
-      });
-    }
-  }
+    document.addEventListener("astro:after-swap", initializeHeader);
 
-  document.addEventListener("astro:after-swap", initializeHeader);
-
-  initializeHeader();
-</script>
+    initializeHeader();
+  </script>
+</header>
