@@ -21,12 +21,36 @@ const docLinks = Astro.props.docLinks;
     class="bg-background/95 supports-[backdrop-filter]:bg-background/80 backdrop-blur"
   >
     <div
-      class="max-w-384 mx-auto ps-4 pe-2 md:px-8 flex h-15 items-center justify-between"
+      class="max-w-384 w-full mx-auto ps-4 pe-2 md:px-8 flex h-15 items-center justify-between"
     >
-      <a href="/" class="flex items-center" aria-label="Ferron logo">
-        <Logo class="h-6.5 w-auto" />
-      </a>
-      <div class="flex-1 items-center justify-end hidden md:flex">
+      <div class="flex-1 flex gap-2">
+        <a href="/" class="flex items-center" aria-label="Ferron logo">
+          <Logo class="h-6.5 w-auto" />
+        </a>
+        {
+          docLinks ? (
+            <div
+              class="w-full max-w-96 border transition-colors hover:border-primary hidden lg:flex rounded-lg mx-4 text-sm text-muted-foreground"
+              data-search-bar
+            >
+              <button
+                class="inline-flex justify-center items-center p-0 h-8 w-8 transition-colors shadow-none"
+                aria-label="Search"
+                aria-controls="search-menu"
+                aria-expanded="false"
+              >
+                <FontAwesomeIcon icon={faSearch} class="w-4 !h-4" />
+              </button>
+              <div class="grow cursor-text flex items-center px-1 overflow-x-auto whitespace-nowrap">
+                <span>Search docs...</span>
+              </div>
+            </div>
+          ) : (
+            ""
+          )
+        }
+      </div>
+      <div class="items-center justify-end hidden md:flex">
         <nav class="flex items-center space-x-1">
           <a
             href="/#features"
@@ -61,15 +85,21 @@ const docLinks = Astro.props.docLinks;
             Docs
           </a>
           <div class="ml-2 flex items-center gap-1">
-            <button
-              class="btn p-0 h-9 w-9 cursor-pointer hover:bg-accent hover:text-accent-foreground shadow-none"
-              aria-label="Search"
-              aria-controls="search-menu"
-              aria-expanded="false"
-              data-search-button
-            >
-              <FontAwesomeIcon icon={faSearch} class="w-5 !h-5" />
-            </button>
+            {
+              docLinks ? (
+                <button
+                  class="btn p-0 h-9 w-9 cursor-pointer hover:bg-accent hover:text-accent-foreground shadow-none lg:hidden"
+                  aria-label="Search"
+                  aria-controls="search-menu"
+                  aria-expanded="false"
+                  data-search-button
+                >
+                  <FontAwesomeIcon icon={faSearch} class="w-5 !h-5" />
+                </button>
+              ) : (
+                ""
+              )
+            }
             <a
               href={githubLink}
               target="_blank"
@@ -91,12 +121,11 @@ const docLinks = Astro.props.docLinks;
           </div>
         </nav>
       </div>
-      <!-- Mobile Menu Button -->
       <nav class="gap-1 flex md:hidden">
         {
           docLinks ? (
             <button
-              class="inline-flex items-center justify-center rounded-md p-2 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none cursor-pointer"
+              class="inline-flex items-center justify-center rounded-md p-2 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none cursor-pointer h-10 w-10 transition-colors"
               aria-label="Search"
               aria-controls="search-menu"
               aria-expanded="false"
@@ -110,7 +139,7 @@ const docLinks = Astro.props.docLinks;
         }
         <button
           type="button"
-          class="inline-flex items-center justify-center rounded-md p-2 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none cursor-pointer"
+          class="inline-flex items-center justify-center rounded-md p-2 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none cursor-pointer h-10 w-10 transition-colors"
           aria-controls="mobile-menu"
           aria-expanded="false"
           data-mobile-menu-button
@@ -134,7 +163,6 @@ const docLinks = Astro.props.docLinks;
       </nav>
     </div>
   </div>
-  <!-- Mobile Menu -->
   <div
     class="hidden md:hidden bg-background supports-[backdrop-filter]:bg-background/90 backdrop-blur w-full h-full overflow-auto z-60 fixed top-0 shrink-0 duration-1000"
     data-mobile-menu
@@ -239,112 +267,122 @@ const docLinks = Astro.props.docLinks;
       )
     }
   </div>
-
-  <!-- Search Menu -->
-  <div
-    class="hidden bg-background supports-[backdrop-filter]:bg-background/80 backdrop-blur w-full h-full overflow-auto z-70 fixed top-0 shrink-0"
-    data-search-menu
-  >
-    <div class="flex p-2">
-      <button
-        type="button"
-        class="rounded-md ml-auto p-4 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none transition-colors cursor-pointer"
-        aria-controls="close-search-menu"
-        aria-expanded="false"
-        data-search-close-button
+  {
+    docLinks ? (
+      <div
+        class="hidden bg-background supports-[backdrop-filter]:bg-background/80 backdrop-blur w-full h-full overflow-auto z-70 fixed top-0 shrink-0"
+        data-search-menu
       >
-        <span class="sr-only">Close search menu</span>
-        <FontAwesomeIcon icon={faX} class="self-center w-5 !h-5" />
-      </button>
-    </div>
-    <div class="px-4 py-2 md:py-4">
-      <Search
-        className="max-w-screen-xl mx-auto pagefind-ui"
-        uiOptions={{
-          showImages: false,
-          showSubResults: false,
-          resetStyles: false
-        }}
-      />
-    </div>
-  </div>
+        <div class="flex p-4">
+          <button
+            type="button"
+            class="rounded-md ml-auto p-2 text-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none transition-colors cursor-pointer"
+            aria-controls="close-search-menu"
+            aria-expanded="false"
+            data-search-close-button
+          >
+            <span class="sr-only">Close search menu</span>
+            <FontAwesomeIcon icon={faX} class="self-center w-5 !h-5" />
+          </button>
+        </div>
+        <div class="px-4 py-2 md:py-4">
+          <Search
+            className="max-w-screen-xl mx-auto pagefind-ui"
+            uiOptions={{
+              showImages: false,
+              showSubResults: false,
+              resetStyles: false
+            }}
+          />
+        </div>
+      </div>
+    ) : (
+      ""
+    )
+  }
+</header>
 
-  <script>
-    function initializeHeader() {
-      const menuButton = document.querySelector("[data-mobile-menu-button]");
-      const menuClose = document.querySelector(
-        "[data-mobile-menu-close-button]"
-      );
-      const menu = document.querySelector("[data-mobile-menu]");
-      const menuLinks = document.querySelectorAll("[data-mobile-menu] a");
-      if (menuButton) {
-        menuButton.addEventListener("click", (e) => {
-          e.preventDefault();
-          if (menu) {
-            menu.classList.remove("hidden");
-            document.documentElement.classList.add("max-md:overflow-hidden");
-          }
-        });
-      }
-      if (menuClose) {
-        menuClose.addEventListener("click", (e) => {
-          e.preventDefault();
+<script>
+  function initializeHeader() {
+    const menuButton = document.querySelector("[data-mobile-menu-button]");
+    const menuClose = document.querySelector("[data-mobile-menu-close-button]");
+    const menu = document.querySelector("[data-mobile-menu]");
+    const menuLinks = document.querySelectorAll("[data-mobile-menu] a");
+    if (menuButton) {
+      menuButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (menu) {
+          menu.classList.remove("hidden");
+          document.documentElement.classList.add("max-md:overflow-hidden");
+        }
+      });
+    }
+    if (menuClose) {
+      menuClose.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (menu) {
+          menu.classList.add("hidden");
+          document.documentElement.classList.remove("max-md:overflow-hidden");
+        }
+      });
+    }
+    if (menuLinks) {
+      menuLinks.forEach((menuLink) => {
+        menuLink.addEventListener("click", () => {
           if (menu) {
             menu.classList.add("hidden");
             document.documentElement.classList.remove("max-md:overflow-hidden");
           }
         });
-      }
-      if (menuLinks) {
-        menuLinks.forEach((menuLink) => {
-          menuLink.addEventListener("click", () => {
-            if (menu) {
-              menu.classList.add("hidden");
-              document.documentElement.classList.remove(
-                "max-md:overflow-hidden"
-              );
-            }
-          });
-        });
-      }
-
-      const searchButton = document.querySelector("[data-search-button]");
-      const searchButtonMobile = document.querySelector(
-        "[data-mobile-search-button]"
-      );
-      const searchClose = document.querySelector("[data-search-close-button]");
-      const search = document.querySelector("[data-search-menu]");
-      if (searchButton) {
-        searchButton.addEventListener("click", (e) => {
-          e.preventDefault();
-          if (search) {
-            search.classList.remove("hidden");
-            document.documentElement.classList.add("max-md:overflow-hidden");
-          }
-        });
-      }
-      if (searchButtonMobile) {
-        searchButtonMobile.addEventListener("click", (e) => {
-          e.preventDefault();
-          if (search) {
-            search.classList.remove("hidden");
-            document.documentElement.classList.add("max-md:overflow-hidden");
-          }
-        });
-      }
-      if (searchClose) {
-        searchClose.addEventListener("click", (e) => {
-          e.preventDefault();
-          if (search) {
-            search.classList.add("hidden");
-            document.documentElement.classList.remove("max-md:overflow-hidden");
-          }
-        });
-      }
+      });
     }
 
-    document.addEventListener("astro:after-swap", initializeHeader);
+    const searchBar = document.querySelector("[data-search-bar]");
+    const searchButton = document.querySelector("[data-search-button]");
+    const searchButtonMobile = document.querySelector(
+      "[data-mobile-search-button]"
+    );
+    const searchClose = document.querySelector("[data-search-close-button]");
+    const search = document.querySelector("[data-search-menu]");
+    if (searchBar) {
+      searchBar.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (search) {
+          search.classList.remove("hidden");
+          document.documentElement.classList.add("max-md:overflow-hidden");
+        }
+      });
+    }
+    if (searchButton) {
+      searchButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (search) {
+          search.classList.remove("hidden");
+          document.documentElement.classList.add("max-md:overflow-hidden");
+        }
+      });
+    }
+    if (searchButtonMobile) {
+      searchButtonMobile.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (search) {
+          search.classList.remove("hidden");
+          document.documentElement.classList.add("max-md:overflow-hidden");
+        }
+      });
+    }
+    if (searchClose) {
+      searchClose.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (search) {
+          search.classList.add("hidden");
+          document.documentElement.classList.remove("max-md:overflow-hidden");
+        }
+      });
+    }
+  }
 
-    initializeHeader();
-  </script>
-</header>
+  document.addEventListener("astro:after-swap", initializeHeader);
+
+  initializeHeader();
+</script>
