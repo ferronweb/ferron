@@ -493,8 +493,8 @@ example.com {
 
 ### Reverse proxy & load balancing
 
-- `proxy <proxy_to: string|null>` (_rproxy_ module)
-  - This directive specifies the URL to which the reverse proxy should forward requests. This directive can be specified multiple times. Default: none
+- `proxy <proxy_to: string|null> [unix=<unix_socket_path: string>]` (_rproxy_ module)
+  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported (Ferron UNRELEASED and newer) via the `unix` prop set to the path to the socket, supported only on Unix and Unix-like systems. This directive can be specified multiple times. Default: none
 - `lb_health_check [enable_lb_health_check: bool]` (_rproxy_ module)
   - This directive specifies whenever the load balancer passive health check is enabled. Default: `lb_health_check #false`
 - `lb_health_check_max_fails <max_fails: integer>` (_rproxy_ module)
