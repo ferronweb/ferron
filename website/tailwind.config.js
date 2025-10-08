@@ -116,6 +116,11 @@ export default {
             },
             td: {
               color: "inherit"
+            },
+            li: {
+              "&::marker": {
+                color: "hsla(var(--muted-foreground), 1)"
+              }
             }
           }
         }
