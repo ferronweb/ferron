@@ -71,7 +71,7 @@ jobs:
                   cargo update $CONFLICTING_PACKAGES || true; \
               fi; \
           done
-          cargo build --verbose --target-dir ../target
+          RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 cargo build --verbose --target-dir ../target
           cd ..
 
       - name: Smoke test the binary

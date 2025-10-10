@@ -168,7 +168,7 @@ jobs:
                   cargo update $CONFLICTING_PACKAGES || true; \
               fi; \
           done
-          ${{ matrix.command }} build --verbose --release --target-dir ../target --target ${{ matrix.target }} ${{ matrix.options }}
+          RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 ${{ matrix.command }} build --verbose --release --target-dir ../target --target ${{ matrix.target }} ${{ matrix.options }}
           cd ..
 
       - name: Smoke test the binary (Unix-like)
