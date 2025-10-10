@@ -945,6 +945,8 @@ fn before_starting_server(
                 tls_alpn_01_data_lock: tls_alpn_01_data_lock.clone(),
                 http_01_data_lock: http_01_data_lock.clone(),
                 dns_provider,
+                renewal_info: None,
+                account: None,
               };
               let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock));
               acme_configs.push(acme_config);
@@ -997,7 +999,7 @@ fn before_starting_server(
       secondary_runtime_ref.spawn(async move {
         for acme_config in &mut acme_configs {
           // Install the certificates from the cache if they're valid
-          check_certificate_validity_or_install_cached(acme_config)
+          check_certificate_validity_or_install_cached(acme_config, None)
             .await
             .unwrap_or_default();
         }
@@ -1015,7 +1017,7 @@ fn before_starting_server(
             existing_combinations.insert((cached_domain, acme_on_demand_config.port));
 
             // Install the certificates from the cache if they're valid
-            check_certificate_validity_or_install_cached(&mut acme_config)
+            check_certificate_validity_or_install_cached(&mut acme_config, None)
               .await
               .unwrap_or_default();
 

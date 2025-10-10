@@ -1287,6 +1287,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a41953f86f8a05768a6cda24def994fd2f424b04ec5c719cf89989779f199071"
 dependencies = [
  "powerfmt",
+ "serde_core",
 ]
 
 [[package]]
@@ -2388,7 +2389,9 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.17",
+ "time",
  "tokio",
+ "x509-parser 0.18.0",
 ]
 
 [[package]]

@@ -1,8 +1,9 @@
 globals {
   log "access.log"
   error_log "error.log"
+  auto_tls_challenge "http-01"
 }
 
-:8080 {
+tahoe-olive-lecture-bird.trycloudflare.com {
   root "wwwroot"
 }
