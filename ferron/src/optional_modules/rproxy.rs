@@ -222,30 +222,36 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           .insert(header::CONNECTION, "keep-alive".parse()?);
 
         // X-Forwarded-* headers to send the client's data to a server that's behind the reverse proxy
-        hyper_request_parts.headers.insert(
-          "x-forwarded-for",
-          socket_data
-            .remote_addr
-            .ip()
-            .to_canonical()
-            .to_string()
-            .parse()?,
-        );
-
-        if socket_data.encrypted {
-          hyper_request_parts
-            .headers
-            .insert("x-forwarded-proto", "https".parse()?);
+        if config["disableProxyXForwarded"].as_bool().unwrap_or(false) {
+          hyper_request_parts.headers.remove("x-forwarder-for");
+          hyper_request_parts.headers.remove("x-forwarded-proto");
+          hyper_request_parts.headers.remove("x-forwarded-host");
         } else {
-          hyper_request_parts
-            .headers
-            .insert("x-forwarded-proto", "http".parse()?);
-        }
+          hyper_request_parts.headers.insert(
+            "x-forwarded-for",
+            socket_data
+              .remote_addr
+              .ip()
+              .to_canonical()
+              .to_string()
+              .parse()?,
+          );
 
-        if let Some(original_host) = original_host {
-          hyper_request_parts
-            .headers
-            .insert("x-forwarded-host", original_host);
+          if socket_data.encrypted {
+            hyper_request_parts
+              .headers
+              .insert("x-forwarded-proto", "https".parse()?);
+          } else {
+            hyper_request_parts
+              .headers
+              .insert("x-forwarded-proto", "http".parse()?);
+          }
+
+          if let Some(original_host) = original_host {
+            hyper_request_parts
+              .headers
+              .insert("x-forwarded-host", original_host);
+          }
         }
 
         hyper_request_parts.version = Version::HTTP_11;
