@@ -60,7 +60,9 @@ cargo run --manifest-path build-prepare/Cargo.toml
 cd build-workspace
 cargo update # If you experience crate conflicts
 cargo build -r --target-dir ../target
-../target/release/ferron
+cd ..
+cp ferron-test.kdl ferron.kdl
+target/release/ferron
 ```
 
 You can also, for convenience, use `make`:

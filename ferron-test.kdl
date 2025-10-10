@@ -1,0 +1,8 @@
+globals {
+  log "access.log"
+  error_log "error.log"
+}
+
+:8080 {
+  root "wwwroot"
+}

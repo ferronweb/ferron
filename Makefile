@@ -40,9 +40,11 @@ smoketest: build
 	smoketest/smoketest.sh
 
 run: build
+	if ! [ -f "ferron.kdl" ]; then cp ferron-test.kdl ferron.kdl; fi
 	$(CARGO_TARGET_ROOT)/release/ferron
 
 run-dev: build-dev
+	if ! [ -f "ferron.kdl" ]; then cp ferron-test.kdl ferron.kdl; fi
 	$(CARGO_TARGET_ROOT)/debug/ferron
 
 build: prepare-build fix-conflicts

@@ -60,12 +60,20 @@ if (-not $env:CARGO_FINAL)
 function Run
 {
     Build
+    if (-not (Test-Path "ferron.kdl"))
+    {
+        Copy-Item "ferron-test.kdl" "ferron.kdl" -ErrorAction SilentlyContinue -Force
+    }
     & "$cargoTargetRoot/release/ferron"
 }
 
 function RunDev
 {
     BuildDev
+    if (-not (Test-Path "ferron.kdl"))
+    {
+        Copy-Item "ferron-test.kdl" "ferron.kdl" -ErrorAction SilentlyContinue -Force
+    }
     & "$cargoTargetRoot/debug/ferron"
 }
 
