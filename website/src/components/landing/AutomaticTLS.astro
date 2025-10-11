@@ -20,7 +20,8 @@
             <span
               class="inline-flex shadow-sm border rounded-md overflow-clip bg-background text-foreground"
             >
-              <span class="bg-primary text-primary-foreground px-4 py-1"
+              <span
+                class="bg-primary text-primary-foreground px-4 py-1 font-medium"
                 >CNAME</span
               >
               <span class="px-4 py-1">demo.ferron.sh</span>
@@ -29,7 +30,9 @@
             <span
               class="inline-flex shadow-sm border rounded-md overflow-clip bg-background text-foreground"
             >
-              <span class="bg-primary text-primary-foreground px-4 py-1">A</span
+              <span
+                class="bg-primary text-primary-foreground px-4 py-1 font-medium"
+                >A</span
               >
               <span class="px-4 py-1">194.110.4.223</span>
             </span>
@@ -37,12 +40,18 @@
         </li>
         <li>
           Visit the subdomain in the browser. You may have to wait some time for
-          the DNS to propagate and the TLS certificate to be issued.
+          the DNS records to propagate and the TLS certificate to be issued.
+          After few minutes, visit the subdomain again and you will see a
+          securely served webpage.
         </li>
       </ol>
       <p>
         You will notice how Ferron manages the TLS certificate for your
         subdomain automatically.
+      </p>
+      <p class="text-sm">
+        <strong>Not working?</strong> Check your DNS settings and ensure that the
+        subdomain is correctly pointing to the IP address or CNAME provided.
       </p>
     </div>
   </div>
