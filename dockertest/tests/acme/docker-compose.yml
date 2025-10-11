@@ -12,7 +12,7 @@ services:
       dockerfile: Dockerfile.test
     volumes:
       - ./ferron.kdl:/etc/ferron.kdl
-      - ./cache:/var/lib/ferron-acme
+      - ./cache:/var/cache/ferron-acme
     depends_on:
       pebble-health-check:
         condition: service_healthy
