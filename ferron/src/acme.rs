@@ -142,6 +142,18 @@ async fn set_in_cache(cache: &AcmeCache, key: &str, value: Vec<u8>) -> Result<()
   }
 }
 
+/// Removes data from the cache.
+async fn remove_from_cache(cache: &AcmeCache, key: &str) {
+  match cache {
+    AcmeCache::Memory(cache) => {
+      cache.write().await.remove(key);
+    }
+    AcmeCache::File(path) => {
+      let _ = tokio::fs::remove_file(path.join(key)).await;
+    }
+  }
+}
+
 /// Checks if the TLS certificate is valid
 fn check_certificate_validity(
   certificate: &CertificateDer,
@@ -350,7 +362,17 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
     acme_new_order = acme_new_order.profile(profile);
   }
 
-  let mut acme_order = acme_account.new_order(&acme_new_order).await?;
+  let mut acme_order = match acme_account.new_order(&acme_new_order).await {
+    Ok(order) => order,
+    Err(instant_acme::Error::Api(problem)) => {
+      if problem.r#type.as_deref() == Some("urn:ietf:params:acme:error:accountDoesNotExist") {
+        // Remove non-existent account from the cache
+        remove_from_cache(&config.account_cache, &account_cache_key).await;
+      }
+      Err(instant_acme::Error::Api(problem))?
+    }
+    Err(err) => Err(err)?,
+  };
   let mut dns_01_identifiers = Vec::new();
   let mut acme_authorizations = acme_order.authorizations();
   while let Some(acme_authorization) = acme_authorizations.next().await {
