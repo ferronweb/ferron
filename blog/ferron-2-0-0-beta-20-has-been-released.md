@@ -1,7 +1,7 @@
 ---
 title: "Ferron 2.0.0-beta.20 has been released"
 description: We are excited to announce the release of Ferron 2.0.0-beta.20. This release brings a default access log format fix.
-date: 2025-10-11 14:24:00
+date: 2025-10-11 15:44:00
 cover: ./covers/ferron-2-0-0-beta-20-has-been-released.png
 ---
 
