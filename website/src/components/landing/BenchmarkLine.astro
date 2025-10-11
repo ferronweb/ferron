@@ -48,7 +48,9 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
         <canvas></canvas>
       </div>
     </benchmark-chart-line>
-    <div class="mt-4 text-center text-sm text-muted-foreground">
+    <div
+      class="mt-4 text-center max-w-full prose prose-sm text-muted-foreground"
+    >
       <p>
         {Astro.props.higherIsBetter ? "Higher is better" : "Lower is better"} | Benchmarks
         run on AMD Ryzen 5 8600G, 32GB RAM, with the{" "}
