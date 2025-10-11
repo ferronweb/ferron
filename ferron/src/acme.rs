@@ -7,7 +7,7 @@ use std::{
   path::PathBuf,
   pin::Pin,
   sync::Arc,
-  time::Duration,
+  time::{Duration, SystemTime},
 };
 
 use base64::Engine;
@@ -16,8 +16,8 @@ use hyper::Request;
 use hyper_util::client::legacy::Client as HyperClient;
 use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
 use instant_acme::{
-  Account, AccountCredentials, AuthorizationStatus, BodyWrapper, BytesResponse, ChallengeType, ExternalAccountKey,
-  HttpClient, Identifier, NewAccount, NewOrder, OrderStatus, RetryPolicy,
+  Account, AccountCredentials, AuthorizationStatus, BodyWrapper, BytesResponse, CertificateIdentifier, ChallengeType,
+  ExternalAccountKey, HttpClient, Identifier, NewAccount, NewOrder, OrderStatus, RenewalInfo, RetryPolicy,
 };
 use rcgen::{CertificateParams, CustomExtension, KeyPair};
 use rustls::{
@@ -26,9 +26,9 @@ use rustls::{
   sign::CertifiedKey,
   ClientConfig,
 };
-use rustls_pki_types::PrivateKeyDer;
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
+use tokio::{sync::RwLock, time::Instant};
 use x509_parser::prelude::{FromDer, X509Certificate};
 use xxhash_rust::xxh3::xxh3_128;
 
@@ -69,6 +69,10 @@ pub struct AcmeConfig {
   pub http_01_data_lock: Http01DataLock,
   /// The ACME DNS provider.
   pub dns_provider: Option<Arc<dyn DnsProvider + Send + Sync>>,
+  /// The certificate renewal information.
+  pub renewal_info: Option<(RenewalInfo, Instant)>,
+  /// The ACME account information
+  pub account: Option<Account>,
 }
 
 /// Represents the type of cache to use for storing ACME data.
@@ -139,7 +143,14 @@ async fn set_in_cache(cache: &AcmeCache, key: &str, value: Vec<u8>) -> Result<()
 }
 
 /// Checks if the TLS certificate is valid
-fn check_certificate_validity(x509_certificate: &X509Certificate) -> bool {
+fn check_certificate_validity(
+  certificate: &CertificateDer,
+  renewal_info: Option<&RenewalInfo>,
+) -> Result<bool, Box<dyn Error + Send + Sync>> {
+  if let Some(renewal_info) = renewal_info {
+    return Ok(SystemTime::now() < renewal_info.suggested_window.start);
+  }
+  let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
   let validity = x509_certificate.validity();
   if let Some(time_to_expiration) = validity.time_to_expiration() {
     let time_before_expiration = if let Some(valid_duration) = validity.not_after.sub(validity.not_before) {
@@ -147,11 +158,11 @@ fn check_certificate_validity(x509_certificate: &X509Certificate) -> bool {
     } else {
       SECONDS_BEFORE_RENEWAL
     };
-    if time_to_expiration > Duration::from_secs(time_before_expiration) {
-      return true;
+    if time_to_expiration >= Duration::from_secs(time_before_expiration) {
+      return Ok(true);
     }
   }
-  false
+  Ok(false)
 }
 
 /// Determines the account cache key
@@ -202,11 +213,26 @@ fn get_hostname_cache_key(config: &AcmeOnDemandConfig) -> String {
 /// Checks if the TLS certificate (cached or live) is valid. If cached certificate is valid, installs the cached certificate
 pub async fn check_certificate_validity_or_install_cached(
   config: &mut AcmeConfig,
+  acme_account: Option<&Account>,
 ) -> Result<bool, Box<dyn Error + Send + Sync>> {
   if let Some(certified_key) = config.certified_key_lock.read().await.as_deref() {
     if let Some(certificate) = certified_key.cert.first() {
-      let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
-      if check_certificate_validity(&x509_certificate) {
+      if let Some(acme_account) = acme_account {
+        if config
+          .renewal_info
+          .as_ref()
+          .is_none_or(|v| v.1.elapsed() > Duration::ZERO)
+        {
+          if let Ok(certificate_id) = CertificateIdentifier::try_from(certificate) {
+            if let Ok(renewal_info) = acme_account.renewal_info(&certificate_id).await {
+              let mut renewal_instant = Instant::now();
+              renewal_instant += renewal_info.1;
+              config.renewal_info = Some((renewal_info.0, renewal_instant));
+            }
+          }
+        }
+      }
+      if check_certificate_validity(certificate, config.renewal_info.as_ref().map(|i| &i.0))? {
         return Ok(true);
       }
     }
@@ -223,8 +249,22 @@ pub async fn check_certificate_validity_or_install_cached(
     ))
     .collect::<Result<Vec<_>, _>>()?;
     if let Some(certificate) = certs.first() {
-      let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
-      if check_certificate_validity(&x509_certificate) {
+      if let Some(acme_account) = acme_account {
+        if config
+          .renewal_info
+          .as_ref()
+          .is_none_or(|v| v.1.elapsed() > Duration::ZERO)
+        {
+          if let Ok(certificate_id) = CertificateIdentifier::try_from(certificate) {
+            if let Ok(renewal_info) = acme_account.renewal_info(&certificate_id).await {
+              let mut renewal_instant = Instant::now();
+              renewal_instant -= renewal_info.1;
+              config.renewal_info = Some((renewal_info.0, renewal_instant));
+            }
+          }
+        }
+      }
+      if check_certificate_validity(certificate, config.renewal_info.as_ref().map(|i| &i.0))? {
         let private_key =
           (match rustls_pemfile::private_key(&mut std::io::Cursor::new(certificate_data.private_key_pem.as_bytes())) {
             Ok(Some(private_key)) => Ok(private_key),
@@ -252,18 +292,15 @@ pub async fn check_certificate_validity_or_install_cached(
 
 /// Provisions TLS certificates using the ACME protocol.
 pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dyn Error + Send + Sync>> {
-  if check_certificate_validity_or_install_cached(config).await? {
-    // Certificate is still valid, no need to renew
-    return Ok(());
-  }
-
   let account_cache_key = get_account_cache_key(config);
   let certificate_cache_key = get_certificate_cache_key(config);
 
-  let acme_account_builder =
-    Account::builder_with_http(Box::new(HttpsClientForAcme::new(config.rustls_client_config.clone())));
+  let acme_account = if let Some(acme_account) = config.account.take() {
+    acme_account
+  } else {
+    let acme_account_builder =
+      Account::builder_with_http(Box::new(HttpsClientForAcme::new(config.rustls_client_config.clone())));
 
-  let acme_account =
     if let Some(account_credentials_serialized) = get_from_cache(&config.account_cache, &account_cache_key).await {
       let account_credentials = serde_json::from_slice::<AccountCredentials>(&account_credentials_serialized)?;
       acme_account_builder.from_credentials(account_credentials).await?
@@ -287,7 +324,14 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
       )
       .await?;
       account
-    };
+    }
+  };
+
+  if check_certificate_validity_or_install_cached(config, Some(&acme_account)).await? {
+    // Certificate is still valid, no need to renew
+    config.account.replace(acme_account);
+    return Ok(());
+  }
 
   let acme_identifiers_vec = config
     .domains
@@ -413,6 +457,8 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
       .key_provider
       .load_private_key(private_key)?;
 
+    config.account.replace(acme_account);
+
     *config.certified_key_lock.write().await = Some(Arc::new(CertifiedKey::new(certs, signing_key)));
 
     Ok::<_, Box<dyn Error + Send + Sync>>(())
@@ -533,6 +579,8 @@ pub async fn convert_on_demand_config(
     tls_alpn_01_data_lock: tls_alpn_01_data_lock.clone(),
     http_01_data_lock: http_01_data_lock.clone(),
     dns_provider: config.dns_provider.clone(),
+    renewal_info: None,
+    account: None,
   }
 }
 

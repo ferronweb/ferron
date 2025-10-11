@@ -16,27 +16,25 @@ jobs:
     environment: ferron-website-develop-v2
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: develop-2.x
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: latest
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
         shell: bash
         run: |
           pushd website
-          npm ci || npm install
+          bun ci || bun install
           popd
 
       - name: Build the website
         shell: bash
         run: |
           pushd website
-          npm run build
+          bun run --bun build
           echo "User-agent: *" > dist/robots.txt
           echo "Disallow: /" >> dist/robots.txt
           popd

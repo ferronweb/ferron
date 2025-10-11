@@ -40,19 +40,21 @@ smoketest: build
 	smoketest/smoketest.sh
 
 run: build
+	if ! [ -f "ferron.kdl" ]; then cp ferron-test.kdl ferron.kdl; fi
 	$(CARGO_TARGET_ROOT)/release/ferron
 
 run-dev: build-dev
+	if ! [ -f "ferron.kdl" ]; then cp ferron-test.kdl ferron.kdl; fi
 	$(CARGO_TARGET_ROOT)/debug/ferron
 
 build: prepare-build fix-conflicts
-	cd build-workspace && $(CARGO_FINAL) build --target-dir ../target -r $(CARGO_FINAL_EXTRA_ARGS)
+	cd build-workspace && RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 $(CARGO_FINAL) build --target-dir ../target -r $(CARGO_FINAL_EXTRA_ARGS)
 
 build-dev: prepare-build fix-conflicts
-	cd build-workspace && $(CARGO_FINAL) build --target-dir ../target $(CARGO_FINAL_EXTRA_ARGS)
+	cd build-workspace && RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 $(CARGO_FINAL) build --target-dir ../target $(CARGO_FINAL_EXTRA_ARGS)
 
 build-deb: prepare-build fix-conflicts
-	cd build-workspace && $(CARGO_FINAL) build --target-dir ../target -r $(CARGO_FINAL_EXTRA_ARGS)
+	cd build-workspace && RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 $(CARGO_FINAL) build --target-dir ../target -r $(CARGO_FINAL_EXTRA_ARGS)
 
 prepare-build:
 	cargo run --manifest-path build-prepare/Cargo.toml

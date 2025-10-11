@@ -18,10 +18,12 @@ Start-Sleep -Seconds 5
 $Got = curl.exe -sk https://localhost:8443/test.txt
 $Expected = Get-Content "wwwroot/test.txt"
 
-if ($Got -eq $Expected) {
+if ($Got -eq $Expected)
+{
     Write-Output "Test passed"
     Stop-Process -Id $FerronProcess.Id -Force
-} else {
+} else
+{
     Write-Error "Test failed"
     Stop-Process -Id $FerronProcess.Id -Force
     exit 1

@@ -2,7 +2,24 @@
 
 TEST_FAILED=0
 
-sleep 0.5 # Sleep before making requests to allow backend to start
+# Wait for the backend server to start
+for i in $(seq 1 3)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    nc -z backend 3000 >/dev/null 2>&1 && break || true
+done
+
+# Wait for the HTTP server to start
+for i in $(seq 1 3)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    nc -z ferron 80 >/dev/null 2>&1 && break || true
+done
+
 TEST_RESULTS="$(curl -fsSL http://backend:3000/)"
 TEST_EXIT_CODE=$?
 TEST_EXPECTED="Hello, World!"
@@ -89,6 +106,41 @@ if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
     echo "Bad gateway test passed!"
 else
     echo "Bad gateway test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
+# Wait for the TLS backend server to start
+for i in $(seq 1 3)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    nc -z backend 3001 >/dev/null 2>&1 && break || true
+done
+
+TEST_RESULTS="$(curl -fsSLk https://backend:3001/tls)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="Hello, World!"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "TLS backend server smoke test passed!"
+else
+    echo "TLS backend server smoke test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
+TEST_RESULTS="$(curl -fsSL http://ferron/tls)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="Hello, World!"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "Basic reverse proxy to TLS backend test passed!"
+else
+    echo "Basic reverse proxy to TLS backend test failed!" >&2
     echo "  Exit code: $TEST_EXIT_CODE" >&2
     echo "  Expected: $TEST_EXPECTED" >&2
     echo "  Received: $TEST_RESULTS" >&2

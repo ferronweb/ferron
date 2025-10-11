@@ -493,8 +493,8 @@ example.com {
 
 ### Reverse proxy & load balancing
 
-- `proxy <proxy_to: string|null>` (_rproxy_ module)
-  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. This directive can be specified multiple times. Default: none
+- `proxy <proxy_to: string|null> [unix=<unix_socket_path: string>]` (_rproxy_ module)
+  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported (Ferron 2.0.0-beta.19 and newer) via the `unix` prop set to the path to the socket, supported only on Unix and Unix-like systems. This directive can be specified multiple times. Default: none
 - `lb_health_check [enable_lb_health_check: bool]` (_rproxy_ module)
   - This directive specifies whenever the load balancer passive health check is enabled. Default: `lb_health_check #false`
 - `lb_health_check_max_fails <max_fails: integer>` (_rproxy_ module)
@@ -678,6 +678,22 @@ example.com {
 }
 ```
 
+### Logging
+
+- `log_date_format <log_date_format: string>` (Ferron 2.0.0-beta.19 or newer)
+  - This directive specifies the date format (according to POSIX) for the access log file. Default: `"%d/%b/%Y:%H:%M:%S %z"`
+- `log_format <log_format: string>` (Ferron 2.0.0-beta.19 or newer)
+  - This directive specifies the entry format for the access log file. The placeholders can be found in the reference below the section specifying. Default: `"{server_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""` (Combined Log Format)
+
+**Configuration example:**
+
+```kdl
+* {
+    log_date_format "%d/%b/%Y:%H:%M:%S %z"
+    log_format "{server_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""
+}
+```
+
 ## Subconditions
 
 Ferron 2.0.0-beta.15 and newer supports conditional configuration based on conditions. This allows you to configure different settings based on the request method, path, or other conditions.
@@ -706,6 +722,10 @@ Below is the list of supported subconditions:
 Ferron supports the following placeholders for header values, subconditions, reverse proxying, and redirect destinations:
 
 - `{path}` - the request URI with path (for example, `/index.html`)
+  <<<<<<< HEAD
+  =======
+- `{path_and_query}` (Ferron 2.0.0-beta.19 or newer) - the request URI with path and query string (for example, `/index.html?param=value`)
+  > > > > > > > develop-2.x
 - `{method}` (Ferron 2.0.0-beta.9 or newer) - the request method
 - `{version}` (Ferron 2.0.0-beta.9 or newer) - the HTTP version of the request
 - `{header:<header_name>}` (Ferron 2.0.0-beta.9 or newer) - the header value of the request URI
@@ -714,6 +734,25 @@ Ferron supports the following placeholders for header values, subconditions, rev
 - `{client_port}` (Ferron 2.0.0-beta.9 or newer) - the client port number, applicable only for subconditions, reverse proxying and redirect destinations.
 - `{server_ip}` (Ferron 2.0.0-beta.9 or newer) - the server IP address, applicable only for subconditions, reverse proxying and redirect destinations.
 - `{server_port}` (Ferron 2.0.0-beta.9 or newer) - the server port number, applicable only for subconditions, reverse proxying and redirect destinations.
+
+## Log placeholders
+
+Ferron 2.0.0-beta.19 and newer supports the following placeholders for access logs:
+
+- `{path}` - the request URI with path (for example, `/index.html`)
+- `{path_and_query}` - the request URI with path and query string (for example, `/index.html?param=value`)
+- `{method}` - the request method
+- `{version}` - the HTTP version of the request
+- `{header:<header_name>}` - the header value of the request URI (`-`, if header is missing)
+- `{scheme}` - the scheme of the request URI (`http` or `https`).
+- `{client_ip}` - the client IP address.
+- `{client_port}` - the client port number.
+- `{server_ip}` - the server IP address.
+- `{server_port}` - the server port number.
+- `{auth_user}` - the username of the authenticated user (`-`, if not authenticated)
+- `{timestamp}` - the formatted timestamp of the entry
+- `{status_code}` - the HTTP status code of the response
+- `{content_length}` - the content length of the response (`-`, if not available)
 
 ## Location block example
 

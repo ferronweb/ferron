@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -18,6 +20,8 @@ use hyper_util::rt::{TokioExecutor, TokioIo};
 use monoio::io::IntoPollIo;
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
+#[cfg(all(feature = "runtime-monoio", unix))]
+use monoio::net::UnixStream;
 #[cfg(feature = "runtime-monoio")]
 use monoio_compat::hyper::{MonoioExecutor, MonoioIo};
 use rustls::client::WebPkiServerVerifier;
@@ -26,6 +30,8 @@ use rustls_platform_verifier::BuilderVerifierExt;
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
+#[cfg(all(feature = "runtime-tokio", unix))]
+use tokio::net::UnixStream;
 use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
 #[cfg(feature = "runtime-monoio")]
@@ -47,6 +53,77 @@ const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
 enum SendRequest {
   Http1(hyper::client::conn::http1::SendRequest<BoxBody<Bytes, std::io::Error>>),
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
+}
+
+enum Connection {
+  #[cfg(feature = "runtime-monoio")]
+  Tcp(monoio::net::tcp::stream_poll::TcpStreamPoll),
+  #[cfg(not(feature = "runtime-monoio"))]
+  Tcp(TcpStream),
+  #[cfg(all(feature = "runtime-monoio", unix))]
+  Unix(monoio::net::unix::stream_poll::UnixStreamPoll),
+  #[cfg(all(not(feature = "runtime-monoio"), unix))]
+  Unix(UnixStream),
+}
+
+impl AsyncRead for Connection {
+  fn poll_read(
+    mut self: Pin<&mut Self>,
+    cx: &mut Context<'_>,
+    buf: &mut tokio::io::ReadBuf,
+  ) -> Poll<Result<(), std::io::Error>> {
+    match &mut *self {
+      Connection::Tcp(stream) => Pin::new(stream).poll_read(cx, buf),
+      #[cfg(unix)]
+      Connection::Unix(stream) => Pin::new(stream).poll_read(cx, buf),
+    }
+  }
+}
+
+impl AsyncWrite for Connection {
+  fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, std::io::Error>> {
+    match &mut *self {
+      Connection::Tcp(stream) => Pin::new(stream).poll_write(cx, buf),
+      #[cfg(unix)]
+      Connection::Unix(stream) => Pin::new(stream).poll_write(cx, buf),
+    }
+  }
+
+  fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
+    match &mut *self {
+      Connection::Tcp(stream) => Pin::new(stream).poll_flush(cx),
+      #[cfg(unix)]
+      Connection::Unix(stream) => Pin::new(stream).poll_flush(cx),
+    }
+  }
+
+  fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
+    match &mut *self {
+      Connection::Tcp(stream) => Pin::new(stream).poll_shutdown(cx),
+      #[cfg(unix)]
+      Connection::Unix(stream) => Pin::new(stream).poll_shutdown(cx),
+    }
+  }
+
+  fn is_write_vectored(&self) -> bool {
+    match self {
+      Connection::Tcp(stream) => stream.is_write_vectored(),
+      #[cfg(unix)]
+      Connection::Unix(stream) => stream.is_write_vectored(),
+    }
+  }
+
+  fn poll_write_vectored(
+    mut self: Pin<&mut Self>,
+    cx: &mut Context<'_>,
+    bufs: &[std::io::IoSlice<'_>],
+  ) -> Poll<Result<usize, std::io::Error>> {
+    match &mut *self {
+      Connection::Tcp(stream) => Pin::new(stream).poll_write_vectored(cx, bufs),
+      #[cfg(unix)]
+      Connection::Unix(stream) => Pin::new(stream).poll_write_vectored(cx, bufs),
+    }
+  }
 }
 
 /// A reverse proxy module loader
@@ -162,6 +239,13 @@ impl ModuleLoader for ReverseProxyModuleLoader {
           ))?
         } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
           Err(anyhow::anyhow!("Invalid proxy backend server"))?
+        } else if !entry.props.get("unix").is_none_or(|v| v.is_string()) {
+          Err(anyhow::anyhow!("Invalid proxy Unix socket path"))?
+        }
+
+        #[cfg(not(unix))]
+        if entry.props.get("unix").is_some() {
+          Err(anyhow::anyhow!("Unix sockets are not supported on this platform"))?
         }
       }
     };
@@ -278,7 +362,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 #[allow(clippy::type_complexity)]
 struct ReverseProxyModule {
   connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
-  failed_backends: Arc<RwLock<TtlCache<String, u64>>>,
+  failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
 }
 
 impl Module for ReverseProxyModule {
@@ -294,7 +378,7 @@ impl Module for ReverseProxyModule {
 #[allow(clippy::type_complexity)]
 struct ReverseProxyModuleHandlers {
   connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
-  failed_backends: Arc<RwLock<TtlCache<String, u64>>>,
+  failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
 }
 
 #[async_trait(?Send)]
@@ -337,7 +421,12 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let mut proxy_to_vector = get_entries!("proxy", config).map_or(vec![], |e| {
       e.inner
         .iter()
-        .filter_map(|e| e.values.first().and_then(|v| v.as_str()))
+        .filter_map(|e| {
+          e.values
+            .first()
+            .and_then(|v| v.as_str())
+            .map(|v| (v, e.props.get("unix").and_then(|v| v.as_str())))
+        })
         .collect()
     });
     let retry_connection = get_value!("lb_retry_connection", config)
@@ -347,7 +436,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let mut request_parts = Some(request_parts);
 
     loop {
-      if let Some(proxy_to) = determine_proxy_to(
+      if let Some((proxy_to, proxy_unix)) = determine_proxy_to(
         &mut proxy_to_vector,
         &self.failed_backends,
         enable_health_check,
@@ -436,47 +525,86 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           None
         };
 
-        let stream = match TcpStream::connect(&addr).await {
-          Ok(stream) => stream,
-          Err(err) => {
-            if enable_health_check {
-              let mut failed_backends_write = self.failed_backends.write().await;
-              let proxy_to = proxy_to.clone();
-              let failed_attempts = failed_backends_write.get(&proxy_to);
-              failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
-            }
+        let stream = if let Some(proxy_unix_str) = &proxy_unix {
+          #[cfg(not(unix))]
+          {
+            Err(anyhow::anyhow!("Unix sockets are not supported on this platform"))?
+          }
 
-            if retry_connection && !proxy_to_vector.is_empty() {
-              error_logger
-                .log(&format!("Failed to connect to backend, trying another backend: {err}"))
-                .await;
-              continue;
-            }
+          #[cfg(unix)]
+          {
+            let stream = match UnixStream::connect(proxy_unix_str).await {
+              Ok(stream) => stream,
+              Err(err) => {
+                if enable_health_check {
+                  let mut failed_backends_write = self.failed_backends.write().await;
+                  let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                  let failed_attempts = failed_backends_write.get(&proxy_key);
+                  failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+                }
 
-            match err.kind() {
-              std::io::ErrorKind::ConnectionRefused
-              | std::io::ErrorKind::NotFound
-              | std::io::ErrorKind::HostUnreachable => {
-                error_logger.log(&format!("Service unavailable: {err}")).await;
-                return Ok(ResponseData {
-                  request: None,
-                  response: None,
-                  response_status: Some(StatusCode::SERVICE_UNAVAILABLE),
-                  response_headers: None,
-                  new_remote_address: None,
-                });
+                if retry_connection && !proxy_to_vector.is_empty() {
+                  error_logger
+                    .log(&format!("Failed to connect to backend, trying another backend: {err}"))
+                    .await;
+                  continue;
+                }
+
+                match err.kind() {
+                  std::io::ErrorKind::ConnectionRefused
+                  | std::io::ErrorKind::NotFound
+                  | std::io::ErrorKind::HostUnreachable => {
+                    error_logger.log(&format!("Service unavailable: {err}")).await;
+                    return Ok(ResponseData {
+                      request: None,
+                      response: None,
+                      response_status: Some(StatusCode::SERVICE_UNAVAILABLE),
+                      response_headers: None,
+                      new_remote_address: None,
+                    });
+                  }
+                  std::io::ErrorKind::TimedOut => {
+                    error_logger.log(&format!("Gateway timeout: {err}")).await;
+                    return Ok(ResponseData {
+                      request: None,
+                      response: None,
+                      response_status: Some(StatusCode::GATEWAY_TIMEOUT),
+                      response_headers: None,
+                      new_remote_address: None,
+                    });
+                  }
+                  _ => {
+                    error_logger.log(&format!("Bad gateway: {err}")).await;
+                    return Ok(ResponseData {
+                      request: None,
+                      response: None,
+                      response_status: Some(StatusCode::BAD_GATEWAY),
+                      response_headers: None,
+                      new_remote_address: None,
+                    });
+                  }
+                };
               }
-              std::io::ErrorKind::TimedOut => {
-                error_logger.log(&format!("Gateway timeout: {err}")).await;
-                return Ok(ResponseData {
-                  request: None,
-                  response: None,
-                  response_status: Some(StatusCode::GATEWAY_TIMEOUT),
-                  response_headers: None,
-                  new_remote_address: None,
-                });
-              }
-              _ => {
+            };
+
+            #[cfg(feature = "runtime-monoio")]
+            let stream = match stream.into_poll_io() {
+              Ok(stream) => stream,
+              Err(err) => {
+                if enable_health_check {
+                  let mut failed_backends_write = self.failed_backends.write().await;
+                  let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                  let failed_attempts = failed_backends_write.get(&proxy_key);
+                  failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+                }
+
+                if retry_connection && !proxy_to_vector.is_empty() {
+                  error_logger
+                    .log(&format!("Failed to connect to backend, trying another backend: {err}"))
+                    .await;
+                  continue;
+                }
+
                 error_logger.log(&format!("Bad gateway: {err}")).await;
                 return Ok(ResponseData {
                   request: None,
@@ -487,64 +615,122 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
                 });
               }
             };
+
+            Connection::Unix(stream)
           }
-        };
+        } else {
+          let stream = match TcpStream::connect(&addr).await {
+            Ok(stream) => stream,
+            Err(err) => {
+              if enable_health_check {
+                let mut failed_backends_write = self.failed_backends.write().await;
+                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                let failed_attempts = failed_backends_write.get(&proxy_key);
+                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+              }
 
-        match stream.set_nodelay(true) {
-          Ok(_) => (),
-          Err(err) => {
-            if enable_health_check {
-              let mut failed_backends_write = self.failed_backends.write().await;
-              let proxy_to = proxy_to.clone();
-              let failed_attempts = failed_backends_write.get(&proxy_to);
-              failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
+              if retry_connection && !proxy_to_vector.is_empty() {
+                error_logger
+                  .log(&format!("Failed to connect to backend, trying another backend: {err}"))
+                  .await;
+                continue;
+              }
+
+              match err.kind() {
+                std::io::ErrorKind::ConnectionRefused
+                | std::io::ErrorKind::NotFound
+                | std::io::ErrorKind::HostUnreachable => {
+                  error_logger.log(&format!("Service unavailable: {err}")).await;
+                  return Ok(ResponseData {
+                    request: None,
+                    response: None,
+                    response_status: Some(StatusCode::SERVICE_UNAVAILABLE),
+                    response_headers: None,
+                    new_remote_address: None,
+                  });
+                }
+                std::io::ErrorKind::TimedOut => {
+                  error_logger.log(&format!("Gateway timeout: {err}")).await;
+                  return Ok(ResponseData {
+                    request: None,
+                    response: None,
+                    response_status: Some(StatusCode::GATEWAY_TIMEOUT),
+                    response_headers: None,
+                    new_remote_address: None,
+                  });
+                }
+                _ => {
+                  error_logger.log(&format!("Bad gateway: {err}")).await;
+                  return Ok(ResponseData {
+                    request: None,
+                    response: None,
+                    response_status: Some(StatusCode::BAD_GATEWAY),
+                    response_headers: None,
+                    new_remote_address: None,
+                  });
+                }
+              };
             }
+          };
 
-            if retry_connection && !proxy_to_vector.is_empty() {
-              error_logger
-                .log(&format!("Failed to connect to backend, trying another backend: {err}"))
-                .await;
-              continue;
+          match stream.set_nodelay(true) {
+            Ok(_) => (),
+            Err(err) => {
+              if enable_health_check {
+                let mut failed_backends_write = self.failed_backends.write().await;
+                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                let failed_attempts = failed_backends_write.get(&proxy_key);
+                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+              }
+
+              if retry_connection && !proxy_to_vector.is_empty() {
+                error_logger
+                  .log(&format!("Failed to connect to backend, trying another backend: {err}"))
+                  .await;
+                continue;
+              }
+
+              error_logger.log(&format!("Bad gateway: {err}")).await;
+              return Ok(ResponseData {
+                request: None,
+                response: None,
+                response_status: Some(StatusCode::BAD_GATEWAY),
+                response_headers: None,
+                new_remote_address: None,
+              });
             }
+          };
 
-            error_logger.log(&format!("Bad gateway: {err}")).await;
-            return Ok(ResponseData {
-              request: None,
-              response: None,
-              response_status: Some(StatusCode::BAD_GATEWAY),
-              response_headers: None,
-              new_remote_address: None,
-            });
-          }
-        };
+          #[cfg(feature = "runtime-monoio")]
+          let stream = match stream.into_poll_io() {
+            Ok(stream) => stream,
+            Err(err) => {
+              if enable_health_check {
+                let mut failed_backends_write = self.failed_backends.write().await;
+                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                let failed_attempts = failed_backends_write.get(&proxy_key);
+                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+              }
 
-        #[cfg(feature = "runtime-monoio")]
-        let stream = match stream.into_poll_io() {
-          Ok(stream) => stream,
-          Err(err) => {
-            if enable_health_check {
-              let mut failed_backends_write = self.failed_backends.write().await;
-              let proxy_to = proxy_to.clone();
-              let failed_attempts = failed_backends_write.get(&proxy_to);
-              failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
+              if retry_connection && !proxy_to_vector.is_empty() {
+                error_logger
+                  .log(&format!("Failed to connect to backend, trying another backend: {err}"))
+                  .await;
+                continue;
+              }
+
+              error_logger.log(&format!("Bad gateway: {err}")).await;
+              return Ok(ResponseData {
+                request: None,
+                response: None,
+                response_status: Some(StatusCode::BAD_GATEWAY),
+                response_headers: None,
+                new_remote_address: None,
+              });
             }
+          };
 
-            if retry_connection && !proxy_to_vector.is_empty() {
-              error_logger
-                .log(&format!("Failed to connect to backend, trying another backend: {err}"))
-                .await;
-              continue;
-            }
-
-            error_logger.log(&format!("Bad gateway: {err}")).await;
-            return Ok(ResponseData {
-              request: None,
-              response: None,
-              response_status: Some(StatusCode::BAD_GATEWAY),
-              response_headers: None,
-              new_remote_address: None,
-            });
-          }
+          Connection::Tcp(stream)
         };
 
         let sender = if !encrypted {
@@ -564,9 +750,9 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             Err(err) => {
               if enable_health_check {
                 let mut failed_backends_write = self.failed_backends.write().await;
-                let proxy_to = proxy_to.clone();
-                let failed_attempts = failed_backends_write.get(&proxy_to);
-                failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
+                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                let failed_attempts = failed_backends_write.get(&proxy_key);
+                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
               }
 
               if retry_connection && !proxy_to_vector.is_empty() {
@@ -621,9 +807,9 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             Err(err) => {
               if enable_health_check {
                 let mut failed_backends_write = self.failed_backends.write().await;
-                let proxy_to = proxy_to.clone();
-                let failed_attempts = failed_backends_write.get(&proxy_to);
-                failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
+                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                let failed_attempts = failed_backends_write.get(&proxy_key);
+                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
               }
 
               if retry_connection && !proxy_to_vector.is_empty() {
@@ -663,9 +849,9 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             Err(err) => {
               if enable_health_check {
                 let mut failed_backends_write = self.failed_backends.write().await;
-                let proxy_to = proxy_to.clone();
-                let failed_attempts = failed_backends_write.get(&proxy_to);
-                failed_backends_write.insert(proxy_to, failed_attempts.map_or(1, |x| x + 1));
+                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                let failed_attempts = failed_backends_write.get(&proxy_key);
+                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
               }
 
               if retry_connection && !proxy_to_vector.is_empty() {
@@ -732,11 +918,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 /// # Returns
 /// * `Option<String>` - The URL of the selected backend server, or None if no valid backend exists
 async fn determine_proxy_to(
-  proxy_to_vector: &mut Vec<&str>,
-  failed_backends: &RwLock<TtlCache<String, u64>>,
+  proxy_to_vector: &mut Vec<(&str, Option<&str>)>,
+  failed_backends: &RwLock<TtlCache<(String, Option<String>), u64>>,
   enable_health_check: bool,
   health_check_max_fails: u64,
-) -> Option<String> {
+) -> Option<(String, Option<String>)> {
   let mut proxy_to = None;
   // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
   // The "proxy" directive is validated though.
@@ -744,15 +930,20 @@ async fn determine_proxy_to(
   if proxy_to_vector.is_empty() {
     return None;
   } else if proxy_to_vector.len() == 1 {
-    proxy_to = Some(proxy_to_vector.remove(0).to_string());
+    let proxy_to_borrowed = proxy_to_vector.remove(0);
+    let proxy_to_url = proxy_to_borrowed.0.to_string();
+    let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
+    proxy_to = Some((proxy_to_url, proxy_to_header));
   } else if enable_health_check {
     loop {
       if !proxy_to_vector.is_empty() {
         let index = rand::random_range(..proxy_to_vector.len());
-        let proxy_to_str = proxy_to_vector.remove(index);
-        proxy_to = Some(proxy_to_str.to_string());
+        let proxy_to_borrowed = proxy_to_vector.remove(index);
+        let proxy_to_url = proxy_to_borrowed.0.to_string();
+        let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
+        proxy_to = Some((proxy_to_url.clone(), proxy_to_header.clone()));
         let failed_backends_read = failed_backends.read().await;
-        let failed_backend_fails = match failed_backends_read.get(&proxy_to_str.to_string()) {
+        let failed_backend_fails = match failed_backends_read.get(&(proxy_to_url, proxy_to_header)) {
           Some(fails) => fails,
           None => break,
         };
@@ -766,11 +957,10 @@ async fn determine_proxy_to(
   } else if !proxy_to_vector.is_empty() {
     // If we have backends available and health checking is disabled,
     // randomly select one backend from all available options
-    proxy_to = Some(
-      proxy_to_vector
-        .remove(rand::random_range(..proxy_to_vector.len()))
-        .to_string(),
-    );
+    let proxy_to_borrowed = proxy_to_vector.remove(rand::random_range(..proxy_to_vector.len()));
+    let proxy_to_url = proxy_to_borrowed.0.to_string();
+    let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
+    proxy_to = Some((proxy_to_url, proxy_to_header));
   }
 
   proxy_to

@@ -2,6 +2,24 @@
 
 TEST_FAILED=0
 
+# Wait for the HTTP server to start
+for i in $(seq 1 3)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    nc -z ferron 80 >/dev/null 2>&1 && break || true
+done
+
+# Wait for the PHP-FPM daemon to start
+for i in $(seq 1 3)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    nc -z php-fpm 9000 >/dev/null 2>&1 && break || true
+done
+
 TEST_RESULTS="$(curl -fsSL http://ferron/)"
 TEST_EXIT_CODE=$?
 TEST_EXPECTED="Hello, World!"

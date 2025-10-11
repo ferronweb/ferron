@@ -61,6 +61,7 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     echo "[target.$TARGET_TRIPLE]\nlinker = \"/tmp/musl-gcc\"\nrustflags = [\"-Clink-args=-L$LIB_PATH\", \"-Clink-args=-L/tmp/lib\", \"-Clink-self-contained=no\"]" >> /usr/local/cargo/config.toml && \
     TARGET_PATH="target/$TARGET_TRIPLE/release" && \
     # Build Ferron
+    RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 \
     CARGO_FINAL_EXTRA_ARGS="--features ferron/config-docker-auto" \
     TARGET="$TARGET_TRIPLE" \
     CC="/tmp/musl-gcc" \

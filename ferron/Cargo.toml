@@ -1,6 +1,6 @@
 [package]
 name = "ferron"
-version = "2.0.0-beta.18"
+version = "2.0.0-beta.19"
 edition = "2021"
 
 [dependencies]
@@ -52,6 +52,8 @@ instant-acme = { version = "0.8.0", default-features = false, features = [
     "hyper-rustls",
     "aws-lc-rs",
     "rcgen",
+    "time",
+    "x509-parser"
 ] }
 rustls-native-certs = "0.8.1"
 rustls-pemfile = "2.2.0"

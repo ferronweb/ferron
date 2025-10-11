@@ -2,6 +2,15 @@
 
 TEST_FAILED=0
 
+# Wait for the HTTP server to start
+for i in $(seq 1 3)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    nc -z ferron 80 >/dev/null 2>&1 && break || true
+done
+
 TEST_RESULTS="$(curl -fsSL http://ferron/basic.txt)"
 TEST_EXIT_CODE=$?
 TEST_EXPECTED="$(cat /var/www/ferron/basic.txt)"
@@ -114,6 +123,19 @@ if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
     echo "ETag test passed!"
 else
     echo "ETag test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
+TEST_RESULTS="$(curl -fsSL -w %{http_code} -H "Accept-Encoding: gzip" -H "If-None-Match: $(curl -fsSLI -H "Accept-Encoding: gzip" http://ferron/basic.txt | grep -i 'etag:' | cut -d ':' -f 2 | tr -d '[:space:]')" http://ferron/basic.txt)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="304"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "ETag with gzip compression test passed!"
+else
+    echo "ETag with gzip compression test failed!" >&2
     echo "  Exit code: $TEST_EXIT_CODE" >&2
     echo "  Expected: $TEST_EXPECTED" >&2
     echo "  Received: $TEST_RESULTS" >&2

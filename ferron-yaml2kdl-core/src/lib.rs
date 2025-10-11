@@ -585,6 +585,23 @@ pub fn obtain_host_configuration(
             }
           }
         }
+        "disableProxyXForwarded" => {
+          if loaded_modules.contains(&"rproxy".to_string()) {
+            if let Some(value) = value.as_bool() {
+              if value {
+                let mut kdl_property = KdlNode::new("proxy_request_header_remove");
+                kdl_property.push(KdlValue::String("X-Forwarded-For".to_string()));
+                kdl_config_nodes.push(kdl_property);
+                let mut kdl_property = KdlNode::new("proxy_request_header_remove");
+                kdl_property.push(KdlValue::String("X-Forwarded-Proto".to_string()));
+                kdl_config_nodes.push(kdl_property);
+                let mut kdl_property = KdlNode::new("proxy_request_header_remove");
+                kdl_property.push(KdlValue::String("X-Forwarded-Host".to_string()));
+                kdl_config_nodes.push(kdl_property);
+              }
+            }
+          }
+        }
         _ => (),
       }
     }

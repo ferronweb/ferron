@@ -1,0 +1,26 @@
+globals {
+  auto_tls_directory "https://pebble:14000/dir"
+  auto_tls_no_verification
+}
+
+ferron {
+  auto_tls_challenge "tls-alpn-01"
+  root "/var/www/ferron" // Serve "Ferron is installed successfully" page
+}
+
+ferron-ondemand {
+  auto_tls_challenge "tls-alpn-01"
+  auto_tls_on_demand
+  root "/var/www/ferron" // Serve "Ferron is installed successfully" page
+}
+
+ferron-http01 {
+  auto_tls_challenge "http-01"
+  root "/var/www/ferron" // Serve "Ferron is installed successfully" page
+}
+
+ferron-http01-ondemand {
+  auto_tls_challenge "http-01"
+  auto_tls_on_demand
+  root "/var/www/ferron" // Serve "Ferron is installed successfully" page
+}

@@ -4,6 +4,15 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.19
+
+**Released in October 11, 2025**
+
+- Added support for `{path_and_query}` placeholder
+- Added support for ACME Renewal Information (ARI)
+- Added support for connecting to backend servers via Unix sockets as a reverse proxy
+- Added support for custom access log formats
+
 ## Ferron 2.0.0-beta.18
 
 **Released in October 4, 2025**

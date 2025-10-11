@@ -1,0 +1,21 @@
+snippet "WORDPRESS_SCAN" {
+  status 403
+}
+
+ferron:80 {
+  root "/var/www/ferron"
+
+  condition "WORDPRESS_SCAN" {
+    is_regex "{path_and_query}" "^/wp-(?:login\\.php|admin/?)(?:$|[?#])" case_insensitive=#true
+  }
+
+  // Deny phpMyAdmin scan
+  location "/phpmyadmin" {
+    status 403
+  }
+
+  // Deny WordPress scan
+  if "WORDPRESS_SCAN" {
+    use "WORDPRESS_SCAN"
+  }
+}
