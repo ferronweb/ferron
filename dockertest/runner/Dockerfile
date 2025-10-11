@@ -23,7 +23,7 @@ FROM debian:trixie
 RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
     --mount=type=cache,sharing=private,target=/var/lib/apt \
     apt update && \
-    apt install -y curl brotli zstd bind9-host iproute2 bsdextrautils argon2 netcat-openbsd && \
+    DEBIAN_FRONTEND=noninteractive apt install -y curl brotli zstd bind9-host iproute2 bsdextrautils argon2 netcat-openbsd && \
     apt clean && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/cache/apt/*

@@ -19,15 +19,15 @@ RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
     apt update && \
     if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
     case "$TARGETPLATFORM" in \
-    "linux/386") apt install -y gcc-i686-linux-gnu ;; \
-    "linux/amd64") apt install -y gcc-x86-64-linux-gnu ;; \
-    "linux/arm64") apt install -y gcc-aarch64-linux-gnu ;; \
-    "linux/arm/v7") apt install -y gcc-arm-linux-gnueabihf ;; \
+    "linux/386") DEBIAN_FRONTEND=noninteractive apt install -y gcc-i686-linux-gnu ;; \
+    "linux/amd64") DEBIAN_FRONTEND=noninteractive apt install -y gcc-x86-64-linux-gnu ;; \
+    "linux/arm64") DEBIAN_FRONTEND=noninteractive apt install -y gcc-aarch64-linux-gnu ;; \
+    "linux/arm/v7") DEBIAN_FRONTEND=noninteractive apt install -y gcc-arm-linux-gnueabihf ;; \
     "*") echo "Unsupported target platform for cross-compilation: $TARGETPLATFORM" && exit 1 ;; \
     esac \
     fi && \
     # Install cmake, bindgen CLI, and required dependencies
-    apt install -y cmake clang libclang-dev && \
+    DEBIAN_FRONTEND=noninteractive apt install -y cmake clang libclang-dev && \
     cargo install bindgen-cli
 
 # Build the actual application (cache dependencies with BuildKit)
@@ -67,7 +67,7 @@ FROM debian:trixie
 RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
     --mount=type=cache,sharing=private,target=/var/lib/apt \
     apt update && \
-    apt install -y ca-certificates && \
+    DEBIAN_FRONTEND=noninteractive apt install -y ca-certificates && \
     apt clean && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/cache/apt/*

@@ -18,14 +18,14 @@ RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
     # Install packages for cross-compiling software with musl libc
     if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
     case "$TARGETPLATFORM" in \
-    "linux/386") dpkg --add-architecture i386 && apt update && apt install -y musl-dev:i386 ;; \
-    "linux/amd64") dpkg --add-architecture amd64 && apt update && apt install -y musl-dev:amd64 ;; \
-    "linux/arm64") dpkg --add-architecture arm64 && apt update && apt install -y musl-dev:arm64 ;; \
-    "linux/arm/v7") dpkg --add-architecture armhf && apt update && apt install -y musl-dev:armhf ;; \
+    "linux/386") dpkg --add-architecture i386 && apt update && DEBIAN_FRONTEND=noninteractive apt install -y musl-dev:i386 ;; \
+    "linux/amd64") dpkg --add-architecture amd64 && apt update && DEBIAN_FRONTEND=noninteractive apt install -y musl-dev:amd64 ;; \
+    "linux/arm64") dpkg --add-architecture arm64 && apt update && DEBIAN_FRONTEND=noninteractive apt install -y musl-dev:arm64 ;; \
+    "linux/arm/v7") dpkg --add-architecture armhf && apt update && DEBIAN_FRONTEND=noninteractive apt install -y musl-dev:armhf ;; \
     "*") echo "Unsupported target platform for cross-compilation: $TARGETPLATFORM" && exit 1 ;; \
     esac \
     else \
-    apt update && apt install -y musl-dev; \
+    apt update && DEBIAN_FRONTEND=noninteractive apt install -y musl-dev; \
     fi && \
     # Install cmake, bindgen CLI, and required dependencies
     apt install -y cmake clang libclang-dev && \
