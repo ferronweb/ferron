@@ -19,6 +19,7 @@ use instant_acme::{
   Account, AccountCredentials, AuthorizationStatus, BodyWrapper, BytesResponse, CertificateIdentifier, ChallengeType,
   ExternalAccountKey, HttpClient, Identifier, NewAccount, NewOrder, OrderStatus, RenewalInfo, RetryPolicy,
 };
+use monoio_compat::AsyncWriteExt;
 use rcgen::{CertificateParams, CustomExtension, KeyPair};
 use rustls::{
   crypto::CryptoProvider,
@@ -137,7 +138,17 @@ async fn set_in_cache(cache: &AcmeCache, key: &str, value: Vec<u8>) -> Result<()
     }
     AcmeCache::File(path) => {
       tokio::fs::create_dir_all(path).await.unwrap_or_default();
-      tokio::fs::write(path.join(key), value).await.map_err(Into::into)
+      let mut open_options = tokio::fs::OpenOptions::new();
+      open_options.write(true).create(true);
+
+      #[cfg(unix)]
+      open_options.mode(0o600); // Don't allow others to read or write
+
+      let mut file = open_options.open(path.join(key)).await?;
+      file.write_all(&value).await?;
+      file.flush().await.unwrap_or_default();
+
+      Ok(())
     }
   }
 }
