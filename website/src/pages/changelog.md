@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-beta.20
+
+**Released in October 11, 2025**
+
+- The server now logs the client IP address instead of the server IP address in the access log
+
 ## Ferron 2.0.0-beta.19
 
 **Released in October 11, 2025**
