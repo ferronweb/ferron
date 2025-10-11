@@ -1,0 +1,49 @@
+<section id="automatictls" class="py-20">
+  <div class="container mx-auto px-4">
+    <div class="text-center mb-16">
+      <h2 class="text-3xl md:text-4xl font-bold mb-4">
+        Experience automatic TLS
+      </h2>
+      <p class="text-muted-foreground text-lg max-w-2xl mx-auto">
+        Discover how Ferron simplifies the process of securing your website with
+        HTTPS through automatic TLS management.
+      </p>
+    </div>
+    <div class="card mx-auto max-w-224 prose md:prose-lg">
+      <ol>
+        <li>
+          Point a subdomain named <code>ferrondemo</code> of your domain name (for
+          example, <code>ferrondemo.example.com</code>) to either:
+          <div
+            class="my-2 flex flex-col sm:flex-row gap-1 md:gap-4 justify-center items-center"
+          >
+            <span
+              class="inline-flex shadow-sm border rounded-md overflow-clip bg-background text-foreground"
+            >
+              <span class="bg-primary text-primary-foreground px-4 py-1"
+                >CNAME</span
+              >
+              <span class="px-4 py-1">demo.ferron.sh</span>
+            </span>
+            <span>or</span>
+            <span
+              class="inline-flex shadow-sm border rounded-md overflow-clip bg-background text-foreground"
+            >
+              <span class="bg-primary text-primary-foreground px-4 py-1">A</span
+              >
+              <span class="px-4 py-1">194.110.4.223</span>
+            </span>
+          </div>
+        </li>
+        <li>
+          Visit the subdomain in the browser. You may have to wait some time for
+          the DNS to propagate and the TLS certificate to be issued.
+        </li>
+      </ol>
+      <p>
+        You will notice how Ferron manages the TLS certificate for your
+        subdomain automatically.
+      </p>
+    </div>
+  </div>
+</section>
