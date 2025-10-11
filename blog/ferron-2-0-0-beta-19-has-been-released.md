@@ -42,7 +42,7 @@ example.com {
     log "/var/log/ferron/access.log" // Replace "/var/log/ferron/access.log" with the path to the access log file
 
     // The log format is Combined Log Format.
-    log_format "{server_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""
+    log_format "{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""
     log_date_format "%d/%b/%Y:%H:%M:%S %z"
 
     // Serve static files (for this example)

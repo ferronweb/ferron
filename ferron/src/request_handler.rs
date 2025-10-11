@@ -138,7 +138,7 @@ async fn log_access(
     .send(LogMessage::new(
       replace_log_placeholders(
         log_format.unwrap_or(
-          "{server_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" \
+          "{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" \
            {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\"",
         ),
         request_parts,

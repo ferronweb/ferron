@@ -683,14 +683,14 @@ example.com {
 - `log_date_format <log_date_format: string>` (Ferron 2.0.0-beta.19 or newer)
   - This directive specifies the date format (according to POSIX) for the access log file. Default: `"%d/%b/%Y:%H:%M:%S %z"`
 - `log_format <log_format: string>` (Ferron 2.0.0-beta.19 or newer)
-  - This directive specifies the entry format for the access log file. The placeholders can be found in the reference below the section specifying. Default: `"{server_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""` (Combined Log Format)
+  - This directive specifies the entry format for the access log file. The placeholders can be found in the reference below the section specifying. Default: `"{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""` (Combined Log Format)
 
 **Configuration example:**
 
 ```kdl
 * {
     log_date_format "%d/%b/%Y:%H:%M:%S %z"
-    log_format "{server_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""
+    log_format "{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""
 }
 ```
 
