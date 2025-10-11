@@ -494,7 +494,7 @@ example.com {
 ### Reverse proxy & load balancing
 
 - `proxy <proxy_to: string|null> [unix=<unix_socket_path: string>]` (_rproxy_ module)
-  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported (Ferron UNRELEASED and newer) via the `unix` prop set to the path to the socket, supported only on Unix and Unix-like systems. This directive can be specified multiple times. Default: none
+  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported (Ferron 2.0.0-beta.19 and newer) via the `unix` prop set to the path to the socket, supported only on Unix and Unix-like systems. This directive can be specified multiple times. Default: none
 - `lb_health_check [enable_lb_health_check: bool]` (_rproxy_ module)
   - This directive specifies whenever the load balancer passive health check is enabled. Default: `lb_health_check #false`
 - `lb_health_check_max_fails <max_fails: integer>` (_rproxy_ module)
@@ -680,9 +680,9 @@ example.com {
 
 ### Logging
 
-- `log_date_format <log_date_format: string>` (Ferron UNRELEASED or newer)
+- `log_date_format <log_date_format: string>` (Ferron 2.0.0-beta.19 or newer)
   - This directive specifies the date format (according to POSIX) for the access log file. Default: `"%d/%b/%Y:%H:%M:%S %z"`
-- `log_format <log_format: string>` (Ferron UNRELEASED or newer)
+- `log_format <log_format: string>` (Ferron 2.0.0-beta.19 or newer)
   - This directive specifies the entry format for the access log file. The placeholders can be found in the reference below the section specifying. Default: `"{server_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""` (Combined Log Format)
 
 **Configuration example:**
@@ -722,7 +722,7 @@ Below is the list of supported subconditions:
 Ferron supports the following placeholders for header values, subconditions, reverse proxying, and redirect destinations:
 
 - `{path}` - the request URI with path (for example, `/index.html`)
-- `{path_and_query}` (Ferron UNRELEASED or newer) - the request URI with path and query string (for example, `/index.html?param=value`)
+- `{path_and_query}` (Ferron 2.0.0-beta.19 or newer) - the request URI with path and query string (for example, `/index.html?param=value`)
 - `{method}` (Ferron 2.0.0-beta.9 or newer) - the request method
 - `{version}` (Ferron 2.0.0-beta.9 or newer) - the HTTP version of the request
 - `{header:<header_name>}` (Ferron 2.0.0-beta.9 or newer) - the header value of the request URI
@@ -734,7 +734,7 @@ Ferron supports the following placeholders for header values, subconditions, rev
 
 ## Log placeholders
 
-Ferron UNRELEASED and newer supports the following placeholders for access logs:
+Ferron 2.0.0-beta.19 and newer supports the following placeholders for access logs:
 
 - `{path}` - the request URI with path (for example, `/index.html`)
 - `{path_and_query}` - the request URI with path and query string (for example, `/index.html?param=value`)
