@@ -34,7 +34,7 @@ jobs:
         shell: bash
         run: |
           pushd website
-          bun run build
+          bun run --bun build
           popd
 
       - name: Create the website ZIP archive
