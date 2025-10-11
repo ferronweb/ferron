@@ -14,6 +14,8 @@ services:
       - ./ferron.kdl:/etc/ferron.kdl
       - ./cache:/var/cache/ferron-acme
     depends_on:
+      ferron-acme-change-vol-ownership:
+        condition: service_completed_successfully
       pebble-health-check:
         condition: service_healthy
 
@@ -36,6 +38,14 @@ services:
       interval: 3s
       timeout: 5s
       retries: 3
+
+  # Container to change ownership of the volume, necessary for the ACME cache to work properly
+  ferron-acme-change-vol-ownership:
+    image: alpine
+    user: "root"
+    volumes:
+      - ./cache:/tmp/change-ownership
+    command: chown nobody:nogroup /tmp/change-ownership
 
   # A container to run tests
   test-runner:
