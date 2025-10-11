@@ -528,6 +528,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         let stream = if let Some(proxy_unix_str) = &proxy_unix {
           #[cfg(not(unix))]
           {
+            let _ = proxy_unix_str; // Discard the variable to avoid unused variable warning
             Err(anyhow::anyhow!("Unix sockets are not supported on this platform"))?
           }
 
