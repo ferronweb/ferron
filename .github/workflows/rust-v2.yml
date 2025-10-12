@@ -82,7 +82,7 @@ jobs:
           FERRON="$(pwd)/target/debug/ferron" bash smoketest/smoketest.sh
 
   check:
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-8x
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -100,3 +100,17 @@ jobs:
 
       - name: Check linting
         run: cargo clippy --workspace -- -D warnings
+
+  depcheck:
+    runs-on: ubuntu-latest # GitHub-hosted runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install "cargo shear"
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm shear --force
+
+      - name: Check for unused dependencies
+        run: cargo shear
