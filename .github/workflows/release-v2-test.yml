@@ -115,11 +115,18 @@ jobs:
         with:
           targets: "${{ matrix.target }}"
 
-      - name: Setup cache for preparation step
-        uses: WarpBuilds/rust-cache@v2
+      - name: Setup cache
+        uses: WarpBuilds/cache@v1
         with:
-          workspaces: |
-            build-prepare -> target
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            build-prepare/target/
+            target/
+          key: ReleaseFerron2-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ReleaseFerron2-${{ runner.os }}-${{ matrix.target }}-
 
       - name: Determine Ferron version
         shell: bash
@@ -155,7 +162,7 @@ jobs:
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall --no-confirm bindgen-cli --force
 
-      - name: Prepare for building binaries
+      - name: Build binaries
         shell: bash
         run: |
           cargo run --manifest-path build-prepare/Cargo.toml
@@ -174,19 +181,6 @@ jobs:
                   cargo update $CONFLICTING_PACKAGES || true; \
               fi; \
           done
-          cd ..
-
-      - name: Setup cache for final build step
-        uses: WarpBuilds/rust-cache@v2
-        with:
-          key: ${{ matrix.target }}
-          workspaces: |
-            build-workspace -> ../target
-
-      - name: Build binaries
-        shell: bash
-        run: |
-          cd build-workspace
           RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 ${{ matrix.command }} build --verbose --release --target-dir ../target --target ${{ matrix.target }} ${{ matrix.options }}
           cd ..
 
