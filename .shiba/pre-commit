@@ -11,6 +11,8 @@ if git diff --name-only --cached | grep -qE ".*\.rs$|(^|/)Cargo\.(lock|toml)$"; 
   cargo fmt || exit $?
 fi
 
+cargo shear --fix || true
+
 for rust_file in $(comm -12 <(git diff --name-only --cached | sort) <(git diff --name-only | sort) | grep ".*\.rs$"); do
   git add $rust_file
 done
