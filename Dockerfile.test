@@ -56,12 +56,12 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     echo "[target.$TARGET_TRIPLE]\nlinker = \"$TARGET_GCC\"" >> /usr/local/cargo/config.toml && \
     TARGET_PATH="target/$TARGET_TRIPLE/debug" && TARGET_MAKEFILE="$TARGET_TRIPLE"; \
     fi && \
-    # Build binaries (use "build-dev" instead of "build" recipe, to build faster, and because the Dockerfile is for testing)
-    CARGO_FINAL_EXTRA_ARGS="--features ferron/config-docker-auto" \
+    # Build Ferron binary (use "build-dev" instead of "build" recipe, to build faster, and because the Dockerfile is for testing)
+    CARGO_FINAL_EXTRA_ARGS="--bin ferron --features ferron/config-docker-auto" \
     TARGET="$TARGET_MAKEFILE" \
     make build-dev && \
     # Copy executables out of the cache
-    mkdir .dist && cp $TARGET_PATH/ferron $TARGET_PATH/ferron-passwd $TARGET_PATH/ferron-yaml2kdl .dist
+    mkdir .dist && cp $TARGET_PATH/ferron .dist
 
 # Use a Debian base image for the final image
 FROM debian:trixie
