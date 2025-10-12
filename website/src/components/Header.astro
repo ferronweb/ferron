@@ -66,18 +66,18 @@ const docLinks = Astro.props.docLinks;
             Install
           </a>
           <a
-            href="/blog"
-            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2 flex items-center gap-1"
-          >
-            <FontAwesomeIcon icon={faFileText} class="!h-4 w-4" />
-            Blog
-          </a>
-          <a
             href="/docs"
             class="text-sm font-medium transition-colors hover:text-primary px-2 py-2 flex items-center gap-1"
           >
             <FontAwesomeIcon icon={faBook} class="!h-4 w-4" />
             Docs
+          </a>
+          <a
+            href="/blog"
+            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2 flex items-center gap-1"
+          >
+            <FontAwesomeIcon icon={faFileText} class="!h-4 w-4" />
+            Blog
           </a>
           <a
             href="/support"
@@ -201,16 +201,16 @@ const docLinks = Astro.props.docLinks;
           Install
         </a>
         <a
-          href="/blog"
-          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
-        >
-          Blog
-        </a>
-        <a
           href="/docs"
           class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
         >
           Docs
+        </a>
+        <a
+          href="/blog"
+          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
+        >
+          Blog
         </a>
         <a
           href="/support"
