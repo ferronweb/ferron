@@ -78,10 +78,10 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
 
   interface BenchmarkData {
     name: string;
-    ferron: number;
-    competitor1: number;
-    competitor2: number;
-    competitor3: number;
+    ferron: string | number;
+    competitor1: string | number;
+    competitor2: string | number;
+    competitor3: string | number;
   }
 
   Chart.register([
