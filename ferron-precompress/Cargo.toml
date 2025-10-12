@@ -1,0 +1,20 @@
+[package]
+name = "ferron-precompress"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata.winresource]
+ProductName = "Ferron precompression utility"
+
+[dependencies]
+brotli = "8.0.2"
+clap = { version = "4.5.38", features = ["cargo"] }
+flate2 = { version = "1.1.4", default-features = false, features = ["zlib-rs"] }
+mimalloc = { workspace = true }
+zstd = "0.13.3"
+
+[dev-dependencies]
+shiba = { workspace = true }
+
+[build-dependencies]
+winresource = "0.1.19"

@@ -7,7 +7,7 @@ members = [
     "ferron-modules-builtin",
     "ferron-passwd",
     "ferron-yaml2kdl-core",
-    "ferron-yaml2kdl",
+    "ferron-yaml2kdl", "ferron-precompress",
 ]
 exclude = ["build-prepare", "dockertest"]
 resolver = "2"

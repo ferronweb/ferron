@@ -1642,6 +1642,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferron-precompress"
+version = "0.1.0"
+dependencies = [
+ "brotli",
+ "clap",
+ "flate2",
+ "mimalloc",
+ "shiba",
+ "winresource",
+ "zstd",
+]
+
+[[package]]
 name = "ferron-yaml2kdl"
 version = "2.0.0-beta.20"
 dependencies = [

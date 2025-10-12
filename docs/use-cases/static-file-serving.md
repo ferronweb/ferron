@@ -73,3 +73,10 @@ example.com {
 ```
 
 In this configuration, Ferron will serve precompressed versions of static files if they exist. The precompressed static files would additionally have `.gz` extension for gzip, `.deflate` for Deflate, `.br` for Brotli, or `.zst` for Zstandard.
+
+To create precompressed static files, you can use the `ferron-precompress` tool that comes with Ferron:
+
+```bash
+# Replace "/var/www/html" with the directory containing your static files
+ferron-precompress /var/www/html
+```

@@ -67,7 +67,7 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     CC="/tmp/musl-gcc" \
     make build && \
     # Copy executables out of the cache
-    mkdir .dist && cp $TARGET_PATH/ferron $TARGET_PATH/ferron-passwd $TARGET_PATH/ferron-yaml2kdl .dist
+    mkdir .dist && cp $TARGET_PATH/ferron $TARGET_PATH/ferron-passwd $TARGET_PATH/ferron-precompress $TARGET_PATH/ferron-yaml2kdl .dist
 
 # Use a Distroless base image for the final image
 # (even though the Rust image is based on Debian 13, the compiled binaries work on an image with Debian 12 base, since they're statically linked)
