@@ -25,20 +25,8 @@ RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
     DEBIAN_FRONTEND=noninteractive apt install -y cmake clang libclang-dev && \
     cargo install bindgen-cli
 
-# Set the working directory
-WORKDIR /usr/src/ferron
-
-# Copy the source code
-COPY . .
-
 # Install the right Rust target and configure Cargo
-
-
-# Build the actual application (cache dependencies with BuildKit)
-RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
-    --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
-    --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
-    --mount=type=cache,sharing=private,target=/usr/src/ferron/build-prepare/target \
+RUN \
     # Determine the target
     if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
     TARGET_TRIPLE="" && \
@@ -73,7 +61,7 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     --mount=type=cache,sharing=private,target=/usr/src/ferron/build-prepare/target \
     # Set target triple and path
     TARGET_TRIPLE="$(cat /tmp/target_triple)" && \
-    TARGET_PATH="target/$TARGET_TRIPLE/release" && \
+    TARGET_PATH="target/$TARGET_TRIPLE/debug" && \
     # Build Ferron binary (use "build-dev" instead of "build" recipe, to build faster, and because the Dockerfile is for testing)
     CARGO_FINAL_EXTRA_ARGS="--bin ferron --features ferron/config-docker-auto" \
     TARGET="$TARGET_TRIPLE" \
