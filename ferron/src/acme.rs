@@ -19,7 +19,6 @@ use instant_acme::{
   Account, AccountCredentials, AuthorizationStatus, BodyWrapper, BytesResponse, CertificateIdentifier, ChallengeType,
   ExternalAccountKey, HttpClient, Identifier, NewAccount, NewOrder, OrderStatus, RenewalInfo, RetryPolicy,
 };
-use monoio_compat::AsyncWriteExt;
 use rcgen::{CertificateParams, CustomExtension, KeyPair};
 use rustls::{
   crypto::CryptoProvider,
@@ -29,7 +28,7 @@ use rustls::{
 };
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use serde::{Deserialize, Serialize};
-use tokio::{sync::RwLock, time::Instant};
+use tokio::{io::AsyncWriteExt, sync::RwLock, time::Instant};
 use x509_parser::prelude::{FromDer, X509Certificate};
 use xxhash_rust::xxh3::xxh3_128;
 
