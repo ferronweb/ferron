@@ -25,7 +25,7 @@ on:
       - "packaging/**"
       - "smoketest/**"
       - "wwwroot/**"
-      - ".github/workflows/release-v2.yml"
+      - ".github/workflows/release-v2-test.yml"
 
 env:
   CARGO_TERM_COLOR: always
