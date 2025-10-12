@@ -160,7 +160,7 @@ This configuration reference organizes directives by both **scope** (where they 
 ### TLS/SSL & security
 
 - `tls_cipher_suite <tls_cipher_suite: string> [<tls_cipher_suite_2: string> ...]`
-  - This directive specifies the supported TLS cipher suites. This directive can be specified multiple times. Default: default TLS cipher suite for Rustls
+  - This directive specifies the supported TLS cipher suites. If using the HTTP/3 protocol (which is experimental in Ferron), the `TLS_AES_128_GCM_SHA256` cipher suite needs to be enabled (it's enabled by default), otherwise the HTTP/3 server wouldn’t start at all. This directive can be specified multiple times. Default: default TLS cipher suite for Rustls
 - `tls_ecdh_curves <ecdh_curve: string> [<ecdh_curve: string> ...]`
   - This directive specifies the supported TLS ECDH curves. This directive can be specified multiple times. Default: default ECDH curves for Rustls
 - `tls_client_certificate [enable_tls_client_certificate: bool]`
