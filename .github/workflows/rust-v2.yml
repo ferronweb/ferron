@@ -110,7 +110,7 @@ jobs:
       - name: Install "cargo shear"
         run: |
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-          cargo binstall --no-confirm shear --force
+          cargo binstall --no-confirm cargo-shear --force
 
       - name: Check for unused dependencies
         run: cargo shear
