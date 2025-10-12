@@ -5,15 +5,10 @@ FROM --platform=$BUILDPLATFORM rust:trixie AS builder
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 
-# Set the working directory
-WORKDIR /usr/src/ferron
-
-# Copy the source code
-COPY . .
-
 # Install packages for cross-compiling software
 RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
     --mount=type=cache,sharing=private,target=/var/lib/apt \
+    --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
     # Install packages for cross-compiling software with musl libc
     if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
@@ -31,15 +26,11 @@ RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
     apt install -y cmake clang libclang-dev && \
     cargo install bindgen-cli
 
-# Build the actual application (cache dependencies with BuildKit)
-RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
-    --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
-    --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
-    --mount=type=cache,sharing=private,target=/usr/src/ferron/build-prepare/target \
+# Install the right Rust target and configure Cargo
+RUN \
     # Determine the target
     TARGET_TRIPLE="" && \
     LIB_PATH="" && \
-    SYSROOT_PATH="" && \
     if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
     case "$TARGETPLATFORM" in \
     "linux/386") TARGET_TRIPLE="i686-unknown-linux-musl" && COMPILER_PREFIX="i686-linux-gnu-" && LIB_PATH="/usr/lib/i386-linux-musl"; ;; \
@@ -59,8 +50,24 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     mkdir -p /tmp/lib && cp $(rustc --print target-libdir --target $TARGET_TRIPLE)/self-contained/libunwind.a /tmp/lib && \
     # Configure Cargo
     echo "[target.$TARGET_TRIPLE]\nlinker = \"/tmp/musl-gcc\"\nrustflags = [\"-Clink-args=-L$LIB_PATH\", \"-Clink-args=-L/tmp/lib\", \"-Clink-self-contained=no\"]" >> /usr/local/cargo/config.toml && \
+    # Save target triple
+    echo "$TARGET_TRIPLE" > /tmp/target_triple
+
+# Set the working directory
+WORKDIR /usr/src/ferron
+
+# Copy the source code
+COPY . .
+
+# Build the application and copy binaries to an accessible location
+RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
+    --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
+    --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
+    --mount=type=cache,sharing=private,target=/usr/src/ferron/build-prepare/target \
+    # Set target triple and path
+    TARGET_TRIPLE="$(cat /tmp/target_triple)" && \
     TARGET_PATH="target/$TARGET_TRIPLE/release" && \
-    # Build Ferron
+    # Build Ferron binaries
     RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 \
     CARGO_FINAL_EXTRA_ARGS="--features ferron/config-docker-auto" \
     TARGET="$TARGET_TRIPLE" \

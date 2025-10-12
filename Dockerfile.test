@@ -1,5 +1,3 @@
-# This Dockerfile is intended for testing purposes only!
-
 # Use the official Rust image as a build stage
 FROM --platform=$BUILDPLATFORM rust:trixie AS builder
 
@@ -7,30 +5,34 @@ FROM --platform=$BUILDPLATFORM rust:trixie AS builder
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 
+# Install packages for cross-compiling software
+RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
+    --mount=type=cache,sharing=private,target=/var/lib/apt \
+    --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
+    --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
+    # Install packages for cross-compiling software with musl libc
+    apt update && \
+    if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
+    case "$TARGETPLATFORM" in \
+    "linux/386") DEBIAN_FRONTEND=noninteractive apt install -y gcc-i686-linux-gnu ;; \
+    "linux/amd64") DEBIAN_FRONTEND=noninteractive apt install -y gcc-x86-64-linux-gnu ;; \
+    "linux/arm64") DEBIAN_FRONTEND=noninteractive apt install -y gcc-aarch64-linux-gnu ;; \
+    "linux/arm/v7") DEBIAN_FRONTEND=noninteractive apt install -y gcc-arm-linux-gnueabihf ;; \
+    "*") echo "Unsupported target platform for cross-compilation: $TARGETPLATFORM" && exit 1 ;; \
+    esac \
+    fi && \
+    # Install cmake, bindgen CLI, and required dependencies
+    DEBIAN_FRONTEND=noninteractive apt install -y cmake clang libclang-dev && \
+    cargo install bindgen-cli
+
 # Set the working directory
 WORKDIR /usr/src/ferron
 
 # Copy the source code
 COPY . .
 
-# Install packages for cross-compiling software
-RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
-    --mount=type=cache,sharing=private,target=/var/lib/apt \
-    --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
-    # Install packages for cross-compiling software with musl libc
-    apt update && \
-    if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
-    case "$TARGETPLATFORM" in \
-    "linux/386") apt install -y gcc-i686-linux-gnu ;; \
-    "linux/amd64") apt install -y gcc-x86-64-linux-gnu ;; \
-    "linux/arm64") apt install -y gcc-aarch64-linux-gnu ;; \
-    "linux/arm/v7") apt install -y gcc-arm-linux-gnueabihf ;; \
-    "*") echo "Unsupported target platform for cross-compilation: $TARGETPLATFORM" && exit 1 ;; \
-    esac \
-    fi && \
-    # Install cmake, bindgen CLI, and required dependencies
-    apt install -y cmake clang libclang-dev && \
-    cargo install bindgen-cli
+# Install the right Rust target and configure Cargo
+
 
 # Build the actual application (cache dependencies with BuildKit)
 RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
@@ -38,8 +40,6 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
     --mount=type=cache,sharing=private,target=/usr/src/ferron/build-prepare/target \
     # Determine the target
-    TARGET_MAKEFILE= && \
-    TARGET_PATH="target/debug" && \
     if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
     TARGET_TRIPLE="" && \
     TARGET_GCC="" && \
@@ -53,9 +53,27 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     # Install the Rustup target
     rustup target add $TARGET_TRIPLE && \
     # Configure Cargo
-    echo "[target.$TARGET_TRIPLE]\nlinker = \"$TARGET_GCC\"" >> /usr/local/cargo/config.toml && \
-    TARGET_PATH="target/$TARGET_TRIPLE/debug" && TARGET_MAKEFILE="$TARGET_TRIPLE"; \
+    echo "[target.$TARGET_TRIPLE]\nlinker = \"$TARGET_GCC\"" >> /usr/local/cargo/config.toml; \
+    else \
+    TARGET_TRIPLE="$(rustc --print host-tuple)"; \
     fi && \
+    # Save target triple
+    echo "$TARGET_TRIPLE" > /tmp/target_triple
+
+# Set the working directory
+WORKDIR /usr/src/ferron
+
+# Copy the source code
+COPY . .
+
+# Build the application and copy binaries to an accessible location
+RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
+    --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
+    --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
+    --mount=type=cache,sharing=private,target=/usr/src/ferron/build-prepare/target \
+    # Set target triple and path
+    TARGET_TRIPLE="$(cat /tmp/target_triple)" && \
+    TARGET_PATH="target/$TARGET_TRIPLE/release" && \
     # Build Ferron binary (use "build-dev" instead of "build" recipe, to build faster, and because the Dockerfile is for testing)
     CARGO_FINAL_EXTRA_ARGS="--bin ferron --features ferron/config-docker-auto" \
     TARGET="$TARGET_MAKEFILE" \

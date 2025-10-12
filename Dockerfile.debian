@@ -5,15 +5,10 @@ FROM --platform=$BUILDPLATFORM rust:trixie AS builder
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 
-# Set the working directory
-WORKDIR /usr/src/ferron
-
-# Copy the source code
-COPY . .
-
 # Install packages for cross-compiling software
 RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
     --mount=type=cache,sharing=private,target=/var/lib/apt \
+    --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
     # Install packages for cross-compiling software with musl libc
     apt update && \
@@ -30,14 +25,21 @@ RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
     DEBIAN_FRONTEND=noninteractive apt install -y cmake clang libclang-dev && \
     cargo install bindgen-cli
 
+# Set the working directory
+WORKDIR /usr/src/ferron
+
+# Copy the source code
+COPY . .
+
+# Install the right Rust target and configure Cargo
+
+
 # Build the actual application (cache dependencies with BuildKit)
 RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
     --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
     --mount=type=cache,sharing=private,target=/usr/src/ferron/build-prepare/target \
     # Determine the target
-    TARGET_MAKEFILE= && \
-    TARGET_PATH="target/release" && \
     if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
     TARGET_TRIPLE="" && \
     TARGET_GCC="" && \
@@ -51,11 +53,30 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     # Install the Rustup target
     rustup target add $TARGET_TRIPLE && \
     # Configure Cargo
-    echo "[target.$TARGET_TRIPLE]\nlinker = \"$TARGET_GCC\"" >> /usr/local/cargo/config.toml && \
-    TARGET_PATH="target/$TARGET_TRIPLE/release" && TARGET_MAKEFILE="$TARGET_TRIPLE"; \
+    echo "[target.$TARGET_TRIPLE]\nlinker = \"$TARGET_GCC\"" >> /usr/local/cargo/config.toml; \
+    else \
+    TARGET_TRIPLE="$(rustc --print host-tuple)"; \
     fi && \
+    # Save target triple
+    echo "$TARGET_TRIPLE" > /tmp/target_triple
+
+# Set the working directory
+WORKDIR /usr/src/ferron
+
+# Copy the source code
+COPY . .
+
+# Build the application and copy binaries to an accessible location
+RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
+    --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
+    --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
+    --mount=type=cache,sharing=private,target=/usr/src/ferron/build-prepare/target \
+    # Set target triple and path
+    TARGET_TRIPLE="$(cat /tmp/target_triple)" && \
+    TARGET_PATH="target/$TARGET_TRIPLE/release" && \
+    # Build Ferron binaries
     CARGO_FINAL_EXTRA_ARGS="--features ferron/config-docker-auto" \
-    TARGET="$TARGET_MAKEFILE" \
+    TARGET="$TARGET_TRIPLE" \
     make build && \
     # Copy executables out of the cache
     mkdir .dist && cp $TARGET_PATH/ferron $TARGET_PATH/ferron-passwd $TARGET_PATH/ferron-precompress $TARGET_PATH/ferron-yaml2kdl .dist
