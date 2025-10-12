@@ -76,7 +76,7 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     TARGET_PATH="target/$TARGET_TRIPLE/release" && \
     # Build Ferron binary (use "build-dev" instead of "build" recipe, to build faster, and because the Dockerfile is for testing)
     CARGO_FINAL_EXTRA_ARGS="--bin ferron --features ferron/config-docker-auto" \
-    TARGET="$TARGET_MAKEFILE" \
+    TARGET="$TARGET_TRIPLE" \
     make build-dev && \
     # Copy executables out of the cache
     mkdir .dist && cp $TARGET_PATH/ferron .dist
