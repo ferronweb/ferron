@@ -5,6 +5,7 @@ import {
   faBook,
   faComments,
   faFileText,
+  faHeadset,
   faSearch,
   faX
 } from "@fortawesome/free-solid-svg-icons";
@@ -59,12 +60,6 @@ const docLinks = Astro.props.docLinks;
             Features
           </a>
           <a
-            href="/#benchmarks"
-            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2"
-          >
-            Benchmarks
-          </a>
-          <a
             href="/#install"
             class="text-sm font-medium transition-colors hover:text-primary px-2 py-2"
           >
@@ -83,6 +78,13 @@ const docLinks = Astro.props.docLinks;
           >
             <FontAwesomeIcon icon={faBook} class="!h-4 w-4" />
             Docs
+          </a>
+          <a
+            href="/support"
+            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2 flex items-center gap-1"
+          >
+            <FontAwesomeIcon icon={faHeadset} class="!h-4 w-4" />
+            Support
           </a>
           <div class="ml-2 flex items-center gap-1">
             {
@@ -193,12 +195,6 @@ const docLinks = Astro.props.docLinks;
           Features
         </a>
         <a
-          href="/#benchmarks"
-          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
-        >
-          Benchmarks
-        </a>
-        <a
           href="/#install"
           class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
         >
@@ -215,6 +211,12 @@ const docLinks = Astro.props.docLinks;
           class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
         >
           Docs
+        </a>
+        <a
+          href="/support"
+          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
+        >
+          Support
         </a>
         <div class={`${docLinks ? "inline-flex" : "flex mt-4"} space-x-2 px-3`}>
           <a
