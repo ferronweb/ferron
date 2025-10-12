@@ -116,8 +116,17 @@ jobs:
           targets: "${{ matrix.target }}"
 
       - name: Setup cache
-        if: matrix.command != 'cross'
-        uses: Swatinem/rust-cache@v2
+        uses: WarpBuilds/cache@v1
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            build-prepare/target/
+            target/
+          key: ReleaseFerron2-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ReleaseFerron2-${{ runner.os }}-${{ matrix.target }}-
 
       - name: Determine Ferron version
         shell: bash
@@ -181,7 +190,7 @@ jobs:
         run: |
           FERRON="$(pwd)/target/${{ matrix.target }}/release/ferron" bash smoketest/smoketest.sh
 
-      - name: Smoke test the  binary (Windows)
+      - name: Smoke test the binary (Windows)
         if: matrix.runner == 'warp-windows-latest-x64-8x' && matrix.smoketest == true
         shell: powershell
         run: |
@@ -364,6 +373,9 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            network=host
 
       - name: Build and export to Docker
         uses: docker/build-push-action@v6.18.0
@@ -372,8 +384,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           load: true
           tags: ${{ env.DOCKER_TAGS }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,url=http://127.0.0.1:49160/,version=1
+          cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1
 
       - name: Smoke test the Docker image
         shell: bash
@@ -389,8 +401,8 @@ jobs:
           platforms: ${{ matrix.platforms }}
           push: true
           tags: ${{ env.DOCKER_TAGS }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,url=http://127.0.0.1:49160/,version=1
+          cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v3
