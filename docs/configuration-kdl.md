@@ -716,16 +716,64 @@ Below is the list of supported subconditions:
   - This subcondition checks if the value matches the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
 - `is_not_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]` (Ferron 2.0.0-beta.15 or newer)
   - This subcondition checks if the value does not match the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
+- `is_rego <rego_policy: string>` (Ferron UNRELEASED or newer)
+  - This subcondition evaluates a Rego policy.
+
+## Rego subconditions
+
+Ferron UNRELEASED and newer supports more advanced subconditions with Rego policies embedded in Ferron configuration.
+
+When writing Rego policies for Ferron subconditions, you need to set the package name to `ferron` (`package ferron` line). Ferron checks the `pass` result of the policy.
+
+Inputs for Rego-based subconditions (`input`) are as follows:
+
+- `input.method` (string) - the HTTP method of the request (`GET`, `POST`, etc.)
+- `input.uri` (string) - the URI of the request (for example, `/index.php?page=1`)
+- `input.headers` (array<string, array<string>>) - the headers of the request. The header names are in lower-case.
+- `input.socket_data.client_ip` (string) - the client's IP address.
+- `input.socket_data.client_port` (number) - the client's port.
+- `input.socket_data.server_ip` (string) - the server's IP address.
+- `input.socket_data.server_port` (number) - the server's port.
+- `input.socket_data.encrypted` (boolean) - whether the connection is encrypted.
+
+You can read more about Rego in [Open Policy Agent documentation](https://www.openpolicyagent.org/docs/policy-language).
+
+**Configuration example utilizing Rego subconditions (denying `curl` requests):**
+
+```kdl
+// Replace "example.com" with your domain name.
+example.com {
+  condition "DENY_CURL" {
+    is_rego """
+      package ferron
+
+      default pass := false
+
+      pass := true if {
+        input.headers["user-agent"][0] == "curl"
+      }
+
+      pass := true if {
+        startswith(input.headers["user-agent"][0], "curl/")
+      }
+      """
+  }
+
+  if "DENY_CURL" {
+    status 403
+  }
+
+  // Serve static files
+  root "/var/www/html"
+}
+```
 
 ## Placeholders
 
 Ferron supports the following placeholders for header values, subconditions, reverse proxying, and redirect destinations:
 
 - `{path}` - the request URI with path (for example, `/index.html`)
-  <<<<<<< HEAD
-  =======
 - `{path_and_query}` (Ferron 2.0.0-beta.19 or newer) - the request URI with path and query string (for example, `/index.html?param=value`)
-  > > > > > > > develop-2.x
 - `{method}` (Ferron 2.0.0-beta.9 or newer) - the request method
 - `{version}` (Ferron 2.0.0-beta.9 or newer) - the HTTP version of the request
 - `{header:<header_name>}` (Ferron 2.0.0-beta.9 or newer) - the header value of the request URI

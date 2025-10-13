@@ -3,9 +3,10 @@ pub mod processing;
 
 pub use ferron_common::config::*;
 
-use std::fmt::Debug;
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
+use std::{collections::BTreeMap, fmt::Debug};
 
 use fancy_regex::RegexBuilder;
 
@@ -101,6 +102,21 @@ pub fn parse_conditional_data(name: &str, value: ServerConfigurationEntry) -> Co
         ConditionalData::Invalid
       }
     }
+    "is_rego" => {
+      if let Some(rego_policy) = value.values.first().and_then(|v| v.as_str()) {
+        let mut rego_engine = regorus::Engine::new();
+        if rego_engine
+          .add_policy("ferron.rego".to_string(), rego_policy.to_string())
+          .is_ok()
+        {
+          ConditionalData::IsRego(Arc::new(rego_engine))
+        } else {
+          ConditionalData::Invalid
+        }
+      } else {
+        ConditionalData::Invalid
+      }
+    }
     _ => ConditionalData::Invalid,
   }
 }
@@ -178,6 +194,56 @@ fn match_condition(
       !(regex
         .is_match(&replace_header_placeholders(v1, request, Some(socket_data)))
         .unwrap_or(true))
+    }
+    ConditionalData::IsRego(rego_engine) => {
+      let mut cloned_engine = (*rego_engine.clone()).clone();
+      let mut rego_input_object = BTreeMap::new();
+      rego_input_object.insert("method".into(), request.method.as_str().into());
+      rego_input_object.insert(
+        "protocol".into(),
+        match request.version {
+          hyper::Version::HTTP_09 => "HTTP/0.9".into(),
+          hyper::Version::HTTP_10 => "HTTP/1.0".into(),
+          hyper::Version::HTTP_11 => "HTTP/1.1".into(),
+          hyper::Version::HTTP_2 => "HTTP/2.0".into(),
+          hyper::Version::HTTP_3 => "HTTP/3.0".into(),
+          _ => "HTTP/Unknown".into(),
+        },
+      );
+      rego_input_object.insert("uri".into(), request.uri.to_string().into());
+      let mut headers_hashmap_initial: HashMap<String, Vec<regorus::Value>> = HashMap::new();
+      for (key, value) in request.headers.iter() {
+        let key_string = key.as_str().to_lowercase();
+        if let Some(header_list) = headers_hashmap_initial.get_mut(&key_string) {
+          header_list.push(value.to_str().unwrap_or("").into());
+        } else {
+          headers_hashmap_initial.insert(key_string, vec![value.to_str().unwrap_or("").into()]);
+        }
+      }
+      let mut headers_btreemap = BTreeMap::new();
+      for (key, value) in headers_hashmap_initial.into_iter() {
+        headers_btreemap.insert(key.into(), value.into());
+      }
+      let headers_rego = regorus::Value::Object(Arc::new(headers_btreemap));
+      rego_input_object.insert("headers".into(), headers_rego);
+      let mut socket_data_btreemap = BTreeMap::new();
+      socket_data_btreemap.insert("client_ip".into(), socket_data.remote_addr.ip().to_string().into());
+      socket_data_btreemap.insert("client_port".into(), (socket_data.remote_addr.port() as u32).into());
+      socket_data_btreemap.insert("server_ip".into(), socket_data.local_addr.ip().to_string().into());
+      socket_data_btreemap.insert("server_port".into(), (socket_data.local_addr.port() as u32).into());
+      socket_data_btreemap.insert("encrypted".into(), socket_data.encrypted.into());
+      let socket_data_rego = regorus::Value::Object(Arc::new(socket_data_btreemap));
+      rego_input_object.insert("socket_data".into(), socket_data_rego);
+      let rego_input = regorus::Value::Object(Arc::new(rego_input_object));
+      cloned_engine.set_input(rego_input);
+      cloned_engine
+        .eval_rule("data.ferron.pass".to_string())
+        .ok()
+        .unwrap_or(regorus::Value::Bool(false))
+        .as_bool()
+        .ok()
+        .copied()
+        .unwrap_or(false)
     }
     _ => false,
   }

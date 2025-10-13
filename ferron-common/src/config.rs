@@ -10,6 +10,7 @@ use crate::modules::Module;
 use crate::util::IpBlockList;
 
 /// Conditional data
+#[non_exhaustive]
 #[derive(Clone, Debug)]
 pub enum ConditionalData {
   IsRemoteIp(IpBlockList),
@@ -20,6 +21,7 @@ pub enum ConditionalData {
   IsNotEqual(String, String),
   IsRegex(String, Regex),
   IsNotRegex(String, Regex),
+  IsRego(Arc<regorus::Engine>),
   Invalid,
 }
 
@@ -34,6 +36,7 @@ impl PartialEq for ConditionalData {
       (Self::IsNotEqual(v1, v2), Self::IsNotEqual(v3, v4)) => v1 == v3 && v2 == v4,
       (Self::IsRegex(v1, v2), Self::IsRegex(v3, v4)) => v1 == v3 && v2.as_str() == v4.as_str(),
       (Self::IsNotRegex(v1, v2), Self::IsNotRegex(v3, v4)) => v1 == v3 && v2.as_str() == v4.as_str(),
+      (Self::IsRego(v1), Self::IsRego(v2)) => v1.get_policies().ok() == v2.get_policies().ok(),
       _ => false,
     }
   }

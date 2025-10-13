@@ -18,6 +18,7 @@ monoio = { version = "0.2.4", optional = true, features = ["sync"] }
 hickory-resolver = "0.25.2"
 tokio-util = "0.7.15"
 futures-util = { version = "0.3.31", features = ["sink"] }
+regorus = { version = "0.5.0", default-features = false, features = ["arc"] }
 
 [dev-dependencies]
 shiba = { workspace = true }
