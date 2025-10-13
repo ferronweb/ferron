@@ -589,13 +589,92 @@ async fn request_handler_wrapped(
     configurations.find_configuration(&request_parts, hostname_determinant.as_deref(), &socket_data);
   let mut request = Request::from_parts(request_parts, request_body);
   let mut configuration = match configuration_option {
-    Some(configuration) => configuration,
-    None => {
+    Ok(Some(configuration)) => configuration,
+    Ok(None) => {
       if error_log_enabled {
         if let Some(logger) = loggers.find_global_logger() {
           logger
             .send(LogMessage::new(
               String::from("Cannot determine server configuration"),
+              true,
+            ))
+            .await
+            .unwrap_or_default()
+        }
+      }
+      let response = Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .header(header::CONTENT_TYPE, "text/html")
+        .body(
+          Full::new(Bytes::from(generate_default_error_page(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            None,
+          )))
+          .map_err(|e| match e {})
+          .boxed(),
+        )
+        .unwrap_or_default();
+      if log_enabled {
+        let (request_parts, _) = request.into_parts();
+        if let Some(logger) = loggers.find_global_logger() {
+          log_access(
+            &logger,
+            &request_parts,
+            &socket_data,
+            None,
+            response.status().as_u16(),
+            match response.headers().get(header::CONTENT_LENGTH) {
+              Some(header_value) => match header_value.to_str() {
+                Ok(header_value) => match header_value.parse::<u64>() {
+                  Ok(content_length) => Some(content_length),
+                  Err(_) => response.body().size_hint().exact(),
+                },
+                Err(_) => response.body().size_hint().exact(),
+              },
+              None => response.body().size_hint().exact(),
+            },
+            global_configuration
+              .as_deref()
+              .and_then(|c| get_value!("log_date_format", c))
+              .and_then(|v| v.as_str()),
+            global_configuration
+              .as_deref()
+              .and_then(|c| get_value!("log_format", c))
+              .and_then(|v| v.as_str()),
+          )
+          .await;
+        }
+      }
+      let (mut response_parts, response_body) = response.into_parts();
+      if let Some(http3_alt_port) = http3_alt_port {
+        if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
+          Some(value) => {
+            let header_value_old = String::from_utf8_lossy(value.as_bytes());
+            let header_value_new = format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
+
+            if header_value_old != header_value_new {
+              HeaderValue::from_bytes(format!("{header_value_old}, {header_value_new}").as_bytes())
+            } else {
+              HeaderValue::from_bytes(header_value_old.as_bytes())
+            }
+          }
+          None => HeaderValue::from_bytes(format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes()),
+        } {
+          response_parts.headers.insert(header::ALT_SVC, header_value);
+        }
+      }
+      response_parts
+        .headers
+        .insert(header::SERVER, HeaderValue::from_static(SERVER_SOFTWARE));
+
+      return Ok(Response::from_parts(response_parts, response_body));
+    }
+    Err(err) => {
+      if error_log_enabled {
+        if let Some(logger) = loggers.find_global_logger() {
+          logger
+            .send(LogMessage::new(
+              format!("Cannot determine server configuration: {err}"),
               true,
             ))
             .await
@@ -950,10 +1029,91 @@ async fn request_handler_wrapped(
     };
     let configuration_option = configurations.find_configuration(&parts, hostname_determinant.as_deref(), &socket_data);
     request = Request::from_parts(parts, body);
-    if let Some(new_configuration) = configuration_option {
-      configuration = new_configuration;
-      log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
-      log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
+    match configuration_option {
+      Ok(Some(new_configuration)) => {
+        configuration = new_configuration;
+        log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
+        log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
+      }
+      Ok(None) => {}
+      Err(err) => {
+        if error_log_enabled {
+          if let Some(logger) = &logger {
+            logger
+              .send(LogMessage::new(
+                format!("Cannot determine server configuration: {err}"),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
+        }
+        let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
+
+        // Determine headers to add/remove/replace
+        let mut headers_to_add = HeaderMap::new();
+        let mut headers_to_replace = HeaderMap::new();
+        let mut headers_to_remove = Vec::new();
+        let (request_parts, _) = request.into_parts();
+        if let Some(custom_headers) = get_entries!("header", configuration) {
+          for custom_header in custom_headers.inner.iter().rev() {
+            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+              if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                if !headers_to_add.contains_key(header_name) {
+                  if let Ok(header_name) = HeaderName::from_str(header_name) {
+                    if let Ok(header_value) =
+                      HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts, None))
+                    {
+                      headers_to_add.insert(header_name, header_value);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        if let Some(custom_headers) = get_entries!("header_replace", configuration) {
+          for custom_header in custom_headers.inner.iter().rev() {
+            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+              if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                if let Ok(header_name) = HeaderName::from_str(header_name) {
+                  if let Ok(header_value) =
+                    HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts, None))
+                  {
+                    headers_to_replace.insert(header_name, header_value);
+                  }
+                }
+              }
+            }
+          }
+        }
+        if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
+          for custom_header in custom_headers_to_remove.inner.iter().rev() {
+            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+              if let Ok(header_name) = HeaderName::from_str(header_name) {
+                headers_to_remove.push(header_name);
+              }
+            }
+          }
+        }
+
+        return Ok(
+          finalize_response_and_log(
+            response,
+            http3_alt_port,
+            headers_to_add,
+            headers_to_replace,
+            headers_to_remove,
+            &logger,
+            &log_request_parts,
+            &socket_data,
+            None,
+            log_date_format,
+            log_format,
+          )
+          .await,
+        );
+      }
     }
   }
 

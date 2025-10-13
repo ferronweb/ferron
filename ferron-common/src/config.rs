@@ -22,7 +22,6 @@ pub enum ConditionalData {
   IsRegex(String, Regex),
   IsNotRegex(String, Regex),
   IsRego(Arc<regorus::Engine>),
-  Invalid,
 }
 
 impl PartialEq for ConditionalData {
