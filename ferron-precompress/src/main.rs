@@ -19,6 +19,15 @@ fn parse_arguments() -> ArgMatches {
         .action(ArgAction::Append)
         .value_parser(PathBuf::from_str),
     )
+    .arg(
+      Arg::new("threads")
+        .long("threads")
+        .short('t')
+        .help("The number of threads to use for compression")
+        .default_value("64")
+        .action(ArgAction::Append)
+        .value_parser(usize::from_str),
+    )
     .get_matches()
 }
 
@@ -267,6 +276,15 @@ fn main() {
     }
   };
 
+  // Obtain the number of threads
+  let num_threads = match args.get_one::<usize>("threads") {
+    Some(num) => *num,
+    None => {
+      eprintln!("Cannot obtain the number of threads");
+      std::process::exit(1);
+    }
+  };
+
   let mut paths = Vec::new();
 
   // Obtain the paths
@@ -280,15 +298,26 @@ fn main() {
     });
   }
 
-  // Compress the assets
-  for path in paths {
-    println!("Compressing asset at {}...", path.display());
-    match compress_asset(&path) {
-      Ok(_) => {}
-      Err(err) => {
-        eprintln!("Error compressing asset at {}: {}", path.display(), err);
-        std::process::exit(1);
-      }
+  // Initialize the thread pool
+  let thread_pool = match rayon::ThreadPoolBuilder::new().num_threads(num_threads).build() {
+    Ok(pool) => pool,
+    Err(err) => {
+      eprintln!("Error initializing thread pool: {}", err);
+      std::process::exit(1);
     }
-  }
+  };
+
+  // Compress the assets
+  thread_pool.scope(move |scope| {
+    for path in paths {
+      println!("Compressing asset at {}...", path.display());
+      scope.spawn(move |_| match compress_asset(&path) {
+        Ok(_) => {}
+        Err(err) => {
+          eprintln!("Error compressing asset at {}: {}", path.display(), err);
+          std::process::exit(1);
+        }
+      });
+    }
+  });
 }
