@@ -73,7 +73,6 @@ jobs:
         uses: docker/build-push-action@v6.18.0
         with:
           context: ./dockertest/runner
-          file: Dockerfile
           load: true
           cache-from: type=gha,url=http://127.0.0.1:49160/,version=1
           cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1
