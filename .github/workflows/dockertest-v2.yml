@@ -60,6 +60,7 @@ jobs:
       - name: Set up Docker Compose
         uses: docker/setup-compose-action@v1
 
+      # Build the test Ferron image to cache it for the test suite
       - name: Build the test Ferron image
         uses: docker/build-push-action@v6.18.0
         with:
@@ -69,6 +70,7 @@ jobs:
           cache-from: type=gha,url=http://127.0.0.1:49160/,version=1
           cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1
 
+      # Build the test runner image to cache it for the test suite
       - name: Build the test runner image
         uses: docker/build-push-action@v6.18.0
         with:
