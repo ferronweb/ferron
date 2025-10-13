@@ -45,21 +45,29 @@ env:
 
 jobs:
   dockertest:
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-4x
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Configure WarpBuild Docker Builders
-        uses: Warpbuilds/docker-configure@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
         with:
-          api-key: ${{ secrets.WARPBUILD_API_KEY }}
-          profile-name: warp-dockertest
-          timeout: 300000
+          driver-opts: |
+            network=host
 
       - name: Set up Docker Compose
         uses: docker/setup-compose-action@v1
+
+      - name: Build the test image
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: .
+          file: Dockerfile.test
+          load: true
+          cache-from: type=gha,url=http://127.0.0.1:49160/,version=1
+          cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1
 
       - name: Run the test suite
         shell: bash
