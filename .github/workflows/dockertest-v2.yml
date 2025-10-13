@@ -45,7 +45,7 @@ env:
 
 jobs:
   dockertest:
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: warp-ubuntu-latest-x64-8x
 
     steps:
       - name: Checkout
@@ -60,11 +60,20 @@ jobs:
       - name: Set up Docker Compose
         uses: docker/setup-compose-action@v1
 
-      - name: Build the test image
+      - name: Build the test Ferron image
         uses: docker/build-push-action@v6.18.0
         with:
           context: .
           file: Dockerfile.test
+          load: true
+          cache-from: type=gha,url=http://127.0.0.1:49160/,version=1
+          cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1
+
+      - name: Build the test runner image
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: ./dockertest/runner
+          file: Dockerfile
           load: true
           cache-from: type=gha,url=http://127.0.0.1:49160/,version=1
           cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1
