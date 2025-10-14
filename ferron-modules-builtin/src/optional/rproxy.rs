@@ -508,11 +508,10 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           "random" => LoadBalancerAlgorithm::Random,
           _ => LoadBalancerAlgorithm::Random,
         });
-    #[allow(clippy::match_like_matches_macro)]
-    let track_connections = match load_balancer_algorithm {
-      LoadBalancerAlgorithm::LeastConnections(_) | LoadBalancerAlgorithm::TwoRandomChoices(_) => true,
-      _ => false,
-    };
+    let track_connections = matches!(
+      load_balancer_algorithm,
+      LoadBalancerAlgorithm::LeastConnections(_) | LoadBalancerAlgorithm::TwoRandomChoices(_)
+    );
     let retry_connection = get_value!("lb_retry_connection", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(true);
