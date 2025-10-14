@@ -6,6 +6,7 @@ services:
         aliases:
           - ferron-random
           - ferron-round-robin
+          - ferron-least-conn
     build:
       context: ../../..
       dockerfile: Dockerfile.test

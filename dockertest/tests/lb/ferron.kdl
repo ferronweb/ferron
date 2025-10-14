@@ -13,3 +13,11 @@ ferron-round-robin:80 {
 
   lb_algorithm "round_robin"
 }
+
+ferron-least-conn:80 {
+  proxy "http://backend-1:3000"
+  proxy "http://backend-2:3000"
+  proxy "http://backend-3:3000"
+
+  lb_algorithm "least_conn"
+}
