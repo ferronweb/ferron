@@ -57,6 +57,7 @@ enum LoadBalancerAlgorithm {
   Random,
   RoundRobin(Arc<AtomicUsize>),
   LeastConnections(Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>),
+  TwoRandomChoices(Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>),
 }
 
 enum SendRequest {
@@ -501,6 +502,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
       get_value!("lb_algorithm", config)
         .and_then(|v| v.as_str())
         .map_or(LoadBalancerAlgorithm::Random, |v| match v {
+          "two_random" => LoadBalancerAlgorithm::TwoRandomChoices(self.connection_track.clone()),
           "least_conn" => LoadBalancerAlgorithm::LeastConnections(self.connection_track.clone()),
           "round_robin" => LoadBalancerAlgorithm::RoundRobin(self.round_robin_index.clone()),
           "random" => LoadBalancerAlgorithm::Random,
@@ -508,7 +510,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         });
     #[allow(clippy::match_like_matches_macro)]
     let track_connections = match load_balancer_algorithm {
-      LoadBalancerAlgorithm::LeastConnections(_) => true,
+      LoadBalancerAlgorithm::LeastConnections(_) | LoadBalancerAlgorithm::TwoRandomChoices(_) => true,
       _ => false,
     };
     let retry_connection = get_value!("lb_retry_connection", config)
@@ -1030,6 +1032,52 @@ async fn select_backend_index(
   backends: &[(&str, Option<&str>, usize)],
 ) -> usize {
   match load_balancer_algorithm {
+    LoadBalancerAlgorithm::TwoRandomChoices(connection_track) => {
+      let random_choice1 = rand::random_range(..backends.len());
+      let mut random_choice2 = if backends.len() > 1 {
+        rand::random_range(..(backends.len() - 1))
+      } else {
+        0
+      };
+      if backends.len() > 1 && random_choice2 >= random_choice1 {
+        random_choice2 += 1;
+      }
+      let backend1 = backends[random_choice1];
+      let backend2 = backends[random_choice2];
+      let connection_track_key1 = (backend1.0.to_string(), backend1.1.as_ref().map(|s| s.to_string()));
+      let connection_track_key2 = (backend2.0.to_string(), backend2.1.as_ref().map(|s| s.to_string()));
+      let connection_track_read = connection_track.read().await;
+      let connection_count_option1 = connection_track_read
+        .get(&connection_track_key1)
+        .map(|connection_count| Arc::strong_count(connection_count) - 1);
+      let connection_count_option2 = connection_track_read
+        .get(&connection_track_key2)
+        .map(|connection_count| Arc::strong_count(connection_count) - 1);
+      drop(connection_track_read);
+      let connection_count1 = if let Some(count) = connection_count_option1 {
+        count
+      } else {
+        connection_track
+          .write()
+          .await
+          .insert(connection_track_key1, Arc::new(()));
+        0
+      };
+      let connection_count2 = if let Some(count) = connection_count_option2 {
+        count
+      } else {
+        connection_track
+          .write()
+          .await
+          .insert(connection_track_key2, Arc::new(()));
+        0
+      };
+      if connection_count2 >= connection_count1 {
+        random_choice1
+      } else {
+        random_choice2
+      }
+    }
     LoadBalancerAlgorithm::LeastConnections(connection_track) => {
       let mut min_index = 0;
       let mut min_connections = None;

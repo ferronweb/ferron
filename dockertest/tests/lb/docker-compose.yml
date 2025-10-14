@@ -7,6 +7,7 @@ services:
           - ferron-random
           - ferron-round-robin
           - ferron-least-conn
+          - ferron-two-random
     build:
       context: ../../..
       dockerfile: Dockerfile.test

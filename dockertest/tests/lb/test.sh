@@ -114,6 +114,18 @@ else
     TEST_FAILED=1
 fi
 
+TEST_RESULTS="$(curl -fsSL http://ferron-two-random/ && echo -n " " && curl -fsSL http://ferron-two-random/ && echo -n " " && curl -fsSL http://ferron-two-random/)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="Hello, World! Hello, World! Hello, World!"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "Basic load balancing (power of two random choices) test passed!"
+else
+    echo "Basic load balancing (power of two random choices) test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
 
 if [ "$TEST_FAILED" -eq 1 ]; then
     exit 1
