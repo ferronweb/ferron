@@ -213,7 +213,7 @@ jobs:
           directory: "release"
 
       - name: Set up SSH
-        uses: LuisEnMarroquin/setup-ssh-action@v2.0.5
+        uses: LuisEnMarroquin/setup-ssh-action@v3.0.0
         with:
           ORIGIN: ${{ secrets.SSH_HOSTNAME }}
           SSHKEY: ${{ secrets.SSH_KEY }}
@@ -279,7 +279,7 @@ jobs:
   #         directory: "target/doc"
 
   #     - name: Set up SSH
-  #       uses: LuisEnMarroquin/setup-ssh-action@v2.0.5
+  #       uses: LuisEnMarroquin/setup-ssh-action@v3.0.0
   #       with:
   #         ORIGIN: ${{ secrets.SSH_HOSTNAME }}
   #         SSHKEY: ${{ secrets.SSH_KEY }}
