@@ -977,14 +977,25 @@ async fn determine_proxy_to(
       if !proxy_to_vector.is_empty() {
         let index = match load_balancer_algorithm {
           LoadBalancerAlgorithm::RoundRobin(round_robin_index) => {
-            let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed);
-            if index_init >= proxy_to_vector.len() {
-              let index_final = index_init % proxy_to_vector.len();
-              round_robin_index.store(index_final, Ordering::Relaxed);
-              index_final
-            } else {
-              index_init
+            let index;
+            loop {
+              let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed);
+              if index_init >= proxy_to_vector.len() {
+                let index_final = index_init % proxy_to_vector.len();
+                round_robin_index.store(index_final, Ordering::Relaxed);
+                if excluded_backend_indexes.contains(&index_final) {
+                  continue;
+                }
+                index = index_final;
+              } else {
+                if excluded_backend_indexes.contains(&index_init) {
+                  continue;
+                }
+                index = index_init;
+              }
+              break;
             }
+            index
           }
           LoadBalancerAlgorithm::Random => rand::random_range(..proxy_to_vector.len()),
         };
