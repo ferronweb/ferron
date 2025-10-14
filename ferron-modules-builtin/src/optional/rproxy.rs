@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -443,11 +443,12 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let mut proxy_to_vector = get_entries!("proxy", config).map_or(vec![], |e| {
       e.inner
         .iter()
-        .filter_map(|e| {
+        .enumerate()
+        .filter_map(|(index, e)| {
           e.values
             .first()
             .and_then(|v| v.as_str())
-            .map(|v| (v, e.props.get("unix").and_then(|v| v.as_str())))
+            .map(|v| (v, e.props.get("unix").and_then(|v| v.as_str()), index))
         })
         .collect()
     });
@@ -462,6 +463,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let retry_connection = get_value!("lb_retry_connection", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(true);
+    let mut excluded_backend_indexes = HashSet::new();
     let (request_parts, request_body) = request.into_parts();
     let mut request_parts = Some(request_parts);
 
@@ -472,6 +474,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         enable_health_check,
         health_check_max_fails,
         &load_balancer_algorithm,
+        &mut excluded_backend_indexes,
       )
       .await
       {
@@ -950,11 +953,12 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 /// # Returns
 /// * `Option<String>` - The URL of the selected backend server, or None if no valid backend exists
 async fn determine_proxy_to(
-  proxy_to_vector: &mut Vec<(&str, Option<&str>)>,
+  proxy_to_vector: &mut Vec<(&str, Option<&str>, usize)>,
   failed_backends: &RwLock<TtlCache<(String, Option<String>), u64>>,
   enable_health_check: bool,
   health_check_max_fails: u64,
   load_balancer_algorithm: &LoadBalancerAlgorithm,
+  excluded_backend_indexes: &mut HashSet<usize>,
 ) -> Option<(String, Option<String>)> {
   let mut proxy_to = None;
   // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
@@ -964,6 +968,7 @@ async fn determine_proxy_to(
     return None;
   } else if proxy_to_vector.len() == 1 {
     let proxy_to_borrowed = proxy_to_vector.remove(0);
+    excluded_backend_indexes.insert(proxy_to_borrowed.2);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
     let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
     proxy_to = Some((proxy_to_url, proxy_to_header));
@@ -984,6 +989,7 @@ async fn determine_proxy_to(
           LoadBalancerAlgorithm::Random => rand::random_range(..proxy_to_vector.len()),
         };
         let proxy_to_borrowed = proxy_to_vector.remove(index);
+        excluded_backend_indexes.insert(proxy_to_borrowed.2);
         let proxy_to_url = proxy_to_borrowed.0.to_string();
         let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
         proxy_to = Some((proxy_to_url.clone(), proxy_to_header.clone()));
@@ -1004,18 +1010,30 @@ async fn determine_proxy_to(
     // select one backend from all available options
     let index = match load_balancer_algorithm {
       LoadBalancerAlgorithm::RoundRobin(round_robin_index) => {
-        let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed);
-        if index_init >= proxy_to_vector.len() {
-          let index_final = index_init % proxy_to_vector.len();
-          round_robin_index.store(index_final, Ordering::Relaxed);
-          index_final
-        } else {
-          index_init
+        let index;
+        loop {
+          let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed);
+          if index_init >= proxy_to_vector.len() {
+            let index_final = index_init % proxy_to_vector.len();
+            round_robin_index.store(index_final, Ordering::Relaxed);
+            if excluded_backend_indexes.contains(&index_final) {
+              continue;
+            }
+            index = index_final;
+          } else {
+            if excluded_backend_indexes.contains(&index_init) {
+              continue;
+            }
+            index = index_init;
+          }
+          break;
         }
+        index
       }
       LoadBalancerAlgorithm::Random => rand::random_range(..proxy_to_vector.len()),
     };
     let proxy_to_borrowed = proxy_to_vector.remove(index);
+    excluded_backend_indexes.insert(proxy_to_borrowed.2);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
     let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
     proxy_to = Some((proxy_to_url, proxy_to_header));
