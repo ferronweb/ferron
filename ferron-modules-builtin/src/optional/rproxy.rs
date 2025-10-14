@@ -935,6 +935,46 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
   }
 }
 
+/// Selects an index for a backend server based on the load balancing algorithm.
+///
+/// # Parameters
+/// * `load_balancer_algorithm`: The load balancing algorithm to use.
+/// * `excluded_backend_indexes`: A set of backend indexes that should be excluded.
+/// * `backends_len`: The length of the list of backend servers to choose from
+///
+/// # Returns
+/// * `usize` - The index of the selected backend server.
+fn select_backend_index(
+  load_balancer_algorithm: &LoadBalancerAlgorithm,
+  excluded_backend_indexes: &HashSet<usize>,
+  backends_len: usize,
+) -> usize {
+  match load_balancer_algorithm {
+    LoadBalancerAlgorithm::RoundRobin(round_robin_index) => {
+      let index;
+      loop {
+        let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed);
+        if index_init >= backends_len {
+          let index_final = index_init % backends_len;
+          round_robin_index.store(index_final + 1 % backends_len, Ordering::Relaxed);
+          if excluded_backend_indexes.contains(&index_final) {
+            continue;
+          }
+          index = index_final;
+        } else {
+          if excluded_backend_indexes.contains(&index_init) {
+            continue;
+          }
+          index = index_init;
+        }
+        break;
+      }
+      index
+    }
+    LoadBalancerAlgorithm::Random => rand::random_range(..backends_len),
+  }
+}
+
 /// Determines which backend server to proxy the request to, based on the list of backend servers
 ///
 /// This function:
@@ -949,6 +989,8 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 /// * `failed_backends` - Cache tracking failed backend attempts
 /// * `enable_health_check` - Whether backend health checking is enabled
 /// * `health_check_max_fails` - Maximum number of failures before considering a backend unhealthy
+/// * `load_balancer_algorithm` - The load balancing algorithm to use
+/// * `excluded_backend_indexes` - A set of backend indexes that should be excluded
 ///
 /// # Returns
 /// * `Option<String>` - The URL of the selected backend server, or None if no valid backend exists
@@ -975,30 +1017,7 @@ async fn determine_proxy_to(
   } else if enable_health_check {
     loop {
       if !proxy_to_vector.is_empty() {
-        let index = match load_balancer_algorithm {
-          LoadBalancerAlgorithm::RoundRobin(round_robin_index) => {
-            let index;
-            loop {
-              let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed);
-              if index_init >= proxy_to_vector.len() {
-                let index_final = index_init % proxy_to_vector.len();
-                round_robin_index.store(index_final + 1 % proxy_to_vector.len(), Ordering::Relaxed);
-                if excluded_backend_indexes.contains(&index_final) {
-                  continue;
-                }
-                index = index_final;
-              } else {
-                if excluded_backend_indexes.contains(&index_init) {
-                  continue;
-                }
-                index = index_init;
-              }
-              break;
-            }
-            index
-          }
-          LoadBalancerAlgorithm::Random => rand::random_range(..proxy_to_vector.len()),
-        };
+        let index = select_backend_index(load_balancer_algorithm, excluded_backend_indexes, proxy_to_vector.len());
         let proxy_to_borrowed = proxy_to_vector.remove(index);
         excluded_backend_indexes.insert(proxy_to_borrowed.2);
         let proxy_to_url = proxy_to_borrowed.0.to_string();
@@ -1019,30 +1038,7 @@ async fn determine_proxy_to(
   } else if !proxy_to_vector.is_empty() {
     // If we have backends available and health checking is disabled,
     // select one backend from all available options
-    let index = match load_balancer_algorithm {
-      LoadBalancerAlgorithm::RoundRobin(round_robin_index) => {
-        let index;
-        loop {
-          let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed);
-          if index_init >= proxy_to_vector.len() {
-            let index_final = index_init % proxy_to_vector.len();
-            round_robin_index.store(index_final + 1 % proxy_to_vector.len(), Ordering::Relaxed);
-            if excluded_backend_indexes.contains(&index_final) {
-              continue;
-            }
-            index = index_final;
-          } else {
-            if excluded_backend_indexes.contains(&index_init) {
-              continue;
-            }
-            index = index_init;
-          }
-          break;
-        }
-        index
-      }
-      LoadBalancerAlgorithm::Random => rand::random_range(..proxy_to_vector.len()),
-    };
+    let index = select_backend_index(load_balancer_algorithm, excluded_backend_indexes, proxy_to_vector.len());
     let proxy_to_borrowed = proxy_to_vector.remove(index);
     excluded_backend_indexes.insert(proxy_to_borrowed.2);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
