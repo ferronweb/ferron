@@ -982,7 +982,7 @@ async fn determine_proxy_to(
               let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed);
               if index_init >= proxy_to_vector.len() {
                 let index_final = index_init % proxy_to_vector.len();
-                round_robin_index.store(index_final, Ordering::Relaxed);
+                round_robin_index.store(index_final + 1 % proxy_to_vector.len(), Ordering::Relaxed);
                 if excluded_backend_indexes.contains(&index_final) {
                   continue;
                 }
@@ -1026,7 +1026,7 @@ async fn determine_proxy_to(
           let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed);
           if index_init >= proxy_to_vector.len() {
             let index_final = index_init % proxy_to_vector.len();
-            round_robin_index.store(index_final, Ordering::Relaxed);
+            round_robin_index.store(index_final + 1 % proxy_to_vector.len(), Ordering::Relaxed);
             if excluded_backend_indexes.contains(&index_final) {
               continue;
             }
