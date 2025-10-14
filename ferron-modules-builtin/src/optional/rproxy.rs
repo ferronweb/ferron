@@ -13,6 +13,7 @@ use bytes::Bytes;
 use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
+use hyper::body::Body;
 use hyper::header::{HeaderName, HeaderValue};
 use hyper::{header, HeaderMap, Request, Response, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
@@ -51,9 +52,11 @@ use ferron_common::{get_entries, get_entries_for_validation, get_value};
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
 
+#[allow(clippy::type_complexity)]
 enum LoadBalancerAlgorithm {
   Random,
   RoundRobin(Arc<AtomicUsize>),
+  LeastConnections(Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>),
 }
 
 enum SendRequest {
@@ -132,6 +135,44 @@ impl AsyncWrite for Connection {
   }
 }
 
+/// A tracked response body
+struct TrackedBody<B> {
+  inner: B,
+  _tracker: Arc<()>,
+}
+
+impl<B> TrackedBody<B> {
+  fn new(inner: B, tracker: Arc<()>) -> Self {
+    Self {
+      inner,
+      _tracker: tracker,
+    }
+  }
+}
+
+impl<B> Body for TrackedBody<B>
+where
+  B: Body + Unpin,
+{
+  type Data = B::Data;
+  type Error = B::Error;
+
+  fn poll_frame(
+    mut self: Pin<&mut Self>,
+    cx: &mut Context<'_>,
+  ) -> Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
+    Pin::new(&mut self.inner).poll_frame(cx)
+  }
+
+  fn is_end_stream(&self) -> bool {
+    self.inner.is_end_stream()
+  }
+
+  fn size_hint(&self) -> hyper::body::SizeHint {
+    self.inner.size_hint()
+  }
+}
+
 /// A reverse proxy module loader
 #[allow(clippy::type_complexity)]
 pub struct ReverseProxyModuleLoader {
@@ -180,6 +221,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                 .unwrap_or(5000) as u64,
             )))),
             round_robin_index: Arc::new(AtomicUsize::new(0)),
+            connection_track: Arc::new(RwLock::new(HashMap::new())),
           }))
         })?,
     )
@@ -383,6 +425,7 @@ struct ReverseProxyModule {
   connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
   round_robin_index: Arc<AtomicUsize>,
+  connection_track: Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>,
 }
 
 impl Module for ReverseProxyModule {
@@ -391,6 +434,7 @@ impl Module for ReverseProxyModule {
       connections: self.connections.clone(),
       failed_backends: self.failed_backends.clone(),
       round_robin_index: self.round_robin_index.clone(),
+      connection_track: self.connection_track.clone(),
     })
   }
 }
@@ -401,6 +445,7 @@ struct ReverseProxyModuleHandlers {
   connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
   round_robin_index: Arc<AtomicUsize>,
+  connection_track: Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>,
 }
 
 #[async_trait(?Send)]
@@ -456,10 +501,16 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
       get_value!("lb_algorithm", config)
         .and_then(|v| v.as_str())
         .map_or(LoadBalancerAlgorithm::Random, |v| match v {
+          "least_conn" => LoadBalancerAlgorithm::LeastConnections(self.connection_track.clone()),
           "round_robin" => LoadBalancerAlgorithm::RoundRobin(self.round_robin_index.clone()),
           "random" => LoadBalancerAlgorithm::Random,
           _ => LoadBalancerAlgorithm::Random,
         });
+    #[allow(clippy::match_like_matches_macro)]
+    let track_connections = match load_balancer_algorithm {
+      LoadBalancerAlgorithm::LeastConnections(_) => true,
+      _ => false,
+    };
     let retry_connection = get_value!("lb_retry_connection", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(true);
@@ -514,6 +565,27 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         let proxy_request_parts =
           construct_proxy_request_parts(request_parts, config, socket_data, &proxy_request_url)?;
 
+        let tracked_connection = if track_connections {
+          let connection_track_key = (proxy_to.clone(), proxy_unix.clone());
+          let connection_track_read = self.connection_track.read().await;
+          Some(
+            if let Some(connection_count) = connection_track_read.get(&connection_track_key) {
+              connection_count.clone()
+            } else {
+              let tracked_connection = Arc::new(());
+              drop(connection_track_read);
+              self
+                .connection_track
+                .write()
+                .await
+                .insert(connection_track_key, tracked_connection.clone());
+              tracked_connection
+            },
+          )
+        } else {
+          None
+        };
+
         let connections = if get_value!("proxy_keepalive", config)
           .and_then(|v| v.as_bool())
           .unwrap_or(true)
@@ -538,7 +610,14 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
                   SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
                 } {
                   let proxy_request = Request::from_parts(proxy_request_parts, request_body);
-                  let result = http_proxy_kept_alive(sender, proxy_request, error_logger, proxy_intercept_errors).await;
+                  let result = http_proxy_kept_alive(
+                    sender,
+                    proxy_request,
+                    error_logger,
+                    proxy_intercept_errors,
+                    tracked_connection,
+                  )
+                  .await;
                   drop(rwlock_write);
                   return result;
                 } else {
@@ -919,6 +998,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           proxy_request,
           error_logger,
           proxy_intercept_errors,
+          tracked_connection,
         )
         .await;
       } else {
@@ -940,23 +1020,46 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 /// # Parameters
 /// * `load_balancer_algorithm`: The load balancing algorithm to use.
 /// * `excluded_backend_indexes`: A set of backend indexes that should be excluded.
-/// * `backends_len`: The length of the list of backend servers to choose from
+/// * `backends`: The list of backend servers to choose from
 ///
 /// # Returns
 /// * `usize` - The index of the selected backend server.
-fn select_backend_index(
+async fn select_backend_index(
   load_balancer_algorithm: &LoadBalancerAlgorithm,
   excluded_backend_indexes: &HashSet<usize>,
-  backends_len: usize,
+  backends: &[(&str, Option<&str>, usize)],
 ) -> usize {
   match load_balancer_algorithm {
+    LoadBalancerAlgorithm::LeastConnections(connection_track) => {
+      let mut min_index = 0;
+      let mut min_connections = None;
+      for (index, (uri, unix, _)) in backends.iter().enumerate() {
+        let connection_track_key = (uri.to_string(), unix.as_ref().map(|s| s.to_string()));
+        let connection_track_read = connection_track.read().await;
+        let connection_count = if let Some(connection_count) = connection_track_read.get(&connection_track_key) {
+          Arc::strong_count(connection_count) - 1
+        } else {
+          drop(connection_track_read);
+          connection_track
+            .write()
+            .await
+            .insert(connection_track_key, Arc::new(()));
+          0
+        };
+        if min_connections.is_none_or(|min| connection_count < min) {
+          min_index = index;
+          min_connections = Some(connection_count);
+        }
+      }
+      min_index
+    }
     LoadBalancerAlgorithm::RoundRobin(round_robin_index) => {
       let index;
       loop {
         let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed);
-        if index_init >= backends_len {
-          let index_final = index_init % backends_len;
-          round_robin_index.store(index_final + 1 % backends_len, Ordering::Relaxed);
+        if index_init >= backends.len() {
+          let index_final = index_init % backends.len();
+          round_robin_index.store(index_final + 1 % backends.len(), Ordering::Relaxed);
           if excluded_backend_indexes.contains(&index_final) {
             continue;
           }
@@ -971,7 +1074,7 @@ fn select_backend_index(
       }
       index
     }
-    LoadBalancerAlgorithm::Random => rand::random_range(..backends_len),
+    LoadBalancerAlgorithm::Random => rand::random_range(..backends.len()),
   }
 }
 
@@ -1017,7 +1120,7 @@ async fn determine_proxy_to(
   } else if enable_health_check {
     loop {
       if !proxy_to_vector.is_empty() {
-        let index = select_backend_index(load_balancer_algorithm, excluded_backend_indexes, proxy_to_vector.len());
+        let index = select_backend_index(load_balancer_algorithm, excluded_backend_indexes, proxy_to_vector).await;
         let proxy_to_borrowed = proxy_to_vector.remove(index);
         excluded_backend_indexes.insert(proxy_to_borrowed.2);
         let proxy_to_url = proxy_to_borrowed.0.to_string();
@@ -1038,7 +1141,7 @@ async fn determine_proxy_to(
   } else if !proxy_to_vector.is_empty() {
     // If we have backends available and health checking is disabled,
     // select one backend from all available options
-    let index = select_backend_index(load_balancer_algorithm, excluded_backend_indexes, proxy_to_vector.len());
+    let index = select_backend_index(load_balancer_algorithm, excluded_backend_indexes, proxy_to_vector).await;
     let proxy_to_borrowed = proxy_to_vector.remove(index);
     excluded_backend_indexes.insert(proxy_to_borrowed.2);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
@@ -1111,6 +1214,7 @@ async fn http_proxy_handshake(
 /// * `proxy_request` - The HTTP request to forward to the backend
 /// * `error_logger` - Logger for reporting errors
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
+/// * `tracked_connection` - The optional tracked connection to the backend server
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
@@ -1121,6 +1225,7 @@ async fn http_proxy(
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
+  tracked_connection: Option<Arc<()>>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
@@ -1202,9 +1307,14 @@ async fn http_proxy(
       new_remote_address: None,
     }
   } else {
+    let (response_parts, response_body) = proxy_response.into_parts();
+    let mut boxed_body = response_body.map_err(|e| std::io::Error::other(e.to_string())).boxed();
+    if let Some(tracked_connection) = tracked_connection {
+      boxed_body = TrackedBody::new(boxed_body, tracked_connection).boxed();
+    }
     ResponseData {
       request: None,
-      response: Some(proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed())),
+      response: Some(Response::from_parts(response_parts, boxed_body)),
       response_status: None,
       response_headers: None,
       new_remote_address: None,
@@ -1242,6 +1352,7 @@ async fn http_proxy(
 /// * `proxy_request` - The HTTP request to forward to the backend
 /// * `error_logger` - Logger for reporting errors
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
+/// * `tracked_connection` - The optional tracked connection to the backend server
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
@@ -1250,6 +1361,7 @@ async fn http_proxy_kept_alive(
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
+  tracked_connection: Option<Arc<()>>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
@@ -1338,9 +1450,14 @@ async fn http_proxy_kept_alive(
     }
   } else {
     // For successful responses or when not intercepting errors, pass the backend response directly
+    let (response_parts, response_body) = proxy_response.into_parts();
+    let mut boxed_body = response_body.map_err(|e| std::io::Error::other(e.to_string())).boxed();
+    if let Some(tracked_connection) = tracked_connection {
+      boxed_body = TrackedBody::new(boxed_body, tracked_connection).boxed();
+    }
     ResponseData {
       request: None,
-      response: Some(proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed())),
+      response: Some(Response::from_parts(response_parts, boxed_body)),
       response_status: None,
       response_headers: None,
       new_remote_address: None,
