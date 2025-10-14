@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -49,6 +50,11 @@ use ferron_common::{
 use ferron_common::{get_entries, get_entries_for_validation, get_value};
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
+
+enum LoadBalancerAlgorithm {
+  Random,
+  RoundRobin(Arc<AtomicUsize>),
+}
 
 enum SendRequest {
   Http1(hyper::client::conn::http1::SendRequest<BoxBody<Bytes, std::io::Error>>),
@@ -173,6 +179,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                 .and_then(|v| v.as_i128())
                 .unwrap_or(5000) as u64,
             )))),
+            round_robin_index: Arc::new(AtomicUsize::new(0)),
           }))
         })?,
     )
@@ -354,6 +361,18 @@ impl ModuleLoader for ReverseProxyModuleLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("lb_algorithm", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `lb_algorithm` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
+          Err(anyhow::anyhow!("Invalid load balancer algorithm"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -363,6 +382,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 struct ReverseProxyModule {
   connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
+  round_robin_index: Arc<AtomicUsize>,
 }
 
 impl Module for ReverseProxyModule {
@@ -370,6 +390,7 @@ impl Module for ReverseProxyModule {
     Box::new(ReverseProxyModuleHandlers {
       connections: self.connections.clone(),
       failed_backends: self.failed_backends.clone(),
+      round_robin_index: self.round_robin_index.clone(),
     })
   }
 }
@@ -379,6 +400,7 @@ impl Module for ReverseProxyModule {
 struct ReverseProxyModuleHandlers {
   connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
+  round_robin_index: Arc<AtomicUsize>,
 }
 
 #[async_trait(?Send)]
@@ -429,6 +451,14 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         })
         .collect()
     });
+    let load_balancer_algorithm =
+      get_value!("lb_algorithm", config)
+        .and_then(|v| v.as_str())
+        .map_or(LoadBalancerAlgorithm::Random, |v| match v {
+          "round_robin" => LoadBalancerAlgorithm::RoundRobin(self.round_robin_index.clone()),
+          "random" => LoadBalancerAlgorithm::Random,
+          _ => LoadBalancerAlgorithm::Random,
+        });
     let retry_connection = get_value!("lb_retry_connection", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(true);
@@ -441,6 +471,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         &self.failed_backends,
         enable_health_check,
         health_check_max_fails,
+        &load_balancer_algorithm,
       )
       .await
       {
@@ -923,6 +954,7 @@ async fn determine_proxy_to(
   failed_backends: &RwLock<TtlCache<(String, Option<String>), u64>>,
   enable_health_check: bool,
   health_check_max_fails: u64,
+  load_balancer_algorithm: &LoadBalancerAlgorithm,
 ) -> Option<(String, Option<String>)> {
   let mut proxy_to = None;
   // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
@@ -938,7 +970,19 @@ async fn determine_proxy_to(
   } else if enable_health_check {
     loop {
       if !proxy_to_vector.is_empty() {
-        let index = rand::random_range(..proxy_to_vector.len());
+        let index = match load_balancer_algorithm {
+          LoadBalancerAlgorithm::RoundRobin(round_robin_index) => {
+            let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed);
+            if index_init >= proxy_to_vector.len() {
+              let index_final = index_init % proxy_to_vector.len();
+              round_robin_index.store(index_final, Ordering::Relaxed);
+              index_final
+            } else {
+              index_init
+            }
+          }
+          LoadBalancerAlgorithm::Random => rand::random_range(..proxy_to_vector.len()),
+        };
         let proxy_to_borrowed = proxy_to_vector.remove(index);
         let proxy_to_url = proxy_to_borrowed.0.to_string();
         let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
@@ -957,8 +1001,21 @@ async fn determine_proxy_to(
     }
   } else if !proxy_to_vector.is_empty() {
     // If we have backends available and health checking is disabled,
-    // randomly select one backend from all available options
-    let proxy_to_borrowed = proxy_to_vector.remove(rand::random_range(..proxy_to_vector.len()));
+    // select one backend from all available options
+    let index = match load_balancer_algorithm {
+      LoadBalancerAlgorithm::RoundRobin(round_robin_index) => {
+        let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed);
+        if index_init >= proxy_to_vector.len() {
+          let index_final = index_init % proxy_to_vector.len();
+          round_robin_index.store(index_final, Ordering::Relaxed);
+          index_final
+        } else {
+          index_init
+        }
+      }
+      LoadBalancerAlgorithm::Random => rand::random_range(..proxy_to_vector.len()),
+    };
+    let proxy_to_borrowed = proxy_to_vector.remove(index);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
     let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
     proxy_to = Some((proxy_to_url, proxy_to_header));

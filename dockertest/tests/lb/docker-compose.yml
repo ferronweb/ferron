@@ -1,6 +1,11 @@
 services:
   # The web server to test
   ferron:
+    networks:
+      default:
+        aliases:
+          - ferron-random
+          - ferron-round-robin
     build:
       context: ../../..
       dockerfile: Dockerfile.test

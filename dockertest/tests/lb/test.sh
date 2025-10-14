@@ -75,13 +75,26 @@ else
     TEST_FAILED=1
 fi
 
-TEST_RESULTS="$(curl -fsSL http://ferron/ && echo -n " " && curl -fsSL http://ferron/ && echo -n " " && curl -fsSL http://ferron/)"
+TEST_RESULTS="$(curl -fsSL http://ferron-random/ && echo -n " " && curl -fsSL http://ferron-random/ && echo -n " " && curl -fsSL http://ferron-random/)"
 TEST_EXIT_CODE=$?
 TEST_EXPECTED="Hello, World! Hello, World! Hello, World!"
 if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
-    echo "Basic load balancing with random selection test passed!"
+    echo "Basic load balancing (random selection) test passed!"
 else
-    echo "Basic load balancing with random selection test failed!" >&2
+    echo "Basic load balancing (random selection) test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
+TEST_RESULTS="$(curl -fsSL http://ferron-round-robin/ && echo -n " " && curl -fsSL http://ferron-round-robin/ && echo -n " " && curl -fsSL http://ferron-round-robin/)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="Hello, World! Hello, World! Hello, World!"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "Basic load balancing (round-robin) test passed!"
+else
+    echo "Basic load balancing (round-robin) test failed!" >&2
     echo "  Exit code: $TEST_EXIT_CODE" >&2
     echo "  Expected: $TEST_EXPECTED" >&2
     echo "  Received: $TEST_RESULTS" >&2
