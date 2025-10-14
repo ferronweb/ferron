@@ -1,5 +1,31 @@
-ferron:80 {
+ferron-random:80 {
   proxy "http://backend-1:3000"
   proxy "http://backend-2:3000"
   proxy "http://backend-3:3000"
+
+  lb_algorithm "random"
+}
+
+ferron-round-robin:80 {
+  proxy "http://backend-1:3000"
+  proxy "http://backend-2:3000"
+  proxy "http://backend-3:3000"
+
+  lb_algorithm "round_robin"
+}
+
+ferron-least-conn:80 {
+  proxy "http://backend-1:3000"
+  proxy "http://backend-2:3000"
+  proxy "http://backend-3:3000"
+
+  lb_algorithm "least_conn"
+}
+
+ferron-two-random:80 {
+  proxy "http://backend-1:3000"
+  proxy "http://backend-2:3000"
+  proxy "http://backend-3:3000"
+
+  lb_algorithm "two_random"
 }
