@@ -52,7 +52,6 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
-        id: setup-buildx
         uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
@@ -60,22 +59,6 @@ jobs:
 
       - name: Set up Docker Compose
         uses: docker/setup-compose-action@v1
-
-      # Docker cache mounts for test Ferron image
-      - name: Set up cache to restore Docker cache mounts from
-        uses: WarpBuilds/cache@v1
-        id: cache
-        with:
-          path: .buildx_cache
-          key: DockertestFerron2-${{ hashFiles('Dockerfile.test') }}
-
-      - name: Restore Docker cache mounts
-        uses: reproducible-containers/buildkit-cache-dance@v3
-        with:
-          builder: ${{ steps.setup-buildx.outputs.name }}
-          cache-dir: .buildx_cache
-          dockerfile: Dockerfile.test
-          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
 
       # Build the test Ferron image to cache it for the test suite
       - name: Build the test Ferron image
