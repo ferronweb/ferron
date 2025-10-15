@@ -1078,7 +1078,7 @@ async fn select_backend_index(
       }
     }
     LoadBalancerAlgorithm::LeastConnections(connection_track) => {
-      let mut min_index = 0;
+      let mut min_indexes = Vec::new();
       let mut min_connections = None;
       for (index, (uri, unix, _)) in backends.iter().enumerate() {
         let connection_track_key = (uri.to_string(), unix.as_ref().map(|s| s.to_string()));
@@ -1094,11 +1094,17 @@ async fn select_backend_index(
           0
         };
         if min_connections.is_none_or(|min| connection_count < min) {
-          min_index = index;
+          min_indexes = vec![index];
           min_connections = Some(connection_count);
+        } else {
+          min_indexes.push(index);
         }
       }
-      min_index
+      match min_indexes.len() {
+        0 => 0,
+        1 => min_indexes[0],
+        _ => min_indexes[rand::random_range(0..min_indexes.len())],
+      }
     }
     LoadBalancerAlgorithm::RoundRobin(round_robin_index) => {
       let index;
