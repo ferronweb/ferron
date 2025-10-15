@@ -1387,9 +1387,10 @@ async fn http_proxy(
       SendRequest::Http1(sender) => sender.is_closed(),
       SendRequest::Http2(sender) => sender.is_closed(),
     }) {
-      let mut mutex = connections.lock().await;
-      mutex.replace(sender);
-      drop(mutex);
+      let mutex = connections.try_lock();
+      if let Ok(mut mutex) = mutex {
+        mutex.replace(sender);
+      }
     }
   }
 
