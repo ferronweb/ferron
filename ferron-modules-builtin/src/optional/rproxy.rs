@@ -1117,20 +1117,11 @@ async fn select_backend_index(
     LoadBalancerAlgorithm::RoundRobin(round_robin_index) => {
       let index;
       loop {
-        let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed);
-        if index_init >= backends.len() {
-          let index_final = index_init % backends.len();
-          round_robin_index.store(index_final + 1 % backends.len(), Ordering::Relaxed);
-          if excluded_backend_indexes.contains(&index_final) {
-            continue;
-          }
-          index = index_final;
-        } else {
-          if excluded_backend_indexes.contains(&index_init) {
-            continue;
-          }
-          index = index_init;
+        let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed) % backends.len();
+        if excluded_backend_indexes.contains(&index_init) {
+          continue;
         }
+        index = index_init;
         break;
       }
       index
