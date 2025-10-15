@@ -63,7 +63,7 @@ jobs:
 
       # Docker cache mounts for test Ferron image
       - name: Set up cache to restore Docker cache mounts from
-        uses: WarpBuilds/cache@v4
+        uses: WarpBuilds/cache@v1
         id: cache
         with:
           path: .buildx_cache
