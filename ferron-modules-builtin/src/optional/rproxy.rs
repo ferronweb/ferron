@@ -34,7 +34,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 #[cfg(all(feature = "runtime-tokio", unix))]
 use tokio::net::UnixStream;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tokio_rustls::TlsConnector;
 #[cfg(feature = "runtime-monoio")]
 use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
@@ -65,7 +65,7 @@ enum SendRequest {
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
 
-type Connections = Arc<Vec<RwLock<Option<SendRequest>>>>;
+type Connections = Arc<Vec<Mutex<Option<SendRequest>>>>;
 
 enum Connection {
   #[cfg(feature = "runtime-monoio")]
@@ -231,7 +231,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                         Arc::new({
                           let mut connections_vec = Vec::new();
                           for _ in 0..DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST {
-                            connections_vec.push(RwLock::new(None));
+                            connections_vec.push(Mutex::new(None));
                           }
                           connections_vec
                         }),
@@ -602,19 +602,19 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .and_then(|v| v.as_bool())
           .unwrap_or(true)
         {
-          let connections = &connections[rand::random_range(..connections.len())];
+          let mut connection: &Mutex<Option<SendRequest>>;
+          let mut connections_indexes = Vec::new();
+          for i in 0..connections.len() {
+            connections_indexes.push(i);
+          }
+          loop {
+            let connections_indexes_index = rand::random_range(..connections_indexes.len());
+            connection = &connections[connections_indexes[connections_indexes_index]];
 
-          let rwlock_read = connections.read().await;
+            let mut mutex = connection.try_lock();
 
-          if let Some(sender_read) = &*rwlock_read {
-            if match sender_read {
-              SendRequest::Http1(sender) => !sender.is_closed(),
-              SendRequest::Http2(sender) => !sender.is_closed(),
-            } {
-              drop(rwlock_read);
-              let mut rwlock_write = connections.write().await;
-
-              if let Some(sender) = &mut *rwlock_write {
+            match mutex.as_deref_mut() {
+              Ok(Some(sender)) => {
                 if match sender {
                   SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
                   SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
@@ -628,22 +628,27 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
                     tracked_connection,
                   )
                   .await;
-                  drop(rwlock_write);
+                  drop(mutex);
                   return result;
                 } else {
-                  drop(rwlock_write);
+                  drop(mutex);
                 }
-              } else {
-                drop(rwlock_write);
               }
-            } else {
-              drop(rwlock_read);
+              Ok(None) => {
+                drop(mutex);
+              }
+              Err(_) => {
+                drop(mutex);
+                connections_indexes.remove(connections_indexes_index);
+                if connections_indexes.is_empty() {
+                  break;
+                }
+                continue;
+              }
             }
-          } else {
-            drop(rwlock_read);
+            break;
           }
-
-          Some(connections)
+          Some(connection)
         } else {
           None
         };
@@ -1276,7 +1281,7 @@ async fn http_proxy_handshake(
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
 async fn http_proxy(
   mut sender: SendRequest,
-  connections: Option<&RwLock<Option<SendRequest>>>,
+  connections: Option<&Mutex<Option<SendRequest>>>,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
@@ -1382,9 +1387,9 @@ async fn http_proxy(
       SendRequest::Http1(sender) => sender.is_closed(),
       SendRequest::Http2(sender) => sender.is_closed(),
     }) {
-      let mut rwlock_write = connections.write().await;
-      rwlock_write.replace(sender);
-      drop(rwlock_write);
+      let mut mutex = connections.lock().await;
+      mutex.replace(sender);
+      drop(mutex);
     }
   }
 
