@@ -50,7 +50,7 @@ use ferron_common::{
 };
 use ferron_common::{get_entries, get_entries_for_validation, get_value};
 
-const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
+const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 48;
 
 #[allow(clippy::type_complexity)]
 enum LoadBalancerAlgorithm {
@@ -64,6 +64,8 @@ enum SendRequest {
   Http1(hyper::client::conn::http1::SendRequest<BoxBody<Bytes, std::io::Error>>),
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
+
+type Connections = Arc<Vec<RwLock<Option<SendRequest>>>>;
 
 enum Connection {
   #[cfg(feature = "runtime-monoio")]
@@ -178,7 +180,6 @@ where
 #[allow(clippy::type_complexity)]
 pub struct ReverseProxyModuleLoader {
   cache: ModuleCache<ReverseProxyModule>,
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
 }
 
 impl Default for ReverseProxyModuleLoader {
@@ -190,14 +191,8 @@ impl Default for ReverseProxyModuleLoader {
 impl ReverseProxyModuleLoader {
   /// Creates a new module loader
   pub fn new() -> Self {
-    let mut connections_vec = Vec::new();
-    for _ in 0..DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST {
-      connections_vec.push(RwLock::new(HashMap::new()));
-    }
-
     Self {
       cache: ModuleCache::new(vec![]),
-      connections: Arc::new(connections_vec),
     }
   }
 }
@@ -214,7 +209,6 @@ impl ModuleLoader for ReverseProxyModuleLoader {
         .cache
         .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
           Ok(Arc::new(ReverseProxyModule {
-            connections: self.connections.clone(),
             failed_backends: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(
               global_config
                 .and_then(|c| get_value!("lb_health_check_window", c))
@@ -223,6 +217,29 @@ impl ModuleLoader for ReverseProxyModuleLoader {
             )))),
             round_robin_index: Arc::new(AtomicUsize::new(0)),
             connection_track: Arc::new(RwLock::new(HashMap::new())),
+            proxy_to: Arc::new(get_entries!("proxy", config).map_or(vec![], |e| {
+              e.inner
+                .iter()
+                .filter_map(|e| {
+                  e.values
+                    .first()
+                    .and_then(|v| v.as_str().map(|s| s.to_owned()))
+                    .map(|v| {
+                      (
+                        v,
+                        e.props.get("unix").and_then(|v| v.as_str()).map(|s| s.to_owned()),
+                        Arc::new({
+                          let mut connections_vec = Vec::new();
+                          for _ in 0..DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST {
+                            connections_vec.push(RwLock::new(None));
+                          }
+                          connections_vec
+                        }),
+                      )
+                    })
+                })
+                .collect()
+            })),
           }))
         })?,
     )
@@ -423,19 +440,19 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 /// A reverse proxy module
 #[allow(clippy::type_complexity)]
 struct ReverseProxyModule {
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
   round_robin_index: Arc<AtomicUsize>,
   connection_track: Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>,
+  proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
 }
 
 impl Module for ReverseProxyModule {
   fn get_module_handlers(&self) -> Box<dyn ModuleHandlers> {
     Box::new(ReverseProxyModuleHandlers {
-      connections: self.connections.clone(),
       failed_backends: self.failed_backends.clone(),
       round_robin_index: self.round_robin_index.clone(),
       connection_track: self.connection_track.clone(),
+      proxy_to: self.proxy_to.clone(),
     })
   }
 }
@@ -443,10 +460,10 @@ impl Module for ReverseProxyModule {
 /// Handlers for the reverse proxy module
 #[allow(clippy::type_complexity)]
 struct ReverseProxyModuleHandlers {
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
   round_robin_index: Arc<AtomicUsize>,
   connection_track: Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>,
+  proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
 }
 
 #[async_trait(?Send)]
@@ -486,18 +503,12 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let proxy_intercept_errors = get_value!("proxy_intercept_errors", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(false);
-    let mut proxy_to_vector = get_entries!("proxy", config).map_or(vec![], |e| {
-      e.inner
-        .iter()
-        .enumerate()
-        .filter_map(|(index, e)| {
-          e.values
-            .first()
-            .and_then(|v| v.as_str())
-            .map(|v| (v, e.props.get("unix").and_then(|v| v.as_str()), index))
-        })
-        .collect()
-    });
+    let mut proxy_to_vector = self
+      .proxy_to
+      .iter()
+      .enumerate()
+      .map(|(index, e)| (&*e.0, e.1.as_deref(), index, e.2.clone()))
+      .collect();
     let load_balancer_algorithm =
       get_value!("lb_algorithm", config)
         .and_then(|v| v.as_str())
@@ -520,7 +531,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let mut request_parts = Some(request_parts);
 
     loop {
-      if let Some((proxy_to, proxy_unix)) = determine_proxy_to(
+      if let Some((proxy_to, proxy_unix, connections)) = determine_proxy_to(
         &mut proxy_to_vector,
         &self.failed_backends,
         enable_health_check,
@@ -591,21 +602,19 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .and_then(|v| v.as_bool())
           .unwrap_or(true)
         {
-          let connections = &self.connections[rand::random_range(..self.connections.len())];
+          let connections = &connections[rand::random_range(..connections.len())];
 
           let rwlock_read = connections.read().await;
-          let sender_read_option = rwlock_read.get(&addr);
 
-          if let Some(sender_read) = sender_read_option {
+          if let Some(sender_read) = &*rwlock_read {
             if match sender_read {
               SendRequest::Http1(sender) => !sender.is_closed(),
               SendRequest::Http2(sender) => !sender.is_closed(),
             } {
               drop(rwlock_read);
               let mut rwlock_write = connections.write().await;
-              let sender_option = rwlock_write.get_mut(&addr);
 
-              if let Some(sender) = sender_option {
+              if let Some(sender) = &mut *rwlock_write {
                 if match sender {
                   SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
                   SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
@@ -995,7 +1004,6 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         return http_proxy(
           sender,
           connections,
-          addr,
           proxy_request,
           error_logger,
           proxy_intercept_errors,
@@ -1028,7 +1036,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 async fn select_backend_index(
   load_balancer_algorithm: &LoadBalancerAlgorithm,
   excluded_backend_indexes: &HashSet<usize>,
-  backends: &[(&str, Option<&str>, usize)],
+  backends: &[(&str, Option<&str>, usize, Connections)],
 ) -> usize {
   match load_balancer_algorithm {
     LoadBalancerAlgorithm::TwoRandomChoices(connection_track) => {
@@ -1041,8 +1049,8 @@ async fn select_backend_index(
       if backends.len() > 1 && random_choice2 >= random_choice1 {
         random_choice2 += 1;
       }
-      let backend1 = backends[random_choice1];
-      let backend2 = backends[random_choice2];
+      let backend1 = backends[random_choice1].clone();
+      let backend2 = backends[random_choice2].clone();
       let connection_track_key1 = (backend1.0.to_string(), backend1.1.as_ref().map(|s| s.to_string()));
       let connection_track_key2 = (backend2.0.to_string(), backend2.1.as_ref().map(|s| s.to_string()));
       let connection_track_read = connection_track.read().await;
@@ -1080,7 +1088,7 @@ async fn select_backend_index(
     LoadBalancerAlgorithm::LeastConnections(connection_track) => {
       let mut min_indexes = Vec::new();
       let mut min_connections = None;
-      for (index, (uri, unix, _)) in backends.iter().enumerate() {
+      for (index, (uri, unix, _, _)) in backends.iter().enumerate() {
         let connection_track_key = (uri.to_string(), unix.as_ref().map(|s| s.to_string()));
         let connection_track_read = connection_track.read().await;
         let connection_count = if let Some(connection_count) = connection_track_read.get(&connection_track_key) {
@@ -1149,15 +1157,16 @@ async fn select_backend_index(
 /// * `excluded_backend_indexes` - A set of backend indexes that should be excluded
 ///
 /// # Returns
-/// * `Option<String>` - The URL of the selected backend server, or None if no valid backend exists
+/// * `Option<(String, Option<String>, Connections)>` - The URL, the optional Unix socket path,
+///   and the connections of the selected backend server, or None if no valid backend exists
 async fn determine_proxy_to(
-  proxy_to_vector: &mut Vec<(&str, Option<&str>, usize)>,
+  proxy_to_vector: &mut Vec<(&str, Option<&str>, usize, Connections)>,
   failed_backends: &RwLock<TtlCache<(String, Option<String>), u64>>,
   enable_health_check: bool,
   health_check_max_fails: u64,
   load_balancer_algorithm: &LoadBalancerAlgorithm,
   excluded_backend_indexes: &mut HashSet<usize>,
-) -> Option<(String, Option<String>)> {
+) -> Option<(String, Option<String>, Connections)> {
   let mut proxy_to = None;
   // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
   // The "proxy" directive is validated though.
@@ -1169,7 +1178,8 @@ async fn determine_proxy_to(
     excluded_backend_indexes.insert(proxy_to_borrowed.2);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
     let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-    proxy_to = Some((proxy_to_url, proxy_to_header));
+    let proxy_to_connections = proxy_to_borrowed.3.clone();
+    proxy_to = Some((proxy_to_url, proxy_to_header, proxy_to_connections));
   } else if enable_health_check {
     loop {
       if !proxy_to_vector.is_empty() {
@@ -1178,7 +1188,8 @@ async fn determine_proxy_to(
         excluded_backend_indexes.insert(proxy_to_borrowed.2);
         let proxy_to_url = proxy_to_borrowed.0.to_string();
         let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-        proxy_to = Some((proxy_to_url.clone(), proxy_to_header.clone()));
+        let proxy_to_connections = proxy_to_borrowed.3.clone();
+        proxy_to = Some((proxy_to_url.clone(), proxy_to_header.clone(), proxy_to_connections));
         let failed_backends_read = failed_backends.read().await;
         let failed_backend_fails = match failed_backends_read.get(&(proxy_to_url, proxy_to_header)) {
           Some(fails) => fails,
@@ -1199,7 +1210,8 @@ async fn determine_proxy_to(
     excluded_backend_indexes.insert(proxy_to_borrowed.2);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
     let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-    proxy_to = Some((proxy_to_url, proxy_to_header));
+    let proxy_to_connections = proxy_to_borrowed.3.clone();
+    proxy_to = Some((proxy_to_url, proxy_to_header, proxy_to_connections));
   }
 
   proxy_to
@@ -1273,8 +1285,7 @@ async fn http_proxy_handshake(
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
 async fn http_proxy(
   mut sender: SendRequest,
-  connections: Option<&RwLock<HashMap<String, SendRequest>>>,
-  connect_addr: String,
+  connections: Option<&RwLock<Option<SendRequest>>>,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
@@ -1381,7 +1392,7 @@ async fn http_proxy(
       SendRequest::Http2(sender) => sender.is_closed(),
     }) {
       let mut rwlock_write = connections.write().await;
-      rwlock_write.insert(connect_addr, sender);
+      rwlock_write.replace(sender);
       drop(rwlock_write);
     }
   }
