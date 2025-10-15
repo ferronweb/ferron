@@ -192,7 +192,7 @@ impl ReverseProxyModuleLoader {
   /// Creates a new module loader
   pub fn new() -> Self {
     Self {
-      cache: ModuleCache::new(vec![]),
+      cache: ModuleCache::new(vec!["proxy"]),
     }
   }
 }
@@ -207,7 +207,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
     Ok(
       self
         .cache
-        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |config| {
           Ok(Arc::new(ReverseProxyModule {
             failed_backends: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(
               global_config
