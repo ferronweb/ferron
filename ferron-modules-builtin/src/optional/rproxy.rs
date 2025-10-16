@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::error::Error;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -540,8 +540,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let mut proxy_to_vector = self
       .proxy_to
       .iter()
-      .enumerate()
-      .map(|(index, e)| (&*e.0, e.1.as_deref(), index, e.2.clone()))
+      .map(|e| (&*e.0, e.1.as_deref(), e.2.clone()))
       .collect();
     let load_balancer_algorithm = self.load_balancer_algorithm.clone();
     let connection_track = match &*load_balancer_algorithm {
@@ -552,7 +551,6 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let retry_connection = get_value!("lb_retry_connection", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(true);
-    let mut excluded_backend_indexes = HashSet::new();
     let (request_parts, request_body) = request.into_parts();
     let mut request_parts = Some(request_parts);
 
@@ -563,7 +561,6 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         enable_health_check,
         health_check_max_fails,
         &load_balancer_algorithm,
-        &mut excluded_backend_indexes,
       )
       .await
       {
@@ -1058,15 +1055,13 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 ///
 /// # Parameters
 /// * `load_balancer_algorithm`: The load balancing algorithm to use.
-/// * `excluded_backend_indexes`: A set of backend indexes that should be excluded.
 /// * `backends`: The list of backend servers to choose from
 ///
 /// # Returns
 /// * `usize` - The index of the selected backend server.
 async fn select_backend_index(
   load_balancer_algorithm: &LoadBalancerAlgorithm,
-  excluded_backend_indexes: &HashSet<usize>,
-  backends: &[(&str, Option<&str>, usize, Connections)],
+  backends: &[(&str, Option<&str>, Connections)],
 ) -> usize {
   match load_balancer_algorithm {
     LoadBalancerAlgorithm::TwoRandomChoices(connection_track) => {
@@ -1118,7 +1113,7 @@ async fn select_backend_index(
     LoadBalancerAlgorithm::LeastConnections(connection_track) => {
       let mut min_indexes = Vec::new();
       let mut min_connections = None;
-      for (index, (uri, unix, _, _)) in backends.iter().enumerate() {
+      for (index, (uri, unix, _)) in backends.iter().enumerate() {
         let connection_track_key = (uri.to_string(), unix.as_ref().map(|s| s.to_string()));
         let connection_track_read = connection_track.read().await;
         let connection_count = if let Some(connection_count) = connection_track_read.get(&connection_track_key) {
@@ -1145,16 +1140,7 @@ async fn select_backend_index(
       }
     }
     LoadBalancerAlgorithm::RoundRobin(round_robin_index) => {
-      let index;
-      loop {
-        let index_init = round_robin_index.fetch_add(1, Ordering::Relaxed) % backends.len();
-        if excluded_backend_indexes.contains(&index_init) {
-          continue;
-        }
-        index = index_init;
-        break;
-      }
-      index
+      round_robin_index.fetch_add(1, Ordering::Relaxed) % backends.len()
     }
     LoadBalancerAlgorithm::Random => rand::random_range(..backends.len()),
   }
@@ -1175,18 +1161,16 @@ async fn select_backend_index(
 /// * `enable_health_check` - Whether backend health checking is enabled
 /// * `health_check_max_fails` - Maximum number of failures before considering a backend unhealthy
 /// * `load_balancer_algorithm` - The load balancing algorithm to use
-/// * `excluded_backend_indexes` - A set of backend indexes that should be excluded
 ///
 /// # Returns
 /// * `Option<(String, Option<String>, Connections)>` - The URL, the optional Unix socket path,
 ///   and the connections of the selected backend server, or None if no valid backend exists
 async fn determine_proxy_to(
-  proxy_to_vector: &mut Vec<(&str, Option<&str>, usize, Connections)>,
+  proxy_to_vector: &mut Vec<(&str, Option<&str>, Connections)>,
   failed_backends: &RwLock<TtlCache<(String, Option<String>), u64>>,
   enable_health_check: bool,
   health_check_max_fails: u64,
   load_balancer_algorithm: &LoadBalancerAlgorithm,
-  excluded_backend_indexes: &mut HashSet<usize>,
 ) -> Option<(String, Option<String>, Connections)> {
   let mut proxy_to = None;
   // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
@@ -1196,20 +1180,18 @@ async fn determine_proxy_to(
     return None;
   } else if proxy_to_vector.len() == 1 {
     let proxy_to_borrowed = proxy_to_vector.remove(0);
-    excluded_backend_indexes.insert(proxy_to_borrowed.2);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
     let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-    let proxy_to_connections = proxy_to_borrowed.3.clone();
+    let proxy_to_connections = proxy_to_borrowed.2.clone();
     proxy_to = Some((proxy_to_url, proxy_to_header, proxy_to_connections));
   } else if enable_health_check {
     loop {
       if !proxy_to_vector.is_empty() {
-        let index = select_backend_index(load_balancer_algorithm, excluded_backend_indexes, proxy_to_vector).await;
+        let index = select_backend_index(load_balancer_algorithm, proxy_to_vector).await;
         let proxy_to_borrowed = proxy_to_vector.remove(index);
-        excluded_backend_indexes.insert(proxy_to_borrowed.2);
         let proxy_to_url = proxy_to_borrowed.0.to_string();
         let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-        let proxy_to_connections = proxy_to_borrowed.3.clone();
+        let proxy_to_connections = proxy_to_borrowed.2.clone();
         proxy_to = Some((proxy_to_url.clone(), proxy_to_header.clone(), proxy_to_connections));
         let failed_backends_read = failed_backends.read().await;
         let failed_backend_fails = match failed_backends_read.get(&(proxy_to_url, proxy_to_header)) {
@@ -1226,12 +1208,11 @@ async fn determine_proxy_to(
   } else if !proxy_to_vector.is_empty() {
     // If we have backends available and health checking is disabled,
     // select one backend from all available options
-    let index = select_backend_index(load_balancer_algorithm, excluded_backend_indexes, proxy_to_vector).await;
+    let index = select_backend_index(load_balancer_algorithm, proxy_to_vector).await;
     let proxy_to_borrowed = proxy_to_vector.remove(index);
-    excluded_backend_indexes.insert(proxy_to_borrowed.2);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
     let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-    let proxy_to_connections = proxy_to_borrowed.3.clone();
+    let proxy_to_connections = proxy_to_borrowed.2.clone();
     proxy_to = Some((proxy_to_url, proxy_to_header, proxy_to_connections));
   }
 
