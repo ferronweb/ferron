@@ -506,6 +506,8 @@ example.com {
   - This directive specifies the load balancing algorithm to be used. The supported algorithms are `random` (random selection), `round-robin` (round-robin), `least_conn` (least connections, "connections" would mean concurrent requests here), and `two_random` (power of two random choices; after two random choices, the backend server with the least concurrent requests is chosen). Default: `lb_algorithm "random"`
 - `lb_health_check_window <lb_health_check_window: integer>` (_rproxy_ module)
   - This directive specifies the window size (in milliseconds) for load balancer health checks. This directive was global-only before Ferron UNRELEASED. Default: `lb_health_check_window 5000`
+- `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module; Ferron UNRELEASED or newer)
+  - This directive specifies the maximum number of idle connections to backend servers to keep alive. Default: `proxy_keepalive_idle_conns 48`
 
 **Configuration example:**
 

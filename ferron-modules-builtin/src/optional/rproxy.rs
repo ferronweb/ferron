@@ -50,7 +50,7 @@ use ferron_common::{
 };
 use ferron_common::{get_entries, get_entries_for_validation, get_value};
 
-const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 48;
+const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: usize = 48;
 
 #[allow(clippy::type_complexity)]
 enum LoadBalancerAlgorithm {
@@ -197,6 +197,7 @@ impl ReverseProxyModuleLoader {
         "lb_health_check_window",
         "lb_health_check_max_fails",
         "lb_algorithm",
+        "proxy_keepalive_idle_conns",
       ]),
     }
   }
@@ -242,7 +243,11 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                         e.props.get("unix").and_then(|v| v.as_str()).map(|s| s.to_owned()),
                         Arc::new({
                           let mut connections_vec = Vec::new();
-                          for _ in 0..DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST {
+                          for _ in 0..get_value!("proxy_keepalive_idle_conns", config)
+                            .and_then(|v| v.as_i128())
+                            .map(|v| v as usize)
+                            .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST)
+                          {
                             connections_vec.push(Mutex::new(None));
                           }
                           connections_vec
@@ -444,6 +449,22 @@ impl ModuleLoader for ReverseProxyModuleLoader {
           ))?
         } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
           Err(anyhow::anyhow!("Invalid load balancer algorithm"))?
+        }
+      }
+    }
+
+    if let Some(entries) = get_entries_for_validation!("proxy_keepalive_idle_conns", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `proxy_keepalive_idle_conns` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_integer() && !entry.values[0].is_null() {
+          Err(anyhow::anyhow!("Invalid proxy keep-alive idle connections"))?
+        } else if let Some(value) = entry.values[0].as_i128() {
+          if value < 1 {
+            Err(anyhow::anyhow!("Invalid proxy keep-alive idle connections"))?
+          }
         }
       }
     }
