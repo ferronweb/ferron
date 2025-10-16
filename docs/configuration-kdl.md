@@ -250,19 +250,6 @@ This configuration reference organizes directives by both **scope** (where they 
 }
 ```
 
-### Load balancing
-
-- `lb_health_check_window <lb_health_check_window: integer>` (_rproxy_ module)
-  - This directive specifies the window size (in milliseconds) for load balancer health checks. Default: `lb_health_check_window 5000`
-
-**Configuration example:**
-
-```kdl
-* {
-    lb_health_check_window 5000
-}
-```
-
 ### Networking & system
 
 - `listen_ip <listen_ip: string>`
@@ -517,6 +504,8 @@ example.com {
   - This directive specifies whenever the load balancer should retry connections to another backend server, in case of TCP connection or TLS handshake failure. Default: `lb_retry_connection #true`
 - `lb_algorithm <lb_algorithm: string>` (_rproxy_ module; Ferron UNRELEASED or newer)
   - This directive specifies the load balancing algorithm to be used. The supported algorithms are `random` (random selection), `round-robin` (round-robin), `least_conn` (least connections, "connections" would mean concurrent requests here), and `two_random` (power of two random choices; after two random choices, the backend server with the least concurrent requests is chosen). Default: `lb_algorithm "random"`
+- `lb_health_check_window <lb_health_check_window: integer>` (_rproxy_ module)
+  - This directive specifies the window size (in milliseconds) for load balancer health checks. This directive was global-only before Ferron UNRELEASED. Default: `lb_health_check_window 5000`
 
 **Configuration example:**
 
@@ -531,6 +520,7 @@ api.example.com {
     // Health check configuration
     lb_health_check
     lb_health_check_max_fails 3
+    lb_health_check_window 5000
 
     // Proxy settings
     proxy_no_verification #false

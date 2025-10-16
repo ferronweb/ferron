@@ -192,7 +192,7 @@ impl ReverseProxyModuleLoader {
   /// Creates a new module loader
   pub fn new() -> Self {
     Self {
-      cache: ModuleCache::new(vec!["proxy"]),
+      cache: ModuleCache::new(vec!["proxy", "lb_health_check_window", "lb_health_check_max_fails"]),
     }
   }
 }
@@ -201,17 +201,16 @@ impl ModuleLoader for ReverseProxyModuleLoader {
   fn load_module(
     &mut self,
     config: &ServerConfiguration,
-    global_config: Option<&ServerConfiguration>,
+    _global_config: Option<&ServerConfiguration>,
     _secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
     Ok(
       self
         .cache
-        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |config| {
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |config| {
           Ok(Arc::new(ReverseProxyModule {
             failed_backends: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(
-              global_config
-                .and_then(|c| get_value!("lb_health_check_window", c))
+              get_value!("lb_health_check_window", config)
                 .and_then(|v| v.as_i128())
                 .unwrap_or(5000) as u64,
             )))),
@@ -240,6 +239,9 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                 })
                 .collect()
             })),
+            health_check_max_fails: get_value!("lb_health_check_max_fails", config)
+              .and_then(|v| v.as_i128())
+              .unwrap_or(3) as u64,
           }))
         })?,
     )
@@ -444,6 +446,7 @@ struct ReverseProxyModule {
   round_robin_index: Arc<AtomicUsize>,
   connection_track: Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>,
   proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
+  health_check_max_fails: u64,
 }
 
 impl Module for ReverseProxyModule {
@@ -453,6 +456,7 @@ impl Module for ReverseProxyModule {
       round_robin_index: self.round_robin_index.clone(),
       connection_track: self.connection_track.clone(),
       proxy_to: self.proxy_to.clone(),
+      health_check_max_fails: self.health_check_max_fails,
     })
   }
 }
@@ -464,6 +468,7 @@ struct ReverseProxyModuleHandlers {
   round_robin_index: Arc<AtomicUsize>,
   connection_track: Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>,
   proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
+  health_check_max_fails: u64,
 }
 
 #[async_trait(?Send)]
@@ -494,9 +499,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let enable_health_check = get_value!("lb_health_check", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(false);
-    let health_check_max_fails = get_value!("lb_health_check_max_fails", config)
-      .and_then(|v| v.as_i128())
-      .unwrap_or(3) as u64;
+    let health_check_max_fails = self.health_check_max_fails;
     let disable_certificate_verification = get_value!("proxy_no_verification", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(false);
