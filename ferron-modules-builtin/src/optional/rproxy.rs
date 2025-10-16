@@ -192,7 +192,12 @@ impl ReverseProxyModuleLoader {
   /// Creates a new module loader
   pub fn new() -> Self {
     Self {
-      cache: ModuleCache::new(vec!["proxy", "lb_health_check_window", "lb_health_check_max_fails"]),
+      cache: ModuleCache::new(vec![
+        "proxy",
+        "lb_health_check_window",
+        "lb_health_check_max_fails",
+        "lb_algorithm",
+      ]),
     }
   }
 }
@@ -214,8 +219,16 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                 .and_then(|v| v.as_i128())
                 .unwrap_or(5000) as u64,
             )))),
-            round_robin_index: Arc::new(AtomicUsize::new(0)),
-            connection_track: Arc::new(RwLock::new(HashMap::new())),
+            load_balancer_algorithm: Arc::new(get_value!("lb_algorithm", config).and_then(|v| v.as_str()).map_or(
+              LoadBalancerAlgorithm::Random,
+              |v| match v {
+                "two_random" => LoadBalancerAlgorithm::TwoRandomChoices(Arc::new(RwLock::new(HashMap::new()))),
+                "least_conn" => LoadBalancerAlgorithm::LeastConnections(Arc::new(RwLock::new(HashMap::new()))),
+                "round_robin" => LoadBalancerAlgorithm::RoundRobin(Arc::new(AtomicUsize::new(0))),
+                "random" => LoadBalancerAlgorithm::Random,
+                _ => LoadBalancerAlgorithm::Random,
+              },
+            )),
             proxy_to: Arc::new(get_entries!("proxy", config).map_or(vec![], |e| {
               e.inner
                 .iter()
@@ -443,8 +456,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 #[allow(clippy::type_complexity)]
 struct ReverseProxyModule {
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
-  round_robin_index: Arc<AtomicUsize>,
-  connection_track: Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>,
+  load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
   proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
   health_check_max_fails: u64,
 }
@@ -453,8 +465,7 @@ impl Module for ReverseProxyModule {
   fn get_module_handlers(&self) -> Box<dyn ModuleHandlers> {
     Box::new(ReverseProxyModuleHandlers {
       failed_backends: self.failed_backends.clone(),
-      round_robin_index: self.round_robin_index.clone(),
-      connection_track: self.connection_track.clone(),
+      load_balancer_algorithm: self.load_balancer_algorithm.clone(),
       proxy_to: self.proxy_to.clone(),
       health_check_max_fails: self.health_check_max_fails,
     })
@@ -465,8 +476,7 @@ impl Module for ReverseProxyModule {
 #[allow(clippy::type_complexity)]
 struct ReverseProxyModuleHandlers {
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
-  round_robin_index: Arc<AtomicUsize>,
-  connection_track: Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>,
+  load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
   proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
   health_check_max_fails: u64,
 }
@@ -512,20 +522,12 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
       .enumerate()
       .map(|(index, e)| (&*e.0, e.1.as_deref(), index, e.2.clone()))
       .collect();
-    let load_balancer_algorithm =
-      get_value!("lb_algorithm", config)
-        .and_then(|v| v.as_str())
-        .map_or(LoadBalancerAlgorithm::Random, |v| match v {
-          "two_random" => LoadBalancerAlgorithm::TwoRandomChoices(self.connection_track.clone()),
-          "least_conn" => LoadBalancerAlgorithm::LeastConnections(self.connection_track.clone()),
-          "round_robin" => LoadBalancerAlgorithm::RoundRobin(self.round_robin_index.clone()),
-          "random" => LoadBalancerAlgorithm::Random,
-          _ => LoadBalancerAlgorithm::Random,
-        });
-    let track_connections = matches!(
-      load_balancer_algorithm,
-      LoadBalancerAlgorithm::LeastConnections(_) | LoadBalancerAlgorithm::TwoRandomChoices(_)
-    );
+    let load_balancer_algorithm = self.load_balancer_algorithm.clone();
+    let connection_track = match &*load_balancer_algorithm {
+      LoadBalancerAlgorithm::LeastConnections(connection_track) => Some(connection_track),
+      LoadBalancerAlgorithm::TwoRandomChoices(connection_track) => Some(connection_track),
+      _ => None,
+    };
     let retry_connection = get_value!("lb_retry_connection", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(true);
@@ -580,17 +582,16 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         let proxy_request_parts =
           construct_proxy_request_parts(request_parts, config, socket_data, &proxy_request_url)?;
 
-        let tracked_connection = if track_connections {
+        let tracked_connection = if let Some(connection_track) = connection_track {
           let connection_track_key = (proxy_to.clone(), proxy_unix.clone());
-          let connection_track_read = self.connection_track.read().await;
+          let connection_track_read = connection_track.read().await;
           Some(
             if let Some(connection_count) = connection_track_read.get(&connection_track_key) {
               connection_count.clone()
             } else {
               let tracked_connection = Arc::new(());
               drop(connection_track_read);
-              self
-                .connection_track
+              connection_track
                 .write()
                 .await
                 .insert(connection_track_key, tracked_connection.clone());
