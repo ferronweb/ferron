@@ -402,8 +402,11 @@ async fn request_handler_wrapped(
     match header_data.to_str() {
       Ok(host_header) => {
         let host_header_lower_case = host_header.to_lowercase();
-        if host_header_lower_case != *host_header {
-          let host_header_value = match HeaderValue::from_str(&host_header_lower_case) {
+        let host_header_without_dot = host_header_lower_case
+          .strip_suffix('.')
+          .unwrap_or(host_header_lower_case.as_str());
+        if host_header_without_dot != host_header {
+          let host_header_value = match HeaderValue::from_str(host_header_without_dot) {
             Ok(host_header_value) => host_header_value,
             Err(err) => {
               if error_log_enabled {

@@ -52,7 +52,7 @@ impl CustomSniResolver {
 
 impl ResolvesServerCert for CustomSniResolver {
   fn resolve(&self, client_hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
-    let hostname = client_hello.server_name();
+    let hostname = client_hello.server_name().map(|hn| hn.strip_suffix('.').unwrap_or(hn));
     if let Some(hostname) = hostname {
       // If blocking_read() method is used when only Tokio is used, the program would panic on resolving a TLS certificate.
       #[cfg(feature = "runtime-monoio")]
