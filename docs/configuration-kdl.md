@@ -722,10 +722,7 @@ Below is the list of supported subconditions:
 Ferron supports the following placeholders for header values, subconditions, reverse proxying, and redirect destinations:
 
 - `{path}` - the request URI with path (for example, `/index.html`)
-  <<<<<<< HEAD
-  =======
 - `{path_and_query}` (Ferron 2.0.0-beta.19 or newer) - the request URI with path and query string (for example, `/index.html?param=value`)
-  > > > > > > > develop-2.x
 - `{method}` (Ferron 2.0.0-beta.9 or newer) - the request method
 - `{version}` (Ferron 2.0.0-beta.9 or newer) - the HTTP version of the request
 - `{header:<header_name>}` (Ferron 2.0.0-beta.9 or newer) - the header value of the request URI
