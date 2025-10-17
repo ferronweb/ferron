@@ -94,14 +94,14 @@ if (begPage < 1) {
                 class={`flex flex-col ${currentPage === 1 && index === 0 ? "md:flex-row" : ""} grow`}
               >
                 <div
-                  class={`relative overflow-hidden rounded-t-lg ${currentPage === 1 && index === 0 ? "md:rounded-none md:rounded-l-lg md:grow md:w-1/2 lg:w-7/12" : ""}`}
+                  class={`relative overflow-hidden rounded-t-lg aspect-5/3 ${currentPage === 1 && index === 0 ? "md:w-1/2 lg:w-7/12 md:rounded-none md:rounded-l-lg md:grow" : ""}`}
                 >
                   <Image
                     src={post.data.cover || blogMissing}
                     alt={post.data.title || null}
                     width={750}
                     height={450}
-                    class={`object-cover w-full ${currentPage === 1 && index === 0 ? "sm:h-full" : ""}`}
+                    class={`object-cover w-full h-full`}
                   />
                 </div>
                 <div
