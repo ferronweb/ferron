@@ -16,14 +16,17 @@
     color: hsla(var(--foreground), 1);
   }
 
+  body {
+    @apply flex flex-col min-h-screen;
+  }
+
   code,
   pre {
     font-family: var(--font-jetbrains-mono);
   }
 
   * {
-    border-color: hsla(var(--border), 1);
-    accent-color: hsla(var(--accent), 1);
+    @apply border-border accent-accent;
   }
 
   *:focus-visible {
