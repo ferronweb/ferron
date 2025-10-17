@@ -221,16 +221,20 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                 .and_then(|v| v.as_i128())
                 .unwrap_or(5000) as u64,
             )))),
-            load_balancer_algorithm: Arc::new(get_value!("lb_algorithm", config).and_then(|v| v.as_str()).map_or(
-              LoadBalancerAlgorithm::Random,
-              |v| match v {
+            load_balancer_algorithm: {
+              let algorithm_name = get_value!("lb_algorithm", config)
+                .and_then(|v| v.as_str())
+                .unwrap_or("two_random");
+              Arc::new(match algorithm_name {
                 "two_random" => LoadBalancerAlgorithm::TwoRandomChoices(Arc::new(RwLock::new(HashMap::new()))),
                 "least_conn" => LoadBalancerAlgorithm::LeastConnections(Arc::new(RwLock::new(HashMap::new()))),
                 "round_robin" => LoadBalancerAlgorithm::RoundRobin(Arc::new(AtomicUsize::new(0))),
                 "random" => LoadBalancerAlgorithm::Random,
-                _ => LoadBalancerAlgorithm::Random,
-              },
-            )),
+                _ => Err(anyhow::anyhow!(
+                  "Unsupported load balancing algorithm: {algorithm_name}"
+                ))?,
+              })
+            },
             proxy_to: Arc::new(get_entries!("proxy", config).map_or(vec![], |e| {
               e.inner
                 .iter()
