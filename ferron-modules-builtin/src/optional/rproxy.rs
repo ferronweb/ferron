@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
+use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use bytes::Bytes;
 #[cfg(feature = "runtime-monoio")]
@@ -34,7 +35,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 #[cfg(all(feature = "runtime-tokio", unix))]
 use tokio::net::UnixStream;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
 #[cfg(feature = "runtime-monoio")]
 use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
@@ -65,7 +66,7 @@ enum SendRequest {
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
 
-type Connections = Arc<Vec<Mutex<Option<SendRequest>>>>;
+type Connections = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
 
 enum Connection {
   #[cfg(feature = "runtime-monoio")]
@@ -241,17 +242,12 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                       (
                         v,
                         e.props.get("unix").and_then(|v| v.as_str()).map(|s| s.to_owned()),
-                        Arc::new({
-                          let mut connections_vec = Vec::new();
-                          for _ in 0..get_value!("proxy_keepalive_idle_conns", config)
+                        Arc::new(async_channel::bounded(
+                          get_value!("proxy_keepalive_idle_conns", config)
                             .and_then(|v| v.as_i128())
                             .map(|v| v as usize)
-                            .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST)
-                          {
-                            connections_vec.push(Mutex::new(None));
-                          }
-                          connections_vec
-                        }),
+                            .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST),
+                        )),
                       )
                     })
                 })
@@ -624,53 +620,31 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .and_then(|v| v.as_bool())
           .unwrap_or(true)
         {
-          let mut connection: &Mutex<Option<SendRequest>>;
-          let mut connections_indexes = Vec::new();
-          for i in 0..connections.len() {
-            connections_indexes.push(i);
-          }
+          let (sender, receiver) = &*connections;
           loop {
-            let connections_indexes_index = rand::random_range(..connections_indexes.len());
-            connection = &connections[connections_indexes[connections_indexes_index]];
-
-            let mut mutex = connection.try_lock();
-
-            match mutex.as_deref_mut() {
-              Ok(Some(sender)) => {
-                if match sender {
-                  SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-                  SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-                } {
-                  let proxy_request = Request::from_parts(proxy_request_parts, request_body);
-                  let result = http_proxy_kept_alive(
-                    sender,
-                    proxy_request,
-                    error_logger,
-                    proxy_intercept_errors,
-                    tracked_connection,
-                  )
-                  .await;
-                  drop(mutex);
-                  return result;
-                } else {
-                  drop(mutex);
-                }
-              }
-              Ok(None) => {
-                drop(mutex);
-              }
-              Err(_) => {
-                drop(mutex);
-                connections_indexes.remove(connections_indexes_index);
-                if connections_indexes.is_empty() {
-                  break;
-                }
+            if let Ok(mut send_request) = receiver.try_recv() {
+              if match &mut send_request {
+                SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+                SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+              } {
+                let proxy_request = Request::from_parts(proxy_request_parts, request_body);
+                let result = http_proxy_kept_alive(
+                  send_request,
+                  proxy_request,
+                  error_logger,
+                  proxy_intercept_errors,
+                  tracked_connection,
+                  sender,
+                )
+                .await;
+                return result;
+              } else {
                 continue;
               }
             }
             break;
           }
-          Some(connection)
+          Some(sender)
         } else {
           None
         };
@@ -1272,11 +1246,11 @@ async fn http_proxy_handshake(
 /// 2. Forwards the request to the backend server
 /// 3. Handles protocol upgrades (e.g., WebSockets)
 /// 4. Processes the response from the backend
-/// 5. Stores the connection in the connection pool for future reuse if possible
+/// 5. Stores the connection in the connection queue for future reuse if possible
 ///
 /// # Parameters
 /// * `sender` - The sender for the HTTP request
-/// * `connections` - Optional connection pool for storing and reusing HTTP connections
+/// * `connections` - Optional connection queue for storing and reusing HTTP connections
 /// * `connect_addr` - The address (host:port) to connect to
 /// * `proxy_request` - The HTTP request to forward to the backend
 /// * `error_logger` - Logger for reporting errors
@@ -1287,7 +1261,7 @@ async fn http_proxy_handshake(
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
 async fn http_proxy(
   mut sender: SendRequest,
-  connections: Option<&Mutex<Option<SendRequest>>>,
+  connections: Option<&Sender<SendRequest>>,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
@@ -1393,10 +1367,7 @@ async fn http_proxy(
       SendRequest::Http1(sender) => sender.is_closed(),
       SendRequest::Http2(sender) => sender.is_closed(),
     }) {
-      let mutex = connections.try_lock();
-      if let Ok(mut mutex) = mutex {
-        mutex.replace(sender);
-      }
+      connections.try_send(sender).unwrap_or_default();
     }
   }
 
@@ -1420,21 +1391,23 @@ async fn http_proxy(
 /// * `error_logger` - Logger for reporting errors
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
 /// * `tracked_connection` - The optional tracked connection to the backend server
+/// * `connections_tx` - The sender part of idle keep-alive connection queue
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
 async fn http_proxy_kept_alive(
-  sender: &mut SendRequest,
+  mut sender: SendRequest,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
   tracked_connection: Option<Arc<()>>,
+  connections_tx: &Sender<SendRequest>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
   let proxy_request = Request::from_parts(proxy_request_parts, proxy_request_body);
 
-  let send_request_result = match sender {
+  let send_request_result = match &mut sender {
     SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
     SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
   };
@@ -1530,6 +1503,13 @@ async fn http_proxy_kept_alive(
       new_remote_address: None,
     }
   };
+
+  if !(match &sender {
+    SendRequest::Http1(sender) => sender.is_closed(),
+    SendRequest::Http2(sender) => sender.is_closed(),
+  }) {
+    connections_tx.send(sender).await.unwrap_or_default();
+  }
 
   Ok(response)
 }
