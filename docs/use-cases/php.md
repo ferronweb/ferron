@@ -21,7 +21,7 @@ To configure PHP through FastCGI with Ferron, you can use this configuration:
 // Example configuration with PHP through FastCGI. Replace "example.com" with your domain name.
 example.com {
     root "/var/www/html"
-    fcgi_php "unix:///run/php/php8.2-fpm.sock" // Replace with the Unix socket URL with actual path to the PHP FastCGI daemon socket.
+    fcgi_php "unix:///run/php/php8.4-fpm.sock" // Replace with the Unix socket URL with actual path to the PHP FastCGI daemon socket.
     // Also, if using Unix socket with PHP-FPM,
     // set the listener owner and group in the pool configuration to the web server user (`ferron`, if you used installer for GNU/Linux)
     // For example:
