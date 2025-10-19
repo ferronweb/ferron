@@ -71,6 +71,12 @@ export default [
     label: "PHP hosting",
   },
   {
+    href: "/docs/use-cases/web-applications",
+    target: "_self",
+    sub: true,
+    label: "Web applications",
+  },
+  {
     href: "/docs/use-cases/redirecting",
     target: "_self",
     sub: true,
@@ -95,11 +101,6 @@ export default [
     href: "/docs/modules",
     target: "_self",
     label: "Server modules",
-  },
-  {
-    href: "/docs/web-application-compatibility",
-    target: "_self",
-    label: "Compatibility with web applications",
   },
   {
     href: "/docs/commands",
