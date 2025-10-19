@@ -1,6 +1,7 @@
 ---
 import {
   faHackerNews,
+  faReddit,
   faThreads,
   faXTwitter
 } from "@fortawesome/free-brands-svg-icons";
@@ -44,6 +45,13 @@ import Testimonial from "./Testimonial.astro";
         sourceLink="https://www.threads.net/@buddy_spencer/post/DH-lv3mNQ2j"
         name="Andreas Wachter"
         testimonial="I just switched to @ferronweb on my pi to serve services at home. Imho ferron is just way easier to configure than anything else."
+      />
+      <Testimonial
+        sourceIcon={faReddit}
+        sourceLink="https://www.reddit.com/r/rust/comments/1o8ckkk/comment/njy4mac/"
+        name="Michael Murphy"
+        description="Engineer at System76 and Pop!_OS maintainer"
+        testimonial="You may want to check out what Ferron is doing. I've been using it for a few months. Highly recommend. (...) Significantly easier to set up than nginx, and by far the most effortless auto TLS integration. (...) Highly recommend using the v2 docker images though. It now uses KDL for configuration, which is much cleaner than YAML. The syntax is versatile enough that you can create a custom DSL of sorts. Ferron uses it to replicate if statements, and uses them to filter access by IP or headers."
       />
     </div>
   </div>
