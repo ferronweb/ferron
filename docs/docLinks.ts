@@ -6,6 +6,12 @@ export default [
     label: "Welcome to the documentation!",
   },
   {
+    href: "/docs/playground",
+    target: "_self",
+    sub: false,
+    label: "Playground",
+  },
+  {
     label: "Installation",
   },
   {
