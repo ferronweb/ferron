@@ -2,7 +2,7 @@
 title: Web applications
 ---
 
-Ferron is compatible with various web applications, like WordPress, Joomla, and more.
+Ferron is compatible with various web applications, like ones built with WordPress, Joomla, Laravel, and more.
 
 ## WordPress
 
