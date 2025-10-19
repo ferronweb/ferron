@@ -6,11 +6,6 @@ export default [
     label: "Welcome to the documentation!",
   },
   {
-    href: "/docs/requirements",
-    target: "_self",
-    label: "System requirements",
-  },
-  {
     label: "Installation",
   },
   {
@@ -83,38 +78,48 @@ export default [
     label: "Redirecting",
   },
   {
-    href: "/docs/automatic-tls",
-    target: "_self",
-    label: "Automatic TLS",
+    label: "Reference",
   },
   {
     href: "/docs/configuration-kdl",
     target: "_self",
+    sub: true,
     label: "Server configuration",
   },
   {
     href: "/docs/configuration",
     target: "_self",
+    sub: true,
     label: "Server configuration (legacy)",
   },
   {
     href: "/docs/modules",
     target: "_self",
+    sub: true,
     label: "Server modules",
+  },
+  {
+    href: "/docs/automatic-tls",
+    target: "_self",
+    sub: true,
+    label: "Automatic TLS",
   },
   {
     href: "/docs/commands",
     target: "_self",
+    sub: true,
     label: "Commands",
   },
   {
     href: "/docs/ferrbench",
     target: "_self",
+    sub: true,
     label: "FerrBench",
   },
   {
     href: "https://rustdocs.ferronweb.org",
     target: "_self",
+    sub: true,
     label: "Rust crate documentation",
   },
 ];
