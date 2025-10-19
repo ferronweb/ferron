@@ -252,13 +252,21 @@ const docLinks = Astro.props.docLinks;
                 label: string;
               }) => (
                 <li class="block my-1">
-                  <a
-                    href={docLink.href}
-                    target={docLink.target || "_self"}
-                    class={`${docLink.sub ? "ml-4" : ""} block align-middle ${Astro.url.pathname == docLink.href ? "bg-primary text-primary-foreground" : ""} text-inherit px-2 py-1 mx-1 rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors`}
-                  >
-                    {docLink.label}
-                  </a>
+                  {docLink.href ? (
+                    <a
+                      href={docLink.href}
+                      target={docLink.target || "_self"}
+                      class={`${docLink.sub ? "ml-4" : ""} block align-middle ${Astro.url.pathname == docLink.href ? "bg-primary text-primary-foreground" : ""} text-inherit px-2 py-1 mx-1 rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors`}
+                    >
+                      {docLink.label}
+                    </a>
+                  ) : (
+                    <span
+                      class={`${docLink.sub ? "ml-4" : ""} block align-middle text-inherit px-2 py-1 mx-1 rounded-sm`}
+                    >
+                      {docLink.label}
+                    </span>
+                  )}
                 </li>
               )
             )}
