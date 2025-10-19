@@ -44,6 +44,10 @@ export default defineConfig({
     prefetchAll: true,
     defaultStrategy: "tap"
   },
+  build: {
+    format: "preserve"
+  },
+  trailingSlash: "never",
   experimental: {
     fonts: [
       {
