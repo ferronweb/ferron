@@ -256,13 +256,13 @@ const docLinks = Astro.props.docLinks;
                     <a
                       href={docLink.href}
                       target={docLink.target || "_self"}
-                      class={`${docLink.sub ? "ml-4" : ""} block align-middle ${Astro.url.pathname == docLink.href ? "bg-primary text-primary-foreground" : ""} text-inherit px-2 py-1 mx-1 rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors`}
+                      class={`${docLink.sub ? "ml-4" : ""} block align-middle ${Astro.url.pathname == docLink.href ? "bg-primary text-primary-foreground" : ""} text-inherit px-2 py-0.5 mx-1 rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors`}
                     >
                       {docLink.label}
                     </a>
                   ) : (
                     <span
-                      class={`${docLink.sub ? "ml-4" : ""} block align-middle text-inherit px-2 py-1 mx-1 rounded-sm`}
+                      class={`${docLink.sub ? "ml-4" : "text-lg"} block align-middle text-inherit px-2 py-0.5 mx-1 rounded-sm font-bold`}
                     >
                       {docLink.label}
                     </span>
