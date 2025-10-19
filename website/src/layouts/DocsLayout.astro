@@ -20,6 +20,11 @@ const pathname = Astro.url.pathname;
           docLinks.map((link) => (
             <li class="block my-1">
               <a
+                data-pagefind-meta={
+                  pathname.replace(/\/+$/g, "") == link.href
+                    ? "url[href]"
+                    : null
+                }
                 href={link.href}
                 target={link.target || "_self"}
                 class={`${link.sub ? "ml-4" : ""} block align-middle ${pathname.replace(/\/+$/g, "") == link.href ? "bg-primary text-primary-foreground" : "text-inherit"} px-2 py-1 mx-1 rounded-sm hover:bg-accent/80 hover:text-accent-foreground transition-colors`}
