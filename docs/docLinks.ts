@@ -11,8 +11,6 @@ export default [
     label: "System requirements",
   },
   {
-    href: "/docs/installation",
-    target: "_self",
     label: "Installation",
   },
   {
@@ -52,8 +50,6 @@ export default [
     label: "Manual installation",
   },
   {
-    href: "/docs/use-cases",
-    target: "_self",
     label: "Common use cases",
   },
   {
