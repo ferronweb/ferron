@@ -28,7 +28,7 @@ use rustls::{
 };
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use serde::{Deserialize, Serialize};
-use tokio::{sync::RwLock, time::Instant};
+use tokio::{io::AsyncWriteExt, sync::RwLock, time::Instant};
 use x509_parser::prelude::{FromDer, X509Certificate};
 use xxhash_rust::xxh3::xxh3_128;
 
@@ -137,7 +137,29 @@ async fn set_in_cache(cache: &AcmeCache, key: &str, value: Vec<u8>) -> Result<()
     }
     AcmeCache::File(path) => {
       tokio::fs::create_dir_all(path).await.unwrap_or_default();
-      tokio::fs::write(path.join(key), value).await.map_err(Into::into)
+      let mut open_options = tokio::fs::OpenOptions::new();
+      open_options.write(true).create(true);
+
+      #[cfg(unix)]
+      open_options.mode(0o600); // Don't allow others to read or write
+
+      let mut file = open_options.open(path.join(key)).await?;
+      file.write_all(&value).await?;
+      file.flush().await.unwrap_or_default();
+
+      Ok(())
+    }
+  }
+}
+
+/// Removes data from the cache.
+async fn remove_from_cache(cache: &AcmeCache, key: &str) {
+  match cache {
+    AcmeCache::Memory(cache) => {
+      cache.write().await.remove(key);
+    }
+    AcmeCache::File(path) => {
+      let _ = tokio::fs::remove_file(path.join(key)).await;
     }
   }
 }
@@ -350,7 +372,17 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
     acme_new_order = acme_new_order.profile(profile);
   }
 
-  let mut acme_order = acme_account.new_order(&acme_new_order).await?;
+  let mut acme_order = match acme_account.new_order(&acme_new_order).await {
+    Ok(order) => order,
+    Err(instant_acme::Error::Api(problem)) => {
+      if problem.r#type.as_deref() == Some("urn:ietf:params:acme:error:accountDoesNotExist") {
+        // Remove non-existent account from the cache
+        remove_from_cache(&config.account_cache, &account_cache_key).await;
+      }
+      Err(instant_acme::Error::Api(problem))?
+    }
+    Err(err) => Err(err)?,
+  };
   let mut dns_01_identifiers = Vec::new();
   let mut acme_authorizations = acme_order.authorizations();
   while let Some(acme_authorization) = acme_authorizations.next().await {
@@ -657,7 +689,7 @@ impl TlsAlpn01Resolver {
 
 impl ResolvesServerCert for TlsAlpn01Resolver {
   fn resolve(&self, client_hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
-    let hostname = client_hello.server_name();
+    let hostname = client_hello.server_name().map(|hn| hn.strip_suffix('.').unwrap_or(hn));
 
     // If blocking_read() method is used when only Tokio is used, the program would panic on resolving a TLS certificate.
     #[cfg(feature = "runtime-monoio")]

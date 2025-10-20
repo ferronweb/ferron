@@ -2,16 +2,19 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
+use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use bytes::Bytes;
 #[cfg(feature = "runtime-monoio")]
 use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
+use hyper::body::Body;
 use hyper::header::{HeaderName, HeaderValue};
 use hyper::{header, HeaderMap, Request, Response, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
@@ -48,12 +51,22 @@ use ferron_common::{
 };
 use ferron_common::{get_entries, get_entries_for_validation, get_value};
 
-const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
+const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: usize = 48;
+
+#[allow(clippy::type_complexity)]
+enum LoadBalancerAlgorithm {
+  Random,
+  RoundRobin(Arc<AtomicUsize>),
+  LeastConnections(Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>),
+  TwoRandomChoices(Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>),
+}
 
 enum SendRequest {
   Http1(hyper::client::conn::http1::SendRequest<BoxBody<Bytes, std::io::Error>>),
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
+
+type Connections = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
 
 enum Connection {
   #[cfg(feature = "runtime-monoio")]
@@ -126,11 +139,48 @@ impl AsyncWrite for Connection {
   }
 }
 
+/// A tracked response body
+struct TrackedBody<B> {
+  inner: B,
+  _tracker: Arc<()>,
+}
+
+impl<B> TrackedBody<B> {
+  fn new(inner: B, tracker: Arc<()>) -> Self {
+    Self {
+      inner,
+      _tracker: tracker,
+    }
+  }
+}
+
+impl<B> Body for TrackedBody<B>
+where
+  B: Body + Unpin,
+{
+  type Data = B::Data;
+  type Error = B::Error;
+
+  fn poll_frame(
+    mut self: Pin<&mut Self>,
+    cx: &mut Context<'_>,
+  ) -> Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
+    Pin::new(&mut self.inner).poll_frame(cx)
+  }
+
+  fn is_end_stream(&self) -> bool {
+    self.inner.is_end_stream()
+  }
+
+  fn size_hint(&self) -> hyper::body::SizeHint {
+    self.inner.size_hint()
+  }
+}
+
 /// A reverse proxy module loader
 #[allow(clippy::type_complexity)]
 pub struct ReverseProxyModuleLoader {
   cache: ModuleCache<ReverseProxyModule>,
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
 }
 
 impl Default for ReverseProxyModuleLoader {
@@ -142,14 +192,14 @@ impl Default for ReverseProxyModuleLoader {
 impl ReverseProxyModuleLoader {
   /// Creates a new module loader
   pub fn new() -> Self {
-    let mut connections_vec = Vec::new();
-    for _ in 0..DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST {
-      connections_vec.push(RwLock::new(HashMap::new()));
-    }
-
     Self {
-      cache: ModuleCache::new(vec![]),
-      connections: Arc::new(connections_vec),
+      cache: ModuleCache::new(vec![
+        "proxy",
+        "lb_health_check_window",
+        "lb_health_check_max_fails",
+        "lb_algorithm",
+        "proxy_keepalive_idle_conns",
+      ]),
     }
   }
 }
@@ -158,21 +208,58 @@ impl ModuleLoader for ReverseProxyModuleLoader {
   fn load_module(
     &mut self,
     config: &ServerConfiguration,
-    global_config: Option<&ServerConfiguration>,
+    _global_config: Option<&ServerConfiguration>,
     _secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
     Ok(
       self
         .cache
-        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |config| {
           Ok(Arc::new(ReverseProxyModule {
-            connections: self.connections.clone(),
             failed_backends: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(
-              global_config
-                .and_then(|c| get_value!("lb_health_check_window", c))
+              get_value!("lb_health_check_window", config)
                 .and_then(|v| v.as_i128())
                 .unwrap_or(5000) as u64,
             )))),
+            load_balancer_algorithm: {
+              let algorithm_name = get_value!("lb_algorithm", config)
+                .and_then(|v| v.as_str())
+                .unwrap_or("two_random");
+              Arc::new(match algorithm_name {
+                "two_random" => LoadBalancerAlgorithm::TwoRandomChoices(Arc::new(RwLock::new(HashMap::new()))),
+                "least_conn" => LoadBalancerAlgorithm::LeastConnections(Arc::new(RwLock::new(HashMap::new()))),
+                "round_robin" => LoadBalancerAlgorithm::RoundRobin(Arc::new(AtomicUsize::new(0))),
+                "random" => LoadBalancerAlgorithm::Random,
+                _ => Err(anyhow::anyhow!(
+                  "Unsupported load balancing algorithm: {algorithm_name}"
+                ))?,
+              })
+            },
+            proxy_to: Arc::new(get_entries!("proxy", config).map_or(vec![], |e| {
+              e.inner
+                .iter()
+                .filter_map(|e| {
+                  e.values
+                    .first()
+                    .and_then(|v| v.as_str().map(|s| s.to_owned()))
+                    .map(|v| {
+                      (
+                        v,
+                        e.props.get("unix").and_then(|v| v.as_str()).map(|s| s.to_owned()),
+                        Arc::new(async_channel::bounded(
+                          get_value!("proxy_keepalive_idle_conns", config)
+                            .and_then(|v| v.as_i128())
+                            .map(|v| v as usize)
+                            .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST),
+                        )),
+                      )
+                    })
+                })
+                .collect()
+            })),
+            health_check_max_fails: get_value!("lb_health_check_max_fails", config)
+              .and_then(|v| v.as_i128())
+              .unwrap_or(3) as u64,
           }))
         })?,
     )
@@ -354,6 +441,34 @@ impl ModuleLoader for ReverseProxyModuleLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("lb_algorithm", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `lb_algorithm` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
+          Err(anyhow::anyhow!("Invalid load balancer algorithm"))?
+        }
+      }
+    }
+
+    if let Some(entries) = get_entries_for_validation!("proxy_keepalive_idle_conns", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `proxy_keepalive_idle_conns` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_integer() && !entry.values[0].is_null() {
+          Err(anyhow::anyhow!("Invalid proxy keep-alive idle connections"))?
+        } else if let Some(value) = entry.values[0].as_i128() {
+          if value < 1 {
+            Err(anyhow::anyhow!("Invalid proxy keep-alive idle connections"))?
+          }
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -361,15 +476,19 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 /// A reverse proxy module
 #[allow(clippy::type_complexity)]
 struct ReverseProxyModule {
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
+  load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
+  proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
+  health_check_max_fails: u64,
 }
 
 impl Module for ReverseProxyModule {
   fn get_module_handlers(&self) -> Box<dyn ModuleHandlers> {
     Box::new(ReverseProxyModuleHandlers {
-      connections: self.connections.clone(),
       failed_backends: self.failed_backends.clone(),
+      load_balancer_algorithm: self.load_balancer_algorithm.clone(),
+      proxy_to: self.proxy_to.clone(),
+      health_check_max_fails: self.health_check_max_fails,
     })
   }
 }
@@ -377,8 +496,10 @@ impl Module for ReverseProxyModule {
 /// Handlers for the reverse proxy module
 #[allow(clippy::type_complexity)]
 struct ReverseProxyModuleHandlers {
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
+  load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
+  proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
+  health_check_max_fails: u64,
 }
 
 #[async_trait(?Send)]
@@ -409,26 +530,24 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let enable_health_check = get_value!("lb_health_check", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(false);
-    let health_check_max_fails = get_value!("lb_health_check_max_fails", config)
-      .and_then(|v| v.as_i128())
-      .unwrap_or(3) as u64;
+    let health_check_max_fails = self.health_check_max_fails;
     let disable_certificate_verification = get_value!("proxy_no_verification", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(false);
     let proxy_intercept_errors = get_value!("proxy_intercept_errors", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(false);
-    let mut proxy_to_vector = get_entries!("proxy", config).map_or(vec![], |e| {
-      e.inner
-        .iter()
-        .filter_map(|e| {
-          e.values
-            .first()
-            .and_then(|v| v.as_str())
-            .map(|v| (v, e.props.get("unix").and_then(|v| v.as_str())))
-        })
-        .collect()
-    });
+    let mut proxy_to_vector = self
+      .proxy_to
+      .iter()
+      .map(|e| (&*e.0, e.1.as_deref(), e.2.clone()))
+      .collect();
+    let load_balancer_algorithm = self.load_balancer_algorithm.clone();
+    let connection_track = match &*load_balancer_algorithm {
+      LoadBalancerAlgorithm::LeastConnections(connection_track) => Some(connection_track),
+      LoadBalancerAlgorithm::TwoRandomChoices(connection_track) => Some(connection_track),
+      _ => None,
+    };
     let retry_connection = get_value!("lb_retry_connection", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(true);
@@ -436,11 +555,12 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let mut request_parts = Some(request_parts);
 
     loop {
-      if let Some((proxy_to, proxy_unix)) = determine_proxy_to(
+      if let Some((proxy_to, proxy_unix, connections)) = determine_proxy_to(
         &mut proxy_to_vector,
         &self.failed_backends,
         enable_health_check,
         health_check_max_fails,
+        &load_balancer_algorithm,
       )
       .await
       {
@@ -480,47 +600,55 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         let proxy_request_parts =
           construct_proxy_request_parts(request_parts, config, socket_data, &proxy_request_url)?;
 
+        let tracked_connection = if let Some(connection_track) = connection_track {
+          let connection_track_key = (proxy_to.clone(), proxy_unix.clone());
+          let connection_track_read = connection_track.read().await;
+          Some(
+            if let Some(connection_count) = connection_track_read.get(&connection_track_key) {
+              connection_count.clone()
+            } else {
+              let tracked_connection = Arc::new(());
+              drop(connection_track_read);
+              connection_track
+                .write()
+                .await
+                .insert(connection_track_key, tracked_connection.clone());
+              tracked_connection
+            },
+          )
+        } else {
+          None
+        };
+
         let connections = if get_value!("proxy_keepalive", config)
           .and_then(|v| v.as_bool())
           .unwrap_or(true)
         {
-          let connections = &self.connections[rand::random_range(..self.connections.len())];
-
-          let rwlock_read = connections.read().await;
-          let sender_read_option = rwlock_read.get(&addr);
-
-          if let Some(sender_read) = sender_read_option {
-            if match sender_read {
-              SendRequest::Http1(sender) => !sender.is_closed(),
-              SendRequest::Http2(sender) => !sender.is_closed(),
-            } {
-              drop(rwlock_read);
-              let mut rwlock_write = connections.write().await;
-              let sender_option = rwlock_write.get_mut(&addr);
-
-              if let Some(sender) = sender_option {
-                if match sender {
-                  SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-                  SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-                } {
-                  let proxy_request = Request::from_parts(proxy_request_parts, request_body);
-                  let result = http_proxy_kept_alive(sender, proxy_request, error_logger, proxy_intercept_errors).await;
-                  drop(rwlock_write);
-                  return result;
-                } else {
-                  drop(rwlock_write);
-                }
+          let (sender, receiver) = &*connections;
+          loop {
+            if let Ok(mut send_request) = receiver.try_recv() {
+              if match &mut send_request {
+                SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+                SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+              } {
+                let proxy_request = Request::from_parts(proxy_request_parts, request_body);
+                let result = http_proxy_kept_alive(
+                  send_request,
+                  proxy_request,
+                  error_logger,
+                  proxy_intercept_errors,
+                  tracked_connection,
+                  sender,
+                )
+                .await;
+                return result;
               } else {
-                drop(rwlock_write);
+                continue;
               }
-            } else {
-              drop(rwlock_read);
             }
-          } else {
-            drop(rwlock_read);
+            break;
           }
-
-          Some(connections)
+          Some(sender)
         } else {
           None
         };
@@ -881,10 +1009,10 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         return http_proxy(
           sender,
           connections,
-          addr,
           proxy_request,
           error_logger,
           proxy_intercept_errors,
+          tracked_connection,
         )
         .await;
       } else {
@@ -898,6 +1026,101 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         });
       }
     }
+  }
+}
+
+/// Selects an index for a backend server based on the load balancing algorithm.
+///
+/// # Parameters
+/// * `load_balancer_algorithm`: The load balancing algorithm to use.
+/// * `backends`: The list of backend servers to choose from
+///
+/// # Returns
+/// * `usize` - The index of the selected backend server.
+async fn select_backend_index(
+  load_balancer_algorithm: &LoadBalancerAlgorithm,
+  backends: &[(&str, Option<&str>, Connections)],
+) -> usize {
+  match load_balancer_algorithm {
+    LoadBalancerAlgorithm::TwoRandomChoices(connection_track) => {
+      let random_choice1 = rand::random_range(..backends.len());
+      let mut random_choice2 = if backends.len() > 1 {
+        rand::random_range(..(backends.len() - 1))
+      } else {
+        0
+      };
+      if backends.len() > 1 && random_choice2 >= random_choice1 {
+        random_choice2 += 1;
+      }
+      let backend1 = backends[random_choice1].clone();
+      let backend2 = backends[random_choice2].clone();
+      let connection_track_key1 = (backend1.0.to_string(), backend1.1.as_ref().map(|s| s.to_string()));
+      let connection_track_key2 = (backend2.0.to_string(), backend2.1.as_ref().map(|s| s.to_string()));
+      let connection_track_read = connection_track.read().await;
+      let connection_count_option1 = connection_track_read
+        .get(&connection_track_key1)
+        .map(|connection_count| Arc::strong_count(connection_count) - 1);
+      let connection_count_option2 = connection_track_read
+        .get(&connection_track_key2)
+        .map(|connection_count| Arc::strong_count(connection_count) - 1);
+      drop(connection_track_read);
+      let connection_count1 = if let Some(count) = connection_count_option1 {
+        count
+      } else {
+        connection_track
+          .write()
+          .await
+          .insert(connection_track_key1, Arc::new(()));
+        0
+      };
+      let connection_count2 = if let Some(count) = connection_count_option2 {
+        count
+      } else {
+        connection_track
+          .write()
+          .await
+          .insert(connection_track_key2, Arc::new(()));
+        0
+      };
+      if connection_count2 >= connection_count1 {
+        random_choice1
+      } else {
+        random_choice2
+      }
+    }
+    LoadBalancerAlgorithm::LeastConnections(connection_track) => {
+      let mut min_indexes = Vec::new();
+      let mut min_connections = None;
+      for (index, (uri, unix, _)) in backends.iter().enumerate() {
+        let connection_track_key = (uri.to_string(), unix.as_ref().map(|s| s.to_string()));
+        let connection_track_read = connection_track.read().await;
+        let connection_count = if let Some(connection_count) = connection_track_read.get(&connection_track_key) {
+          Arc::strong_count(connection_count) - 1
+        } else {
+          drop(connection_track_read);
+          connection_track
+            .write()
+            .await
+            .insert(connection_track_key, Arc::new(()));
+          0
+        };
+        if min_connections.is_none_or(|min| connection_count < min) {
+          min_indexes = vec![index];
+          min_connections = Some(connection_count);
+        } else {
+          min_indexes.push(index);
+        }
+      }
+      match min_indexes.len() {
+        0 => 0,
+        1 => min_indexes[0],
+        _ => min_indexes[rand::random_range(0..min_indexes.len())],
+      }
+    }
+    LoadBalancerAlgorithm::RoundRobin(round_robin_index) => {
+      round_robin_index.fetch_add(1, Ordering::Relaxed) % backends.len()
+    }
+    LoadBalancerAlgorithm::Random => rand::random_range(..backends.len()),
   }
 }
 
@@ -915,15 +1138,18 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 /// * `failed_backends` - Cache tracking failed backend attempts
 /// * `enable_health_check` - Whether backend health checking is enabled
 /// * `health_check_max_fails` - Maximum number of failures before considering a backend unhealthy
+/// * `load_balancer_algorithm` - The load balancing algorithm to use
 ///
 /// # Returns
-/// * `Option<String>` - The URL of the selected backend server, or None if no valid backend exists
+/// * `Option<(String, Option<String>, Connections)>` - The URL, the optional Unix socket path,
+///   and the connections of the selected backend server, or None if no valid backend exists
 async fn determine_proxy_to(
-  proxy_to_vector: &mut Vec<(&str, Option<&str>)>,
+  proxy_to_vector: &mut Vec<(&str, Option<&str>, Connections)>,
   failed_backends: &RwLock<TtlCache<(String, Option<String>), u64>>,
   enable_health_check: bool,
   health_check_max_fails: u64,
-) -> Option<(String, Option<String>)> {
+  load_balancer_algorithm: &LoadBalancerAlgorithm,
+) -> Option<(String, Option<String>, Connections)> {
   let mut proxy_to = None;
   // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
   // The "proxy" directive is validated though.
@@ -934,15 +1160,17 @@ async fn determine_proxy_to(
     let proxy_to_borrowed = proxy_to_vector.remove(0);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
     let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-    proxy_to = Some((proxy_to_url, proxy_to_header));
+    let proxy_to_connections = proxy_to_borrowed.2.clone();
+    proxy_to = Some((proxy_to_url, proxy_to_header, proxy_to_connections));
   } else if enable_health_check {
     loop {
       if !proxy_to_vector.is_empty() {
-        let index = rand::random_range(..proxy_to_vector.len());
+        let index = select_backend_index(load_balancer_algorithm, proxy_to_vector).await;
         let proxy_to_borrowed = proxy_to_vector.remove(index);
         let proxy_to_url = proxy_to_borrowed.0.to_string();
         let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-        proxy_to = Some((proxy_to_url.clone(), proxy_to_header.clone()));
+        let proxy_to_connections = proxy_to_borrowed.2.clone();
+        proxy_to = Some((proxy_to_url.clone(), proxy_to_header.clone(), proxy_to_connections));
         let failed_backends_read = failed_backends.read().await;
         let failed_backend_fails = match failed_backends_read.get(&(proxy_to_url, proxy_to_header)) {
           Some(fails) => fails,
@@ -957,11 +1185,13 @@ async fn determine_proxy_to(
     }
   } else if !proxy_to_vector.is_empty() {
     // If we have backends available and health checking is disabled,
-    // randomly select one backend from all available options
-    let proxy_to_borrowed = proxy_to_vector.remove(rand::random_range(..proxy_to_vector.len()));
+    // select one backend from all available options
+    let index = select_backend_index(load_balancer_algorithm, proxy_to_vector).await;
+    let proxy_to_borrowed = proxy_to_vector.remove(index);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
     let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-    proxy_to = Some((proxy_to_url, proxy_to_header));
+    let proxy_to_connections = proxy_to_borrowed.2.clone();
+    proxy_to = Some((proxy_to_url, proxy_to_header, proxy_to_connections));
   }
 
   proxy_to
@@ -1020,25 +1250,26 @@ async fn http_proxy_handshake(
 /// 2. Forwards the request to the backend server
 /// 3. Handles protocol upgrades (e.g., WebSockets)
 /// 4. Processes the response from the backend
-/// 5. Stores the connection in the connection pool for future reuse if possible
+/// 5. Stores the connection in the connection queue for future reuse if possible
 ///
 /// # Parameters
 /// * `sender` - The sender for the HTTP request
-/// * `connections` - Optional connection pool for storing and reusing HTTP connections
+/// * `connections` - Optional connection queue for storing and reusing HTTP connections
 /// * `connect_addr` - The address (host:port) to connect to
 /// * `proxy_request` - The HTTP request to forward to the backend
 /// * `error_logger` - Logger for reporting errors
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
+/// * `tracked_connection` - The optional tracked connection to the backend server
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
 async fn http_proxy(
   mut sender: SendRequest,
-  connections: Option<&RwLock<HashMap<String, SendRequest>>>,
-  connect_addr: String,
+  connections: Option<&Sender<SendRequest>>,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
+  tracked_connection: Option<Arc<()>>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
@@ -1120,9 +1351,14 @@ async fn http_proxy(
       new_remote_address: None,
     }
   } else {
+    let (response_parts, response_body) = proxy_response.into_parts();
+    let mut boxed_body = response_body.map_err(|e| std::io::Error::other(e.to_string())).boxed();
+    if let Some(tracked_connection) = tracked_connection {
+      boxed_body = TrackedBody::new(boxed_body, tracked_connection).boxed();
+    }
     ResponseData {
       request: None,
-      response: Some(proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed())),
+      response: Some(Response::from_parts(response_parts, boxed_body)),
       response_status: None,
       response_headers: None,
       new_remote_address: None,
@@ -1135,9 +1371,7 @@ async fn http_proxy(
       SendRequest::Http1(sender) => sender.is_closed(),
       SendRequest::Http2(sender) => sender.is_closed(),
     }) {
-      let mut rwlock_write = connections.write().await;
-      rwlock_write.insert(connect_addr, sender);
-      drop(rwlock_write);
+      connections.try_send(sender).unwrap_or_default();
     }
   }
 
@@ -1160,20 +1394,24 @@ async fn http_proxy(
 /// * `proxy_request` - The HTTP request to forward to the backend
 /// * `error_logger` - Logger for reporting errors
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
+/// * `tracked_connection` - The optional tracked connection to the backend server
+/// * `connections_tx` - The sender part of idle keep-alive connection queue
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
 async fn http_proxy_kept_alive(
-  sender: &mut SendRequest,
+  mut sender: SendRequest,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
+  tracked_connection: Option<Arc<()>>,
+  connections_tx: &Sender<SendRequest>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
   let proxy_request = Request::from_parts(proxy_request_parts, proxy_request_body);
 
-  let send_request_result = match sender {
+  let send_request_result = match &mut sender {
     SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
     SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
   };
@@ -1256,14 +1494,26 @@ async fn http_proxy_kept_alive(
     }
   } else {
     // For successful responses or when not intercepting errors, pass the backend response directly
+    let (response_parts, response_body) = proxy_response.into_parts();
+    let mut boxed_body = response_body.map_err(|e| std::io::Error::other(e.to_string())).boxed();
+    if let Some(tracked_connection) = tracked_connection {
+      boxed_body = TrackedBody::new(boxed_body, tracked_connection).boxed();
+    }
     ResponseData {
       request: None,
-      response: Some(proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed())),
+      response: Some(Response::from_parts(response_parts, boxed_body)),
       response_status: None,
       response_headers: None,
       new_remote_address: None,
     }
   };
+
+  if !(match &sender {
+    SendRequest::Http1(sender) => sender.is_closed(),
+    SendRequest::Http2(sender) => sender.is_closed(),
+  }) {
+    connections_tx.send(sender).await.unwrap_or_default();
+  }
 
   Ok(response)
 }

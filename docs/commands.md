@@ -38,6 +38,22 @@ Options:
   -V, --version  Print version
 ```
 
+### `ferron-precompress`
+
+```
+A utility that precompresses static files for Ferron
+
+Usage: ferron-precompress [OPTIONS] <assets>...
+
+Arguments:
+  <assets>...  The path to the static assets (it can be a directory or a file)
+
+Options:
+  -t, --threads <threads>  The number of threads to use for compression [default: 64]
+  -h, --help               Print help
+  -V, --version            Print version
+```
+
 ### `ferron-yaml2kdl`
 
 ```

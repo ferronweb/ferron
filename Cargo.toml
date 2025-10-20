@@ -7,7 +7,7 @@ members = [
     "ferron-modules-builtin",
     "ferron-passwd",
     "ferron-yaml2kdl-core",
-    "ferron-yaml2kdl",
+    "ferron-yaml2kdl", "ferron-precompress",
 ]
 exclude = ["build-prepare", "dockertest"]
 resolver = "2"
@@ -37,3 +37,6 @@ strip = true
 lto = true
 codegen-units = 1
 panic = "abort"
+
+[workspace.metadata.cargo-shear]
+ignored = ["shiba", "ferron-modules-builtin", "ferron-dns-builtin"]

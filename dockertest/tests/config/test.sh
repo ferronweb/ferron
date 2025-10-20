@@ -63,6 +63,19 @@ else
     TEST_FAILED=1
 fi
 
+TEST_RESULTS="$(curl -fsL -A 'somescanner/0.0.0' -w %{http_code} http://ferron || true)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="403"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "Access denial with Rego-based conditional test passed!"
+else
+    echo "Access denial with Rego-based conditional test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
 if [ "$TEST_FAILED" -eq 1 ]; then
     exit 1
 fi

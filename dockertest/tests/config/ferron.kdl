@@ -9,6 +9,22 @@ ferron:80 {
     is_regex "{path_and_query}" "^/wp-(?:login\\.php|admin/?)(?:$|[?#])" case_insensitive=#true
   }
 
+  condition "SOMESCANNER_SCAN" {
+    is_rego """
+      package ferron
+
+      default pass := false
+
+      pass := true if {
+        input.headers["user-agent"][0] == "somescanner"
+      }
+
+      pass := true if {
+        startswith(input.headers["user-agent"][0], "somescanner/")
+      }
+      """
+  }
+
   // Deny phpMyAdmin scan
   location "/phpmyadmin" {
     status 403
@@ -17,5 +33,10 @@ ferron:80 {
   // Deny WordPress scan
   if "WORDPRESS_SCAN" {
     use "WORDPRESS_SCAN"
+  }
+
+  // Deny WordPress scan
+  if "SOMESCANNER_SCAN" {
+    status 403
   }
 }

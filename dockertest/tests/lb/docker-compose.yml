@@ -1,0 +1,32 @@
+services:
+  # The web server to test
+  ferron:
+    networks:
+      default:
+        aliases:
+          - ferron-random
+          - ferron-round-robin
+          - ferron-least-conn
+          - ferron-two-random
+    build:
+      context: ../../..
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./ferron.kdl:/etc/ferron.kdl
+
+  # The backend servers for testing
+  backend-1:
+    build:
+      context: ./backend
+  backend-2:
+    build:
+      context: ./backend
+  backend-3:
+    build:
+      context: ./backend
+
+  # A container to run tests
+  test-runner:
+    build:
+      context: ../../runner
+    command: "tail -f /dev/null"

@@ -289,10 +289,10 @@ fn load_configuration_inner(
                       let value = kdl_node_to_configuration_entry(kdl_node);
                       let name = kdl_node.name().value();
                       conditions_data.push(match parse_conditional_data(name, value) {
-                        ConditionalData::Invalid => Err(anyhow::anyhow!(
-                          "Invalid or unsupported subcondition at \"{condition_name_str}\" condition"
+                        Ok(d) => d,
+                        Err(err) => Err(anyhow::anyhow!(
+                          "Invalid or unsupported subcondition at \"{condition_name_str}\" condition: {err}"
                         ))?,
-                        d => d,
                       });
                     }
 

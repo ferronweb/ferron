@@ -3,9 +3,11 @@ pub mod processing;
 
 pub use ferron_common::config::*;
 
-use std::fmt::Debug;
+use std::collections::HashMap;
+use std::error::Error;
 use std::net::IpAddr;
 use std::sync::Arc;
+use std::{collections::BTreeMap, fmt::Debug};
 
 use fancy_regex::RegexBuilder;
 
@@ -13,8 +15,11 @@ use crate::util::{is_localhost, match_hostname, match_location, replace_header_p
 use ferron_common::modules::SocketData;
 
 /// Parses conditional data
-pub fn parse_conditional_data(name: &str, value: ServerConfigurationEntry) -> ConditionalData {
-  match name {
+pub fn parse_conditional_data(
+  name: &str,
+  value: ServerConfigurationEntry,
+) -> Result<ConditionalData, Box<dyn Error + Send + Sync>> {
+  Ok(match name {
     "is_remote_ip" => {
       let mut list = IpBlockList::new();
       list.load_from_vec(value.values.iter().filter_map(|v| v.as_str()).collect());
@@ -35,83 +40,132 @@ pub fn parse_conditional_data(name: &str, value: ServerConfigurationEntry) -> Co
       list.load_from_vec(value.values.iter().filter_map(|v| v.as_str()).collect());
       ConditionalData::IsNotForwardedFor(list)
     }
-    "is_equal" => {
-      if let Some(left_side) = value.values.first().and_then(|v| v.as_str()) {
-        if let Some(right_side) = value.values.get(1).and_then(|v| v.as_str()) {
-          ConditionalData::IsEqual(left_side.to_string(), right_side.to_string())
-        } else {
-          ConditionalData::Invalid
-        }
-      } else {
-        ConditionalData::Invalid
-      }
-    }
-    "is_not_equal" => {
-      if let Some(left_side) = value.values.first().and_then(|v| v.as_str()) {
-        if let Some(right_side) = value.values.get(1).and_then(|v| v.as_str()) {
-          ConditionalData::IsNotEqual(left_side.to_string(), right_side.to_string())
-        } else {
-          ConditionalData::Invalid
-        }
-      } else {
-        ConditionalData::Invalid
-      }
-    }
+    "is_equal" => ConditionalData::IsEqual(
+      value
+        .values
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(anyhow::anyhow!(
+          "Missing or invalid left side of a \"is_equal\" subcondition"
+        ))?
+        .to_string(),
+      value
+        .values
+        .get(1)
+        .and_then(|v| v.as_str())
+        .ok_or(anyhow::anyhow!(
+          "Missing or invalid right side of a \"is_equal\" subcondition"
+        ))?
+        .to_string(),
+    ),
+    "is_not_equal" => ConditionalData::IsNotEqual(
+      value
+        .values
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(anyhow::anyhow!(
+          "Missing or invalid left side of a \"is_not_equal\" subcondition"
+        ))?
+        .to_string(),
+      value
+        .values
+        .get(1)
+        .and_then(|v| v.as_str())
+        .ok_or(anyhow::anyhow!(
+          "Missing or invalid right side of a \"is_not_equal\" subcondition"
+        ))?
+        .to_string(),
+    ),
     "is_regex" => {
-      if let Some(left_side) = value.values.first().and_then(|v| v.as_str()) {
-        if let Some(right_side) = value.values.get(1).and_then(|v| v.as_str()).and_then(|v| {
-          RegexBuilder::new(v)
-            .case_insensitive(
-              value
-                .props
-                .get("case_insensitive")
-                .and_then(|p| p.as_bool())
-                .unwrap_or(false),
-            )
-            .build()
-            .ok()
-        }) {
-          ConditionalData::IsRegex(left_side.to_string(), right_side)
-        } else {
-          ConditionalData::Invalid
-        }
-      } else {
-        ConditionalData::Invalid
-      }
+      let left_side = value.values.first().and_then(|v| v.as_str()).ok_or(anyhow::anyhow!(
+        "Missing or invalid left side of a \"is_regex\" subcondition"
+      ))?;
+      let right_side = value.values.get(1).and_then(|v| v.as_str()).ok_or(anyhow::anyhow!(
+        "Missing or invalid right side of a \"is_regex\" subcondition"
+      ))?;
+      ConditionalData::IsRegex(
+        left_side.to_string(),
+        RegexBuilder::new(right_side)
+          .case_insensitive(
+            value
+              .props
+              .get("case_insensitive")
+              .and_then(|p| p.as_bool())
+              .unwrap_or(false),
+          )
+          .build()?,
+      )
     }
     "is_not_regex" => {
-      if let Some(left_side) = value.values.first().and_then(|v| v.as_str()) {
-        if let Some(right_side) = value.values.get(1).and_then(|v| v.as_str()).and_then(|v| {
-          RegexBuilder::new(v)
-            .case_insensitive(
-              value
-                .props
-                .get("case_insensitive")
-                .and_then(|p| p.as_bool())
-                .unwrap_or(false),
-            )
-            .build()
-            .ok()
-        }) {
-          ConditionalData::IsNotRegex(left_side.to_string(), right_side)
-        } else {
-          ConditionalData::Invalid
-        }
-      } else {
-        ConditionalData::Invalid
-      }
+      let left_side = value.values.first().and_then(|v| v.as_str()).ok_or(anyhow::anyhow!(
+        "Missing or invalid left side of a \"is_not_regex\" subcondition"
+      ))?;
+      let right_side = value.values.get(1).and_then(|v| v.as_str()).ok_or(anyhow::anyhow!(
+        "Missing or invalid right side of a \"is_not_regex\" subcondition"
+      ))?;
+      ConditionalData::IsNotRegex(
+        left_side.to_string(),
+        RegexBuilder::new(right_side)
+          .case_insensitive(
+            value
+              .props
+              .get("case_insensitive")
+              .and_then(|p| p.as_bool())
+              .unwrap_or(false),
+          )
+          .build()?,
+      )
     }
-    _ => ConditionalData::Invalid,
-  }
+    "is_rego" => {
+      let rego_policy = value
+        .values
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(anyhow::anyhow!("Missing or invalid Rego policy"))?;
+      let mut rego_engine = regorus::Engine::new();
+      rego_engine.add_policy("ferron.rego".to_string(), rego_policy.to_string())?;
+      ConditionalData::IsRego(Arc::new(rego_engine))
+    }
+    _ => Err(anyhow::anyhow!("Unrecognized subcondition: {name}"))?,
+  })
 }
 
 /// Matches conditions
-fn match_conditions(conditions: &Conditions, request: &hyper::http::request::Parts, socket_data: &SocketData) -> bool {
-  match_location(&conditions.location_prefix, request.uri.path())
-    && conditions.conditionals.iter().all(|cond| match cond {
-      Conditional::If(data) => data.iter().all(|d| match_condition(d, request, socket_data)),
-      Conditional::IfNot(data) => !data.iter().all(|d| match_condition(d, request, socket_data)),
-    })
+fn match_conditions(
+  conditions: &Conditions,
+  request: &hyper::http::request::Parts,
+  socket_data: &SocketData,
+) -> Result<bool, Box<dyn Error + Send + Sync>> {
+  if !match_location(&conditions.location_prefix, request.uri.path()) {
+    return Ok(false);
+  }
+  for cond in &conditions.conditionals {
+    if !(match cond {
+      Conditional::If(data) => {
+        let mut matches = true;
+        for d in data {
+          if !match_condition(d, request, socket_data)? {
+            matches = false;
+            break;
+          }
+        }
+        matches
+      }
+      Conditional::IfNot(data) => {
+        let mut matches = true;
+        for d in data {
+          if !match_condition(d, request, socket_data)? {
+            matches = false;
+            break;
+          }
+        }
+        !matches
+      }
+    }) {
+      return Ok(false);
+    }
+  }
+  Ok(true)
 }
 
 /// Matches a condition
@@ -119,20 +173,20 @@ fn match_condition(
   condition: &ConditionalData,
   request: &hyper::http::request::Parts,
   socket_data: &SocketData,
-) -> bool {
+) -> Result<bool, Box<dyn Error + Send + Sync>> {
   match condition {
-    ConditionalData::IsRemoteIp(list) => list.is_blocked(socket_data.remote_addr.ip()),
+    ConditionalData::IsRemoteIp(list) => Ok(list.is_blocked(socket_data.remote_addr.ip())),
     ConditionalData::IsForwardedFor(list) => {
       let client_ip =
         if let Some(x_forwarded_for) = request.headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
           let prepared_remote_ip_str = match x_forwarded_for.split(",").next() {
             Some(ip_address_str) => ip_address_str.replace(" ", ""),
-            None => return false,
+            None => return Ok(false),
           };
 
           let prepared_remote_ip: IpAddr = match prepared_remote_ip_str.parse() {
             Ok(ip_address) => ip_address,
-            Err(_) => return false,
+            Err(_) => return Ok(false),
           };
 
           prepared_remote_ip
@@ -140,20 +194,20 @@ fn match_condition(
           socket_data.remote_addr.ip()
         };
 
-      list.is_blocked(client_ip)
+      Ok(list.is_blocked(client_ip))
     }
-    ConditionalData::IsNotRemoteIp(list) => !list.is_blocked(socket_data.remote_addr.ip()),
+    ConditionalData::IsNotRemoteIp(list) => Ok(!list.is_blocked(socket_data.remote_addr.ip())),
     ConditionalData::IsNotForwardedFor(list) => {
       let client_ip =
         if let Some(x_forwarded_for) = request.headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
           let prepared_remote_ip_str = match x_forwarded_for.split(",").next() {
             Some(ip_address_str) => ip_address_str.replace(" ", ""),
-            None => return false,
+            None => return Ok(false),
           };
 
           let prepared_remote_ip: IpAddr = match prepared_remote_ip_str.parse() {
             Ok(ip_address) => ip_address,
-            Err(_) => return false,
+            Err(_) => return Ok(false),
           };
 
           prepared_remote_ip
@@ -161,25 +215,66 @@ fn match_condition(
           socket_data.remote_addr.ip()
         };
 
-      !list.is_blocked(client_ip)
+      Ok(!list.is_blocked(client_ip))
     }
-    ConditionalData::IsEqual(v1, v2) => {
+    ConditionalData::IsEqual(v1, v2) => Ok(
       replace_header_placeholders(v1, request, Some(socket_data))
-        == replace_header_placeholders(v2, request, Some(socket_data))
-    }
-    ConditionalData::IsNotEqual(v1, v2) => {
+        == replace_header_placeholders(v2, request, Some(socket_data)),
+    ),
+    ConditionalData::IsNotEqual(v1, v2) => Ok(
       replace_header_placeholders(v1, request, Some(socket_data))
-        != replace_header_placeholders(v2, request, Some(socket_data))
+        != replace_header_placeholders(v2, request, Some(socket_data)),
+    ),
+    ConditionalData::IsRegex(v1, regex) => {
+      Ok(regex.is_match(&replace_header_placeholders(v1, request, Some(socket_data)))?)
     }
-    ConditionalData::IsRegex(v1, regex) => regex
-      .is_match(&replace_header_placeholders(v1, request, Some(socket_data)))
-      .unwrap_or(false),
     ConditionalData::IsNotRegex(v1, regex) => {
-      !(regex
-        .is_match(&replace_header_placeholders(v1, request, Some(socket_data)))
-        .unwrap_or(true))
+      Ok(!(regex.is_match(&replace_header_placeholders(v1, request, Some(socket_data)))?))
     }
-    _ => false,
+    ConditionalData::IsRego(rego_engine) => {
+      let mut cloned_engine = (*rego_engine.clone()).clone();
+      let mut rego_input_object = BTreeMap::new();
+      rego_input_object.insert("method".into(), request.method.as_str().into());
+      rego_input_object.insert(
+        "protocol".into(),
+        match request.version {
+          hyper::Version::HTTP_09 => "HTTP/0.9".into(),
+          hyper::Version::HTTP_10 => "HTTP/1.0".into(),
+          hyper::Version::HTTP_11 => "HTTP/1.1".into(),
+          hyper::Version::HTTP_2 => "HTTP/2.0".into(),
+          hyper::Version::HTTP_3 => "HTTP/3.0".into(),
+          _ => "HTTP/Unknown".into(),
+        },
+      );
+      rego_input_object.insert("uri".into(), request.uri.to_string().into());
+      let mut headers_hashmap_initial: HashMap<String, Vec<regorus::Value>> = HashMap::new();
+      for (key, value) in request.headers.iter() {
+        let key_string = key.as_str().to_lowercase();
+        if let Some(header_list) = headers_hashmap_initial.get_mut(&key_string) {
+          header_list.push(value.to_str().unwrap_or("").into());
+        } else {
+          headers_hashmap_initial.insert(key_string, vec![value.to_str().unwrap_or("").into()]);
+        }
+      }
+      let mut headers_btreemap = BTreeMap::new();
+      for (key, value) in headers_hashmap_initial.into_iter() {
+        headers_btreemap.insert(key.into(), value.into());
+      }
+      let headers_rego = regorus::Value::Object(Arc::new(headers_btreemap));
+      rego_input_object.insert("headers".into(), headers_rego);
+      let mut socket_data_btreemap = BTreeMap::new();
+      socket_data_btreemap.insert("client_ip".into(), socket_data.remote_addr.ip().to_string().into());
+      socket_data_btreemap.insert("client_port".into(), (socket_data.remote_addr.port() as u32).into());
+      socket_data_btreemap.insert("server_ip".into(), socket_data.local_addr.ip().to_string().into());
+      socket_data_btreemap.insert("server_port".into(), (socket_data.local_addr.port() as u32).into());
+      socket_data_btreemap.insert("encrypted".into(), socket_data.encrypted.into());
+      let socket_data_rego = regorus::Value::Object(Arc::new(socket_data_btreemap));
+      rego_input_object.insert("socket_data".into(), socket_data_rego);
+      let rego_input = regorus::Value::Object(Arc::new(rego_input_object));
+      cloned_engine.set_input(rego_input);
+      Ok(*cloned_engine.eval_rule("data.ferron.pass".to_string())?.as_bool()?)
+    }
+    _ => Ok(false),
   }
 }
 
@@ -209,30 +304,31 @@ impl ServerConfigurations {
     request: &hyper::http::request::Parts,
     hostname: Option<&str>,
     socket_data: &SocketData,
-  ) -> Option<Arc<ServerConfiguration>> {
+  ) -> Result<Option<Arc<ServerConfiguration>>, Box<dyn Error + Send + Sync>> {
     // The inner array is sorted by specifity, so it's easier to find the configurations.
     // If it was not sorted, we would need to implement the specifity...
     // Also, the approach mentioned in the line above might be slower...
     // But there is one thing we're wondering: so many logical operators???
-    self
-      .inner
-      .iter()
-      .rev()
-      .find(|&server_configuration| {
-        match_hostname(server_configuration.filters.hostname.as_deref(), hostname)
-          && ((server_configuration.filters.ip.is_none() && (!is_localhost(server_configuration.filters.ip.as_ref(), server_configuration.filters.hostname.as_deref())
+    for server_configuration in self.inner.iter().rev() {
+      if match_hostname(server_configuration.filters.hostname.as_deref(), hostname)
+        && ((server_configuration.filters.ip.is_none() && (!is_localhost(server_configuration.filters.ip.as_ref(), server_configuration.filters.hostname.as_deref())
             || socket_data.local_addr.ip().to_canonical().is_loopback()))  // With special `localhost` check
             || server_configuration.filters.ip == Some(socket_data.local_addr.ip()))
-          && (server_configuration.filters.port.is_none()
-            || server_configuration.filters.port == Some(socket_data.local_addr.port()))
-          && server_configuration
-            .filters
-            .condition
-            .as_ref()
-            .is_none_or(|c| match_conditions(c, request, socket_data))
-          && server_configuration.filters.error_handler_status.is_none()
-      })
-      .cloned()
+        && (server_configuration.filters.port.is_none()
+          || server_configuration.filters.port == Some(socket_data.local_addr.port()))
+        && server_configuration
+          .filters
+          .condition
+          .as_ref()
+          .map(|c| match_conditions(c, request, socket_data))
+          .unwrap_or(Ok(true))?
+        && server_configuration.filters.error_handler_status.is_none()
+      {
+        return Ok(Some(server_configuration.clone()));
+      }
+    }
+
+    Ok(None)
   }
 
   /// Finds the server error configuration based on configuration filters
