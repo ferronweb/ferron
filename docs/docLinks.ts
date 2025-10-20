@@ -128,4 +128,10 @@ export default [
     sub: true,
     label: "Rust crate documentation",
   },
+  {
+    href: "https://v1.ferron.sh/docs",
+    target: "_self",
+    sub: true,
+    label: "Ferron 1.x documentation",
+  },
 ];
