@@ -45,7 +45,7 @@ const { Content } = await render(Astro.props.post);
 <MainLayout
   title={data.title}
   description={data.description}
-  image={data.cover || blogMissing}
+  image={data.cover ? data.cover.src : blogMissing.src}
 >
   <main
     class="max-w-5xl container mx-auto pt-4 pb-8 md:pt-24 md:pb-28 flex flex-col items-center !px-4"
