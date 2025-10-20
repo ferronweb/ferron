@@ -253,47 +253,47 @@ jobs:
           # The "update-ferron-deb-repo" is a custom command that updates the Debian repository
           ssh ferron-servers "sudo update-ferron-deb-repo $DEB_PACKAGE_VERSION $DEB_ARCHITECTURE"
 
-  # docs:
-  #   runs-on: warp-ubuntu-latest-x64-8x
+  docs:
+    runs-on: warp-ubuntu-latest-x64-8x
 
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v5
-  #       with:
-  #         ref: 2.x
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: 2.x
 
-  #     - name: Install Rust
-  #       uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
-  #     - name: Setup cache
-  #       uses: Swatinem/rust-cache@v2
+      - name: Setup cache
+        uses: WarpBuilds/rust-cache@v2
 
-  #     - name: Generate the Rust crate documentation
-  #       run: "cargo doc --verbose --locked --release --document-private-items"
+      - name: Generate the Rust crate documentation
+        run: "cargo doc --verbose --locked --release --document-private-items"
 
-  #     - name: Create the documentation ZIP archive
-  #       uses: thedoctor0/zip-release@0.7.6
-  #       with:
-  #         type: "zip"
-  #         filename: "../../ferron-rustdocs.zip"
-  #         directory: "target/doc"
+      - name: Create the documentation ZIP archive
+        uses: thedoctor0/zip-release@0.7.6
+        with:
+          type: "zip"
+          filename: "../../ferron-rustdocs.zip"
+          directory: "target/doc"
 
-  #     - name: Set up SSH
-  #       uses: LuisEnMarroquin/setup-ssh-action@v3.0.0
-  #       with:
-  #         ORIGIN: ${{ secrets.SSH_HOSTNAME }}
-  #         SSHKEY: ${{ secrets.SSH_KEY }}
-  #         NAME: ferron-servers
-  #         PORT: ${{ secrets.SSH_PORT }}
-  #         USER: ${{ secrets.SSH_USERNAME }}
+      - name: Set up SSH
+        uses: LuisEnMarroquin/setup-ssh-action@v3.0.0
+        with:
+          ORIGIN: ${{ secrets.SSH_HOSTNAME }}
+          SSHKEY: ${{ secrets.SSH_KEY }}
+          NAME: ferron-servers
+          PORT: ${{ secrets.SSH_PORT }}
+          USER: ${{ secrets.SSH_USERNAME }}
 
-  #     - name: Deploy the documentation
-  #       shell: bash
-  #       run: |
-  #         scp ferron2-rustdocs.zip ferron-servers:.
+      - name: Deploy the documentation
+        shell: bash
+        run: |
+          scp ferron2-rustdocs.zip ferron-servers:.
 
-  #         # The "deploy-ferron2-rustdocs" is a custom command that deploys the Ferron's Rust crate documentation
-  #         ssh ferron-servers "sudo deploy-ferron2-rustdocs ferron2-rustdocs.zip && rm ferron2-rustdocs.zip"
+          # The "deploy-ferron2-rustdocs" is a custom command that deploys the Ferron's Rust crate documentation
+          ssh ferron-servers "sudo deploy-ferron2-rustdocs ferron2-rustdocs.zip && rm ferron2-rustdocs.zip"
 
   docker:
     runs-on: warp-ubuntu-latest-arm64-8x

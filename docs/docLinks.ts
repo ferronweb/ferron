@@ -116,7 +116,7 @@ export default [
     label: "FerrBench",
   },
   {
-    href: "https://rustdocs.ferronweb.org",
+    href: "https://rustdocs-v2.ferron.sh",
     target: "_self",
     label: "Rust crate documentation",
   },
