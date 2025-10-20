@@ -9,7 +9,7 @@ import rehypeWrap from "rehype-wrap";
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://www.ferronweb.org",
+  site: "https://v1.ferron.sh",
 
   vite: {
     plugins: [tailwindcss()],
