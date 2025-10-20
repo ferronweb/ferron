@@ -95,7 +95,8 @@ export default {
               color: "inherit"
             },
             blockquote: {
-              color: "inherit"
+              color: "inherit",
+              borderInlineStartColor: "hsla(var(--border), 1)"
             },
             code: {
               color: "inherit",
