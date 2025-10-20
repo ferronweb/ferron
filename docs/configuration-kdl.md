@@ -502,11 +502,11 @@ example.com {
   - This directive specifies whenever the reverse proxy can use HTTP/2 protocol when connecting to backend servers. Default: `proxy_http2 #false`
 - `lb_retry_connection [enable_lb_retry_connection: bool]` (_rproxy_ module; Ferron 2.0.0-beta.15 or newer)
   - This directive specifies whenever the load balancer should retry connections to another backend server, in case of TCP connection or TLS handshake failure. Default: `lb_retry_connection #true`
-- `lb_algorithm <lb_algorithm: string>` (_rproxy_ module; Ferron UNRELEASED or newer)
+- `lb_algorithm <lb_algorithm: string>` (_rproxy_ module; Ferron 2.0.0-rc.1 or newer)
   - This directive specifies the load balancing algorithm to be used. The supported algorithms are `random` (random selection), `round-robin` (round-robin), `least_conn` (least connections, "connections" would mean concurrent requests here), and `two_random` (power of two random choices; after two random choices, the backend server with the least concurrent requests is chosen). Default: `lb_algorithm "two_random"`
 - `lb_health_check_window <lb_health_check_window: integer>` (_rproxy_ module)
-  - This directive specifies the window size (in milliseconds) for load balancer health checks. This directive was global-only before Ferron UNRELEASED. Default: `lb_health_check_window 5000`
-- `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module; Ferron UNRELEASED or newer)
+  - This directive specifies the window size (in milliseconds) for load balancer health checks. This directive was global-only before Ferron 2.0.0-rc.1. Default: `lb_health_check_window 5000`
+- `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module; Ferron 2.0.0-rc.1 or newer)
   - This directive specifies the maximum number of idle connections to backend servers to keep alive. Default: `proxy_keepalive_idle_conns 48`
 
 **Configuration example:**
@@ -710,12 +710,12 @@ Below is the list of supported subconditions:
   - This subcondition checks if the value matches the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
 - `is_not_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]` (Ferron 2.0.0-beta.15 or newer)
   - This subcondition checks if the value does not match the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
-- `is_rego <rego_policy: string>` (Ferron UNRELEASED or newer)
+- `is_rego <rego_policy: string>` (Ferron 2.0.0-rc.1 or newer)
   - This subcondition evaluates a Rego policy.
 
 ## Rego subconditions
 
-Ferron UNRELEASED and newer supports more advanced subconditions with Rego policies embedded in Ferron configuration.
+Ferron 2.0.0-rc.1 and newer supports more advanced subconditions with Rego policies embedded in Ferron configuration.
 
 When writing Rego policies for Ferron subconditions, you need to set the package name to `ferron` (`package ferron` line). Ferron checks the `pass` result of the policy.
 

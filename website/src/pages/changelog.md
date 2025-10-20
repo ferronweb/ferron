@@ -4,6 +4,20 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-rc.1
+
+**Released in October 20, 2025**
+
+- Added an utility to precompress static files ("ferron-precompress")
+- Added support for Rego-based subconditions
+- Added support for specifying maximum idle connections to backend servers to keep alive
+- Added various load balancing algorithms (round-robin, power of two random choices, least connection)
+- Changed the default load balancing algorithm to power of two random choices
+- Improved subcondition error handling by logging specific subcondition errors
+- Optimized the keep-alive behavior in reverse proxying and load balancing for better performance
+- The "lb_health_check_window" directive is no longer global-only
+- The web server now removes ACME accounts from the ACME cache, if they don't exist in an ACME server
+
 ## Ferron 2.0.0-beta.20
 
 **Released in October 11, 2025**
