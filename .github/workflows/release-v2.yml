@@ -275,7 +275,7 @@ jobs:
         uses: thedoctor0/zip-release@0.7.6
         with:
           type: "zip"
-          filename: "../../ferron-rustdocs.zip"
+          filename: "../../ferron2-rustdocs.zip"
           directory: "target/doc"
 
       - name: Set up SSH
