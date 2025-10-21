@@ -11,7 +11,7 @@ export const headerLinks = {
       label: "Docs"
     },
     {
-      href: "/blog",
+      href: "https://ferron.sh/blog",
       target: "_self",
       label: "Blog"
     }
@@ -70,7 +70,7 @@ export const footerLinks = {
     { href: "/", label: "Home" },
     { href: "/download", label: "Download" },
     { href: "/contact", label: "Contact" },
-    { href: "/blog", label: "Blog" }
+    { href: "https://ferron.sh/blog", label: "Blog" }
   ],
   resources: [
     { href: "/docs", label: "Docs" },
