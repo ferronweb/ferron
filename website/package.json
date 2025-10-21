@@ -22,7 +22,7 @@
     "@types/react-dom": "^19.2.1",
     "apexcharts": "^5.3.5",
     "asciinema-player": "^3.12.1",
-    "astro": "^5.14.4",
+    "astro": "^5.14.6",
     "astro-seo": "^0.8.4",
     "autoprefixer": "^10.4.21",
     "date-fns": "^4.1.0",
