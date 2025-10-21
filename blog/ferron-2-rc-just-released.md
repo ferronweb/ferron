@@ -95,7 +95,7 @@ Below is the used Ferron web server configuration:
 
 ```kdl
 localhost {
-    tls "tls/server.crt" "tls/server.key"
+    tls "tls/server.crt" "tls/server.key" // Replace the paths with your own certificate and key files
 
     proxy "http://localhost:3000"
     proxy "http://localhost:3001"
