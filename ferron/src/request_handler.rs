@@ -811,12 +811,17 @@ async fn request_handler_wrapped(
     let response = match request.method() {
       &Method::OPTIONS => Response::builder()
         .status(StatusCode::NO_CONTENT)
-        .header(header::ALLOW, "GET, POST, HEAD, OPTIONS")
+        .header(
+          header::ALLOW,
+          "GET, POST, HEAD, OPTIONS, PUT, PATCH, DELETE",
+        )
         .body(Empty::new().map_err(|e| match e {}).boxed())
         .unwrap_or_default(),
       _ => {
         let mut header_map = HeaderMap::new();
-        if let Ok(header_value) = HeaderValue::from_str("GET, POST, HEAD, OPTIONS") {
+        if let Ok(header_value) =
+          HeaderValue::from_str("GET, POST, HEAD, OPTIONS, PUT, PATCH, DELETE")
+        {
           header_map.insert(header::ALLOW, header_value);
         };
         generate_error_response(StatusCode::BAD_REQUEST, &combined_config, &Some(header_map)).await
