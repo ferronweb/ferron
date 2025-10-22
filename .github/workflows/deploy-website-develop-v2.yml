@@ -39,6 +39,11 @@ jobs:
           echo "Disallow: /" >> dist/robots.txt
           popd
 
+      - name: Pre-compress static files
+        shell: bash
+        run: |
+          docker run --rm -v ./website/dist:/tmp/website ferronserver/ferron:2 ferron-precompress /tmp/website
+
       - name: Create the website ZIP archive
         uses: thedoctor0/zip-release@0.7.6
         with:
