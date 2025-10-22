@@ -16,8 +16,8 @@ globals {
 // by default a catch-all ":80" host that applies to all hostnames and port 80 (HTTP).
 //
 // Replace ":80" with your domain name (pointing to your server) to use HTTPS.
-// If you don't specify the TLS certificate and private key paths,
-// Ferron will automatically obtain a TLS certificate (using Let's Encrypt by default).
+// If you don't specify the paths to the TLS certificate and private key manually,
+// Ferron will obtain a TLS certificate automatically (via Let's Encrypt by default).
 :80 {
   // Serve static files
   root "/var/www/ferron"
