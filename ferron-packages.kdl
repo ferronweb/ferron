@@ -26,6 +26,7 @@ globals {
   //proxy "http://localhost:3000/"
 
   // Serve a PHP site with PHP-FPM (you would need to specify the webroot also used for serving static files)
+  // Replace "unix:///run/php/php-fpm.sock" with your Unix socket URL
   //fcgi_php "unix:///run/php/php-fpm.sock"
 
   // If using Unix socket with PHP-FPM,
