@@ -1,13 +1,36 @@
-// See https://v2.ferronweb.org/docs/configuration-kdl for the configuration reference
-* {
-  // Set implicit HTTP port, and disable HTTPS
-  default_http_port 80
-  default_https_port #null
+// See https://ferron.sh/docs/configuration-kdl for the configuration reference
 
-  // Webroot, from where static files are served
-  root "/var/www/ferron"
-
-  // Server logs
+// Global configuration.
+//
+// Here you can put configuration that applies to all hosts,
+// and even to the web server itself.
+globals {
+  // Log requests and errors into log files
   log "/var/log/ferron/access.log"
   error_log "/var/log/ferron/error.log"
+}
+
+// Host configuration.
+//
+// Here you can put configuration that applies to a specific host,
+// by default a catch-all ":80" host that applies to all hostnames and port 80 (HTTP).
+//
+// Replace ":80" with your domain name (pointing to your server) to use HTTPS.
+// If you don't specify the TLS certificate and private key paths,
+// Ferron will automatically obtain a TLS certificate (using Let's Encrypt by default).
+:80 {
+  // Serve static files
+  root "/var/www/ferron"
+
+  // Reverse proxy to a backend server
+  //proxy "http://localhost:3000/"
+
+  // Serve a PHP site with PHP-FPM (you would need to specify the webroot also used for serving static files)
+  //fcgi_php "unix:///run/php/php-fpm.sock"
+
+  // If using Unix socket with PHP-FPM,
+  // set the listener owner and group in the pool configuration to the web server user (`ferron`, if you used installer for GNU/Linux)
+  // For example:
+  //   listen.owner = ferron
+  //   listen.group = ferron
 }
