@@ -846,7 +846,7 @@ async fn execute_fastcgi(
   socket_writer.write_all(&begin_request_packet).await?;
 
   // Construct and send PARAMS records
-  let mut environment_variables_to_wrap = Vec::new();
+  let mut environment_variables_to_wrap = Vec::with_capacity(environment_variables.len());
   for (key, value) in environment_variables.iter() {
     let mut environment_variable = construct_fastcgi_name_value_pair(key.as_bytes(), value.as_bytes());
     environment_variables_to_wrap.append(&mut environment_variable);
