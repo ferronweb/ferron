@@ -327,17 +327,41 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
       let account_credentials = serde_json::from_slice::<AccountCredentials>(&account_credentials_serialized)?;
       acme_account_builder.from_credentials(account_credentials).await?
     } else {
-      let (account, account_credentials) = acme_account_builder
+      let (account, account_credentials) = match acme_account_builder
         .create(
           &NewAccount {
             contact: config.contact.iter().map(|s| s.deref()).collect::<Vec<_>>().as_slice(),
             terms_of_service_agreed: true,
-            only_return_existing: false,
+            only_return_existing: true,
           },
           config.directory.clone(),
           config.eab_key.as_deref(),
         )
-        .await?;
+        .await
+      {
+        Ok(account_data) => account_data,
+        Err(instant_acme::Error::Api(problem)) => {
+          if problem.r#type.as_deref() == Some("urn:ietf:params:acme:error:accountDoesNotExist") {
+            // Try again, this time with "onlyReturnExisting" set to false
+            let acme_account_builder =
+              Account::builder_with_http(Box::new(HttpsClientForAcme::new(config.rustls_client_config.clone())));
+            acme_account_builder
+              .create(
+                &NewAccount {
+                  contact: config.contact.iter().map(|s| s.deref()).collect::<Vec<_>>().as_slice(),
+                  terms_of_service_agreed: true,
+                  only_return_existing: false,
+                },
+                config.directory.clone(),
+                config.eab_key.as_deref(),
+              )
+              .await?
+          } else {
+            Err(instant_acme::Error::Api(problem))?
+          }
+        }
+        Err(err) => Err(err)?,
+      };
 
       set_in_cache(
         &config.account_cache,
