@@ -132,8 +132,6 @@ cargo build -r
 
 For compilation notes, see the [compilation notes page](./COMPILATION.md).
 
-~~You can also use [Ferron Forge](https://github.com/ferronweb/ferron-forge) to build the web server. Ferron Forge outputs a ZIP archive that can be used by the Ferron installer.~~
-
 ## Modules
 
 If you would like to develop Ferron modules, you can find the [Ferron module development notes](./MODULES.md).
