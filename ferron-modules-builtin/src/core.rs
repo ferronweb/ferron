@@ -640,14 +640,16 @@ impl ModuleLoader for CoreModuleLoader {
           Err(anyhow::anyhow!(
             "The `auto_tls_eab` configuration property must have one (if disabled) or two values"
           ))?
-        } else if !entry.values[0].is_null() && entry.values.len() != 2 {
-          Err(anyhow::anyhow!(
-            "The `auto_tls_eab` configuration property must have exactly two values if enabled"
-          ))?
-        } else if !entry.values[0].is_string() {
-          Err(anyhow::anyhow!("Invalid ACME EAB key ID"))?
-        } else if !entry.values[1].is_string() {
-          Err(anyhow::anyhow!("Invalid ACME EAB key"))?
+        } else if !entry.values[0].is_null() {
+          if entry.values.len() != 2 {
+            Err(anyhow::anyhow!(
+              "The `auto_tls_eab` configuration property must have exactly two values if enabled"
+            ))?
+          } else if !entry.values[0].is_string() {
+            Err(anyhow::anyhow!("Invalid ACME EAB key ID"))?
+          } else if !entry.values[1].is_string() {
+            Err(anyhow::anyhow!("Invalid ACME EAB key"))?
+          }
         }
       }
     }
