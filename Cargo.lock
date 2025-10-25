@@ -2406,8 +2406,7 @@ dependencies = [
 [[package]]
 name = "instant-acme"
 version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa48652eee2967fa047312e3f289e78763cf4dd7e45ff1ccc955a792d0077462"
+source = "git+https://github.com/DorianNiemiecSVRJS/instant-acme.git#2c1f9c79a48086a9342827fecca66db742a3e044"
 dependencies = [
  "async-trait",
  "aws-lc-rs",

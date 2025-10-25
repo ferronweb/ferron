@@ -28,6 +28,7 @@ cache_control = { git = "https://github.com/DorianNiemiecSVRJS/rust-cache-contro
 desec_api = { git = "https://github.com/DorianNiemiecSVRJS/desec_api.git" }                                     # This is a fork of "desec_api" crate, with updated dependencies and crypto provider requirement removed
 dns-update = { git = "https://github.com/DorianNiemiecSVRJS/dns-update.git" }                                   # This is a fork of "dns-update" crate, with updated dependencies and crypto provider requirement removed
 async-compression = { git = "https://github.com/DorianNiemiecSVRJS/async-compression.git", branch = "0.4.28"  } # This is a fork of "async-compression" crate that uses "zlib-rs" backend for "flate2" instead of "miniz_oxide"
+instant-acme = { git = "https://github.com/DorianNiemiecSVRJS/instant-acme.git" }                               # This is a fork of "instant_acme" crate, with patch to support Actalis ACME directory
 
 [patch.'https://github.com/ferronweb/ferron']
 ferron-common = { path = "./ferron-common" }
