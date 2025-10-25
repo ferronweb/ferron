@@ -14,6 +14,13 @@ services:
     volumes:
       - ./wwwroot:/var/www/html
 
+  # The `fcgiwrap` server for testing
+  fcgiwrap:
+    build:
+      context: ./fcgiwrap
+    volumes:
+      - ./wwwroot:/var/www/html
+
   # A container to run tests
   test-runner:
     build:
