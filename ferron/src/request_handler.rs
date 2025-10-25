@@ -1249,7 +1249,7 @@ async fn request_handler_wrapped(
   };
 
   // Obtain module handlers
-  let mut module_handlers = Vec::new();
+  let mut module_handlers = Vec::with_capacity(configuration.modules.len());
   for module in &configuration.modules {
     module_handlers.push(module.get_module_handlers());
   }

@@ -4,6 +4,13 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.0-rc.2
+
+**Released in October 25, 2025**
+
+- Fixed bugs related to ACME EAB (External Account Binding).
+- Fixed bugs related to FastCGI, when using Ferron with fcgiwrap.
+
 ## Ferron 2.0.0-rc.1
 
 **Released in October 20, 2025**

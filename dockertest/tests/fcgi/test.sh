@@ -20,6 +20,15 @@ do
     nc -z php-fpm 9000 >/dev/null 2>&1 && break || true
 done
 
+# Wait for the fcgiwrap daemon to start
+for i in $(seq 1 3)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    nc -z fcgiwrap 9000 >/dev/null 2>&1 && break || true
+done
+
 TEST_RESULTS="$(curl -fsSL http://ferron/)"
 TEST_EXIT_CODE=$?
 TEST_EXPECTED="Hello, World!"
@@ -27,6 +36,19 @@ if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
     echo "Basic PHP-FPM test passed!"
 else
     echo "Basic PHP-FPM test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
+TEST_RESULTS="$(curl -fsSL http://ferron/cgi-bin/index.cgi)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="Hello, World!"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "Basic fcgiwrap test passed!"
+else
+    echo "Basic fcgiwrap test failed!" >&2
     echo "  Exit code: $TEST_EXIT_CODE" >&2
     echo "  Expected: $TEST_EXPECTED" >&2
     echo "  Received: $TEST_RESULTS" >&2

@@ -827,7 +827,7 @@ fn before_starting_server(
                 } else {
                   LetsEncrypt::Staging.url().to_string()
                 },
-                eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab_key", server_configuration) {
+                eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab", server_configuration) {
                   if let Some(eab_key_id) = eab_key_entry.values.first().and_then(|v| v.as_str()) {
                     if let Some(eab_key_hmac) = eab_key_entry.values.get(1).and_then(|v| v.as_str()) {
                       match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(eab_key_hmac) {
@@ -911,7 +911,7 @@ fn before_starting_server(
                 } else {
                   LetsEncrypt::Staging.url().to_string()
                 },
-                eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab_key", server_configuration) {
+                eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab", server_configuration) {
                   if let Some(eab_key_id) = eab_key_entry.values.first().and_then(|v| v.as_str()) {
                     if let Some(eab_key_hmac) = eab_key_entry.values.get(1).and_then(|v| v.as_str()) {
                       match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(eab_key_hmac) {

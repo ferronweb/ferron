@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://v2.ferronweb.org" target="_blank">
+  <a href="https://ferron.sh" target="_blank">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="wwwroot/img/logo-dark.png">
       <img alt="Ferron logo" src="wwwroot/img/logo.png" width="256">
@@ -10,8 +10,8 @@
   <b>Ferron</b> - a fast, memory-safe web server written in Rust
 </p>
 <p align="center">
-  <a href="https://v2.ferronweb.org/docs" target="_blank"><img alt="Static Badge" src="https://img.shields.io/badge/Documentation-orange"></a>
-  <a href="https://v2.ferronweb.org" target="_blank"><img alt="Website" src="https://img.shields.io/website?url=https%3A%2F%2Fv2.ferronweb.org"></a>
+  <a href="https://ferron.sh/docs" target="_blank"><img alt="Static Badge" src="https://img.shields.io/badge/Documentation-orange"></a>
+  <a href="https://ferron.sh" target="_blank"><img alt="Website" src="https://img.shields.io/website?url=https%3A%2F%2Fferron.sh"></a>
   <a href="https://matrix.to/#/#ferronweb:matrix.org" target="_blank"><img alt="Chat" src="https://img.shields.io/matrix/ferronweb%3Amatrix.org"></a>
   <a href="https://x.com/ferron_web" target="_blank"><img alt="X (formerly Twitter) Follow" src="https://img.shields.io/twitter/follow/ferron_web"></a>
   <a href="https://hub.docker.com/r/ferronserver/ferron" target="_blank"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/ferronserver/ferron"></a>
@@ -132,19 +132,17 @@ cargo build -r
 
 For compilation notes, see the [compilation notes page](./COMPILATION.md).
 
-~~You can also use [Ferron Forge](https://github.com/ferronweb/ferron-forge) to build the web server. Ferron Forge outputs a ZIP archive that can be used by the Ferron installer.~~
-
 ## Modules
 
 If you would like to develop Ferron modules, you can find the [Ferron module development notes](./MODULES.md).
 
 ## Server configuration
 
-You can check the [Ferron documentation](https://v2.ferronweb.org/docs/configuration-kdl) to see configuration properties used by Ferron.
+You can check the [Ferron documentation](https://ferron.sh/docs/configuration-kdl) to see configuration properties used by Ferron.
 
 ## Contributing
 
-See [Ferron contribution page](https://v2.ferronweb.org/contribute) for details.
+See [Ferron contribution page](https://ferron.sh/contribute) for details.
 
 ## License
 

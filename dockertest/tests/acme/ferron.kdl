@@ -1,5 +1,6 @@
 globals {
   auto_tls_directory "https://pebble:14000/dir"
+  auto_tls_eab "kid-3" "HjudV5qnbreN-n9WyFSH-t4HXuEx_XFen45zuxY-G1h6fr74V3cUM_dVlwQZBWmc"
   auto_tls_no_verification
 }
 

@@ -25,6 +25,7 @@ use tokio::net::TcpStream;
 use tokio::sync::RwLock;
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio_util::io::{ReaderStream, SinkWriter, StreamReader};
+use tokio_util::sync::CancellationToken;
 
 use crate::util::cgi::CgiResponse;
 use crate::util::fcgi::{
@@ -846,7 +847,7 @@ async fn execute_fastcgi(
   socket_writer.write_all(&begin_request_packet).await?;
 
   // Construct and send PARAMS records
-  let mut environment_variables_to_wrap = Vec::new();
+  let mut environment_variables_to_wrap = Vec::with_capacity(environment_variables.len());
   for (key, value) in environment_variables.iter() {
     let mut environment_variable = construct_fastcgi_name_value_pair(key.as_bytes(), value.as_bytes());
     environment_variables_to_wrap.append(&mut environment_variable);
@@ -962,9 +963,19 @@ async fn execute_fastcgi(
 
   let mut reader_stream = ReaderStream::new(cgi_response);
   let (reader_stream_tx, reader_stream_rx) = async_channel::bounded(MAX_RESPONSE_CHANNEL_CAPACITY);
+  let stderr_cancel = CancellationToken::new();
+  let stderr_cancel_clone = stderr_cancel.clone();
   ferron_common::runtime::spawn(async move {
     while let Some(chunk) = reader_stream.next().await {
-      reader_stream_tx.send(chunk).await.unwrap_or_default();
+      if chunk.as_ref().is_ok_and(|c| c.is_empty()) {
+        // Received empty STDOUT chunk, likely indicating end of output
+        break;
+      }
+      if reader_stream_tx.send(chunk).await.is_err() {
+        // Pipe is probably closed, stop sending data
+        stderr_cancel_clone.cancel();
+        break;
+      }
     }
     reader_stream_tx.close();
   });
@@ -975,12 +986,19 @@ async fn execute_fastcgi(
 
   let error_logger_clone = error_logger.clone();
   ferron_common::runtime::spawn(async move {
-    let stderr_vec = stderr_read_future_pinned.await.unwrap_or(vec![]);
-    let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
-    if !stderr_string.is_empty() {
-      error_logger_clone
-        .log(&format!("There were FastCGI errors: {stderr_string}"))
-        .await;
+    ferron_common::runtime::select! {
+      biased;
+
+      stderr_vec_result = stderr_read_future_pinned => {
+        let stderr_vec = stderr_vec_result.unwrap_or(vec![]);
+        let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
+        if !stderr_string.is_empty() {
+          error_logger_clone
+            .log(&format!("There were FastCGI errors: {stderr_string}"))
+            .await;
+        }
+      }
+      _ = stderr_cancel.cancelled() => {}
     }
   });
 

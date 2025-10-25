@@ -116,16 +116,13 @@ impl Decoder for FcgiDecoder {
               6 => {
                 // STDOUT record
                 self.state = FcgiDecodeState::ReadingHead;
-                if content.is_empty() {
-                  return Ok(None);
-                }
                 return Ok(Some(FcgiDecodedData::Stdout(Bytes::from_owner(content))));
               }
               7 => {
                 // STDERR record
                 self.state = FcgiDecodeState::ReadingHead;
                 if content.is_empty() {
-                  return Ok(None);
+                  continue;
                 }
                 return Ok(Some(FcgiDecodedData::Stderr(Bytes::from_owner(content))));
               }
