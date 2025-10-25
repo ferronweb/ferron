@@ -830,7 +830,8 @@ fn before_starting_server(
                 eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab", server_configuration) {
                   if let Some(eab_key_id) = eab_key_entry.values.first().and_then(|v| v.as_str()) {
                     if let Some(eab_key_hmac) = eab_key_entry.values.get(1).and_then(|v| v.as_str()) {
-                      match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(eab_key_hmac) {
+                      match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(eab_key_hmac.trim_end_matches('='))
+                      {
                         Ok(decoded_key) => {
                           Some(Arc::new(ExternalAccountKey::new(eab_key_id.to_string(), &decoded_key)))
                         }
