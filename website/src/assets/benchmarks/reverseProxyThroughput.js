@@ -1,709 +1,709 @@
 export default [
   {
-    ferron: "19687.62",
-    competitor1: "11190.80",
-    competitor2: "11943.46",
-    competitor3: "9512.29",
-    concurrency: "1"
+    concurrency: "1",
+    ferron: "21358.70",
+    competitor1: "11396.93",
+    competitor2: "11995.60",
+    competitor3: "9843.61"
   },
   {
-    ferron: "75395.78",
-    competitor1: "97082.77",
-    competitor2: "215366.91",
-    competitor3: "68776.90",
-    concurrency: "100"
+    concurrency: "100",
+    ferron: "174091.70",
+    competitor1: "120567.44",
+    competitor2: "267767.26",
+    competitor3: "86074.18"
   },
   {
-    ferron: "117547.64",
-    competitor1: "95828.52",
-    competitor2: "209309.51",
-    competitor3: "63273.43",
-    concurrency: "200"
+    concurrency: "200",
+    ferron: "154997.86",
+    competitor1: "120736.49",
+    competitor2: "265373.29",
+    competitor3: "80228.48"
   },
   {
-    ferron: "124595.82",
-    competitor1: "81786.95",
-    competitor2: "201679.43",
-    competitor3: "59268.97",
-    concurrency: "300"
+    concurrency: "300",
+    ferron: "157662.33",
+    competitor1: "103819.41",
+    competitor2: "255020.93",
+    competitor3: "76186.26"
   },
   {
-    ferron: "114973.91",
-    competitor1: "73748.87",
-    competitor2: "188705.22",
-    competitor3: "56366.13",
-    concurrency: "400"
+    concurrency: "400",
+    ferron: "149578.79",
+    competitor1: "94905.30",
+    competitor2: "245939.76",
+    competitor3: "72634.99"
   },
   {
-    ferron: "110398.72",
-    competitor1: "69805.70",
-    competitor2: "176559.77",
-    competitor3: "55048.62",
-    concurrency: "500"
+    concurrency: "500",
+    ferron: "157819.05",
+    competitor1: "90366.65",
+    competitor2: "237524.28",
+    competitor3: "72002.12"
   },
   {
-    ferron: "118462.40",
-    competitor1: "65755.29",
-    competitor2: "166578.12",
-    competitor3: "53545.71",
-    concurrency: "600"
+    concurrency: "600",
+    ferron: "164438.87",
+    competitor1: "87064.53",
+    competitor2: "229381.33",
+    competitor3: "71197.31"
   },
   {
-    ferron: "108896.98",
-    competitor1: "63287.65",
-    competitor2: "155964.65",
-    competitor3: "51927.27",
-    concurrency: "700"
+    concurrency: "700",
+    ferron: "162674.77",
+    competitor1: "83553.44",
+    competitor2: "226947.78",
+    competitor3: "69759.46"
   },
   {
-    ferron: "92795.08",
-    competitor1: "60696.81",
-    competitor2: "152293.80",
-    competitor3: "48818.99",
-    concurrency: "800"
+    concurrency: "800",
+    ferron: "128635.82",
+    competitor1: "80793.92",
+    competitor2: "219758.82",
+    competitor3: "66893.07"
   },
   {
-    ferron: "92184.30",
-    competitor1: "57825.04",
-    competitor2: "147502.46",
-    competitor3: "50188.17",
-    concurrency: "900"
+    concurrency: "900",
+    ferron: "113563.99",
+    competitor1: "74980.18",
+    competitor2: "219478.08",
+    competitor3: "65641.87"
   },
   {
-    ferron: "88256.39",
-    competitor1: "55518.32",
-    competitor2: "142589.91",
-    competitor3: "48093.43",
-    concurrency: "1000"
+    concurrency: "1000",
+    ferron: "134553.14",
+    competitor1: "73855.43",
+    competitor2: "214650.66",
+    competitor3: "63628.87"
   },
   {
-    ferron: "90914.97",
-    competitor1: "54098.91",
-    competitor2: "138905.76",
-    competitor3: "47888.28",
-    concurrency: "1100"
+    concurrency: "1100",
+    ferron: "128916.92",
+    competitor1: "71940.08",
+    competitor2: "209320.54",
+    competitor3: "63883.20"
   },
   {
-    ferron: "113840.57",
-    competitor1: "52421.49",
-    competitor2: "134150.01",
-    competitor3: "47863.96",
-    concurrency: "1200"
+    concurrency: "1200",
+    ferron: "127138.74",
+    competitor1: "70548.64",
+    competitor2: "203405.94",
+    competitor3: "63410.02"
   },
   {
-    ferron: "115202.59",
-    competitor1: "49747.18",
-    competitor2: "128872.39",
-    competitor3: "46823.79",
-    concurrency: "1300"
+    concurrency: "1300",
+    ferron: "149151.72",
+    competitor1: "67955.46",
+    competitor2: "199902.34",
+    competitor3: "64438.81"
   },
   {
-    ferron: "98201.80",
-    competitor1: "48708.50",
-    competitor2: "107853.19",
-    competitor3: "45490.32",
-    concurrency: "1400"
+    concurrency: "1400",
+    ferron: "152522.38",
+    competitor1: "67236.93",
+    competitor2: "197064.98",
+    competitor3: "61802.61"
   },
   {
-    ferron: "94574.48",
-    competitor1: "47835.33",
-    competitor2: "104723.29",
-    competitor3: "43968.88",
-    concurrency: "1500"
+    concurrency: "1500",
+    ferron: "130615.27",
+    competitor1: "66035.17",
+    competitor2: "192890.67",
+    competitor3: "59903.37"
   },
   {
-    ferron: "107197.41",
-    competitor1: "45630.66",
-    competitor2: "98273.39",
-    competitor3: "43826.72",
-    concurrency: "1600"
+    concurrency: "1600",
+    ferron: "153696.15",
+    competitor1: "63484.02",
+    competitor2: "189348.21",
+    competitor3: "60622.32"
   },
   {
-    ferron: "85442.88",
-    competitor1: "45843.11",
-    competitor2: "95209.26",
-    competitor3: "43624.10",
-    concurrency: "1700"
+    concurrency: "1700",
+    ferron: "151448.15",
+    competitor1: "62335.90",
+    competitor2: "188022.17",
+    competitor3: "59684.43"
   },
   {
-    ferron: "108922.36",
-    competitor1: "45308.74",
-    competitor2: "95939.94",
-    competitor3: "41921.70",
-    concurrency: "1800"
+    concurrency: "1800",
+    ferron: "103213.74",
+    competitor1: "61123.39",
+    competitor2: "158380.82",
+    competitor3: "55561.41"
   },
   {
-    ferron: "103779.16",
-    competitor1: "44278.27",
-    competitor2: "91353.87",
-    competitor3: "41766.17",
-    concurrency: "1900"
+    concurrency: "1900",
+    ferron: "148259.80",
+    competitor1: "59343.69",
+    competitor2: "159058.45",
+    competitor3: "53044.17"
   },
   {
-    ferron: "82724.78",
-    competitor1: "43140.10",
-    competitor2: "91859.31",
-    competitor3: "41281.80",
-    concurrency: "2000"
+    concurrency: "2000",
+    ferron: "102133.49",
+    competitor1: "59361.91",
+    competitor2: "151492.86",
+    competitor3: "57306.60"
   },
   {
-    ferron: "90115.84",
-    competitor1: "42022.33",
-    competitor2: "90723.49",
-    competitor3: "41324.71",
-    concurrency: "2100"
+    concurrency: "2100",
+    ferron: "124807.25",
+    competitor1: "58039.40",
+    competitor2: "140281.40",
+    competitor3: "52695.93"
   },
   {
-    ferron: "106732.25",
-    competitor1: "41741.19",
-    competitor2: "90085.72",
-    competitor3: "41122.72",
-    concurrency: "2200"
+    concurrency: "2200",
+    ferron: "149742.21",
+    competitor1: "54531.04",
+    competitor2: "141537.96",
+    competitor3: "54325.59"
   },
   {
-    ferron: "90025.18",
-    competitor1: "40513.20",
-    competitor2: "90825.64",
-    competitor3: "40224.51",
-    concurrency: "2300"
+    concurrency: "2300",
+    ferron: "150180.21",
+    competitor1: "57051.24",
+    competitor2: "129587.49",
+    competitor3: "53027.89"
   },
   {
-    ferron: "109541.33",
-    competitor1: "40387.74",
-    competitor2: "89501.32",
-    competitor3: "40012.50",
-    concurrency: "2400"
+    concurrency: "2400",
+    ferron: "146593.28",
+    competitor1: "54403.85",
+    competitor2: "129013.51",
+    competitor3: "53142.46"
   },
   {
-    ferron: "101110.77",
-    competitor1: "40037.69",
-    competitor2: "85100.60",
-    competitor3: "40551.90",
-    concurrency: "2500"
+    concurrency: "2500",
+    ferron: "148134.00",
+    competitor1: "52963.00",
+    competitor2: "128341.91",
+    competitor3: "51082.40"
   },
   {
-    ferron: "103732.36",
-    competitor1: "37924.65",
-    competitor2: "87884.51",
-    competitor3: "39995.36",
-    concurrency: "2600"
+    concurrency: "2600",
+    ferron: "147303.62",
+    competitor1: "51660.92",
+    competitor2: "126495.50",
+    competitor3: "49028.39"
   },
   {
-    ferron: "103086.54",
-    competitor1: "38647.56",
-    competitor2: "83968.33",
-    competitor3: "39528.46",
-    concurrency: "2700"
+    concurrency: "2700",
+    ferron: "127007.12",
+    competitor1: "52402.29",
+    competitor2: "123160.39",
+    competitor3: "47409.70"
   },
   {
-    ferron: "106060.05",
-    competitor1: "36455.41",
-    competitor2: "83725.05",
-    competitor3: "38735.16",
-    concurrency: "2800"
+    concurrency: "2800",
+    ferron: "121441.78",
+    competitor1: "50202.79",
+    competitor2: "120289.43",
+    competitor3: "48250.84"
   },
   {
-    ferron: "102989.45",
-    competitor1: "36214.21",
-    competitor2: "85709.09",
-    competitor3: "37558.31",
-    concurrency: "2900"
+    concurrency: "2900",
+    ferron: "117290.32",
+    competitor1: "50659.14",
+    competitor2: "122314.11",
+    competitor3: "49085.97"
   },
   {
-    ferron: "101904.62",
-    competitor1: "36310.18",
-    competitor2: "83682.37",
-    competitor3: "38466.82",
-    concurrency: "3000"
+    concurrency: "3000",
+    ferron: "111473.44",
+    competitor1: "50857.03",
+    competitor2: "118766.25",
+    competitor3: "46796.31"
   },
   {
-    ferron: "95820.13",
-    competitor1: "35323.27",
-    competitor2: "83916.33",
-    competitor3: "37342.94",
-    concurrency: "3100"
+    concurrency: "3100",
+    ferron: "126282.78",
+    competitor1: "48082.23",
+    competitor2: "119671.32",
+    competitor3: "46570.35"
   },
   {
-    ferron: "82797.20",
-    competitor1: "33734.99",
-    competitor2: "83626.18",
-    competitor3: "37408.34",
-    concurrency: "3200"
+    concurrency: "3200",
+    ferron: "113943.13",
+    competitor1: "46077.43",
+    competitor2: "117599.94",
+    competitor3: "45763.25"
   },
   {
-    ferron: "104662.96",
-    competitor1: "33965.44",
-    competitor2: "83530.86",
-    competitor3: "36619.94",
-    concurrency: "3300"
+    concurrency: "3300",
+    ferron: "108059.81",
+    competitor1: "47011.82",
+    competitor2: "116786.01",
+    competitor3: "44493.10"
   },
   {
-    ferron: "103712.34",
-    competitor1: "33695.13",
-    competitor2: "78717.67",
-    competitor3: "36431.67",
-    concurrency: "3400"
+    concurrency: "3400",
+    ferron: "123961.07",
+    competitor1: "46853.99",
+    competitor2: "113636.44",
+    competitor3: "43552.17"
   },
   {
-    ferron: "86314.92",
-    competitor1: "31953.74",
-    competitor2: "84230.17",
-    competitor3: "35781.90",
-    concurrency: "3500"
+    concurrency: "3500",
+    ferron: "138584.98",
+    competitor1: "45438.09",
+    competitor2: "115983.71",
+    competitor3: "44015.96"
   },
   {
-    ferron: "95919.52",
-    competitor1: "32031.31",
-    competitor2: "83289.91",
-    competitor3: "35731.17",
-    concurrency: "3600"
+    concurrency: "3600",
+    ferron: "124080.00",
+    competitor1: "44831.95",
+    competitor2: "113924.20",
+    competitor3: "43175.38"
   },
   {
-    ferron: "106015.26",
-    competitor1: "32355.78",
-    competitor2: "82354.42",
-    competitor3: "35904.71",
-    concurrency: "3700"
+    concurrency: "3700",
+    ferron: "137248.83",
+    competitor1: "46193.54",
+    competitor2: "118736.28",
+    competitor3: "44450.47"
   },
   {
-    ferron: "106981.52",
-    competitor1: "31307.07",
-    competitor2: "80431.46",
-    competitor3: "34384.50",
-    concurrency: "3800"
+    concurrency: "3800",
+    ferron: "107315.98",
+    competitor1: "44162.17",
+    competitor2: "117166.16",
+    competitor3: "38088.86"
   },
   {
-    ferron: "74767.47",
-    competitor1: "33349.41",
-    competitor2: "82219.63",
-    competitor3: "33848.48",
-    concurrency: "3900"
+    concurrency: "3900",
+    ferron: "128072.26",
+    competitor1: "45074.29",
+    competitor2: "117614.53",
+    competitor3: "26100.90"
   },
   {
-    ferron: "78091.62",
-    competitor1: "31310.38",
-    competitor2: "81174.49",
-    competitor3: "34260.30",
-    concurrency: "4000"
+    concurrency: "4000",
+    ferron: "123267.33",
+    competitor1: "42671.30",
+    competitor2: "105513.04",
+    competitor3: "41413.77"
   },
   {
-    ferron: "75082.18",
-    competitor1: "31234.29",
-    competitor2: "82127.70",
-    competitor3: "30743.48",
-    concurrency: "4100"
+    concurrency: "4100",
+    ferron: "131405.37",
+    competitor1: "42977.34",
+    competitor2: "106778.88",
+    competitor3: "42647.44"
   },
   {
-    ferron: "96034.99",
-    competitor1: "31455.45",
-    competitor2: "83328.84",
-    competitor3: "35180.82",
-    concurrency: "4200"
+    concurrency: "4200",
+    ferron: "140059.90",
+    competitor1: "40158.32",
+    competitor2: "108622.38",
+    competitor3: "41889.44"
   },
   {
-    ferron: "97805.01",
-    competitor1: "30304.05",
-    competitor2: "81864.06",
-    competitor3: "33443.70",
-    concurrency: "4300"
+    concurrency: "4300",
+    ferron: "126339.76",
+    competitor1: "40489.12",
+    competitor2: "110238.94",
+    competitor3: "28146.94"
   },
   {
-    ferron: "104334.46",
-    competitor1: "30759.35",
-    competitor2: "86101.56",
-    competitor3: "34303.71",
-    concurrency: "4400"
+    concurrency: "4400",
+    ferron: "139082.32",
+    competitor1: "43654.23",
+    competitor2: "113932.15",
+    competitor3: "39885.02"
   },
   {
-    ferron: "81108.49",
-    competitor1: "32484.11",
-    competitor2: "82969.11",
-    competitor3: "33859.44",
-    concurrency: "4500"
+    concurrency: "4500",
+    ferron: "140277.18",
+    competitor1: "43271.08",
+    competitor2: "111302.67",
+    competitor3: "42328.54"
   },
   {
-    ferron: "99266.48",
-    competitor1: "30654.00",
-    competitor2: "79276.97",
-    competitor3: "32468.94",
-    concurrency: "4600"
+    concurrency: "4600",
+    ferron: "138006.81",
+    competitor1: "39157.80",
+    competitor2: "105351.54",
+    competitor3: "37907.87"
   },
   {
-    ferron: "94249.46",
-    competitor1: "28930.47",
-    competitor2: "81157.24",
-    competitor3: "32946.90",
-    concurrency: "4700"
+    concurrency: "4700",
+    ferron: "134657.33",
+    competitor1: "41488.71",
+    competitor2: "108190.88",
+    competitor3: "40694.78"
   },
   {
-    ferron: "97020.21",
-    competitor1: "29339.88",
-    competitor2: "81189.43",
-    competitor3: "34333.11",
-    concurrency: "4800"
+    concurrency: "4800",
+    ferron: "136473.85",
+    competitor1: "40030.72",
+    competitor2: "106682.98",
+    competitor3: "40834.65"
   },
   {
-    ferron: "101703.87",
-    competitor1: "31039.06",
-    competitor2: "78854.27",
-    competitor3: "29313.23",
-    concurrency: "4900"
+    concurrency: "4900",
+    ferron: "121151.82",
+    competitor1: "40366.75",
+    competitor2: "112298.88",
+    competitor3: "39196.07"
   },
   {
-    ferron: "99030.63",
-    competitor1: "19974.90",
-    competitor2: "81644.67",
-    competitor3: "30595.30",
-    concurrency: "5000"
+    concurrency: "5000",
+    ferron: "136120.70",
+    competitor1: "38626.10",
+    competitor2: "108320.67",
+    competitor3: "37920.98"
   },
   {
-    ferron: "101636.20",
-    competitor1: "26127.97",
-    competitor2: "80855.97",
-    competitor3: "31428.70",
-    concurrency: "5100"
+    concurrency: "5100",
+    ferron: "127082.68",
+    competitor1: "38272.18",
+    competitor2: "110249.26",
+    competitor3: "39855.64"
   },
   {
-    ferron: "92349.28",
-    competitor1: "27312.63",
-    competitor2: "80319.04",
-    competitor3: "30895.66",
-    concurrency: "5200"
+    concurrency: "5200",
+    ferron: "121651.61",
+    competitor1: "33649.49",
+    competitor2: "110588.70",
+    competitor3: "21342.57"
   },
   {
-    ferron: "101660.60",
-    competitor1: "27905.35",
-    competitor2: "81168.33",
-    competitor3: "31011.93",
-    concurrency: "5300"
+    concurrency: "5300",
+    ferron: "114578.41",
+    competitor1: "38749.88",
+    competitor2: "102358.61",
+    competitor3: "34294.33"
   },
   {
-    ferron: "103160.90",
-    competitor1: "28329.56",
-    competitor2: "77592.11",
-    competitor3: "30643.60",
-    concurrency: "5400"
+    concurrency: "5400",
+    ferron: "134770.19",
+    competitor1: "35430.97",
+    competitor2: "102232.43",
+    competitor3: "37495.21"
   },
   {
-    ferron: "98759.73",
-    competitor1: "26945.50",
-    competitor2: "77052.59",
-    competitor3: "29889.80",
-    concurrency: "5500"
+    concurrency: "5500",
+    ferron: "136106.53",
+    competitor1: "36046.57",
+    competitor2: "101942.66",
+    competitor3: "34922.33"
   },
   {
-    ferron: "102308.20",
-    competitor1: "27065.06",
-    competitor2: "78984.68",
-    competitor3: "30877.24",
-    concurrency: "5600"
+    concurrency: "5600",
+    ferron: "135896.86",
+    competitor1: "38137.70",
+    competitor2: "101553.98",
+    competitor3: "35637.19"
   },
   {
-    ferron: "98161.09",
-    competitor1: "27647.90",
-    competitor2: "82595.74",
-    competitor3: "29271.91",
-    concurrency: "5700"
+    concurrency: "5700",
+    ferron: "135541.18",
+    competitor1: "40249.29",
+    competitor2: "100514.85",
+    competitor3: "36273.07"
   },
   {
-    ferron: "77264.07",
-    competitor1: "26596.57",
-    competitor2: "83515.67",
-    competitor3: "30724.51",
-    concurrency: "5800"
+    concurrency: "5800",
+    ferron: "125248.01",
+    competitor1: "35552.35",
+    competitor2: "96407.85",
+    competitor3: "33828.48"
   },
   {
-    ferron: "98043.43",
-    competitor1: "26612.77",
-    competitor2: "78864.51",
-    competitor3: "28715.86",
-    concurrency: "5900"
+    concurrency: "5900",
+    ferron: "136069.65",
+    competitor1: "36727.50",
+    competitor2: "110457.42",
+    competitor3: "35765.20"
   },
   {
-    ferron: "92205.06",
-    competitor1: "25710.17",
-    competitor2: "83174.74",
-    competitor3: "29369.78",
-    concurrency: "6000"
+    concurrency: "6000",
+    ferron: "134852.95",
+    competitor1: "36468.67",
+    competitor2: "98718.59",
+    competitor3: "33876.86"
   },
   {
-    ferron: "86968.27",
-    competitor1: "23607.79",
-    competitor2: "78957.19",
-    competitor3: "29050.86",
-    concurrency: "6100"
+    concurrency: "6100",
+    ferron: "135344.16",
+    competitor1: "35650.23",
+    competitor2: "104290.13",
+    competitor3: "34748.71"
   },
   {
-    ferron: "98238.14",
-    competitor1: "24812.23",
-    competitor2: "84081.88",
-    competitor3: "28743.95",
-    concurrency: "6200"
+    concurrency: "6200",
+    ferron: "134772.78",
+    competitor1: "34148.68",
+    competitor2: "106264.63",
+    competitor3: "35371.63"
   },
   {
-    ferron: "98039.86",
-    competitor1: "24569.41",
-    competitor2: "80229.29",
-    competitor3: "28238.51",
-    concurrency: "6300"
+    concurrency: "6300",
+    ferron: "134644.81",
+    competitor1: "31534.12",
+    competitor2: "101657.45",
+    competitor3: "38096.45"
   },
   {
-    ferron: "95618.27",
-    competitor1: "25821.37",
-    competitor2: "83520.94",
-    competitor3: "29759.07",
-    concurrency: "6400"
+    concurrency: "6400",
+    ferron: "117339.47",
+    competitor1: "36869.66",
+    competitor2: "99828.08",
+    competitor3: "33962.94"
   },
   {
-    ferron: "97930.49",
-    competitor1: "23930.34",
-    competitor2: "87914.38",
-    competitor3: "20065.32",
-    concurrency: "6500"
+    concurrency: "6500",
+    ferron: "122361.83",
+    competitor1: "40135.64",
+    competitor2: "106423.37",
+    competitor3: "33029.38"
   },
   {
-    ferron: "91690.71",
-    competitor1: "25756.87",
-    competitor2: "80610.84",
-    competitor3: "28838.82",
-    concurrency: "6600"
+    concurrency: "6600",
+    ferron: "132651.24",
+    competitor1: "32087.62",
+    competitor2: "101633.73",
+    competitor3: "32238.55"
   },
   {
-    ferron: "97636.19",
-    competitor1: "23879.81",
-    competitor2: "82260.53",
-    competitor3: "24926.74",
-    concurrency: "6700"
+    concurrency: "6700",
+    ferron: "133250.36",
+    competitor1: "34060.82",
+    competitor2: "102036.77",
+    competitor3: "31820.39"
   },
   {
-    ferron: "95485.59",
-    competitor1: "24854.26",
-    competitor2: "89852.01",
-    competitor3: "27114.39",
-    concurrency: "6800"
+    concurrency: "6800",
+    ferron: "133435.76",
+    competitor1: "31382.33",
+    competitor2: "98237.00",
+    competitor3: "31332.47"
   },
   {
-    ferron: "95680.73",
-    competitor1: "23353.51",
-    competitor2: "82604.99",
-    competitor3: "23822.93",
-    concurrency: "6900"
+    concurrency: "6900",
+    ferron: "131921.47",
+    competitor1: "33203.28",
+    competitor2: "109492.58",
+    competitor3: "31642.07"
   },
   {
-    ferron: "96300.13",
-    competitor1: "25306.20",
-    competitor2: "80801.67",
-    competitor3: "26282.92",
-    concurrency: "7000"
+    concurrency: "7000",
+    ferron: "133197.74",
+    competitor1: "31563.46",
+    competitor2: "98047.31",
+    competitor3: "32608.22"
   },
   {
-    ferron: "95741.78",
-    competitor1: "24128.19",
-    competitor2: "81403.17",
-    competitor3: "24741.68",
-    concurrency: "7100"
+    concurrency: "7100",
+    ferron: "133030.95",
+    competitor1: "30969.21",
+    competitor2: "98152.05",
+    competitor3: "30080.14"
   },
   {
-    ferron: "95592.25",
-    competitor1: "23556.83",
-    competitor2: "83755.42",
-    competitor3: "26319.07",
-    concurrency: "7200"
+    concurrency: "7200",
+    ferron: "132193.71",
+    competitor1: "30235.31",
+    competitor2: "103673.76",
+    competitor3: "27474.38"
   },
   {
-    ferron: "95247.99",
-    competitor1: "25277.83",
-    competitor2: "81979.20",
-    competitor3: "25427.33",
-    concurrency: "7300"
+    concurrency: "7300",
+    ferron: "130925.01",
+    competitor1: "16981.53",
+    competitor2: "100013.28",
+    competitor3: "29082.18"
   },
   {
-    ferron: "92128.08",
-    competitor1: "21080.19",
-    competitor2: "77941.42",
-    competitor3: "24653.60",
-    concurrency: "7400"
+    concurrency: "7400",
+    ferron: "131880.27",
+    competitor1: "28545.61",
+    competitor2: "94410.31",
+    competitor3: "30862.82"
   },
   {
-    ferron: "97708.16",
-    competitor1: "22885.89",
-    competitor2: "80689.45",
-    competitor3: "24885.94",
-    concurrency: "7500"
+    concurrency: "7500",
+    ferron: "130976.09",
+    competitor1: "33507.59",
+    competitor2: "100407.32",
+    competitor3: "30620.66"
   },
   {
-    ferron: "93172.20",
-    competitor1: "22646.09",
-    competitor2: "87126.91",
-    competitor3: "24218.34",
-    concurrency: "7600"
+    concurrency: "7600",
+    ferron: "130892.09",
+    competitor1: "29652.37",
+    competitor2: "103733.82",
+    competitor3: "29240.08"
   },
   {
-    ferron: "95652.54",
-    competitor1: "22582.47",
-    competitor2: "86136.99",
-    competitor3: "26701.44",
-    concurrency: "7700"
+    concurrency: "7700",
+    ferron: "131111.35",
+    competitor1: "32349.70",
+    competitor2: "101808.79",
+    competitor3: "31260.11"
   },
   {
-    ferron: "70390.78",
-    competitor1: "24670.24",
-    competitor2: "93025.84",
-    competitor3: "24939.24",
-    concurrency: "7800"
+    concurrency: "7800",
+    ferron: "131256.64",
+    competitor1: "30980.38",
+    competitor2: "97338.62",
+    competitor3: "30756.29"
   },
   {
-    ferron: "91779.63",
-    competitor1: "21589.52",
-    competitor2: "117764.41",
-    competitor3: "24470.40",
-    concurrency: "7900"
+    concurrency: "7900",
+    ferron: "131494.64",
+    competitor1: "34235.05",
+    competitor2: "103212.70",
+    competitor3: "28486.62"
   },
   {
-    ferron: "95452.53",
-    competitor1: "24214.89",
-    competitor2: "81275.33",
-    competitor3: "24206.38",
-    concurrency: "8000"
+    concurrency: "8000",
+    ferron: "130373.94",
+    competitor1: "23518.34",
+    competitor2: "97283.88",
+    competitor3: "30305.12"
   },
   {
-    ferron: "94424.40",
-    competitor1: "22190.93",
-    competitor2: "85217.02",
-    competitor3: "23337.09",
-    concurrency: "8100"
+    concurrency: "8100",
+    ferron: "130514.61",
+    competitor1: "25769.05",
+    competitor2: "104073.04",
+    competitor3: "28918.55"
   },
   {
-    ferron: "95499.31",
-    competitor1: "22861.75",
-    competitor2: "83334.04",
-    competitor3: "22556.40",
-    concurrency: "8200"
+    concurrency: "8200",
+    ferron: "130903.12",
+    competitor1: "29216.47",
+    competitor2: "111093.88",
+    competitor3: "29325.36"
   },
   {
-    ferron: "94002.68",
-    competitor1: "22691.04",
-    competitor2: "80353.30",
-    competitor3: "24489.38",
-    concurrency: "8300"
+    concurrency: "8300",
+    ferron: "129009.86",
+    competitor1: "25809.11",
+    competitor2: "102211.96",
+    competitor3: "26184.45"
   },
   {
-    ferron: "89010.74",
-    competitor1: "22465.95",
-    competitor2: "85815.45",
-    competitor3: "21924.50",
-    concurrency: "8400"
+    concurrency: "8400",
+    ferron: "128441.16",
+    competitor1: "29901.16",
+    competitor2: "113934.50",
+    competitor3: "27578.60"
   },
   {
-    ferron: "95607.45",
-    competitor1: "21900.99",
-    competitor2: "86344.76",
-    competitor3: "23519.56",
-    concurrency: "8500"
+    concurrency: "8500",
+    ferron: "128691.60",
+    competitor1: "27128.44",
+    competitor2: "107800.43",
+    competitor3: "28719.94"
   },
   {
-    ferron: "90621.79",
-    competitor1: "19599.14",
-    competitor2: "86418.41",
-    competitor3: "21174.12",
-    concurrency: "8600"
+    concurrency: "8600",
+    ferron: "125876.03",
+    competitor1: "31959.55",
+    competitor2: "98439.84",
+    competitor3: "27888.30"
   },
   {
-    ferron: "93698.87",
-    competitor1: "19315.95",
-    competitor2: "85834.73",
-    competitor3: "21702.70",
-    concurrency: "8700"
+    concurrency: "8700",
+    ferron: "127021.67",
+    competitor1: "24019.07",
+    competitor2: "105904.19",
+    competitor3: "28654.72"
   },
   {
-    ferron: "94638.61",
-    competitor1: "19771.78",
-    competitor2: "85242.52",
-    competitor3: "24859.50",
-    concurrency: "8800"
+    concurrency: "8800",
+    ferron: "128492.82",
+    competitor1: "22194.45",
+    competitor2: "103119.27",
+    competitor3: "27422.66"
   },
   {
-    ferron: "95256.83",
-    competitor1: "20134.86",
-    competitor2: "89118.33",
-    competitor3: "21918.79",
-    concurrency: "8900"
+    concurrency: "8900",
+    ferron: "127878.67",
+    competitor1: "23824.27",
+    competitor2: "107712.30",
+    competitor3: "24809.45"
   },
   {
-    ferron: "93317.40",
-    competitor1: "22893.00",
-    competitor2: "82912.77",
-    competitor3: "22328.56",
-    concurrency: "9000"
+    concurrency: "9000",
+    ferron: "127626.95",
+    competitor1: "25839.35",
+    competitor2: "106914.31",
+    competitor3: "31640.26"
   },
   {
-    ferron: "91606.28",
-    competitor1: "17858.50",
-    competitor2: "84914.23",
-    competitor3: "22265.97",
-    concurrency: "9100"
+    concurrency: "9100",
+    ferron: "126740.91",
+    competitor1: "28206.36",
+    competitor2: "103659.52",
+    competitor3: "24033.09"
   },
   {
-    ferron: "92627.05",
-    competitor1: "19106.04",
-    competitor2: "87247.71",
-    competitor3: "20538.20",
-    concurrency: "9200"
+    concurrency: "9200",
+    ferron: "127446.49",
+    competitor1: "27506.51",
+    competitor2: "96116.47",
+    competitor3: "26872.45"
   },
   {
-    ferron: "92953.37",
-    competitor1: "19307.19",
-    competitor2: "93402.07",
-    competitor3: "19681.80",
-    concurrency: "9300"
+    concurrency: "9300",
+    ferron: "126859.65",
+    competitor1: "23719.27",
+    competitor2: "123000.14",
+    competitor3: "27617.45"
   },
   {
-    ferron: "91543.01",
-    competitor1: "19011.17",
-    competitor2: "90674.23",
-    competitor3: "23615.03",
-    concurrency: "9400"
+    concurrency: "9400",
+    ferron: "126921.24",
+    competitor1: "23942.81",
+    competitor2: "101225.07",
+    competitor3: "12770.66"
   },
   {
-    ferron: "90214.39",
-    competitor1: "19275.74",
-    competitor2: "89547.98",
-    competitor3: "19800.04",
-    concurrency: "9500"
+    concurrency: "9500",
+    ferron: "127433.45",
+    competitor1: "31771.43",
+    competitor2: "104889.56",
+    competitor3: "23277.99"
   },
   {
-    ferron: "64919.50",
-    competitor1: "18136.06",
-    competitor2: "83247.28",
-    competitor3: "21671.01",
-    concurrency: "9600"
+    concurrency: "9600",
+    ferron: "126178.21",
+    competitor1: "30186.39",
+    competitor2: "99662.47",
+    competitor3: "26220.20"
   },
   {
-    ferron: "90349.77",
-    competitor1: "18109.48",
-    competitor2: "92316.15",
-    competitor3: "21758.49",
-    concurrency: "9700"
+    concurrency: "9700",
+    ferron: "126138.78",
+    competitor1: "25555.74",
+    competitor2: "114615.90",
+    competitor3: "26510.59"
   },
   {
-    ferron: "91251.16",
-    competitor1: "20364.21",
-    competitor2: "86496.17",
-    competitor3: "19972.38",
-    concurrency: "9800"
+    concurrency: "9800",
+    ferron: "124175.02",
+    competitor1: "26834.75",
+    competitor2: "119156.38",
+    competitor3: "23990.60"
   },
   {
-    ferron: "90690.01",
-    competitor1: "17849.26",
-    competitor2: "88406.52",
-    competitor3: "21652.18",
-    concurrency: "9900"
+    concurrency: "9900",
+    ferron: "123710.63",
+    competitor1: "32939.12",
+    competitor2: "103831.80",
+    competitor3: "24105.25"
   },
   {
-    ferron: "86556.98",
-    competitor1: "18259.02",
-    competitor2: "124673.99",
-    competitor3: "24312.06",
-    concurrency: "10000"
+    concurrency: "10000",
+    ferron: "125352.92",
+    competitor1: "26166.87",
+    competitor2: "104323.62",
+    competitor3: "28140.27"
   }
 ];

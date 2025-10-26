@@ -59,9 +59,9 @@ import reverseProxyLatency from "../../assets/benchmarks/reverseProxyLatency";
         competitor1={"Traefik"}
         competitor2={"NGINX"}
         competitor3={"Caddy"}
-        command="ferrbench -c $CONCURRENCY -d 5s -t 12 -h https://localhost --http2"
-        date={new Date("2025-09-25")}
-        system={"AMD Ryzen 5 8600G, 32GB RAM"}
+        command="ferrbench -c $CONCURRENCY -d 5s -t 16 -h https://localhost --http2"
+        date={new Date("2025-10-26")}
+        system={"AMD Ryzen 7 8700G, 32GB RAM"}
       />
       <BenchmarkLine
         title="Latency under load (reverse proxy)"
@@ -72,9 +72,9 @@ import reverseProxyLatency from "../../assets/benchmarks/reverseProxyLatency";
         competitor1={"Traefik"}
         competitor2={"NGINX"}
         competitor3={"Caddy"}
-        command="ferrbench -c $CONCURRENCY -d 5s -t 12 -h https://localhost --http2"
-        date={new Date("2025-09-25")}
-        system={"AMD Ryzen 5 8600G, 32GB RAM"}
+        command="ferrbench -c $CONCURRENCY -d 5s -t 16 -h https://localhost --http2"
+        date={new Date("2025-10-26")}
+        system={"AMD Ryzen 7 8700G, 32GB RAM"}
       />
       <Benchmark
         title="PHP performance"
