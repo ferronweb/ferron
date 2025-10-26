@@ -2,6 +2,7 @@
 import Header from "../components/Header.astro";
 import docLinks from "../../../docs/docLinks";
 import Root from "./Root.astro";
+import Footer from "../components/Footer.astro";
 
 const pathname = Astro.url.pathname;
 ---
@@ -11,11 +12,11 @@ const pathname = Astro.url.pathname;
   description="The Ferron documentation provides comprehensive information and instructions on how to install, use and configure the Ferron web server."
 >
   <Header docLinks={docLinks} />
-  <div class="grow flex-1 overflow-x-hidden w-full max-w-360 mx-auto">
+  <div class="grow flex-1 w-full max-w-360 mx-auto">
     <nav
-      class="hidden md:block md:fixed w-64 lg:w-80 px-3 bottom-0 top-15 overflow-y-auto"
+      class="hidden md:block md:sticky md:float-left w-64 lg:w-80 px-3 top-[calc(var(--spacing,0.25rem)*15+1px)] bottom-0 h-[calc(100vh-var(--spacing,0.25rem)*15-1px)]"
     >
-      <ul class={`flex flex-col my-3 list-none`}>
+      <ul class="flex flex-col py-2 list-none h-full overflow-y-auto">
         {
           docLinks.map((link) => (
             <li class="block my-1">
@@ -59,4 +60,5 @@ const pathname = Astro.url.pathname;
       </div>
     </main>
   </div>
+  <Footer />
 </Root>
