@@ -57,7 +57,7 @@ import reverseProxyLatency from "../../assets/benchmarks/reverseProxyLatency";
         unit={"req/s"}
         higherIsBetter={true}
         competitor1={"Traefik"}
-        competitor2={"NGINX"}
+        competitor2={"NGINX mainline"}
         competitor3={"Caddy"}
         command="ferrbench -c $CONCURRENCY -d 5s -t 16 -h https://localhost --http2"
         date={new Date("2025-10-26")}
@@ -70,7 +70,7 @@ import reverseProxyLatency from "../../assets/benchmarks/reverseProxyLatency";
         unit={"ms"}
         higherIsBetter={false}
         competitor1={"Traefik"}
-        competitor2={"NGINX"}
+        competitor2={"NGINX mainline"}
         competitor3={"Caddy"}
         command="ferrbench -c $CONCURRENCY -d 5s -t 16 -h https://localhost --http2"
         date={new Date("2025-10-26")}
