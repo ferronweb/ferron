@@ -36,7 +36,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "rehype-wrap": "^1.1.0",
-    "tailwindcss": "=4.0.17"
+    "tailwindcss": "=4.1.16"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.1.0",
