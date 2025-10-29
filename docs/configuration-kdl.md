@@ -163,8 +163,8 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the supported TLS cipher suites. If using the HTTP/3 protocol (which is experimental in Ferron), the `TLS_AES_128_GCM_SHA256` cipher suite needs to be enabled (it's enabled by default), otherwise the HTTP/3 server wouldn’t start at all. This directive can be specified multiple times. Default: default TLS cipher suite for Rustls
 - `tls_ecdh_curves <ecdh_curve: string> [<ecdh_curve: string> ...]`
   - This directive specifies the supported TLS ECDH curves. This directive can be specified multiple times. Default: default ECDH curves for Rustls
-- `tls_client_certificate [enable_tls_client_certificate: bool]`
-  - This directive specifies whenever the TLS client certificate verification is enabled. Default: `tls_client_certificate #false`
+- `tls_client_certificate [tls_client_certificate: bool|string]`
+  - This directive specifies whenever the TLS client certificate verification is enabled. If set to `#true`, the client certificate will be verified against the system certificate store. If set to a string (supported on Ferron UNRELEASED and newer), the client certificate will be verified against the certificate authority in the specified path. Default: `tls_client_certificate #false`
 - `ocsp_stapling [enable_ocsp_stapling: bool]`
   - This directive specifies whenever OCSP stapling is enabled. Default: `ocsp_stapling #true`
 - `block <blocked_ip: string> [<blocked_ip: string> ...]`

@@ -445,7 +445,19 @@ fn before_starting_server(
       }
     };
 
-    let tls_config_builder_wants_server_cert = if global_configuration
+    let tls_config_builder_wants_server_cert = if let Some(client_cert_path) = global_configuration
+      .as_deref()
+      .and_then(|c| get_value!("tls_client_certificate", c))
+      .and_then(|v| v.as_str())
+    {
+      let mut roots = RootCertStore::empty();
+      let client_certificate_cas = load_certs(client_cert_path)?;
+      for cert in client_certificate_cas {
+        roots.add(cert)?;
+      }
+      tls_config_builder_wants_verifier
+        .with_client_cert_verifier(WebPkiClientVerifier::builder(Arc::new(roots)).build()?)
+    } else if global_configuration
       .as_deref()
       .and_then(|c| get_value!("tls_client_certificate", c))
       .and_then(|v| v.as_bool())

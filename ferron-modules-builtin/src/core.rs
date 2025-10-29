@@ -678,6 +678,18 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
+    if let Some(entries) = get_entries_for_validation!("tls_client_certificate", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `tls_client_certificate` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_bool() && !entry.values[0].is_string() {
+          Err(anyhow::anyhow!("Invalid TLS client certificate enabling option"))?
+        }
+      }
+    };
+
     Ok(())
   }
 }
