@@ -2,8 +2,13 @@
 import { getCollection, render } from "astro:content";
 import MainLayout from "../../layouts/MainLayout.astro";
 import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
-import { faArrowLeft, faArrowRight } from "@fortawesome/free-solid-svg-icons";
-import { format } from "date-fns";
+import {
+  faArrowLeft,
+  faArrowRight,
+  faCalendar,
+  faUser
+} from "@fortawesome/free-solid-svg-icons";
+import { format, formatISO } from "date-fns";
 import blogMissing from "../../assets/blog-missing.png";
 import { Image } from "astro:assets";
 import {
@@ -46,6 +51,10 @@ const { Content } = await render(Astro.props.post);
   title={data.title}
   description={data.description}
   image={data.cover ? data.cover.src : blogMissing.src}
+  articleMetaData={{
+    publishedTime: data.date ? formatISO(data.date) : undefined,
+    authors: data.author ? [data.author] : undefined
+  }}
 >
   <main
     class="max-w-5xl container mx-auto pt-4 pb-8 md:pt-24 md:pb-28 flex flex-col items-center !px-4"
@@ -69,14 +78,41 @@ const { Content } = await render(Astro.props.post);
         <h1 class="text-4xl md:text-5xl py-3 font-bold">
           {data.title}
         </h1>
-        <p class="mb-6 text-base md:text-lg text-muted-foreground print:mb-4">
-          Published on: <time
-            >{
-              data.date === undefined
-                ? "Unknown date"
-                : format(data.date, "MMMM d, yyyy")
-            }</time
-          >
+        <p
+          class="mb-6 text-base md:text-lg text-muted-foreground print:mb-4 flex flex-wrap gap-4"
+        >
+          {
+            data.date !== undefined ? (
+              <span class="whitespace-nowrap">
+                <FontAwesomeIcon
+                  icon={faCalendar}
+                  class="w-5 !h-5 me-1 inline-block align-middle"
+                />
+                <span class="align-middle">
+                  <>
+                    <span class="sr-only">Published on: </span>
+                    <time>{format(data.date, "MMMM d, yyyy")}</time>
+                  </>
+                </span>
+              </span>
+            ) : null
+          }
+          {
+            data.author !== undefined ? (
+              <span class="whitespace-nowrap">
+                <FontAwesomeIcon
+                  icon={faUser}
+                  class="w-5 !h-5 me-1 inline-block align-middle"
+                />
+                <span class="align-middle">
+                  <>
+                    <span class="sr-only">Author: </span>
+                    <span>{data.author}</span>
+                  </>
+                </span>
+              </span>
+            ) : null
+          }
         </p>
         <Image
           src={data.cover || blogMissing}

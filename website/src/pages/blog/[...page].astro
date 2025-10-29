@@ -4,9 +4,11 @@ import MainLayout from "../../layouts/MainLayout.astro";
 import { format } from "date-fns";
 import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
 import {
+  faCalendar,
   faChevronLeft,
   faChevronRight,
-  faExternalLink
+  faExternalLink,
+  faUser
 } from "@fortawesome/free-solid-svg-icons";
 import blogMissing from "../../assets/blog-missing.png";
 import { Image } from "astro:assets";
@@ -73,11 +75,6 @@ if (begPage < 1) {
     >
       {
         data.map((post, index) => {
-          const formattedDate =
-            post.data.date === undefined
-              ? "Unknown date"
-              : format(new Date(post.data.date), "MMMM d, yyyy");
-
           const truncatedDescription =
             post.data.description === undefined
               ? ""
@@ -123,9 +120,34 @@ if (begPage < 1) {
                     {truncatedDescription}
                   </p>
                   <p
-                    class={`text-xs ${currentPage === 1 && index === 0 ? "md:text-sm" : ""} text-muted-foreground mt-2`}
+                    class={`text-xs ${currentPage === 1 && index === 0 ? "md:text-sm" : ""} text-muted-foreground mt-2 flex flex-wrap gap-2`}
                   >
-                    Published on: <time>{formattedDate}</time>
+                    {post.data.date !== undefined ? (
+                      <span class="whitespace-nowrap">
+                        <FontAwesomeIcon
+                          icon={faCalendar}
+                          class="w-4 !h-4 me-0.5 inline-block align-middle"
+                        />
+                        <span class="align-middle">
+                          <span class="sr-only">Published on: </span>
+                          <time>
+                            {format(new Date(post.data.date), "MMMM d, yyyy")}
+                          </time>
+                        </span>
+                      </span>
+                    ) : null}
+                    {post.data.author !== undefined ? (
+                      <span class="whitespace-nowrap">
+                        <FontAwesomeIcon
+                          icon={faUser}
+                          class="w-4 !h-4 me-0.5 inline-block align-middle"
+                        />
+                        <span class="align-middle">
+                          <span class="sr-only">Author: </span>
+                          {post.data.author}
+                        </span>
+                      </span>
+                    ) : null}
                   </p>
                 </div>
               </a>

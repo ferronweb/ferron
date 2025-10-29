@@ -3,6 +3,7 @@ title: Writing essays makes web designers/developers better
 description: Writing essays can lead to better web design and development skills, because it improves copywriting and marketing skills.
 date: 2025-10-28 14:10:00
 cover: ./covers/writing-essays-makes-web-designers-developers-better.jpg
+author: Dorian Niemiec
 ---
 
 If you have an assignment of writing an essay (for example in a school) as a (future) web developer or designer, you may be wondering why would you write essays, and what use would this assignment be at all.
