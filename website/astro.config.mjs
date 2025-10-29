@@ -8,6 +8,7 @@ import pagefind from "astro-pagefind";
 import kdl from "./kdl.tmLanguage.json";
 
 import rehypeWrap from "rehype-wrap";
+import { visit } from "unist-util-visit";
 
 // https://astro.build/config
 export default defineConfig({
@@ -36,6 +37,22 @@ export default defineConfig({
       langs: [kdl],
       defaultColor: false
     },
+    remarkPlugins: [
+      function remarkNofollowLinks() {
+        return (tree, file) => {
+          const data = file.data.astro?.frontmatter || {};
+          if (!data.nofollow) return;
+
+          // Traverse Markdown AST
+          visit(tree, "link", (node) => {
+            // Add rel="nofollow" via data.hProperties (used by rehype)
+            node.data ??= {};
+            node.data.hProperties ??= {};
+            node.data.hProperties.rel = "nofollow";
+          });
+        };
+      }
+    ],
     rehypePlugins: [
       [rehypeWrap, { wrapper: "div.overflow-x-auto", selector: "table" }]
     ]
