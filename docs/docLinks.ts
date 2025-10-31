@@ -33,6 +33,12 @@ export default [
     label: "Debian/Ubuntu",
   },
   {
+    href: "/docs/installation/rpm",
+    target: "_self",
+    sub: true,
+    label: "RHEL/Fedora",
+  },
+  {
     href: "/docs/installation/docker",
     target: "_self",
     sub: true,
