@@ -12,8 +12,6 @@ Requires(post): systemd
 Requires(pre):  shadow-utils
 Requires(postun): systemd
 
-BuildArch:      $ARCHITECTURE
-
 Provides:       webserver
 
 %description

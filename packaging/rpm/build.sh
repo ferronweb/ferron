@@ -71,10 +71,9 @@ cp ferron-template.spec ferron.spec
 
 # Replace the version and architecture in the spec file
 sed -Ei "s/^Version:( *).*/Version:\1$RPM_VERSION/" ferron.spec
-sed -Ei "s/^BuildArch:( *).*/BuildArch:\1$RPM_ARCHITECTURE/" ferron.spec
 
 # Build the RPM package
-rpmbuild -ba --build-in-place --define "_topdir $(pwd)/rpm" ferron.spec
+rpmbuild -bb --build-in-place --define "_topdir $(pwd)/rpm" --target $RPM_ARCHITECTURE ferron.spec
 
 # Move the RPM package to the distribution directory
 mv rpm/RPMS/$RPM_ARCHITECTURE/*.rpm $PROJECT_ROOT_DIR/dist
