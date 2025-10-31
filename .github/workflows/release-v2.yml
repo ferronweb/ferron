@@ -253,6 +253,21 @@ jobs:
           # The "update-ferron-deb-repo" is a custom command that updates the Debian repository
           ssh ferron-servers "sudo update-ferron-deb-repo $DEB_PACKAGE_VERSION $DEB_ARCHITECTURE"
 
+      - name: Build and release RPM package
+        if: matrix.runner == 'warp-ubuntu-latest-x64-8x' && contains(matrix.target, 'linux-gnu')
+        shell: bash
+        run: |
+          packaging/rpm/build.sh ${{ matrix.target }} ${{ env.FERRON_VERSION }} target/${{ matrix.target }}/release
+
+          RPM_FILE_NAME_WO_RPM=$(ls dist/*.rpm | head -n 1 | sed -E 's|^dist/||' | sed -E 's/\.rpm$//')
+          RPM_PACKAGE_VERSION=$(echo $RPM_FILE_NAME_WO_RPM | cut -d'-' -f2)
+          RPM_ARCHITECTURE=$(echo $RPM_FILE_NAME_WO_RPM | rev | cut -d'.' -f1 | rev)
+          ssh ferron-servers "mkdir -p rpm || true"
+          scp dist/${RPM_FILE_NAME_WO_RPM}.rpm ferron-servers:rpm/${RPM_FILE_NAME_WO_RPM}.rpm
+
+          # The "update-ferron-rpm-repo" is a custom command that updates the RPM repository
+          ssh ferron-servers "sudo update-ferron-rpm-repo $RPM_PACKAGE_VERSION $RPM_ARCHITECTURE"
+
   docs:
     runs-on: warp-ubuntu-latest-x64-8x
 
