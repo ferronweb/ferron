@@ -83,7 +83,7 @@ fn non_standard_codes_config_init(
         Err(err) => {
           return Err(anyhow::anyhow!(
             "Invalid non-standard code regular expression: {}",
-            err.to_string()
+            err
           ));
         }
       },

@@ -907,6 +907,14 @@ pub fn validate_config(
             "Invalid reverse proxy error interception option value"
           ))?
         }
+
+        if used_properties.contains("disableProxyXForwarded")
+          && config["disableProxyXForwarded"].as_bool().is_none()
+        {
+          Err(anyhow::anyhow!(
+            "Invalid X-Forwarded-* header disabling on reverse proxy option value"
+          ))?
+        }
       }
       #[cfg(feature = "cache")]
       "cache" => {

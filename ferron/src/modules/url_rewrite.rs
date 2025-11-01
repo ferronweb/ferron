@@ -61,7 +61,7 @@ fn url_rewrite_config_init(rewrite_map: &[Yaml]) -> Result<Vec<UrlRewriteMapEntr
       Err(err) => {
         return Err(anyhow::anyhow!(
           "Invalid URL rewrite regular expression: {}",
-          err.to_string()
+          err
         ))
       }
     };

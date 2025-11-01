@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.3.6
+
+**Released in November 1, 2025**
+
+- Added support for disabling X-Forwarded-\* headers for the reverse proxy
+
 ## Ferron 1.3.5
 
 **Released in July 31, 2025**

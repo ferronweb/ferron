@@ -228,6 +228,8 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
   - Base URL, which ASGI handler will handle the request if the request URL begins with it. Default: `"/"`
 - **proxyInterceptErrors** (_bool_; _rproxy_ module; Ferron 1.3.0 and newer)
   - Option to enable interception of backend error responses. If set to `true`, the server will call a default error handler with the same status code as the backend error response. Default: `false`
+- **disableProxyXForwarded** (_bool_; _rproxy_ module; Ferron 1.3.6 and newer)
+  - Option to disable the X-Forwarded-\* headers for backend servers. Default: `false`
 
 ## Server configuration includes
 
