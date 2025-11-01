@@ -236,7 +236,7 @@ jobs:
       #     allowUpdates: true
       #     artifacts: "ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip"
       #     tag: "${{ env.FERRON_VERSION }}"
-      #     commit: "main"
+      #     commit: "2.x"
 
       - name: Build and release Debian package
         if: matrix.runner == 'warp-ubuntu-latest-x64-8x' && contains(matrix.target, 'linux-gnu')
