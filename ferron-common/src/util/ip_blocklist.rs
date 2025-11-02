@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv6Addr};
 
@@ -13,6 +14,22 @@ pub struct IpBlockList {
 impl Default for IpBlockList {
   fn default() -> Self {
     Self::new()
+  }
+}
+
+impl Ord for IpBlockList {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self
+      .blocked_ips
+      .iter()
+      .cmp(other.blocked_ips.iter())
+      .then(self.blocked_cidrs.iter().cmp(other.blocked_cidrs.iter()))
+  }
+}
+
+impl PartialOrd for IpBlockList {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
   }
 }
 
