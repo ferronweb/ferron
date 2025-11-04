@@ -11,6 +11,7 @@ use crate::util::IpBlockList;
 
 /// Conditional data
 #[non_exhaustive]
+#[repr(u8)]
 #[derive(Clone, Debug)]
 pub enum ConditionalData {
   IsRemoteIp(IpBlockList),
@@ -43,6 +44,34 @@ impl PartialEq for ConditionalData {
 
 impl Eq for ConditionalData {}
 
+impl Ord for ConditionalData {
+  fn cmp(&self, other: &Self) -> Ordering {
+    match (self, other) {
+      (Self::IsRemoteIp(v1), Self::IsRemoteIp(v2)) => v1.cmp(v2),
+      (Self::IsForwardedFor(v1), Self::IsForwardedFor(v2)) => v1.cmp(v2),
+      (Self::IsNotRemoteIp(v1), Self::IsNotRemoteIp(v2)) => v1.cmp(v2),
+      (Self::IsNotForwardedFor(v1), Self::IsNotForwardedFor(v2)) => v1.cmp(v2),
+      (Self::IsEqual(v1, v2), Self::IsEqual(v3, v4)) => v1.cmp(v3).then(v2.cmp(v4)),
+      (Self::IsNotEqual(v1, v2), Self::IsNotEqual(v3, v4)) => v1.cmp(v3).then(v2.cmp(v4)),
+      (Self::IsRegex(v1, v2), Self::IsRegex(v3, v4)) => v1.cmp(v3).then(v2.as_str().cmp(v4.as_str())),
+      (Self::IsNotRegex(v1, v2), Self::IsNotRegex(v3, v4)) => v1.cmp(v3).then(v2.as_str().cmp(v4.as_str())),
+      (Self::IsRego(v1), Self::IsRego(v2)) => v1.get_policies().ok().cmp(&v2.get_policies().ok()),
+      _ => {
+        // SAFETY: See https://doc.rust-lang.org/core/mem/fn.discriminant.html
+        let discriminant_self = unsafe { *<*const _>::from(self).cast::<u8>() };
+        let discriminant_other = unsafe { *<*const _>::from(other).cast::<u8>() };
+        discriminant_self.cmp(&discriminant_other)
+      }
+    }
+  }
+}
+
+impl PartialOrd for ConditionalData {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
+  }
+}
+
 fn count_logical_slashes(s: &str) -> usize {
   if s.is_empty() {
     // Input is empty, zero slashes
@@ -51,7 +80,7 @@ fn count_logical_slashes(s: &str) -> usize {
   let trimmed = s.trim_end_matches('/');
   if trimmed.is_empty() {
     // Trimmed input is empty, but the original wasn't, probably input with only slashes
-    return 1;
+    return 0;
   }
 
   let mut count = 0;
@@ -96,7 +125,7 @@ impl PartialOrd for Conditions {
 }
 
 /// The enum containing a conditional
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
 pub enum Conditional {
   /// "if" condition
   If(Vec<ConditionalData>),
@@ -128,7 +157,7 @@ impl Debug for ServerConfiguration {
 }
 
 /// A error handler status code
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ErrorHandlerStatus {
   /// Any status code
   Any,
@@ -219,7 +248,7 @@ impl PartialOrd for ServerConfigurationFilters {
 }
 
 /// A specific list of Ferron server configuration entries
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct ServerConfigurationEntries {
   /// Vector of configuration entries
   pub inner: Vec<ServerConfigurationEntry>,

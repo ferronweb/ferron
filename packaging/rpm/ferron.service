@@ -1,0 +1,14 @@
+[Unit]
+Description=Ferron web server
+After=network.target
+
+[Service]
+Type=simple
+User=ferron
+ExecStart=/usr/sbin/ferron -c /etc/ferron.kdl
+ExecReload=kill -HUP $MAINPID
+Restart=on-failure
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

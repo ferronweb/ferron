@@ -53,9 +53,6 @@ build: prepare-build fix-conflicts
 build-dev: prepare-build fix-conflicts
 	cd build-workspace && RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 $(CARGO_FINAL) build --target-dir ../target $(CARGO_FINAL_EXTRA_ARGS)
 
-build-deb: prepare-build fix-conflicts
-	cd build-workspace && RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 $(CARGO_FINAL) build --target-dir ../target -r $(CARGO_FINAL_EXTRA_ARGS)
-
 prepare-build:
 	cargo run --manifest-path build-prepare/Cargo.toml
 
@@ -88,10 +85,14 @@ package:
 package-deb:
 	packaging/deb/build.sh $(DEST_TARGET_TRIPLE) $(FERRON_VERSION) $(CARGO_TARGET_ROOT)/release
 
+package-rpm:
+	packaging/rpm/build.sh $(DEST_TARGET_TRIPLE) $(FERRON_VERSION) $(CARGO_TARGET_ROOT)/release
+
 build-with-package: build package
 build-with-package-deb: build package-deb
+build-with-package-rpm: build package-rpm
 
 clean:
-	rm -rf build-workspace build-release dist packaging/deb/ferron_* packaging/deb/md5sums.tmp
+	rm -rf build-workspace build-release dist packaging/deb/ferron_* packaging/deb/md5sums.tmp packaging/rpm/data packaging/rpm/ferron.spec packaging/rpm/rpm
 	cargo clean
 	cd build-prepare && cargo clean

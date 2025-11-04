@@ -446,7 +446,6 @@ impl ModuleHandlers for FcgiModuleHandlers {
                 }
                 Err(err) => {
                   if err.kind() == std::io::ErrorKind::NotADirectory {
-                    // TODO: find a file
                     let mut temp_pathbuf = joined_pathbuf.clone();
                     loop {
                       if !temp_pathbuf.pop() {
