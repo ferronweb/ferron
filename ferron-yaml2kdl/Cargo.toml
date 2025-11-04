@@ -15,4 +15,4 @@ ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core" }
 shiba = { workspace = true }
 
 [build-dependencies]
-winresource = "0.1.19"
+winresource = "0.1.26"
