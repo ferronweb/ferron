@@ -164,6 +164,7 @@ impl ServerConfigurationFilterTrie {
   pub fn insert(&mut self, filters: ServerConfigurationFilters, filters_index: usize) {
     let filters_clone = Arc::new(filters.clone());
 
+    let no_host = !filters.is_host;
     let no_port = filters.port.is_none();
     let no_ip = filters.ip.is_none();
     let no_hostname = filters.hostname.is_none();
@@ -183,32 +184,17 @@ impl ServerConfigurationFilterTrie {
     for filter in filter_vec {
       if match &filter {
         ServerConfigurationFilter::IsHost(_) => {
+          no_host && no_port && no_ip && no_hostname && no_condition && no_error_handler_status
+        }
+        ServerConfigurationFilter::Port(_) => {
           no_port && no_ip && no_hostname && no_condition && no_error_handler_status
         }
-        ServerConfigurationFilter::Port(_) => no_ip && no_hostname && no_condition && no_error_handler_status,
-        ServerConfigurationFilter::Ip(_) => no_hostname && no_condition && no_error_handler_status,
-        ServerConfigurationFilter::Hostname(_) => no_condition && no_error_handler_status,
-        ServerConfigurationFilter::Condition(_) => no_error_handler_status,
-        ServerConfigurationFilter::ErrorHandlerStatus(_) => true,
-      } && current_node.least_filter.as_ref().is_none_or(|lf| {
-        let a = &filters_clone;
-        let b = &lf.0;
-        (
-          &a.is_host,
-          &a.port,
-          &a.ip,
-          &a.hostname,
-          &a.condition.as_ref().map(|s| (&s.location_prefix, &s.conditionals)),
-          &a.error_handler_status,
-        ) < (
-          &b.is_host,
-          &b.port,
-          &b.ip,
-          &b.hostname,
-          &b.condition.as_ref().map(|s| (&s.location_prefix, &s.conditionals)),
-          &b.error_handler_status,
-        )
-      }) {
+        ServerConfigurationFilter::Ip(_) => no_ip && no_hostname && no_condition && no_error_handler_status,
+        ServerConfigurationFilter::Hostname(_) => no_hostname && no_condition && no_error_handler_status,
+        ServerConfigurationFilter::Condition(_) => no_condition && no_error_handler_status,
+        ServerConfigurationFilter::ErrorHandlerStatus(_) => no_error_handler_status,
+      } && current_node.least_filter.is_none()
+      {
         current_node.least_filter = Some((filters_clone.clone(), filters_index));
       }
       if !current_node.children.contains_key(&filter) {
