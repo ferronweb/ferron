@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.0.1
+
+**Released in November 4, 2025**
+
+- Fixed bugs related to wrongly applying configurations from configuration blocks.
+
 ## Ferron 2.0.0
 
 **Released in November 4, 2025**
