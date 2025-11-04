@@ -94,7 +94,7 @@ async-io = "2.4.0"
 futures-util = { version = "0.3.31", features = ["sink"] }
 pin-project-lite = "0.2.16"
 blocking = { version = "1.6.1", optional = true }
-tokio-util = "0.7.15"
+tokio-util = "0.7.17"
 futures-executor = { version = "0.3.31", optional = true }
 
 # Data Handling & Serialization
