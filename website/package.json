@@ -19,7 +19,7 @@
     "@fortawesome/free-brands-svg-icons": "^7.1.0",
     "@fortawesome/free-solid-svg-icons": "^7.1.0",
     "@tailwindcss/typography": "^0.5.19",
-    "@tailwindcss/vite": "^4.1.14",
+    "@tailwindcss/vite": "^4.1.16",
     "asciinema-player": "^3.12.1",
     "astro": "^5.14.4",
     "astro-compress": "^2.3.8",
