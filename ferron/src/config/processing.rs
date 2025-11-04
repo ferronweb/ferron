@@ -164,6 +164,12 @@ impl ServerConfigurationFilterTrie {
   pub fn insert(&mut self, filters: ServerConfigurationFilters, filters_index: usize) {
     let filters_clone = Arc::new(filters.clone());
 
+    let no_port = filters.port.is_none();
+    let no_ip = filters.ip.is_none();
+    let no_hostname = filters.hostname.is_none();
+    let no_condition = filters.condition.is_none();
+    let no_error_handler_status = filters.error_handler_status.is_none();
+
     let filter_vec = vec![
       ServerConfigurationFilter::IsHost(filters.is_host),
       ServerConfigurationFilter::Port(filters.port),
@@ -175,7 +181,16 @@ impl ServerConfigurationFilterTrie {
 
     let mut current_node = self;
     for filter in filter_vec {
-      if current_node.least_filter.as_ref().is_none_or(|lf| {
+      if match &filter {
+        ServerConfigurationFilter::IsHost(_) => {
+          no_port && no_ip && no_hostname && no_condition && no_error_handler_status
+        }
+        ServerConfigurationFilter::Port(_) => no_ip && no_hostname && no_condition && no_error_handler_status,
+        ServerConfigurationFilter::Ip(_) => no_hostname && no_condition && no_error_handler_status,
+        ServerConfigurationFilter::Hostname(_) => no_condition && no_error_handler_status,
+        ServerConfigurationFilter::Condition(_) => no_error_handler_status,
+        ServerConfigurationFilter::ErrorHandlerStatus(_) => true,
+      } && current_node.least_filter.as_ref().is_none_or(|lf| {
         let a = &filters_clone;
         let b = &lf.0;
         (
