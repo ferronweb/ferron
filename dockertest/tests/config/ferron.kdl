@@ -2,6 +2,11 @@ snippet "WORDPRESS_SCAN" {
   status 403
 }
 
+aunrel:80 {
+  // Some unrelated configuration
+  status 403
+}
+
 ferron:80 {
   root "/var/www/ferron"
 
