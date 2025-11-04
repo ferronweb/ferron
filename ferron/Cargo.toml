@@ -118,4 +118,4 @@ wsgid = [
 ]
 
 [build-dependencies]
-winresource = "0.1.19"
+winresource = "0.1.26"
