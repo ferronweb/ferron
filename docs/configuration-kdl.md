@@ -1054,7 +1054,7 @@ example.com {
 
     // API endpoints
     location "/api" {
-        if "is_api_request"
+        if "is_api_request" {
             // Add headers that aren't inherited
             use "security_headers"
             header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"
