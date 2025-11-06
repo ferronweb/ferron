@@ -2,7 +2,6 @@ use std::{
   collections::{BTreeMap, HashMap, HashSet, VecDeque},
   error::Error,
   net::IpAddr,
-  sync::Arc,
 };
 
 use ferron_common::{
@@ -148,7 +147,7 @@ enum ServerConfigurationFilter {
 /// Configuration filter trie
 struct ServerConfigurationFilterTrie {
   children: BTreeMap<ServerConfigurationFilter, ServerConfigurationFilterTrie>,
-  least_filter: Option<(Arc<ServerConfigurationFilters>, usize)>,
+  index: Option<usize>,
 }
 
 impl ServerConfigurationFilterTrie {
@@ -156,14 +155,12 @@ impl ServerConfigurationFilterTrie {
   pub fn new() -> Self {
     Self {
       children: BTreeMap::new(),
-      least_filter: None,
+      index: None,
     }
   }
 
   /// Inserts new filters with index into the trie.
   pub fn insert(&mut self, filters: ServerConfigurationFilters, filters_index: usize) {
-    let filters_clone = Arc::new(filters.clone());
-
     let no_host = !filters.is_host;
     let no_port = filters.port.is_none();
     let no_ip = filters.ip.is_none();
@@ -193,9 +190,9 @@ impl ServerConfigurationFilterTrie {
         ServerConfigurationFilter::Hostname(_) => no_hostname && no_condition && no_error_handler_status,
         ServerConfigurationFilter::Condition(_) => no_condition && no_error_handler_status,
         ServerConfigurationFilter::ErrorHandlerStatus(_) => no_error_handler_status,
-      } && current_node.least_filter.is_none()
+      } && current_node.index.is_none()
       {
-        current_node.least_filter = Some((filters_clone.clone(), filters_index));
+        current_node.index = Some(filters_index);
       }
       if !current_node.children.contains_key(&filter) {
         current_node.children.insert(filter.clone(), Self::new());
@@ -221,9 +218,9 @@ impl ServerConfigurationFilterTrie {
     let mut current_node = self;
     let mut indices = Vec::new();
     for filter in filter_vec {
-      if indices.last() != current_node.least_filter.as_ref().map(|v| &v.1) {
-        if let Some(least_filter) = &current_node.least_filter {
-          indices.push(least_filter.1);
+      if indices.last() != current_node.index.as_ref() {
+        if let Some(index) = current_node.index {
+          indices.push(index);
         }
       }
       let child = current_node.children.get(&filter);
