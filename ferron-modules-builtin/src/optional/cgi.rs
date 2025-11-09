@@ -918,7 +918,7 @@ async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dy
   }
 
   match open_file_result.1.freeze().as_ref() {
-    b"!#" => Ok(executable_params_vector),
+    b"#!" => Ok(executable_params_vector),
     _ => Err(anyhow::anyhow!("No shebang"))?
   }
 }
