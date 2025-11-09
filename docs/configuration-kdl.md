@@ -583,11 +583,11 @@ app.example.com {
 - `cgi_interpreter <cgi_extension: string> <cgi_interpreter: string|null> [<cgi_interpreter_argument: string> ...]` (_cgi_ module)
   - This directive specifies CGI script interpreters used by the CGI handler. If CGI interpreter is set to `#null`, the default interpreter settings will be disabled. This directive can be specified multiple times. Default: specified for `.pl`, `.py`, `.sh`, `.ksh`, `.csh`, `.rb` and `.php` extensions, and additionally `.exe`, `.bat` and `.vbs` extensions for Windows
 - `cgi_environment <environment_variable_name: string> <environment_variable_value: string>` (_cgi_ module)
-  - This directive specifies an environment variable passed into CGI applications. Default: none
+  - This directive specifies an environment variable passed into CGI applications. This directive can be specified multiple times. Default: none
 - `scgi <scgi_to: string|null>` (_scgi_ module)
   - This directive specifies whenever SCGI is enabled and the base URL to which the SCGI client will send requests. TCP (for example `tcp://localhost:4000/`) and Unix socket URLs (only on Unix systems; for example `unix:///run/scgi.sock`) are supported. Default: `scgi #null`
 - `scgi_environment <environment_variable_name: string> <environment_variable_value: string>` (_scgi_ module)
-  - This directive specifies an environment variable passed into SCGI server. Default: none
+  - This directive specifies an environment variable passed into SCGI server. This directive can be specified multiple times. Default: none
 - `fcgi <fcgi_to: string|null> [pass=<fcgi_pass: bool>]` (_fcgi_ module)
   - This directive specifies whenever FastCGI is enabled and the base URL to which the FastCGI client will send requests. The `pass` prop specified whenever to pass the all the requests to the FastCGI request handler. TCP (for example `tcp://localhost:4000/`) and Unix socket URLs (only on Unix systems; for example `unix:///run/scgi.sock`) are supported. Default: `fcgi #null pass=#true`
 - `fcgi_php <fcgi_php_to: string|null>` (_fcgi_ module)
@@ -595,7 +595,7 @@ app.example.com {
 - `fcgi_extension <fcgi_extension: string|null>` (_fcgi_ module)
   - This directive specifies file extensions, which will be handled via the FastCGI handle. This directive can be specified multiple times. Default: none
 - `fcgi_environment <environment_variable_name: string> <environment_variable_value: string>` (_fcgi_ module)
-  - This directive specifies an environment variable passed into FastCGI server. Default: none
+  - This directive specifies an environment variable passed into FastCGI server. This directive can be specified multiple times. Default: none
 
 **Configuration example:**
 
