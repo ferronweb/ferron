@@ -501,6 +501,7 @@ impl ModuleHandlers for CgiModuleHandlers {
           wwwroot,
           execute_pathbuf,
           execute_path_info,
+          config.filters.hostname.as_deref(),
           get_value!("server_administrator_email", config).and_then(|v| v.as_str()),
           cgi_interpreters,
           additional_environment_variables,
@@ -527,10 +528,12 @@ async fn execute_cgi_with_environment_variables(
   wwwroot: &Path,
   execute_pathbuf: PathBuf,
   path_info: Option<String>,
+  server_name: Option<&str>,
   server_administrator_email: Option<&str>,
   cgi_interpreters: HashMap<String, Vec<String>>,
   additional_environment_variables: HashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
+  println!("{:?}", request);
   let mut environment_variables: LinkedHashMap<String, String> = LinkedHashMap::new();
 
   let request_data = request.extensions().get::<RequestData>();
@@ -575,14 +578,14 @@ async fn execute_cgi_with_environment_variables(
     "SERVER_ADDR".to_string(),
     socket_data.local_addr.ip().to_canonical().to_string(),
   );
+  environment_variables.insert(
+    "SERVER_NAME".to_string(),
+    server_name
+      .map(|name| name.to_string())
+      .unwrap_or_else(|| socket_data.local_addr.ip().to_canonical().to_string()),
+  );
   if let Some(server_administrator_email) = server_administrator_email {
     environment_variables.insert("SERVER_ADMIN".to_string(), server_administrator_email.to_string());
-  }
-  if let Some(host) = request.headers().get(header::HOST) {
-    environment_variables.insert(
-      "SERVER_NAME".to_string(),
-      String::from_utf8_lossy(host.as_bytes()).to_string(),
-    );
   }
 
   environment_variables.insert("DOCUMENT_ROOT".to_string(), wwwroot.to_string_lossy().to_string());
