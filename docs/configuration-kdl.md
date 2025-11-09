@@ -629,8 +629,10 @@ fastcgi.example.com {
 
 ### Content processing
 
+Disabling HTTP compression is required for string replacement.
+
 - `replace <searched_string: string> <replaced_string: string> [once=<replace_once: bool>]` (_replace_ module)
-  - This directive specifies the string to be replaced in a response body, and a replacement string. The `once` prop specifies whenever the string will be replaced once, by default this prop is set to `#true`. Default: none
+  - This directive specifies the string to be replaced in a response body, and a replacement string. The `once` prop specifies whenever the string will be replaced once, by default this prop is set to `#true`. This directive can be specified multiple times. Default: none
 - `replace_last_modified [preserve_last_modified: bool]` (_replace_ module)
   - This directive specifies whenever to preserve the "Last-Modified" header in the response. Default: `replace_last_modified #false`
 - `replace_filter_types <filter_type: string> [<filter_type: string> ...]` (_replace_ module)
