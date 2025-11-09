@@ -622,7 +622,6 @@ fastcgi.example.com {
     fcgi "tcp://localhost:9000/" pass=#true
     fcgi_php "tcp://localhost:9000/"
     fcgi_extension ".php" ".php5"
-    fcgi_environment "SCRIPT_FILENAME" "/var/www/example.com{path}"
     fcgi_environment "DOCUMENT_ROOT" "/var/www/example.com"
 }
 ```
