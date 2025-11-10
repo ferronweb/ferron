@@ -16,4 +16,4 @@ mimalloc = { workspace = true }
 shiba = { workspace = true }
 
 [build-dependencies]
-winresource = "0.1.19"
+winresource = "0.1.27"
