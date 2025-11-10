@@ -32,7 +32,7 @@ socket2 = "0.6.0"
 ppp = "2.3.0"
 
 # TLS/Security
-rustls = { version = "0.23.27", default-features = false, features = [
+rustls = { version = "0.23.35", default-features = false, features = [
     "tls12",
     "std",
     "aws-lc-rs",
