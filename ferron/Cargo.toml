@@ -12,7 +12,7 @@ tokio = { version = "1.44.2", features = ["full"] }
 http-body-util = "0.1.0"
 hyper-util = { version = "0.1", features = ["full"] }
 tokio-util = { version = "0.7.13", features = ["io"] }
-rustls = { version = "0.23.24", default-features = false, features = [
+rustls = { version = "0.23.35", default-features = false, features = [
     "tls12",
     "std",
     "ring",
