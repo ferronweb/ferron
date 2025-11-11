@@ -63,6 +63,8 @@ import FontAwesomeIcon from "../FontAwesomeIcon.astro";
 </install-command>
 
 <script>
+  import { track } from "@plausible-analytics/tracker";
+
   const commands: Record<string, string> = {
     linux: 'sudo bash -c "$(curl -fsSL https://get.ferron.sh/v2)"',
     windows: 'powershell -c "irm https://get.ferron.sh/v2-win | iex"',
@@ -152,7 +154,7 @@ import FontAwesomeIcon from "../FontAwesomeIcon.astro";
             }, 2000);
 
             // Track the command copying button clicks; the Plausible event name is "install-command-copy".
-            window.plausible.trackEvent("install-command-copy", {
+            track("install-command-copy", {
               props: { variant: selectedPlatform }
             });
           }

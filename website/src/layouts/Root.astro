@@ -49,20 +49,12 @@ import { ClientRouter } from "astro:transitions";
 </html>
 
 <script>
-  import Plausible from "plausible-tracker";
+  import { init } from "@plausible-analytics/tracker";
 
-  const plausible = Plausible({
+  init({
     domain: "ferron.sh",
-    apiHost: "https://analytics.ferron.sh"
-  });
-
-  plausible.trackPageview();
-  plausible.enableAutoOutboundTracking();
-
-  window.plausible = plausible;
-
-  document.addEventListener("astro:after-swap", () => {
-    // Track page view
-    plausible.trackPageview();
+    endpoint: "https://analytics.ferron.sh",
+    autoCapturePageviews: true,
+    outboundLinks: true
   });
 </script>
