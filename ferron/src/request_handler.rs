@@ -1341,9 +1341,9 @@ async fn request_handler_wrapped(
               Ok(response) => {
                 if log_enabled {
                   if let Some(request_parts) = log_request_parts {
-                    if let Some(logger) = loggers.find_global_logger() {
+                    if let Some(logger) = &logger {
                       log_access(
-                        &logger,
+                        logger,
                         &request_parts,
                         &socket_data,
                         latest_auth_data.as_deref(),
@@ -1430,9 +1430,9 @@ async fn request_handler_wrapped(
                 Ok(response) => {
                   if log_enabled {
                     if let Some(request_parts) = log_request_parts {
-                      if let Some(logger) = loggers.find_global_logger() {
+                      if let Some(logger) = &logger {
                         log_access(
-                          &logger,
+                          logger,
                           &request_parts,
                           &socket_data,
                           latest_auth_data.as_deref(),
@@ -1512,9 +1512,9 @@ async fn request_handler_wrapped(
           Ok(response) => {
             if log_enabled {
               if let Some(request_parts) = log_request_parts {
-                if let Some(logger) = loggers.find_global_logger() {
+                if let Some(logger) = &logger {
                   log_access(
-                    &logger,
+                    logger,
                     &request_parts,
                     &socket_data,
                     latest_auth_data.as_deref(),
