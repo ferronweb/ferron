@@ -366,7 +366,8 @@ pub fn load_modules(
         Err(error) => {
           // Store the first error encountered
           if first_server_module_error.is_none() {
-            first_server_module_error.replace(error);
+            first_server_module_error
+              .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
           }
           // Skip remaining modules for this configuration if validation fails
           break;
@@ -380,7 +381,8 @@ pub fn load_modules(
           Err(error) => {
             // Store the first error encountered
             if first_server_module_error.is_none() {
-              first_server_module_error.replace(error);
+              first_server_module_error
+                .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
             }
             // Skip remaining modules for this configuration if loading fails
             break;
