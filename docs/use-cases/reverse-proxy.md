@@ -9,6 +9,11 @@ Configuring Ferron as a reverse proxy is straightforward - you just need to spec
 example.com {
     proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
 }
+// Reverse proxy to Unix domain socket. Set `unix` propery to the path of the socket.
+// The main value of `proxy` directive is set to the URL of the site.
+example.com {
+    proxy "http://example.com" unix="/run/backend/web.sock"
+}
 ```
 
 ## Reverse proxy with static file serving support
