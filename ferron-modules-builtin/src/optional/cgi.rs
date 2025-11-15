@@ -101,7 +101,7 @@ impl ModuleLoader for CgiModuleLoader {
     if let Some(entries) = get_entries_for_validation!("cgi_interpreter", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.first().is_some_and(|v| v.is_null())
-          || entry.values.get(1).is_some_and(|v| v.is_null() || !v.is_string())
+          || !entry.values.get(1).is_some_and(|v| v.is_null() || v.is_string())
         {
           Err(anyhow::anyhow!("Invalid CGI extension interpreter specification"))?
         }
@@ -533,7 +533,6 @@ async fn execute_cgi_with_environment_variables(
   cgi_interpreters: HashMap<String, Vec<String>>,
   additional_environment_variables: HashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  println!("{:?}", request);
   let mut environment_variables: LinkedHashMap<String, String> = LinkedHashMap::new();
 
   let request_data = request.extensions().get::<RequestData>();
@@ -911,19 +910,7 @@ async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dy
   }
 
   let executable_params_vector = vec![execute_pathbuf.to_string_lossy().to_string()];
-  use bytes::BytesMut;
-
-  let magic_signature_buffer = BytesMut::with_capacity(2);
-  let open_file = fs::File::open(&execute_pathbuf).await?;
-  let open_file_result = open_file.read_exact_at(magic_signature_buffer, 0).await;
-  if open_file_result.0.is_err() {
-    Err(anyhow::anyhow!("Failed to read the CGI program signature"))?
-  }
-
-  match open_file_result.1.freeze().as_ref() {
-    b"#!" => Ok(executable_params_vector),
-    _ => Err(anyhow::anyhow!("No shebang"))?
-  }
+  Ok(executable_params_vector)
 }
 
 
