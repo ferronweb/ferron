@@ -894,7 +894,6 @@ async fn execute_cgi(
   })
 }
 
-
 #[allow(dead_code)]
 #[cfg(unix)]
 async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
@@ -912,7 +911,6 @@ async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dy
   let executable_params_vector = vec![execute_pathbuf.to_string_lossy().to_string()];
   Ok(executable_params_vector)
 }
-
 
 #[allow(dead_code)]
 #[cfg(all(feature = "runtime-monoio", not(unix)))]
