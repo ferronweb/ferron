@@ -9,11 +9,6 @@ Configuring Ferron as a reverse proxy is straightforward - you just need to spec
 example.com {
     proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
 }
-// Reverse proxy to Unix domain socket. Set `unix` propery to the path of the socket.
-// The main value of `proxy` directive is set to the URL of the site.
-example.com {
-    proxy "http://example.com" unix="/run/backend/web.sock"
-}
 ```
 
 ## Reverse proxy with static file serving support
@@ -93,6 +88,17 @@ example.com {
     cache
     // Optional: set Cache-Control header if you want to also cache responses from backend servers without the Cache-Control header
     header "Cache-Control" "max-age=3600"
+}
+```
+
+## Reverse proxy to backends listening on Unix sockets
+
+Ferron supports reverse proxying to backends listening on Unix sockets. To configure Ferron for reverse proxying to backends listening on Unix sockets, you can use this configuration:
+
+```kdl
+// Example configuration with reverse proxy to backends listening on Unix sockets. Replace "example.com" with your domain name.
+example.com {
+    proxy "http://example.com" unix="/run/backend/web.sock" // The "example.com" in the backend URL can be replaced with an arbitrary domain name
 }
 ```
 
