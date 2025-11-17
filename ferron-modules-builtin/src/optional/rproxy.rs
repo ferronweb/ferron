@@ -1629,9 +1629,26 @@ fn construct_proxy_request_parts(
   request_parts.headers.remove(header::FORWARDED);
 
   // X-Forwarded-* headers to send the client's data to a server that's behind the reverse proxy
+  let remote_addr_str = socket_data.remote_addr.ip().to_canonical().to_string();
   request_parts.headers.insert(
     "x-forwarded-for",
-    socket_data.remote_addr.ip().to_canonical().to_string().parse()?,
+    (if let Some(ref forwarded_for) = request_parts
+      .headers
+      .get("x-forwarded-for")
+      .and_then(|h| h.to_str().ok())
+    {
+      if get_value!("trust_x_forwarded_for", config)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+      {
+        format!("{forwarded_for}, {remote_addr_str}")
+      } else {
+        remote_addr_str
+      }
+    } else {
+      remote_addr_str
+    })
+    .parse()?,
   );
 
   if socket_data.encrypted {
