@@ -1078,13 +1078,22 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
                 // Check for browsers with known compression bugs
                 // Some web browsers have broken HTTP compression handling
-                let is_netscape_4_broken_html_compression = user_agent.starts_with("Mozilla/4.");
-                let is_netscape_4_broken_compression = match user_agent.strip_prefix("Mozilla/4.") {
-                  Some(stripped_user_agent) => {
-                    matches!(stripped_user_agent.chars().nth(0), Some('6') | Some('7') | Some('8'))
-                  }
-                  None => false,
-                };
+                let (is_netscape_4_broken_html_compression, is_netscape_4_broken_compression) =
+                  match user_agent.strip_prefix("Mozilla/4.") {
+                    Some(stripped_user_agent) => {
+                      if user_agent.contains(" MSIE ") {
+                        // Internet Explorer "masquerading" as Netscape 4.x
+                        (false, false)
+                      } else {
+                        (
+                          true,
+                          matches!(stripped_user_agent.chars().nth(0), Some('0'))
+                            && matches!(stripped_user_agent.chars().nth(1), Some('6') | Some('7') | Some('8')),
+                        )
+                      }
+                    }
+                    None => (false, false),
+                  };
                 let is_w3m_broken_html_compression = user_agent.starts_with("w3m/");
                 if !(content_type_option == Some("text/html".to_string())
                   && (is_netscape_4_broken_html_compression || is_w3m_broken_html_compression))
