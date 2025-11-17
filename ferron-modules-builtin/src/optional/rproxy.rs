@@ -1625,6 +1625,9 @@ fn construct_proxy_request_parts(
     request_parts.headers.insert(header::CONNECTION, "keep-alive".parse()?);
   }
 
+  // Remove Forwarded header to prevent spoofing (Ferron reverse proxy doesn't support "Forwarded" header)
+  request_parts.headers.remove(header::FORWARDED);
+
   // X-Forwarded-* headers to send the client's data to a server that's behind the reverse proxy
   request_parts.headers.insert(
     "x-forwarded-for",
