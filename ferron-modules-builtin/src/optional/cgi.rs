@@ -100,7 +100,7 @@ impl ModuleLoader for CgiModuleLoader {
 
     if let Some(entries) = get_entries_for_validation!("cgi_interpreter", config, used_properties) {
       for entry in &entries.inner {
-        if entry.values.first().is_some_and(|v| v.is_null())
+        if !entry.values.first().is_some_and(|v| v.is_string())
           || !entry.values.get(1).is_some_and(|v| v.is_null() || v.is_string())
         {
           Err(anyhow::anyhow!("Invalid CGI extension interpreter specification"))?
