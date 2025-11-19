@@ -1638,6 +1638,7 @@ dependencies = [
  "papaya",
  "password-auth",
  "pin-project-lite",
+ "ppp",
  "rand",
  "rustls",
  "rustls-pki-types",

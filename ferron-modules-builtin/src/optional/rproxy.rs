@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::net::IpAddr;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -27,6 +28,7 @@ use monoio::net::TcpStream;
 use monoio::net::UnixStream;
 #[cfg(feature = "runtime-monoio")]
 use monoio_compat::hyper::{MonoioExecutor, MonoioIo};
+use monoio_compat::AsyncWriteExt;
 use rustls::client::WebPkiServerVerifier;
 use rustls_pki_types::ServerName;
 use rustls_platform_verifier::BuilderVerifierExt;
@@ -481,6 +483,18 @@ impl ModuleLoader for ReverseProxyModuleLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("proxy_proxy_header", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `proxy_proxy_header` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
+          Err(anyhow::anyhow!("Invalid PROXY header version"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -873,6 +887,149 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 
           Connection::Tcp(stream)
         };
+
+        let proxy_header = get_value!("proxy_proxy_header", config).and_then(|v| v.as_str());
+        let proxy_header_to_write = match proxy_header {
+          Some("v1") => {
+            let is_ipv4 = socket_data.local_addr.ip().to_canonical().is_ipv4()
+              && socket_data.remote_addr.ip().to_canonical().is_ipv4();
+            let local_addr = if is_ipv4 {
+              match socket_data.local_addr.ip().to_canonical() {
+                IpAddr::V4(ip) => ip.to_string(),
+                IpAddr::V6(ip) => ip
+                  .to_ipv4_mapped()
+                  .ok_or(anyhow::anyhow!("Connection IP address type mismatch"))?
+                  .to_string(),
+              }
+            } else {
+              match socket_data.local_addr.ip().to_canonical() {
+                IpAddr::V4(ip) => ip
+                  .to_ipv6_mapped()
+                  .segments()
+                  .iter()
+                  .map(|seg| format!("{:04x}", seg))
+                  .collect::<Vec<_>>()
+                  .join(":"),
+                IpAddr::V6(ip) => ip
+                  .segments()
+                  .iter()
+                  .map(|seg| format!("{:04x}", seg))
+                  .collect::<Vec<_>>()
+                  .join(":"),
+              }
+            };
+            let remote_addr = if is_ipv4 {
+              match socket_data.remote_addr.ip().to_canonical() {
+                IpAddr::V4(ip) => ip.to_string(),
+                IpAddr::V6(ip) => ip
+                  .to_ipv4_mapped()
+                  .ok_or(anyhow::anyhow!("Connection IP address type mismatch"))?
+                  .to_string(),
+              }
+            } else {
+              match socket_data.remote_addr.ip().to_canonical() {
+                IpAddr::V4(ip) => ip
+                  .to_ipv6_mapped()
+                  .segments()
+                  .iter()
+                  .map(|seg| format!("{:04x}", seg))
+                  .collect::<Vec<_>>()
+                  .join(":"),
+                IpAddr::V6(ip) => ip
+                  .segments()
+                  .iter()
+                  .map(|seg| format!("{:04x}", seg))
+                  .collect::<Vec<_>>()
+                  .join(":"),
+              }
+            };
+            let local_port = socket_data.local_addr.port();
+            let remote_port = socket_data.remote_addr.port();
+            let header = format!(
+              "PROXY {} {} {} {} {}\r\n",
+              if is_ipv4 { "TCP4" } else { "TCP6" },
+              remote_addr,
+              local_addr,
+              remote_port,
+              local_port,
+            );
+            Some(header.into_bytes())
+          }
+          Some("v2") => {
+            let is_ipv4 = socket_data.local_addr.ip().to_canonical().is_ipv4()
+              && socket_data.remote_addr.ip().to_canonical().is_ipv4();
+            let addresses = if is_ipv4 {
+              ppp::v2::Addresses::IPv4(ppp::v2::IPv4::new(
+                match socket_data.remote_addr.ip().to_canonical() {
+                  IpAddr::V4(ip) => ip,
+                  IpAddr::V6(ip) => ip
+                    .to_ipv4_mapped()
+                    .ok_or(anyhow::anyhow!("Connection IP address type mismatch"))?,
+                },
+                match socket_data.local_addr.ip().to_canonical() {
+                  IpAddr::V4(ip) => ip,
+                  IpAddr::V6(ip) => ip
+                    .to_ipv4_mapped()
+                    .ok_or(anyhow::anyhow!("Connection IP address type mismatch"))?,
+                },
+                socket_data.remote_addr.port(),
+                socket_data.local_addr.port(),
+              ))
+            } else {
+              ppp::v2::Addresses::IPv6(ppp::v2::IPv6::new(
+                match socket_data.remote_addr.ip().to_canonical() {
+                  IpAddr::V4(ip) => ip.to_ipv6_mapped(),
+                  IpAddr::V6(ip) => ip,
+                },
+                match socket_data.local_addr.ip().to_canonical() {
+                  IpAddr::V4(ip) => ip.to_ipv6_mapped(),
+                  IpAddr::V6(ip) => ip,
+                },
+                socket_data.remote_addr.port(),
+                socket_data.local_addr.port(),
+              ))
+            };
+            let header_builder = ppp::v2::Builder::with_addresses(
+              ppp::v2::Version::Two | ppp::v2::Command::Proxy,
+              ppp::v2::Protocol::Stream,
+              addresses,
+            );
+            Some(header_builder.build()?)
+          }
+          _ => None,
+        };
+
+        let mut stream = stream; // Make the stream a mutable variable (to be able to write PROXY protocol header to it).
+
+        if let Some(proxy_header_to_write) = proxy_header_to_write {
+          match stream.write_all(&proxy_header_to_write).await {
+            Ok(_) => (),
+            Err(err) => {
+              if enable_health_check {
+                let mut failed_backends_write = self.failed_backends.write().await;
+                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                let failed_attempts = failed_backends_write.get(&proxy_key);
+                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+              }
+
+              if retry_connection && !proxy_to_vector.is_empty() {
+                error_logger
+                  .log(&format!("Failed to connect to backend, trying another backend: {err}"))
+                  .await;
+                continue;
+              }
+
+              error_logger.log(&format!("Bad gateway: {err}")).await;
+              return Ok(ResponseData {
+                request: None,
+                response: None,
+                response_status: Some(StatusCode::BAD_GATEWAY),
+                response_headers: None,
+                new_remote_address: None,
+              });
+            }
+          };
+        }
 
         let enable_http2_only_config = get_value!("proxy_http2_only", config)
           .and_then(|v| v.as_bool())
