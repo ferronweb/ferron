@@ -102,6 +102,18 @@ example.com {
 }
 ```
 
+## Reverse proxy to gRPC backends
+
+Ferron supports reverse proxying to gRPC backends that accept HTTP/2 requests either via HTTPS, or plaintext with prior knowledge. To configure Ferron for reverse proxying to gRPC backends, you can use this configuration:
+
+```kdl
+// Example configuration with reverse proxy to gRPC backends. Replace "grpc.example.com" with your domain name.
+grpc.example.com {
+    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+    proxy_http2_only // Enables HTTP/2-only proxying to support gRPC proxying
+}
+```
+
 ## Example: Ferron multiplexing to several backend servers
 
 In this example, the `example.com` and `bar.example.com` domains point to a server running Ferron.
