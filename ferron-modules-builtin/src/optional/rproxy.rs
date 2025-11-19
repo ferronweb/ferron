@@ -906,7 +906,8 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         } else {
           let enable_http2_config = get_value!("proxy_http2", config)
             .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+            .unwrap_or(false)
+            && !proxy_request_parts.headers.contains_key(header::UPGRADE);
           let mut tls_client_config = (if disable_certificate_verification {
             rustls::ClientConfig::builder()
               .dangerous()
