@@ -502,7 +502,7 @@ example.com {
 - `proxy_request_header_replace <header_name: string> <header_value: string>` (_rproxy_ module)
   - This directive specifies a header to be added to HTTP requests sent by the reverse proxy, potentially replacing existing headers. The header values supports placeholders like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
 - `proxy_http2 [enable_proxy_http2: bool]` (_rproxy_ module)
-  - This directive specifies whenever the reverse proxy can use HTTP/2 protocol when connecting to backend servers. Default: `proxy_http2 #false`
+  - This directive specifies whenever the reverse proxy can use HTTP/2 protocol when connecting to backend servers. This directive would have effect only if the backend server supports HTTP/2 and is connected via HTTPS. Default: `proxy_http2 #false`
 - `lb_retry_connection [enable_lb_retry_connection: bool]` (_rproxy_ module)
   - This directive specifies whenever the load balancer should retry connections to another backend server, in case of TCP connection or TLS handshake failure. Default: `lb_retry_connection #true`
 - `lb_algorithm <lb_algorithm: string>` (_rproxy_ module)
@@ -511,6 +511,8 @@ example.com {
   - This directive specifies the window size (in milliseconds) for load balancer health checks. Default: `lb_health_check_window 5000`
 - `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module)
   - This directive specifies the maximum number of idle connections to backend servers to keep alive. Default: `proxy_keepalive_idle_conns 48`
+- `proxy_http2_only [enable_proxy_http2_only: bool]` (_rproxy_ module)
+  - This directive specifies whenever the reverse proxy uses HTTP/2 protocol (without HTTP/1.1 fallback) when connecting to backend servers. When the backend server is connected via HTTPS, the reverse proxy negotiates HTTP/2 during the TLS handshake. When the backend server is connected via HTTP, the reverse proxy uses HTTP/2 with prior knowledge. This directive can be used when proxying gRPC requests. Default: `proxy_http2_only #false`
 
 **Configuration example:**
 

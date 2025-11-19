@@ -469,6 +469,18 @@ impl ModuleLoader for ReverseProxyModuleLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("proxy_http2_only", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `proxy_http2_only` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_bool() {
+          Err(anyhow::anyhow!("Invalid reverse proxy HTTP/2 only enabling option"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -862,6 +874,10 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           Connection::Tcp(stream)
         };
 
+        let enable_http2_only_config = get_value!("proxy_http2_only", config)
+          .and_then(|v| v.as_bool())
+          .unwrap_or(false);
+
         let sender = if !encrypted {
           #[cfg(feature = "runtime-monoio")]
           let rw = {
@@ -874,7 +890,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           #[cfg(feature = "runtime-tokio")]
           let rw = stream;
 
-          let sender = match http_proxy_handshake(rw, false).await {
+          let sender = match http_proxy_handshake(rw, enable_http2_only_config).await {
             Ok(sender) => sender,
             Err(err) => {
               if enable_health_check {
@@ -904,10 +920,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 
           sender
         } else {
-          let enable_http2_config = get_value!("proxy_http2", config)
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false)
-            && !proxy_request_parts.headers.contains_key(header::UPGRADE);
+          let enable_http2_config = enable_http2_only_config
+            || get_value!("proxy_http2", config)
+              .and_then(|v| v.as_bool())
+              .unwrap_or(false)
+              && !proxy_request_parts.headers.contains_key(header::UPGRADE);
           let mut tls_client_config = (if disable_certificate_verification {
             rustls::ClientConfig::builder()
               .dangerous()
@@ -924,7 +941,9 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             )
           })
           .with_no_client_auth();
-          if enable_http2_config {
+          if enable_http2_only_config {
+            tls_client_config.alpn_protocols = vec![b"h2".to_vec()];
+          } else if enable_http2_config {
             tls_client_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
           } else {
             tls_client_config.alpn_protocols = vec![b"http/1.1".to_vec(), b"http/1.0".to_vec()];
