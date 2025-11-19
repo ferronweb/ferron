@@ -40,7 +40,7 @@ use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, 
 #[cfg(feature = "runtime-monoio")]
 use ferron_common::util::MonoioFileStream;
 use ferron_common::util::{anti_xss, sizify, ModuleCache, TtlCache};
-use ferron_common::{format_page, get_entries_for_validation, get_entry, get_value};
+use ferron_common::{format_page, get_entries, get_entries_for_validation, get_entry, get_value};
 
 const COMPRESSED_STREAM_READER_BUFFER_SIZE: usize = 16384;
 
@@ -358,6 +358,20 @@ impl ModuleLoader for StaticFileServingModuleLoader {
           ))?
         } else if !entry.values[0].is_bool() {
           Err(anyhow::anyhow!("Invalid static file precompression enabling option"))?
+        }
+      }
+    };
+
+    if let Some(entries) = get_entries_for_validation!("mime_type", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 2 {
+          Err(anyhow::anyhow!(
+            "The `mime_type` configuration property must have exactly two values"
+          ))?
+        } else if !entry.values[0].is_string() {
+          Err(anyhow::anyhow!("The file extension must be a string"))?
+        } else if !entry.values[1].is_string() {
+          Err(anyhow::anyhow!("The MIME type must be a string"))?
         }
       }
     };
@@ -897,10 +911,31 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               };
             }
 
+            let custom_content_type_option = {
+              let mut custom_content_type = None;
+              if let Some(mime_types_entries) = get_entries!("mime_type", config) {
+                if let Some(extension) = joined_pathbuf.extension().map(|a| format!(".{}", a.to_string_lossy())) {
+                  for entry in mime_types_entries.inner.iter() {
+                    if let Some(key) = entry.values.first().and_then(|v| v.as_str()) {
+                      if key == extension {
+                        if let Some(value) = entry.values.get(1).and_then(|v| v.as_str()) {
+                          custom_content_type = Some(value.to_string());
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              custom_content_type
+            };
+
             // Determine the content type based on file extension
-            let content_type_option = new_mime_guess::from_path(&joined_pathbuf)
-              .first()
-              .map(|mime_type| mime_type.to_string());
+            let content_type_option = custom_content_type_option.or_else(|| {
+              new_mime_guess::from_path(&joined_pathbuf)
+                .first()
+                .map(|mime_type| mime_type.to_string())
+            });
 
             // Handle Range requests for partial content
             let range_header = match request.headers().get(header::RANGE) {

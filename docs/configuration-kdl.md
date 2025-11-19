@@ -442,6 +442,8 @@ example.com {
   - This directive specifies whenever the directory listings are enabled. Default: `directory_listing #false`
 - `precompressed [enable_precompression: bool]` (_static_ module)
   - This directive specifies whenever serving the precompressed static files is enabled. The precompressed static files would additionally have `.gz` extension for gzip, `.deflate` for Deflate, `.br` for Brotli, or `.zst` for Zstandard. Default: `precompressed #false`
+- `mime_type <file_extension: string> <mime_type: string>` (_static_ module; Ferron UNRELEASED or newer)
+  - This directive specifies an additional MIME type corresponding to a file extension (like `.html`) for static files. Default: none
 
 **Configuration example:**
 
