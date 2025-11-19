@@ -163,7 +163,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `tls_ecdh_curves <ecdh_curve: string> [<ecdh_curve: string> ...]`
   - This directive specifies the supported TLS ECDH curves. This directive can be specified multiple times. Default: default ECDH curves for Rustls
 - `tls_client_certificate [tls_client_certificate: bool|string]`
-  - This directive specifies whenever the TLS client certificate verification is enabled. If set to `#true`, the client certificate will be verified against the system certificate store. If set to a string (supported on Ferron UNRELEASED and newer), the client certificate will be verified against the certificate authority in the specified path. Default: `tls_client_certificate #false`
+  - This directive specifies whenever the TLS client certificate verification is enabled. If set to `#true`, the client certificate will be verified against the system certificate store. If set to a string, the client certificate will be verified against the certificate authority in the specified path. Default: `tls_client_certificate #false`
 - `tls_min_version <tls_min_version: string>`
   - This directive specifies the minimum TLS version (TLSv1.2 or TLSv1.3) that the server will accept. Default: `tls_min_version "TLSv1.2"`
 - `tls_max_version <tls_max_version: string>`
