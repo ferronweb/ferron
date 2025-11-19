@@ -1,0 +1,35 @@
+services:
+  # The web server to test
+  ferron:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./ferron.kdl:/etc/ferron.kdl
+      - ./certs:/etc/certs
+    depends_on:
+      change-certs-ownership:
+        condition: service_completed_successfully
+
+  # Container to change ownership of the TLS credentials
+  change-certs-ownership:
+    image: alpine
+    user: "root"
+    volumes:
+      - ./certs:/tmp/change-ownership
+    command: "sh -c 'chown nobody:nogroup /tmp/change-ownership/*'"
+
+  # The backend server for testing
+  backend:
+    build:
+      context: ./backend
+    volumes:
+      - ./certs:/etc/certs
+
+  # A container to run tests
+  test-runner:
+    build:
+      context: ../../runner
+    command: "tail -f /dev/null"
+    volumes:
+      - ./hello.proto:/tmp/hello.proto

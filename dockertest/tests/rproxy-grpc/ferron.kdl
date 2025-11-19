@@ -1,0 +1,9 @@
+globals {
+  protocols "h1" "h2"
+}
+
+* {
+  tls "/etc/certs/server.crt" "/etc/certs/server.key"
+  proxy "http://backend:50051/"
+  proxy_http2_only
+}
