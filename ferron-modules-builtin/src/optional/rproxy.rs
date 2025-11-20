@@ -646,9 +646,18 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           None
         };
 
-        let connections = if get_value!("proxy_keepalive", config)
+        let is_http_upgrade = proxy_request_parts.headers.contains_key(header::UPGRADE);
+        let enable_http2_only_config = get_value!("proxy_http2_only", config)
           .and_then(|v| v.as_bool())
-          .unwrap_or(true)
+          .unwrap_or(false);
+        let enable_http2_config = get_value!("proxy_http2", config)
+          .and_then(|v| v.as_bool())
+          .unwrap_or(false);
+
+        let connections = if (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
+          && get_value!("proxy_keepalive", config)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true)
         {
           let (sender, receiver) = &*connections;
           loop {
@@ -1031,10 +1040,6 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           };
         }
 
-        let enable_http2_only_config = get_value!("proxy_http2_only", config)
-          .and_then(|v| v.as_bool())
-          .unwrap_or(false);
-
         let sender = if !encrypted {
           #[cfg(feature = "runtime-monoio")]
           let rw = {
@@ -1077,11 +1082,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 
           sender
         } else {
-          let enable_http2_config = enable_http2_only_config
-            || (get_value!("proxy_http2", config)
-              .and_then(|v| v.as_bool())
-              .unwrap_or(false)
-              && !proxy_request_parts.headers.contains_key(header::UPGRADE));
+          let enable_http2_config = enable_http2_only_config || (enable_http2_config && !is_http_upgrade);
           let mut tls_client_config = (if disable_certificate_verification {
             rustls::ClientConfig::builder()
               .dangerous()
