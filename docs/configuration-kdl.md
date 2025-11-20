@@ -170,10 +170,6 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the maximum TLS version (TLSv1.2 or TLSv1.3) that the server will accept. Default: `tls_max_version "TLSv1.3"`
 - `ocsp_stapling [enable_ocsp_stapling: bool]`
   - This directive specifies whenever OCSP stapling is enabled. Default: `ocsp_stapling #true`
-- `block <blocked_ip: string> [<blocked_ip: string> ...]`
-  - This directive specifies IP addresses to be blocked. This directive can be specified multiple times. Default: none
-- `allow <allowed_ip: string> [<allowed_ip: string> ...]`
-  - This directive specifies IP addresses to be allowed. This directive can be specified multiple times. Default: none
 - `auto_tls_on_demand_ask <auto_tls_on_demand_ask_url: string|null>`
   - This directive specifies the URL to be used for asking whenever to the hostname for automatic TLS on demand is allowed. The server will append the `domain` query parameter with the domain name for the certificate to issue as a value to the URL. It's recommended to configure this option when using automatic TLS on demand to prevent abuse. Default: `auto_tls_on_demand_ask #null`
 - `auto_tls_on_demand_ask_no_verification [auto_tls_on_demand_ask_no_verification: bool]`
@@ -187,8 +183,6 @@ This configuration reference organizes directives by both **scope** (where they 
     tls_ecdh_curves "secp256r1" "secp384r1"
     tls_client_certificate #false
     ocsp_stapling
-    block "192.168.1.100" "10.0.0.5"
-    allow "192.168.1.0/24" "10.0.0.0/8"
     auto_tls_on_demand_ask "https://auth.example.com/check"
     auto_tls_on_demand_ask_no_verification #false
 }
@@ -379,6 +373,10 @@ example.com {
   - This directive specifies the custom status code. This directive can be specified multiple times. The `url` prop specifies the request path for this status code. The `regex` prop specifies the regular expression (like `^/ferron(?:$|[/#?])`) for the custom status code. The `location` prop specifies the destination for the redirect; it supports placeholders like `{path}` which will be replaced with the request path. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whenever the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. The `allowed` prop is a comma-separated list of IP addresses applicable for the status code. The `not_allowed` prop is a comma-separated list of IP addresses not applicable for the status code. The `body` prop specifies the response body to be sent. Default: none
 - `users [username: string] [password_hash: string]`
   - This directive specifies an user with a password hash used for the HTTP basic authentication (it can be either Argon2, PBKDF2, or `scrypt` one). It's recommended to use the `ferron-passwd` tool to generate the password hash. This directive can be specified multiple times. Default: none
+- `block (<blocked_ip: string> [<blocked_ip: string> ...])|<not_specified: null>`
+  - This directive specifies IP addresses and CIDR ranges to be blocked. If set as `block #null`, this directive is ignored. This directive was global-only before Ferron UNRELEASED. This directive can be specified multiple times. Default: none
+- `allow (<allowed_ip: string> [<allowed_ip: string> ...])|<not_specified: null>`
+  - This directive specifies IP addresses and CIDR ranges to be allowed. If set as `allow #null`, this directive is ignored. This directive was global-only before Ferron UNRELEASED. This directive can be specified multiple times. Default: none
 
 **Configuration example:**
 
@@ -394,6 +392,10 @@ example.com {
     // User definitions for authentication (use `ferron-passwd` to generate password hashes)
     users "admin" "$2b$10$hashedpassword12345"
     users "moderator" "$2b$10$anotherhashedpassword"
+
+    // Limit who can access the site
+    block "192.168.1.100" "10.0.0.5"
+    allow "192.168.1.0/24" "10.0.0.0/8"
 }
 ```
 
