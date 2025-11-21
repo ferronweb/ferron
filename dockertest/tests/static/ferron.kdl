@@ -1,5 +1,6 @@
 :80 {
   root "/var/www/ferron"
+  index "basic.txt"
 
   location "/precompressed" {
     precompressed

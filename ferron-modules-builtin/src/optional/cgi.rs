@@ -174,6 +174,10 @@ impl ModuleHandlers for CgiModuleHandlers {
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     let mut cgi_script_exts = Vec::new();
 
+    let indexes = get_entry!("index", config)
+      .map(|e| e.values.iter().filter_map(|v| v.as_str()).collect::<Vec<&str>>())
+      .unwrap_or(vec!["index.php", "index.cgi", "index.html", "index.htm", "index.xhtml"]);
+
     let cgi_script_exts_config = get_entries!("cgi_extension", config);
     if let Some(cgi_script_exts_obtained) = cgi_script_exts_config {
       for cgi_script_ext_config in cgi_script_exts_obtained.inner.iter() {
@@ -308,7 +312,6 @@ impl ModuleHandlers for CgiModuleHandlers {
                   }
                 }
               } else if metadata.is_dir() {
-                let indexes = vec!["index.php", "index.cgi"];
                 for index in indexes {
                   let temp_joined_pathbuf = joined_pathbuf.join(index);
                   // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
@@ -345,12 +348,13 @@ impl ModuleHandlers for CgiModuleHandlers {
                           let contained_extension = temp_joined_pathbuf
                             .extension()
                             .map(|a| format!(".{}", a.to_string_lossy()));
-                          if let Some(contained_extension) = contained_extension {
-                            if cgi_script_exts.contains(&(&contained_extension as &str)) {
-                              execute_pathbuf = Some(temp_joined_pathbuf);
-                              break;
-                            }
+                          let is_cgi_script_ext =
+                            contained_extension.is_some_and(|e| cgi_script_exts.contains(&(&e as &str)));
+                          if !is_cgi_script_ext {
+                            break;
                           }
+                          execute_pathbuf = Some(temp_joined_pathbuf);
+                          break;
                         }
                       }
                     }

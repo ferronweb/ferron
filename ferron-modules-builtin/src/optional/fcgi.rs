@@ -191,6 +191,10 @@ impl ModuleHandlers for FcgiModuleHandlers {
       .and_then(|v| v.as_bool())
       .unwrap_or(true);
 
+    let indexes = get_entry!("index", config)
+      .map(|e| e.values.iter().filter_map(|v| v.as_str()).collect::<Vec<&str>>())
+      .unwrap_or(vec!["index.php", "index.cgi", "index.html", "index.htm", "index.xhtml"]);
+
     if fastcgi_to.is_none() {
       fastcgi_to = fastcgi_php_entry
         .and_then(|e| e.values.first())
@@ -402,7 +406,6 @@ impl ModuleHandlers for FcgiModuleHandlers {
                       }
                     }
                   } else if metadata.is_dir() {
-                    let indexes = vec!["index.php", "index.cgi"];
                     for index in indexes {
                       let temp_joined_pathbuf = joined_pathbuf.join(index);
                       // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
@@ -431,12 +434,13 @@ impl ModuleHandlers for FcgiModuleHandlers {
                             let contained_extension = temp_joined_pathbuf
                               .extension()
                               .map(|a| format!(".{}", a.to_string_lossy()));
-                            if let Some(contained_extension) = contained_extension {
-                              if fastcgi_script_exts.contains(&(&contained_extension as &str)) {
-                                execute_pathbuf = Some(temp_joined_pathbuf);
-                                break;
-                              }
+                            let is_fastcgi_script_ext =
+                              contained_extension.is_some_and(|e| fastcgi_script_exts.contains(&(&e as &str)));
+                            if !is_fastcgi_script_ext {
+                              break;
                             }
+                            execute_pathbuf = Some(temp_joined_pathbuf);
+                            break;
                           }
                         }
                         Err(_) => continue,

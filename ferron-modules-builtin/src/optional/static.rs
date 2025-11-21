@@ -376,6 +376,14 @@ impl ModuleLoader for StaticFileServingModuleLoader {
       }
     };
 
+    if let Some(entries) = get_entries_for_validation!("index", config, used_properties) {
+      for entry in &entries.inner {
+        if !entry.values.iter().all(|v| v.is_string()) {
+          Err(anyhow::anyhow!("An index file name must be a string"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -480,6 +488,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
         .and_then(|d| d.original_url.as_ref())
         .map_or(request_path, |u| u.path());
 
+      // Get the configured index files
+      let indexes = get_entry!("index", config)
+        .map(|e| e.values.iter().filter_map(|v| v.as_str()).collect::<Vec<&str>>())
+        .unwrap_or(vec!["index.html", "index.htm", "index.xhtml"]);
+
       // Create a cache key that includes IP and hostname filters if present
       let cache_key = format!(
         "{}{}{}",
@@ -552,7 +565,6 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
           if !joined_pathbuf_cached {
             if metadata.is_dir() {
               // Try common index file names
-              let indexes = vec!["index.html", "index.htm", "index.xhtml"];
               for index in indexes {
                 let temp_joined_pathbuf = joined_pathbuf.join(index);
 

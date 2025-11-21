@@ -446,6 +446,8 @@ example.com {
   - This directive specifies whenever serving the precompressed static files is enabled. The precompressed static files would additionally have `.gz` extension for gzip, `.deflate` for Deflate, `.br` for Brotli, or `.zst` for Zstandard. Default: `precompressed #false`
 - `mime_type <file_extension: string> <mime_type: string>` (_static_ module; Ferron UNRELEASED or newer)
   - This directive specifies an additional MIME type corresponding to a file extension (like `.html`) for static files. Default: none
+- `index <index_file: string> [<another_index_file: string> ...]` (_static_ module; Ferron UNRELEASED or newer)
+  - This directive specifies the index files to be used when a directory is requested. Default: `index "index.html" "index.htm" "index.html"` (static file serving), `index "index.php" "index.cgi" "index.html" "index.htm" "index.html"` (CGI, FastCGI)
 
 **Configuration example:**
 
