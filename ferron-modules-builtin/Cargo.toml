@@ -102,6 +102,7 @@ fastrand = "2.3.0"
 default = [
     "cache",
     "cgi",
+    "dcompress",
     "fauth",
     "fcgi",
     "fproxy",
@@ -115,6 +116,7 @@ default = [
 default-tokio = [
     "cache",
     "cgi",
+    "dcompress",
     "fauth",
     "fcgi",
     "fproxy",
@@ -127,6 +129,7 @@ default-tokio = [
 ]
 cache = ["cache_control", "papaya", "ahash"]
 cgi = ["async-process", "httparse", "memchr"]
+dcompress = ["async-compression"]
 fauth = ["rand"]
 fcgi = ["tokio-util/codec", "httparse", "memchr"]
 fproxy = []

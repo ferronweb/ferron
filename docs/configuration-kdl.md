@@ -448,6 +448,8 @@ example.com {
   - This directive specifies an additional MIME type corresponding to a file extension (like `.html`) for static files. Default: none
 - `index <index_file: string> [<another_index_file: string> ...]` (_static_ module; Ferron UNRELEASED or newer)
   - This directive specifies the index files to be used when a directory is requested. Default: `index "index.html" "index.htm" "index.html"` (static file serving), `index "index.php" "index.cgi" "index.html" "index.htm" "index.html"` (CGI, FastCGI)
+- `dynamic_compressed [enable_dynamic_content_compression: bool]` (_dcompress_ module; Ferron UNRELEASED or newer)
+  - This directive specifies whenever the HTTP compression for dynamic content is enabled. Default: `dynamic_compressed #false`
 
 **Configuration example:**
 
