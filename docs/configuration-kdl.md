@@ -818,6 +818,52 @@ Ferron 2.0.0 and newer supports the following placeholders for access logs:
 - `{status_code}` - the HTTP status code of the response
 - `{content_length}` - the content length of the response (`-`, if not available)
 
+## Language-specific content configuration example
+
+Below is an example of Ferron configuration involving conditionals to serve language-specific content:
+
+```kdl
+// Snippet for common language settings
+snippet "LANG_COMMON" {
+    set_constant "LANGUAGES" "en,de,pl"
+}
+
+example.com {
+    // Generic response
+    status 200 body="lang: Unknown"
+
+    condition "LANG_PL" {
+        use "LANG_COMMON"
+        is_language "pl"
+    }
+
+    condition "LANG_DE" {
+        use "LANG_COMMON"
+        is_language "de"
+    }
+
+    condition "LANG_EN" {
+        use "LANG_COMMON"
+        is_language "en"
+    }
+
+    if "LANG_PL" {
+        // Polish language
+        status 200 body="lang: Polski"
+    }
+
+    if "LANG_DE" {
+        // German language
+        status 200 body="lang: Deutsch"
+    }
+
+    if "LANG_EN" {
+        // English language
+        status 200 body="lang: English"
+    }
+}
+```
+
 ## Location block example
 
 Below is an example of Ferron configuration involving location blocks:
