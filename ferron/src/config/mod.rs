@@ -268,7 +268,8 @@ fn match_condition(
         },
       );
       rego_input_object.insert("uri".into(), request.uri.to_string().into());
-      let mut headers_hashmap_initial: HashMap<String, Vec<regorus::Value>> = HashMap::new();
+      let mut headers_hashmap_initial: HashMap<String, Vec<regorus::Value>> =
+        HashMap::with_capacity(request.headers.keys_len());
       for (key, value) in request.headers.iter() {
         let key_string = key.as_str().to_lowercase();
         if let Some(header_list) = headers_hashmap_initial.get_mut(&key_string) {
