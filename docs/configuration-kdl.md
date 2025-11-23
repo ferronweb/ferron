@@ -728,9 +728,9 @@ Below is the list of supported subconditions:
   - This subcondition checks if the value does not match the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
 - `is_rego <rego_policy: string>`
   - This subcondition evaluates a Rego policy.
-- `set_constant <key: string> <value: string>`
+- `set_constant <key: string> <value: string>` (Ferron UNRELEASED or newer)
   - This subcondition sets a constant value.
-- `is_language <language: string>`
+- `is_language <language: string>` (Ferron UNRELEASED or newer)
   - This subcondition checks if the language is the preferred language specified in the `Accept-Language` header. This subcondition uses `LANGUAGES` constant, which is a comma-separated list of preferred language codes (such as `en-US` or `fr-FR`).
 
 ## Rego subconditions
@@ -749,7 +749,7 @@ Inputs for Rego-based subconditions (`input`) are as follows:
 - `input.socket_data.server_ip` (string) - the server's IP address.
 - `input.socket_data.server_port` (number) - the server's port.
 - `input.socket_data.encrypted` (boolean) - whether the connection is encrypted.
-- `input.constants` (array<string, string>) - the constants set by `set_constant` subconditions.
+- `input.constants` (array<string, string>; Ferron UNRELEASED or newer) - the constants set by `set_constant` subconditions.
 
 You can read more about Rego in [Open Policy Agent documentation](https://www.openpolicyagent.org/docs/policy-language).
 
