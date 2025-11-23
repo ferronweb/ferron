@@ -271,16 +271,6 @@ fn before_starting_server(
     let configs_to_process = merge_duplicates(configs_to_process);
     let configs_to_process = remove_and_add_global_configuration(configs_to_process);
     let configs_to_process = premerge_configuration(configs_to_process);
-
-    // Shutdown request handler threads and secondary runtime
-    if let Some((handler_shutdown_channels, secondary_runtime)) = old_runtime.take() {
-      for shutdown in handler_shutdown_channels {
-        shutdown.cancel();
-      }
-      drop(secondary_runtime);
-    }
-
-    // Load modules
     let (configs_to_process, first_module_error, unused_properties) =
       load_modules(configs_to_process, &mut module_loaders, &secondary_runtime);
 
@@ -338,6 +328,9 @@ fn before_starting_server(
 
     // Reference to the secondary Tokio runtime
     let secondary_runtime_ref = &secondary_runtime;
+
+    // Mutable reference to the old runtime
+    let old_runtime_ref = &mut old_runtime;
 
     // Execute the rest
     let execute_rest = move || {
@@ -1020,6 +1013,14 @@ fn before_starting_server(
             }
           }
         }
+      }
+
+      // Shut down request handler threads and secondary runtime
+      if let Some((handler_shutdown_channels, secondary_runtime)) = old_runtime_ref.take() {
+        for shutdown in handler_shutdown_channels {
+          shutdown.cancel();
+        }
+        drop(secondary_runtime);
       }
 
       if !acme_configs.is_empty() || !acme_on_demand_configs.is_empty() {
