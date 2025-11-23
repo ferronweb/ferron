@@ -23,6 +23,7 @@ pub enum ConditionalData {
   IsRegex(String, Regex),
   IsNotRegex(String, Regex),
   IsRego(Arc<regorus::Engine>),
+  SetConstant(String, String),
 }
 
 impl PartialEq for ConditionalData {
@@ -37,6 +38,7 @@ impl PartialEq for ConditionalData {
       (Self::IsRegex(v1, v2), Self::IsRegex(v3, v4)) => v1 == v3 && v2.as_str() == v4.as_str(),
       (Self::IsNotRegex(v1, v2), Self::IsNotRegex(v3, v4)) => v1 == v3 && v2.as_str() == v4.as_str(),
       (Self::IsRego(v1), Self::IsRego(v2)) => v1.get_policies().ok() == v2.get_policies().ok(),
+      (Self::SetConstant(v1, v2), Self::SetConstant(v3, v4)) => v1 == v3 && v2 == v4,
       _ => false,
     }
   }
@@ -56,6 +58,7 @@ impl Ord for ConditionalData {
       (Self::IsRegex(v1, v2), Self::IsRegex(v3, v4)) => v1.cmp(v3).then(v2.as_str().cmp(v4.as_str())),
       (Self::IsNotRegex(v1, v2), Self::IsNotRegex(v3, v4)) => v1.cmp(v3).then(v2.as_str().cmp(v4.as_str())),
       (Self::IsRego(v1), Self::IsRego(v2)) => v1.get_policies().ok().cmp(&v2.get_policies().ok()),
+      (Self::SetConstant(v1, v2), Self::SetConstant(v3, v4)) => v1.cmp(v3).then(v2.cmp(v4)),
       _ => {
         // SAFETY: See https://doc.rust-lang.org/core/mem/fn.discriminant.html
         let discriminant_self = unsafe { *<*const _>::from(self).cast::<u8>() };

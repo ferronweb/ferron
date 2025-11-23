@@ -728,6 +728,8 @@ Below is the list of supported subconditions:
   - This subcondition checks if the value does not match the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
 - `is_rego <rego_policy: string>`
   - This subcondition evaluates a Rego policy.
+- `set_constant <key: string> <value: string>`
+  - This subcondition sets a constant value.
 
 ## Rego subconditions
 
@@ -745,6 +747,7 @@ Inputs for Rego-based subconditions (`input`) are as follows:
 - `input.socket_data.server_ip` (string) - the server's IP address.
 - `input.socket_data.server_port` (number) - the server's port.
 - `input.socket_data.encrypted` (boolean) - whether the connection is encrypted.
+- `input.constants` (array<string, string>) - the constants set by `set_constant` subconditions.
 
 You can read more about Rego in [Open Policy Agent documentation](https://www.openpolicyagent.org/docs/policy-language).
 
