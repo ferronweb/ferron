@@ -82,6 +82,7 @@ with-conditions.example.com {
 
 snippet "EXAMPLE" {
   // Example snippet configuration
+  // Snippets containing subconditions can also be used in conditions in Ferron UNRELEASED or newer
 }
 
 with-snippet.example.com {
