@@ -309,6 +309,8 @@ fn load_configuration_inner(
                               "Snippet not defined: {snippet_name}. You might need to define it before using it"
                             ))?;
                           }
+                        } else {
+                          Err(anyhow::anyhow!("Invalid `use` statement"))?;
                         }
                       }
                       let value = kdl_node_to_configuration_entry(kdl_node);
