@@ -24,6 +24,7 @@ pub enum ConditionalData {
   IsNotRegex(String, Regex),
   IsRego(Arc<regorus::Engine>),
   SetConstant(String, String),
+  IsLanguage(String),
 }
 
 impl PartialEq for ConditionalData {
@@ -39,6 +40,7 @@ impl PartialEq for ConditionalData {
       (Self::IsNotRegex(v1, v2), Self::IsNotRegex(v3, v4)) => v1 == v3 && v2.as_str() == v4.as_str(),
       (Self::IsRego(v1), Self::IsRego(v2)) => v1.get_policies().ok() == v2.get_policies().ok(),
       (Self::SetConstant(v1, v2), Self::SetConstant(v3, v4)) => v1 == v3 && v2 == v4,
+      (Self::IsLanguage(v1), Self::IsLanguage(v2)) => v1 == v2,
       _ => false,
     }
   }

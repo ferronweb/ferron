@@ -730,6 +730,8 @@ Below is the list of supported subconditions:
   - This subcondition evaluates a Rego policy.
 - `set_constant <key: string> <value: string>`
   - This subcondition sets a constant value.
+- `is_language <language: string>`
+  - This subcondition checks if the language is the preferred language specified in the `Accept-Language` header. This subcondition uses `LANGUAGES` constant, which is a comma-separated list of preferred language codes (such as `en-US` or `fr-FR`).
 
 ## Rego subconditions
 

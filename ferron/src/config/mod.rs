@@ -2,8 +2,9 @@ pub mod adapters;
 pub mod processing;
 
 pub use ferron_common::config::*;
+use ferron_common::util::parse_q_value_header;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -141,6 +142,16 @@ pub fn parse_conditional_data(
         .and_then(|v| v.as_str())
         .ok_or(anyhow::anyhow!(
           "Missing or invalid constant value in a \"set_constant\" subcondition"
+        ))?
+        .to_string(),
+    ),
+    "is_language" => ConditionalData::IsLanguage(
+      value
+        .values
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(anyhow::anyhow!(
+          "Missing or invalid desired language in a \"is_language\" subcondition"
         ))?
         .to_string(),
     ),
@@ -305,6 +316,42 @@ fn match_condition(
     ConditionalData::SetConstant(name, value) => {
       constants.insert(name.to_owned(), value.to_owned());
       Ok(true)
+    }
+    ConditionalData::IsLanguage(language) => {
+      let accepted_languages = parse_q_value_header(
+        request
+          .headers
+          .get(hyper::header::ACCEPT_LANGUAGE)
+          .and_then(|v| v.to_str().ok())
+          .unwrap_or("*"),
+      );
+      let supported_languages = constants
+        .get("LANGUAGES")
+        .and_then(|v| {
+          let mut hash_set: HashSet<&str> = HashSet::new();
+          for lang in v.split(",") {
+            hash_set.insert(lang);
+            if let Some((lang2, _)) = lang.split_once('-') {
+              hash_set.insert(lang2);
+            }
+          }
+          if hash_set.is_empty() {
+            None
+          } else {
+            Some(hash_set)
+          }
+        })
+        .unwrap_or(HashSet::from_iter(vec![language.as_str()]));
+      Ok(
+        accepted_languages
+          .iter()
+          .find(|l| {
+            *l == "*"
+              || supported_languages.contains(l.as_str())
+              || l.split_once('-').is_some_and(|(v, _)| supported_languages.contains(v))
+          })
+          .is_some_and(|l| l == language || language.split_once('-').is_some_and(|(v, _)| v == l)),
+      )
     }
     _ => Ok(false),
   }
