@@ -1,0 +1,16 @@
+// Project-local debug tasks
+//
+// For more documentation on how to configure debug tasks,
+// see: https://zed.dev/docs/debugger
+[
+  {
+    "label": "Debug Ferron",
+    "adapter": "CodeLLDB",
+    "program": "target/debug/ferron",
+    "request": "launch",
+    "build": {
+      "command": "cargo",
+      "args": ["build"]
+    }
+  }
+]
