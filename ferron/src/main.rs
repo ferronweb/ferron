@@ -1602,7 +1602,7 @@ fn parse_arguments(all_adapters: Vec<&'static str>) -> ArgMatches {
 fn main() {
   // Set the panic handler
   setup_panic!(Metadata::new("Ferron", env!("CARGO_PKG_VERSION"))
-    .homepage("www.ferronweb.org")
+    .homepage("https://ferron.sh")
     .support("- Send an email message to hello@ferron.sh"));
 
   // Obtain the configuration adapters
