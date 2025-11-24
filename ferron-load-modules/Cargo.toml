@@ -8,6 +8,7 @@ ferron-common = { workspace = true }
 ferron-modules-builtin = { workspace = true, features = [
     "cache",
     "cgi",
+    "dcompress",
     "fauth",
     "fcgi",
     "fproxy",
