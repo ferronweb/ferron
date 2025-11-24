@@ -12,7 +12,7 @@ pub mod fcgi;
 mod read_to_end_move;
 #[cfg(all(feature = "scgi", feature = "runtime-monoio"))]
 mod send_read_stream;
-#[cfg(feature = "fcgi")]
+#[cfg(any(feature = "dcompress", feature = "fcgi"))]
 mod split_stream_by_map;
 
 #[cfg(feature = "cache")]
@@ -25,5 +25,5 @@ pub use copy_move::*;
 pub use read_to_end_move::*;
 #[cfg(all(feature = "scgi", feature = "runtime-monoio"))]
 pub use send_read_stream::*;
-#[cfg(feature = "fcgi")]
+#[cfg(any(feature = "dcompress", feature = "fcgi"))]
 pub use split_stream_by_map::*;
