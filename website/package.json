@@ -20,7 +20,7 @@
     "@tailwindcss/vite": "^4.1.14",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
-    "apexcharts": "^5.3.5",
+    "apexcharts": "^5.3.6",
     "asciinema-player": "^3.12.1",
     "astro": "^5.14.4",
     "astro-seo": "^0.8.4",
