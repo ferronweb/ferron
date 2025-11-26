@@ -57,6 +57,9 @@
       "path": "./node_modules/cz-conventional-changelog"
     }
   },
+  "overrides": {
+    "@emmetio/css-parser": "ramya-rao-a/css-parser#vscode"
+  },
   "browserslist": [
     "chrome 64",
     "edge 79",
