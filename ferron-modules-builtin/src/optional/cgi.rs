@@ -100,8 +100,8 @@ impl ModuleLoader for CgiModuleLoader {
 
     if let Some(entries) = get_entries_for_validation!("cgi_interpreter", config, used_properties) {
       for entry in &entries.inner {
-        if entry.values.first().is_some_and(|v| v.is_null())
-          || entry.values.get(1).is_some_and(|v| v.is_null() || v.is_string())
+        if !entry.values.first().is_some_and(|v| v.is_string())
+          || !entry.values.get(1).is_some_and(|v| v.is_null() || v.is_string())
         {
           Err(anyhow::anyhow!("Invalid CGI extension interpreter specification"))?
         }
@@ -173,6 +173,10 @@ impl ModuleHandlers for CgiModuleHandlers {
     error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     let mut cgi_script_exts = Vec::new();
+
+    let indexes = get_entry!("index", config)
+      .map(|e| e.values.iter().filter_map(|v| v.as_str()).collect::<Vec<&str>>())
+      .unwrap_or(vec!["index.php", "index.cgi", "index.html", "index.htm", "index.xhtml"]);
 
     let cgi_script_exts_config = get_entries!("cgi_extension", config);
     if let Some(cgi_script_exts_obtained) = cgi_script_exts_config {
@@ -308,7 +312,6 @@ impl ModuleHandlers for CgiModuleHandlers {
                   }
                 }
               } else if metadata.is_dir() {
-                let indexes = vec!["index.php", "index.cgi"];
                 for index in indexes {
                   let temp_joined_pathbuf = joined_pathbuf.join(index);
                   // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
@@ -345,12 +348,13 @@ impl ModuleHandlers for CgiModuleHandlers {
                           let contained_extension = temp_joined_pathbuf
                             .extension()
                             .map(|a| format!(".{}", a.to_string_lossy()));
-                          if let Some(contained_extension) = contained_extension {
-                            if cgi_script_exts.contains(&(&contained_extension as &str)) {
-                              execute_pathbuf = Some(temp_joined_pathbuf);
-                              break;
-                            }
+                          let is_cgi_script_ext =
+                            contained_extension.is_some_and(|e| cgi_script_exts.contains(&(&e as &str)));
+                          if !is_cgi_script_ext {
+                            break;
                           }
+                          execute_pathbuf = Some(temp_joined_pathbuf);
+                          break;
                         }
                       }
                     }
@@ -501,6 +505,7 @@ impl ModuleHandlers for CgiModuleHandlers {
           wwwroot,
           execute_pathbuf,
           execute_path_info,
+          config.filters.hostname.as_deref(),
           get_value!("server_administrator_email", config).and_then(|v| v.as_str()),
           cgi_interpreters,
           additional_environment_variables,
@@ -527,6 +532,7 @@ async fn execute_cgi_with_environment_variables(
   wwwroot: &Path,
   execute_pathbuf: PathBuf,
   path_info: Option<String>,
+  server_name: Option<&str>,
   server_administrator_email: Option<&str>,
   cgi_interpreters: HashMap<String, Vec<String>>,
   additional_environment_variables: HashMap<String, String>,
@@ -575,14 +581,14 @@ async fn execute_cgi_with_environment_variables(
     "SERVER_ADDR".to_string(),
     socket_data.local_addr.ip().to_canonical().to_string(),
   );
+  environment_variables.insert(
+    "SERVER_NAME".to_string(),
+    server_name
+      .map(|name| name.to_string())
+      .unwrap_or_else(|| socket_data.local_addr.ip().to_canonical().to_string()),
+  );
   if let Some(server_administrator_email) = server_administrator_email {
     environment_variables.insert("SERVER_ADMIN".to_string(), server_administrator_email.to_string());
-  }
-  if let Some(host) = request.headers().get(header::HOST) {
-    environment_variables.insert(
-      "SERVER_NAME".to_string(),
-      String::from_utf8_lossy(host.as_bytes()).to_string(),
-    );
   }
 
   environment_variables.insert("DOCUMENT_ROOT".to_string(), wwwroot.to_string_lossy().to_string());

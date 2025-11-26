@@ -1341,9 +1341,9 @@ async fn request_handler_wrapped(
               Ok(response) => {
                 if log_enabled {
                   if let Some(request_parts) = log_request_parts {
-                    if let Some(logger) = loggers.find_global_logger() {
+                    if let Some(logger) = &logger {
                       log_access(
-                        &logger,
+                        logger,
                         &request_parts,
                         &socket_data,
                         latest_auth_data.as_deref(),
@@ -1378,7 +1378,11 @@ async fn request_handler_wrapped(
                   };
                   if let Some(request_cloned) = request_option {
                     configuration = error_configuration;
-                    handlers_iter = Box::new(executed_handlers.into_iter().chain(handlers_iter));
+                    let mut module_handlers = Vec::with_capacity(configuration.modules.len());
+                    for module in &configuration.modules {
+                      module_handlers.push(module.get_module_handlers());
+                    }
+                    handlers_iter = Box::new(module_handlers.into_iter());
                     executed_handlers = Vec::new();
                     request = request_cloned;
                     if let Some(request_data) = request.extensions_mut().get_mut::<RequestData>() {
@@ -1426,9 +1430,9 @@ async fn request_handler_wrapped(
                 Ok(response) => {
                   if log_enabled {
                     if let Some(request_parts) = log_request_parts {
-                      if let Some(logger) = loggers.find_global_logger() {
+                      if let Some(logger) = &logger {
                         log_access(
-                          &logger,
+                          logger,
                           &request_parts,
                           &socket_data,
                           latest_auth_data.as_deref(),
@@ -1508,9 +1512,9 @@ async fn request_handler_wrapped(
           Ok(response) => {
             if log_enabled {
               if let Some(request_parts) = log_request_parts {
-                if let Some(logger) = loggers.find_global_logger() {
+                if let Some(logger) = &logger {
                   log_access(
-                    &logger,
+                    logger,
                     &request_parts,
                     &socket_data,
                     latest_auth_data.as_deref(),

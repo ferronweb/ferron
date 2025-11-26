@@ -8,6 +8,7 @@ The following modules are built into Ferron and are enabled by default:
 
 - _cache_ - this module enables server response caching.
 - _cgi_ - this module enables the execution of CGI programs.
+- _dcompress_ (Ferron 2.1.0 and newer) - this module enables HTTP compression for dynamic content.
 - _fauth_ - this module enables authentication forwarded to the authentication server.
 - _fcgi_ - this module enables the support for connecting to FastCGI servers.
 - _fproxy_ - this module enables forward proxy functionality.

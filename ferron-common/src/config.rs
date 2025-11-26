@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hasher;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -23,6 +23,8 @@ pub enum ConditionalData {
   IsRegex(String, Regex),
   IsNotRegex(String, Regex),
   IsRego(Arc<regorus::Engine>),
+  SetConstant(String, String),
+  IsLanguage(String),
 }
 
 impl PartialEq for ConditionalData {
@@ -37,6 +39,8 @@ impl PartialEq for ConditionalData {
       (Self::IsRegex(v1, v2), Self::IsRegex(v3, v4)) => v1 == v3 && v2.as_str() == v4.as_str(),
       (Self::IsNotRegex(v1, v2), Self::IsNotRegex(v3, v4)) => v1 == v3 && v2.as_str() == v4.as_str(),
       (Self::IsRego(v1), Self::IsRego(v2)) => v1.get_policies().ok() == v2.get_policies().ok(),
+      (Self::SetConstant(v1, v2), Self::SetConstant(v3, v4)) => v1 == v3 && v2 == v4,
+      (Self::IsLanguage(v1), Self::IsLanguage(v2)) => v1 == v2,
       _ => false,
     }
   }
@@ -56,6 +60,7 @@ impl Ord for ConditionalData {
       (Self::IsRegex(v1, v2), Self::IsRegex(v3, v4)) => v1.cmp(v3).then(v2.as_str().cmp(v4.as_str())),
       (Self::IsNotRegex(v1, v2), Self::IsNotRegex(v3, v4)) => v1.cmp(v3).then(v2.as_str().cmp(v4.as_str())),
       (Self::IsRego(v1), Self::IsRego(v2)) => v1.get_policies().ok().cmp(&v2.get_policies().ok()),
+      (Self::SetConstant(v1, v2), Self::SetConstant(v3, v4)) => v1.cmp(v3).then(v2.cmp(v4)),
       _ => {
         // SAFETY: See https://doc.rust-lang.org/core/mem/fn.discriminant.html
         let discriminant_self = unsafe { *<*const _>::from(self).cast::<u8>() };
@@ -244,6 +249,55 @@ impl Ord for ServerConfigurationFilters {
 impl PartialOrd for ServerConfigurationFilters {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     Some(self.cmp(other))
+  }
+}
+
+impl Display for ServerConfigurationFilters {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    if !self.is_host {
+      write!(f, "\"globals\" block")
+    } else {
+      let mut blocks = Vec::new();
+      if self.ip.is_some() || self.hostname.is_some() || self.port.is_some() {
+        let mut name = String::new();
+        if let Some(hostname) = &self.hostname {
+          name.push_str(hostname);
+          if let Some(ip) = self.ip {
+            name.push_str(&format!("({ip})"));
+          }
+        } else if let Some(ip) = self.ip {
+          name.push_str(&ip.to_string());
+        }
+        if let Some(port) = self.port {
+          name.push_str(&format!(":{port}"));
+        }
+        if !name.is_empty() {
+          blocks.push(format!("\"{name}\" host block",));
+        }
+      }
+      if let Some(condition) = &self.condition {
+        let mut name = String::new();
+        if !condition.location_prefix.is_empty() {
+          name.push_str(&format!("\"{}\" location", condition.location_prefix));
+        }
+        if !condition.conditionals.is_empty() {
+          if !name.is_empty() {
+            name.push_str(" and ");
+          }
+          name.push_str("some conditional blocks");
+        } else {
+          name.push_str(" block");
+        }
+        blocks.push(name);
+      }
+      if let Some(error_handler_status) = &self.error_handler_status {
+        match error_handler_status {
+          ErrorHandlerStatus::Any => blocks.push("\"error_status\" block".to_string()),
+          ErrorHandlerStatus::Status(status) => blocks.push(format!("\"error_status {status}\" block")),
+        }
+      }
+      write!(f, "{}", blocks.join(" -> "))
+    }
   }
 }
 

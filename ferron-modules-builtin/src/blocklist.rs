@@ -31,7 +31,7 @@ impl BlocklistModuleLoader {
   /// Creates a new module loader
   pub fn new() -> Self {
     Self {
-      cache: ModuleCache::new(vec![]),
+      cache: ModuleCache::new(vec!["block", "allow"]),
     }
   }
 }
@@ -40,14 +40,14 @@ impl ModuleLoader for BlocklistModuleLoader {
   fn load_module(
     &mut self,
     config: &ServerConfiguration,
-    global_config: Option<&ServerConfiguration>,
+    _global_config: Option<&ServerConfiguration>,
     _secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
     Ok(
       self
         .cache
-        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |_| {
-          let blocklist_value_vec = global_config.map_or(vec![], |c| get_values!("block", c));
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |config| {
+          let blocklist_value_vec = get_values!("block", config);
           let blocklist = if !blocklist_value_vec.is_empty() {
             let mut blocklist_str_vec = Vec::new();
             for blocked_ip_config in blocklist_value_vec {
@@ -63,7 +63,7 @@ impl ModuleLoader for BlocklistModuleLoader {
             None
           };
 
-          let allowlist_value_vec = global_config.map_or(vec![], |c| get_values!("allow", c));
+          let allowlist_value_vec = get_values!("allow", config);
           let allowlist = if !allowlist_value_vec.is_empty() {
             let mut allowlist_str_vec = Vec::new();
             for allowed_ip_config in allowlist_value_vec {
@@ -95,12 +95,20 @@ impl ModuleLoader for BlocklistModuleLoader {
   ) -> Result<(), Box<dyn Error + Send + Sync>> {
     if let Some(entries) = get_entries_for_validation!("block", config, used_properties) {
       for entry in &entries.inner {
-        for value in &entry.values {
-          if !value.is_string() {
-            Err(anyhow::anyhow!("Invalid blocked IP address"))?
-          } else if let Some(value) = value.as_str() {
-            if value.parse::<IpAddr>().is_err() && value.parse::<IpCidr>().is_err() {
+        if entry.values.first().is_some_and(|v| v.is_null()) {
+          if entry.values.len() != 1 {
+            Err(anyhow::anyhow!(
+              "The `block` configuration property must have exactly one value if the first value is \"#null\""
+            ))?
+          }
+        } else {
+          for value in &entry.values {
+            if !value.is_string() {
               Err(anyhow::anyhow!("Invalid blocked IP address"))?
+            } else if let Some(value) = value.as_str() {
+              if value.parse::<IpAddr>().is_err() && value.parse::<IpCidr>().is_err() {
+                Err(anyhow::anyhow!("Invalid blocked IP address"))?
+              }
             }
           }
         }
@@ -109,12 +117,20 @@ impl ModuleLoader for BlocklistModuleLoader {
 
     if let Some(entries) = get_entries_for_validation!("allow", config, used_properties) {
       for entry in &entries.inner {
-        for value in &entry.values {
-          if !value.is_string() {
-            Err(anyhow::anyhow!("Invalid allowed IP address"))?
-          } else if let Some(value) = value.as_str() {
-            if value.parse::<IpAddr>().is_err() && value.parse::<IpCidr>().is_err() {
+        if entry.values.first().is_some_and(|v| v.is_null()) {
+          if entry.values.len() != 1 {
+            Err(anyhow::anyhow!(
+              "The `allow` configuration property must have exactly one value if the first value is \"#null\""
+            ))?
+          }
+        } else {
+          for value in &entry.values {
+            if !value.is_string() {
               Err(anyhow::anyhow!("Invalid allowed IP address"))?
+            } else if let Some(value) = value.as_str() {
+              if value.parse::<IpAddr>().is_err() && value.parse::<IpCidr>().is_err() {
+                Err(anyhow::anyhow!("Invalid allowed IP address"))?
+              }
             }
           }
         }

@@ -82,6 +82,7 @@ with-conditions.example.com {
 
 snippet "EXAMPLE" {
   // Example snippet configuration
+  // Snippets containing subconditions can also be used in conditions in Ferron 2.1.0 or newer
 }
 
 with-snippet.example.com {
@@ -163,17 +164,13 @@ This configuration reference organizes directives by both **scope** (where they 
 - `tls_ecdh_curves <ecdh_curve: string> [<ecdh_curve: string> ...]`
   - This directive specifies the supported TLS ECDH curves. This directive can be specified multiple times. Default: default ECDH curves for Rustls
 - `tls_client_certificate [tls_client_certificate: bool|string]`
-  - This directive specifies whenever the TLS client certificate verification is enabled. If set to `#true`, the client certificate will be verified against the system certificate store. If set to a string (supported on Ferron UNRELEASED and newer), the client certificate will be verified against the certificate authority in the specified path. Default: `tls_client_certificate #false`
+  - This directive specifies whenever the TLS client certificate verification is enabled. If set to `#true`, the client certificate will be verified against the system certificate store. If set to a string, the client certificate will be verified against the certificate authority in the specified path. Default: `tls_client_certificate #false`
 - `tls_min_version <tls_min_version: string>`
   - This directive specifies the minimum TLS version (TLSv1.2 or TLSv1.3) that the server will accept. Default: `tls_min_version "TLSv1.2"`
 - `tls_max_version <tls_max_version: string>`
   - This directive specifies the maximum TLS version (TLSv1.2 or TLSv1.3) that the server will accept. Default: `tls_max_version "TLSv1.3"`
 - `ocsp_stapling [enable_ocsp_stapling: bool]`
   - This directive specifies whenever OCSP stapling is enabled. Default: `ocsp_stapling #true`
-- `block <blocked_ip: string> [<blocked_ip: string> ...]`
-  - This directive specifies IP addresses to be blocked. This directive can be specified multiple times. Default: none
-- `allow <allowed_ip: string> [<allowed_ip: string> ...]`
-  - This directive specifies IP addresses to be allowed. This directive can be specified multiple times. Default: none
 - `auto_tls_on_demand_ask <auto_tls_on_demand_ask_url: string|null>`
   - This directive specifies the URL to be used for asking whenever to the hostname for automatic TLS on demand is allowed. The server will append the `domain` query parameter with the domain name for the certificate to issue as a value to the URL. It's recommended to configure this option when using automatic TLS on demand to prevent abuse. Default: `auto_tls_on_demand_ask #null`
 - `auto_tls_on_demand_ask_no_verification [auto_tls_on_demand_ask_no_verification: bool]`
@@ -187,8 +184,6 @@ This configuration reference organizes directives by both **scope** (where they 
     tls_ecdh_curves "secp256r1" "secp384r1"
     tls_client_certificate #false
     ocsp_stapling
-    block "192.168.1.100" "10.0.0.5"
-    allow "192.168.1.0/24" "10.0.0.0/8"
     auto_tls_on_demand_ask "https://auth.example.com/check"
     auto_tls_on_demand_ask_no_verification #false
 }
@@ -379,6 +374,10 @@ example.com {
   - This directive specifies the custom status code. This directive can be specified multiple times. The `url` prop specifies the request path for this status code. The `regex` prop specifies the regular expression (like `^/ferron(?:$|[/#?])`) for the custom status code. The `location` prop specifies the destination for the redirect; it supports placeholders like `{path}` which will be replaced with the request path. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whenever the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. The `allowed` prop is a comma-separated list of IP addresses applicable for the status code. The `not_allowed` prop is a comma-separated list of IP addresses not applicable for the status code. The `body` prop specifies the response body to be sent. Default: none
 - `user [username: string] [password_hash: string]`
   - This directive specifies an user with a password hash used for the HTTP basic authentication (it can be either Argon2, PBKDF2, or `scrypt` one). It's recommended to use the `ferron-passwd` tool to generate the password hash. This directive can be specified multiple times. Default: none
+- `block (<blocked_ip: string> [<blocked_ip: string> ...])|<not_specified: null>`
+  - This directive specifies IP addresses and CIDR ranges to be blocked. If set as `block #null`, this directive is ignored. This directive was global-only before Ferron 2.1.0. This directive can be specified multiple times. Default: none
+- `allow (<allowed_ip: string> [<allowed_ip: string> ...])|<not_specified: null>`
+  - This directive specifies IP addresses and CIDR ranges to be allowed. If set as `allow #null`, this directive is ignored. This directive was global-only before Ferron 2.1.0. This directive can be specified multiple times. Default: none
 
 **Configuration example:**
 
@@ -394,6 +393,10 @@ example.com {
     // User definitions for authentication (use `ferron-passwd` to generate password hashes)
     user "admin" "$2b$10$hashedpassword12345"
     user "moderator" "$2b$10$anotherhashedpassword"
+
+    // Limit who can access the site
+    block "192.168.1.100" "10.0.0.5"
+    allow "192.168.1.0/24" "10.0.0.0/8"
 }
 ```
 
@@ -442,6 +445,12 @@ example.com {
   - This directive specifies whenever the directory listings are enabled. Default: `directory_listing #false`
 - `precompressed [enable_precompression: bool]` (_static_ module)
   - This directive specifies whenever serving the precompressed static files is enabled. The precompressed static files would additionally have `.gz` extension for gzip, `.deflate` for Deflate, `.br` for Brotli, or `.zst` for Zstandard. Default: `precompressed #false`
+- `mime_type <file_extension: string> <mime_type: string>` (_static_ module; Ferron 2.1.0 or newer)
+  - This directive specifies an additional MIME type corresponding to a file extension (like `.html`) for static files. Default: none
+- `index <index_file: string> [<another_index_file: string> ...]` (_static_ module; Ferron 2.1.0 or newer)
+  - This directive specifies the index files to be used when a directory is requested. Default: `index "index.html" "index.htm" "index.html"` (static file serving), `index "index.php" "index.cgi" "index.html" "index.htm" "index.html"` (CGI, FastCGI)
+- `dynamic_compressed [enable_dynamic_content_compression: bool]` (_dcompress_ module; Ferron 2.1.0 or newer)
+  - This directive specifies whenever the HTTP compression for dynamic content is enabled. Default: `dynamic_compressed #false`
 
 **Configuration example:**
 
@@ -484,7 +493,7 @@ example.com {
 ### Reverse proxy & load balancing
 
 - `proxy <proxy_to: string|null> [unix=<unix_socket_path: string>]` (_rproxy_ module)
-  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported via the `unix` prop set to the path to the socket, supported only on Unix and Unix-like systems. This directive can be specified multiple times. Default: none
+  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported via the `unix` prop set to the path to the socket (and the main value is set to the URL of the website), supported only on Unix and Unix-like systems. This directive can be specified multiple times. Default: none
 - `lb_health_check [enable_lb_health_check: bool]` (_rproxy_ module)
   - This directive specifies whenever the load balancer passive health check is enabled. Default: `lb_health_check #false`
 - `lb_health_check_max_fails <max_fails: integer>` (_rproxy_ module)
@@ -502,7 +511,7 @@ example.com {
 - `proxy_request_header_replace <header_name: string> <header_value: string>` (_rproxy_ module)
   - This directive specifies a header to be added to HTTP requests sent by the reverse proxy, potentially replacing existing headers. The header values supports placeholders like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
 - `proxy_http2 [enable_proxy_http2: bool]` (_rproxy_ module)
-  - This directive specifies whenever the reverse proxy can use HTTP/2 protocol when connecting to backend servers. Default: `proxy_http2 #false`
+  - This directive specifies whenever the reverse proxy can use HTTP/2 protocol when connecting to backend servers. This directive would have effect only if the backend server supports HTTP/2 and is connected via HTTPS. Default: `proxy_http2 #false`
 - `lb_retry_connection [enable_lb_retry_connection: bool]` (_rproxy_ module)
   - This directive specifies whenever the load balancer should retry connections to another backend server, in case of TCP connection or TLS handshake failure. Default: `lb_retry_connection #true`
 - `lb_algorithm <lb_algorithm: string>` (_rproxy_ module)
@@ -511,6 +520,10 @@ example.com {
   - This directive specifies the window size (in milliseconds) for load balancer health checks. Default: `lb_health_check_window 5000`
 - `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module)
   - This directive specifies the maximum number of idle connections to backend servers to keep alive. Default: `proxy_keepalive_idle_conns 48`
+- `proxy_http2_only [enable_proxy_http2_only: bool]` (_rproxy_ module; Ferron 2.1.0 or newer)
+  - This directive specifies whenever the reverse proxy uses HTTP/2 protocol (without HTTP/1.1 fallback) when connecting to backend servers. When the backend server is connected via HTTPS, the reverse proxy negotiates HTTP/2 during the TLS handshake. When the backend server is connected via HTTP, the reverse proxy uses HTTP/2 with prior knowledge. This directive can be used when proxying gRPC requests. Default: `proxy_http2_only #false`
+- `proxy_proxy_header <proxy_version_version: string|null>` (_rproxy_ module; Ferron 2.1.0 or newer)
+  - This directive specifies the version of the PROXY protocol header to be sent to backend servers when acting as a reverse proxy. Supported versions are `"v1"` (PROXY protocol version 1) and `"v2"` (PROXY protocol version 2). If specified with `#null` value, no PROXY protocol header is sent. Default: `proxy_proxy_header #null`
 
 **Configuration example:**
 
@@ -716,6 +729,10 @@ Below is the list of supported subconditions:
   - This subcondition checks if the value does not match the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
 - `is_rego <rego_policy: string>`
   - This subcondition evaluates a Rego policy.
+- `set_constant <key: string> <value: string>` (Ferron 2.1.0 or newer)
+  - This subcondition sets a constant value.
+- `is_language <language: string>` (Ferron 2.1.0 or newer)
+  - This subcondition checks if the language is the preferred language specified in the `Accept-Language` header. This subcondition uses `LANGUAGES` constant, which is a comma-separated list of preferred language codes (such as `en-US` or `fr-FR`).
 
 ## Rego subconditions
 
@@ -733,6 +750,7 @@ Inputs for Rego-based subconditions (`input`) are as follows:
 - `input.socket_data.server_ip` (string) - the server's IP address.
 - `input.socket_data.server_port` (number) - the server's port.
 - `input.socket_data.encrypted` (boolean) - whether the connection is encrypted.
+- `input.constants` (array<string, string>; Ferron 2.1.0 or newer) - the constants set by `set_constant` subconditions.
 
 You can read more about Rego in [Open Policy Agent documentation](https://www.openpolicyagent.org/docs/policy-language).
 
@@ -799,6 +817,52 @@ Ferron 2.0.0 and newer supports the following placeholders for access logs:
 - `{timestamp}` - the formatted timestamp of the entry
 - `{status_code}` - the HTTP status code of the response
 - `{content_length}` - the content length of the response (`-`, if not available)
+
+## Language-specific content configuration example
+
+Below is an example of Ferron configuration involving conditionals to serve language-specific content:
+
+```kdl
+// Snippet for common language settings
+snippet "LANG_COMMON" {
+    set_constant "LANGUAGES" "en,de,pl"
+}
+
+example.com {
+    // Generic response
+    status 200 body="lang: Unknown"
+
+    condition "LANG_PL" {
+        use "LANG_COMMON"
+        is_language "pl"
+    }
+
+    condition "LANG_DE" {
+        use "LANG_COMMON"
+        is_language "de"
+    }
+
+    condition "LANG_EN" {
+        use "LANG_COMMON"
+        is_language "en"
+    }
+
+    if "LANG_PL" {
+        // Polish language
+        status 200 body="lang: Polski"
+    }
+
+    if "LANG_DE" {
+        // German language
+        status 200 body="lang: Deutsch"
+    }
+
+    if "LANG_EN" {
+        // English language
+        status 200 body="lang: English"
+    }
+}
+```
 
 ## Location block example
 

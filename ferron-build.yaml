@@ -27,6 +27,9 @@ modules:
     cargo_feature: cache
     loader: CacheModuleLoader
   - builtin: true
+    cargo_feature: dcompress
+    loader: DynamicCompressionModuleLoader
+  - builtin: true
     cargo_feature: replace
     loader: ReplaceModuleLoader
   - builtin: true

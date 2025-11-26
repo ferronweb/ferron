@@ -4,6 +4,26 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.1.0
+
+**Released in November 26, 2025**
+
+- Added a language matching subcondition (based on the `Accept-Language` header).
+- Added support for custom MIME types for static file serving.
+- Added support for dynamic content compression.
+- Added support for HTTP/2-only (and gRPC over plain text) backend servers.
+- Added support for sending PROXY protocol headers to backend servers when acting as a reverse proxy.
+- Added support for setting constants inside conditions.
+- Added support for specifying custom directory index files.
+- Added support for using snippets inside conditions.
+- Configuration validation and module loading error messages now also report in what block did the error occur.
+- Corrected the configuration validation for `cgi_interpreter` directive.
+- Fixed access logs wrongly written to global log files instead of host-specific ones.
+- Fixed bug preventing some configuration properties in `error_config` blocks from being applied.
+- The `block` and `allow` directives (used for access control) are no longer global-only.
+- The server now disables HTTP/2 for backend servers when `proxy_http2` directive is used, and the request contains `Upgrade` header.
+- The server now removes `Forwarded` header before sending requests to backend servers as a reverse proxy.
+
 ## Ferron 2.0.1
 
 **Released in November 4, 2025**

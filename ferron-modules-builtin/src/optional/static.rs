@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt::Write;
@@ -8,7 +8,7 @@ use std::fs::ReadDir;
 use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use async_compression::brotli::EncoderParams;
@@ -40,9 +40,138 @@ use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, 
 #[cfg(feature = "runtime-monoio")]
 use ferron_common::util::MonoioFileStream;
 use ferron_common::util::{anti_xss, sizify, ModuleCache, TtlCache};
-use ferron_common::{format_page, get_entries_for_validation, get_entry, get_value};
+use ferron_common::{format_page, get_entries, get_entries_for_validation, get_entry, get_value};
 
 const COMPRESSED_STREAM_READER_BUFFER_SIZE: usize = 16384;
+
+/// A hard-coded list of non-compressible file extensions
+static NON_COMPRESSIBLE_FILE_EXTENSIONS: LazyLock<BTreeSet<&'static str>> = LazyLock::new(|| {
+  BTreeSet::from_iter(vec![
+    "7z",
+    "air",
+    "amlx",
+    "apk",
+    "apng",
+    "appinstaller",
+    "appx",
+    "appxbundle",
+    "arj",
+    "au",
+    "avif",
+    "bdoc",
+    "boz",
+    "br",
+    "bz",
+    "bz2",
+    "caf",
+    "class",
+    "doc",
+    "docx",
+    "dot",
+    "dvi",
+    "ear",
+    "epub",
+    "flv",
+    "gdoc",
+    "gif",
+    "gsheet",
+    "gslides",
+    "gz",
+    "iges",
+    "igs",
+    "jar",
+    "jnlp",
+    "jp2",
+    "jpe",
+    "jpeg",
+    "jpf",
+    "jpg",
+    "jpg2",
+    "jpgm",
+    "jpm",
+    "jpx",
+    "kmz",
+    "latex",
+    "m1v",
+    "m2a",
+    "m2v",
+    "m3a",
+    "m4a",
+    "mesh",
+    "mk3d",
+    "mks",
+    "mkv",
+    "mov",
+    "mp2",
+    "mp2a",
+    "mp3",
+    "mp4",
+    "mp4a",
+    "mp4v",
+    "mpe",
+    "mpeg",
+    "mpg",
+    "mpg4",
+    "mpga",
+    "msg",
+    "msh",
+    "msix",
+    "msixbundle",
+    "odg",
+    "odp",
+    "ods",
+    "odt",
+    "oga",
+    "ogg",
+    "ogv",
+    "ogx",
+    "opus",
+    "p12",
+    "pdf",
+    "pfx",
+    "pgp",
+    "pkpass",
+    "png",
+    "pot",
+    "pps",
+    "ppt",
+    "pptx",
+    "qt",
+    "ser",
+    "silo",
+    "sit",
+    "snd",
+    "spx",
+    "stpxz",
+    "stpz",
+    "swf",
+    "tif",
+    "tiff",
+    "ubj",
+    "usdz",
+    "vbox-extpack",
+    "vrml",
+    "war",
+    "wav",
+    "weba",
+    "webm",
+    "wmv",
+    "wrl",
+    "x3dbz",
+    "x3dvz",
+    "xla",
+    "xlc",
+    "xlm",
+    "xls",
+    "xlsx",
+    "xlt",
+    "xlw",
+    "xpi",
+    "xps",
+    "zip",
+    "zst",
+  ])
+});
 
 /// Generates a directory listing
 pub async fn generate_directory_listing(
@@ -362,6 +491,28 @@ impl ModuleLoader for StaticFileServingModuleLoader {
       }
     };
 
+    if let Some(entries) = get_entries_for_validation!("mime_type", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 2 {
+          Err(anyhow::anyhow!(
+            "The `mime_type` configuration property must have exactly two values"
+          ))?
+        } else if !entry.values[0].is_string() {
+          Err(anyhow::anyhow!("The file extension must be a string"))?
+        } else if !entry.values[1].is_string() {
+          Err(anyhow::anyhow!("The MIME type must be a string"))?
+        }
+      }
+    };
+
+    if let Some(entries) = get_entries_for_validation!("index", config, used_properties) {
+      for entry in &entries.inner {
+        if !entry.values.iter().all(|v| v.is_string()) {
+          Err(anyhow::anyhow!("An index file name must be a string"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -466,6 +617,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
         .and_then(|d| d.original_url.as_ref())
         .map_or(request_path, |u| u.path());
 
+      // Get the configured index files
+      let indexes = get_entry!("index", config)
+        .map(|e| e.values.iter().filter_map(|v| v.as_str()).collect::<Vec<&str>>())
+        .unwrap_or(vec!["index.html", "index.htm", "index.xhtml"]);
+
       // Create a cache key that includes IP and hostname filters if present
       let cache_key = format!(
         "{}{}{}",
@@ -538,7 +694,6 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
           if !joined_pathbuf_cached {
             if metadata.is_dir() {
               // Try common index file names
-              let indexes = vec!["index.html", "index.htm", "index.xhtml"];
               for index in indexes {
                 let temp_joined_pathbuf = joined_pathbuf.join(index);
 
@@ -610,136 +765,10 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true)
             {
-              // A hard-coded list of non-compressible file extension
-              let non_compressible_file_extensions = vec![
-                "7z",
-                "air",
-                "amlx",
-                "apk",
-                "apng",
-                "appinstaller",
-                "appx",
-                "appxbundle",
-                "arj",
-                "au",
-                "avif",
-                "bdoc",
-                "boz",
-                "br",
-                "bz",
-                "bz2",
-                "caf",
-                "class",
-                "doc",
-                "docx",
-                "dot",
-                "dvi",
-                "ear",
-                "epub",
-                "flv",
-                "gdoc",
-                "gif",
-                "gsheet",
-                "gslides",
-                "gz",
-                "iges",
-                "igs",
-                "jar",
-                "jnlp",
-                "jp2",
-                "jpe",
-                "jpeg",
-                "jpf",
-                "jpg",
-                "jpg2",
-                "jpgm",
-                "jpm",
-                "jpx",
-                "kmz",
-                "latex",
-                "m1v",
-                "m2a",
-                "m2v",
-                "m3a",
-                "m4a",
-                "mesh",
-                "mk3d",
-                "mks",
-                "mkv",
-                "mov",
-                "mp2",
-                "mp2a",
-                "mp3",
-                "mp4",
-                "mp4a",
-                "mp4v",
-                "mpe",
-                "mpeg",
-                "mpg",
-                "mpg4",
-                "mpga",
-                "msg",
-                "msh",
-                "msix",
-                "msixbundle",
-                "odg",
-                "odp",
-                "ods",
-                "odt",
-                "oga",
-                "ogg",
-                "ogv",
-                "ogx",
-                "opus",
-                "p12",
-                "pdf",
-                "pfx",
-                "pgp",
-                "pkpass",
-                "png",
-                "pot",
-                "pps",
-                "ppt",
-                "pptx",
-                "qt",
-                "ser",
-                "silo",
-                "sit",
-                "snd",
-                "spx",
-                "stpxz",
-                "stpz",
-                "swf",
-                "tif",
-                "tiff",
-                "ubj",
-                "usdz",
-                "vbox-extpack",
-                "vrml",
-                "war",
-                "wav",
-                "weba",
-                "webm",
-                "wmv",
-                "wrl",
-                "x3dbz",
-                "x3dvz",
-                "xla",
-                "xlc",
-                "xlm",
-                "xls",
-                "xlsx",
-                "xlt",
-                "xlw",
-                "xpi",
-                "xps",
-                "zip",
-                "zst",
-              ];
               let file_extension = joined_pathbuf
                 .extension()
                 .map_or_else(|| "".to_string(), |ext| ext.to_string_lossy().to_string());
-              let file_extension_compressible = !non_compressible_file_extensions.contains(&(&file_extension as &str));
+              let file_extension_compressible = !NON_COMPRESSIBLE_FILE_EXTENSIONS.contains(&(&file_extension as &str));
 
               // Only compress files larger than 256 bytes and with compressible extensions
               if metadata.len() > 256 && file_extension_compressible {
@@ -897,10 +926,31 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               };
             }
 
+            let custom_content_type_option = {
+              let mut custom_content_type = None;
+              if let Some(mime_types_entries) = get_entries!("mime_type", config) {
+                if let Some(extension) = joined_pathbuf.extension().map(|a| format!(".{}", a.to_string_lossy())) {
+                  for entry in mime_types_entries.inner.iter() {
+                    if let Some(key) = entry.values.first().and_then(|v| v.as_str()) {
+                      if key == extension {
+                        if let Some(value) = entry.values.get(1).and_then(|v| v.as_str()) {
+                          custom_content_type = Some(value.to_string());
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              custom_content_type
+            };
+
             // Determine the content type based on file extension
-            let content_type_option = new_mime_guess::from_path(&joined_pathbuf)
-              .first()
-              .map(|mime_type| mime_type.to_string());
+            let content_type_option = custom_content_type_option.or_else(|| {
+              new_mime_guess::from_path(&joined_pathbuf)
+                .first()
+                .map(|mime_type| mime_type.to_string())
+            });
 
             // Handle Range requests for partial content
             let range_header = match request.headers().get(header::RANGE) {
@@ -1078,13 +1128,22 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
                 // Check for browsers with known compression bugs
                 // Some web browsers have broken HTTP compression handling
-                let is_netscape_4_broken_html_compression = user_agent.starts_with("Mozilla/4.");
-                let is_netscape_4_broken_compression = match user_agent.strip_prefix("Mozilla/4.") {
-                  Some(stripped_user_agent) => {
-                    matches!(stripped_user_agent.chars().nth(0), Some('6') | Some('7') | Some('8'))
-                  }
-                  None => false,
-                };
+                let (is_netscape_4_broken_html_compression, is_netscape_4_broken_compression) =
+                  match user_agent.strip_prefix("Mozilla/4.") {
+                    Some(stripped_user_agent) => {
+                      if user_agent.contains(" MSIE ") {
+                        // Internet Explorer "masquerading" as Netscape 4.x
+                        (false, false)
+                      } else {
+                        (
+                          true,
+                          matches!(stripped_user_agent.chars().nth(0), Some('0'))
+                            && matches!(stripped_user_agent.chars().nth(1), Some('6') | Some('7') | Some('8')),
+                        )
+                      }
+                    }
+                    None => (false, false),
+                  };
                 let is_w3m_broken_html_compression = user_agent.starts_with("w3m/");
                 if !(content_type_option == Some("text/html".to_string())
                   && (is_netscape_4_broken_html_compression || is_w3m_broken_html_compression))

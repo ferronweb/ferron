@@ -1,6 +1,6 @@
 [package]
 name = "ferron-load-modules"
-version = "2.0.1"
+version = "2.1.0"
 edition = "2021"
 
 [dependencies]
@@ -8,6 +8,7 @@ ferron-common = { workspace = true }
 ferron-modules-builtin = { workspace = true, features = [
     "cache",
     "cgi",
+    "dcompress",
     "fauth",
     "fcgi",
     "fproxy",

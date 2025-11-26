@@ -243,6 +243,19 @@ else
     TEST_FAILED=1
 fi
 
+TEST_RESULTS="$(curl -fsSL http://ferron/)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="$(cat /var/www/ferron/basic.txt)"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "Static file serving with custom index file test passed!"
+else
+    echo "Static file serving with custom index file test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
 if [ "$TEST_FAILED" -eq 1 ]; then
     exit 1
 fi
