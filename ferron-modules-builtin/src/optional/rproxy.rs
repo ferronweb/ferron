@@ -28,11 +28,10 @@ use monoio::net::TcpStream;
 use monoio::net::UnixStream;
 #[cfg(feature = "runtime-monoio")]
 use monoio_compat::hyper::{MonoioExecutor, MonoioIo};
-use monoio_compat::AsyncWriteExt;
 use rustls::client::WebPkiServerVerifier;
 use rustls_pki_types::ServerName;
 use rustls_platform_verifier::BuilderVerifierExt;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
 #[cfg(all(feature = "runtime-tokio", unix))]
