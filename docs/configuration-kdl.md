@@ -82,7 +82,7 @@ with-conditions.example.com {
 
 snippet "EXAMPLE" {
   // Example snippet configuration
-  // Snippets containing subconditions can also be used in conditions in Ferron UNRELEASED or newer
+  // Snippets containing subconditions can also be used in conditions in Ferron 2.1.0 or newer
 }
 
 with-snippet.example.com {
@@ -375,9 +375,9 @@ example.com {
 - `user [username: string] [password_hash: string]`
   - This directive specifies an user with a password hash used for the HTTP basic authentication (it can be either Argon2, PBKDF2, or `scrypt` one). It's recommended to use the `ferron-passwd` tool to generate the password hash. This directive can be specified multiple times. Default: none
 - `block (<blocked_ip: string> [<blocked_ip: string> ...])|<not_specified: null>`
-  - This directive specifies IP addresses and CIDR ranges to be blocked. If set as `block #null`, this directive is ignored. This directive was global-only before Ferron UNRELEASED. This directive can be specified multiple times. Default: none
+  - This directive specifies IP addresses and CIDR ranges to be blocked. If set as `block #null`, this directive is ignored. This directive was global-only before Ferron 2.1.0. This directive can be specified multiple times. Default: none
 - `allow (<allowed_ip: string> [<allowed_ip: string> ...])|<not_specified: null>`
-  - This directive specifies IP addresses and CIDR ranges to be allowed. If set as `allow #null`, this directive is ignored. This directive was global-only before Ferron UNRELEASED. This directive can be specified multiple times. Default: none
+  - This directive specifies IP addresses and CIDR ranges to be allowed. If set as `allow #null`, this directive is ignored. This directive was global-only before Ferron 2.1.0. This directive can be specified multiple times. Default: none
 
 **Configuration example:**
 
@@ -445,11 +445,11 @@ example.com {
   - This directive specifies whenever the directory listings are enabled. Default: `directory_listing #false`
 - `precompressed [enable_precompression: bool]` (_static_ module)
   - This directive specifies whenever serving the precompressed static files is enabled. The precompressed static files would additionally have `.gz` extension for gzip, `.deflate` for Deflate, `.br` for Brotli, or `.zst` for Zstandard. Default: `precompressed #false`
-- `mime_type <file_extension: string> <mime_type: string>` (_static_ module; Ferron UNRELEASED or newer)
+- `mime_type <file_extension: string> <mime_type: string>` (_static_ module; Ferron 2.1.0 or newer)
   - This directive specifies an additional MIME type corresponding to a file extension (like `.html`) for static files. Default: none
-- `index <index_file: string> [<another_index_file: string> ...]` (_static_ module; Ferron UNRELEASED or newer)
+- `index <index_file: string> [<another_index_file: string> ...]` (_static_ module; Ferron 2.1.0 or newer)
   - This directive specifies the index files to be used when a directory is requested. Default: `index "index.html" "index.htm" "index.html"` (static file serving), `index "index.php" "index.cgi" "index.html" "index.htm" "index.html"` (CGI, FastCGI)
-- `dynamic_compressed [enable_dynamic_content_compression: bool]` (_dcompress_ module; Ferron UNRELEASED or newer)
+- `dynamic_compressed [enable_dynamic_content_compression: bool]` (_dcompress_ module; Ferron 2.1.0 or newer)
   - This directive specifies whenever the HTTP compression for dynamic content is enabled. Default: `dynamic_compressed #false`
 
 **Configuration example:**
@@ -520,9 +520,9 @@ example.com {
   - This directive specifies the window size (in milliseconds) for load balancer health checks. Default: `lb_health_check_window 5000`
 - `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module)
   - This directive specifies the maximum number of idle connections to backend servers to keep alive. Default: `proxy_keepalive_idle_conns 48`
-- `proxy_http2_only [enable_proxy_http2_only: bool]` (_rproxy_ module; Ferron UNRELEASED or newer)
+- `proxy_http2_only [enable_proxy_http2_only: bool]` (_rproxy_ module; Ferron 2.1.0 or newer)
   - This directive specifies whenever the reverse proxy uses HTTP/2 protocol (without HTTP/1.1 fallback) when connecting to backend servers. When the backend server is connected via HTTPS, the reverse proxy negotiates HTTP/2 during the TLS handshake. When the backend server is connected via HTTP, the reverse proxy uses HTTP/2 with prior knowledge. This directive can be used when proxying gRPC requests. Default: `proxy_http2_only #false`
-- `proxy_proxy_header <proxy_version_version: string|null>` (_rproxy_ module; Ferron UNRELEASED or newer)
+- `proxy_proxy_header <proxy_version_version: string|null>` (_rproxy_ module; Ferron 2.1.0 or newer)
   - This directive specifies the version of the PROXY protocol header to be sent to backend servers when acting as a reverse proxy. Supported versions are `"v1"` (PROXY protocol version 1) and `"v2"` (PROXY protocol version 2). If specified with `#null` value, no PROXY protocol header is sent. Default: `proxy_proxy_header #null`
 
 **Configuration example:**
@@ -729,9 +729,9 @@ Below is the list of supported subconditions:
   - This subcondition checks if the value does not match the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
 - `is_rego <rego_policy: string>`
   - This subcondition evaluates a Rego policy.
-- `set_constant <key: string> <value: string>` (Ferron UNRELEASED or newer)
+- `set_constant <key: string> <value: string>` (Ferron 2.1.0 or newer)
   - This subcondition sets a constant value.
-- `is_language <language: string>` (Ferron UNRELEASED or newer)
+- `is_language <language: string>` (Ferron 2.1.0 or newer)
   - This subcondition checks if the language is the preferred language specified in the `Accept-Language` header. This subcondition uses `LANGUAGES` constant, which is a comma-separated list of preferred language codes (such as `en-US` or `fr-FR`).
 
 ## Rego subconditions
@@ -750,7 +750,7 @@ Inputs for Rego-based subconditions (`input`) are as follows:
 - `input.socket_data.server_ip` (string) - the server's IP address.
 - `input.socket_data.server_port` (number) - the server's port.
 - `input.socket_data.encrypted` (boolean) - whether the connection is encrypted.
-- `input.constants` (array<string, string>; Ferron UNRELEASED or newer) - the constants set by `set_constant` subconditions.
+- `input.constants` (array<string, string>; Ferron 2.1.0 or newer) - the constants set by `set_constant` subconditions.
 
 You can read more about Rego in [Open Policy Agent documentation](https://www.openpolicyagent.org/docs/policy-language).
 
