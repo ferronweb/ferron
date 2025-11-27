@@ -130,7 +130,10 @@ impl<T> Default for ModuleCache<T> {
 
 #[cfg(test)]
 mod test {
-  use crate::config::{ServerConfigurationEntry, ServerConfigurationFilters, ServerConfigurationValue};
+  use crate::{
+    config::{ServerConfigurationEntry, ServerConfigurationFilters, ServerConfigurationValue},
+    observability::ObservabilityBackendChannels,
+  };
 
   use super::*;
 
@@ -161,6 +164,7 @@ mod test {
         error_handler_status: None,
       },
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let mut config2_entries = HashMap::new();
@@ -193,6 +197,7 @@ mod test {
         error_handler_status: None,
       },
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     assert_eq!(
@@ -238,6 +243,7 @@ mod test {
         error_handler_status: None,
       },
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let mut config2_entries = HashMap::new();
@@ -270,6 +276,7 @@ mod test {
         error_handler_status: None,
       },
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     // Should initialize a module
@@ -304,6 +311,7 @@ mod test {
         error_handler_status: None,
       },
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     assert!(cache.is_empty());

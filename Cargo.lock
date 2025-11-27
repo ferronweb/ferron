@@ -1561,6 +1561,7 @@ dependencies = [
  "ferron-common",
  "ferron-dns-builtin",
  "ferron-modules-builtin",
+ "ferron-observability-builtin",
  "shiba",
  "toml 0.9.8",
  "yaml-rust2",
@@ -1612,6 +1613,18 @@ dependencies = [
  "tokio-util",
  "urlencoding",
  "webpki-roots 1.0.4",
+]
+
+[[package]]
+name = "ferron-observability-builtin"
+version = "2.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "chrono",
+ "ferron-common",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]

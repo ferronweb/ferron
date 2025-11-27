@@ -32,6 +32,7 @@ use std::time::Instant;
 use async_channel::{Receiver, Sender};
 #[cfg(feature = "runtime-monoio")]
 use async_io::Async;
+use ferron_common::logging::LogMessage;
 #[cfg(feature = "runtime-monoio")]
 use pin_project_lite::pin_project;
 use quinn::crypto::rustls::QuicServerConfig;
@@ -41,7 +42,6 @@ use rustls::ServerConfig;
 use tokio_util::sync::CancellationToken;
 
 use crate::listener_handler_communication::{Connection, ConnectionData};
-use crate::logging::LogMessage;
 
 #[cfg(feature = "runtime-monoio")]
 pin_project_lite::pin_project! {

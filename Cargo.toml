@@ -7,7 +7,7 @@ members = [
     "ferron-modules-builtin",
     "ferron-passwd",
     "ferron-yaml2kdl-core",
-    "ferron-yaml2kdl", "ferron-precompress",
+    "ferron-yaml2kdl", "ferron-precompress", "ferron-observability-builtin",
 ]
 exclude = ["build-prepare", "dockertest"]
 resolver = "2"
@@ -21,6 +21,7 @@ ferron-common = { path = "./ferron-common", default-features = false }
 ferron-dns-builtin = { path = "./ferron-dns-builtin", default-features = false }
 ferron-load-modules = { path = "./ferron-load-modules", default-features = false }
 ferron-modules-builtin = { path = "./ferron-modules-builtin", default-features = false }
+ferron-observability-builtin = { path = "./ferron-observability-builtin", default-features = false }
 
 [patch.crates-io]
 monoio = { git = "https://github.com/DorianNiemiecSVRJS/monoio.git" }                                           # This is needed for the web server to be able to accept more than one connection on Windows, and to be able to be compiled correctly on FreeBSD

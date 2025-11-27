@@ -25,6 +25,9 @@ ferron-dns-builtin = { workspace = true, features = [
     "rfc2136",
     "route53",
 ] }
+ferron-observability-builtin = { workspace = true, features = [
+    "logfile",
+] }
 anyhow = "1.0.98"
 
 [dev-dependencies]

@@ -34,13 +34,23 @@ fn main() {
     } else {
       vec![]
     };
+  let ferron_observability_builtin_features =
+    if let Some(features) = cargo_toml["dependencies"]["ferron-observability-builtin"]["features"].as_array() {
+      features
+        .iter()
+        .filter_map(|feature| feature.as_str())
+        .collect::<Vec<&str>>()
+    } else {
+      vec![]
+    };
 
   let mut modules_block_inside = String::new();
   let mut dns_block_inside = String::new();
+  let mut observability_block_inside = String::new();
 
   ferron_build_yaml["modules"]
     .as_vec()
-    .unwrap()
+    .unwrap_or(&vec![])
     .iter()
     .for_each(|module| {
       let is_builtin = module["builtin"].as_bool().unwrap_or(false);
@@ -60,7 +70,8 @@ fn main() {
       }
     });
 
-  ferron_build_yaml["dns"].as_vec().unwrap().iter().for_each(|module| {
+  ferron_build_yaml["dns"].as_vec()
+      .unwrap_or(&vec![]).iter().for_each(|module| {
     let is_builtin = module["builtin"].as_bool().unwrap_or(false);
     if is_builtin
       && module["cargo_feature"]
@@ -80,11 +91,41 @@ fn main() {
     }
   });
 
+  ferron_build_yaml["observability"]
+    .as_vec()
+    .unwrap_or(&vec![])
+    .iter()
+    .for_each(|module| {
+      let is_builtin = module["builtin"].as_bool().unwrap_or(false);
+      if is_builtin
+        && module["cargo_feature"]
+          .as_str()
+          .is_none_or(|f| ferron_observability_builtin_features.contains(&f))
+      {
+        let observability_backend_loader_name = module["loader"].as_str().unwrap();
+        let observability_backend_loader =
+          format!("ferron_observability_builtin::{observability_backend_loader_name}::new()");
+        observability_block_inside.push_str(&format!(
+          "register_observability_backend_loader!({observability_backend_loader});\n"
+        ));
+      } else {
+        println!(
+          "cargo:warning=Observability backend with \"{}\" loader is not built-in",
+          module["loader"].as_str().unwrap()
+        );
+      }
+    });
+
   let out_dir = env::var("OUT_DIR").unwrap();
+
   let dest_path = Path::new(&out_dir).join("register_module_loaders.rs");
   let mut f = File::create(&dest_path).unwrap();
-
   f.write_all(format!("{{{modules_block_inside}}}").as_bytes()).unwrap();
+
+  let dest_path = Path::new(&out_dir).join("register_observability_backend_loaders.rs");
+  let mut f = File::create(&dest_path).unwrap();
+  f.write_all(format!("{{{observability_block_inside}}}").as_bytes())
+    .unwrap();
 
   let dest_path = Path::new(&out_dir).join("match_dns_providers.rs");
   let mut f = File::create(&dest_path).unwrap();

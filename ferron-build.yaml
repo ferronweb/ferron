@@ -87,3 +87,8 @@ dns:
   #   id: mock
   #   crate: ferron-dns-mock
   #   provider: MockDnsProvider
+
+observability:
+  - builtin: true
+    cargo_feature: logfile
+    loader: LogFileObservabilityBackendLoader

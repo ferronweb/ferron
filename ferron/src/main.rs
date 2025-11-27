@@ -4,7 +4,6 @@ mod handler;
 mod listener_handler_communication;
 mod listener_quic;
 mod listener_tcp;
-mod logging;
 mod request_handler;
 mod runtime;
 mod tls_util;
@@ -21,20 +20,19 @@ use std::time::Duration;
 
 use async_channel::{Receiver, Sender};
 use base64::Engine;
-use chrono::{DateTime, Local};
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use config::adapters::ConfigurationAdapter;
 use config::processing::{load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration};
 use config::ServerConfigurations;
+use ferron_common::logging::LogMessage;
 use ferron_common::{get_entry, get_value, get_values};
-use ferron_load_modules::{get_dns_provider, obtain_module_loaders};
+use ferron_load_modules::{get_dns_provider, obtain_module_loaders, obtain_observability_backend_loaders};
 use handler::create_http_handler;
 use human_panic::{setup_panic, Metadata};
 use instant_acme::{ChallengeType, ExternalAccountKey, LetsEncrypt};
 use listener_handler_communication::ConnectionData;
 use listener_quic::create_quic_listener;
 use listener_tcp::create_tcp_listener;
-use logging::LogMessage;
 use mimalloc::MiMalloc;
 use rustls::client::WebPkiServerVerifier;
 use rustls::crypto::aws_lc_rs::cipher_suite::*;
@@ -48,7 +46,6 @@ use rustls_native_certs::load_native_certs;
 use rustls_platform_verifier::BuilderVerifierExt;
 use shadow_rs::shadow;
 use tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
-use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio_util::sync::CancellationToken;
 use xxhash_rust::xxh3::xxh3_128;
 
@@ -57,7 +54,6 @@ use crate::acme::{
   provision_certificate, AcmeCache, AcmeConfig, AcmeOnDemandConfig, AcmeResolver, TlsAlpn01Resolver,
   ACME_TLS_ALPN_NAME,
 };
-use crate::logging::{LoggerFilter, LoggersBuilder};
 use crate::util::{is_localhost, match_hostname, NoServerVerifier};
 
 // Set the global allocator to use mimalloc for performance optimization
@@ -74,9 +70,9 @@ static TCP_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, CancellationToken>>
 #[allow(clippy::type_complexity)]
 static QUIC_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, (CancellationToken, Sender<Arc<ServerConfig>>)>>>> =
   LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
-static LOGGER_BUILDER: LazyLock<Arc<Mutex<LoggersBuilder>>> =
-  LazyLock::new(|| Arc::new(Mutex::new(LoggersBuilder::new())));
 static URING_ENABLED: LazyLock<Arc<Mutex<bool>>> = LazyLock::new(|| Arc::new(Mutex::new(true)));
+static LISTENER_LOGGING_CHANNEL: LazyLock<Arc<(Sender<LogMessage>, Receiver<LogMessage>)>> =
+  LazyLock::new(|| Arc::new(async_channel::unbounded()));
 
 /// Handles shutdown signals (SIGHUP and CTRL+C) and returns whether to continue running
 fn handle_shutdown_signals(runtime: &tokio::runtime::Runtime) -> bool {
@@ -118,105 +114,6 @@ fn handle_shutdown_signals(runtime: &tokio::runtime::Runtime) -> bool {
   })
 }
 
-/// Configure logging with the specified server configurations and runtime
-fn configure_logging(
-  log_filename: Option<String>,
-  error_log_filename: Option<String>,
-  secondary_runtime: &tokio::runtime::Runtime,
-  logging_rx: &Receiver<LogMessage>,
-) {
-  // Spawn logging task in the secondary asynchronous runtime
-  let logging_rx = logging_rx.clone();
-  secondary_runtime.spawn(async move {
-    let log_file = match log_filename {
-      Some(log_filename) => Some(
-        tokio::fs::OpenOptions::new()
-          .append(true)
-          .create(true)
-          .open(log_filename)
-          .await,
-      ),
-      None => None,
-    };
-
-    let error_log_file = match error_log_filename {
-      Some(error_log_filename) => Some(
-        tokio::fs::OpenOptions::new()
-          .append(true)
-          .create(true)
-          .open(error_log_filename)
-          .await,
-      ),
-      None => None,
-    };
-
-    let log_file_wrapped = match log_file {
-      Some(Ok(file)) => Some(Arc::new(tokio::sync::Mutex::new(BufWriter::with_capacity(
-        131072, file,
-      )))),
-      Some(Err(e)) => {
-        eprintln!("Failed to open log file: {e}");
-        None
-      }
-      None => None,
-    };
-
-    let error_log_file_wrapped = match error_log_file {
-      Some(Ok(file)) => Some(Arc::new(tokio::sync::Mutex::new(BufWriter::with_capacity(
-        131072, file,
-      )))),
-      Some(Err(e)) => {
-        eprintln!("Failed to open error log file: {e}");
-        None
-      }
-      None => None,
-    };
-
-    // The logs are written when the log message is received by the log event loop, and flushed every 100 ms, improving the server performance.
-    let log_file_wrapped_cloned_for_sleep = log_file_wrapped.clone();
-    let error_log_file_wrapped_cloned_for_sleep = error_log_file_wrapped.clone();
-    tokio::task::spawn(async move {
-      let mut interval = tokio::time::interval(Duration::from_millis(100));
-      loop {
-        interval.tick().await;
-        if let Some(log_file_wrapped_cloned) = log_file_wrapped_cloned_for_sleep.clone() {
-          let mut locked_file = log_file_wrapped_cloned.lock().await;
-          locked_file.flush().await.unwrap_or_default();
-        }
-        if let Some(error_log_file_wrapped_cloned) = error_log_file_wrapped_cloned_for_sleep.clone() {
-          let mut locked_file = error_log_file_wrapped_cloned.lock().await;
-          locked_file.flush().await.unwrap_or_default();
-        }
-      }
-    });
-
-    // Logging loop
-    while let Ok(message) = logging_rx.recv().await {
-      let (mut message, is_error) = message.get_message();
-      let log_file_wrapped_cloned = if !is_error {
-        log_file_wrapped.clone()
-      } else {
-        error_log_file_wrapped.clone()
-      };
-
-      if let Some(log_file_wrapped_cloned) = log_file_wrapped_cloned {
-        tokio::task::spawn(async move {
-          let mut locked_file = log_file_wrapped_cloned.lock().await;
-          if is_error {
-            let now: DateTime<Local> = Local::now();
-            let formatted_time = now.format("%Y-%m-%d %H:%M:%S").to_string();
-            message = format!("[{formatted_time}]: {message}");
-          }
-          message.push('\n');
-          if let Err(e) = locked_file.write(message.as_bytes()).await {
-            eprintln!("Failed to write to log file: {e}");
-          }
-        });
-      }
-    }
-  });
-}
-
 /// Function called before starting a server
 fn before_starting_server(
   args: ArgMatches,
@@ -254,6 +151,9 @@ fn before_starting_server(
     // Obtain the module loaders
     let mut module_loaders = obtain_module_loaders();
 
+    // Obtain the observability backend loaders
+    let mut observability_backend_loaders = obtain_observability_backend_loaders();
+
     // Create a secondary Tokio runtime
     let secondary_runtime = tokio::runtime::Builder::new_multi_thread()
       .worker_threads(match available_parallelism / 2 {
@@ -271,14 +171,20 @@ fn before_starting_server(
     let configs_to_process = merge_duplicates(configs_to_process);
     let configs_to_process = remove_and_add_global_configuration(configs_to_process);
     let configs_to_process = premerge_configuration(configs_to_process);
-    let (configs_to_process, first_module_error, unused_properties) =
-      load_modules(configs_to_process, &mut module_loaders, &secondary_runtime);
+    let (configs_to_process, first_module_error, unused_properties) = load_modules(
+      configs_to_process,
+      &mut module_loaders,
+      &mut observability_backend_loaders,
+      &secondary_runtime,
+    );
 
     // Finalize the configurations
     let server_configurations = Arc::new(ServerConfigurations::new(configs_to_process));
 
     let global_configuration = server_configurations.find_global_configuration();
+    let global_configuration_clone = global_configuration.clone();
 
+    /*
     // Obtain the loggers builder
     let mut loggers_builder = (*LOGGER_BUILDER)
       .lock()
@@ -325,6 +231,7 @@ fn before_starting_server(
     // Obtain the global logger
     let global_logger = loggers.find_global_logger();
     let global_logger_clone = global_logger.clone();
+    */
 
     // Reference to the secondary Tokio runtime
     let secondary_runtime_ref = &secondary_runtime;
@@ -341,7 +248,10 @@ fn before_starting_server(
 
       // Log unused properties
       for unused_property in unused_properties {
-        if let Some(logging_tx) = &global_logger {
+        for logging_tx in global_configuration
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels)
+        {
           logging_tx
             .send_blocking(LogMessage::new(
               format!("Unused configuration property detected: \"{unused_property}\""),
@@ -718,7 +628,10 @@ fn before_starting_server(
                 .unwrap_or(HashMap::new());
               if let Some(sni_hostname) = &sni_hostname {
                 if sni_hostname.parse::<IpAddr>().is_ok() {
-                  if let Some(logging_tx) = &global_logger {
+                  for logging_tx in global_configuration
+                    .as_ref()
+                    .map_or(&vec![], |c| &c.observability.log_channels)
+                  {
                     logging_tx
                     .send_blocking(LogMessage::new(
                       format!("Ferron's automatic TLS functionality doesn't support IP address-based identifiers, skipping SNI host \"{sni_hostname}\"..."),
@@ -733,7 +646,10 @@ fn before_starting_server(
                 "HTTP-01" => {
                   if let Some(sni_hostname) = &sni_hostname {
                     if is_wildcard_domain && !on_demand_tls {
-                      if let Some(logging_tx) = &global_logger {
+                      for logging_tx in global_configuration
+                        .as_ref()
+                        .map_or(&vec![], |c| &c.observability.log_channels)
+                      {
                         logging_tx
                         .send_blocking(LogMessage::new(
                           format!("HTTP-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."),
@@ -749,7 +665,10 @@ fn before_starting_server(
                 "TLS-ALPN-01" => {
                   if let Some(sni_hostname) = &sni_hostname {
                     if is_wildcard_domain && !on_demand_tls {
-                      if let Some(logging_tx) = &global_logger {
+                      for logging_tx in global_configuration
+                        .as_ref()
+                        .map_or(&vec![], |c| &c.observability.log_channels)
+                      {
                         logging_tx
                         .send_blocking(LogMessage::new(
                           format!("TLS-ALPN-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."),
@@ -1002,7 +921,10 @@ fn before_starting_server(
                 automatic_tls_used_sni_hostnames.insert((automatic_tls_port, Some(sni_hostname)));
               }
             } else if !server_configuration.filters.is_global() && !server_configuration.filters.is_global_non_host() {
-              if let Some(logging_tx) = &global_logger {
+              for logging_tx in global_configuration
+                .as_ref()
+                .map_or(&vec![], |c| &c.observability.log_channels)
+              {
                 logging_tx
                   .send_blocking(LogMessage::new(
                     "Skipping automatic TLS for a host without a SNI hostname...".to_string(),
@@ -1026,7 +948,7 @@ fn before_starting_server(
       if !acme_configs.is_empty() || !acme_on_demand_configs.is_empty() {
         // Spawn a task to handle ACME certificate provisioning, one certificate at time
 
-        let acme_logger_option = global_logger.clone();
+        let global_configuration_clone = global_configuration.clone();
         secondary_runtime_ref.spawn(async move {
           for acme_config in &mut acme_configs {
             // Install the certificates from the cache if they're valid
@@ -1064,8 +986,8 @@ fn before_starting_server(
           if !acme_on_demand_configs.is_empty() {
             // On-demand TLS
             let acme_configs_mutex = acme_configs_mutex.clone();
-            let acme_logger_option = acme_logger_option.clone();
             let acme_on_demand_configs = Arc::new(acme_on_demand_configs);
+            let global_configuration_clone = global_configuration_clone.clone();
             tokio::spawn(async move {
               let mut existing_combinations = existing_combinations;
               while let Ok(received_data) = acme_on_demand_rx.recv().await {
@@ -1082,7 +1004,10 @@ fn before_starting_server(
                     url_parts.path_and_query = Some(match format!("{}?{}", path_and_query.path(), query).parse() {
                       Ok(parsed) => parsed,
                       Err(err) => {
-                        if let Some(acme_logger) = &acme_logger_option {
+                        for acme_logger in global_configuration_clone
+                          .as_ref()
+                          .map_or(&vec![], |c| &c.observability.log_channels)
+                        {
                           acme_logger
                             .send(LogMessage::new(
                               format!("Error while formatting the URL for on-demand TLS request: {err}"),
@@ -1099,7 +1024,10 @@ fn before_starting_server(
                       match format!("/?domain={}", urlencoding::encode(&received_data.0)).parse() {
                         Ok(parsed) => parsed,
                         Err(err) => {
-                          if let Some(acme_logger) = &acme_logger_option {
+                          for acme_logger in global_configuration_clone
+                            .as_ref()
+                            .map_or(&vec![], |c| &c.observability.log_channels)
+                          {
                             acme_logger
                               .send(LogMessage::new(
                                 format!("Error while formatting the URL for on-demand TLS request: {err}"),
@@ -1116,7 +1044,10 @@ fn before_starting_server(
                   let endpoint_url = match hyper::Uri::from_parts(url_parts) {
                     Ok(parsed) => parsed,
                     Err(err) => {
-                      if let Some(acme_logger) = &acme_logger_option {
+                      for acme_logger in global_configuration_clone
+                        .as_ref()
+                        .map_or(&vec![], |c| &c.observability.log_channels)
+                      {
                         acme_logger
                           .send(LogMessage::new(
                             format!("Error while formatting the URL for on-demand TLS request: {err}"),
@@ -1171,7 +1102,10 @@ fn before_starting_server(
                   match ask_closure.await {
                     Ok(true) => (),
                     Ok(false) => {
-                      if let Some(acme_logger) = &acme_logger_option {
+                      for acme_logger in global_configuration_clone
+                        .as_ref()
+                        .map_or(&vec![], |c| &c.observability.log_channels)
+                      {
                         acme_logger
                           .send(LogMessage::new(
                             format!(
@@ -1186,7 +1120,10 @@ fn before_starting_server(
                       continue;
                     }
                     Err(err) => {
-                      if let Some(acme_logger) = &acme_logger_option {
+                      for acme_logger in global_configuration_clone
+                        .as_ref()
+                        .map_or(&vec![], |c| &c.observability.log_channels)
+                      {
                         acme_logger
                           .send(LogMessage::new(
                             format!(
@@ -1242,7 +1179,10 @@ fn before_starting_server(
           loop {
             for acme_config in &mut *acme_configs_mutex.lock().await {
               if let Err(acme_error) = provision_certificate(acme_config).await {
-                if let Some(acme_logger) = &acme_logger_option {
+                for acme_logger in global_configuration_clone
+                  .as_ref()
+                  .map_or(&vec![], |c| &c.observability.log_channels)
+                {
                   acme_logger
                     .send(LogMessage::new(
                       format!("Error while obtaining a TLS certificate: {acme_error}"),
@@ -1403,6 +1343,28 @@ fn before_starting_server(
         quic_listeners.remove(&key_to_remove);
       }
 
+      // Get a global logger for listeners
+      let (global_logging_tx, global_logging_rx) = &**LISTENER_LOGGING_CHANNEL;
+      let global_logger = if global_configuration
+        .as_ref()
+        .is_none_or(|c| c.observability.log_channels.is_empty())
+      {
+        None
+      } else {
+        let global_configuration_clone = global_configuration.clone();
+        secondary_runtime_ref.spawn(async move {
+          while let Ok(log_message) = global_logging_rx.recv().await {
+            for logging_tx in global_configuration_clone
+              .as_ref()
+              .map_or(&vec![], |c| &c.observability.log_channels)
+            {
+              logging_tx.send(log_message.clone()).await.unwrap_or_default();
+            }
+          }
+        });
+        Some(global_logging_tx.clone())
+      };
+
       // Spawn request handler threads
       let mut handler_shutdown_channels = Vec::new();
       for _ in 0..available_parallelism {
@@ -1410,7 +1372,6 @@ fn before_starting_server(
           server_configurations.clone(),
           listener_handler_rx.clone(),
           enable_uring,
-          loggers.clone(),
           tls_configs.clone(),
           !quic_listened_socket_addresses.is_empty(),
           acme_tls_alpn_01_configs.clone(),
@@ -1496,7 +1457,10 @@ fn before_starting_server(
         }
       }
       Err(err) => {
-        if let Some(logging_tx) = global_logger_clone {
+        for logging_tx in global_configuration_clone
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels)
+        {
           logging_tx
             .send_blocking(LogMessage::new(err.to_string(), true))
             .unwrap_or_default();

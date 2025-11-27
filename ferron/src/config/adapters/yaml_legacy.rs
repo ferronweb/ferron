@@ -5,6 +5,7 @@ use std::{
   path::Path,
 };
 
+use ferron_common::observability::ObservabilityBackendChannels;
 use ferron_yaml2kdl_core::convert_yaml_to_kdl;
 use kdl::{KdlDocument, KdlNode, KdlValue};
 
@@ -159,6 +160,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                                   error_handler_status: Some(ErrorHandlerStatus::Status(error_status_code as u16)),
                                 },
                                 modules: vec![],
+                                observability: ObservabilityBackendChannels::new(),
                               });
                             } else {
                               Err(anyhow::anyhow!("Invalid error handler status code"))?
@@ -190,6 +192,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                                 error_handler_status: Some(ErrorHandlerStatus::Any),
                               },
                               modules: vec![],
+                              observability: ObservabilityBackendChannels::new(),
                             });
                           }
                         } else {
@@ -238,6 +241,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                         error_handler_status: None,
                       },
                       modules: vec![],
+                      observability: ObservabilityBackendChannels::new(),
                     });
                   } else {
                     Err(anyhow::anyhow!("Invalid location path"))?
@@ -276,6 +280,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                         error_handler_status: Some(ErrorHandlerStatus::Status(error_status_code as u16)),
                       },
                       modules: vec![],
+                      observability: ObservabilityBackendChannels::new(),
                     });
                   } else {
                     Err(anyhow::anyhow!("Invalid error handler status code"))?
@@ -304,6 +309,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                       error_handler_status: Some(ErrorHandlerStatus::Any),
                     },
                     modules: vec![],
+                    observability: ObservabilityBackendChannels::new(),
                   });
                 }
               } else {
@@ -334,6 +340,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
               error_handler_status: None,
             },
             modules: vec![],
+            observability: ObservabilityBackendChannels::new(),
           });
         }
       } else {

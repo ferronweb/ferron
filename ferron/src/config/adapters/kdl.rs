@@ -7,6 +7,7 @@ use std::{
   str::FromStr,
 };
 
+use ferron_common::observability::ObservabilityBackendChannels;
 use glob::glob;
 use kdl::{KdlDocument, KdlNode, KdlValue};
 
@@ -257,6 +258,7 @@ fn load_configuration_inner(
                         error_handler_status: None,
                       },
                       modules: vec![],
+                      observability: ObservabilityBackendChannels::new(),
                     });
                   } else {
                     let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
@@ -392,6 +394,7 @@ fn load_configuration_inner(
                         error_handler_status: None,
                       },
                       modules: vec![],
+                      observability: ObservabilityBackendChannels::new(),
                     });
                   } else {
                     let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
@@ -464,6 +467,7 @@ fn load_configuration_inner(
                         error_handler_status: None,
                       },
                       modules: vec![],
+                      observability: ObservabilityBackendChannels::new(),
                     });
                   } else {
                     let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
@@ -516,6 +520,7 @@ fn load_configuration_inner(
                         error_handler_status: Some(ErrorHandlerStatus::Status(error_status_code as u16)),
                       },
                       modules: vec![],
+                      observability: ObservabilityBackendChannels::new(),
                     });
                   } else {
                     let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
@@ -549,6 +554,7 @@ fn load_configuration_inner(
                       error_handler_status: Some(ErrorHandlerStatus::Any),
                     },
                     modules: vec![],
+                    observability: ObservabilityBackendChannels::new(),
                   });
                 }
               } else {
@@ -596,6 +602,7 @@ fn load_configuration_inner(
             error_handler_status: None,
           },
           modules: vec![],
+          observability: ObservabilityBackendChannels::new(),
         });
       }
     } else if global_name == "include" {

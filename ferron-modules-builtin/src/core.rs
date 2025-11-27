@@ -112,30 +112,6 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(error_log_entries) = get_entries_for_validation!("error_log", config, used_properties) {
-      for error_log_entry in &error_log_entries.inner {
-        if error_log_entry.values.len() != 1 {
-          Err(anyhow::anyhow!(
-            "The `error_log` configuration property must have exactly one value"
-          ))?
-        } else if !error_log_entry.values[0].is_string() {
-          Err(anyhow::anyhow!("The path to the error log must be a string"))?
-        }
-      }
-    };
-
-    if let Some(log_entries) = get_entries_for_validation!("log", config, used_properties) {
-      for log_entry in &log_entries.inner {
-        if log_entry.values.len() != 1 {
-          Err(anyhow::anyhow!(
-            "The `log` configuration property must have exactly one value"
-          ))?
-        } else if !log_entry.values[0].is_string() {
-          Err(anyhow::anyhow!("The path to the access log must be a string"))?
-        }
-      }
-    };
-
     for tls_cipher in get_values_for_validation!("tls_cipher_suite", config, used_properties) {
       if !tls_cipher.is_string() {
         Err(anyhow::anyhow!("Invalid TLS cipher suite"))?

@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use async_channel::Sender;
 use chrono::{DateTime, Local};
+use ferron_common::logging::{ErrorLogger, LogMessage};
 use futures_util::stream::TryStreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
@@ -19,7 +20,6 @@ use tokio_util::io::ReaderStream;
 
 use crate::config::{ServerConfiguration, ServerConfigurations};
 use crate::get_value;
-use crate::logging::{ErrorLogger, LogMessage, Loggers};
 use crate::runtime::timeout;
 #[cfg(feature = "runtime-monoio")]
 use crate::util::MonoioFileStream;
@@ -123,7 +123,7 @@ async fn generate_error_response(
 /// Sends a log message formatted according to the Combined Log Format
 #[allow(clippy::too_many_arguments)]
 async fn log_access(
-  logger: &Sender<LogMessage>,
+  loggers: &Vec<Sender<LogMessage>>,
   request_parts: &hyper::http::request::Parts,
   socket_data: &SocketData,
   auth_user: Option<&str>,
@@ -134,24 +134,24 @@ async fn log_access(
 ) {
   let now: DateTime<Local> = Local::now();
   let formatted_time = now.format(date_format.unwrap_or("%d/%b/%Y:%H:%M:%S %z")).to_string();
-  logger
-    .send(LogMessage::new(
-      replace_log_placeholders(
-        log_format.unwrap_or(
-          "{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" \
-           {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\"",
-        ),
-        request_parts,
-        socket_data,
-        auth_user,
-        &formatted_time,
-        status_code,
-        content_length,
-      ),
-      false,
-    ))
-    .await
-    .unwrap_or_default();
+  let log_message_string = replace_log_placeholders(
+    log_format.unwrap_or(
+      "{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" \
+       {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\"",
+    ),
+    request_parts,
+    socket_data,
+    auth_user,
+    &formatted_time,
+    status_code,
+    content_length,
+  );
+  for logger in loggers {
+    logger
+      .send(LogMessage::new(log_message_string.clone(), false))
+      .await
+      .unwrap_or_default();
+  }
 }
 
 /// Helper function to add custom headers to response
@@ -228,7 +228,7 @@ async fn finalize_response_and_log(
   headers_to_add: HeaderMap,
   headers_to_replace: HeaderMap,
   headers_to_remove: Vec<HeaderName>,
-  logger: &Option<Sender<LogMessage>>,
+  loggers: &Vec<Sender<LogMessage>>,
   request_parts: &Option<hyper::http::request::Parts>,
   socket_data: &SocketData,
   latest_auth_data: Option<&str>,
@@ -249,9 +249,9 @@ async fn finalize_response_and_log(
   let response = Response::from_parts(response_parts, response_body);
 
   if let Some(request_parts) = request_parts {
-    if let Some(logger) = &logger {
+    if !loggers.is_empty() {
       log_access(
-        logger,
+        loggers,
         request_parts,
         socket_data,
         latest_auth_data,
@@ -277,8 +277,7 @@ async fn execute_response_modifying_handlers(
   headers_to_add: HeaderMap,
   headers_to_replace: HeaderMap,
   headers_to_remove: Vec<HeaderName>,
-  logger: &Option<Sender<LogMessage>>,
-  error_log_enabled: bool,
+  loggers: &Vec<Sender<LogMessage>>,
   request_parts: &Option<hyper::http::request::Parts>,
   socket_data: &SocketData,
   latest_auth_data: Option<&str>,
@@ -290,16 +289,14 @@ async fn execute_response_modifying_handlers(
     response = match response_status {
       Ok(response) => response,
       Err(err) => {
-        if error_log_enabled {
-          if let Some(logger) = &logger {
-            logger
-              .send(LogMessage::new(
-                format!("Unexpected error while serving a request: {err}"),
-                true,
-              ))
-              .await
-              .unwrap_or_default();
-          }
+        for logger in loggers {
+          logger
+            .send(LogMessage::new(
+              format!("Unexpected error while serving a request: {err}"),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
         }
 
         let error_response = generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, configuration, &None).await;
@@ -310,7 +307,7 @@ async fn execute_response_modifying_handlers(
           headers_to_add,
           headers_to_replace,
           headers_to_remove,
-          logger,
+          loggers,
           request_parts,
           socket_data,
           latest_auth_data,
@@ -334,7 +331,6 @@ async fn request_handler_wrapped(
   server_address: SocketAddr,
   encrypted: bool,
   configurations: Arc<ServerConfigurations>,
-  loggers: Loggers,
   http3_alt_port: Option<u16>,
   acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   proxy_protocol_client_address: Option<SocketAddr>,
@@ -342,16 +338,6 @@ async fn request_handler_wrapped(
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
   // Global configuration
   let global_configuration = configurations.find_global_configuration();
-
-  // Check if logging is enabled
-  let log_enabled = !global_configuration
-    .as_deref()
-    .and_then(|c| get_value!("log", c))
-    .is_none_or(|v| v.is_null());
-  let error_log_enabled = !global_configuration
-    .as_deref()
-    .and_then(|c| get_value!("error_log", c))
-    .is_none_or(|v| v.is_null());
 
   // Normalize HTTP/2 and HTTP/3 request objects
   match request.version() {
@@ -409,13 +395,14 @@ async fn request_handler_wrapped(
           let host_header_value = match HeaderValue::from_str(host_header_without_dot) {
             Ok(host_header_value) => host_header_value,
             Err(err) => {
-              if error_log_enabled {
-                if let Some(logger) = loggers.find_global_logger() {
-                  logger
-                    .send(LogMessage::new(format!("Host header sanitation error: {err}"), true))
-                    .await
-                    .unwrap_or_default();
-                }
+              for logger in global_configuration
+                .as_ref()
+                .map_or(&vec![], |c| &c.observability.log_channels)
+              {
+                logger
+                  .send(LogMessage::new(format!("Host header sanitation error: {err}"), true))
+                  .await
+                  .unwrap_or_default();
               }
               let response = Response::builder()
                 .status(StatusCode::BAD_REQUEST)
@@ -427,37 +414,35 @@ async fn request_handler_wrapped(
                 )
                 .unwrap_or_default();
 
-              if log_enabled {
-                let (request_parts, _) = request.into_parts();
-                if let Some(logger) = loggers.find_global_logger() {
-                  log_access(
-                    &logger,
-                    &request_parts,
-                    &socket_data,
-                    None,
-                    response.status().as_u16(),
-                    match response.headers().get(header::CONTENT_LENGTH) {
-                      Some(header_value) => match header_value.to_str() {
-                        Ok(header_value) => match header_value.parse::<u64>() {
-                          Ok(content_length) => Some(content_length),
-                          Err(_) => response.body().size_hint().exact(),
-                        },
-                        Err(_) => response.body().size_hint().exact(),
-                      },
-                      None => response.body().size_hint().exact(),
+              let (request_parts, _) = request.into_parts();
+              log_access(
+                global_configuration
+                  .as_ref()
+                  .map_or(&vec![], |c| &c.observability.log_channels),
+                &request_parts,
+                &socket_data,
+                None,
+                response.status().as_u16(),
+                match response.headers().get(header::CONTENT_LENGTH) {
+                  Some(header_value) => match header_value.to_str() {
+                    Ok(header_value) => match header_value.parse::<u64>() {
+                      Ok(content_length) => Some(content_length),
+                      Err(_) => response.body().size_hint().exact(),
                     },
-                    global_configuration
-                      .as_deref()
-                      .and_then(|c| get_value!("log_date_format", c))
-                      .and_then(|v| v.as_str()),
-                    global_configuration
-                      .as_deref()
-                      .and_then(|c| get_value!("log_format", c))
-                      .and_then(|v| v.as_str()),
-                  )
-                  .await;
-                }
-              }
+                    Err(_) => response.body().size_hint().exact(),
+                  },
+                  None => response.body().size_hint().exact(),
+                },
+                global_configuration
+                  .as_deref()
+                  .and_then(|c| get_value!("log_date_format", c))
+                  .and_then(|v| v.as_str()),
+                global_configuration
+                  .as_deref()
+                  .and_then(|c| get_value!("log_format", c))
+                  .and_then(|v| v.as_str()),
+              )
+              .await;
               let (mut response_parts, response_body) = response.into_parts();
               if let Some(http3_alt_port) = http3_alt_port {
                 if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
@@ -490,13 +475,14 @@ async fn request_handler_wrapped(
         }
       }
       Err(err) => {
-        if error_log_enabled {
-          if let Some(logger) = loggers.find_global_logger() {
-            logger
-              .send(LogMessage::new(format!("Host header sanitation error: {err}"), true))
-              .await
-              .unwrap_or_default();
-          }
+        for logger in global_configuration
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels)
+        {
+          logger
+            .send(LogMessage::new(format!("Host header sanitation error: {err}"), true))
+            .await
+            .unwrap_or_default();
         }
         let response = Response::builder()
           .status(StatusCode::BAD_REQUEST)
@@ -507,37 +493,35 @@ async fn request_handler_wrapped(
               .boxed(),
           )
           .unwrap_or_default();
-        if log_enabled {
-          let (request_parts, _) = request.into_parts();
-          if let Some(logger) = loggers.find_global_logger() {
-            log_access(
-              &logger,
-              &request_parts,
-              &socket_data,
-              None,
-              response.status().as_u16(),
-              match response.headers().get(header::CONTENT_LENGTH) {
-                Some(header_value) => match header_value.to_str() {
-                  Ok(header_value) => match header_value.parse::<u64>() {
-                    Ok(content_length) => Some(content_length),
-                    Err(_) => response.body().size_hint().exact(),
-                  },
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                None => response.body().size_hint().exact(),
+        let (request_parts, _) = request.into_parts();
+        log_access(
+          global_configuration
+            .as_ref()
+            .map_or(&vec![], |c| &c.observability.log_channels),
+          &request_parts,
+          &socket_data,
+          None,
+          response.status().as_u16(),
+          match response.headers().get(header::CONTENT_LENGTH) {
+            Some(header_value) => match header_value.to_str() {
+              Ok(header_value) => match header_value.parse::<u64>() {
+                Ok(content_length) => Some(content_length),
+                Err(_) => response.body().size_hint().exact(),
               },
-              global_configuration
-                .as_deref()
-                .and_then(|c| get_value!("log_date_format", c))
-                .and_then(|v| v.as_str()),
-              global_configuration
-                .as_deref()
-                .and_then(|c| get_value!("log_format", c))
-                .and_then(|v| v.as_str()),
-            )
-            .await;
-          }
-        }
+              Err(_) => response.body().size_hint().exact(),
+            },
+            None => response.body().size_hint().exact(),
+          },
+          global_configuration
+            .as_deref()
+            .and_then(|c| get_value!("log_date_format", c))
+            .and_then(|v| v.as_str()),
+          global_configuration
+            .as_deref()
+            .and_then(|c| get_value!("log_format", c))
+            .and_then(|v| v.as_str()),
+        )
+        .await;
         let (mut response_parts, response_body) = response.into_parts();
         if let Some(http3_alt_port) = http3_alt_port {
           if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
@@ -583,7 +567,14 @@ async fn request_handler_wrapped(
   };
 
   let (request_parts, request_body) = request.into_parts();
-  let mut log_request_parts = if log_enabled { Some(request_parts.clone()) } else { None };
+  let mut log_request_parts = if global_configuration
+    .as_ref()
+    .is_some_and(|c| !c.observability.log_channels.is_empty())
+  {
+    Some(request_parts.clone())
+  } else {
+    None
+  };
   let request = Request::from_parts(request_parts, request_body);
 
   // Find the server configuration
@@ -594,16 +585,17 @@ async fn request_handler_wrapped(
   let mut configuration = match configuration_option {
     Ok(Some(configuration)) => configuration,
     Ok(None) => {
-      if error_log_enabled {
-        if let Some(logger) = loggers.find_global_logger() {
-          logger
-            .send(LogMessage::new(
-              String::from("Cannot determine server configuration"),
-              true,
-            ))
-            .await
-            .unwrap_or_default()
-        }
+      for logger in global_configuration
+        .as_ref()
+        .map_or(&vec![], |c| &c.observability.log_channels)
+      {
+        logger
+          .send(LogMessage::new(
+            String::from("Cannot determine server configuration"),
+            true,
+          ))
+          .await
+          .unwrap_or_default()
       }
       let response = Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -617,37 +609,35 @@ async fn request_handler_wrapped(
           .boxed(),
         )
         .unwrap_or_default();
-      if log_enabled {
-        let (request_parts, _) = request.into_parts();
-        if let Some(logger) = loggers.find_global_logger() {
-          log_access(
-            &logger,
-            &request_parts,
-            &socket_data,
-            None,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                Err(_) => response.body().size_hint().exact(),
-              },
-              None => response.body().size_hint().exact(),
+      let (request_parts, _) = request.into_parts();
+      log_access(
+        global_configuration
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels),
+        &request_parts,
+        &socket_data,
+        None,
+        response.status().as_u16(),
+        match response.headers().get(header::CONTENT_LENGTH) {
+          Some(header_value) => match header_value.to_str() {
+            Ok(header_value) => match header_value.parse::<u64>() {
+              Ok(content_length) => Some(content_length),
+              Err(_) => response.body().size_hint().exact(),
             },
-            global_configuration
-              .as_deref()
-              .and_then(|c| get_value!("log_date_format", c))
-              .and_then(|v| v.as_str()),
-            global_configuration
-              .as_deref()
-              .and_then(|c| get_value!("log_format", c))
-              .and_then(|v| v.as_str()),
-          )
-          .await;
-        }
-      }
+            Err(_) => response.body().size_hint().exact(),
+          },
+          None => response.body().size_hint().exact(),
+        },
+        global_configuration
+          .as_deref()
+          .and_then(|c| get_value!("log_date_format", c))
+          .and_then(|v| v.as_str()),
+        global_configuration
+          .as_deref()
+          .and_then(|c| get_value!("log_format", c))
+          .and_then(|v| v.as_str()),
+      )
+      .await;
       let (mut response_parts, response_body) = response.into_parts();
       if let Some(http3_alt_port) = http3_alt_port {
         if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
@@ -673,16 +663,17 @@ async fn request_handler_wrapped(
       return Ok(Response::from_parts(response_parts, response_body));
     }
     Err(err) => {
-      if error_log_enabled {
-        if let Some(logger) = loggers.find_global_logger() {
-          logger
-            .send(LogMessage::new(
-              format!("Cannot determine server configuration: {err}"),
-              true,
-            ))
-            .await
-            .unwrap_or_default()
-        }
+      for logger in global_configuration
+        .as_ref()
+        .map_or(&vec![], |c| &c.observability.log_channels)
+      {
+        logger
+          .send(LogMessage::new(
+            format!("Cannot determine server configuration: {err}"),
+            true,
+          ))
+          .await
+          .unwrap_or_default()
       }
       let response = Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -696,37 +687,35 @@ async fn request_handler_wrapped(
           .boxed(),
         )
         .unwrap_or_default();
-      if log_enabled {
-        let (request_parts, _) = request.into_parts();
-        if let Some(logger) = loggers.find_global_logger() {
-          log_access(
-            &logger,
-            &request_parts,
-            &socket_data,
-            None,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                Err(_) => response.body().size_hint().exact(),
-              },
-              None => response.body().size_hint().exact(),
+      let (request_parts, _) = request.into_parts();
+      log_access(
+        global_configuration
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels),
+        &request_parts,
+        &socket_data,
+        None,
+        response.status().as_u16(),
+        match response.headers().get(header::CONTENT_LENGTH) {
+          Some(header_value) => match header_value.to_str() {
+            Ok(header_value) => match header_value.parse::<u64>() {
+              Ok(content_length) => Some(content_length),
+              Err(_) => response.body().size_hint().exact(),
             },
-            global_configuration
-              .as_deref()
-              .and_then(|c| get_value!("log_date_format", c))
-              .and_then(|v| v.as_str()),
-            global_configuration
-              .as_deref()
-              .and_then(|c| get_value!("log_format", c))
-              .and_then(|v| v.as_str()),
-          )
-          .await;
-        }
-      }
+            Err(_) => response.body().size_hint().exact(),
+          },
+          None => response.body().size_hint().exact(),
+        },
+        global_configuration
+          .as_deref()
+          .and_then(|c| get_value!("log_date_format", c))
+          .and_then(|v| v.as_str()),
+        global_configuration
+          .as_deref()
+          .and_then(|c| get_value!("log_format", c))
+          .and_then(|v| v.as_str()),
+      )
+      .await;
       let (mut response_parts, response_body) = response.into_parts();
       if let Some(http3_alt_port) = http3_alt_port {
         if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
@@ -757,17 +746,8 @@ async fn request_handler_wrapped(
   let mut log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
   let mut log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
 
-  // Determine the logger
-  let logger = loggers.find_logger(
-    hostname_determinant.as_deref(),
-    socket_data.local_addr.ip(),
-    socket_data.local_addr.port(),
-  );
-  let log_enabled = !get_value!("log", configuration).is_none_or(|v| v.is_null());
-  let error_log_enabled = !get_value!("error_log", configuration).is_none_or(|v| v.is_null());
-
   // Clone the log request parts if logging is enabled and request parts are not already cloned
-  if log_enabled && log_request_parts.is_none() {
+  if !configuration.observability.log_channels.is_empty() && log_request_parts.is_none() {
     let (request_parts, request_body) = request.into_parts();
     log_request_parts = Some(request_parts.clone());
     request = Request::from_parts(request_parts, request_body);
@@ -783,13 +763,11 @@ async fn request_handler_wrapped(
   ) {
     Ok(sanitized_url) => sanitized_url,
     Err(err) => {
-      if error_log_enabled {
-        if let Some(logger) = &logger {
-          logger
-            .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
-            .await
-            .unwrap_or_default();
-        }
+      for logger in &configuration.observability.log_channels {
+        logger
+          .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
+          .await
+          .unwrap_or_default();
       }
       let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
 
@@ -847,7 +825,7 @@ async fn request_handler_wrapped(
           headers_to_add,
           headers_to_replace,
           headers_to_remove,
-          &logger,
+          &configuration.observability.log_channels,
           &log_request_parts,
           &socket_data,
           None,
@@ -881,14 +859,13 @@ async fn request_handler_wrapped(
       {
         Ok(path_and_query) => path_and_query,
         Err(err) => {
-          if error_log_enabled {
-            if let Some(logger) = &logger {
-              logger
-                .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
-                .await
-                .unwrap_or_default();
-            }
+          for logger in &configuration.observability.log_channels {
+            logger
+              .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
+              .await
+              .unwrap_or_default();
           }
+
           let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
 
           parts.uri = orig_uri;
@@ -946,7 +923,7 @@ async fn request_handler_wrapped(
               headers_to_add,
               headers_to_replace,
               headers_to_remove,
-              &logger,
+              &configuration.observability.log_channels,
               &log_request_parts,
               &socket_data,
               None,
@@ -961,14 +938,13 @@ async fn request_handler_wrapped(
     parts.uri = match hyper::Uri::from_parts(url_parts) {
       Ok(uri) => uri,
       Err(err) => {
-        if error_log_enabled {
-          if let Some(logger) = &logger {
-            logger
-              .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
-              .await
-              .unwrap_or_default();
-          }
+        for logger in &configuration.observability.log_channels {
+          logger
+            .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
+            .await
+            .unwrap_or_default();
         }
+
         let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
 
         parts.uri = orig_uri;
@@ -1026,7 +1002,7 @@ async fn request_handler_wrapped(
             headers_to_add,
             headers_to_replace,
             headers_to_remove,
-            &logger,
+            &configuration.observability.log_channels,
             &log_request_parts,
             &socket_data,
             None,
@@ -1047,16 +1023,14 @@ async fn request_handler_wrapped(
       }
       Ok(None) => {}
       Err(err) => {
-        if error_log_enabled {
-          if let Some(logger) = &logger {
-            logger
-              .send(LogMessage::new(
-                format!("Cannot determine server configuration: {err}"),
-                true,
-              ))
-              .await
-              .unwrap_or_default();
-          }
+        for logger in &configuration.observability.log_channels {
+          logger
+            .send(LogMessage::new(
+              format!("Cannot determine server configuration: {err}"),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
         }
         let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
 
@@ -1114,7 +1088,7 @@ async fn request_handler_wrapped(
             headers_to_add,
             headers_to_replace,
             headers_to_remove,
-            &logger,
+            &configuration.observability.log_channels,
             &log_request_parts,
             &socket_data,
             None,
@@ -1197,7 +1171,7 @@ async fn request_handler_wrapped(
         headers_to_add,
         headers_to_replace,
         headers_to_remove,
-        &logger,
+        &configuration.observability.log_channels,
         &log_request_parts,
         &socket_data,
         None,
@@ -1232,7 +1206,7 @@ async fn request_handler_wrapped(
                 headers_to_add,
                 headers_to_replace,
                 headers_to_remove,
-                &logger,
+                &configuration.observability.log_channels,
                 &log_request_parts,
                 &socket_data,
                 None,
@@ -1248,11 +1222,10 @@ async fn request_handler_wrapped(
   };
   drop(acme_http_01_resolvers_inner);
 
-  // Create an error logger
-  let cloned_logger = logger.clone();
-  let error_logger = match (cloned_logger, error_log_enabled) {
-    (Some(cloned_logger), true) => ErrorLogger::new(cloned_logger),
-    _ => ErrorLogger::without_logger(),
+  let error_logger = if !configuration.observability.log_channels.is_empty() {
+    ErrorLogger::new_multiple(configuration.observability.log_channels.clone())
+  } else {
+    ErrorLogger::without_logger()
   };
 
   // Obtain module handlers
@@ -1335,8 +1308,7 @@ async fn request_handler_wrapped(
               headers_to_add,
               headers_to_replace,
               headers_to_remove,
-              &logger,
-              error_log_enabled,
+              &configuration.observability.log_channels,
               &log_request_parts,
               &socket_data,
               latest_auth_data.as_deref(),
@@ -1346,22 +1318,18 @@ async fn request_handler_wrapped(
             .await
             {
               Ok(response) => {
-                if log_enabled {
-                  if let Some(request_parts) = log_request_parts {
-                    if let Some(logger) = &logger {
-                      log_access(
-                        logger,
-                        &request_parts,
-                        &socket_data,
-                        latest_auth_data.as_deref(),
-                        response.status().as_u16(),
-                        extract_content_length(&response),
-                        log_date_format,
-                        log_format,
-                      )
-                      .await;
-                    }
-                  }
+                if let Some(request_parts) = log_request_parts {
+                  log_access(
+                    &configuration.observability.log_channels,
+                    &request_parts,
+                    &socket_data,
+                    latest_auth_data.as_deref(),
+                    response.status().as_u16(),
+                    extract_content_length(&response),
+                    log_date_format,
+                    log_format,
+                  )
+                  .await;
                 }
                 return Ok(response);
               }
@@ -1424,8 +1392,7 @@ async fn request_handler_wrapped(
                 headers_to_add,
                 headers_to_replace,
                 headers_to_remove,
-                &logger,
-                error_log_enabled,
+                &configuration.observability.log_channels,
                 &log_request_parts,
                 &socket_data,
                 latest_auth_data.as_deref(),
@@ -1435,22 +1402,18 @@ async fn request_handler_wrapped(
               .await
               {
                 Ok(response) => {
-                  if log_enabled {
-                    if let Some(request_parts) = log_request_parts {
-                      if let Some(logger) = &logger {
-                        log_access(
-                          logger,
-                          &request_parts,
-                          &socket_data,
-                          latest_auth_data.as_deref(),
-                          response.status().as_u16(),
-                          extract_content_length(&response),
-                          log_date_format,
-                          log_format,
-                        )
-                        .await;
-                      }
-                    }
+                  if let Some(request_parts) = log_request_parts {
+                    log_access(
+                      &configuration.observability.log_channels,
+                      &request_parts,
+                      &socket_data,
+                      latest_auth_data.as_deref(),
+                      response.status().as_u16(),
+                      extract_content_length(&response),
+                      log_date_format,
+                      log_format,
+                    )
+                    .await;
                   }
                   return Ok(response);
                 }
@@ -1474,16 +1437,14 @@ async fn request_handler_wrapped(
       Err(err) => {
         let response = generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &configuration, &None).await;
 
-        if error_log_enabled {
-          if let Some(logger) = &logger {
-            logger
-              .send(LogMessage::new(
-                format!("Unexpected error while serving a request: {err}"),
-                true,
-              ))
-              .await
-              .unwrap_or_default();
-          }
+        for logger in &configuration.observability.log_channels {
+          logger
+            .send(LogMessage::new(
+              format!("Unexpected error while serving a request: {err}"),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
         }
 
         let (mut response_parts, response_body) = response.into_parts();
@@ -1506,8 +1467,7 @@ async fn request_handler_wrapped(
           headers_to_add,
           headers_to_replace,
           headers_to_remove,
-          &logger,
-          error_log_enabled,
+          &configuration.observability.log_channels,
           &log_request_parts,
           &socket_data,
           latest_auth_data.as_deref(),
@@ -1517,22 +1477,18 @@ async fn request_handler_wrapped(
         .await
         {
           Ok(response) => {
-            if log_enabled {
-              if let Some(request_parts) = log_request_parts {
-                if let Some(logger) = &logger {
-                  log_access(
-                    logger,
-                    &request_parts,
-                    &socket_data,
-                    latest_auth_data.as_deref(),
-                    response.status().as_u16(),
-                    extract_content_length(&response),
-                    log_date_format,
-                    log_format,
-                  )
-                  .await;
-                }
-              }
+            if let Some(request_parts) = log_request_parts {
+              log_access(
+                &configuration.observability.log_channels,
+                &request_parts,
+                &socket_data,
+                latest_auth_data.as_deref(),
+                response.status().as_u16(),
+                extract_content_length(&response),
+                log_date_format,
+                log_format,
+              )
+              .await;
             }
             return Ok(response);
           }
@@ -1566,8 +1522,7 @@ async fn request_handler_wrapped(
     headers_to_add,
     headers_to_replace,
     headers_to_remove,
-    &logger,
-    error_log_enabled,
+    &configuration.observability.log_channels,
     &log_request_parts,
     &socket_data,
     latest_auth_data.as_deref(),
@@ -1577,22 +1532,18 @@ async fn request_handler_wrapped(
   .await
   {
     Ok(response) => {
-      if log_enabled {
-        if let Some(request_parts) = log_request_parts {
-          if let Some(logger) = &logger {
-            log_access(
-              logger,
-              &request_parts,
-              &socket_data,
-              latest_auth_data.as_deref(),
-              response.status().as_u16(),
-              extract_content_length(&response),
-              log_date_format,
-              log_format,
-            )
-            .await;
-          }
-        }
+      if let Some(request_parts) = log_request_parts {
+        log_access(
+          &configuration.observability.log_channels,
+          &request_parts,
+          &socket_data,
+          latest_auth_data.as_deref(),
+          response.status().as_u16(),
+          extract_content_length(&response),
+          log_date_format,
+          log_format,
+        )
+        .await;
       }
       Ok(response)
     }
@@ -1608,7 +1559,6 @@ pub async fn request_handler(
   server_address: SocketAddr,
   encrypted: bool,
   configurations: Arc<ServerConfigurations>,
-  loggers: Loggers,
   http3_alt_port: Option<u16>,
   acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   proxy_protocol_client_address: Option<SocketAddr>,
@@ -1625,7 +1575,6 @@ pub async fn request_handler(
     server_address,
     encrypted,
     configurations,
-    loggers,
     http3_alt_port,
     acme_http_01_resolvers,
     proxy_protocol_client_address,

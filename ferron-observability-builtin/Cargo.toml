@@ -1,0 +1,30 @@
+[package]
+name = "ferron-observability-builtin"
+version = "2.1.0"
+edition = "2021"
+
+[dependencies]
+# Ferron internal dependencies
+ferron-common = { workspace = true }
+
+# Error Handling & Utilities
+anyhow = "1.0.98"
+chrono = "0.4.41"
+
+# Async Runtime & Concurrency
+tokio = { version = "1.45.0", features = [
+    "fs",
+    "io-util",
+    "parking_lot",
+    "rt",
+    "rt-multi-thread",
+    "signal",
+    "sync",
+    "time",
+] }
+tokio-util = { version = "0.7.15" }
+async-channel = "2.3.1"
+
+[features]
+default = ["logfile"]
+logfile = []
