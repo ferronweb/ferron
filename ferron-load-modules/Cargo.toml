@@ -27,6 +27,7 @@ ferron-dns-builtin = { workspace = true, features = [
 ] }
 ferron-observability-builtin = { workspace = true, features = [
     "logfile",
+    "otlp"
 ] }
 anyhow = "1.0.98"
 

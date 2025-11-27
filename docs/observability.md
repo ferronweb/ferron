@@ -7,6 +7,7 @@ Ferron UNRELEASED and newer support modular observability backends. This allows 
 The following observability backend support is built into Ferron and is enabled by default:
 
 - _logfile_ - this observability backend logs requests and errors into files.
+- _otlp_ (Ferron UNRELEASED or newer) - this observability backend sends requests and errors into a service supporting OTLP (such as an OpenTelemetry collector).
 
 Ferron also supports additional observability backends that can be enabled at compile-time.
 
@@ -17,3 +18,9 @@ Additional observability backend support provided by Ferron are from these repos
 If you would like to use Ferron with additional observability backends, you can check the [compilation notes](https://github.com/ferronweb/ferron/blob/2.x/COMPILATION.md).
 
 ## Observability backend notes
+
+### _otlp_ observability backend
+
+This observability backend support OTLP (OpenTelemetry Protocol) logs.
+
+For OTLP logs, access logs have an `access` OTLP scope, while error logs have an `error` scope.
