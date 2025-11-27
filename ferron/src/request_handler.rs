@@ -583,7 +583,7 @@ async fn request_handler_wrapped(
   };
 
   let (request_parts, request_body) = request.into_parts();
-  let log_request_parts = if log_enabled { Some(request_parts.clone()) } else { None };
+  let mut log_request_parts = if log_enabled { Some(request_parts.clone()) } else { None };
   let request = Request::from_parts(request_parts, request_body);
 
   // Find the server configuration
@@ -765,6 +765,13 @@ async fn request_handler_wrapped(
   );
   let log_enabled = !get_value!("log", configuration).is_none_or(|v| v.is_null());
   let error_log_enabled = !get_value!("error_log", configuration).is_none_or(|v| v.is_null());
+
+  // Clone the log request parts if logging is enabled and request parts are not already cloned
+  if log_enabled && log_request_parts.is_none() {
+    let (request_parts, request_body) = request.into_parts();
+    log_request_parts = Some(request_parts.clone());
+    request = Request::from_parts(request_parts, request_body);
+  }
 
   // Sanitize the URL
   let url_pathname = request.uri().path();
