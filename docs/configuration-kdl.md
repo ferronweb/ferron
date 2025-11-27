@@ -316,22 +316,6 @@ manual-tls.example.com {
 }
 ```
 
-### Logging
-
-- `log <log_file_path: string>`
-  - This directive specifies the path to the access log file, which contains the HTTP response logs in Combined Log Format. Default: none
-- `error_log <error_log_file_path: string>`
-  - This directive specifies the path to the error log file. Default: none
-
-**Configuration example:**
-
-```kdl
-example.com {
-    log "/var/log/ferron/example.com.access.log"
-    error_log "/var/log/ferron/example.com.error.log"
-}
-```
-
 ## Directives
 
 ### Headers & response customization
@@ -695,6 +679,10 @@ example.com {
   - This directive specifies the date format (according to POSIX) for the access log file. Default: `"%d/%b/%Y:%H:%M:%S %z"`
 - `log_format <log_format: string>`
   - This directive specifies the entry format for the access log file. The placeholders can be found in the reference below the section specifying. Default: `"{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""` (Combined Log Format)
+- `log <log_file_path: string>` (_logfile_ observability backend)
+  - This directive specifies the path to the access log file, which contains the HTTP response logs in Combined Log Format. This directive was a global and virtual host directive before Ferron UNRELEASED. Default: none
+- `error_log <error_log_file_path: string>` (_logfile_ observability backend)
+  - This directive specifies the path to the error log file. This directive was a global and virtual host directive before Ferron UNRELEASED. Default: none
 
 **Configuration example:**
 
@@ -702,6 +690,11 @@ example.com {
 * {
     log_date_format "%d/%b/%Y:%H:%M:%S %z"
     log_format "{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""
+}
+
+example.com {
+    log "/var/log/ferron/example.com.access.log"
+    error_log "/var/log/ferron/example.com.error.log"
 }
 ```
 
