@@ -10,10 +10,10 @@ The following observability backend support is built into Ferron and is enabled 
 
 Ferron also supports additional observability backends that can be enabled at compile-time.
 
-Additional observability backends provided by Ferron are from these repositories:
+Additional observability backend support provided by Ferron are from these repositories:
 
 **TODO: add observability backends**
 
-If you would like to use Ferron with additional modules, you can check the [compilation notes](https://github.com/ferronweb/ferron/blob/2.x/COMPILATION.md).
+If you would like to use Ferron with additional observability backends, you can check the [compilation notes](https://github.com/ferronweb/ferron/blob/2.x/COMPILATION.md).
 
 ## Observability backend notes
