@@ -184,55 +184,6 @@ fn before_starting_server(
     let global_configuration = server_configurations.find_global_configuration();
     let global_configuration_clone = global_configuration.clone();
 
-    /*
-    // Obtain the loggers builder
-    let mut loggers_builder = (*LOGGER_BUILDER)
-      .lock()
-      .map_err(|_| anyhow::anyhow!("Can't access the loggers"))?;
-
-    let mut log_file_names = HashMap::new();
-
-    // Iterate server configurations (logging configuration)
-    for server_configuration in &server_configurations.inner {
-      // Determine log filenames
-      let error_log_filename = get_value!("error_log", server_configuration)
-        .and_then(|v| v.as_str())
-        .map(String::from);
-      let log_filename = get_value!("log", server_configuration)
-        .and_then(|v| v.as_str())
-        .map(String::from);
-      if log_filename.is_some() || error_log_filename.is_some() {
-        // If there are two global configurations, the latest one takes precedence, because the entry is overridden in the `HashMap`
-        log_file_names.insert(
-          LoggerFilter {
-            hostname: server_configuration.filters.hostname.clone(),
-            ip: server_configuration.filters.ip,
-            port: server_configuration.filters.port,
-          },
-          (log_filename, error_log_filename),
-        );
-      }
-    }
-
-    // Remove unused loggers from the logger builder
-    loggers_builder
-      .inner
-      .retain(|filter, _| log_file_names.contains_key(filter));
-
-    // Configure new loggers
-    for (filter, (log_filename, error_log_filename)) in log_file_names {
-      let (_, logging_rx) = loggers_builder.add(filter, async_channel::unbounded());
-      configure_logging(log_filename, error_log_filename, &secondary_runtime, &logging_rx);
-    }
-
-    // Obtain loggers from the logger builder
-    let loggers = loggers_builder.build_borrowed();
-
-    // Obtain the global logger
-    let global_logger = loggers.find_global_logger();
-    let global_logger_clone = global_logger.clone();
-    */
-
     // Reference to the secondary Tokio runtime
     let secondary_runtime_ref = &secondary_runtime;
 
