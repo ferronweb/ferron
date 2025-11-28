@@ -257,7 +257,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                     .build(),
                 ),
                 Err(e) => {
-                  eprintln!("Failed to initialize OTLP log exporter: {e}");
+                  eprintln!("Failed to initialize OTLP metrics exporter: {e}");
                   None
                 }
               };
