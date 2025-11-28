@@ -11,10 +11,10 @@ use hyper::{header, Request, Response, StatusCode, Uri};
 
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
+use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
+use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender};
 use ferron_common::util::{is_localhost, ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value, get_values_for_validation};
-
-use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 
 /// A core module loader
 pub struct CoreModuleLoader {
@@ -683,6 +683,9 @@ impl Module for CoreModule {
       default_http_port: self.default_http_port,
       default_https_port: self.default_https_port,
       has_https: self.has_https.load(Ordering::Relaxed),
+      request_timer: None,
+      metrics_attributes: None,
+      response_status: None,
     })
   }
 }
@@ -692,6 +695,9 @@ struct CoreModuleHandlers {
   default_http_port: Option<u16>,
   default_https_port: Option<u16>,
   has_https: bool,
+  request_timer: Option<std::time::Instant>,
+  metrics_attributes: Option<Vec<(&'static str, MetricAttributeValue)>>,
+  response_status: Option<hyper::StatusCode>,
 }
 
 #[async_trait(?Send)]
@@ -981,5 +987,120 @@ impl ModuleHandlers for CoreModuleHandlers {
         new_remote_address: None,
       })
     }
+  }
+
+  async fn response_modifying_handler(
+    &mut self,
+    response: Response<BoxBody<Bytes, std::io::Error>>,
+  ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Box<dyn Error>> {
+    self.response_status = Some(response.status());
+    Ok(response)
+  }
+
+  async fn metric_data_before_handler(
+    &mut self,
+    request: &Request<BoxBody<Bytes, std::io::Error>>,
+    socket_data: &SocketData,
+    metrics_sender: &MetricsMultiSender,
+  ) {
+    let request_method = request.method().clone();
+    let url_scheme = if socket_data.encrypted { "https" } else { "http" };
+    let http_version = match request.version() {
+      hyper::Version::HTTP_09 => Some("0.9"),
+      hyper::Version::HTTP_10 => Some("1.0"),
+      hyper::Version::HTTP_11 => Some("1.1"),
+      hyper::Version::HTTP_2 => Some("2"),
+      hyper::Version::HTTP_3 => Some("3"),
+      _ => None,
+    };
+    let request_timer = std::time::Instant::now();
+    let mut metric_attributes = Vec::new();
+    metric_attributes.push((
+      "http.request.method",
+      MetricAttributeValue::String(request_method.to_string()),
+    ));
+    metric_attributes.push(("url.scheme", MetricAttributeValue::String(url_scheme.to_string())));
+    if let Some(http_version) = http_version {
+      metric_attributes.push((
+        "network.protocol.name",
+        MetricAttributeValue::String("http".to_string()),
+      ));
+      metric_attributes.push((
+        "network.protocol.version",
+        MetricAttributeValue::String(http_version.to_string()),
+      ));
+    }
+
+    metrics_sender
+      .send(Metric::new(
+        "http.server.active_requests",
+        metric_attributes.clone(),
+        MetricType::UpDownCounter,
+        MetricValue::I64(1),
+        Some("{request}"),
+        Some("Number of active HTTP server requests."),
+      ))
+      .await;
+
+    self.metrics_attributes = Some(metric_attributes);
+    self.request_timer = Some(request_timer);
+  }
+
+  async fn metric_data_after_handler(&mut self, metrics_sender: &MetricsMultiSender) {
+    let request_duration = self.request_timer.take().map(|timer| timer.elapsed().as_secs_f64());
+    let metric_attributes = self.metrics_attributes.take().unwrap_or_default();
+    let mut request_count_metric_attributes = metric_attributes.clone();
+    if let Some(status_code) = self.response_status.take() {
+      request_count_metric_attributes.push((
+        "http.response.status_code",
+        MetricAttributeValue::I64(status_code.as_u16() as i64),
+      ));
+      if status_code.is_client_error() || status_code.is_server_error() {
+        request_count_metric_attributes.push((
+          "error.type",
+          MetricAttributeValue::String(status_code.as_u16().to_string()),
+        ));
+      }
+    }
+
+    // One active request less
+    metrics_sender
+      .send(Metric::new(
+        "http.server.active_requests",
+        metric_attributes.clone(),
+        MetricType::UpDownCounter,
+        MetricValue::I64(-1),
+        Some("{request}"),
+        Some("Number of active HTTP server requests."),
+      ))
+      .await;
+
+    if let Some(request_duration) = request_duration {
+      // HTTP request duration
+      metrics_sender
+        .send(Metric::new(
+          "http.server.request.duration",
+          metric_attributes.clone(),
+          MetricType::Histogram(Some(vec![
+            0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
+          ])),
+          MetricValue::F64(request_duration),
+          Some("s"),
+          Some("Duration of HTTP server requests."),
+        ))
+        .await;
+    }
+
+    // Add one HTTP request
+    metrics_sender
+      .send(Metric::new(
+        "ferron.http.server.request_count",
+        request_count_metric_attributes.clone(),
+        MetricType::Counter,
+        MetricValue::U64(1),
+        Some("{request}"),
+        Some("Number of HTTP server requests."),
+      ))
+      .await;
   }
 }

@@ -39,6 +39,11 @@ pub trait ObservabilityBackend {
   fn get_log_channel(&self) -> Option<Sender<LogMessage>> {
     None
   }
+
+  /// Obtains the channel for metrics
+  fn get_metric_channel(&self) -> Option<Sender<Metric>> {
+    None
+  }
 }
 
 /// Observability backend channels inside configurations
@@ -46,6 +51,8 @@ pub trait ObservabilityBackend {
 pub struct ObservabilityBackendChannels {
   /// Log channels
   pub log_channels: Vec<Sender<LogMessage>>,
+  /// Metric channels
+  pub metric_channels: Vec<Sender<Metric>>,
 }
 
 impl Default for ObservabilityBackendChannels {
@@ -59,11 +66,163 @@ impl ObservabilityBackendChannels {
   pub fn new() -> Self {
     Self {
       log_channels: Vec::new(),
+      metric_channels: Vec::new(),
     }
   }
 
   /// Adds a log channel to the observability backend channels
   pub fn add_log_channel(&mut self, channel: Sender<LogMessage>) {
     self.log_channels.push(channel);
+  }
+
+  /// Adds a metric channel to the observability backend channels
+  pub fn add_metric_channel(&mut self, channel: Sender<Metric>) {
+    self.metric_channels.push(channel);
+  }
+}
+
+/// Represents a metric with its name, attributes, and value.
+#[derive(Clone)]
+pub struct Metric {
+  /// Name of the metric
+  pub name: &'static str,
+  /// Attributes of the metric
+  pub attributes: Vec<(&'static str, MetricAttributeValue)>,
+  /// Type of the metric
+  pub ty: MetricType,
+  /// Value of the metric
+  pub value: MetricValue,
+  /// Optional unit of the metric
+  pub unit: Option<&'static str>,
+  /// Optional description of the metric
+  pub description: Option<&'static str>,
+}
+
+impl Metric {
+  /// Creates a new instance of `Metric`
+  pub fn new(
+    name: &'static str,
+    attributes: Vec<(&'static str, MetricAttributeValue)>,
+    ty: MetricType,
+    value: MetricValue,
+    unit: Option<&'static str>,
+    description: Option<&'static str>,
+  ) -> Self {
+    Self {
+      name,
+      attributes,
+      ty,
+      value,
+      unit,
+      description,
+    }
+  }
+}
+
+/// Represents a type of metric.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MetricType {
+  /// Increasing counter
+  Counter,
+
+  /// Gauge
+  Gauge,
+
+  /// Increasing or decreasing counter
+  UpDownCounter,
+
+  /// Histogram with optional buckets
+  Histogram(Option<Vec<f64>>),
+}
+
+/// Represents a value for a metric.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum MetricValue {
+  F64(f64),
+  U64(u64),
+  I64(i64),
+}
+
+/// Represents an attribute value for a metric.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MetricAttributeValue {
+  /// String value
+  String(String),
+
+  /// Boolean value
+  Bool(bool),
+
+  /// Integer value
+  I64(i64),
+
+  /// Floating-point value
+  F64(f64),
+}
+
+/// Facilitates logging of error messages through a provided sender.
+pub struct MetricsMultiSender {
+  senders: Vec<Sender<Metric>>,
+}
+
+impl MetricsMultiSender {
+  /// Creates a new `MetricsMultiSender` instance.
+  ///
+  /// # Parameters
+  ///
+  /// - `sender`: A `Sender<Metric>` used for sending metric data.
+  ///
+  /// # Returns
+  ///
+  /// A new `MetricsMultiSender` instance associated with the provided sender.
+  pub fn new(sender: Sender<Metric>) -> Self {
+    Self { senders: vec![sender] }
+  }
+
+  /// Creates a new `MetricsMultiSender` instance with multiple senders.
+  ///
+  /// # Parameters
+  ///
+  /// - `senders`: A vector of `Sender<Metric>` used for sending metric data.
+  ///
+  /// # Returns
+  ///
+  /// A new `MetricsMultiSender` instance associated with multiple provided senders.
+  pub fn new_multiple(senders: Vec<Sender<Metric>>) -> Self {
+    Self { senders }
+  }
+
+  /// Creates a new `MetricsMultiSender` instance without any underlying sender.
+  ///
+  /// # Returns
+  ///
+  /// A new `MetricsMultiSender` instance not associated with any sender.
+  pub fn without_sender() -> Self {
+    Self { senders: vec![] }
+  }
+
+  /// Sends metric data asynchronously.
+  ///
+  /// # Parameters
+  ///
+  /// - `metric_data`: A `Metric` containing the metric data to be sent.
+  ///
+  pub async fn send(&self, metric_data: Metric) {
+    for sender in &self.senders {
+      sender.send(metric_data.clone()).await.unwrap_or_default();
+    }
+  }
+}
+
+impl Clone for MetricsMultiSender {
+  /// Clone a `MetricsMultiSender`.
+  ///
+  /// # Returns
+  ///
+  /// A cloned `MetricsMultiSender` instance
+  fn clone(&self) -> Self {
+    Self {
+      senders: self.senders.clone(),
+    }
   }
 }

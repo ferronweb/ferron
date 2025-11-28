@@ -10,6 +10,7 @@ use hyper::{HeaderMap, Request, Response, StatusCode, Uri};
 
 use crate::config::ServerConfiguration;
 use crate::logging::ErrorLogger;
+use crate::observability::MetricsMultiSender;
 
 /// A trait that defines a module loader
 pub trait ModuleLoader {
@@ -62,6 +63,20 @@ pub trait ModuleHandlers {
   ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Box<dyn Error>> {
     Ok(response)
   }
+
+  /// Sends metric data before handling the request
+  #[allow(unused_variables)]
+  async fn metric_data_before_handler(
+    &mut self,
+    request: &Request<BoxBody<Bytes, std::io::Error>>,
+    socket_data: &SocketData,
+    metrics_sender: &MetricsMultiSender,
+  ) {
+  }
+
+  /// Sends metric data after modifying the response
+  #[allow(unused_variables)]
+  async fn metric_data_after_handler(&mut self, metrics_sender: &MetricsMultiSender) {}
 }
 
 /// Contains information about a network socket, including remote and local addresses,

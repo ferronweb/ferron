@@ -7,6 +7,7 @@ use std::time::Duration;
 use async_channel::Sender;
 use chrono::{DateTime, Local};
 use ferron_common::logging::{ErrorLogger, LogMessage};
+use ferron_common::observability::MetricsMultiSender;
 use futures_util::stream::TryStreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
@@ -283,6 +284,8 @@ async fn execute_response_modifying_handlers(
   latest_auth_data: Option<&str>,
   date_format: Option<&str>,
   log_format: Option<&str>,
+  metrics_sender: MetricsMultiSender,
+  metrics_enabled: bool,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Response<BoxBody<Bytes, std::io::Error>>> {
   while let Some(mut executed_handler) = executed_handlers.pop() {
     let response_status = executed_handler.response_modifying_handler(response).await;
@@ -316,9 +319,18 @@ async fn execute_response_modifying_handlers(
         )
         .await;
 
+        if metrics_enabled {
+          while let Some(mut executed_handler) = executed_handlers.pop() {
+            executed_handler.metric_data_after_handler(&metrics_sender).await;
+          }
+        }
+
         return Err(final_response);
       }
     };
+    if metrics_enabled {
+      executed_handler.metric_data_after_handler(&metrics_sender).await;
+    }
   }
   Ok(response)
 }
@@ -1222,10 +1234,16 @@ async fn request_handler_wrapped(
   };
   drop(acme_http_01_resolvers_inner);
 
-  let error_logger = if !configuration.observability.log_channels.is_empty() {
+  let mut error_logger = if !configuration.observability.log_channels.is_empty() {
     ErrorLogger::new_multiple(configuration.observability.log_channels.clone())
   } else {
     ErrorLogger::without_logger()
+  };
+  let mut metrics_enabled = !configuration.observability.metric_channels.is_empty();
+  let mut metrics_sender = if metrics_enabled {
+    MetricsMultiSender::new_multiple(configuration.observability.metric_channels.clone())
+  } else {
+    MetricsMultiSender::without_sender()
   };
 
   // Obtain module handlers
@@ -1264,6 +1282,12 @@ async fn request_handler_wrapped(
   let mut is_error_handler = false;
   let mut handlers_iter: Box<dyn Iterator<Item = Box<dyn ModuleHandlers>>> = Box::new(module_handlers.into_iter());
   while let Some(mut handlers) = handlers_iter.next() {
+    if metrics_enabled {
+      handlers
+        .metric_data_before_handler(&request, &socket_data, &metrics_sender)
+        .await;
+    }
+
     let response_result = handlers
       .request_handler(request, &configuration, &socket_data, &error_logger)
       .await;
@@ -1314,6 +1338,8 @@ async fn request_handler_wrapped(
               latest_auth_data.as_deref(),
               log_date_format,
               log_format,
+              metrics_sender,
+              metrics_enabled,
             )
             .await
             {
@@ -1358,6 +1384,11 @@ async fn request_handler_wrapped(
                       module_handlers.push(module.get_module_handlers());
                     }
                     handlers_iter = Box::new(module_handlers.into_iter());
+                    if metrics_enabled {
+                      while let Some(mut executed_handler) = executed_handlers.pop() {
+                        executed_handler.metric_data_after_handler(&metrics_sender).await;
+                      }
+                    }
                     executed_handlers = Vec::new();
                     request = request_cloned;
                     if let Some(request_data) = request.extensions_mut().get_mut::<RequestData>() {
@@ -1366,6 +1397,17 @@ async fn request_handler_wrapped(
                     is_error_handler = true;
                     log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
                     log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
+                    error_logger = if !configuration.observability.log_channels.is_empty() {
+                      ErrorLogger::new_multiple(configuration.observability.log_channels.clone())
+                    } else {
+                      ErrorLogger::without_logger()
+                    };
+                    metrics_enabled = !configuration.observability.metric_channels.is_empty();
+                    metrics_sender = if metrics_enabled {
+                      MetricsMultiSender::new_multiple(configuration.observability.metric_channels.clone())
+                    } else {
+                      MetricsMultiSender::without_sender()
+                    };
                     continue;
                   }
                 }
@@ -1398,6 +1440,8 @@ async fn request_handler_wrapped(
                 latest_auth_data.as_deref(),
                 log_date_format,
                 log_format,
+                metrics_sender,
+                metrics_enabled,
               )
               .await
               {
@@ -1473,6 +1517,8 @@ async fn request_handler_wrapped(
           latest_auth_data.as_deref(),
           log_date_format,
           log_format,
+          metrics_sender,
+          metrics_enabled,
         )
         .await
         {
@@ -1528,6 +1574,8 @@ async fn request_handler_wrapped(
     latest_auth_data.as_deref(),
     log_date_format,
     log_format,
+    metrics_sender,
+    metrics_enabled,
   )
   .await
   {

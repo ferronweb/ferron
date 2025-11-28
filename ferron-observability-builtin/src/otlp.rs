@@ -1,19 +1,37 @@
-use std::{error::Error, sync::Arc, time::Duration};
+use std::{collections::HashMap, error::Error, sync::Arc, time::Duration};
 
 use async_channel::Sender;
 use ferron_common::{
   config::ServerConfiguration,
   get_entries_for_validation, get_entry, get_value,
   logging::LogMessage,
-  observability::{ObservabilityBackend, ObservabilityBackendLoader},
+  observability::{
+    Metric, MetricAttributeValue, MetricType, MetricValue, ObservabilityBackend, ObservabilityBackendLoader,
+  },
   util::{ModuleCache, NoServerVerifier},
 };
 use hyper::header::HeaderValue;
-use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
+use opentelemetry::metrics::MeterProvider;
+use opentelemetry::{
+  logs::{LogRecord, Logger, LoggerProvider},
+  KeyValue,
+};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
 use rustls::{client::WebPkiServerVerifier, ClientConfig};
 use rustls_platform_verifier::BuilderVerifierExt;
+
+enum CachedInstrument {
+  F64Counter(opentelemetry::metrics::Counter<f64>),
+  F64Gauge(opentelemetry::metrics::Gauge<f64>),
+  F64Histogram(opentelemetry::metrics::Histogram<f64>),
+  F64UpDownCounter(opentelemetry::metrics::UpDownCounter<f64>),
+  I64Gauge(opentelemetry::metrics::Gauge<i64>),
+  I64UpDownCounter(opentelemetry::metrics::UpDownCounter<i64>),
+  U64Counter(opentelemetry::metrics::Counter<u64>),
+  U64Gauge(opentelemetry::metrics::Gauge<u64>),
+  U64Histogram(opentelemetry::metrics::Histogram<u64>),
+}
 
 /// OTLP observability backend loader
 pub struct OtlpObservabilityBackendLoader {
@@ -30,7 +48,12 @@ impl OtlpObservabilityBackendLoader {
   /// Creates a new observability backend loader
   pub fn new() -> Self {
     Self {
-      cache: ModuleCache::new(vec!["otlp_no_verification", "otlp_service_name", "otlp_logs"]),
+      cache: ModuleCache::new(vec![
+        "otlp_no_verification",
+        "otlp_service_name",
+        "otlp_logs",
+        "otlp_metrics",
+      ]),
     }
   }
 }
@@ -100,6 +123,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
           if let Some(logs_endpoint) = logs_endpoint {
             let cancel_token_clone = cancel_token.clone();
             let opentelemetry_resource = opentelemetry_resource.clone();
+            let hyper_tls_config = hyper_tls_config.clone();
             let (logging_tx, logging_rx) = async_channel::unbounded::<LogMessage>();
             logging_tx_option = Some(logging_tx);
             secondary_runtime.spawn(async move {
@@ -108,7 +132,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                   .with_http()
                   .with_http_client(opentelemetry_http::hyper::HyperClient::new(
                     hyper_rustls::HttpsConnectorBuilder::new()
-                      .with_tls_config(hyper_tls_config.clone())
+                      .with_tls_config(hyper_tls_config)
                       .https_or_http()
                       .enable_http1()
                       .enable_http2()
@@ -151,7 +175,10 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                 let error_logger = log_provider.logger("error");
                 while let Ok(message) = tokio::select! {
                   message = logging_rx.recv() => message,
-                  _ = cancel_token_clone.cancelled() => return,
+                  _ = cancel_token_clone.cancelled() => {
+                      log_provider.shutdown().unwrap_or_default();
+                      return;
+                  },
                 } {
                   let (message_inner, is_error) = message.get_message();
                   if is_error {
@@ -170,16 +197,267 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
             });
           }
 
+          // Metrics
+          let otlp_metrics = get_entry!("otlp_metrics", config);
+          let metrics_endpoint = otlp_metrics
+            .and_then(|e| e.values.first())
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+          let metrics_authorization = otlp_metrics
+            .and_then(|e| e.props.get("authorization"))
+            .and_then(|v| v.as_str())
+            .and_then(|s| HeaderValue::from_str(s).ok());
+          let metrics_protocol = otlp_metrics
+            .and_then(|e| e.props.get("protocol"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+          let mut metrics_tx_option = None;
+          if let Some(metrics_endpoint) = metrics_endpoint {
+            let cancel_token_clone = cancel_token.clone();
+            let opentelemetry_resource = opentelemetry_resource.clone();
+            let hyper_tls_config = hyper_tls_config.clone();
+            let (metrics_tx, metrics_rx) = async_channel::unbounded::<Metric>();
+            metrics_tx_option = Some(metrics_tx);
+            secondary_runtime.spawn(async move {
+              let metric_provider = match match metrics_protocol.as_deref() {
+                Some("http/protobuf") | Some("http/json") => opentelemetry_otlp::MetricExporter::builder()
+                  .with_http()
+                  .with_http_client(opentelemetry_http::hyper::HyperClient::new(
+                    hyper_rustls::HttpsConnectorBuilder::new()
+                      .with_tls_config(hyper_tls_config)
+                      .https_or_http()
+                      .enable_http1()
+                      .enable_http2()
+                      .build(),
+                    Duration::from_secs(10),
+                    metrics_authorization,
+                  ))
+                  .with_protocol(match metrics_protocol.as_deref() {
+                    Some("http/json") => opentelemetry_otlp::Protocol::HttpJson,
+                    _ => opentelemetry_otlp::Protocol::HttpBinary, // Also: Some("http/protobuf")
+                  })
+                  .with_endpoint(metrics_endpoint)
+                  .build(),
+                _ => opentelemetry_otlp::MetricExporter::builder() // Also: Some("grpc")
+                  .with_tonic()
+                  .with_endpoint(metrics_endpoint)
+                  .build(),
+              } {
+                Ok(exporter) => Some(
+                  opentelemetry_sdk::metrics::SdkMeterProvider::builder()
+                    .with_reader(
+                      opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader::builder(
+                        exporter,
+                        opentelemetry_sdk::runtime::Tokio,
+                      )
+                      .build(),
+                    )
+                    .with_resource(opentelemetry_resource)
+                    .build(),
+                ),
+                Err(e) => {
+                  eprintln!("Failed to initialize OTLP log exporter: {e}");
+                  None
+                }
+              };
+
+              let mut instrument_cache: HashMap<&'static str, CachedInstrument> = HashMap::new();
+
+              if let Some(metric_provider) = metric_provider {
+                let meter = metric_provider.meter("ferron");
+                while let Ok(metric) = tokio::select! {
+                  message = metrics_rx.recv() => message,
+                  _ = cancel_token_clone.cancelled() => {
+                      metric_provider.shutdown().unwrap_or_default();
+                      return;
+                  },
+                } {
+                  let attributes = metric
+                    .attributes
+                    .into_iter()
+                    .map(|(key, value)| {
+                      KeyValue::new(
+                        key,
+                        match value {
+                          MetricAttributeValue::F64(value) => opentelemetry::Value::from(value),
+                          MetricAttributeValue::I64(value) => opentelemetry::Value::from(value),
+                          MetricAttributeValue::String(value) => opentelemetry::Value::from(value),
+                          MetricAttributeValue::Bool(value) => opentelemetry::Value::from(value),
+                        },
+                      )
+                    })
+                    .collect::<Vec<_>>();
+                  match (metric.ty, metric.value) {
+                    (MetricType::Counter, MetricValue::F64(value)) => {
+                      if let CachedInstrument::F64Counter(metric) =
+                        instrument_cache.entry(metric.name).or_insert_with(|| {
+                          let mut metric_builder = meter.f64_counter(metric.name);
+                          if let Some(unit) = metric.unit {
+                            metric_builder = metric_builder.with_unit(unit);
+                          }
+                          if let Some(description) = metric.description {
+                            metric_builder = metric_builder.with_description(description);
+                          }
+                          CachedInstrument::F64Counter(metric_builder.build())
+                        })
+                      {
+                        metric.add(value, &attributes);
+                      }
+                    }
+                    (MetricType::Counter, MetricValue::U64(value)) => {
+                      if let CachedInstrument::U64Counter(metric) =
+                        instrument_cache.entry(metric.name).or_insert_with(|| {
+                          let mut metric_builder = meter.u64_counter(metric.name);
+                          if let Some(unit) = metric.unit {
+                            metric_builder = metric_builder.with_unit(unit);
+                          }
+                          if let Some(description) = metric.description {
+                            metric_builder = metric_builder.with_description(description);
+                          }
+                          CachedInstrument::U64Counter(metric_builder.build())
+                        })
+                      {
+                        metric.add(value, &attributes);
+                      }
+                    }
+                    (MetricType::UpDownCounter, MetricValue::F64(value)) => {
+                      if let CachedInstrument::F64UpDownCounter(metric) =
+                        instrument_cache.entry(metric.name).or_insert_with(|| {
+                          let mut metric_builder = meter.f64_up_down_counter(metric.name);
+                          if let Some(unit) = metric.unit {
+                            metric_builder = metric_builder.with_unit(unit);
+                          }
+                          if let Some(description) = metric.description {
+                            metric_builder = metric_builder.with_description(description);
+                          }
+                          CachedInstrument::F64UpDownCounter(metric_builder.build())
+                        })
+                      {
+                        metric.add(value, &attributes);
+                      }
+                    }
+                    (MetricType::UpDownCounter, MetricValue::I64(value)) => {
+                      if let CachedInstrument::I64UpDownCounter(metric) =
+                        instrument_cache.entry(metric.name).or_insert_with(|| {
+                          let mut metric_builder = meter.i64_up_down_counter(metric.name);
+                          if let Some(unit) = metric.unit {
+                            metric_builder = metric_builder.with_unit(unit);
+                          }
+                          if let Some(description) = metric.description {
+                            metric_builder = metric_builder.with_description(description);
+                          }
+                          CachedInstrument::I64UpDownCounter(metric_builder.build())
+                        })
+                      {
+                        metric.add(value, &attributes);
+                      }
+                    }
+                    (MetricType::Gauge, MetricValue::F64(value)) => {
+                      if let CachedInstrument::F64Gauge(metric) =
+                        instrument_cache.entry(metric.name).or_insert_with(|| {
+                          let mut metric_builder = meter.f64_gauge(metric.name);
+                          if let Some(unit) = metric.unit {
+                            metric_builder = metric_builder.with_unit(unit);
+                          }
+                          if let Some(description) = metric.description {
+                            metric_builder = metric_builder.with_description(description);
+                          }
+                          CachedInstrument::F64Gauge(metric_builder.build())
+                        })
+                      {
+                        metric.record(value, &attributes);
+                      }
+                    }
+                    (MetricType::Gauge, MetricValue::I64(value)) => {
+                      if let CachedInstrument::I64Gauge(metric) =
+                        instrument_cache.entry(metric.name).or_insert_with(|| {
+                          let mut metric_builder = meter.i64_gauge(metric.name);
+                          if let Some(unit) = metric.unit {
+                            metric_builder = metric_builder.with_unit(unit);
+                          }
+                          if let Some(description) = metric.description {
+                            metric_builder = metric_builder.with_description(description);
+                          }
+                          CachedInstrument::I64Gauge(metric_builder.build())
+                        })
+                      {
+                        metric.record(value, &attributes);
+                      }
+                    }
+                    (MetricType::Gauge, MetricValue::U64(value)) => {
+                      if let CachedInstrument::U64Gauge(metric) =
+                        instrument_cache.entry(metric.name).or_insert_with(|| {
+                          let mut metric_builder = meter.u64_gauge(metric.name);
+                          if let Some(unit) = metric.unit {
+                            metric_builder = metric_builder.with_unit(unit);
+                          }
+                          if let Some(description) = metric.description {
+                            metric_builder = metric_builder.with_description(description);
+                          }
+                          CachedInstrument::U64Gauge(metric_builder.build())
+                        })
+                      {
+                        metric.record(value, &attributes);
+                      }
+                    }
+                    (MetricType::Histogram(buckets), MetricValue::F64(value)) => {
+                      if let CachedInstrument::F64Histogram(metric) =
+                        instrument_cache.entry(metric.name).or_insert_with(|| {
+                          let mut metric_builder = meter.f64_histogram(metric.name);
+                          if let Some(unit) = metric.unit {
+                            metric_builder = metric_builder.with_unit(unit);
+                          }
+                          if let Some(buckets) = buckets {
+                            metric_builder = metric_builder.with_boundaries(buckets);
+                          }
+                          if let Some(description) = metric.description {
+                            metric_builder = metric_builder.with_description(description);
+                          }
+                          CachedInstrument::F64Histogram(metric_builder.build())
+                        })
+                      {
+                        metric.record(value, &attributes);
+                      }
+                    }
+                    (MetricType::Histogram(buckets), MetricValue::U64(value)) => {
+                      if let CachedInstrument::U64Histogram(metric) =
+                        instrument_cache.entry(metric.name).or_insert_with(|| {
+                          let mut metric_builder = meter.u64_histogram(metric.name);
+                          if let Some(unit) = metric.unit {
+                            metric_builder = metric_builder.with_unit(unit);
+                          }
+                          if let Some(buckets) = buckets {
+                            metric_builder = metric_builder.with_boundaries(buckets);
+                          }
+                          if let Some(description) = metric.description {
+                            metric_builder = metric_builder.with_description(description);
+                          }
+                          CachedInstrument::U64Histogram(metric_builder.build())
+                        })
+                      {
+                        metric.record(value, &attributes);
+                      }
+                    }
+                    _ => {} // Ignore unsupported metric types
+                  }
+                }
+
+                metric_provider.shutdown().unwrap_or_default();
+              }
+            });
+          }
+
           Ok(Arc::new(OtlpObservabilityBackend {
             cancel_token,
             logging_tx_option,
+            metrics_tx_option,
           }))
         })?,
     )
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {
-    vec!["otlp_logs"]
+    vec!["otlp_logs", "otlp_metrics"]
   }
 
   fn validate_configuration(
@@ -231,6 +509,24 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("otlp_metrics", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `otlp_metrics` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
+          Err(anyhow::anyhow!("Invalid OTLP metrics endpoint"))?
+        } else if !entry.props.get("authorization").is_none_or(|v| v.is_string()) {
+          Err(anyhow::anyhow!(
+            "Invalid Authorization header value for OTLP metrics endpoint"
+          ))?
+        } else if !entry.props.get("protocol").is_none_or(|v| v.is_string()) {
+          Err(anyhow::anyhow!("Invalid protocol for OTLP metrics endpoint"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -238,11 +534,16 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
 struct OtlpObservabilityBackend {
   cancel_token: tokio_util::sync::CancellationToken,
   logging_tx_option: Option<Sender<LogMessage>>,
+  metrics_tx_option: Option<Sender<Metric>>,
 }
 
 impl ObservabilityBackend for OtlpObservabilityBackend {
   fn get_log_channel(&self) -> Option<Sender<LogMessage>> {
     self.logging_tx_option.clone()
+  }
+
+  fn get_metric_channel(&self) -> Option<Sender<Metric>> {
+    self.metrics_tx_option.clone()
   }
 }
 

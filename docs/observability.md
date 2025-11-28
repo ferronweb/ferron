@@ -17,10 +17,40 @@ Additional observability backend support provided by Ferron are from these repos
 
 If you would like to use Ferron with additional observability backends, you can check the [compilation notes](https://github.com/ferronweb/ferron/blob/2.x/COMPILATION.md).
 
+## Metrics notes
+
+Metrics in Ferron are specified with OpenTelemetry-style names. Below are the metrics sent by Ferron:
+
+- **`http.server.active_requests`** (unit: `{request}`)
+  - Number of active HTTP server requests.
+  - **Attributes**
+    - `http.request.method` - HTTP request method.
+    - `url.scheme` - URL scheme (either `"http"` or `"https"`).
+    - `network.protocol.name` - Always `"http"`.
+    - `network.protocol.version` - HTTP version.
+- **`http.server.request.duration`** (unit: `s`)
+  - Duration of HTTP server requests.
+  - **Attributes**
+    - `http.request.method` - HTTP request method.
+    - `url.scheme` - URL scheme (either `"http"` or `"https"`).
+    - `network.protocol.name` - Always `"http"`.
+    - `network.protocol.version` - HTTP version.
+- **`ferron.http.server.request_count`** (unit: `{request}`)
+  - Number of HTTP server requests.
+  - **Attributes**
+    - `http.request.method` - HTTP request method.
+    - `url.scheme` - URL scheme (either `"http"` or `"https"`).
+    - `network.protocol.name` - Always `"http"`.
+    - `network.protocol.version` - HTTP version.
+    - `http.response.status_code` - HTTP response status code.
+    - `error.type` - Error type (if status code indicates a client or a server error).
+
 ## Observability backend notes
 
 ### _otlp_ observability backend
 
-This observability backend support OTLP (OpenTelemetry Protocol) logs.
+This observability backend support OTLP (OpenTelemetry Protocol) logs and metrics.
 
 For OTLP logs, access logs have an `access` OTLP scope, while error logs have an `error` scope.
+
+For OTLP metrics, they have a `ferron` scope.
