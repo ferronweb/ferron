@@ -250,6 +250,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                         exporter,
                         opentelemetry_sdk::runtime::Tokio,
                       )
+                      .with_interval(Duration::from_secs(30))
                       .build(),
                     )
                     .with_resource(opentelemetry_resource)
