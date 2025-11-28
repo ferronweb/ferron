@@ -44,6 +44,16 @@ Metrics in Ferron are specified with OpenTelemetry-style names. Below are the me
     - `network.protocol.version` - HTTP version.
     - `http.response.status_code` - HTTP response status code.
     - `error.type` - Error type (if status code indicates a client or a server error).
+- **`ferron.proxy.backends.selected`** (unit: `{backend}`; _rproxy_ module)
+  - Number of times a backend server was selected.
+  - **Attributes**
+    - `ferron.proxy.backend_url` - Backend server URL.
+    - `ferron.proxy.backend_unix_path` - Backend server Unix socket path.
+- **`ferron.proxy.backends.unhealthy`** (unit: `{backend}`; _rproxy_ module)
+  - Number of health check failures for a backend server.
+  - **Attributes**
+    - `ferron.proxy.backend_url` - Backend server URL.
+    - `ferron.proxy.backend_unix_path` - Backend server Unix socket path.
 
 ## Observability backend notes
 

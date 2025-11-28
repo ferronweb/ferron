@@ -11,6 +11,7 @@ use std::time::Duration;
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use bytes::Bytes;
+use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender};
 #[cfg(feature = "runtime-monoio")]
 use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
@@ -514,6 +515,8 @@ impl Module for ReverseProxyModule {
       load_balancer_algorithm: self.load_balancer_algorithm.clone(),
       proxy_to: self.proxy_to.clone(),
       health_check_max_fails: self.health_check_max_fails,
+      selected_backends_metrics: None,
+      unhealthy_backends_metrics: None,
     })
   }
 }
@@ -525,6 +528,8 @@ struct ReverseProxyModuleHandlers {
   load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
   proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
   health_check_max_fails: u64,
+  selected_backends_metrics: Option<Vec<(String, Option<String>)>>,
+  unhealthy_backends_metrics: Option<Vec<(String, Option<String>)>>,
 }
 
 #[async_trait(?Send)]
@@ -589,6 +594,9 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
       )
       .await
       {
+        if let Some(selected_backends_metrics) = self.selected_backends_metrics.as_mut() {
+          selected_backends_metrics.push((proxy_to.clone(), proxy_unix.clone()));
+        }
         let proxy_request_url = proxy_to.parse::<hyper::Uri>()?;
         let scheme_str = proxy_request_url.scheme_str();
         let mut encrypted = false;
@@ -700,8 +708,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
               Ok(stream) => stream,
               Err(err) => {
                 if enable_health_check {
-                  let mut failed_backends_write = self.failed_backends.write().await;
                   let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                  if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
+                    unhealthy_backends_metrics.push(proxy_key.clone());
+                  }
+                  let mut failed_backends_write = self.failed_backends.write().await;
                   let failed_attempts = failed_backends_write.get(&proxy_key);
                   failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
                 }
@@ -755,8 +766,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
               Ok(stream) => stream,
               Err(err) => {
                 if enable_health_check {
-                  let mut failed_backends_write = self.failed_backends.write().await;
                   let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                  if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
+                    unhealthy_backends_metrics.push(proxy_key.clone());
+                  }
+                  let mut failed_backends_write = self.failed_backends.write().await;
                   let failed_attempts = failed_backends_write.get(&proxy_key);
                   failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
                 }
@@ -786,8 +800,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             Ok(stream) => stream,
             Err(err) => {
               if enable_health_check {
-                let mut failed_backends_write = self.failed_backends.write().await;
                 let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
+                  unhealthy_backends_metrics.push(proxy_key.clone());
+                }
+                let mut failed_backends_write = self.failed_backends.write().await;
                 let failed_attempts = failed_backends_write.get(&proxy_key);
                 failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
               }
@@ -840,8 +857,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             Ok(_) => (),
             Err(err) => {
               if enable_health_check {
-                let mut failed_backends_write = self.failed_backends.write().await;
                 let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
+                  unhealthy_backends_metrics.push(proxy_key.clone());
+                }
+                let mut failed_backends_write = self.failed_backends.write().await;
                 let failed_attempts = failed_backends_write.get(&proxy_key);
                 failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
               }
@@ -869,8 +889,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             Ok(stream) => stream,
             Err(err) => {
               if enable_health_check {
-                let mut failed_backends_write = self.failed_backends.write().await;
                 let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
+                  unhealthy_backends_metrics.push(proxy_key.clone());
+                }
+                let mut failed_backends_write = self.failed_backends.write().await;
                 let failed_attempts = failed_backends_write.get(&proxy_key);
                 failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
               }
@@ -1014,8 +1037,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             Ok(_) => (),
             Err(err) => {
               if enable_health_check {
-                let mut failed_backends_write = self.failed_backends.write().await;
                 let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
+                  unhealthy_backends_metrics.push(proxy_key.clone());
+                }
+                let mut failed_backends_write = self.failed_backends.write().await;
                 let failed_attempts = failed_backends_write.get(&proxy_key);
                 failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
               }
@@ -1055,8 +1081,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             Ok(sender) => sender,
             Err(err) => {
               if enable_health_check {
-                let mut failed_backends_write = self.failed_backends.write().await;
                 let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
+                  unhealthy_backends_metrics.push(proxy_key.clone());
+                }
+                let mut failed_backends_write = self.failed_backends.write().await;
                 let failed_attempts = failed_backends_write.get(&proxy_key);
                 failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
               }
@@ -1112,8 +1141,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             Ok(stream) => stream,
             Err(err) => {
               if enable_health_check {
-                let mut failed_backends_write = self.failed_backends.write().await;
                 let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
+                  unhealthy_backends_metrics.push(proxy_key.clone());
+                }
+                let mut failed_backends_write = self.failed_backends.write().await;
                 let failed_attempts = failed_backends_write.get(&proxy_key);
                 failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
               }
@@ -1154,8 +1186,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             Ok(sender) => sender,
             Err(err) => {
               if enable_health_check {
-                let mut failed_backends_write = self.failed_backends.write().await;
                 let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+                if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
+                  unhealthy_backends_metrics.push(proxy_key.clone());
+                }
+                let mut failed_backends_write = self.failed_backends.write().await;
                 let failed_attempts = failed_backends_write.get(&proxy_key);
                 failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
               }
@@ -1201,6 +1236,69 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           response_headers: None,
           new_remote_address: None,
         });
+      }
+    }
+  }
+
+  async fn metric_data_before_handler(
+    &mut self,
+    _request: &Request<BoxBody<Bytes, std::io::Error>>,
+    _socket_data: &SocketData,
+    _metrics_sender: &MetricsMultiSender,
+  ) {
+    self.selected_backends_metrics = Some(Vec::new());
+    self.unhealthy_backends_metrics = Some(Vec::new());
+  }
+
+  async fn metric_data_after_handler(&mut self, metrics_sender: &MetricsMultiSender) {
+    if let Some(selected_backends_metrics) = self.selected_backends_metrics.take() {
+      for selected_backend in selected_backends_metrics {
+        let mut attributes = Vec::new();
+        attributes.push((
+          "ferron.proxy.backend_url",
+          MetricAttributeValue::String(selected_backend.0),
+        ));
+        if let Some(backend_unix) = selected_backend.1 {
+          attributes.push((
+            "ferron.proxy.backend_unix_path",
+            MetricAttributeValue::String(backend_unix),
+          ));
+        }
+        metrics_sender
+          .send(Metric::new(
+            "ferron.proxy.backends.selected",
+            attributes,
+            MetricType::Counter,
+            MetricValue::U64(1),
+            Some("{backend}"),
+            Some("Number of times a backend server was selected."),
+          ))
+          .await;
+      }
+    }
+    if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.take() {
+      for unhealthy_backend in unhealthy_backends_metrics {
+        let mut attributes = Vec::new();
+        attributes.push((
+          "ferron.proxy.backend_url",
+          MetricAttributeValue::String(unhealthy_backend.0),
+        ));
+        if let Some(backend_unix) = unhealthy_backend.1 {
+          attributes.push((
+            "ferron.proxy.backend_unix_path",
+            MetricAttributeValue::String(backend_unix),
+          ));
+        }
+        metrics_sender
+          .send(Metric::new(
+            "ferron.proxy.backends.unhealthy",
+            attributes,
+            MetricType::Counter,
+            MetricValue::U64(1),
+            Some("{backend}"),
+            Some("Number of health check failures for a backend server."),
+          ))
+          .await;
       }
     }
   }
