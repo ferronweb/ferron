@@ -28,6 +28,7 @@ Metrics in Ferron are specified with OpenTelemetry-style names. Below are the me
     - `url.scheme` - URL scheme (either `"http"` or `"https"`).
     - `network.protocol.name` - Always `"http"`.
     - `network.protocol.version` - HTTP version.
+    - `ferron.http.request.error_status_code` - HTTP error status code that occurred before a request handler with error configuration is executed.
 - **`http.server.request.duration`** (unit: `s`)
   - Duration of HTTP server requests.
   - **Attributes**
@@ -35,6 +36,7 @@ Metrics in Ferron are specified with OpenTelemetry-style names. Below are the me
     - `url.scheme` - URL scheme (either `"http"` or `"https"`).
     - `network.protocol.name` - Always `"http"`.
     - `network.protocol.version` - HTTP version.
+    - `ferron.http.request.error_status_code` - HTTP error status code that occurred before a request handler with error configuration is executed.
 - **`ferron.http.server.request_count`** (unit: `{request}`)
   - Number of HTTP server requests.
   - **Attributes**
@@ -44,6 +46,7 @@ Metrics in Ferron are specified with OpenTelemetry-style names. Below are the me
     - `network.protocol.version` - HTTP version.
     - `http.response.status_code` - HTTP response status code.
     - `error.type` - Error type (if status code indicates a client or a server error).
+    - `ferron.http.request.error_status_code` - HTTP error status code that occurred before a request handler with error configuration is executed.
 - **`ferron.proxy.backends.selected`** (unit: `{backend}`; _rproxy_ module)
   - Number of times a backend server was selected.
   - **Attributes**

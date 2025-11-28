@@ -1030,6 +1030,14 @@ impl ModuleHandlers for CoreModuleHandlers {
         MetricAttributeValue::String(http_version.to_string()),
       ));
     }
+    if let Some(request_data) = request.extensions().get::<RequestData>() {
+      if let Some(error_status_code) = &request_data.error_status_code {
+        metric_attributes.push((
+          "ferron.http.request.error_status_code",
+          MetricAttributeValue::I64(error_status_code.as_u16() as i64),
+        ));
+      }
+    }
 
     metrics_sender
       .send(Metric::new(
