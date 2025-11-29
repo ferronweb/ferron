@@ -64,7 +64,7 @@ Metrics in Ferron are specified with OpenTelemetry-style names. Below are the me
 - **`ferron.cache.items`** (unit: `{item}`; _cache_ module)
   - Number of items in the cache.
 - **`ferron.cache.evictions`** (unit: `{eviction}`; _cache_ module)
-  - Number of cache evictions.
+  - Number of cache evictions (removals of items).
   - **Attributes**
     - `ferron.cache.eviction_reason` - Cache eviction reason (either `"size"` or `"expired"`).
 - **`process.cpu.time`** (unit: `s`; Linux)
