@@ -7,6 +7,7 @@ use ahash::RandomState;
 use async_trait::async_trait;
 use bytes::Bytes;
 use cache_control::{Cachability, CacheControl};
+use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue};
 use futures_util::stream::{StreamExt, TryStreamExt};
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full, StreamBody};
@@ -23,6 +24,7 @@ use tokio::time::Instant;
 use crate::util::AtomicGenericCache;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
+use ferron_common::observability::MetricsMultiSender;
 use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value, get_values};
 
@@ -418,6 +420,9 @@ impl Module for CacheModule {
       has_authorization: false,
       cached: false,
       no_store: false,
+      metric_cache_hit: None,
+      metric_cache_evictions_size: 0,
+      metric_cache_evictions_expired: 0,
     })
   }
 }
@@ -435,6 +440,9 @@ struct CacheModuleHandlers {
   has_authorization: bool,
   cached: bool,
   no_store: bool,
+  metric_cache_hit: Option<bool>,
+  metric_cache_evictions_size: usize,
+  metric_cache_evictions_expired: usize,
 }
 
 impl CacheModuleHandlers {
@@ -466,8 +474,8 @@ impl CacheModuleHandlers {
     });
   }
 
-  /// Optimized cache cleanup with batching
-  fn cleanup_expired_entries(&self) {
+  /// Optimized cache cleanup with batching (returns number of removed entries)
+  fn cleanup_expired_entries(&self) -> usize {
     let default_max_age = Duration::from_secs(DEFAULT_MAX_AGE);
     let now = Instant::now();
 
@@ -482,7 +490,7 @@ impl CacheModuleHandlers {
       } else {
         false
       }
-    });
+    })
   }
 
   /// Fast cache control evaluation
@@ -606,7 +614,10 @@ impl ModuleHandlers for CacheModuleHandlers {
 
     if self.cached {
       response.headers_mut().insert(CACHE_HEADER_NAME, CACHE_HIT.clone());
+      self.metric_cache_hit = Some(true);
       return Ok(response);
+    } else {
+      self.metric_cache_hit = Some(false);
     }
 
     let Some(cache_key) = &self.cache_key else {
@@ -676,22 +687,22 @@ impl ModuleHandlers for CacheModuleHandlers {
         }
 
         // Periodic cleanup
-        self.cleanup_expired_entries();
+        self.metric_cache_evictions_expired += self.cleanup_expired_entries();
 
         // Store in cache
-        self
-          .cache
-          .force_insert(
-            cache_key_with_vary,
-            Some((
-              response_parts.status,
-              written_headers,
-              response_body_buffer.clone(),
-              Instant::now(),
-              response_cache_control.map(Arc::new),
-            )),
-          )
-          .unwrap_or_default();
+        let cache_result = self.cache.force_insert(
+          cache_key_with_vary,
+          Some((
+            response_parts.status,
+            written_headers,
+            response_body_buffer.clone(),
+            Instant::now(),
+            response_cache_control.map(Arc::new),
+          )),
+        );
+
+        // Calculate cache evictions due to size
+        self.metric_cache_evictions_size += cache_result.map_or(0, |(_, evicted)| evicted.len());
       }
 
       // Create response stream efficiently
@@ -706,6 +717,74 @@ impl ModuleHandlers for CacheModuleHandlers {
       response_parts.headers.insert(CACHE_HEADER_NAME, CACHE_MISS.clone());
 
       Ok(Response::from_parts(response_parts, response_body))
+    }
+  }
+
+  async fn metric_data_after_handler(&mut self, metrics_sender: &MetricsMultiSender) {
+    if let Some(cache_hit) = self.metric_cache_hit.take() {
+      // Cache lookups
+      metrics_sender
+        .send(Metric::new(
+          "ferron.cache.lookups",
+          vec![(
+            "ferron.cache.result",
+            MetricAttributeValue::String(if cache_hit {
+              "hit".to_string()
+            } else {
+              "miss".to_string()
+            }),
+          )],
+          MetricType::Counter,
+          MetricValue::U64(1),
+          Some("{lookup}"),
+          Some("Number of times a cache lookup was performed."),
+        ))
+        .await;
+    }
+
+    // Items in cache
+    metrics_sender
+      .send(Metric::new(
+        "ferron.cache.items",
+        vec![],
+        MetricType::Gauge,
+        MetricValue::U64(self.cache.len() as u64),
+        Some("{item}"),
+        Some("Number of items in the cache."),
+      ))
+      .await;
+
+    // Cache evictions
+    if self.metric_cache_evictions_size > 0 {
+      metrics_sender
+        .send(Metric::new(
+          "ferron.cache.evictions",
+          vec![(
+            "ferron.cache.eviction_reason",
+            MetricAttributeValue::String("size".to_string()),
+          )],
+          MetricType::Counter,
+          MetricValue::U64(self.metric_cache_evictions_size as u64),
+          Some("{eviction}"),
+          Some("Number of cache evictions."),
+        ))
+        .await;
+    }
+
+    if self.metric_cache_evictions_expired > 0 {
+      metrics_sender
+        .send(Metric::new(
+          "ferron.cache.evictions",
+          vec![(
+            "ferron.cache.eviction_reason",
+            MetricAttributeValue::String("expired".to_string()),
+          )],
+          MetricType::Counter,
+          MetricValue::U64(self.metric_cache_evictions_expired as u64),
+          Some("{eviction}"),
+          Some("Number of cache evictions."),
+        ))
+        .await;
     }
   }
 }

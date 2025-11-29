@@ -57,6 +57,16 @@ Metrics in Ferron are specified with OpenTelemetry-style names. Below are the me
   - **Attributes**
     - `ferron.proxy.backend_url` - Backend server URL.
     - `ferron.proxy.backend_unix_path` - Backend server Unix socket path.
+- **`ferron.cache.lookups`** (unit: `{lookup}`; _cache_ module)
+  - Number of times a cache lookup was performed.
+  - **Attributes**
+    - `ferron.cache.result` - Cache lookup result (either `"hit"` or `"miss"`).
+- **`ferron.cache.items`** (unit: `{item}`; _cache_ module)
+  - Number of items in the cache.
+- **`ferron.cache.evictions`** (unit: `{eviction}`; _cache_ module)
+  - Number of cache evictions.
+  - **Attributes**
+    - `ferron.cache.eviction_reason` - Cache eviction reason (either `"size"` or `"expired"`).
 
 ## Observability backend notes
 
