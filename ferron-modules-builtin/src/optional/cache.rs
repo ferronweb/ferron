@@ -303,7 +303,7 @@ impl ModuleLoader for CacheModuleLoader {
           let maximum_cache_entries = global_config
             .and_then(|c| get_entry!("cache_max_entries", c))
             .and_then(|e| e.values.first())
-            .and_then(|v| {
+            .map_or(Some(DEFAULT_MAX_CACHE_ENTRIES), |v| {
               if v.is_null() {
                 None
               } else {
