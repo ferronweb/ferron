@@ -133,6 +133,10 @@ shadow-rs = { version = "1.2.0", default-features = false, features = [
     "tzdb",
 ] }
 
+[target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
+# Process metrics
+procfs = "0.18.0"
+
 [dev-dependencies]
 shiba = { workspace = true }
 

@@ -67,6 +67,18 @@ Metrics in Ferron are specified with OpenTelemetry-style names. Below are the me
   - Number of cache evictions.
   - **Attributes**
     - `ferron.cache.eviction_reason` - Cache eviction reason (either `"size"` or `"expired"`).
+- **`process.cpu.time`** (unit: `s`; Linux)
+  - Total CPU seconds broken down by different states.
+  - **Attributes**
+    - `cpu.mode` - The mode of the CPU (`"user"` or `"system"`)
+- **`process.cpu.utilization`** (unit: `1`; Linux)
+  - Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process.
+  - **Attributes**
+    - `cpu.mode` - The mode of the CPU (`"user"` or `"system"`)
+- **`process.memory.usage`** (unit: `By`; Linux)
+  - The amount of physical memory in use.
+- **`process.memory.virtual`** (unit: `By`; Linux)
+  - The amount of committed virtual memory.
 
 ## Observability backend notes
 
