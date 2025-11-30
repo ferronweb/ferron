@@ -305,10 +305,10 @@ async fn execute_response_modifying_handlers(
     if traces_enabled {
       for trace_sender in &traces_senders {
         trace_sender
-          .send(TraceSignal::EndSpan(format!(
-            "{}::response_modifying_handler",
-            executed_handler.get_name()
-          )))
+          .send(TraceSignal::EndSpan(
+            format!("{}::response_modifying_handler", executed_handler.get_name()),
+            response_status.as_ref().err().map(|e| e.to_string()),
+          ))
           .await
           .unwrap_or_default();
       }
@@ -1344,10 +1344,10 @@ async fn request_handler_wrapped(
     if traces_enabled {
       for trace_sender in &traces_senders {
         trace_sender
-          .send(TraceSignal::EndSpan(format!(
-            "{}::request_handler",
-            handlers.get_name()
-          )))
+          .send(TraceSignal::EndSpan(
+            format!("{}::request_handler", handlers.get_name()),
+            response_result.as_ref().err().map(|e| e.to_string()),
+          ))
           .await
           .unwrap_or_default();
       }

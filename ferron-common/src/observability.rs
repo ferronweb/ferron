@@ -242,9 +242,10 @@ impl Clone for MetricsMultiSender {
 
 /// Represents a trace signal with a Ferron module name and attributes.
 #[derive(Clone)]
+#[non_exhaustive]
 pub enum TraceSignal {
   /// Start a new span with the given module name.
   StartSpan(String),
-  /// End the span with the given module name.
-  EndSpan(String),
+  /// End the span with the given module name and optional error description.
+  EndSpan(String, Option<String>),
 }

@@ -545,11 +545,16 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                           let new_span_context = span_context.with_span(new_span);
                           spans.insert(span, new_span_context);
                         }
-                        TraceSignal::EndSpan(span) => {
+                        TraceSignal::EndSpan(span, optional_error_description) => {
                           if let Some(span_context) = spans.get(&span) {
-                            span_context.span().end();
+                            let span = span_context.span();
+                            if let Some(error_description) = optional_error_description {
+                              span.set_status(opentelemetry::trace::Status::error(error_description));
+                            }
+                            span.end();
                           }
                         }
+                        _ => {}
                       }
                     }
                   });
