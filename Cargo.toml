@@ -40,4 +40,4 @@ codegen-units = 1
 panic = "abort"
 
 [workspace.metadata.cargo-shear]
-ignored = ["shiba", "ferron-modules-builtin", "ferron-dns-builtin"]
+ignored = ["shiba", "ferron-modules-builtin", "ferron-dns-builtin", "ferron-observability-builtin"]
