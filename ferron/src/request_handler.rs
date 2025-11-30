@@ -7,7 +7,7 @@ use std::time::Duration;
 use async_channel::Sender;
 use chrono::{DateTime, Local};
 use ferron_common::logging::{ErrorLogger, LogMessage};
-use ferron_common::observability::MetricsMultiSender;
+use ferron_common::observability::{MetricsMultiSender, TraceSignal};
 use futures_util::stream::TryStreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
@@ -286,9 +286,33 @@ async fn execute_response_modifying_handlers(
   log_format: Option<&str>,
   metrics_sender: MetricsMultiSender,
   metrics_enabled: bool,
+  traces_senders: Vec<Sender<TraceSignal>>,
+  traces_enabled: bool,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Response<BoxBody<Bytes, std::io::Error>>> {
   while let Some(mut executed_handler) = executed_handlers.pop() {
+    if traces_enabled {
+      for trace_sender in &traces_senders {
+        trace_sender
+          .send(TraceSignal::StartSpan(format!(
+            "{}::response_modifying_handler",
+            executed_handler.get_name()
+          )))
+          .await
+          .unwrap_or_default();
+      }
+    }
     let response_status = executed_handler.response_modifying_handler(response).await;
+    if traces_enabled {
+      for trace_sender in &traces_senders {
+        trace_sender
+          .send(TraceSignal::EndSpan(format!(
+            "{}::response_modifying_handler",
+            executed_handler.get_name()
+          )))
+          .await
+          .unwrap_or_default();
+      }
+    }
     response = match response_status {
       Ok(response) => response,
       Err(err) => {
@@ -1245,6 +1269,19 @@ async fn request_handler_wrapped(
   } else {
     MetricsMultiSender::without_sender()
   };
+  let mut traces_enabled = !configuration.observability.trace_channels.is_empty();
+  let mut traces_senders = if traces_enabled {
+    let mut traces_senders = Vec::with_capacity(configuration.observability.trace_channels.len());
+    for channel in &configuration.observability.trace_channels {
+      channel.0.send(()).await.unwrap_or_default();
+      if let Ok(channel2) = channel.1.recv().await {
+        traces_senders.push(channel2);
+      }
+    }
+    traces_senders
+  } else {
+    vec![]
+  };
 
   // Obtain module handlers
   let mut module_handlers = Vec::with_capacity(configuration.modules.len());
@@ -1288,9 +1325,33 @@ async fn request_handler_wrapped(
         .await;
     }
 
+    if traces_enabled {
+      for trace_sender in &traces_senders {
+        trace_sender
+          .send(TraceSignal::StartSpan(format!(
+            "{}::request_handler",
+            handlers.get_name()
+          )))
+          .await
+          .unwrap_or_default();
+      }
+    }
+
     let response_result = handlers
       .request_handler(request, &configuration, &socket_data, &error_logger)
       .await;
+
+    if traces_enabled {
+      for trace_sender in &traces_senders {
+        trace_sender
+          .send(TraceSignal::EndSpan(format!(
+            "{}::request_handler",
+            handlers.get_name()
+          )))
+          .await
+          .unwrap_or_default();
+      }
+    }
 
     executed_handlers.push(handlers);
     match response_result {
@@ -1340,6 +1401,8 @@ async fn request_handler_wrapped(
               log_format,
               metrics_sender,
               metrics_enabled,
+              traces_senders,
+              traces_enabled,
             )
             .await
             {
@@ -1408,6 +1471,19 @@ async fn request_handler_wrapped(
                     } else {
                       MetricsMultiSender::without_sender()
                     };
+                    traces_enabled = !configuration.observability.trace_channels.is_empty();
+                    traces_senders = if traces_enabled {
+                      let mut traces_senders = Vec::with_capacity(configuration.observability.trace_channels.len());
+                      for channel in &configuration.observability.trace_channels {
+                        channel.0.send(()).await.unwrap_or_default();
+                        if let Ok(channel2) = channel.1.recv().await {
+                          traces_senders.push(channel2);
+                        }
+                      }
+                      traces_senders
+                    } else {
+                      vec![]
+                    };
                     continue;
                   }
                 }
@@ -1442,6 +1518,8 @@ async fn request_handler_wrapped(
                 log_format,
                 metrics_sender,
                 metrics_enabled,
+                traces_senders,
+                traces_enabled,
               )
               .await
               {
@@ -1519,6 +1597,8 @@ async fn request_handler_wrapped(
           log_format,
           metrics_sender,
           metrics_enabled,
+          traces_senders,
+          traces_enabled,
         )
         .await
         {
@@ -1576,6 +1656,8 @@ async fn request_handler_wrapped(
     log_format,
     metrics_sender,
     metrics_enabled,
+    traces_senders,
+    traces_enabled,
   )
   .await
   {

@@ -84,8 +84,10 @@ Metrics in Ferron are specified with OpenTelemetry-style names. Below are the me
 
 ### _otlp_ observability backend
 
-This observability backend support OTLP (OpenTelemetry Protocol) logs and metrics.
+This observability backend support OTLP (OpenTelemetry Protocol) logs, metrics and traces.
 
 For OTLP logs, access logs have an `access` OTLP scope, while error logs have an `error` scope.
 
 For OTLP metrics, they have a `ferron` scope.
+
+For OTLP traces, they have a `ferron` scope.

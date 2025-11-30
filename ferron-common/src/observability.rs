@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::sync::Arc;
 
-use async_channel::Sender;
+use async_channel::{Receiver, Sender};
 
 use crate::config::ServerConfiguration;
 use crate::logging::LogMessage;
@@ -44,6 +44,11 @@ pub trait ObservabilityBackend {
   fn get_metric_channel(&self) -> Option<Sender<Metric>> {
     None
   }
+
+  /// Obtains the channel for traces
+  fn get_trace_channel(&self) -> Option<(Sender<()>, Receiver<Sender<TraceSignal>>)> {
+    None
+  }
 }
 
 /// Observability backend channels inside configurations
@@ -53,6 +58,8 @@ pub struct ObservabilityBackendChannels {
   pub log_channels: Vec<Sender<LogMessage>>,
   /// Metric channels
   pub metric_channels: Vec<Sender<Metric>>,
+  /// Trace channels
+  pub trace_channels: Vec<(Sender<()>, Receiver<Sender<TraceSignal>>)>,
 }
 
 impl Default for ObservabilityBackendChannels {
@@ -67,6 +74,7 @@ impl ObservabilityBackendChannels {
     Self {
       log_channels: Vec::new(),
       metric_channels: Vec::new(),
+      trace_channels: Vec::new(),
     }
   }
 
@@ -78,6 +86,11 @@ impl ObservabilityBackendChannels {
   /// Adds a metric channel to the observability backend channels
   pub fn add_metric_channel(&mut self, channel: Sender<Metric>) {
     self.metric_channels.push(channel);
+  }
+
+  /// Adds a trace channel to the observability backend channels
+  pub fn add_trace_channel(&mut self, channel: (Sender<()>, Receiver<Sender<TraceSignal>>)) {
+    self.trace_channels.push(channel);
   }
 }
 
@@ -225,4 +238,13 @@ impl Clone for MetricsMultiSender {
       senders: self.senders.clone(),
     }
   }
+}
+
+/// Represents a trace signal with a Ferron module name and attributes.
+#[derive(Clone)]
+pub enum TraceSignal {
+  /// Start a new span with the given module name.
+  StartSpan(String),
+  /// End the span with the given module name.
+  EndSpan(String),
 }

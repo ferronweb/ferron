@@ -391,6 +391,9 @@ pub fn load_modules(
             if let Some(channel) = loaded_observability_backend.get_metric_channel() {
               server_configuration.observability.add_metric_channel(channel);
             }
+            if let Some(channel) = loaded_observability_backend.get_trace_channel() {
+              server_configuration.observability.add_trace_channel(channel);
+            }
           }
           Err(error) => {
             // Store the first error encountered

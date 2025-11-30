@@ -7,15 +7,19 @@ use ferron_common::{
   logging::LogMessage,
   observability::{
     Metric, MetricAttributeValue, MetricType, MetricValue, ObservabilityBackend, ObservabilityBackendLoader,
+    TraceSignal,
   },
   util::{ModuleCache, NoServerVerifier},
 };
+use hashlink::LinkedHashMap;
 use hyper::header::HeaderValue;
-use opentelemetry::metrics::MeterProvider;
+use opentelemetry::trace::{Tracer, TracerProvider};
+use opentelemetry::KeyValue;
 use opentelemetry::{
   logs::{LogRecord, Logger, LoggerProvider},
-  KeyValue,
+  Context,
 };
+use opentelemetry::{metrics::MeterProvider, trace::TraceContextExt};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
 use rustls::{client::WebPkiServerVerifier, ClientConfig};
@@ -53,6 +57,7 @@ impl OtlpObservabilityBackendLoader {
         "otlp_service_name",
         "otlp_logs",
         "otlp_metrics",
+        "otlp_traces",
       ]),
     }
   }
@@ -448,17 +453,126 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
             });
           }
 
+          // Traces
+          let otlp_traces = get_entry!("otlp_traces", config);
+          let traces_endpoint = otlp_traces
+            .and_then(|e| e.values.first())
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+          let traces_authorization = otlp_traces
+            .and_then(|e| e.props.get("authorization"))
+            .and_then(|v| v.as_str())
+            .and_then(|s| HeaderValue::from_str(s).ok());
+          let traces_protocol = otlp_traces
+            .and_then(|e| e.props.get("protocol"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+          let mut traces_channel_option = None;
+          if let Some(traces_endpoint) = traces_endpoint {
+            let cancel_token_clone = cancel_token.clone();
+            let opentelemetry_resource = opentelemetry_resource.clone();
+            let hyper_tls_config = hyper_tls_config.clone();
+            let (traces_channel_tx, traces_channel_rx) = async_channel::unbounded::<Sender<TraceSignal>>();
+            let (traces_request_tx, traces_request_rx) = async_channel::unbounded::<()>();
+            traces_channel_option = Some((traces_request_tx, traces_channel_rx));
+            secondary_runtime.spawn(async move {
+              let traces_provider = match match traces_protocol.as_deref() {
+                Some("http/protobuf") | Some("http/json") => opentelemetry_otlp::SpanExporter::builder()
+                  .with_http()
+                  .with_http_client(opentelemetry_http::hyper::HyperClient::new(
+                    hyper_rustls::HttpsConnectorBuilder::new()
+                      .with_tls_config(hyper_tls_config)
+                      .https_or_http()
+                      .enable_http1()
+                      .enable_http2()
+                      .build(),
+                    Duration::from_secs(10),
+                    traces_authorization,
+                  ))
+                  .with_protocol(match traces_protocol.as_deref() {
+                    Some("http/json") => opentelemetry_otlp::Protocol::HttpJson,
+                    _ => opentelemetry_otlp::Protocol::HttpBinary, // Also: Some("http/protobuf")
+                  })
+                  .with_endpoint(traces_endpoint)
+                  .build(),
+                _ => opentelemetry_otlp::SpanExporter::builder() // Also: Some("grpc")
+                  .with_tonic()
+                  .with_endpoint(traces_endpoint)
+                  .build(),
+              } {
+                Ok(exporter) => Some(
+                  opentelemetry_sdk::trace::SdkTracerProvider::builder()
+                    .with_span_processor(
+                      opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor::builder(
+                        exporter,
+                        opentelemetry_sdk::runtime::Tokio,
+                      )
+                      .with_batch_config(opentelemetry_sdk::trace::BatchConfig::default())
+                      .build(),
+                    )
+                    .with_resource(opentelemetry_resource)
+                    .build(),
+                ),
+                Err(e) => {
+                  eprintln!("Failed to initialize OTLP trace exporter: {e}");
+                  None
+                }
+              };
+
+              if let Some(traces_provider) = traces_provider {
+                while tokio::select! {
+                  message = traces_request_rx.recv() => message.is_ok(),
+                  _ = cancel_token_clone.cancelled() => {
+                      traces_provider.shutdown().unwrap_or_default();
+                      return;
+                  },
+                } {
+                  let tracer = traces_provider.tracer("ferron");
+                  let (traces_tx, traces_rx) = async_channel::unbounded::<TraceSignal>();
+                  let cancel_token_clone = cancel_token_clone.clone();
+                  tokio::spawn(async move {
+                    let mut spans: LinkedHashMap<String, Context> = LinkedHashMap::new();
+                    while let Ok(signal) = tokio::select! {
+                      message = traces_rx.recv() => message,
+                      _ = cancel_token_clone.cancelled() => {
+                          return;
+                      },
+                    } {
+                      match signal {
+                        TraceSignal::StartSpan(span) => {
+                          let span_context = spans.back().map(|(_, context)| context.clone()).unwrap_or_default();
+                          let new_span = tracer.start_with_context(span.clone(), &span_context);
+                          let new_span_context = span_context.with_span(new_span);
+                          spans.insert(span, new_span_context);
+                        }
+                        TraceSignal::EndSpan(span) => {
+                          if let Some(span_context) = spans.get(&span) {
+                            span_context.span().end();
+                          }
+                        }
+                      }
+                    }
+                  });
+                  traces_channel_tx.send(traces_tx).await.unwrap_or_default();
+                }
+
+                traces_provider.shutdown().unwrap_or_default();
+              }
+            });
+          }
+
           Ok(Arc::new(OtlpObservabilityBackend {
             cancel_token,
             logging_tx_option,
             metrics_tx_option,
+            traces_channel_option,
           }))
         })?,
     )
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {
-    vec!["otlp_logs", "otlp_metrics"]
+    vec!["otlp_logs", "otlp_metrics", "otlp_traces"]
   }
 
   fn validate_configuration(
@@ -528,6 +642,24 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("otlp_traces", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `otlp_traces` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
+          Err(anyhow::anyhow!("Invalid OTLP traces endpoint"))?
+        } else if !entry.props.get("authorization").is_none_or(|v| v.is_string()) {
+          Err(anyhow::anyhow!(
+            "Invalid Authorization header value for OTLP traces endpoint"
+          ))?
+        } else if !entry.props.get("protocol").is_none_or(|v| v.is_string()) {
+          Err(anyhow::anyhow!("Invalid protocol for OTLP traces endpoint"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -536,6 +668,7 @@ struct OtlpObservabilityBackend {
   cancel_token: tokio_util::sync::CancellationToken,
   logging_tx_option: Option<Sender<LogMessage>>,
   metrics_tx_option: Option<Sender<Metric>>,
+  traces_channel_option: Option<(Sender<()>, async_channel::Receiver<Sender<TraceSignal>>)>,
 }
 
 impl ObservabilityBackend for OtlpObservabilityBackend {
@@ -545,6 +678,10 @@ impl ObservabilityBackend for OtlpObservabilityBackend {
 
   fn get_metric_channel(&self) -> Option<Sender<Metric>> {
     self.metrics_tx_option.clone()
+  }
+
+  fn get_trace_channel(&self) -> Option<(Sender<()>, async_channel::Receiver<Sender<TraceSignal>>)> {
+    self.traces_channel_option.clone()
   }
 }
 

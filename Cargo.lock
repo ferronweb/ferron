@@ -1636,6 +1636,7 @@ dependencies = [
  "async-channel",
  "chrono",
  "ferron-common",
+ "hashlink 0.11.0",
  "hyper",
  "hyper-rustls",
  "opentelemetry",

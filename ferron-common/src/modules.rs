@@ -77,6 +77,11 @@ pub trait ModuleHandlers {
   /// Sends metric data after modifying the response
   #[allow(unused_variables)]
   async fn metric_data_after_handler(&mut self, metrics_sender: &MetricsMultiSender) {}
+
+  /// Gets the module handlers' type name
+  fn get_name(&self) -> &'static str {
+    std::any::type_name::<Self>()
+  }
 }
 
 /// Contains information about a network socket, including remote and local addresses,
