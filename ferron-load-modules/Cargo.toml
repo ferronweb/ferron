@@ -48,3 +48,6 @@ runtime-tokio = [
     "ferron-common/runtime-tokio",
     "ferron-modules-builtin/runtime-tokio",
 ]
+
+[package.metadata.cargo-shear]
+ignored = ["anyhow"]
