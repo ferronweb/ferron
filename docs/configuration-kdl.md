@@ -684,7 +684,7 @@ example.com {
 - `error_log <error_log_file_path: string>` (_logfile_ observability backend)
   - This directive specifies the path to the error log file. This directive was a global and virtual host directive before Ferron UNRELEASED. Default: none
 - `otlp_no_verification [otlp_no_verification: bool]` (_otlp_ observability backend; Ferron UNRELEASED or newer)
-  - This directive specifies whenever the server should not verify the TLS certificate of the OTLP (OpenTelemetry Protocol) endpoint. Default: `auth_to_no_verification #false`
+  - This directive specifies whenever the server should not verify the TLS certificate of the OTLP (OpenTelemetry Protocol) endpoint. Default: `otlp_no_verification #false`
 - `otlp_service_name <otlp_service_name: string>` (_otlp_ observability backend; Ferron UNRELEASED or newer)
   - This directive specifies the service name to be used in the OTLP (OpenTelemetry Protocol) endpoint. Default: `otlp_service_name "ferron"`
 - `otlp_logs <otlp_logs_endpoint: string|null> [authorization=<otlp_logs_authorization: string>] [protocol=<otlp_logs_protocol: string>]` (_otlp_ observability backend; Ferron UNRELEASED or newer)
