@@ -7,6 +7,7 @@ use std::{
 use ferron_common::{
   config::{Conditional, ErrorHandlerStatus},
   modules::ModuleLoader,
+  observability::{ObservabilityBackendChannels, ObservabilityBackendLoader},
 };
 
 use super::{ServerConfiguration, ServerConfigurationFilters};
@@ -114,6 +115,7 @@ pub fn remove_and_add_global_configuration(
           error_handler_status: None,
         },
         modules: vec![],
+        observability: ObservabilityBackendChannels::new(),
       },
     );
   }
@@ -320,6 +322,7 @@ pub fn premerge_configuration(mut server_configurations: Vec<ServerConfiguration
 pub fn load_modules(
   server_configurations: Vec<ServerConfiguration>,
   server_modules: &mut [Box<dyn ModuleLoader + Send + Sync>],
+  server_observability_backends: &mut [Box<dyn ObservabilityBackendLoader + Send + Sync>],
   secondary_runtime: &tokio::runtime::Runtime,
 ) -> (
   Vec<ServerConfiguration>,
@@ -341,11 +344,11 @@ pub fn load_modules(
     // Track which properties are used by modules
     let mut used_properties = HashSet::new();
 
-    // Process each available server module
-    for server_module in server_modules.iter_mut() {
-      // Get module requirements
-      let requirements = server_module.get_requirements();
-      // Check if this module's requirements are satisfied by this configuration
+    // Process each available observability backend
+    for server_observability_backend in server_observability_backends.iter_mut() {
+      // Get observability backend requirements
+      let requirements = server_observability_backend.get_requirements();
+      // Check if this observability backend's requirements are satisfied by this configuration
       let mut requirements_met = true;
       for requirement in requirements {
         requirements_met = false;
@@ -360,8 +363,8 @@ pub fn load_modules(
           break;
         }
       }
-      // Validate the configuration against this module
-      match server_module.validate_configuration(&server_configuration, &mut used_properties) {
+      // Validate the configuration against this observability backend
+      match server_observability_backend.validate_configuration(&server_configuration, &mut used_properties) {
         Ok(_) => (),
         Err(error) => {
           // Store the first error encountered
@@ -369,23 +372,89 @@ pub fn load_modules(
             first_server_module_error
               .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
           }
-          // Skip remaining modules for this configuration if validation fails
+          // Skip remaining observability backends for this configuration if validation fails
           break;
         }
       }
-      // Only load module if its requirements are met
+      // Only load observability backend if its requirements are met
       if requirements_met {
-        // Load the module with current configuration and global configuration
-        match server_module.load_module(&server_configuration, global_configuration.as_ref(), secondary_runtime) {
-          Ok(loaded_module) => server_configuration.modules.push(loaded_module),
+        // Load the observability backend with current configuration and global configuration
+        match server_observability_backend.load_observability_backend(
+          &server_configuration,
+          global_configuration.as_ref(),
+          secondary_runtime,
+        ) {
+          Ok(loaded_observability_backend) => {
+            if let Some(channel) = loaded_observability_backend.get_log_channel() {
+              server_configuration.observability.add_log_channel(channel);
+            }
+            if let Some(channel) = loaded_observability_backend.get_metric_channel() {
+              server_configuration.observability.add_metric_channel(channel);
+            }
+            if let Some(channel) = loaded_observability_backend.get_trace_channel() {
+              server_configuration.observability.add_trace_channel(channel);
+            }
+          }
           Err(error) => {
             // Store the first error encountered
             if first_server_module_error.is_none() {
               first_server_module_error
                 .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
             }
-            // Skip remaining modules for this configuration if loading fails
+            // Skip remaining observability backends for this configuration if loading fails
             break;
+          }
+        }
+      }
+    }
+
+    if first_server_module_error.is_none() {
+      // Process each available server module
+      for server_module in server_modules.iter_mut() {
+        // Get module requirements
+        let requirements = server_module.get_requirements();
+        // Check if this module's requirements are satisfied by this configuration
+        let mut requirements_met = true;
+        for requirement in requirements {
+          requirements_met = false;
+          // Check if the required property exists and has a non-null value
+          if server_configuration
+            .entries
+            .get(requirement)
+            .and_then(|e| e.get_value())
+            .is_some_and(|v| !v.is_null() && v.as_bool().unwrap_or(true))
+          {
+            requirements_met = true;
+            break;
+          }
+        }
+        // Validate the configuration against this module
+        match server_module.validate_configuration(&server_configuration, &mut used_properties) {
+          Ok(_) => (),
+          Err(error) => {
+            // Store the first error encountered
+            if first_server_module_error.is_none() {
+              first_server_module_error
+                .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
+            }
+            // Skip remaining modules for this configuration if validation fails
+            break;
+          }
+        }
+        // Only load module if its requirements are met
+        if requirements_met {
+          // Load the module with current configuration and global configuration
+          match server_module.load_module(&server_configuration, global_configuration.as_ref(), secondary_runtime) {
+            Ok(loaded_module) => server_configuration.modules.push(loaded_module),
+            Err(error) => {
+              // Store the first error encountered
+              if first_server_module_error.is_none() {
+                first_server_module_error
+                  .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
+              }
+              // Skip remaining modules for this configuration if loading fails
+              break;
+            }
           }
         }
       }
@@ -503,6 +572,7 @@ mod tests {
       },
       entries: entries.into_iter().collect(),
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     }
   }
 
@@ -542,12 +612,14 @@ mod tests {
       filters: filters_2,
       entries: config1_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let config2 = ServerConfiguration {
       filters,
       entries: config2_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let merged = merge_duplicates(vec![config1, config2]);
@@ -598,12 +670,14 @@ mod tests {
       filters: filters1,
       entries: config1_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let config2 = ServerConfiguration {
       filters: filters2,
       entries: config2_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let merged = merge_duplicates(vec![config1, config2]);
@@ -652,18 +726,21 @@ mod tests {
       filters: filters1.clone(),
       entries: config1_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let config2 = ServerConfiguration {
       filters: filters2,
       entries: config2_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let config3 = ServerConfiguration {
       filters: filters1,
       entries: config3_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let merged = merge_duplicates(vec![config1, config2, config3]);
@@ -706,12 +783,14 @@ mod tests {
       filters: filters_2,
       entries: config1_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let config2 = ServerConfiguration {
       filters,
       entries: config2_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let merged = merge_duplicates(vec![config1, config2]);

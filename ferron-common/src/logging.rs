@@ -1,6 +1,7 @@
 use async_channel::Sender;
 
 /// Represents a log message with its content and error status.
+#[derive(Clone)]
 pub struct LogMessage {
   is_error: bool,
   message: String,
@@ -35,7 +36,7 @@ impl LogMessage {
 
 /// Facilitates logging of error messages through a provided logger sender.
 pub struct ErrorLogger {
-  logger: Option<Sender<LogMessage>>,
+  loggers: Vec<Sender<LogMessage>>,
 }
 
 impl ErrorLogger {
@@ -49,7 +50,20 @@ impl ErrorLogger {
   ///
   /// A new `ErrorLogger` instance associated with the provided logger.
   pub fn new(logger: Sender<LogMessage>) -> Self {
-    Self { logger: Some(logger) }
+    Self { loggers: vec![logger] }
+  }
+
+  /// Creates a new `ErrorLogger` instance with multiple loggers.
+  ///
+  /// # Parameters
+  ///
+  /// - `loggers`: A vector of `Sender<LogMessage>` used for sending log messages.
+  ///
+  /// # Returns
+  ///
+  /// A new `ErrorLogger` instance associated with multiple provided loggers.
+  pub fn new_multiple(loggers: Vec<Sender<LogMessage>>) -> Self {
+    Self { loggers }
   }
 
   /// Creates a new `ErrorLogger` instance without any underlying logger.
@@ -58,7 +72,7 @@ impl ErrorLogger {
   ///
   /// A new `ErrorLogger` instance not associated with any logger.
   pub fn without_logger() -> Self {
-    Self { logger: None }
+    Self { loggers: vec![] }
   }
 
   /// Logs an error message asynchronously.
@@ -79,7 +93,7 @@ impl ErrorLogger {
   /// # }
   /// ```
   pub async fn log(&self, message: &str) {
-    if let Some(logger) = &self.logger {
+    for logger in &self.loggers {
       logger
         .send(LogMessage::new(String::from(message), true))
         .await
@@ -96,7 +110,7 @@ impl Clone for ErrorLogger {
   /// A cloned `ErrorLogger` instance
   fn clone(&self) -> Self {
     Self {
-      logger: self.logger.clone(),
+      loggers: self.loggers.clone(),
     }
   }
 }

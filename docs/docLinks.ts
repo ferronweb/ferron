@@ -111,6 +111,12 @@ export default [
     label: "Server modules",
   },
   {
+    href: "/docs/observability",
+    target: "_self",
+    sub: true,
+    label: "Observability backends",
+  },
+  {
     href: "/docs/automatic-tls",
     target: "_self",
     sub: true,

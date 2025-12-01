@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::{error::Error, time::Duration};
 
 use async_channel::Sender;
+use ferron_common::logging::LogMessage;
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::{ListenerOpts, TcpListener};
 #[cfg(feature = "runtime-tokio")]
@@ -9,7 +10,6 @@ use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 
 use crate::listener_handler_communication::{Connection, ConnectionData};
-use crate::logging::LogMessage;
 
 /// Creates a TCP listener
 pub fn create_tcp_listener(

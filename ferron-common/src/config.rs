@@ -7,6 +7,7 @@ use std::{cmp::Ordering, collections::HashMap};
 use fancy_regex::Regex;
 
 use crate::modules::Module;
+use crate::observability::ObservabilityBackendChannels;
 use crate::util::IpBlockList;
 
 /// Conditional data
@@ -150,6 +151,9 @@ pub struct ServerConfiguration {
 
   /// Loaded modules
   pub modules: Vec<Arc<dyn Module + Send + Sync>>,
+
+  /// Loaded observability backend channels
+  pub observability: ObservabilityBackendChannels,
 }
 
 impl Debug for ServerConfiguration {
