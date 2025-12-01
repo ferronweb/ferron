@@ -105,14 +105,24 @@ The supported observability backends are defined in the `observability` section,
 - **crate** (_String_)
   - The name of the Rust crate corresponding to support for a specific observability backend. Used with observability backend support crates from Git or local paths. Default: none
 - **loader** (_String_)
-  - The name of the struct name that will be used to load support for a specific observability backend (usually ends with `Loader`). The struct must have a `new` method. Default: none
+  - The name of the struct name that will be used to load support for a specific observability backend (usually ends with `ObservabilityBackendLoader`). The struct must have a `new` method. Default: none
 
-For example, you can specify a built-in module:
+For example, you can specify observability backend support from a Git repository:
+
+```yaml
+observability:
+  # ...
+  - git: https://git.example.com/ferron-observability-example.git
+    crate: ferron-observability-example
+    loader: ExampleObservabilityBackendLoader
+```
+
+Or a built-in observability backend:
 
 ```yaml
 observability:
   # ...
   - builtin: true
-    cargo_feature: logfile
-    loader: LogFileObservabilityBackendLoader
+    cargo_feature: example
+    loader: ExampleObservabilityBackendLoader
 ```
