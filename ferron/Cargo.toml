@@ -57,7 +57,7 @@ instant-acme = { version = "0.8.4", default-features = false, features = [
 ] }
 rustls-native-certs = "0.8.1"
 rustls-pemfile = "2.2.0"
-rustls-pki-types = "1.12.0"
+rustls-pki-types = "1.13.1"
 rustls-platform-verifier = "0.6.0"
 webpki-roots = "1.0.2"
 ocsp-stapler = { version = "0.4.7", default-features = false, features = [
