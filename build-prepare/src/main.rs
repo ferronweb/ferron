@@ -200,6 +200,13 @@ fn process_ferron_load_modules(build_config: &yaml_rust2::Yaml) -> Result<()> {
     .ok_or_else(|| BuildError::ConfigError("ferron-dns-builtin dependency is not a table".to_string()))?
     .insert("features".to_string(), Value::Array(Vec::new()));
 
+  dependencies
+    .get_mut("ferron-observability-builtin")
+    .ok_or_else(|| BuildError::ConfigError("ferron-observability-builtin dependency not found".to_string()))?
+    .as_table_mut()
+    .ok_or_else(|| BuildError::ConfigError("ferron-observability-builtin dependency is not a table".to_string()))?
+    .insert("features".to_string(), Value::Array(Vec::new()));
+
   let mut additional_crates = Vec::new();
 
   // Process modules from build config
@@ -315,6 +322,62 @@ fn process_ferron_load_modules(build_config: &yaml_rust2::Yaml) -> Result<()> {
       println!("  Added path dependency: {crate_name} from {path}");
     } else {
       eprintln!("Warning: A DNS provider has no valid source (builtin, git, or path)");
+    }
+  }
+
+  // Process observability backends from build config
+  let observability_backends = build_config["observability"]
+    .as_vec()
+    .ok_or_else(|| BuildError::ConfigError("'observability' is missing or not an array".to_string()))?;
+
+  for module in observability_backends.iter() {
+    if let Some(loader) = module["loader"].as_str() {
+      println!("Processing observability backend with '{loader}' loader");
+    }
+
+    let is_builtin = module["builtin"].as_bool().unwrap_or(false);
+
+    if is_builtin {
+      if let Some(cargo_feature) = module["cargo_feature"].as_str() {
+        dependencies
+          .get_mut("ferron-observability-builtin")
+          .ok_or_else(|| BuildError::ConfigError("ferron-observability-builtin dependency not found".to_string()))?
+          .as_table_mut()
+          .ok_or_else(|| BuildError::ConfigError("ferron-observability-builtin dependency is not a table".to_string()))?
+          .get_mut("features")
+          .unwrap()
+          .as_array_mut()
+          .unwrap()
+          .push(cargo_feature.into());
+        println!("  Added builtin feature: {cargo_feature}");
+      }
+    } else if let Some(git_url) = module["git"].as_str() {
+      let crate_name = module["crate"]
+        .as_str()
+        .ok_or_else(|| BuildError::ConfigError("Observability backend missing 'crate' field".to_string()))?;
+
+      let mut property: HashMap<String, Value> = HashMap::new();
+      property.insert("git".to_string(), git_url.into());
+      if let Some(branch) = module["branch"].as_str() {
+        property.insert("branch".to_string(), branch.into());
+      }
+      property.insert("default-features".to_string(), Value::Boolean(false));
+
+      dependencies.insert(crate_name.to_string(), property.into());
+      println!("  Added git dependency: {crate_name} from {git_url}");
+    } else if let Some(path) = module["path"].as_str() {
+      let crate_name = module["crate"]
+        .as_str()
+        .ok_or_else(|| BuildError::ConfigError("Observability backend missing 'crate' field".to_string()))?;
+
+      let mut property: HashMap<String, Value> = HashMap::new();
+      property.insert("path".to_string(), path.into());
+      property.insert("default-features".to_string(), Value::Boolean(false));
+
+      dependencies.insert(crate_name.to_string(), property.into());
+      println!("  Added path dependency: {crate_name} from {path}");
+    } else {
+      eprintln!("Warning: An observability backend has no valid source (builtin, git, or path)");
     }
   }
 
