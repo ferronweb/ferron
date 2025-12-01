@@ -13,7 +13,7 @@ Ferron also supports additional observability backends that can be enabled at co
 
 Additional observability backend support provided by Ferron are from these repositories:
 
-**TODO: add observability backends**
+- [ferron-observability-example](https://github.com/ferronweb/ferron-observability-example.git) - logs requests and errors into the console.
 
 If you would like to use Ferron with additional observability backends, you can check the [compilation notes](https://github.com/ferronweb/ferron/blob/2.x/COMPILATION.md).
 
