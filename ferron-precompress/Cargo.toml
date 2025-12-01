@@ -18,4 +18,4 @@ zstd = "0.13.3"
 shiba = { workspace = true }
 
 [build-dependencies]
-winresource = "0.1.19"
+winresource = "0.1.28"
