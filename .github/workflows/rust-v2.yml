@@ -46,7 +46,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup cache
         uses: WarpBuilds/rust-cache@v2
@@ -85,7 +85,7 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-8x
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -105,7 +105,7 @@ jobs:
     runs-on: ubuntu-latest # GitHub-hosted runner
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install "cargo shear"
         run: |
