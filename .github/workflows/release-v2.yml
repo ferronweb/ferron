@@ -388,9 +388,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            network=host
 
       - name: Build and export to Docker
         uses: docker/build-push-action@v6.18.0
@@ -399,8 +396,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           load: true
           tags: ${{ env.DOCKER_TAGS }}
-          cache-from: type=gha,url=http://127.0.0.1:49160/,version=1
-          cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Smoke test the Docker image
         shell: bash
@@ -416,8 +413,8 @@ jobs:
           platforms: ${{ matrix.platforms }}
           push: true
           tags: ${{ env.DOCKER_TAGS }}
-          cache-from: type=gha,url=http://127.0.0.1:49160/,version=1
-          cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v3
