@@ -4,6 +4,14 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.2.0
+
+**Released in December 3, 2025**
+
+- Added support for observability (via logs, metrics and traces) via OpenTelemetry Protocol (OTLP).
+- Fixed a bug causing requests to not be logged at all to host-specific access logs, if the global access log file wasn't specified.
+- Fixed a bug causing the default cache item count limit to be not enforced.
+
 ## Ferron 2.1.0
 
 **Released in November 26, 2025**
