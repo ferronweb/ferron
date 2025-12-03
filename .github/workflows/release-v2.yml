@@ -42,64 +42,64 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            runner: warp-ubuntu-latest-x64-8x
+            runner: ubuntu-latest
             command: cross
             smoketest: true
           - target: x86_64-unknown-linux-musl
-            runner: warp-ubuntu-latest-x64-8x
+            runner: ubuntu-latest
             command: cross
             smoketest: true
           - target: i686-unknown-linux-gnu
-            runner: warp-ubuntu-latest-x64-8x
+            runner: ubuntu-latest
             command: cross
           - target: i686-unknown-linux-musl
-            runner: warp-ubuntu-latest-x64-8x
+            runner: ubuntu-latest
             command: cross
           - target: aarch64-unknown-linux-gnu
-            runner: warp-ubuntu-latest-x64-8x
+            runner: ubuntu-latest
             command: cross
           - target: aarch64-unknown-linux-musl
-            runner: warp-ubuntu-latest-x64-8x
+            runner: ubuntu-latest
             command: cross
           - target: armv7-unknown-linux-gnueabihf
-            runner: warp-ubuntu-latest-x64-8x
+            runner: ubuntu-latest
             command: cross
           - target: armv7-unknown-linux-musleabihf
-            runner: warp-ubuntu-latest-x64-8x
+            runner: ubuntu-latest
             command: cross
           - target: riscv64gc-unknown-linux-gnu
-            runner: warp-ubuntu-latest-x64-8x
+            runner: ubuntu-latest
             command: cross
           - target: riscv64gc-unknown-linux-musl
-            runner: warp-ubuntu-latest-x64-8x
+            runner: ubuntu-latest
             command: cross
           - target: s390x-unknown-linux-gnu
-            runner: warp-ubuntu-latest-x64-8x
+            runner: ubuntu-latest
             command: cross
           - target: powerpc64le-unknown-linux-gnu
-            runner: warp-ubuntu-latest-x64-8x
+            runner: ubuntu-latest
             command: cross
           - target: x86_64-unknown-freebsd
-            runner: warp-ubuntu-latest-x64-8x
+            runner: ubuntu-latest
             command: cross
           - target: x86_64-pc-windows-msvc
-            runner: warp-windows-latest-x64-8x
+            runner: windows-latest
             command: cargo
             options: "--no-default-features -F ferron/default-tokio"
             smoketest: true
           - target: i686-pc-windows-msvc
-            runner: warp-windows-latest-x64-8x
+            runner: windows-latest
             command: cargo
             options: "--no-default-features -F ferron/default-tokio"
           - target: aarch64-pc-windows-msvc
-            runner: warp-windows-latest-x64-8x
+            runner: windows-latest
             command: cargo
             options: "--no-default-features -F ferron/default-tokio"
           - target: x86_64-apple-darwin
-            runner: warp-macos-latest-arm64-6x
+            runner: macos-latest
             command: cargo
           - target: aarch64-apple-darwin
-            runner: warp-macos-latest-arm64-6x
+            runner: macos-latest
             command: cargo
             smoketest: true
 
@@ -116,7 +116,7 @@ jobs:
           targets: "${{ matrix.target }}"
 
       - name: Setup cache
-        uses: WarpBuilds/cache@v1
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/bin/
@@ -145,7 +145,7 @@ jobs:
           fi
 
       - name: Setup NASM
-        if: matrix.runner == 'warp-windows-latest-x64-8x'
+        if: matrix.runner == 'windows-latest'
         uses: ilammy/setup-nasm@v1
 
       - name: Install Cross
@@ -185,13 +185,13 @@ jobs:
           cd ..
 
       - name: Smoke test the binary (Unix-like)
-        if: matrix.runner != 'warp-windows-latest-x64-8x' && matrix.smoketest == true
+        if: matrix.runner != 'windows-latest' && matrix.smoketest == true
         shell: bash
         run: |
           FERRON="$(pwd)/target/${{ matrix.target }}/release/ferron" bash smoketest/smoketest.sh
 
       - name: Smoke test the binary (Windows)
-        if: matrix.runner == 'warp-windows-latest-x64-8x' && matrix.smoketest == true
+        if: matrix.runner == 'windows-latest' && matrix.smoketest == true
         shell: powershell
         run: |
           $env:FERRON = $PWD.Path + '\target\${{ matrix.target }}\release\ferron'
@@ -239,7 +239,7 @@ jobs:
           commit: "2.x"
 
       - name: Build and release Debian package
-        if: matrix.runner == 'warp-ubuntu-latest-x64-8x' && contains(matrix.target, 'linux-gnu')
+        if: matrix.runner == 'ubuntu-latest' && contains(matrix.target, 'linux-gnu')
         shell: bash
         run: |
           packaging/deb/build.sh ${{ matrix.target }} ${{ env.FERRON_VERSION }} target/${{ matrix.target }}/release
@@ -254,7 +254,7 @@ jobs:
           ssh ferron-servers "sudo update-ferron-deb-repo $DEB_PACKAGE_VERSION $DEB_ARCHITECTURE"
 
       - name: Build and release RPM package
-        if: matrix.runner == 'warp-ubuntu-latest-x64-8x' && contains(matrix.target, 'linux-gnu')
+        if: matrix.runner == 'ubuntu-latest' && contains(matrix.target, 'linux-gnu')
         shell: bash
         run: |
           packaging/rpm/build.sh ${{ matrix.target }} ${{ env.FERRON_VERSION }} target/${{ matrix.target }}/release
@@ -269,7 +269,7 @@ jobs:
           ssh ferron-servers "sudo update-ferron-rpm-repo $RPM_PACKAGE_VERSION $RPM_ARCHITECTURE"
 
   docs:
-    runs-on: warp-ubuntu-latest-x64-8x
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -281,7 +281,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup cache
-        uses: WarpBuilds/rust-cache@v2
+        uses: Swatinem/rust-cache@v2
 
       - name: Generate the Rust crate documentation
         run: "cargo doc --verbose --locked --release --document-private-items"
@@ -311,7 +311,7 @@ jobs:
           ssh ferron-servers "sudo deploy-ferron2-rustdocs ferron2-rustdocs.zip && rm ferron2-rustdocs.zip"
 
   docker:
-    runs-on: warp-ubuntu-latest-arm64-8x
+    runs-on: ubuntu-latest
 
     permissions:
       packages: write
