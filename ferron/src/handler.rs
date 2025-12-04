@@ -24,6 +24,8 @@ use monoio_compat::hyper::{MonoioExecutor, MonoioIo, MonoioTimer};
 use rustls::server::Acceptor;
 use rustls::ServerConfig;
 #[cfg(feature = "runtime-tokio")]
+use tokio::io::AsyncWriteExt;
+#[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::LazyConfigAcceptor;
@@ -66,6 +68,7 @@ pub fn create_http_handler(
   acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
   acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   enable_proxy_protocol: bool,
+  proxied_tls_domains: HashMap<String, String>,
 ) -> Result<CancellationToken, Box<dyn Error + Send + Sync>> {
   let shutdown_tx = CancellationToken::new();
   let shutdown_rx = shutdown_tx.clone();
@@ -85,6 +88,7 @@ pub fn create_http_handler(
             acme_tls_alpn_01_configs,
             acme_http_01_resolvers,
             enable_proxy_protocol,
+            proxied_tls_domains,
           )
           .await
           .err()
@@ -116,6 +120,7 @@ async fn http_handler_fn(
   acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
   acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   enable_proxy_protocol: bool,
+  proxied_tls_domains: HashMap<String, String>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   handler_init_tx.send(None).await.unwrap_or_default();
 
@@ -154,6 +159,7 @@ async fn http_handler_fn(
     let acme_http_01_resolvers = acme_http_01_resolvers.clone();
     let connections_references_cloned = connections_references.clone();
     let shutdown_rx_clone = shutdown_rx.clone();
+    let proxied_tls_domains_clone = proxied_tls_domains.clone();
     crate::runtime::spawn(async move {
       match conn_data.connection {
         crate::listener_handler_communication::Connection::Tcp(tcp_stream) => {
@@ -187,6 +193,7 @@ async fn http_handler_fn(
             acme_http_01_resolvers,
             enable_proxy_protocol,
             shutdown_rx_clone,
+            proxied_tls_domains_clone,
           )
           .await;
         }
@@ -247,6 +254,7 @@ async fn http_tcp_handler_fn(
   acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   enable_proxy_protocol: bool,
   shutdown_rx: CancellationToken,
+  tls_proxied_domains: HashMap<String, String>,
 ) {
   let _connection_reference = Arc::downgrade(&connection_reference);
   #[cfg(feature = "runtime-monoio")]
@@ -292,6 +300,83 @@ async fn http_tcp_handler_fn(
   } else {
     (tcp_stream, None, None)
   };
+
+  let (mut client, server) = tokio::io::duplex(4096);
+  let mut buf = [0; 4096];
+  match tokio::time::timeout(Duration::from_secs(60), tcp_stream.peek(&mut buf)).await {
+    Ok(Ok(len)) => client.write_all(&buf[0..len]).await.unwrap(),
+    _ => panic!(),
+  }
+
+  let sni: Option<String> = match LazyConfigAcceptor::new(Acceptor::default(), server).await {
+    Ok(start_handshake) => start_handshake.client_hello().server_name().map(|s| s.to_string()),
+    Err(_e) => None,
+  };
+
+  if let Some(tls_proxy_domain) = sni.and_then(|sni| tls_proxied_domains.get(&sni)) {
+    println!("Found matching TLS proxy: {}", tls_proxy_domain);
+    use std::str::FromStr;
+    let dest = SocketAddr::from_str(&tls_proxy_domain).unwrap();
+    let dest_stream = TcpStream::connect(dest).await.unwrap();
+
+    // First read all client data
+    loop {
+      println!("READ CLIENT");
+      // let mut buf = Vec::with_capacity(4096);
+      let mut buf = [0; 4096];
+      tcp_stream.readable().await.unwrap();
+      match tcp_stream.try_read(&mut buf) {
+        Ok(0) => {
+          println!("END READ CLIENT");
+          break;
+        }
+        Ok(n) => loop {
+          println!("WRITE BACKEND");
+          dest_stream.writable().await.unwrap();
+          match dest_stream.try_write(&mut buf[0..n]) {
+            Ok(_n) => break,
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
+            Err(_e) => panic!("This is a real writing error to the backend!"),
+          }
+        },
+        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+          // Is there a way to know the client is done with the request?
+          // Or do we just end up here?
+          break;
+        }
+        Err(_e) => {
+          panic!("This is a real error reading from the client!");
+        }
+      }
+    }
+
+    // Now read the response
+    loop {
+      println!("READ BACKEND");
+      let mut buf = [0; 4096];
+      dest_stream.readable().await.unwrap();
+      match dest_stream.try_read(&mut buf) {
+        Ok(0) => break,
+        Ok(n) => loop {
+          println!("WRITE CLIENT");
+          tcp_stream.writable().await.unwrap();
+          match tcp_stream.try_write(&mut buf[0..n]) {
+            Ok(_n) => break,
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
+            Err(_e) => panic!("This is a real writing error to the client!"),
+          }
+        },
+        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+          continue;
+        }
+        Err(_e) => {
+          panic!("This is a real error reading from the backend!");
+        }
+      }
+    }
+
+    return;
+  }
 
   let maybe_tls_stream = if let Some(tls_config) = tls_config {
     let start_handshake = match LazyConfigAcceptor::new(Acceptor::default(), tcp_stream).await {
