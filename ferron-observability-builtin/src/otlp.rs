@@ -181,7 +181,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                 while let Ok(message) = tokio::select! {
                   message = logging_rx.recv() => message,
                   _ = cancel_token_clone.cancelled() => {
-                      log_provider.shutdown().unwrap_or_default();
+                      tokio::task::spawn_blocking(move ||log_provider.shutdown().unwrap_or_default());
                       return;
                   },
                 } {
@@ -197,7 +197,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                   }
                 }
 
-                log_provider.shutdown().unwrap_or_default();
+                tokio::task::spawn_blocking(move || log_provider.shutdown().unwrap_or_default());
               }
             });
           }
@@ -274,7 +274,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                 while let Ok(metric) = tokio::select! {
                   message = metrics_rx.recv() => message,
                   _ = cancel_token_clone.cancelled() => {
-                      metric_provider.shutdown().unwrap_or_default();
+                      tokio::task::spawn_blocking(move || metric_provider.shutdown().unwrap_or_default());
                       return;
                   },
                 } {
@@ -448,7 +448,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                   }
                 }
 
-                metric_provider.shutdown().unwrap_or_default();
+                tokio::task::spawn_blocking(move || metric_provider.shutdown().unwrap_or_default());
               }
             });
           }
@@ -523,7 +523,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                 while tokio::select! {
                   message = traces_request_rx.recv() => message.is_ok(),
                   _ = cancel_token_clone.cancelled() => {
-                      traces_provider.shutdown().unwrap_or_default();
+                      tokio::task::spawn_blocking(move || traces_provider.shutdown().unwrap_or_default());
                       return;
                   },
                 } {
@@ -561,7 +561,9 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                   traces_channel_tx.send(traces_tx).await.unwrap_or_default();
                 }
 
-                traces_provider.shutdown().unwrap_or_default();
+                // `tokio::task::spawn_blocking` is needed, because without it, there can be a deadlock.
+                // See https://docs.rs/opentelemetry_sdk/latest/opentelemetry_sdk/trace/struct.BatchSpanProcessor.html
+                tokio::task::spawn_blocking(move || traces_provider.shutdown().unwrap_or_default());
               }
             });
           }

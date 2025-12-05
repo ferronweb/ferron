@@ -1903,6 +1903,10 @@ fn construct_proxy_request_parts(
   // Remove Forwarded header to prevent spoofing (Ferron reverse proxy doesn't support "Forwarded" header)
   request_parts.headers.remove(header::FORWARDED);
 
+  let trust_x_forwarded_for = get_value!("trust_x_forwarded_for", config)
+    .and_then(|v| v.as_bool())
+    .unwrap_or(false);
+
   // X-Forwarded-* headers to send the client's data to a server that's behind the reverse proxy
   let remote_addr_str = socket_data.remote_addr.ip().to_canonical().to_string();
   request_parts.headers.insert(
@@ -1912,10 +1916,7 @@ fn construct_proxy_request_parts(
       .get("x-forwarded-for")
       .and_then(|h| h.to_str().ok())
     {
-      if get_value!("trust_x_forwarded_for", config)
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-      {
+      if trust_x_forwarded_for {
         format!("{forwarded_for}, {remote_addr_str}")
       } else {
         remote_addr_str
@@ -1926,14 +1927,18 @@ fn construct_proxy_request_parts(
     .parse()?,
   );
 
-  if socket_data.encrypted {
-    request_parts.headers.insert("x-forwarded-proto", "https".parse()?);
-  } else {
-    request_parts.headers.insert("x-forwarded-proto", "http".parse()?);
+  if !trust_x_forwarded_for || !request_parts.headers.contains_key("x-forwarded-proto") {
+    if socket_data.encrypted {
+      request_parts.headers.insert("x-forwarded-proto", "https".parse()?);
+    } else {
+      request_parts.headers.insert("x-forwarded-proto", "http".parse()?);
+    }
   }
 
-  if let Some(original_host) = original_host {
-    request_parts.headers.insert("x-forwarded-host", original_host);
+  if !trust_x_forwarded_for || !request_parts.headers.contains_key("x-forwarded-host") {
+    if let Some(original_host) = original_host {
+      request_parts.headers.insert("x-forwarded-host", original_host);
+    }
   }
 
   for (header_name_option, header_value) in headers_to_add {

@@ -4,6 +4,13 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.2.1
+
+**Released in December 5, 2025**
+
+- Fixed a bug causing a deadlock when the server is gracefully reloading its configuration and OTLP observability backend was enabled before.
+- The server now no longer overrides `X-Forwarded-Host` and `X-Forwarded-Proto` request headers before sending them to backend servers, when they exist, and the `X-Forwarded-For` header is trusted.
+
 ## Ferron 2.2.0
 
 **Released in December 3, 2025**
