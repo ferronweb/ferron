@@ -91,6 +91,22 @@ example.com {
 }
 ```
 
+## Reverse proxying with intact "Host" header
+
+Ferron by default rewrites the "Host" header before sending the request to the backend server, and preserves the original "Host" header value in the "X-Forwarded-Host" header.
+
+However, there are web applications that may not work with this configuration. This can result in host header mismatch errors, and other issues.
+
+In such cases, you can set the "Host" header value to the original value:
+
+```kdl
+// Example configuration with reverse proxy and intact "Host" header. Replace "example.com" with your domain name.
+example.com {
+    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+    proxy_request_header_replace "Host" "{header:Host}"
+}
+```
+
 ## Reverse proxy to backends listening on Unix sockets
 
 Ferron supports reverse proxying to backends listening on Unix sockets. To configure Ferron for reverse proxying to backends listening on Unix sockets, you can use this configuration:
