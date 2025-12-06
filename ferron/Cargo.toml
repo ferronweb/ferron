@@ -86,8 +86,7 @@ tokio = { version = "1.45.0", features = [
 monoio = { version = "0.2.4", optional = true, features = [
     "poll-io",
     "sync",
-    "threadpool",
-    "iocp"
+    "threadpool"
 ] }
 monoio-compat = { version = "0.2.2", optional = true, features = ["hyper"] }
 async-channel = "2.3.1"

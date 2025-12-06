@@ -2792,11 +2792,10 @@ dependencies = [
 [[package]]
 name = "monoio"
 version = "0.2.4"
-source = "git+https://github.com/DorianNiemiecSVRJS/monoio.git#0d027a342a743dcf9987e3fa4f83d0586dd69bad"
+source = "git+https://github.com/DorianNiemiecSVRJS/monoio.git#ab4e1107c51d78e2ac0b30d51a4d00f50ddfbe73"
 dependencies = [
  "auto-const-array",
  "bytes",
- "cfg-if",
  "flume",
  "io-uring",
  "libc",
@@ -2808,7 +2807,6 @@ dependencies = [
  "pin-project-lite",
  "rustc-hash",
  "socket2 0.5.10",
- "tempfile",
  "threadpool",
  "tokio",
  "windows-sys 0.48.0",
@@ -2830,7 +2828,7 @@ dependencies = [
 [[package]]
 name = "monoio-macros"
 version = "0.1.0"
-source = "git+https://github.com/DorianNiemiecSVRJS/monoio.git#0d027a342a743dcf9987e3fa4f83d0586dd69bad"
+source = "git+https://github.com/DorianNiemiecSVRJS/monoio.git#ab4e1107c51d78e2ac0b30d51a4d00f50ddfbe73"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4613,19 +4611,6 @@ name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
-
-[[package]]
-name = "tempfile"
-version = "3.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d31c77bdf42a745371d260a26ca7163f1e0924b64afa0b688e61b5a9fa02f16"
-dependencies = [
- "fastrand",
- "getrandom 0.3.4",
- "once_cell",
- "rustix",
- "windows-sys 0.61.2",
-]
 
 [[package]]
 name = "terminal_size"
