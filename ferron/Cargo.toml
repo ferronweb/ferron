@@ -87,6 +87,7 @@ monoio = { version = "0.2.4", optional = true, features = [
     "poll-io",
     "sync",
     "threadpool",
+    "iocp"
 ] }
 monoio-compat = { version = "0.2.2", optional = true, features = ["hyper"] }
 async-channel = "2.3.1"
