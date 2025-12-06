@@ -4,7 +4,7 @@ use std::{error::Error, time::Duration};
 use async_channel::Sender;
 use ferron_common::logging::LogMessage;
 #[cfg(feature = "runtime-monoio")]
-use monoio::net::{ListenerOpts, TcpListener};
+use monoio::net::TcpListener;
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
@@ -61,27 +61,21 @@ async fn tcp_listener_fn(
   let mut listener_result;
   let mut tries: u64 = 0;
   loop {
-    #[cfg(feature = "runtime-monoio")]
-    let listener_opts = {
-      let mut listener_opts = ListenerOpts::new()
-        .reuse_addr(!cfg!(windows))
-        .reuse_port(false)
-        .backlog(-1);
-      if let Some(tcp_send_buffer_size) = tcp_buffer_sizes.0 {
-        listener_opts = listener_opts.send_buf_size(tcp_send_buffer_size);
-      }
-      if let Some(tcp_recv_buffer_size) = tcp_buffer_sizes.1 {
-        listener_opts = listener_opts.recv_buf_size(tcp_recv_buffer_size);
-      }
-      listener_opts
-    };
-    #[cfg(feature = "runtime-monoio")]
-    let listener_result2 = TcpListener::bind_with_config(address, &listener_opts);
-    #[cfg(feature = "runtime-tokio")]
-    let listener_result2 = (|| {
-      let listener = std::net::TcpListener::bind(address)?;
-      listener.set_nonblocking(true).unwrap_or_default();
-      let listener_socket2 = socket2::Socket::from(listener);
+    listener_result = (|| {
+      // Create a new socket
+      let listener_socket2 = socket2::Socket::new(
+        if address.is_ipv6() {
+          socket2::Domain::IPV6
+        } else {
+          socket2::Domain::IPV4
+        },
+        socket2::Type::STREAM,
+        Some(socket2::Protocol::TCP),
+      )?;
+
+      // Set socket options
+      listener_socket2.set_reuse_address(!cfg!(windows)).unwrap_or_default();
+      listener_socket2.set_reuse_port(true).unwrap_or_default();
       if let Some(tcp_send_buffer_size) = tcp_buffer_sizes.0 {
         listener_socket2
           .set_send_buffer_size(tcp_send_buffer_size)
@@ -92,9 +86,26 @@ async fn tcp_listener_fn(
           .set_recv_buffer_size(tcp_recv_buffer_size)
           .unwrap_or_default();
       }
+      if address.is_ipv6() {
+        listener_socket2.set_only_v6(false).unwrap_or_default();
+      }
+
+      #[cfg(feature = "runtime-monoio")]
+      let is_poll_io = monoio::utils::is_legacy();
+      #[cfg(feature = "runtime-tokio")]
+      let is_poll_io = true;
+
+      if is_poll_io {
+        listener_socket2.set_nonblocking(true).unwrap_or_default();
+      }
+
+      // Bind the socket to the address
+      listener_socket2.bind(&address.into())?;
+      listener_socket2.listen(-1)?;
+
+      // Wrap the socket into a TcpListener
       TcpListener::from_std(listener_socket2.into())
     })();
-    listener_result = listener_result2;
     if first_startup || listener_result.is_ok() {
       break;
     }

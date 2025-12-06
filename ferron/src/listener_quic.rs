@@ -275,7 +275,30 @@ async fn quic_listener_fn(
   let mut udp_socket_result;
   let mut tries: u64 = 0;
   loop {
-    udp_socket_result = std::net::UdpSocket::bind(address);
+    udp_socket_result = (|| {
+      // Create a new socket
+      let listener_socket2 = socket2::Socket::new(
+        if address.is_ipv6() {
+          socket2::Domain::IPV6
+        } else {
+          socket2::Domain::IPV4
+        },
+        socket2::Type::DGRAM,
+        Some(socket2::Protocol::UDP),
+      )?;
+
+      // Set socket options
+      if address.is_ipv6() {
+        listener_socket2.set_only_v6(false).unwrap_or_default();
+      }
+
+      // Bind the socket to the address
+      listener_socket2.bind(&address.into())?;
+
+      // Wrap the socket into a UdpSocket
+      let listener_socket: std::net::UdpSocket = listener_socket2.into();
+      Ok::<_, std::io::Error>(listener_socket)
+    })();
     if first_startup || udp_socket_result.is_ok() {
       break;
     }
