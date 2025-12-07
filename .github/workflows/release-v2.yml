@@ -85,16 +85,13 @@ jobs:
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             command: cargo
-            options: "--no-default-features -F ferron/default-tokio"
             smoketest: true
           - target: i686-pc-windows-msvc
             runner: windows-latest
             command: cargo
-            options: "--no-default-features -F ferron/default-tokio"
           - target: aarch64-pc-windows-msvc
             runner: windows-latest
             command: cargo
-            options: "--no-default-features -F ferron/default-tokio"
           - target: x86_64-apple-darwin
             runner: macos-latest
             command: cargo

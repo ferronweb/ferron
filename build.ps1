@@ -42,8 +42,10 @@ if ($env:CARGO_FINAL_EXTRA_ARGS)
     $cargoFinalExtraArgs = "$cargoFinalExtraArgs $env:CARGO_FINAL_EXTRA_ARGS"
 }
 
-# There would be a static file serving performance degradation when using Monoio, so we're compiling with Tokio
-$cargoFinalExtraArgs = "--no-default-features -F ferron/runtime-tokio $cargoFinalExtraArgs"
+if ($env:NO_MONOIO)
+{
+    $cargoFinalExtraArgs = "--no-default-features -F ferron/runtime-tokio $cargoFinalExtraArgs"
+}
 
 # Split the arguments (to avoid being interpreted as one large argument)
 $cargoFinalExtraArgs = $cargoFinalExtraArgs -Split ' '
