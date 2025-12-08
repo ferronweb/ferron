@@ -1231,7 +1231,9 @@ fn before_starting_server(
             // Sleep for 1 second
             tokio::time::sleep(Duration::from_secs(1)).await;
 
-            if let Ok(stat) = procfs::process::Process::myself().and_then(|p| p.stat()) {
+            if let Ok(Ok(stat)) =
+              tokio::task::spawn_blocking(|| procfs::process::Process::myself().and_then(|p| p.stat())).await
+            {
               let cpu_user_time = stat.utime as f64 / procfs::ticks_per_second() as f64;
               let cpu_system_time = stat.stime as f64 / procfs::ticks_per_second() as f64;
               let cpu_user_time_increase = cpu_user_time - previous_cpu_user_time;
@@ -1283,7 +1285,10 @@ fn before_starting_server(
                     MetricType::Gauge,
                     MetricValue::F64(cpu_user_utilization),
                     Some("1"),
-                    Some("Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process."),
+                    Some(
+                      "Difference in process.cpu.time since the last measurement, \
+                       divided by the elapsed time and number of CPUs available to the process.",
+                    ),
                   ))
                   .await
                   .unwrap_or_default();
@@ -1295,7 +1300,10 @@ fn before_starting_server(
                     MetricType::Gauge,
                     MetricValue::F64(cpu_system_utilization),
                     Some("1"),
-                    Some("Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process."),
+                    Some(
+                      "Difference in process.cpu.time since the last measurement, \
+                      divided by the elapsed time and number of CPUs available to the process.",
+                    ),
                   ))
                   .await
                   .unwrap_or_default();
