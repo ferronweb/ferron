@@ -1,4 +1,3 @@
-use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -288,7 +287,9 @@ async fn execute_response_modifying_handlers(
   metrics_enabled: bool,
   traces_senders: Vec<Sender<TraceSignal>>,
   traces_enabled: bool,
-) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Response<BoxBody<Bytes, std::io::Error>>> {
+  timeout_instant: std::time::Instant,
+  timeout_duration: Option<std::time::Duration>,
+) -> Result<Result<Response<BoxBody<Bytes, std::io::Error>>, Response<BoxBody<Bytes, std::io::Error>>>, anyhow::Error> {
   while let Some(mut executed_handler) = executed_handlers.pop() {
     if traces_enabled {
       for trace_sender in &traces_senders {
@@ -301,7 +302,24 @@ async fn execute_response_modifying_handlers(
           .unwrap_or_default();
       }
     }
-    let response_status = executed_handler.response_modifying_handler(response).await;
+    let (response_status, is_timeout) = if let Some(timeout_duration) = &timeout_duration {
+      let elapsed = timeout_instant.elapsed();
+      if let Some(timeout_cur_duration) = timeout_duration.checked_sub(elapsed) {
+        match timeout(
+          timeout_cur_duration,
+          executed_handler.response_modifying_handler(response),
+        )
+        .await
+        {
+          Ok(result) => (result, false),
+          Err(_) => (Err(anyhow::anyhow!("The client or server has timed out").into()), true),
+        }
+      } else {
+        (Err(anyhow::anyhow!("The client or server has timed out").into()), true)
+      }
+    } else {
+      (executed_handler.response_modifying_handler(response).await, false)
+    };
     if traces_enabled {
       for trace_sender in &traces_senders {
         trace_sender
@@ -312,6 +330,14 @@ async fn execute_response_modifying_handlers(
           .await
           .unwrap_or_default();
       }
+    }
+    if is_timeout {
+      if metrics_enabled {
+        while let Some(mut executed_handler) = executed_handlers.pop() {
+          executed_handler.metric_data_after_handler(&metrics_sender).await;
+        }
+      }
+      Err(anyhow::anyhow!("The client or server has timed out"))?;
     }
     response = match response_status {
       Ok(response) => response,
@@ -349,19 +375,19 @@ async fn execute_response_modifying_handlers(
           }
         }
 
-        return Err(final_response);
+        return Ok(Err(final_response));
       }
     };
     if metrics_enabled {
       executed_handler.metric_data_after_handler(&metrics_sender).await;
     }
   }
-  Ok(response)
+  Ok(Ok(response))
 }
 
-/// The HTTP request handler
+/// The HTTP request handler, with timeout
 #[allow(clippy::too_many_arguments)]
-async fn request_handler_wrapped(
+pub async fn request_handler(
   mut request: Request<BoxBody<Bytes, std::io::Error>>,
   client_address: SocketAddr,
   server_address: SocketAddr,
@@ -371,9 +397,22 @@ async fn request_handler_wrapped(
   acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   proxy_protocol_client_address: Option<SocketAddr>,
   proxy_protocol_server_address: Option<SocketAddr>,
-) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
+) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
   // Global configuration
   let global_configuration = configurations.find_global_configuration();
+
+  // Request timeout
+  let timeout_from_config = global_configuration
+    .as_deref()
+    .and_then(|c| get_entry!("timeout", c))
+    .and_then(|e| e.values.last());
+  let timeout_duration = if timeout_from_config.is_some_and(|v| v.is_null()) {
+    None
+  } else {
+    let timeout_millis = timeout_from_config.and_then(|v| v.as_i128()).unwrap_or(300000) as u64;
+    Some(Duration::from_millis(timeout_millis))
+  };
+  let timeout_instant = std::time::Instant::now();
 
   // Normalize HTTP/2 and HTTP/3 request objects
   match request.version() {
@@ -1337,9 +1376,29 @@ async fn request_handler_wrapped(
       }
     }
 
-    let response_result = handlers
-      .request_handler(request, &configuration, &socket_data, &error_logger)
-      .await;
+    let (response_result, is_timeout) = if let Some(timeout_duration) = &timeout_duration {
+      let elapsed = timeout_instant.elapsed();
+      if let Some(timeout_cur_duration) = timeout_duration.checked_sub(elapsed) {
+        match timeout(
+          timeout_cur_duration,
+          handlers.request_handler(request, &configuration, &socket_data, &error_logger),
+        )
+        .await
+        {
+          Ok(result) => (result, false),
+          Err(_) => (Err(anyhow::anyhow!("The client or server has timed out").into()), true),
+        }
+      } else {
+        (Err(anyhow::anyhow!("The client or server has timed out").into()), true)
+      }
+    } else {
+      (
+        handlers
+          .request_handler(request, &configuration, &socket_data, &error_logger)
+          .await,
+        false,
+      )
+    };
 
     if traces_enabled {
       for trace_sender in &traces_senders {
@@ -1354,6 +1413,16 @@ async fn request_handler_wrapped(
     }
 
     executed_handlers.push(handlers);
+
+    if is_timeout {
+      if metrics_enabled {
+        while let Some(mut executed_handler) = executed_handlers.pop() {
+          executed_handler.metric_data_after_handler(&metrics_sender).await;
+        }
+      }
+      Err(anyhow::anyhow!("The client or server has timed out"))?;
+    }
+
     match response_result {
       Ok(response) => {
         let status = response.response_status;
@@ -1403,8 +1472,10 @@ async fn request_handler_wrapped(
               metrics_enabled,
               traces_senders,
               traces_enabled,
+              timeout_instant,
+              timeout_duration,
             )
-            .await
+            .await?
             {
               Ok(response) => {
                 if let Some(request_parts) = log_request_parts {
@@ -1520,8 +1591,10 @@ async fn request_handler_wrapped(
                 metrics_enabled,
                 traces_senders,
                 traces_enabled,
+                timeout_instant,
+                timeout_duration,
               )
-              .await
+              .await?
               {
                 Ok(response) => {
                   if let Some(request_parts) = log_request_parts {
@@ -1599,8 +1672,10 @@ async fn request_handler_wrapped(
           metrics_enabled,
           traces_senders,
           traces_enabled,
+          timeout_instant,
+          timeout_duration,
         )
-        .await
+        .await?
         {
           Ok(response) => {
             if let Some(request_parts) = log_request_parts {
@@ -1658,8 +1733,10 @@ async fn request_handler_wrapped(
     metrics_enabled,
     traces_senders,
     traces_enabled,
+    timeout_instant,
+    timeout_duration,
   )
-  .await
+  .await?
   {
     Ok(response) => {
       if let Some(request_parts) = log_request_parts {
@@ -1678,45 +1755,5 @@ async fn request_handler_wrapped(
       Ok(response)
     }
     Err(error_response) => Ok(error_response),
-  }
-}
-
-/// The HTTP request handler, with timeout
-#[allow(clippy::too_many_arguments)]
-pub async fn request_handler(
-  request: Request<BoxBody<Bytes, std::io::Error>>,
-  client_address: SocketAddr,
-  server_address: SocketAddr,
-  encrypted: bool,
-  configurations: Arc<ServerConfigurations>,
-  http3_alt_port: Option<u16>,
-  acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
-  proxy_protocol_client_address: Option<SocketAddr>,
-  proxy_protocol_server_address: Option<SocketAddr>,
-) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
-  let global_configuration = configurations.find_global_configuration();
-  let timeout_from_config = global_configuration
-    .as_deref()
-    .and_then(|c| get_entry!("timeout", c))
-    .and_then(|e| e.values.last());
-  let request_handler_future = request_handler_wrapped(
-    request,
-    client_address,
-    server_address,
-    encrypted,
-    configurations,
-    http3_alt_port,
-    acme_http_01_resolvers,
-    proxy_protocol_client_address,
-    proxy_protocol_server_address,
-  );
-  if timeout_from_config.is_some_and(|v| v.is_null()) {
-    request_handler_future.await.map_err(|e| anyhow::anyhow!(e))
-  } else {
-    let timeout_millis = timeout_from_config.and_then(|v| v.as_i128()).unwrap_or(300000) as u64;
-    match timeout(Duration::from_millis(timeout_millis), request_handler_future).await {
-      Ok(response) => response.map_err(|e| anyhow::anyhow!(e)),
-      Err(_) => Err(anyhow::anyhow!("The client or server has timed out")),
-    }
   }
 }
