@@ -462,13 +462,21 @@ async fn http_tcp_handler_fn(
         }
       };
       if let Err(err) = http_future_result {
+        let error_to_log = if err.is_user() {
+          err.source().unwrap_or(&err)
+        } else {
+          &err
+        };
         for logging_tx in configurations
           .find_global_configuration()
           .as_ref()
           .map_or(&vec![], |c| &c.observability.log_channels)
         {
           logging_tx
-            .send(LogMessage::new(format!("Error serving HTTPS connection: {err}"), true))
+            .send(LogMessage::new(
+              format!("Error serving HTTPS connection: {error_to_log}"),
+              true,
+            ))
             .await
             .unwrap_or_default();
         }
@@ -534,13 +542,21 @@ async fn http_tcp_handler_fn(
         }
       };
       if let Err(err) = http_future_result {
+        let error_to_log = if err.is_user() {
+          err.source().unwrap_or(&err)
+        } else {
+          &err
+        };
         for logging_tx in configurations
           .find_global_configuration()
           .as_ref()
           .map_or(&vec![], |c| &c.observability.log_channels)
         {
           logging_tx
-            .send(LogMessage::new(format!("Error serving HTTPS connection: {err}"), true))
+            .send(LogMessage::new(
+              format!("Error serving HTTPS connection: {error_to_log}"),
+              true,
+            ))
             .await
             .unwrap_or_default();
         }
@@ -609,13 +625,21 @@ async fn http_tcp_handler_fn(
       }
     };
     if let Err(err) = http_future_result {
+      let error_to_log = if err.is_user() {
+        err.source().unwrap_or(&err)
+      } else {
+        &err
+      };
       for logging_tx in configurations
         .find_global_configuration()
         .as_ref()
         .map_or(&vec![], |c| &c.observability.log_channels)
       {
         logging_tx
-          .send(LogMessage::new(format!("Error serving HTTP connection: {err}"), true))
+          .send(LogMessage::new(
+            format!("Error serving HTTP connection: {error_to_log}"),
+            true,
+          ))
           .await
           .unwrap_or_default();
       }
