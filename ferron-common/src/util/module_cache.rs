@@ -150,6 +150,7 @@ mod test {
         inner: vec![ServerConfigurationEntry {
           values: vec![ServerConfigurationValue::String("something".to_string())],
           props: HashMap::new(),
+          children: HashMap::new(),
         }],
       },
     );
@@ -174,6 +175,7 @@ mod test {
         inner: vec![ServerConfigurationEntry {
           values: vec![ServerConfigurationValue::String("something".to_string())],
           props: HashMap::new(),
+          children: HashMap::new(),
         }],
       },
     );
@@ -183,6 +185,7 @@ mod test {
         inner: vec![ServerConfigurationEntry {
           values: vec![ServerConfigurationValue::String("something else".to_string())],
           props: HashMap::new(),
+          children: HashMap::new(),
         }],
       },
     );
@@ -229,6 +232,7 @@ mod test {
         inner: vec![ServerConfigurationEntry {
           values: vec![ServerConfigurationValue::String("something".to_string())],
           props: HashMap::new(),
+          children: HashMap::new(),
         }],
       },
     );
@@ -253,6 +257,7 @@ mod test {
         inner: vec![ServerConfigurationEntry {
           values: vec![ServerConfigurationValue::String("something".to_string())],
           props: HashMap::new(),
+          children: HashMap::new(),
         }],
       },
     );
@@ -262,6 +267,7 @@ mod test {
         inner: vec![ServerConfigurationEntry {
           values: vec![ServerConfigurationValue::String("something else".to_string())],
           props: HashMap::new(),
+          children: HashMap::new(),
         }],
       },
     );

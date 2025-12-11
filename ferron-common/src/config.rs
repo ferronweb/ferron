@@ -341,6 +341,9 @@ pub struct ServerConfigurationEntry {
 
   /// Props for the entry
   pub props: HashMap<String, ServerConfigurationValue>,
+
+  /// Child nodes for the entry, keyed by node name
+  pub children: HashMap<String, ServerConfigurationEntries>,
 }
 
 impl std::hash::Hash for ServerConfigurationEntry {
@@ -358,6 +361,14 @@ impl std::hash::Hash for ServerConfigurationEntry {
     for (key, value) in props_vec {
       key.hash(state);
       value.hash(state);
+    }
+
+    let mut children_vec: Vec<_> = self.children.iter().collect();
+    children_vec.sort_by(|a, b| a.0.cmp(b.0));
+    children_vec.len().hash(state);
+    for (key, entries) in children_vec {
+      key.hash(state);
+      entries.hash(state);
     }
   }
 }

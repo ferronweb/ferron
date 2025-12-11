@@ -61,6 +61,7 @@ impl ConfigurationAdapter for DockerAutoConfigurationAdapter {
         inner: vec![ServerConfigurationEntry {
           values: vec![ServerConfigurationValue::String("/var/cache/ferron-acme".to_string())],
           props: HashMap::new(),
+          children: HashMap::new(),
         }],
       },
     );

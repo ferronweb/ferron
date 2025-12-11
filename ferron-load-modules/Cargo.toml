@@ -17,6 +17,7 @@ ferron-modules-builtin = { workspace = true, features = [
     "rproxy",
     "scgi",
     "static",
+    "script",
 ] }
 ferron-dns-builtin = { workspace = true, features = [
     "cloudflare",

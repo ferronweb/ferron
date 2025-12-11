@@ -17,6 +17,9 @@ modules:
   - builtin: true
     loader: RewriteModuleLoader
   - builtin: true
+    cargo_feature: script
+    loader: ScriptExecModuleLoader
+  - builtin: true
     loader: StatusCodesModuleLoader
   - builtin: true
     loader: TrailingSlashRedirectsModuleLoader
