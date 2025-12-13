@@ -123,7 +123,7 @@ default-tokio = [
     "limit",
     "replace",
     "rproxy",
-    "runtime-monoio",
+    "runtime-tokio",
     "scgi",
     "static",
 ]
