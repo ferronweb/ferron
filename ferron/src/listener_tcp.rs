@@ -25,21 +25,34 @@ pub fn create_tcp_listener(
   let shutdown_rx = shutdown_tx.clone();
   let (listen_error_tx, listen_error_rx) = async_channel::unbounded();
   std::thread::Builder::new()
-        .name(format!("TCP listener for {address}"))
-        .spawn(move || {
-            crate::runtime::new_runtime(async move {
-      crate::runtime::select! {
-      result = tcp_listener_fn(address, encrypted, tx, &listen_error_tx, logging_tx, first_startup, tcp_buffer_sizes) => {
-          if let Some(error) = result.err() {
-              listen_error_tx.send(Some(error)).await.unwrap_or_default();
-          }
-        }
-        _ = shutdown_rx.cancelled() => {
+    .name(format!("TCP listener for {address}"))
+    .spawn(move || {
+      crate::runtime::new_runtime(
+        async move {
+          let tcp_listener_future = tcp_listener_fn(
+            address,
+            encrypted,
+            tx,
+            &listen_error_tx,
+            logging_tx,
+            first_startup,
+            tcp_buffer_sizes,
+          );
+          crate::runtime::select! {
+            result = tcp_listener_future => {
+              if let Some(error) = result.err() {
+                  listen_error_tx.send(Some(error)).await.unwrap_or_default();
+              }
+            }
+            _ = shutdown_rx.cancelled() => {
 
-        }
-      }
-    }, enable_uring).unwrap();
-        })?;
+            }
+          }
+        },
+        enable_uring,
+      )
+      .unwrap();
+    })?;
 
   if let Some(error) = listen_error_rx.recv_blocking()? {
     Err(error)?;
