@@ -1,8 +1,7 @@
 ---
+
+import { Image } from "astro:assets";
 import { getCollection } from "astro:content";
-import MainLayout from "../../layouts/MainLayout.astro";
-import { format } from "date-fns";
-import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
 import {
   faCalendar,
   faChevronLeft,
@@ -10,8 +9,10 @@ import {
   faExternalLink,
   faUser
 } from "@fortawesome/free-solid-svg-icons";
+import { format } from "date-fns";
 import blogMissing from "../../assets/blog-missing.png";
-import { Image } from "astro:assets";
+import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
+import MainLayout from "../../layouts/MainLayout.astro";
 
 // prettier-ignore
 export async function getStaticPaths() {
@@ -30,10 +31,10 @@ export async function getStaticPaths() {
   });
   const pages = [];
   while (sortedPosts.length > 0) {
-    pages.push(sortedPosts.splice(0, pages.length == 0 ? 7 : 6));
+    pages.push(sortedPosts.splice(0, pages.length === 0 ? 7 : 6));
   }
   return pages.map((page, index) => ({
-    params: { page: index == 0 ? undefined : (index + 1).toString() },
+    params: { page: index === 0 ? undefined : (index + 1).toString() },
     props: { page: {
       data: page,
       currentPage: index + 1,

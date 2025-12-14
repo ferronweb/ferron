@@ -1,4 +1,7 @@
 ---
+
+
+
 import { format } from "date-fns";
 
 interface Props {
@@ -69,12 +72,12 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
   import {
     BarController,
     BarElement,
-    Chart,
     CategoryScale,
-    LinearScale,
+    Chart,
+    type ChartItem, 
     Legend,
-    Tooltip,
-    type ChartItem
+    LinearScale,
+    Tooltip
   } from "chart.js";
 
   interface BenchmarkData {

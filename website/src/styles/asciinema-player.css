@@ -1,5 +1,5 @@
-@reference "./global.css";
 @import "asciinema-player/dist/bundle/asciinema-player.css";
+@reference "./global.css";
 
 /* Fix asciinema play button not being centered */
 .ap-player .ap-overlay-start .ap-play-button div span {

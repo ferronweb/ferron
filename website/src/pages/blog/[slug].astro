@@ -1,7 +1,15 @@
 ---
+
+
+
+import { Image } from "astro:assets";
 import { getCollection, render } from "astro:content";
-import MainLayout from "../../layouts/MainLayout.astro";
-import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
+import {
+  faFacebook,
+  faLinkedin, 
+  faThreads,
+  faXTwitter
+} from "@fortawesome/free-brands-svg-icons";
 import {
   faArrowLeft,
   faArrowRight,
@@ -10,13 +18,8 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { format, formatISO } from "date-fns";
 import blogMissing from "../../assets/blog-missing.png";
-import { Image } from "astro:assets";
-import {
-  faThreads,
-  faXTwitter,
-  faFacebook,
-  faLinkedin
-} from "@fortawesome/free-brands-svg-icons";
+import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
+import MainLayout from "../../layouts/MainLayout.astro";
 
 export async function getStaticPaths() {
   const posts = await getCollection("blog");

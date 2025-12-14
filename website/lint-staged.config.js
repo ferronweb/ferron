@@ -1,8 +1,9 @@
 export default {
-  "../docs/**/*.md": ["eslint --cache --fix", "prettier --write"],
-  "../blog/**/*.md": ["eslint --cache --fix", "prettier --write"],
-  "src/**/*.md": ["eslint --cache --fix", "prettier --write"],
-  "src/**/*.js": ["eslint --cache --fix", "prettier --write"],
-  "src/**/*.ts": ["eslint --cache --fix", "prettier --write"],
-  "src/**/*.astro": ["eslint --cache --fix", "prettier --write"]
+  // Markdown is currently not supported by Biome
+  //"../docs/**/*.md": ["biome check --write"],
+  //"../blog/**/*.md": ["biome check --write"],
+  //"src/**/*.md": ["biome check --write"],
+  "src/**/*.js": ["biome check --write"],
+  "src/**/*.ts": ["biome check --write"],
+  "src/**/*.astro": ["biome check --write"]
 };
