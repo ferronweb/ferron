@@ -50,6 +50,9 @@
       "path": "./node_modules/cz-conventional-changelog"
     }
   },
+  "overrides": {
+    "vite": "npm:rolldown-vite@7"
+  },
   "browserslist": [
     "chrome 64",
     "edge 79",

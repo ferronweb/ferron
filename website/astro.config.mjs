@@ -25,7 +25,8 @@ export default defineConfig({
     sitemap(),
     pagefind(),
     (await import("astro-compress")).default({
-      HTML: true // This setting wouldn't work with React (it would cause hydration errors), but since the website uses vanilla JS, it's safe to enable.
+      HTML: true, // This setting wouldn't work with React (it would cause hydration errors), but since the website uses vanilla JS, it's safe to enable.
+      CSS: false // When enabled, it doesn't work with `rolldown-vite` (broken responsive styles)
     })
   ],
   markdown: {
