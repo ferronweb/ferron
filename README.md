@@ -145,6 +145,10 @@ You can check the [Ferron documentation](https://ferron.sh/docs/configuration-kd
 
 See [Ferron contribution page](https://ferron.sh/contribute) for details.
 
+Below is a list of contributors to Ferron. **Thank you to all of them!**
+
+[![Contributor list](./CONTRIBUTORS.svg)](https://github.com/ferronweb/ferron/graphs/contributors)
+
 ## License
 
 Ferron is licensed under the MIT License. See `LICENSE` for details.
