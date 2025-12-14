@@ -82,7 +82,7 @@ pub fn generate_default_error_page(status_code: hyper::StatusCode, server_admini
         "<span class=\"error-message\">{}</span>",
         anti_xss(r)
       )),
-      status_code_description
+      &anti_xss(status_code_description)
     ),
     &status_code_name,
     vec![
