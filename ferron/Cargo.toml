@@ -27,7 +27,6 @@ tokio-rustls = { version = "0.26.1", default-features = false, features = [
     "ring",
 ] }
 rustls-pki-types = "1.11.0"
-rustls-pemfile = "2.2.0"
 yaml-rust2 = { workspace = true }
 anyhow = "1.0.98"
 futures-util = "0.3.31"
