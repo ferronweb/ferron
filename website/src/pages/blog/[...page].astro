@@ -1,5 +1,4 @@
 ---
-
 import { Image } from "astro:assets";
 import { getCollection } from "astro:content";
 import {
@@ -35,11 +34,13 @@ export async function getStaticPaths() {
   }
   return pages.map((page, index) => ({
     params: { page: index === 0 ? undefined : (index + 1).toString() },
-    props: { page: {
-      data: page,
-      currentPage: index + 1,
-      lastPage: pages.length
-    } }
+    props: {
+      page: {
+        data: page,
+        currentPage: index + 1,
+        lastPage: pages.length
+      }
+    }
   }));
 }
 

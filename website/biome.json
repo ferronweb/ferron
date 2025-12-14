@@ -14,9 +14,6 @@
   "files": {
     "includes": ["src/**/*"]
   },
-  "html": {
-    "experimentalFullSupportEnabled": true
-  },
   "css": {
     "parser": {
       "tailwindDirectives": true
