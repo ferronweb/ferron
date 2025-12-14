@@ -1,0 +1,14 @@
+name: Update contributor list
+on:
+  push:
+    branches: ["develop-2.x"]
+
+jobs:
+  contributors:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update contributor list
+        uses: wow-actions/contributors-list@v1
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          svgPath: CONTRIBUTORS.svg
