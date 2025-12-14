@@ -6,6 +6,10 @@ on:
 jobs:
   contributors:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
     steps:
       - name: Update contributor list
         uses: wow-actions/contributors-list@v1
