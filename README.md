@@ -9,6 +9,9 @@
 <p align="center">
   <b>Ferron</b> - a fast, memory-safe web server written in Rust
 </p>
+
+* * *
+
 <p align="center">
   <a href="https://ferron.sh/docs" target="_blank"><img alt="Static Badge" src="https://img.shields.io/badge/Documentation-orange?style=for-the-badge"></a>
   <a href="https://ferron.sh" target="_blank"><img alt="Website" src="https://img.shields.io/website?url=https%3A%2F%2Fferron.sh&style=for-the-badge"></a>
@@ -17,8 +20,6 @@
   <a href="https://hub.docker.com/r/ferronserver/ferron" target="_blank"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/ferronserver/ferron?style=for-the-badge"></a>
   <a href="https://github.com/ferronweb/ferron" target="_blank"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/ferronweb/ferron?style=for-the-badge"></a>
 </p>
-
-* * *
 
 ## Features
 
