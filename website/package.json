@@ -34,7 +34,7 @@
     "postcss-prefix-selector": "^2.1.1",
     "postcss-value-parser": "^4.2.0",
     "rehype-wrap": "^1.1.0",
-    "tailwindcss": "=4.0.17",
+    "tailwindcss": "=4.1.18",
     "unist-util-visit": "^5.0.0"
   },
   "devDependencies": {
