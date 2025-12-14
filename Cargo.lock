@@ -2727,7 +2727,7 @@ dependencies = [
 [[package]]
 name = "monoio"
 version = "0.2.4"
-source = "git+https://github.com/DorianNiemiecSVRJS/monoio.git#04578bc49b618716af03a5db0820efee4c055404"
+source = "git+https://github.com/DorianNiemiecSVRJS/monoio.git#9a0b28a2597425a6cbd8afa797f02703362337a4"
 dependencies = [
  "auto-const-array",
  "bytes",
@@ -2744,7 +2744,7 @@ dependencies = [
  "socket2 0.6.1",
  "threadpool",
  "tokio",
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -2763,7 +2763,7 @@ dependencies = [
 [[package]]
 name = "monoio-macros"
 version = "0.1.0"
-source = "git+https://github.com/DorianNiemiecSVRJS/monoio.git#04578bc49b618716af03a5db0820efee4c055404"
+source = "git+https://github.com/DorianNiemiecSVRJS/monoio.git#9a0b28a2597425a6cbd8afa797f02703362337a4"
 dependencies = [
  "proc-macro2",
  "quote",
