@@ -25,7 +25,7 @@
     "asciinema-player": "^3.12.1",
     "astro": "^5.14.4",
     "astro-seo": "^0.8.4",
-    "autoprefixer": "^10.4.21",
+    "autoprefixer": "^10.4.23",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.561.0",
     "plausible-tracker": "^0.3.9",
