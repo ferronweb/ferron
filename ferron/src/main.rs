@@ -21,18 +21,11 @@ use std::time::Duration;
 use async_channel::{Receiver, Sender};
 use base64::Engine;
 use clap::{Arg, ArgAction, ArgMatches, Command};
-use config::adapters::ConfigurationAdapter;
-use config::processing::{load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration};
-use config::ServerConfigurations;
 use ferron_common::logging::LogMessage;
 use ferron_common::{get_entry, get_value, get_values};
 use ferron_load_modules::{get_dns_provider, obtain_module_loaders, obtain_observability_backend_loaders};
-use handler::create_http_handler;
 use human_panic::{setup_panic, Metadata};
 use instant_acme::{ChallengeType, ExternalAccountKey, LetsEncrypt};
-use listener_handler_communication::ConnectionData;
-use listener_quic::create_quic_listener;
-use listener_tcp::create_tcp_listener;
 use mimalloc::MiMalloc;
 use rustls::client::WebPkiServerVerifier;
 use rustls::crypto::aws_lc_rs::cipher_suite::*;
@@ -45,7 +38,6 @@ use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use rustls_native_certs::load_native_certs;
 use rustls_platform_verifier::BuilderVerifierExt;
 use shadow_rs::shadow;
-use tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
 use tokio_util::sync::CancellationToken;
 use xxhash_rust::xxh3::xxh3_128;
 
@@ -54,6 +46,16 @@ use crate::acme::{
   provision_certificate, AcmeCache, AcmeConfig, AcmeOnDemandConfig, AcmeResolver, TlsAlpn01Resolver,
   ACME_TLS_ALPN_NAME,
 };
+use crate::config::adapters::ConfigurationAdapter;
+use crate::config::processing::{
+  load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration,
+};
+use crate::config::ServerConfigurations;
+use crate::handler::create_http_handler;
+use crate::listener_handler_communication::ConnectionData;
+use crate::listener_quic::create_quic_listener;
+use crate::listener_tcp::create_tcp_listener;
+use crate::tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
 use crate::util::{is_localhost, match_hostname, NoServerVerifier};
 
 // Set the global allocator to use mimalloc for performance optimization

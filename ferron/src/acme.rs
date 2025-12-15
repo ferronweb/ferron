@@ -26,7 +26,7 @@ use rustls::{
   sign::CertifiedKey,
   ClientConfig,
 };
-use rustls_pki_types::{CertificateDer, PrivateKeyDer};
+use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use serde::{Deserialize, Serialize};
 use tokio::{io::AsyncWriteExt, sync::RwLock, time::Instant};
 use x509_parser::prelude::{FromDer, X509Certificate};
@@ -266,10 +266,12 @@ pub async fn check_certificate_validity_or_install_cached(
     get_from_cache(&config.certificate_cache, &certificate_cache_key).await
   {
     let certificate_data = serde_json::from_slice::<CertificateCacheData>(&serialized_certificate_cache_data)?;
-    let certs = rustls_pemfile::certs(&mut std::io::Cursor::new(
-      certificate_data.certificate_chain_pem.as_bytes(),
-    ))
-    .collect::<Result<Vec<_>, _>>()?;
+    let certs = CertificateDer::pem_slice_iter(certificate_data.certificate_chain_pem.as_bytes())
+      .collect::<Result<Vec<_>, _>>()
+      .map_err(|e| match e {
+        rustls_pki_types::pem::Error::Io(err) => err,
+        err => std::io::Error::other(err),
+      })?;
     if let Some(certificate) = certs.first() {
       if let Some(acme_account) = acme_account {
         if config
@@ -287,15 +289,11 @@ pub async fn check_certificate_validity_or_install_cached(
         }
       }
       if check_certificate_validity(certificate, config.renewal_info.as_ref().map(|i| &i.0))? {
-        let private_key =
-          (match rustls_pemfile::private_key(&mut std::io::Cursor::new(certificate_data.private_key_pem.as_bytes())) {
-            Ok(Some(private_key)) => Ok(private_key),
-            Ok(None) => Err(std::io::Error::new(
-              std::io::ErrorKind::InvalidData,
-              "Invalid private key",
-            )),
-            Err(err) => Err(err),
-          })?;
+        let private_key = (match PrivateKeyDer::from_pem_slice(certificate_data.private_key_pem.as_bytes()) {
+          Ok(private_key) => Ok(private_key),
+          Err(rustls_pki_types::pem::Error::Io(err)) => Err(err),
+          Err(err) => Err(std::io::Error::other(err)),
+        })?;
 
         let signing_key = CryptoProvider::get_default()
           .ok_or(anyhow::anyhow!("Cannot get default crypto provider"))?
@@ -473,15 +471,16 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
     )
     .await?;
 
-    let certs = rustls_pemfile::certs(&mut std::io::Cursor::new(certificate_chain_pem.as_bytes()))
-      .collect::<Result<Vec<_>, _>>()?;
-    let private_key = (match rustls_pemfile::private_key(&mut std::io::Cursor::new(private_key_pem.as_bytes())) {
-      Ok(Some(private_key)) => Ok(private_key),
-      Ok(None) => Err(std::io::Error::new(
-        std::io::ErrorKind::InvalidData,
-        "Invalid private key",
-      )),
-      Err(err) => Err(err),
+    let certs = CertificateDer::pem_slice_iter(certificate_chain_pem.as_bytes())
+      .collect::<Result<Vec<_>, _>>()
+      .map_err(|e| match e {
+        rustls_pki_types::pem::Error::Io(err) => err,
+        err => std::io::Error::other(err),
+      })?;
+    let private_key = (match PrivateKeyDer::from_pem_slice(private_key_pem.as_bytes()) {
+      Ok(private_key) => Ok(private_key),
+      Err(rustls_pki_types::pem::Error::Io(err)) => Err(err),
+      Err(err) => Err(std::io::Error::other(err)),
     })?;
 
     let signing_key = CryptoProvider::get_default()

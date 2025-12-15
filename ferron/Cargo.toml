@@ -12,7 +12,7 @@ ferron-load-modules = { workspace = true }
 anyhow = "1.0.98"
 human-panic = "2.0.2"
 chrono = "0.4.41"
-fancy-regex = "0.16.1"
+fancy-regex = "0.17.0"
 glob = "0.3.2"
 urlencoding = "2.1.3"
 miette = { version = "7.6.0", features = ["fancy"] }
@@ -56,7 +56,6 @@ instant-acme = { version = "0.8.4", default-features = false, features = [
     "x509-parser"
 ] }
 rustls-native-certs = "0.8.1"
-rustls-pemfile = "2.2.0"
 rustls-pki-types = "1.12.0"
 rustls-platform-verifier = "0.6.0"
 webpki-roots = "1.0.2"
@@ -90,7 +89,7 @@ monoio = { version = "0.2.4", optional = true, features = [
 ] }
 monoio-compat = { version = "0.2.2", optional = true, features = ["hyper"] }
 async-channel = "2.3.1"
-async-io = "2.4.0"
+async-io = { version = "2.4.0", optional = true }
 futures-util = { version = "0.3.31", features = ["sink"] }
 pin-project-lite = "0.2.16"
 blocking = { version = "1.6.1", optional = true }
@@ -128,14 +127,11 @@ smallvec = { version = "1.15.0", features = [
 ] }
 
 # Build information
-shadow-rs = { version = "1.2.0", default-features = false, features = [
-    "metadata",
-    "tzdb",
-] }
+shadow-rs = { version = "1.2.0", default-features = false }
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 # Process metrics
-procfs = "0.18.0"
+procfs = { version = "0.18.0", default-features = false }
 
 [dev-dependencies]
 shiba = { workspace = true }
@@ -144,8 +140,6 @@ shiba = { workspace = true }
 winresource = "0.1.19"
 shadow-rs = { version = "1.2.0", default-features = false, features = [
     "build",
-    "metadata",
-    "tzdb",
 ] }
 
 [features]
@@ -157,6 +151,7 @@ runtime-monoio = [
     "monoio",
     "monoio-compat",
     "blocking",
+    "async-io",
     "ferron-common/runtime-monoio",
     "ferron-load-modules/runtime-monoio",
 ]

@@ -11,7 +11,7 @@ ferron-script = { path = "../ferron-script", optional = true }
 # Error Handling & Utilities
 anyhow = "1.0.98"
 chrono = "0.4.41"
-fancy-regex = "0.16.1"
+fancy-regex = "0.17.0"
 urlencoding = "2.1.3"
 
 # HTTP/Web Server Core
@@ -125,13 +125,13 @@ default-tokio = [
     "limit",
     "replace",
     "rproxy",
-    "runtime-monoio",
+    "runtime-tokio",
     "scgi",
     "static",
     "script",
 ]
 cache = ["cache_control", "papaya", "ahash"]
-cgi = ["async-process", "httparse", "memchr"]
+cgi = ["httparse", "memchr"]
 dcompress = ["async-compression"]
 fauth = ["rand"]
 fcgi = ["tokio-util/codec", "httparse", "memchr"]
@@ -139,7 +139,7 @@ fproxy = []
 limit = ["tokenbucket"]
 replace = ["memchr"]
 rproxy = ["rand", "ppp"]
-runtime-monoio = ["monoio", "monoio-compat"]
+runtime-monoio = ["async-process", "monoio", "monoio-compat"]
 runtime-tokio = ["hyper-util/tokio"]
 scgi = ["httparse", "memchr"]
 static = ["new_mime_guess", "async-compression", "sha2"]
