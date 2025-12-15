@@ -74,7 +74,7 @@ async fn asgi_application_fn(
   };
   let tx_clone = tx.clone();
   let rx_clone = rx.clone();
-  match Python::with_gil(move |py| -> PyResult<_> {
+  match Python::attach(move |py| -> PyResult<_> {
     let tx_clone = tx_clone.clone();
     let rx_clone = rx_clone.clone();
 
@@ -296,7 +296,7 @@ async fn asgi_application_fn(
       None,
       None,
       move |args: &Bound<'_, PyTuple>, _: Option<&Bound<'_, PyDict>>| -> PyResult<_> {
-        let event = args.get_item(0)?.downcast::<PyDict>()?.clone();
+        let event = args.get_item(0)?.cast::<PyDict>()?.clone();
         let message = asgi_event_to_outgoing_struct(event)?;
         let tx = tx_clone.clone();
         let client_disconnected = client_disconnected_clone.clone();
@@ -358,7 +358,7 @@ async fn asgi_lifetime_init_fn(asgi_applications: Vec<Arc<Py<PyAny>>>) -> Vec<As
       async {
         let (tx, rx_task) = async_channel::unbounded::<IncomingAsgiMessage>();
         let (tx_task, rx) = async_channel::unbounded::<OutgoingAsgiMessage>();
-        if let Ok(locals) = Python::with_gil(pyo3_async_runtimes::tokio::get_current_locals) {
+        if let Ok(locals) = Python::attach(pyo3_async_runtimes::tokio::get_current_locals) {
           tokio::spawn(pyo3_async_runtimes::tokio::scope(
             locals,
             asgi_application_fn(asgi_application, tx_task, rx_task),
@@ -390,7 +390,7 @@ async fn asgi_event_loop_fn(
     let (tx_send, rx_task) = async_channel::unbounded::<IncomingAsgiMessage>();
     let (tx_task, rx_send) = async_channel::unbounded::<OutgoingAsgiMessage>();
     let asgi_application_cloned = asgi_application.clone();
-    if let Ok(locals) = Python::with_gil(pyo3_async_runtimes::tokio::get_current_locals) {
+    if let Ok(locals) = Python::attach(pyo3_async_runtimes::tokio::get_current_locals) {
       tokio::spawn(pyo3_async_runtimes::tokio::scope(
         locals,
         asgi_application_fn(asgi_application_cloned, tx_task, rx_task),
@@ -405,7 +405,7 @@ async fn asgi_init_event_loop_fn(
   asgi_applications: Vec<Arc<Py<PyAny>>>,
   mut channels: Vec<(Sender<AsgiChannelResult>, Receiver<()>)>,
 ) {
-  Python::with_gil(|py| {
+  Python::attach(|py| {
     // Try installing `uvloop`, when it fails, use `asyncio` fallback instead.
     if let Ok(uvloop) = py.import("uvloop") {
       let _ = uvloop.call_method0("install");
@@ -443,7 +443,7 @@ async fn asgi_init_event_loop_fn(
           let last_channel_id = channels_len;
           for (tx, rx) in channels {
             channels_len -= 1;
-            if let Ok(locals) = Python::with_gil(pyo3_async_runtimes::tokio::get_current_locals) {
+            if let Ok(locals) = Python::attach(pyo3_async_runtimes::tokio::get_current_locals) {
               tokio::spawn(pyo3_async_runtimes::tokio::scope(
                 locals,
                 asgi_event_loop_fn(asgi_applications[channels_len].clone(), tx, rx),
@@ -451,7 +451,7 @@ async fn asgi_init_event_loop_fn(
             }
           }
 
-          if let Ok(locals) = Python::with_gil(pyo3_async_runtimes::tokio::get_current_locals) {
+          if let Ok(locals) = Python::attach(pyo3_async_runtimes::tokio::get_current_locals) {
             tokio::spawn(pyo3_async_runtimes::tokio::scope(
               locals,
               asgi_event_loop_fn(asgi_applications[last_channel_id].clone(), tx_last, rx_last),
@@ -513,12 +513,12 @@ pub fn load_asgi_application(
   let module_name_cstring = CString::from_str(&module_name)?;
   let script_data = std::fs::read_to_string(file_path)?;
   let script_data_cstring = CString::from_str(&script_data)?;
-  let asgi_application = Python::with_gil(move |py| -> PyResult<Py<PyAny>> {
+  let asgi_application = Python::attach(move |py| -> PyResult<Py<PyAny>> {
     let mut sys_path_old = None;
     if let Some(script_dirname) = script_dirname {
       if let Ok(sys_module) = PyModule::import(py, "sys") {
         if let Ok(sys_path_any) = sys_module.getattr("path") {
-          if let Ok(sys_path) = sys_path_any.downcast::<PyList>() {
+          if let Ok(sys_path) = sys_path_any.cast::<PyList>() {
             let sys_path = sys_path.clone();
             sys_path_old = sys_path.extract::<Vec<String>>().ok();
             sys_path.insert(0, script_dirname).unwrap_or_default();

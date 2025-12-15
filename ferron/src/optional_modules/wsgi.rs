@@ -486,7 +486,7 @@ async fn execute_wsgi(
   let wsgi_head_clone = wsgi_head.clone();
   let error_logger_owned = error_logger.to_owned();
   let body_iterator = tokio::task::spawn_blocking(move || {
-    Python::with_gil(move |py| -> PyResult<Py<PyIterator>> {
+    Python::attach(move |py| -> PyResult<Py<PyIterator>> {
       let start_response = PyCFunction::new_closure(
         py,
         None,
@@ -508,12 +508,12 @@ async fn execute_wsgi(
           let mut wsgi_head_locked = wsgi_head_clone.blocking_lock();
           if let Some(exc_info) = exc_info {
             if wsgi_head_locked.is_sent {
-              let exc_info_tuple = exc_info.downcast::<PyTuple>()?;
+              let exc_info_tuple = exc_info.cast::<PyTuple>()?;
               let exc_info_exception = exc_info_tuple
                 .get_item(1)?
                 .getattr("with_traceback")?
                 .call((exc_info_tuple.get_item(2)?,), None)?
-                .downcast::<PyException>()?
+                .cast::<PyException>()?
                 .clone();
               Err(exc_info_exception)?
             }
@@ -590,10 +590,7 @@ async fn execute_wsgi(
         PyBool::new(py, false).as_any().clone(),
       );
       let body_unknown = wsgi_application.call(py, (environment, start_response), None)?;
-      let body_iterator = body_unknown
-        .downcast_bound::<PyIterator>(py)?
-        .clone()
-        .unbind();
+      let body_iterator = body_unknown.cast_bound::<PyIterator>(py)?.clone().unbind();
       Ok(body_iterator)
     })
   })
@@ -606,7 +603,7 @@ async fn execute_wsgi(
       Box::pin(async move {
         let body_iterator_arc_clone = body_iterator_arc.clone();
         let blocking_thread_result = tokio::task::spawn_blocking(move || {
-          Python::with_gil(|py| -> PyResult<Option<Bytes>> {
+          Python::attach(|py| -> PyResult<Option<Bytes>> {
             let mut body_iterator_bound = body_iterator_arc_clone.bind(py).clone();
             if let Some(body_chunk) = body_iterator_bound.next() {
               Ok(Some(Bytes::from(body_chunk?.extract::<Vec<u8>>()?)))

@@ -98,7 +98,7 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
         let wsgi_head_clone = wsgi_head.clone();
         let tx_mutex_clone = tx_mutex.clone();
         let rx_mutex_clone = rx_mutex.clone();
-        let body_iterator = Python::with_gil(move |py| -> PyResult<Py<PyIterator>> {
+        let body_iterator = Python::attach(move |py| -> PyResult<Py<PyIterator>> {
           let start_response = PyCFunction::new_closure(
             py,
             None,
@@ -120,12 +120,12 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
               let mut wsgi_head_locked = wsgi_head_clone.blocking_lock();
               if let Some(exc_info) = exc_info {
                 if wsgi_head_locked.is_sent {
-                  let exc_info_tuple = exc_info.downcast::<PyTuple>()?;
+                  let exc_info_tuple = exc_info.cast::<PyTuple>()?;
                   let exc_info_exception = exc_info_tuple
                     .get_item(1)?
                     .getattr("with_traceback")?
                     .call((exc_info_tuple.get_item(2)?,), None)?
-                    .downcast::<PyException>()?
+                    .cast::<PyException>()?
                     .clone();
                   Err(exc_info_exception)?
                 }
@@ -215,10 +215,7 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
             PyBool::new(py, false).as_any().clone(),
           );
           let body_unknown = wsgi_application.call(py, (environment, start_response), None)?;
-          let body_iterator = body_unknown
-            .downcast_bound::<PyIterator>(py)?
-            .clone()
-            .unbind();
+          let body_iterator = body_unknown.cast_bound::<PyIterator>(py)?.clone().unbind();
           Ok(body_iterator)
         })?;
         let current_application_id = application_id;
@@ -241,7 +238,7 @@ fn wsgi_pool_fn(tx: Sender, rx: Recver, wsgi_script_path: PathBuf) {
           if let Some(body_iterator_arc) = body_iterators.get(&application_id) {
             let wsgi_head_clone = wsgi_head.clone();
             let body_iterator_arc_clone = body_iterator_arc.clone();
-            let body_chunk_result = Python::with_gil(|py| -> PyResult<Option<Vec<u8>>> {
+            let body_chunk_result = Python::attach(|py| -> PyResult<Option<Vec<u8>>> {
               let mut body_iterator_bound = body_iterator_arc_clone.bind(py).clone();
               if let Some(body_chunk) = body_iterator_bound.next() {
                 Ok(Some(body_chunk?.extract::<Vec<u8>>()?))

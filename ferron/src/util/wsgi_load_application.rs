@@ -25,12 +25,12 @@ pub fn load_wsgi_application(
   let module_name_cstring = CString::from_str(&module_name)?;
   let script_data = std::fs::read_to_string(file_path)?;
   let script_data_cstring = CString::from_str(&script_data)?;
-  let wsgi_application = Python::with_gil(move |py| -> PyResult<Py<PyAny>> {
+  let wsgi_application = Python::attach(move |py| -> PyResult<Py<PyAny>> {
     let mut sys_path_old = None;
     if let Some(script_dirname) = script_dirname {
       if let Ok(sys_module) = PyModule::import(py, "sys") {
         if let Ok(sys_path_any) = sys_module.getattr("path") {
-          if let Ok(sys_path) = sys_path_any.downcast::<PyList>() {
+          if let Ok(sys_path) = sys_path_any.cast::<PyList>() {
             let sys_path = sys_path.clone();
             sys_path_old = sys_path.extract::<Vec<String>>().ok();
             sys_path.insert(0, script_dirname).unwrap_or_default();

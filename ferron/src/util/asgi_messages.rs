@@ -248,7 +248,7 @@ pub fn asgi_event_to_outgoing_struct(
 }
 
 pub fn incoming_struct_to_asgi_event(incoming: IncomingAsgiMessageInner) -> PyResult<Py<PyDict>> {
-  Python::with_gil(move |py| -> PyResult<_> {
+  Python::attach(move |py| -> PyResult<_> {
     let event = PyDict::new(py);
 
     match incoming {
