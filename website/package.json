@@ -26,7 +26,7 @@
     "astro-compress": "^2.3.8",
     "astro-pagefind": "^1.8.5",
     "astro-seo": "^0.8.4",
-    "autoprefixer": "^10.4.21",
+    "autoprefixer": "^10.4.23",
     "chart.js": "^4.5.0",
     "date-fns": "^4.1.0",
     "postcss-media-minmax": "^5.0.0",
