@@ -1535,7 +1535,7 @@ dependencies = [
  "fastrand",
  "ferron-common",
  "futures-util",
- "hashlink 0.11.0",
+ "hashlink",
  "http-body-util",
  "httparse",
  "hyper",
@@ -1572,7 +1572,7 @@ dependencies = [
  "async-channel",
  "chrono",
  "ferron-common",
- "hashlink 0.11.0",
+ "hashlink",
  "hyper",
  "hyper-rustls",
  "opentelemetry",
@@ -1629,7 +1629,7 @@ version = "2.2.1"
 dependencies = [
  "anyhow",
  "glob",
- "hashlink 0.11.0",
+ "hashlink",
  "kdl",
  "yaml-rust2",
 ]
@@ -1668,12 +1668,6 @@ name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
-
-[[package]]
-name = "foldhash"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
 name = "foldhash"
@@ -1917,9 +1911,6 @@ name = "hashbrown"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
-dependencies = [
- "foldhash 0.1.5",
-]
 
 [[package]]
 name = "hashbrown"
@@ -1927,16 +1918,7 @@ version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 dependencies = [
- "foldhash 0.2.0",
-]
-
-[[package]]
-name = "hashlink"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7382cf6263419f2d8df38c55d7da83da5c18aef87fc7a7fc1fb1e344edfe14c1"
-dependencies = [
- "hashbrown 0.15.5",
+ "foldhash",
 ]
 
 [[package]]
@@ -2577,9 +2559,9 @@ dependencies = [
 
 [[package]]
 name = "libredox"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "416f7e718bdb06000964960ffa43b4335ad4012ae8b99060261aa4a8088d5ccb"
+checksum = "df15f6eac291ed1cf25865b1ee60399f57e7c227e7f51bdbd4c5270396a9ed50"
 dependencies = [
  "bitflags",
  "libc",
@@ -5624,13 +5606,13 @@ checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
 
 [[package]]
 name = "yaml-rust2"
-version = "0.10.4"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2462ea039c445496d8793d052e13787f2b90e750b833afee748e601c17621ed9"
+checksum = "631a50d867fafb7093e709d75aaee9e0e0d5deb934021fcea25ac2fe09edc51e"
 dependencies = [
  "arraydeque",
  "encoding_rs",
- "hashlink 0.10.0",
+ "hashlink",
 ]
 
 [[package]]
