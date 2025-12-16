@@ -17,5 +17,4 @@ humantime = "2.1.0"
 parking_lot = "0.12.3"
 hex = "0.4.3"
 
-[dev-dependencies]
-tokio-test = "0.4.4"
+ 
