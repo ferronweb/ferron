@@ -666,6 +666,18 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
+    if let Some(log_entries) = get_entries_for_validation!("disable_url_sanitizer", config, used_properties) {
+      for log_entry in &log_entries.inner {
+        if log_entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `disable_url_sanitizer` configuration property must have exactly one value"
+          ))?
+        } else if !log_entry.values[0].is_bool() {
+          Err(anyhow::anyhow!("Invalid URL sanitizer disabling option"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }

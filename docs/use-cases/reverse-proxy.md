@@ -107,6 +107,22 @@ example.com {
 }
 ```
 
+## Reverse proxying with intact request URL
+
+Ferron by default rewrites the request URL before sending the request to the backend server, to protect against path traversal attacks.
+
+However, there are web applications that may not work with this default configuration. This can result in 404 Not Found errors, and other issues.
+
+In such cases, you can disable the URL sanitizer (although Ferron won't protect the backend server from path traversal attacks, the backend server must protect itself against such attacks):
+
+```kdl
+// Example configuration with reverse proxy and intact request URL. Replace "example.com" with your domain name.
+example.com {
+    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+    disable_url_sanitizer
+}
+```
+
 ## Reverse proxy to backends listening on Unix sockets
 
 Ferron supports reverse proxying to backends listening on Unix sockets. To configure Ferron for reverse proxying to backends listening on Unix sockets, you can use this configuration:

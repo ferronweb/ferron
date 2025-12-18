@@ -674,6 +674,59 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
         }
       };
 
+      // Check for possible path traversal attack, if the URL sanitizer is disabled.
+      if get_value!("disable_url_sanitizer", config)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+      {
+        // Canonicalize the file path
+        #[cfg(feature = "runtime-monoio")]
+        let canonicalize_result = {
+          let joined_pathbuf = joined_pathbuf.clone();
+          monoio::spawn_blocking(move || std::fs::canonicalize(joined_pathbuf))
+            .await
+            .unwrap_or(Err(std::io::Error::other(
+              "Can't spawn a blocking task to obtain the canonical file path",
+            )))
+        };
+        #[cfg(feature = "runtime-tokio")]
+        let canonicalize_result = fs::canonicalize(&joined_pathbuf).await;
+
+        let canonical_joined_pathbuf = match canonicalize_result {
+          Ok(pathbuf) => pathbuf,
+          Err(_) => joined_pathbuf.clone(),
+        };
+
+        // Canonicalize the webroot
+        #[cfg(feature = "runtime-monoio")]
+        let canonicalize_result = {
+          let wwwroot = wwwroot.to_owned();
+          monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot))
+            .await
+            .unwrap_or(Err(std::io::Error::other(
+              "Can't spawn a blocking task to obtain the canonical file path",
+            )))
+        };
+        #[cfg(feature = "runtime-tokio")]
+        let canonicalize_result = fs::canonicalize(wwwroot).await;
+
+        let canonical_wwwroot = match canonicalize_result {
+          Ok(pathbuf) => pathbuf,
+          Err(_) => PathBuf::from_str(wwwroot)?,
+        };
+
+        // Return 403 Forbidden if the path is outside the webroot
+        if !canonical_joined_pathbuf.starts_with(&canonical_wwwroot) {
+          return Ok(ResponseData {
+            request: Some(request),
+            response: None,
+            response_status: Some(StatusCode::FORBIDDEN),
+            response_headers: None,
+            new_remote_address: None,
+          });
+        }
+      }
+
       // Get file metadata (platform-specific implementation)
       // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
       #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]

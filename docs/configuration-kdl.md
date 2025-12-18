@@ -397,7 +397,9 @@ example.com {
 - `rewrite_log [rewrite_log: bool]`
   - This directive specifies whenever URL rewriting operations are logged into the error log. Default: `rewrite_log #false`
 - `no_trailing_redirect [no_trailing_redirect: bool]`
-  - This directive specifies whenerver not to redirect the URL without a trailing slash to one with a trailing slash, if it refers to a directory. Default: `no_trailing_redirect #false`
+  - This directive specifies whenever not to redirect the URL without a trailing slash to one with a trailing slash, if it refers to a directory. Default: `no_trailing_redirect #false`
+- `disable_url_sanitizer [disable_url_sanitizer: bool]` (Ferron UNRELEASED or newer)
+  - This directive specifies whenever URL sanitation is disabled. Disabling URL sanitation allows the server to process the request URL as is, without rewriting the URL with potential path traversal sequences; this can be useful for certain applications that require raw URLs, for [RFC 3986 compliance](https://datatracker.ietf.org/doc/html/rfc3986#section-2.2). **Disabling URL sanitation may lead to risk of path traversal vulnerabilities, although built-in static file serving, CGI, SCGI and FastCGI module functionality would perform additional checks to prevent path traversal attacks.** Default: `disable_url_sanitizer #false`
 
 **Configuration example:**
 
