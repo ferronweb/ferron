@@ -89,7 +89,7 @@ async fn tcp_listener_fn(
       // Set socket options
       listener_socket2.set_reuse_address(!cfg!(windows)).unwrap_or_default();
       #[cfg(unix)]
-      listener_socket2.set_reuse_port(true).unwrap_or_default();
+      listener_socket2.set_reuse_port(false).unwrap_or_default();
       if let Some(tcp_send_buffer_size) = tcp_buffer_sizes.0 {
         listener_socket2
           .set_send_buffer_size(tcp_send_buffer_size)
