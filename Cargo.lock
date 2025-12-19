@@ -870,7 +870,7 @@ dependencies = [
  "hyper-util",
  "interprocess",
  "itertools 0.14.0",
- "memmem",
+ "memchr",
  "mimalloc",
  "new_mime_guess",
  "nix",
@@ -1693,12 +1693,6 @@ name = "memchr"
 version = "2.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273"
-
-[[package]]
-name = "memmem"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a64a92489e2744ce060c349162be1c5f33c6969234104dbd99ddb5feb08b8c15"
 
 [[package]]
 name = "memoffset"
