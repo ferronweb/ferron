@@ -623,10 +623,10 @@ async fn server_event_loop(
         ))
         .await
         .unwrap_or_default();
-      Err(anyhow::anyhow!(format!(
+      Err(anyhow::anyhow!(
         "Server configuration validation failed: {}",
         err
-      )))?
+      ))?
     }
   };
 
@@ -659,10 +659,10 @@ async fn server_event_loop(
           ))
           .await
           .unwrap_or_default();
-        Err(anyhow::anyhow!(format!(
+        Err(anyhow::anyhow!(
           "Server configuration validation failed: {}",
           err
-        )))?
+        ))?
       }
     };
   }
@@ -696,10 +696,10 @@ async fn server_event_loop(
               ))
               .await
               .unwrap_or_default();
-            Err(anyhow::anyhow!(format!(
+            Err(anyhow::anyhow!(
               "The \"{}\" cipher suite is not supported",
               cipher_suite
-            )))?
+            ))?
           }
         };
         cipher_suites.push(cipher_suite_to_add);
@@ -725,10 +725,10 @@ async fn server_event_loop(
               ))
               .await
               .unwrap_or_default();
-            Err(anyhow::anyhow!(format!(
+            Err(anyhow::anyhow!(
               "The \"{}\" ECDH curve is not supported",
               ecdh_curve
-            )))?
+            ))?
           }
         };
         kx_groups.push(kx_group_to_add);
@@ -783,10 +783,11 @@ async fn server_event_loop(
               ))
               .await
               .unwrap_or_default();
-            Err(anyhow::anyhow!(format!(
+            Err(anyhow::anyhow!(
               "Cannot load the \"{}\" TLS certificate: {}",
-              cert_path, err
-            )))?
+              cert_path,
+              err
+            ))?
           }
         };
         let key = match load_private_key(key_path) {
@@ -799,10 +800,11 @@ async fn server_event_loop(
               ))
               .await
               .unwrap_or_default();
-            Err(anyhow::anyhow!(format!(
+            Err(anyhow::anyhow!(
               "Cannot load the \"{}\" private key: {}",
-              cert_path, err
-            )))?
+              cert_path,
+              err
+            ))?
           }
         };
         let signing_key = match crypto_provider_cloned.key_provider.load_private_key(key) {
@@ -815,10 +817,11 @@ async fn server_event_loop(
               ))
               .await
               .unwrap_or_default();
-            Err(anyhow::anyhow!(format!(
+            Err(anyhow::anyhow!(
               "Cannot load the \"{}\" private key: {}",
-              cert_path, err
-            )))?
+              cert_path,
+              err
+            ))?
           }
         };
         let certified_key = CertifiedKey::new(certs, signing_key);
@@ -842,10 +845,11 @@ async fn server_event_loop(
                     ))
                     .await
                     .unwrap_or_default();
-                  Err(anyhow::anyhow!(format!(
+                  Err(anyhow::anyhow!(
                     "Cannot load the \"{}\" TLS certificate: {}",
-                    cert_path, err
-                  )))?
+                    cert_path,
+                    err
+                  ))?
                 }
               };
               let key = match load_private_key(key_path) {
@@ -858,10 +862,11 @@ async fn server_event_loop(
                     ))
                     .await
                     .unwrap_or_default();
-                  Err(anyhow::anyhow!(format!(
+                  Err(anyhow::anyhow!(
                     "Cannot load the \"{}\" private key: {}",
-                    cert_path, err
-                  )))?
+                    cert_path,
+                    err
+                  ))?
                 }
               };
               let signing_key = match crypto_provider_cloned.key_provider.load_private_key(key) {
@@ -874,10 +879,11 @@ async fn server_event_loop(
                     ))
                     .await
                     .unwrap_or_default();
-                  Err(anyhow::anyhow!(format!(
+                  Err(anyhow::anyhow!(
                     "Cannot load the \"{}\" private key: {}",
-                    cert_path, err
-                  )))?
+                    cert_path,
+                    err
+                  ))?
                 }
               };
               let certified_key_arc = Arc::new(CertifiedKey::new(certs, signing_key));
@@ -922,10 +928,10 @@ async fn server_event_loop(
               ))
               .await
               .unwrap_or_default();
-            Err(anyhow::anyhow!(format!(
+            Err(anyhow::anyhow!(
               "Couldn't create the TLS server configuration: {}",
               err
-            )))?
+            ))?
           }
         }
       }
@@ -952,10 +958,10 @@ async fn server_event_loop(
               ))
               .await
               .unwrap_or_default();
-            Err(anyhow::anyhow!(format!(
+            Err(anyhow::anyhow!(
               "Couldn't create the TLS server configuration: {}",
               err
-            )))?
+            ))?
           }
         }
       }
@@ -970,10 +976,10 @@ async fn server_event_loop(
               ))
               .await
               .unwrap_or_default();
-            Err(anyhow::anyhow!(format!(
+            Err(anyhow::anyhow!(
               "Couldn't create the TLS server configuration: {}",
               err
-            )))?
+            ))?
           }
         }
       }
@@ -1016,10 +1022,10 @@ async fn server_event_loop(
             ))
             .await
             .unwrap_or_default();
-          Err(anyhow::anyhow!(format!(
+          Err(anyhow::anyhow!(
             "Couldn't load the native certificate store: {}",
             certs_result.errors[0]
-          )))?
+          ))?
         }
         let certs = certs_result.certs;
 
@@ -1034,10 +1040,10 @@ async fn server_event_loop(
                 ))
                 .await
                 .unwrap_or_default();
-              Err(anyhow::anyhow!(format!(
+              Err(anyhow::anyhow!(
                 "Couldn't add a certificate to the certificate store: {}",
                 err
-              )))?
+              ))?
             }
           }
         }
@@ -1236,10 +1242,10 @@ async fn server_event_loop(
           ))
           .await
           .unwrap_or_default();
-        Err(anyhow::anyhow!(format!(
+        Err(anyhow::anyhow!(
           "There was a problem when starting HTTP/3 server: {}",
           err
-        )))?
+        ))?
       }
     }));
     Some(quic_config)
@@ -1276,10 +1282,7 @@ async fn server_event_loop(
           ))
           .await
           .unwrap_or_default();
-        Err(anyhow::anyhow!(format!(
-          "Cannot listen to HTTP port: {}",
-          err
-        )))?
+        Err(anyhow::anyhow!("Cannot listen to HTTP port: {}", err))?
       }
     });
   }
@@ -1296,10 +1299,7 @@ async fn server_event_loop(
           ))
           .await
           .unwrap_or_default();
-        Err(anyhow::anyhow!(format!(
-          "Cannot listen to HTTPS port: {}",
-          err
-        )))?
+        Err(anyhow::anyhow!("Cannot listen to HTTPS port: {}", err))?
       }
     });
 
@@ -1315,10 +1315,7 @@ async fn server_event_loop(
             ))
             .await
             .unwrap_or_default();
-          Err(anyhow::anyhow!(format!(
-            "Cannot listen to HTTP/3 port: {}",
-            err
-          )))?
+          Err(anyhow::anyhow!("Cannot listen to HTTP/3 port: {}", err))?
         }
       });
     }

@@ -36,20 +36,20 @@ pub fn server_module_init(
   let mut roots: RootCertStore = RootCertStore::empty();
   let certs_result = load_native_certs();
   if !certs_result.errors.is_empty() {
-    Err(anyhow::anyhow!(format!(
+    Err(anyhow::anyhow!(
       "Couldn't load the native certificate store: {}",
       certs_result.errors[0]
-    )))?
+    ))?
   }
   let certs = certs_result.certs;
 
   for cert in certs {
     match roots.add(cert) {
       Ok(_) => (),
-      Err(err) => Err(anyhow::anyhow!(format!(
+      Err(err) => Err(anyhow::anyhow!(
         "Couldn't add a certificate to the certificate store: {}",
         err
-      )))?,
+      ))?,
     }
   }
 
