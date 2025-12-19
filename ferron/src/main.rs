@@ -236,10 +236,10 @@ fn before_starting_server(
               "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256" => TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
               "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384" => TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
               "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256" => TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-              _ => Err(anyhow::anyhow!(format!(
+              _ => Err(anyhow::anyhow!(
                 "The \"{}\" cipher suite is not supported",
                 cipher_suite
-              )))?,
+              ))?,
             };
             cipher_suites.push(cipher_suite_to_add);
           }
@@ -262,10 +262,7 @@ fn before_starting_server(
               "x25519" => X25519,
               "x25519mklem768" => X25519MLKEM768,
               "mklem768" => MLKEM768,
-              _ => Err(anyhow::anyhow!(format!(
-                "The \"{}\" ECDH curve is not supported",
-                ecdh_curve
-              )))?,
+              _ => Err(anyhow::anyhow!("The \"{}\" ECDH curve is not supported", ecdh_curve))?,
             };
             kx_groups.push(kx_group_to_add);
           }
@@ -503,24 +500,19 @@ fn before_starting_server(
                   if !is_sni_hostname_used {
                     let certs = match load_certs(cert_path) {
                       Ok(certs) => certs,
-                      Err(err) => Err(anyhow::anyhow!(format!(
+                      Err(err) => Err(anyhow::anyhow!(
                         "Cannot load the \"{}\" TLS certificate: {}",
-                        cert_path, err
-                      )))?,
+                        cert_path,
+                        err
+                      ))?,
                     };
                     let key = match load_private_key(key_path) {
                       Ok(key) => key,
-                      Err(err) => Err(anyhow::anyhow!(format!(
-                        "Cannot load the \"{}\" private key: {}",
-                        key_path, err
-                      )))?,
+                      Err(err) => Err(anyhow::anyhow!("Cannot load the \"{}\" private key: {}", key_path, err))?,
                     };
                     let signing_key = match crypto_provider.key_provider.load_private_key(key) {
                       Ok(key) => key,
-                      Err(err) => Err(anyhow::anyhow!(format!(
-                        "Cannot load the \"{}\" private key: {}",
-                        key_path, err
-                      )))?,
+                      Err(err) => Err(anyhow::anyhow!("Cannot load the \"{}\" private key: {}", key_path, err))?,
                     };
                     let certified_key = Arc::new(CertifiedKey::new(certs, signing_key));
                     if let Some(certified_keys) = certified_keys_to_preload.get_mut(&https_port) {

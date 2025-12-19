@@ -265,10 +265,7 @@ async fn quic_listener_fn(
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   let quic_server_config = Arc::new(match QuicServerConfig::try_from(tls_config) {
     Ok(config) => config,
-    Err(err) => Err(anyhow::anyhow!(format!(
-      "Cannot prepare the QUIC server configuration: {}",
-      err
-    )))?,
+    Err(err) => Err(anyhow::anyhow!("Cannot prepare the QUIC server configuration: {}", err))?,
   });
   let server_config = quinn::ServerConfig::with_crypto(quic_server_config);
   let udp_port = address.port();
@@ -317,7 +314,7 @@ async fn quic_listener_fn(
   }
   let udp_socket = match udp_socket_result {
     Ok(socket) => socket,
-    Err(err) => Err(anyhow::anyhow!(format!("Cannot listen to HTTP/3 port: {}", err)))?,
+    Err(err) => Err(anyhow::anyhow!("Cannot listen to HTTP/3 port: {}", err))?,
   };
   let endpoint = match quinn::Endpoint::new(quinn::EndpointConfig::default(), Some(server_config), udp_socket, {
     #[cfg(feature = "runtime-monoio")]
@@ -328,7 +325,7 @@ async fn quic_listener_fn(
     runtime
   }) {
     Ok(endpoint) => endpoint,
-    Err(err) => Err(anyhow::anyhow!(format!("Cannot listen to HTTP/3 port: {}", err)))?,
+    Err(err) => Err(anyhow::anyhow!("Cannot listen to HTTP/3 port: {}", err))?,
   };
   println!("HTTP/3 server is listening on {address}...");
   listen_error_tx.send(None).await.unwrap_or_default();
