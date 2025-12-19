@@ -426,7 +426,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                                 Response::builder()
                                   .status(StatusCode::NOT_MODIFIED)
                                   .header(header::ETAG, etag_original)
-                                  .header(header::VARY, vary)
+                                  .header(header::VARY, HeaderValue::from_static(vary))
                                   .body(Empty::new().map_err(|e| match e {}).boxed())?,
                               )
                               .build(),
@@ -436,9 +436,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                     }
                     Err(_) => {
                       let mut header_map = HeaderMap::new();
-                      if let Ok(vary) = HeaderValue::from_str(vary) {
-                        header_map.insert(header::VARY, vary);
-                      }
+                      header_map.insert(header::VARY, HeaderValue::from_static(vary));
                       return Ok(
                         ResponseData::builder(request)
                           .status(StatusCode::BAD_REQUEST)
@@ -457,9 +455,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                           if etag_extracted != etag {
                             let mut header_map = HeaderMap::new();
                             header_map.insert(header::ETAG, if_match_value.clone());
-                            if let Ok(vary) = HeaderValue::from_str(vary) {
-                              header_map.insert(header::VARY, vary);
-                            }
+                            header_map.insert(header::VARY, HeaderValue::from_static(vary));
                             return Ok(
                               ResponseData::builder(request)
                                 .status(StatusCode::PRECONDITION_FAILED)
@@ -472,9 +468,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                     }
                     Err(_) => {
                       let mut header_map = HeaderMap::new();
-                      if let Ok(vary) = HeaderValue::from_str(vary) {
-                        header_map.insert(header::VARY, vary);
-                      }
+                      header_map.insert(header::VARY, HeaderValue::from_static(vary));
                       return Ok(
                         ResponseData::builder(request)
                           .status(StatusCode::BAD_REQUEST)
@@ -502,9 +496,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                   Ok(value) => Some(value),
                   Err(_) => {
                     let mut header_map = HeaderMap::new();
-                    if let Ok(vary) = HeaderValue::from_str(vary) {
-                      header_map.insert(header::VARY, vary);
-                    }
+                    header_map.insert(header::VARY, HeaderValue::from_static(vary));
                     return Ok(
                       ResponseData::builder(request)
                         .status(StatusCode::BAD_REQUEST)
@@ -520,9 +512,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                 let file_length = metadata.len();
                 if file_length == 0 {
                   let mut header_map = HeaderMap::new();
-                  if let Ok(vary) = HeaderValue::from_str(vary) {
-                    header_map.insert(header::VARY, vary);
-                  }
+                  header_map.insert(header::VARY, HeaderValue::from_static(vary));
                   return Ok(
                     ResponseData::builder(request)
                       .status(StatusCode::RANGE_NOT_SATISFIABLE)
@@ -538,9 +528,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                     || range_begin > range_end
                   {
                     let mut header_map = HeaderMap::new();
-                    if let Ok(vary) = HeaderValue::from_str(vary) {
-                      header_map.insert(header::VARY, vary);
-                    }
+                    header_map.insert(header::VARY, HeaderValue::from_static(vary));
                     return Ok(
                       ResponseData::builder(request)
                         .status(StatusCode::RANGE_NOT_SATISFIABLE)
@@ -569,7 +557,8 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                     response_builder = response_builder.header(header::CONTENT_TYPE, content_type);
                   }
 
-                  response_builder = response_builder.header(header::VARY, vary);
+                  response_builder =
+                    response_builder.header(header::VARY, HeaderValue::from_static(vary));
 
                   let response = match request_method {
                     &Method::HEAD => {
@@ -617,9 +606,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                   return Ok(ResponseData::builder(request).response(response).build());
                 } else {
                   let mut header_map = HeaderMap::new();
-                  if let Ok(vary) = HeaderValue::from_str(vary) {
-                    header_map.insert(header::VARY, vary);
-                  }
+                  header_map.insert(header::VARY, HeaderValue::from_static(vary));
 
                   return Ok(
                     ResponseData::builder(request)
@@ -680,7 +667,7 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                 // Build response
                 let mut response_builder = Response::builder()
                   .status(StatusCode::OK)
-                  .header(header::ACCEPT_RANGES, "bytes");
+                  .header(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
 
                 if let Some(etag) = etag_option {
                   if use_brotli {
@@ -700,7 +687,8 @@ impl ServerModuleHandlers for StaticFileServingModuleHandlers {
                   }
                 }
 
-                response_builder = response_builder.header(header::VARY, vary);
+                response_builder =
+                  response_builder.header(header::VARY, HeaderValue::from_static(vary));
 
                 if let Some(content_type) = content_type_option {
                   response_builder = response_builder.header(header::CONTENT_TYPE, content_type);

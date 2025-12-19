@@ -320,12 +320,12 @@ impl ServerModuleHandlers for CacheModuleHandlers {
       if self.no_store {
         response
           .headers_mut()
-          .insert(CACHE_HEADER_NAME, HeaderValue::from_str("BYPASS")?);
+          .insert(CACHE_HEADER_NAME, HeaderValue::from_static("BYPASS"));
         Ok(response)
       } else if self.cached {
         response
           .headers_mut()
-          .insert(CACHE_HEADER_NAME, HeaderValue::from_str("HIT")?);
+          .insert(CACHE_HEADER_NAME, HeaderValue::from_static("HIT"));
         Ok(response)
       } else if let Some(cache_key) = &self.cache_key {
         let (mut response_parts, mut response_body) = response.into_parts();
@@ -377,7 +377,7 @@ impl ServerModuleHandlers for CacheModuleHandlers {
             let response_body = BodyExt::boxed(stream_body);
             response_parts
               .headers
-              .insert(CACHE_HEADER_NAME, HeaderValue::from_str("MISS")?);
+              .insert(CACHE_HEADER_NAME, HeaderValue::from_static("MISS"));
             let response = Response::from_parts(response_parts, response_body);
             Ok(response)
           } else {
@@ -469,14 +469,14 @@ impl ServerModuleHandlers for CacheModuleHandlers {
             let response_body = BodyExt::boxed(stream_body);
             response_parts
               .headers
-              .insert(CACHE_HEADER_NAME, HeaderValue::from_str("MISS")?);
+              .insert(CACHE_HEADER_NAME, HeaderValue::from_static("MISS"));
             let response = Response::from_parts(response_parts, response_body);
             Ok(response)
           }
         } else {
           response_parts
             .headers
-            .insert(CACHE_HEADER_NAME, HeaderValue::from_str("MISS")?);
+            .insert(CACHE_HEADER_NAME, HeaderValue::from_static("MISS"));
           let response = Response::from_parts(response_parts, response_body);
           Ok(response)
         }
