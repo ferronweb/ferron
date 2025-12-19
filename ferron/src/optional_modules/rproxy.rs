@@ -11,14 +11,13 @@ use crate::ferron_common::{
 use crate::ferron_common::{HyperResponse, WithRuntime};
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
-use http::header::SEC_WEBSOCKET_PROTOCOL;
 use http::uri::{PathAndQuery, Scheme};
-use http::HeaderName;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Bytes;
 use hyper::client::conn::http1::SendRequest;
-use hyper::{header, Request, StatusCode, Uri, Version};
+use hyper::header::{self, HeaderName, SEC_WEBSOCKET_PROTOCOL};
+use hyper::{Request, StatusCode, Uri, Version};
 use hyper_tungstenite::HyperWebsocket;
 use hyper_util::rt::TokioIo;
 use rustls::pki_types::ServerName;

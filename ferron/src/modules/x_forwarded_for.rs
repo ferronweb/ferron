@@ -7,7 +7,7 @@ use crate::ferron_common::{
 };
 use crate::ferron_common::{HyperUpgraded, WithRuntime};
 use async_trait::async_trait;
-use http::HeaderName;
+use hyper::header::HeaderName;
 use hyper::StatusCode;
 use hyper_tungstenite::HyperWebsocket;
 use tokio::runtime::Handle;
