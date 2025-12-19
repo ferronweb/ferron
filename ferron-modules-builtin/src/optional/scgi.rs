@@ -209,7 +209,7 @@ impl ModuleHandlers for ScgiModuleHandlers {
             )))
         };
         #[cfg(feature = "runtime-tokio")]
-        let canonicalize_result = fs::canonicalize(&joined_pathbuf).await;
+        let canonicalize_result = tokio::fs::canonicalize(&joined_pathbuf).await;
 
         let canonical_joined_pathbuf = match canonicalize_result {
           Ok(pathbuf) => pathbuf,
