@@ -69,7 +69,7 @@ pyo3 = { version = "0.27.2", optional = true, features = [
     "anyhow",
     "auto-initialize",
 ] }
-futures-lite = "2.6.0"
+futures-executor = { version = "0.3.31", optional = true }
 nix = { version = "0.30.1", optional = true, features = ["process", "signal"] }
 interprocess = { version = "2.2.3", features = ["tokio"], optional = true }
 serde = { version = "1.0.219", optional = true, features = ["derive"] }
@@ -102,7 +102,7 @@ fcgi = ["httparse", "memchr"]
 fproxy = []
 rproxy = []
 scgi = ["httparse", "memchr"]
-wsgi = ["pyo3"]
+wsgi = ["pyo3", "futures-executor"]
 wsgid = [
     "pyo3",
     "nix",

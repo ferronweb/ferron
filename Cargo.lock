@@ -855,7 +855,7 @@ dependencies = [
  "chrono",
  "clap",
  "fancy-regex",
- "futures-lite",
+ "futures-executor",
  "futures-util",
  "glob",
  "h3",
