@@ -17,8 +17,8 @@ use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Body;
-use hyper::header::{HeaderName, HeaderValue};
-use hyper::{header, HeaderMap, Request, Response, StatusCode, Uri, Version};
+use hyper::header::{self, HeaderName, HeaderValue};
+use hyper::{HeaderMap, Request, Response, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::{TokioExecutor, TokioIo};
 #[cfg(feature = "runtime-monoio")]

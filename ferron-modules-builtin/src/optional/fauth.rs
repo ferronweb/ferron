@@ -9,8 +9,8 @@ use bytes::Bytes;
 use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
-use hyper::Version;
-use hyper::{header, header::HeaderName, Method, Request, StatusCode, Uri};
+use hyper::header::{self, HeaderName};
+use hyper::{Method, Request, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::{TokioExecutor, TokioIo};
 #[cfg(feature = "runtime-monoio")]
