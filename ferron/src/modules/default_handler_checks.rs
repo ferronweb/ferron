@@ -50,16 +50,26 @@ impl ServerModuleHandlers for DefaultHandlerChecksModuleHandlers {
             .response(
               Response::builder()
                 .status(StatusCode::NO_CONTENT)
-                .header(header::ALLOW, "GET, POST, HEAD, OPTIONS")
+                .header(
+                  header::ALLOW,
+                  "GET, POST, HEAD, OPTIONS, PUT, PATCH, DELETE",
+                )
                 .body(Empty::new().map_err(|e| match e {}).boxed())
                 .unwrap_or_default(),
             )
             .build(),
         ),
-        &Method::GET | &Method::POST | &Method::HEAD => Ok(ResponseData::builder(request).build()),
+        &Method::GET
+        | &Method::POST
+        | &Method::HEAD
+        | &Method::PUT
+        | &Method::PATCH
+        | &Method::DELETE => Ok(ResponseData::builder(request).build()),
         _ => {
           let mut header_map = HeaderMap::new();
-          if let Ok(header_value) = HeaderValue::from_str("GET, POST, HEAD, OPTIONS") {
+          if let Ok(header_value) =
+            HeaderValue::from_str("GET, POST, HEAD, OPTIONS, PUT, PATCH, DELETE")
+          {
             header_map.insert(header::ALLOW, header_value);
           };
           Ok(
