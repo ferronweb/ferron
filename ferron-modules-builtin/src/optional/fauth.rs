@@ -255,27 +255,34 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
       // X-Forwarded-* headers to send the client's data to a forwarded authentication server
       auth_request_parts.headers.insert(
-        "x-forwarded-for",
+        HeaderName::from_static("x-forwarded-[a-z]+"),
         socket_data.remote_addr.ip().to_canonical().to_string().parse()?,
       );
 
       if socket_data.encrypted {
-        auth_request_parts.headers.insert("x-forwarded-proto", "https".parse()?);
+        auth_request_parts
+          .headers
+          .insert(HeaderName::from_static("x-forwarded-[a-z]+"), "https".parse()?);
       } else {
-        auth_request_parts.headers.insert("x-forwarded-proto", "http".parse()?);
+        auth_request_parts
+          .headers
+          .insert(HeaderName::from_static("x-forwarded-[a-z]+"), "http".parse()?);
       }
 
       if let Some(original_host) = original_host {
-        auth_request_parts.headers.insert("x-forwarded-host", original_host);
+        auth_request_parts
+          .headers
+          .insert(HeaderName::from_static("x-forwarded-[a-z]+"), original_host);
       }
 
       auth_request_parts
         .headers
-        .insert("x-forwarded-uri", path_and_query.parse()?);
+        .insert(HeaderName::from_static("x-forwarded-[a-z]+"), path_and_query.parse()?);
 
-      auth_request_parts
-        .headers
-        .insert("x-forwarded-method", request_parts.method.as_str().parse()?);
+      auth_request_parts.headers.insert(
+        HeaderName::from_static("x-forwarded-[a-z]+"),
+        request_parts.method.as_str().parse()?,
+      );
 
       auth_request_parts.method = Method::GET;
       auth_request_parts.version = Version::HTTP_11;
