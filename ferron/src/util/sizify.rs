@@ -14,28 +14,33 @@
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
 //
+
+/// Converts the file size into a human-readable one
 pub fn sizify(bytes: u64, add_i: bool) -> String {
   if bytes == 0 {
     return "0".to_string();
   }
 
   let prefixes = ["", "K", "M", "G", "T", "P", "E", "Z", "Y", "R", "Q"];
-  let prefix_index = ((bytes as f64).log2() / 10.0)
-    .floor()
-    .min(prefixes.len() as f64 - 1.0) as usize;
-  let prefix_index_translated = 2_i64.pow(10 * prefix_index as u32);
-  let decimal_points = ((2.0
-    - (bytes as f64 / prefix_index_translated as f64)
-      .log10()
-      .floor()) as i32)
+  let prefix_index = (bytes.ilog2() as usize / 10).min(prefixes.len() - 1);
+  let prefix_index_translated = 2_u64.pow(10 * prefix_index as u32);
+  let decimal_points = (2
+    - (bytes / prefix_index_translated)
+      .checked_ilog10()
+      .unwrap_or(0) as i32)
     .max(0);
 
   let size = ((bytes as f64 / prefix_index_translated as f64) * 10_f64.powi(decimal_points)).ceil()
     / 10_f64.powi(decimal_points);
-  let prefix = prefixes[prefix_index];
-  let suffix = if prefix_index > 0 && add_i { "i" } else { "" };
 
-  format!("{size}{prefix}{suffix}")
+  let mut result = String::new();
+  result.push_str(&size.to_string()); // Size
+  result.push_str(prefixes[prefix_index]); // Prefix
+  if prefix_index > 0 && add_i {
+    result.push('i'); // "i" suffix
+  }
+
+  result
 }
 
 #[cfg(test)]
