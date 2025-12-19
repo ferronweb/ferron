@@ -7,13 +7,13 @@ struct HeaderValue {
 }
 
 impl FromStr for HeaderValue {
-  type Err = &'static str;
+  type Err = ();
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
-    let parts: Vec<&str> = s.split(';').collect();
-    let value = parts[0].trim().to_string();
+    let mut parts = s.split(';').take(2);
+    let value = parts.next().ok_or(())?.trim().to_string();
 
-    let q_value = parts.get(1).map(|part| {
+    let q_value = parts.next().map(|part| {
       part
         .trim()
         .strip_prefix("q=")
