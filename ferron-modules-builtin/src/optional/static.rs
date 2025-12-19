@@ -1281,7 +1281,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               // Build full file response
               let mut response_builder = Response::builder()
                 .status(StatusCode::OK)
-                .header(header::ACCEPT_RANGES, "bytes");
+                .header(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
 
               // Include ETag in response with suffix based on compression method
               if let Some(etag) = etag_option {
