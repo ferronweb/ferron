@@ -115,7 +115,7 @@ async fn generate_error_response(
   if let Some(content_length) = content_length {
     response_builder = response_builder.header(header::CONTENT_LENGTH, content_length);
   }
-  response_builder = response_builder.header(header::CONTENT_TYPE, "text/html");
+  response_builder = response_builder.header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"));
 
   response_builder.body(response_body).unwrap_or_default()
 }
@@ -481,7 +481,7 @@ pub async fn request_handler(
               }
               let response = Response::builder()
                 .status(StatusCode::BAD_REQUEST)
-                .header(header::CONTENT_TYPE, "text/html")
+                .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
                 .body(
                   Full::new(Bytes::from(generate_default_error_page(StatusCode::BAD_REQUEST, None)))
                     .map_err(|e| match e {})
@@ -561,7 +561,7 @@ pub async fn request_handler(
         }
         let response = Response::builder()
           .status(StatusCode::BAD_REQUEST)
-          .header(header::CONTENT_TYPE, "text/html")
+          .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
           .body(
             Full::new(Bytes::from(generate_default_error_page(StatusCode::BAD_REQUEST, None)))
               .map_err(|e| match e {})
@@ -674,7 +674,7 @@ pub async fn request_handler(
       }
       let response = Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .header(header::CONTENT_TYPE, "text/html")
+        .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
         .body(
           Full::new(Bytes::from(generate_default_error_page(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -752,7 +752,7 @@ pub async fn request_handler(
       }
       let response = Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .header(header::CONTENT_TYPE, "text/html")
+        .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
         .body(
           Full::new(Bytes::from(generate_default_error_page(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -1234,14 +1234,12 @@ pub async fn request_handler(
     let response = match request.method() {
       &Method::OPTIONS => Response::builder()
         .status(StatusCode::NO_CONTENT)
-        .header(header::ALLOW, "GET, POST, HEAD, OPTIONS")
+        .header(header::ALLOW, HeaderValue::from_static("GET, POST, HEAD, OPTIONS"))
         .body(Empty::new().map_err(|e| match e {}).boxed())
         .unwrap_or_default(),
       _ => {
         let mut header_map = HeaderMap::new();
-        if let Ok(header_value) = HeaderValue::from_str("GET, POST, HEAD, OPTIONS") {
-          header_map.insert(header::ALLOW, header_value);
-        };
+        header_map.insert(header::ALLOW, HeaderValue::from_static("GET, POST, HEAD, OPTIONS"));
         generate_error_response(StatusCode::BAD_REQUEST, &configuration, &Some(header_map)).await
       }
     };

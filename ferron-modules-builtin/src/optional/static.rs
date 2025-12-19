@@ -564,7 +564,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
           response: Some(
             Response::builder()
               .status(StatusCode::NO_CONTENT)
-              .header(header::ALLOW, "GET, POST, HEAD, OPTIONS")
+              .header(header::ALLOW, HeaderValue::from_static("GET, POST, HEAD, OPTIONS"))
               .body(Empty::new().map_err(|e| match e {}).boxed())
               .unwrap_or_default(),
           ),
@@ -578,9 +578,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
       // All other methods are not allowed
       _ => {
         let mut header_map = HeaderMap::new();
-        if let Ok(header_value) = HeaderValue::from_str("GET, POST, HEAD, OPTIONS") {
-          header_map.insert(header::ALLOW, header_value);
-        };
+        header_map.insert(header::ALLOW, HeaderValue::from_static("GET, POST, HEAD, OPTIONS"));
         return Ok(ResponseData {
           request: Some(request),
           response: None,
@@ -896,7 +894,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                         let mut not_modified_response = Response::builder()
                           .status(StatusCode::NOT_MODIFIED)
                           .header(header::ETAG, etag_strong_to_weak(&etag_original))
-                          .header(header::VARY, vary)
+                          .header(header::VARY, HeaderValue::from_static(vary))
                           .body(Empty::new().map_err(|e| match e {}).boxed())?;
                         if let Some(cache_control) = cache_control {
                           not_modified_response
@@ -915,9 +913,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   }
                   Err(_) => {
                     let mut header_map = HeaderMap::new();
-                    if let Ok(vary) = HeaderValue::from_str(vary) {
-                      header_map.insert(header::VARY, vary);
-                    }
+                    header_map.insert(header::VARY, HeaderValue::from_static(vary));
                     return Ok(ResponseData {
                       request: Some(request),
                       response: None,
@@ -941,9 +937,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                         if etag_extracted != etag {
                           let mut header_map = HeaderMap::new();
                           header_map.insert(header::ETAG, if_match_value.clone());
-                          if let Ok(vary) = HeaderValue::from_str(vary) {
-                            header_map.insert(header::VARY, vary);
-                          }
+                          header_map.insert(header::VARY, HeaderValue::from_static(vary));
                           return Ok(ResponseData {
                             request: Some(request),
                             response: None,
@@ -957,9 +951,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   }
                   Err(_) => {
                     let mut header_map = HeaderMap::new();
-                    if let Ok(vary) = HeaderValue::from_str(vary) {
-                      header_map.insert(header::VARY, vary);
-                    }
+                    header_map.insert(header::VARY, HeaderValue::from_static(vary));
                     return Ok(ResponseData {
                       request: Some(request),
                       response: None,
@@ -1011,9 +1003,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 Ok(value) => Some(value),
                 Err(_) => {
                   let mut header_map = HeaderMap::new();
-                  if let Ok(vary) = HeaderValue::from_str(vary) {
-                    header_map.insert(header::VARY, vary);
-                  }
+                  header_map.insert(header::VARY, HeaderValue::from_static(vary));
                   return Ok(ResponseData {
                     request: Some(request),
                     response: None,
@@ -1033,9 +1023,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               // Can't satisfy range request for empty files
               if file_length == 0 {
                 let mut header_map = HeaderMap::new();
-                if let Ok(vary) = HeaderValue::from_str(vary) {
-                  header_map.insert(header::VARY, vary);
-                }
+                header_map.insert(header::VARY, HeaderValue::from_static(vary));
                 return Ok(ResponseData {
                   request: Some(request),
                   response: None,
@@ -1049,9 +1037,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 // Validate the requested range is within file bounds
                 if range_end > file_length - 1 || range_begin > file_length - 1 || range_begin > range_end {
                   let mut header_map = HeaderMap::new();
-                  if let Ok(vary) = HeaderValue::from_str(vary) {
-                    header_map.insert(header::VARY, vary);
-                  }
+                  header_map.insert(header::VARY, HeaderValue::from_static(vary));
                   return Ok(ResponseData {
                     request: Some(request),
                     response: None,
@@ -1086,7 +1072,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   response_builder = response_builder.header(header::CACHE_CONTROL, cache_control);
                 }
 
-                response_builder = response_builder.header(header::VARY, vary);
+                response_builder = response_builder.header(header::VARY, HeaderValue::from_static(vary));
 
                 let response = match request_method {
                   &Method::HEAD => response_builder.body(Empty::new().map_err(|e| match e {}).boxed())?,
@@ -1150,9 +1136,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 });
               } else {
                 let mut header_map = HeaderMap::new();
-                if let Ok(vary) = HeaderValue::from_str(vary) {
-                  header_map.insert(header::VARY, vary);
-                }
+                header_map.insert(header::VARY, HeaderValue::from_static(vary));
 
                 return Ok(ResponseData {
                   request: Some(request),
@@ -1327,13 +1311,14 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
               // Set appropriate Content-Encoding header based on compression method
               if use_brotli {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, "br");
+                response_builder = response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("br"));
               } else if use_zstd {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, "zstd");
+                response_builder = response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("zstd"));
               } else if use_deflate {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, "deflate");
+                response_builder =
+                  response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("deflate"));
               } else if use_gzip {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, "gzip");
+                response_builder = response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
               } else {
                 // Only include Content-Length for uncompressed responses
                 // Content-Length header + HTTP compression = broken HTTP responses!
