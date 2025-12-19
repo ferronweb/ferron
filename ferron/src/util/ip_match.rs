@@ -2,7 +2,7 @@ use std::net::{IpAddr, Ipv6Addr};
 
 pub fn ip_match(ip1: &str, ip2: IpAddr) -> bool {
   let ip1_processed: IpAddr = match ip1 {
-    "localhost" => Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1).into(),
+    "localhost" => Ipv6Addr::LOCALHOST.into(),
     _ => match ip1.parse() {
       Ok(ip_processed) => ip_processed,
       Err(_) => return false,
@@ -34,7 +34,7 @@ mod tests {
   #[test]
   fn test_ip_match_with_localhost() {
     let ip1 = "localhost";
-    let ip2 = Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1).into();
+    let ip2 = Ipv6Addr::LOCALHOST.into();
     assert!(ip_match(ip1, ip2));
   }
 

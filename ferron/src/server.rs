@@ -1049,8 +1049,8 @@ async fn server_event_loop(
 
   let mut tls_config;
 
-  let mut addr = SocketAddr::from((IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)), 80));
-  let mut addr_tls = SocketAddr::from((IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)), 443));
+  let mut addr = SocketAddr::from((IpAddr::V6(Ipv6Addr::UNSPECIFIED), 80));
+  let mut addr_tls = SocketAddr::from((IpAddr::V6(Ipv6Addr::UNSPECIFIED), 443));
   let mut tls_enabled = false;
   let mut non_tls_disabled = false;
 
@@ -1071,7 +1071,7 @@ async fn server_event_loop(
   // Read port configurations from YAML
   if let Some(read_port) = yaml_config["global"]["port"].as_i64() {
     addr = SocketAddr::from((
-      IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)),
+      IpAddr::V6(Ipv6Addr::UNSPECIFIED),
       match read_port.try_into() {
         Ok(port) => port,
         Err(_) => {
@@ -1107,7 +1107,7 @@ async fn server_event_loop(
 
   if let Some(read_port) = yaml_config["global"]["sport"].as_i64() {
     addr_tls = SocketAddr::from((
-      IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0)),
+      IpAddr::V6(Ipv6Addr::UNSPECIFIED),
       match read_port.try_into() {
         Ok(port) => port,
         Err(_) => {
@@ -1432,7 +1432,7 @@ async fn server_event_loop(
       status = listener_quic_accept => {
         match status {
           Some(connection_attempt) => {
-            let local_ip = SocketAddr::new(connection_attempt.local_ip().unwrap_or(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0))), addr_tls.port());
+            let local_ip = SocketAddr::new(connection_attempt.local_ip().unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED)), addr_tls.port());
             accept_quic_connection(
               connection_attempt,
               local_ip,
