@@ -94,7 +94,7 @@ shiba = { workspace = true }
 [features]
 default = ["cache", "cgi", "fauth", "fcgi", "fproxy", "rproxy", "scgi"]
 asgi = ["pyo3", "pyo3-async-runtimes"]
-cache = ["cache_control", "itertools"]
+cache = ["cache_control"]
 cgi = ["httparse", "memmem"]
 example = []
 fauth = []

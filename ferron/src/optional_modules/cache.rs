@@ -18,7 +18,6 @@ use hyper::body::{Bytes, Frame};
 use hyper::header::HeaderValue;
 use hyper::{header, HeaderMap, Method, Response, StatusCode};
 use hyper_tungstenite::HyperWebsocket;
-use itertools::Itertools;
 use tokio::runtime::Handle;
 use tokio::sync::RwLock;
 
@@ -393,11 +392,13 @@ impl ServerModuleHandlers for CacheModuleHandlers {
             let mut processed_vary_orig = self.cache_vary_headers_configured.clone();
             processed_vary_orig.append(&mut response_vary);
 
-            let processed_vary = processed_vary_orig
+            let mut processed_vary = processed_vary_orig
               .iter()
-              .unique()
               .map(|s| s.to_owned())
               .collect::<Vec<String>>();
+
+            processed_vary.sort_unstable();
+            processed_vary.dedup();
 
             if !processed_vary.contains(&"*".to_string()) {
               let cache_key_with_vary = format!(
