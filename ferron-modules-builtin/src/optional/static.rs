@@ -328,7 +328,7 @@ pub async fn generate_directory_listing(
 /// Parses the HTTP "Range" header value
 fn parse_range_header(range_str: &str, default_end: u64) -> Option<(u64, u64)> {
   if let Some(range_part) = range_str.strip_prefix("bytes=") {
-    let parts: Vec<&str> = range_part.split('-').collect();
+    let parts: Vec<&str> = range_part.split('-').take(2).collect();
     if parts.len() == 2 {
       if parts[0].is_empty() {
         if let Ok(end) = u64::from_str(parts[1]) {
@@ -362,12 +362,7 @@ fn extract_etag_inner(input: &str, weak: bool) -> Option<String> {
   let trimmed = weak_might_removed.trim_matches('"');
 
   // Split the string at the hyphen and take the first part
-  let parts: Vec<&str> = trimmed.split('-').collect();
-  if parts.is_empty() {
-    None
-  } else {
-    Some(parts[0].to_string())
-  }
+  trimmed.split('-').next().map(ToOwned::to_owned)
 }
 
 /// Converts strong ETag to weak one, if it's not a weak one
