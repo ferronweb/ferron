@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use http::header::SEC_WEBSOCKET_PROTOCOL;
 use http::uri::{PathAndQuery, Scheme};
+use http::HeaderName;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Bytes;
@@ -223,12 +224,18 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
 
         // X-Forwarded-* headers to send the client's data to a server that's behind the reverse proxy
         if config["disableProxyXForwarded"].as_bool().unwrap_or(false) {
-          hyper_request_parts.headers.remove("x-forwarder-for");
-          hyper_request_parts.headers.remove("x-forwarded-proto");
-          hyper_request_parts.headers.remove("x-forwarded-host");
+          hyper_request_parts
+            .headers
+            .remove(HeaderName::from_static("x-forwarder-for"));
+          hyper_request_parts
+            .headers
+            .remove(HeaderName::from_static("x-forwarded-proto"));
+          hyper_request_parts
+            .headers
+            .remove(HeaderName::from_static("x-forwarded-host"));
         } else {
           hyper_request_parts.headers.insert(
-            "x-forwarded-for",
+            HeaderName::from_static("x-forwarded-for"),
             socket_data
               .remote_addr
               .ip()
@@ -238,13 +245,15 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
           );
 
           if socket_data.encrypted {
-            hyper_request_parts
-              .headers
-              .insert("x-forwarded-proto", "https".parse()?);
+            hyper_request_parts.headers.insert(
+              HeaderName::from_static("x-forwarded-proto"),
+              "https".parse()?,
+            );
           } else {
-            hyper_request_parts
-              .headers
-              .insert("x-forwarded-proto", "http".parse()?);
+            hyper_request_parts.headers.insert(
+              HeaderName::from_static("x-forwarded-proto"),
+              "http".parse()?,
+            );
           }
 
           if let Some(original_host) = original_host {
@@ -564,7 +573,7 @@ impl ServerModuleHandlers for ReverseProxyModuleHandlers {
               proxy_request_builder = proxy_request_builder.with_sub_protocol(subprotocol.trim());
             }
           } else if !header_name_str.starts_with("sec-websocket-")
-            && header_name_str != "x-forwarded-for"
+            && header_name_str != HeaderName::from_static("x-forwarded-for")
           {
             proxy_request_builder = proxy_request_builder.with_header(
               header_name_str,

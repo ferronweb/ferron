@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use cache_control::{Cachability, CacheControl};
 use futures_util::{StreamExt, TryStreamExt};
 use hashlink::LinkedHashMap;
+use http::HeaderName;
 use http_body_util::{BodyExt, Full, StreamBody};
 use hyper::body::{Bytes, Frame};
 use hyper::header::HeaderValue;
@@ -318,14 +319,16 @@ impl ServerModuleHandlers for CacheModuleHandlers {
   ) -> Result<HyperResponse, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       if self.no_store {
-        response
-          .headers_mut()
-          .insert(CACHE_HEADER_NAME, HeaderValue::from_static("BYPASS"));
+        response.headers_mut().insert(
+          HeaderName::from_static(CACHE_HEADER_NAME),
+          HeaderValue::from_static("BYPASS"),
+        );
         Ok(response)
       } else if self.cached {
-        response
-          .headers_mut()
-          .insert(CACHE_HEADER_NAME, HeaderValue::from_static("HIT"));
+        response.headers_mut().insert(
+          HeaderName::from_static(CACHE_HEADER_NAME),
+          HeaderValue::from_static("HIT"),
+        );
         Ok(response)
       } else if let Some(cache_key) = &self.cache_key {
         let (mut response_parts, mut response_body) = response.into_parts();
@@ -375,9 +378,10 @@ impl ServerModuleHandlers for CacheModuleHandlers {
             let chained_stream = cached_stream.chain(response_stream);
             let stream_body = StreamBody::new(chained_stream.map_ok(Frame::data));
             let response_body = BodyExt::boxed(stream_body);
-            response_parts
-              .headers
-              .insert(CACHE_HEADER_NAME, HeaderValue::from_static("MISS"));
+            response_parts.headers.insert(
+              HeaderName::from_static(CACHE_HEADER_NAME),
+              HeaderValue::from_static("MISS"),
+            );
             let response = Response::from_parts(response_parts, response_body);
             Ok(response)
           } else {
@@ -467,16 +471,18 @@ impl ServerModuleHandlers for CacheModuleHandlers {
               futures_util::stream::once(async move { Ok(Bytes::from(response_body_buffer)) });
             let stream_body = StreamBody::new(cached_stream.map_ok(Frame::data));
             let response_body = BodyExt::boxed(stream_body);
-            response_parts
-              .headers
-              .insert(CACHE_HEADER_NAME, HeaderValue::from_static("MISS"));
+            response_parts.headers.insert(
+              HeaderName::from_static(CACHE_HEADER_NAME),
+              HeaderValue::from_static("MISS"),
+            );
             let response = Response::from_parts(response_parts, response_body);
             Ok(response)
           }
         } else {
-          response_parts
-            .headers
-            .insert(CACHE_HEADER_NAME, HeaderValue::from_static("MISS"));
+          response_parts.headers.insert(
+            HeaderName::from_static(CACHE_HEADER_NAME),
+            HeaderValue::from_static("MISS"),
+          );
           let response = Response::from_parts(response_parts, response_body);
           Ok(response)
         }
