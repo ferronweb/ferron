@@ -2,8 +2,7 @@ mod acme;
 mod config;
 mod handler;
 mod listener_handler_communication;
-mod listener_quic;
-mod listener_tcp;
+mod listeners;
 mod request_handler;
 mod runtime;
 mod tls_util;
@@ -53,8 +52,7 @@ use crate::config::processing::{
 use crate::config::ServerConfigurations;
 use crate::handler::create_http_handler;
 use crate::listener_handler_communication::ConnectionData;
-use crate::listener_quic::create_quic_listener;
-use crate::listener_tcp::create_tcp_listener;
+use crate::listeners::{create_quic_listener, create_tcp_listener};
 use crate::tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
 use crate::util::{is_localhost, match_hostname, NoServerVerifier};
 
