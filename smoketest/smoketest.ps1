@@ -15,7 +15,7 @@ $FerronProcess = Start-Process -FilePath $env:FERRON -PassThru -NoNewWindow
 Start-Sleep -Seconds 5
 
 # Perform the smoke test
-$Got = curl.exe -sk https://localhost:8443/test.txt
+$Got = curl.exe -m 5 -sk https://localhost:8443/test.txt
 $Expected = Get-Content "wwwroot/test.txt"
 
 if ($Got -eq $Expected)
