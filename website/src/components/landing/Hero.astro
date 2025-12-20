@@ -78,27 +78,27 @@ import InstallCommand from "./InstallCommand.astro";
 </section>
 
 <script>
-import * as AsciinemaPlayer from "asciinema-player";
-import heroRecording from "../../assets/ferron-demo.cast?url";
+  import * as AsciinemaPlayer from "asciinema-player";
+  import heroRecording from "../../assets/ferron-demo.cast?url";
 
-function loadPlayer() {
-  const heroElement = document.querySelector("[data-hero-demo]");
-  if (!heroElement) return;
+  function loadPlayer() {
+    const heroElement = document.querySelector("[data-hero-demo]");
+    if (!heroElement) return;
 
-  AsciinemaPlayer.create(heroRecording, heroElement, {
-    cols: 80,
-    rows: 23,
-    autoplay: true,
-    loop: true,
-    poster: "npt:0:0",
-    theme: "ferron",
-    terminalFontFamily: "var(--font-jetbrains-mono)"
+    AsciinemaPlayer.create(heroRecording, heroElement, {
+      cols: 80,
+      rows: 23,
+      autoplay: true,
+      loop: true,
+      poster: "npt:0:0",
+      theme: "ferron",
+      terminalFontFamily: "var(--font-jetbrains-mono)"
+    });
+  }
+
+  document.addEventListener("astro:after-swap", () => {
+    loadPlayer();
   });
-}
 
-document.addEventListener("astro:after-swap", () => {
   loadPlayer();
-});
-
-loadPlayer();
 </script>

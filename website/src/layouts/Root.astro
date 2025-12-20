@@ -49,12 +49,12 @@ import { SEO } from "astro-seo";
 </html>
 
 <script>
-import { init } from "@plausible-analytics/tracker";
+  import { init } from "@plausible-analytics/tracker";
 
-init({
-  domain: "ferron.sh",
-  endpoint: "https://analytics.ferron.sh/api/event",
-  autoCapturePageviews: true,
-  outboundLinks: true
-});
+  init({
+    domain: "ferron.sh",
+    endpoint: "https://analytics.ferron.sh/api/event",
+    autoCapturePageviews: true,
+    outboundLinks: true
+  });
 </script>

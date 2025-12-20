@@ -314,86 +314,86 @@ const docLinks = Astro.props.docLinks;
 </header>
 
 <script>
-function initializeHeader() {
-  const menuButton = document.querySelector("[data-mobile-menu-button]");
-  const menuClose = document.querySelector("[data-mobile-menu-close-button]");
-  const menu = document.querySelector("[data-mobile-menu]");
-  const menuLinks = document.querySelectorAll("[data-mobile-menu] a");
-  if (menuButton) {
-    menuButton.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (menu) {
-        menu.classList.remove("hidden");
-        document.documentElement.classList.add("max-md:overflow-hidden");
-      }
-    });
-  }
-  if (menuClose) {
-    menuClose.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (menu) {
-        menu.classList.add("hidden");
-        document.documentElement.classList.remove("max-md:overflow-hidden");
-      }
-    });
-  }
-  if (menuLinks) {
-    menuLinks.forEach((menuLink) => {
-      menuLink.addEventListener("click", () => {
+  function initializeHeader() {
+    const menuButton = document.querySelector("[data-mobile-menu-button]");
+    const menuClose = document.querySelector("[data-mobile-menu-close-button]");
+    const menu = document.querySelector("[data-mobile-menu]");
+    const menuLinks = document.querySelectorAll("[data-mobile-menu] a");
+    if (menuButton) {
+      menuButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (menu) {
+          menu.classList.remove("hidden");
+          document.documentElement.classList.add("max-md:overflow-hidden");
+        }
+      });
+    }
+    if (menuClose) {
+      menuClose.addEventListener("click", (e) => {
+        e.preventDefault();
         if (menu) {
           menu.classList.add("hidden");
           document.documentElement.classList.remove("max-md:overflow-hidden");
         }
       });
-    });
+    }
+    if (menuLinks) {
+      menuLinks.forEach((menuLink) => {
+        menuLink.addEventListener("click", () => {
+          if (menu) {
+            menu.classList.add("hidden");
+            document.documentElement.classList.remove("max-md:overflow-hidden");
+          }
+        });
+      });
+    }
+
+    const searchBar = document.querySelector("[data-search-bar]");
+    const searchButton = document.querySelector("[data-search-button]");
+    const searchButtonMobile = document.querySelector(
+      "[data-mobile-search-button]"
+    );
+    const searchClose = document.querySelector("[data-search-close-button]");
+    const search = document.querySelector("[data-search-menu]");
+    if (searchBar) {
+      searchBar.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (search) {
+          search.classList.remove("hidden");
+          document.documentElement.classList.add("max-md:overflow-hidden");
+        }
+      });
+    }
+    if (searchButton) {
+      searchButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (search) {
+          search.classList.remove("hidden");
+          document.documentElement.classList.add("max-md:overflow-hidden");
+        }
+      });
+    }
+    if (searchButtonMobile) {
+      searchButtonMobile.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (search) {
+          search.classList.remove("hidden");
+          document.documentElement.classList.add("max-md:overflow-hidden");
+        }
+      });
+    }
+    if (searchClose) {
+      searchClose.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (search) {
+          search.classList.add("hidden");
+          document.documentElement.classList.remove("max-md:overflow-hidden");
+        }
+      });
+    }
   }
 
-  const searchBar = document.querySelector("[data-search-bar]");
-  const searchButton = document.querySelector("[data-search-button]");
-  const searchButtonMobile = document.querySelector(
-    "[data-mobile-search-button]"
-  );
-  const searchClose = document.querySelector("[data-search-close-button]");
-  const search = document.querySelector("[data-search-menu]");
-  if (searchBar) {
-    searchBar.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (search) {
-        search.classList.remove("hidden");
-        document.documentElement.classList.add("max-md:overflow-hidden");
-      }
-    });
-  }
-  if (searchButton) {
-    searchButton.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (search) {
-        search.classList.remove("hidden");
-        document.documentElement.classList.add("max-md:overflow-hidden");
-      }
-    });
-  }
-  if (searchButtonMobile) {
-    searchButtonMobile.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (search) {
-        search.classList.remove("hidden");
-        document.documentElement.classList.add("max-md:overflow-hidden");
-      }
-    });
-  }
-  if (searchClose) {
-    searchClose.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (search) {
-        search.classList.add("hidden");
-        document.documentElement.classList.remove("max-md:overflow-hidden");
-      }
-    });
-  }
-}
+  document.addEventListener("astro:after-swap", initializeHeader);
 
-document.addEventListener("astro:after-swap", initializeHeader);
-
-initializeHeader();
+  initializeHeader();
 </script>
