@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
+  "$schema": "https://biomejs.dev/schemas/latest/schema.json",
   "formatter": {
     "indentStyle": "space",
     "indentWidth": 2
@@ -14,17 +14,20 @@
   "files": {
     "includes": ["website/src/**/*", "website/astro.config.mjs"]
   },
-  "css": {
-    "parser": {
-      "tailwindDirectives": true
-    }
-  },
   "javascript": {
     "formatter": {
       "trailingCommas": "none"
     }
   },
   "overrides": [
+    {
+      "includes": ["website/**/*"],
+      "css": {
+        "parser": {
+          "tailwindDirectives": true
+        }
+      }
+    },
     {
       "includes": ["**/*.svelte", "**/*.astro", "**/*.vue"],
       "linter": {
