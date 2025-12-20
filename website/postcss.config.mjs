@@ -1,22 +1,14 @@
 // From https://gist.github.com/alexanderbuhler/2386befd7b6b3be3695667cb5cb5e709 and transformed from CommonJS to ES modules
 
-import postcssCascadeLayers from "@csstools/postcss-cascade-layers";
-import postcssColorMixFunction from "@csstools/postcss-color-mix-function";
-import postcssOklabFunction from "@csstools/postcss-oklab-function";
-import autoprefixer from "autoprefixer";
 import postcss from "postcss";
-import postcssMediaMinmax from "postcss-media-minmax";
-import postcssNesting from "postcss-nesting";
-import postcssPrefixSelector from "postcss-prefix-selector";
 import valueParser from "postcss-value-parser";
+import postcssMediaMinmax from "postcss-media-minmax";
+import postcssOklabFunction from "@csstools/postcss-oklab-function";
+import postcssNesting from "postcss-nesting";
+import autoprefixer from "autoprefixer";
 
-/*
-    This plugin polyfills @property definitions with regular CSS variables
-    Additionally, it removes `in <colorspace>` after `to left` or `to right` gradient args for older browsers
-*/
 const propertyInjectPlugin = () => {
   return {
-    postcssPlugin: "postcss-property-polyfill",
     Once(root) {
       const fallbackRules = [];
 
@@ -73,7 +65,8 @@ const propertyInjectPlugin = () => {
           }
         );
       });
-    }
+    },
+    postcssPlugin: "postcss-property-polyfill"
   };
 };
 
@@ -85,8 +78,6 @@ propertyInjectPlugin.postcss = true;
 */
 const colorMixVarResolverPlugin = () => {
   return {
-    postcssPlugin: "postcss-color-mix-var-resolver",
-
     Once(root) {
       const cssVariables = {};
 
@@ -150,7 +141,9 @@ const colorMixVarResolverPlugin = () => {
           decl.value = newValue;
         }
       });
-    }
+    },
+
+    postcssPlugin: "postcss-color-mix-var-resolver"
   };
 };
 
@@ -161,8 +154,6 @@ colorMixVarResolverPlugin.postcss = true;
 */
 const transformShortcutPlugin = () => {
   return {
-    postcssPlugin: "postcss-transform-shortcut",
-
     Once(root) {
       const defaults = {
         rotate: [0, 0, 1, "0deg"],
@@ -217,7 +208,9 @@ const transformShortcutPlugin = () => {
       if (fallbackAtRule.nodes && fallbackAtRule.nodes.length > 0) {
         root.append(fallbackAtRule);
       }
-    }
+    },
+
+    postcssPlugin: "postcss-transform-shortcut"
   };
 };
 
@@ -229,8 +222,6 @@ transformShortcutPlugin.postcss = true;
  */
 const addSpaceForEmptyVarFallback = () => {
   return {
-    postcssPlugin: "postcss-add-space-for-empty-var-fallback",
-
     /**
      * We do our edits in `OnceExit`, meaning we process each decl after
      * the AST is fully built and won't get re-visited or re-triggered
@@ -279,7 +270,9 @@ const addSpaceForEmptyVarFallback = () => {
           decl.value = parsed.toString();
         }
       });
-    }
+    },
+
+    postcssPlugin: "postcss-add-space-for-empty-var-fallback"
   };
 };
 
@@ -287,42 +280,10 @@ addSpaceForEmptyVarFallback.postcss = true;
 
 const config = {
   plugins: [
-    postcssPrefixSelector({
-      // Fix for the polyfill conflicting with default Pagefind UI
-      transform(_prefix, selector, _prefixedSelector, _filePath, _rule) {
-        if (selector.match(/^\.pagefind-ui_/)) {
-          return `body:not(#\\#):not(#\\#) ${selector}`;
-        }
-
-        return selector;
-      }
-    }),
-    postcssPrefixSelector({
-      // Fix for the polyfill conflicting with asciinema player
-      includeFiles: [/(?:$|\/)asciinema-player\.css$/],
-      transform(_prefix, selector, prefixedSelector, _filePath, _rule) {
-        if (selector.indexOf("body:not(#\\#)") !== -1) {
-          return selector;
-        }
-
-        if (
-          prefixedSelector.match(/\.ap-hud/) &&
-          prefixedSelector.match(/\.ap-control-bar[^ ]*$/)
-        ) {
-          return `body:not(#\\#):not(#\\#):not(#\\#) ${selector}`;
-        }
-
-        return `body:not(#\\#):not(#\\#) ${selector}`;
-      }
-    }),
-    postcssCascadeLayers,
-    propertyInjectPlugin(),
-    colorMixVarResolverPlugin(),
     transformShortcutPlugin(),
     addSpaceForEmptyVarFallback(),
     postcssMediaMinmax,
     postcssOklabFunction,
-    postcssColorMixFunction,
     postcssNesting,
     autoprefixer
   ]
