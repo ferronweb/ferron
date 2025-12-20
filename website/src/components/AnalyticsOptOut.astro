@@ -5,31 +5,32 @@
       type="checkbox"
       data-analytics-opt-out
       class="w-4 h-4 me-2 align-middle"
-    /><span class="align-middle">Opt out?</span>
+    >
+    <span class="align-middle">Opt out?</span>
   </p>
 </div>
 
 <script>
-  function initializeCheckbox() {
-    const checkbox: HTMLInputElement | null = document.querySelector(
-      "[data-analytics-opt-out]"
-    );
-    const optedOut = localStorage.getItem("plausible_ignore") === "true";
+function initializeCheckbox() {
+  const checkbox: HTMLInputElement | null = document.querySelector(
+    "[data-analytics-opt-out]"
+  );
+  const optedOut = localStorage.getItem("plausible_ignore") === "true";
 
-    if (checkbox) {
-      checkbox.checked = optedOut;
+  if (checkbox) {
+    checkbox.checked = optedOut;
 
-      checkbox.addEventListener("change", () => {
-        if (checkbox.checked) {
-          localStorage.setItem("plausible_ignore", "true");
-        } else {
-          localStorage.removeItem("plausible_ignore");
-        }
-      });
-    }
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        localStorage.setItem("plausible_ignore", "true");
+      } else {
+        localStorage.removeItem("plausible_ignore");
+      }
+    });
   }
+}
 
-  document.addEventListener("astro:after-swap", initializeCheckbox);
+document.addEventListener("astro:after-swap", initializeCheckbox);
 
-  initializeCheckbox();
+initializeCheckbox();
 </script>

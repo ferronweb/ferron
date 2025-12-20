@@ -26,7 +26,7 @@ const docLinks = Astro.props.docLinks;
     >
       <div class="flex-1 flex gap-2">
         <a href="/" class="flex items-center" aria-label="Ferron logo">
-          <Logo class="h-6.5 w-auto" />
+          <Logo class="h-6.5 w-auto"/>
         </a>
         {
           docLinks ? (
@@ -69,21 +69,21 @@ const docLinks = Astro.props.docLinks;
             href="/docs"
             class="text-sm font-medium transition-colors hover:text-primary px-2 py-2 flex items-center gap-1"
           >
-            <FontAwesomeIcon icon={faBook} class="!h-4 w-4" />
+            <FontAwesomeIcon icon={faBook} class="!h-4 w-4"/>
             Docs
           </a>
           <a
             href="/blog"
             class="text-sm font-medium transition-colors hover:text-primary px-2 py-2 flex items-center gap-1"
           >
-            <FontAwesomeIcon icon={faFileText} class="!h-4 w-4" />
+            <FontAwesomeIcon icon={faFileText} class="!h-4 w-4"/>
             Blog
           </a>
           <a
             href="/support"
             class="text-sm font-medium transition-colors hover:text-primary px-2 py-2 flex items-center gap-1"
           >
-            <FontAwesomeIcon icon={faHeadset} class="!h-4 w-4" />
+            <FontAwesomeIcon icon={faHeadset} class="!h-4 w-4"/>
             Support
           </a>
           <div class="ml-2 flex items-center gap-1">
@@ -109,7 +109,7 @@ const docLinks = Astro.props.docLinks;
               class="btn p-0 h-9 w-9 cursor-pointer hover:bg-accent hover:text-accent-foreground shadow-none"
               aria-label="GitHub"
             >
-              <FontAwesomeIcon icon={faGithub} class="w-5 !h-5" />
+              <FontAwesomeIcon icon={faGithub} class="w-5 !h-5"/>
             </a>
             <a
               href={chatLink}
@@ -118,7 +118,7 @@ const docLinks = Astro.props.docLinks;
               class="btn p-0 h-9 w-9 cursor-pointer hover:bg-accent hover:text-accent-foreground shadow-none"
               aria-label="Chat"
             >
-              <FontAwesomeIcon icon={faComments} class="w-5 !h-5" />
+              <FontAwesomeIcon icon={faComments} class="w-5 !h-5"/>
             </a>
           </div>
         </nav>
@@ -159,7 +159,8 @@ const docLinks = Astro.props.docLinks;
               stroke-linecap="round"
               stroke-linejoin="round"
               stroke-width="2"
-              d="M4 6h16M4 12h16M4 18h16"></path>
+              d="M4 6h16M4 12h16M4 18h16"
+            ></path>
           </svg>
         </button>
       </nav>
@@ -171,7 +172,7 @@ const docLinks = Astro.props.docLinks;
   >
     <div class="flex flex-row justify-between px-4 pt-4 md:gap-10">
       <a href="/" class="flex items-center space-x-2" aria-label="Ferron logo">
-        <Logo class="h-8 w-auto" />
+        <Logo class="h-8 w-auto"/>
       </a>
       <button
         type="button"
@@ -181,7 +182,7 @@ const docLinks = Astro.props.docLinks;
         data-mobile-menu-close-button
       >
         <span class="sr-only">Close main menu</span>
-        <FontAwesomeIcon icon={faX} class="self-center w-5 !h-5" />
+        <FontAwesomeIcon icon={faX} class="self-center w-5 !h-5"/>
       </button>
     </div>
     <nav class={`${docLinks ? "whitespace-nowrap p-2" : ""} block`}>
@@ -226,7 +227,7 @@ const docLinks = Astro.props.docLinks;
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground hover:bg-accent hover:text-accent-foreground h-9 w-9"
             aria-label="GitHub"
           >
-            <FontAwesomeIcon icon={faGithub} class="w-5 !h-5" />
+            <FontAwesomeIcon icon={faGithub} class="w-5 !h-5"/>
           </a>
           <a
             href={chatLink}
@@ -235,7 +236,7 @@ const docLinks = Astro.props.docLinks;
             class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground hover:bg-accent hover:text-accent-foreground h-9 w-9"
             aria-label="Chat"
           >
-            <FontAwesomeIcon icon={faComments} class="w-5 !h-5" />
+            <FontAwesomeIcon icon={faComments} class="w-5 !h-5"/>
           </a>
         </div>
       </div>
@@ -313,86 +314,86 @@ const docLinks = Astro.props.docLinks;
 </header>
 
 <script>
-  function initializeHeader() {
-    const menuButton = document.querySelector("[data-mobile-menu-button]");
-    const menuClose = document.querySelector("[data-mobile-menu-close-button]");
-    const menu = document.querySelector("[data-mobile-menu]");
-    const menuLinks = document.querySelectorAll("[data-mobile-menu] a");
-    if (menuButton) {
-      menuButton.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (menu) {
-          menu.classList.remove("hidden");
-          document.documentElement.classList.add("max-md:overflow-hidden");
-        }
-      });
-    }
-    if (menuClose) {
-      menuClose.addEventListener("click", (e) => {
-        e.preventDefault();
+function initializeHeader() {
+  const menuButton = document.querySelector("[data-mobile-menu-button]");
+  const menuClose = document.querySelector("[data-mobile-menu-close-button]");
+  const menu = document.querySelector("[data-mobile-menu]");
+  const menuLinks = document.querySelectorAll("[data-mobile-menu] a");
+  if (menuButton) {
+    menuButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (menu) {
+        menu.classList.remove("hidden");
+        document.documentElement.classList.add("max-md:overflow-hidden");
+      }
+    });
+  }
+  if (menuClose) {
+    menuClose.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (menu) {
+        menu.classList.add("hidden");
+        document.documentElement.classList.remove("max-md:overflow-hidden");
+      }
+    });
+  }
+  if (menuLinks) {
+    menuLinks.forEach((menuLink) => {
+      menuLink.addEventListener("click", () => {
         if (menu) {
           menu.classList.add("hidden");
           document.documentElement.classList.remove("max-md:overflow-hidden");
         }
       });
-    }
-    if (menuLinks) {
-      menuLinks.forEach((menuLink) => {
-        menuLink.addEventListener("click", () => {
-          if (menu) {
-            menu.classList.add("hidden");
-            document.documentElement.classList.remove("max-md:overflow-hidden");
-          }
-        });
-      });
-    }
-
-    const searchBar = document.querySelector("[data-search-bar]");
-    const searchButton = document.querySelector("[data-search-button]");
-    const searchButtonMobile = document.querySelector(
-      "[data-mobile-search-button]"
-    );
-    const searchClose = document.querySelector("[data-search-close-button]");
-    const search = document.querySelector("[data-search-menu]");
-    if (searchBar) {
-      searchBar.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (search) {
-          search.classList.remove("hidden");
-          document.documentElement.classList.add("max-md:overflow-hidden");
-        }
-      });
-    }
-    if (searchButton) {
-      searchButton.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (search) {
-          search.classList.remove("hidden");
-          document.documentElement.classList.add("max-md:overflow-hidden");
-        }
-      });
-    }
-    if (searchButtonMobile) {
-      searchButtonMobile.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (search) {
-          search.classList.remove("hidden");
-          document.documentElement.classList.add("max-md:overflow-hidden");
-        }
-      });
-    }
-    if (searchClose) {
-      searchClose.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (search) {
-          search.classList.add("hidden");
-          document.documentElement.classList.remove("max-md:overflow-hidden");
-        }
-      });
-    }
+    });
   }
 
-  document.addEventListener("astro:after-swap", initializeHeader);
+  const searchBar = document.querySelector("[data-search-bar]");
+  const searchButton = document.querySelector("[data-search-button]");
+  const searchButtonMobile = document.querySelector(
+    "[data-mobile-search-button]"
+  );
+  const searchClose = document.querySelector("[data-search-close-button]");
+  const search = document.querySelector("[data-search-menu]");
+  if (searchBar) {
+    searchBar.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (search) {
+        search.classList.remove("hidden");
+        document.documentElement.classList.add("max-md:overflow-hidden");
+      }
+    });
+  }
+  if (searchButton) {
+    searchButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (search) {
+        search.classList.remove("hidden");
+        document.documentElement.classList.add("max-md:overflow-hidden");
+      }
+    });
+  }
+  if (searchButtonMobile) {
+    searchButtonMobile.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (search) {
+        search.classList.remove("hidden");
+        document.documentElement.classList.add("max-md:overflow-hidden");
+      }
+    });
+  }
+  if (searchClose) {
+    searchClose.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (search) {
+        search.classList.add("hidden");
+        document.documentElement.classList.remove("max-md:overflow-hidden");
+      }
+    });
+  }
+}
 
-  initializeHeader();
+document.addEventListener("astro:after-swap", initializeHeader);
+
+initializeHeader();
 </script>

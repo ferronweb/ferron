@@ -17,18 +17,21 @@ import kdl from "../../../kdl.tmLanguage.json";
         <button
           data-configuration-static-tab
           class="px-4 py-2 font-medium cursor-pointer transition-colors hover:text-accent"
-          >Static file serving</button
         >
+          Static file serving
+        </button>
         <button
           data-configuration-proxy-tab
           class="px-4 py-2 font-medium cursor-pointer transition-colors hover:text-accent"
-          >Reverse proxying</button
         >
+          Reverse proxying
+        </button>
         <button
           data-configuration-php-tab
           class="px-4 py-2 font-medium cursor-pointer transition-colors hover:text-accent"
-          >PHP hosting</button
         >
+          PHP hosting
+        </button>
       </div>
       <div data-configuration-static-content>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -210,109 +213,95 @@ example.com {
   </div>
 
   <script>
-    function initializeTabs() {
-      const staticTab = document.querySelector(
-        "[data-configuration-static-tab]"
-      );
-      const proxyTab = document.querySelector("[data-configuration-proxy-tab]");
-      const phpTab = document.querySelector("[data-configuration-php-tab]");
-      const staticContent = document.querySelector(
-        "[data-configuration-static-content]"
-      );
-      const proxyContent = document.querySelector(
-        "[data-configuration-proxy-content]"
-      );
-      const phpContent = document.querySelector(
-        "[data-configuration-php-content]"
-      );
+  function initializeTabs() {
+    const staticTab = document.querySelector("[data-configuration-static-tab]");
+    const proxyTab = document.querySelector("[data-configuration-proxy-tab]");
+    const phpTab = document.querySelector("[data-configuration-php-tab]");
+    const staticContent = document.querySelector(
+      "[data-configuration-static-content]"
+    );
+    const proxyContent = document.querySelector(
+      "[data-configuration-proxy-content]"
+    );
+    const phpContent = document.querySelector(
+      "[data-configuration-php-content]"
+    );
 
-      if (staticTab) {
-        staticTab.addEventListener("click", () => {
-          staticTab.classList.add(
-            "text-primary",
-            "border-b-2",
-            "border-primary"
-          );
-          if (proxyTab)
-            proxyTab.classList.remove(
-              "text-primary",
-              "border-b-2",
-              "border-primary"
-            );
-          if (phpTab)
-            phpTab.classList.remove(
-              "text-primary",
-              "border-b-2",
-              "border-primary"
-            );
-          if (staticContent) staticContent.classList.remove("hidden");
-          if (proxyContent) proxyContent.classList.add("hidden");
-          if (phpContent) phpContent.classList.add("hidden");
-        });
-      }
-
-      if (proxyTab) {
-        proxyTab.addEventListener("click", () => {
-          proxyTab.classList.add(
-            "text-primary",
-            "border-b-2",
-            "border-primary"
-          );
-          if (staticTab)
-            staticTab.classList.remove(
-              "text-primary",
-              "border-b-2",
-              "border-primary"
-            );
-          if (phpTab)
-            phpTab.classList.remove(
-              "text-primary",
-              "border-b-2",
-              "border-primary"
-            );
-          if (proxyContent) proxyContent.classList.remove("hidden");
-          if (staticContent) staticContent.classList.add("hidden");
-          if (phpContent) phpContent.classList.add("hidden");
-        });
-      }
-
-      if (phpTab) {
-        phpTab.addEventListener("click", () => {
-          phpTab.classList.add("text-primary", "border-b-2", "border-primary");
-          if (staticTab)
-            staticTab.classList.remove(
-              "text-primary",
-              "border-b-2",
-              "border-primary"
-            );
-          if (proxyTab)
-            proxyTab.classList.remove(
-              "text-primary",
-              "border-b-2",
-              "border-primary"
-            );
-          if (phpContent) phpContent.classList.remove("hidden");
-          if (staticContent) staticContent.classList.add("hidden");
-          if (proxyContent) proxyContent.classList.add("hidden");
-        });
-      }
-
-      if (staticTab)
+    if (staticTab) {
+      staticTab.addEventListener("click", () => {
         staticTab.classList.add("text-primary", "border-b-2", "border-primary");
-      if (proxyTab)
-        proxyTab.classList.remove(
-          "text-primary",
-          "border-b-2",
-          "border-primary"
-        );
-      if (phpTab)
-        phpTab.classList.remove("text-primary", "border-b-2", "border-primary");
-      if (staticContent) staticContent.classList.remove("hidden");
-      if (proxyContent) proxyContent.classList.add("hidden");
-      if (phpContent) phpContent.classList.add("hidden");
+        if (proxyTab)
+          proxyTab.classList.remove(
+            "text-primary",
+            "border-b-2",
+            "border-primary"
+          );
+        if (phpTab)
+          phpTab.classList.remove(
+            "text-primary",
+            "border-b-2",
+            "border-primary"
+          );
+        if (staticContent) staticContent.classList.remove("hidden");
+        if (proxyContent) proxyContent.classList.add("hidden");
+        if (phpContent) phpContent.classList.add("hidden");
+      });
     }
 
-    initializeTabs();
-    document.addEventListener("astro:after-swap", initializeTabs);
+    if (proxyTab) {
+      proxyTab.addEventListener("click", () => {
+        proxyTab.classList.add("text-primary", "border-b-2", "border-primary");
+        if (staticTab)
+          staticTab.classList.remove(
+            "text-primary",
+            "border-b-2",
+            "border-primary"
+          );
+        if (phpTab)
+          phpTab.classList.remove(
+            "text-primary",
+            "border-b-2",
+            "border-primary"
+          );
+        if (proxyContent) proxyContent.classList.remove("hidden");
+        if (staticContent) staticContent.classList.add("hidden");
+        if (phpContent) phpContent.classList.add("hidden");
+      });
+    }
+
+    if (phpTab) {
+      phpTab.addEventListener("click", () => {
+        phpTab.classList.add("text-primary", "border-b-2", "border-primary");
+        if (staticTab)
+          staticTab.classList.remove(
+            "text-primary",
+            "border-b-2",
+            "border-primary"
+          );
+        if (proxyTab)
+          proxyTab.classList.remove(
+            "text-primary",
+            "border-b-2",
+            "border-primary"
+          );
+        if (phpContent) phpContent.classList.remove("hidden");
+        if (staticContent) staticContent.classList.add("hidden");
+        if (proxyContent) proxyContent.classList.add("hidden");
+      });
+    }
+
+    if (staticTab)
+      staticTab.classList.add("text-primary", "border-b-2", "border-primary");
+    if (proxyTab)
+      proxyTab.classList.remove("text-primary", "border-b-2", "border-primary");
+    if (phpTab)
+      phpTab.classList.remove("text-primary", "border-b-2", "border-primary");
+    if (staticContent) staticContent.classList.remove("hidden");
+    if (proxyContent) proxyContent.classList.add("hidden");
+    if (phpContent) phpContent.classList.add("hidden");
+  }
+
+  initializeTabs();
+  document.addEventListener("astro:after-swap", initializeTabs);
   </script>
 </section>

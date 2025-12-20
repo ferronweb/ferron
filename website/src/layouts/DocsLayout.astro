@@ -11,7 +11,7 @@ const pathname = Astro.url.pathname;
   title={Astro.props.title}
   description="The Ferron documentation provides comprehensive information and instructions on how to install, use and configure the Ferron web server."
 >
-  <Header docLinks={docLinks} />
+  <Header docLinks={docLinks}/>
   <div class="grow flex-1 w-full max-w-360 mx-auto">
     <nav
       class="hidden md:block md:sticky md:float-left w-64 lg:w-80 px-3 top-[calc(var(--spacing,0.25rem)*15+1px)] bottom-0 h-[calc(100vh-var(--spacing,0.25rem)*15-1px)]"
@@ -56,9 +56,9 @@ const pathname = Astro.url.pathname;
       <div
         class="prose max-w-full md:prose-lg print:prose-pre:!whitespace-pre-wrap print:prose-pre:!overflow-x-visible"
       >
-        <slot />
+        <slot/>
       </div>
     </main>
   </div>
-  <Footer />
+  <Footer/>
 </Root>

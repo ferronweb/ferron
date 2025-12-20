@@ -75,9 +75,7 @@ const { Content } = await render(Astro.props.post);
     </div>
     <header class="text-start mb-6 pb-2 w-full border-b-2 print:pb-0">
       <div class="mb-2">
-        <h1 class="text-4xl md:text-5xl py-3 font-bold">
-          {data.title}
-        </h1>
+        <h1 class="text-4xl md:text-5xl py-3 font-bold">{data.title}</h1>
         <p
           class="mb-6 text-base md:text-lg text-muted-foreground print:mb-4 flex flex-wrap gap-4"
         >
@@ -126,7 +124,7 @@ const { Content } = await render(Astro.props.post);
     <article
       class="prose w-full max-w-full md:prose-lg print:prose-pre:!whitespace-pre-wrap print:prose-pre:!overflow-x-visible"
     >
-      <Content />
+      <Content/>
     </article>
     <div class="mt-6 pt-6 border-t-2 w-full text-lg print:hidden">
       <div

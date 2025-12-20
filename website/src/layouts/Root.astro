@@ -8,11 +8,11 @@ import { SEO } from "astro-seo";
 <!doctype html>
 <html lang="en" transition:animate="none">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width" />
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <Font cssVariable="--font-funnel-sans" />
-    <Font cssVariable="--font-jetbrains-mono" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <Font cssVariable="--font-funnel-sans"/>
+    <Font cssVariable="--font-jetbrains-mono"/>
     <SEO
       title={Astro.props.title
         ? `${Astro.props.title} - Ferron`
@@ -41,20 +41,20 @@ import { SEO } from "astro-seo";
         description: Astro.props.description
       }}
     />
-    <ClientRouter />
+    <ClientRouter/>
   </head>
   <body>
-    <slot />
+    <slot/>
   </body>
 </html>
 
 <script>
-  import { init } from "@plausible-analytics/tracker";
+import { init } from "@plausible-analytics/tracker";
 
-  init({
-    domain: "ferron.sh",
-    endpoint: "https://analytics.ferron.sh/api/event",
-    autoCapturePageviews: true,
-    outboundLinks: true
-  });
+init({
+  domain: "ferron.sh",
+  endpoint: "https://analytics.ferron.sh/api/event",
+  autoCapturePageviews: true,
+  outboundLinks: true
+});
 </script>

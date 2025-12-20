@@ -53,9 +53,10 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
       class="mt-4 text-center max-w-full prose prose-sm text-muted-foreground"
     >
       <p>
-        {Astro.props.higherIsBetter ? "Higher is better" : "Lower is better"} | Benchmarks
-        run on {Astro.props.system}, with the{" "}
-        <code>{Astro.props.command}</code> command{
+        {Astro.props.higherIsBetter ? "Higher is better" : "Lower is better"}|
+        Benchmarks run on {Astro.props.system}, with the{" "}
+        <code>{Astro.props.command}</code>command
+        {
           Astro.props.date
             ? ` | Benchmarks performed on ${format(Astro.props.date, "MMMM d, yyyy")}`
             : ""
@@ -66,111 +67,111 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
 </div>
 
 <script>
-  import {
-    CategoryScale,
-    Chart,
-    type ChartItem,
-    Legend,
-    LinearScale,
-    LineController,
-    LineElement,
-    PointElement,
-    Tooltip
-  } from "chart.js";
+import {
+  CategoryScale,
+  Chart,
+  type ChartItem,
+  Legend,
+  LinearScale,
+  LineController,
+  LineElement,
+  PointElement,
+  Tooltip
+} from "chart.js";
 
-  interface BenchmarkData {
-    name: string;
-    concurrency: string | number;
-    ferron: string | number;
-    competitor1: string | number;
-    competitor2: string | number;
-    competitor3: string | number;
-  }
+interface BenchmarkData {
+  name: string;
+  concurrency: string | number;
+  ferron: string | number;
+  competitor1: string | number;
+  competitor2: string | number;
+  competitor3: string | number;
+}
 
-  Chart.register([
-    LineController,
-    LineElement,
-    PointElement,
-    CategoryScale,
-    LinearScale,
-    Legend,
-    Tooltip
-  ]);
+Chart.register([
+  LineController,
+  LineElement,
+  PointElement,
+  CategoryScale,
+  LinearScale,
+  Legend,
+  Tooltip
+]);
 
-  const style = getComputedStyle(document.body);
-  const mutedForegroundColor = style.getPropertyValue("--muted-foreground");
-  const borderColor = style.getPropertyValue("--border");
-  const primaryColor = style.getPropertyValue("--primary");
-  const chart1 = style.getPropertyValue("--chart-1");
-  const chart2 = style.getPropertyValue("--chart-2");
-  const chart3 = style.getPropertyValue("--chart-3");
-  const fontFamily = style.getPropertyValue("--font-funnel-sans");
+const style = getComputedStyle(document.body);
+const mutedForegroundColor = style.getPropertyValue("--muted-foreground");
+const borderColor = style.getPropertyValue("--border");
+const primaryColor = style.getPropertyValue("--primary");
+const chart1 = style.getPropertyValue("--chart-1");
+const chart2 = style.getPropertyValue("--chart-2");
+const chart3 = style.getPropertyValue("--chart-3");
+const fontFamily = style.getPropertyValue("--font-funnel-sans");
 
-  class BenchmarkChart extends HTMLElement {
-    connectedCallback() {
-      const props = JSON.parse(this.dataset.props || "{}");
-      const canvas = this.querySelector("canvas");
-      Chart.defaults.font.family = fontFamily;
-      Chart.defaults.font.size = 14;
-      Chart.defaults.color = `hsla(${mutedForegroundColor}, 1)`;
-      Chart.defaults.borderColor = `hsla(${borderColor}, 1)`;
-      new Chart(canvas as ChartItem, {
-        type: "line",
-        data: {
-          labels: props.data.map((item: BenchmarkData) => item.concurrency),
-          datasets: [
-            {
-              label: "Ferron",
-              data: props.data.map((item: BenchmarkData) => item.ferron),
-              borderColor: `hsla(${primaryColor}, 1)`,
-              backgroundColor: `hsla(${primaryColor}, 1)`,
-              pointStyle: false
-            },
-            {
-              label: props.competitor1,
-              data: props.data.map((item: BenchmarkData) => item.competitor1),
-              borderColor: `hsla(${chart1}, 1)`,
-              backgroundColor: `hsla(${chart1}, 1)`,
-              pointStyle: false
-            },
-            {
-              label: props.competitor2,
-              data: props.data.map((item: BenchmarkData) => item.competitor2),
-              borderColor: `hsla(${chart2}, 1)`,
-              backgroundColor: `hsla(${chart2}, 1)`,
-              pointStyle: false
-            },
-            {
-              label: props.competitor3,
-              data: props.data.map((item: BenchmarkData) => item.competitor3),
-              borderColor: `hsla(${chart3}, 1)`,
-              backgroundColor: `hsla(${chart3}, 1)`,
-              pointStyle: false
+class BenchmarkChart extends HTMLElement {
+  connectedCallback() {
+    const props = JSON.parse(this.dataset.props || "{}");
+    const canvas = this.querySelector("canvas");
+    Chart.defaults.font.family = fontFamily;
+    Chart.defaults.font.size = 14;
+    Chart.defaults.color = `hsla(${mutedForegroundColor}, 1)`;
+    Chart.defaults.borderColor = `hsla(${borderColor}, 1)`;
+    new Chart(canvas as ChartItem, {
+      type: "line",
+      data: {
+        labels: props.data.map((item: BenchmarkData) => item.concurrency),
+        datasets: [
+          {
+            label: "Ferron",
+            data: props.data.map((item: BenchmarkData) => item.ferron),
+            borderColor: `hsla(${primaryColor}, 1)`,
+            backgroundColor: `hsla(${primaryColor}, 1)`,
+            pointStyle: false
+          },
+          {
+            label: props.competitor1,
+            data: props.data.map((item: BenchmarkData) => item.competitor1),
+            borderColor: `hsla(${chart1}, 1)`,
+            backgroundColor: `hsla(${chart1}, 1)`,
+            pointStyle: false
+          },
+          {
+            label: props.competitor2,
+            data: props.data.map((item: BenchmarkData) => item.competitor2),
+            borderColor: `hsla(${chart2}, 1)`,
+            backgroundColor: `hsla(${chart2}, 1)`,
+            pointStyle: false
+          },
+          {
+            label: props.competitor3,
+            data: props.data.map((item: BenchmarkData) => item.competitor3),
+            borderColor: `hsla(${chart3}, 1)`,
+            backgroundColor: `hsla(${chart3}, 1)`,
+            pointStyle: false
+          }
+        ]
+      },
+      options: {
+        maintainAspectRatio: false,
+
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: "Concurrent requests"
             }
-          ]
-        },
-        options: {
-          maintainAspectRatio: false,
-
-          scales: {
-            x: {
-              title: {
-                display: true,
-                text: "Concurrent requests"
-              }
-            },
-            y: {
-              beginAtZero: true,
-              title: {
-                display: true,
-                text: props.unit
-              }
+          },
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: props.unit
             }
           }
         }
-      });
-    }
+      }
+    });
   }
+}
 
-  customElements.define("benchmark-chart-line", BenchmarkChart);
+customElements.define("benchmark-chart-line", BenchmarkChart);
 </script>

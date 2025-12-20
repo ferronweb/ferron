@@ -12,20 +12,16 @@ import InstallCommand from "./InstallCommand.astro";
     <div class="relative w-full h-full max-w-480 mx-auto">
       <div
         class="absolute -top-24 -left-30 w-128 h-128 bg-primary/15 md:bg-primary/20 rounded-full blur-3xl blur-fix-performance opacity-70"
-      >
-      </div>
+      ></div>
       <div
         class="absolute -bottom-24 -right-30 w-128 h-128 bg-accent/15 md:bg-accent/20 rounded-full blur-3xl blur-fix-performance opacity-70"
-      >
-      </div>
+      ></div>
       <div
         class="absolute -bottom-8 -left-8 w-160 h-160 bg-background/80 rounded-full blur-3xl blur-fix-performance opacity-70 md:opacity-100"
-      >
-      </div>
+      ></div>
       <div
         class="absolute -top-8 -right-8 w-160 h-160 bg-background/80 rounded-full blur-3xl blur-fix-performance opacity-70 md:opacity-100"
-      >
-      </div>
+      ></div>
     </div>
   </div>
   <div class="container relative z-10 py-16 md:pt-28 md:pb-22 gap-6">
@@ -39,7 +35,8 @@ import InstallCommand from "./InstallCommand.astro";
         <h1
           class="text-[3.5rem] md:text-[4.5rem] xl:text-[3.925rem] 2xl:text-[4.695rem] font-extrabold font-stretch-semi-condensed tracking-tight leading-none mb-4"
         >
-          Serve your website in&nbsp;minutes, <span
+          Serve your website in&nbsp;minutes,
+          <span
             class="bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent"
             >not&nbsp;hours</span
           >
@@ -53,7 +50,7 @@ import InstallCommand from "./InstallCommand.astro";
         </p>
         <div class="flex flex-col sm:flex-row gap-4 max-w-md w-full xl:w-auto">
           <a href="#install" class="btn btn-primary group">
-            <FontAwesomeIcon icon={faDownload} class="mr-2 !h-5 w-5" />
+            <FontAwesomeIcon icon={faDownload} class="mr-2 !h-5 w-5"/>
             Start installation
             <FontAwesomeIcon
               icon={faArrowRight}
@@ -63,7 +60,7 @@ import InstallCommand from "./InstallCommand.astro";
           <a href="/docs" class="btn btn-secondary"> Documentation </a>
         </div>
         <div class="mt-12 w-full xl:w-37/40 2xl:w-9/10">
-          <InstallCommand />
+          <InstallCommand/>
         </div>
       </div>
       <div
@@ -81,27 +78,27 @@ import InstallCommand from "./InstallCommand.astro";
 </section>
 
 <script>
-  import * as AsciinemaPlayer from "asciinema-player";
-  import heroRecording from "../../assets/ferron-demo.cast?url";
+import * as AsciinemaPlayer from "asciinema-player";
+import heroRecording from "../../assets/ferron-demo.cast?url";
 
-  function loadPlayer() {
-    const heroElement = document.querySelector("[data-hero-demo]");
-    if (!heroElement) return;
+function loadPlayer() {
+  const heroElement = document.querySelector("[data-hero-demo]");
+  if (!heroElement) return;
 
-    AsciinemaPlayer.create(heroRecording, heroElement, {
-      cols: 80,
-      rows: 23,
-      autoplay: true,
-      loop: true,
-      poster: "npt:0:0",
-      theme: "ferron",
-      terminalFontFamily: "var(--font-jetbrains-mono)"
-    });
-  }
-
-  document.addEventListener("astro:after-swap", () => {
-    loadPlayer();
+  AsciinemaPlayer.create(heroRecording, heroElement, {
+    cols: 80,
+    rows: 23,
+    autoplay: true,
+    loop: true,
+    poster: "npt:0:0",
+    theme: "ferron",
+    terminalFontFamily: "var(--font-jetbrains-mono)"
   });
+}
 
+document.addEventListener("astro:after-swap", () => {
   loadPlayer();
+});
+
+loadPlayer();
 </script>

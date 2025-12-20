@@ -18,35 +18,36 @@ import FontAwesomeIcon from "../FontAwesomeIcon.astro";
         class="btn hover:bg-primary/90 hover:text-primary-foreground rounded-none border-r border-muted/60 py-2 px-4 h-12"
         data-install-command-button="linux"
       >
-        <FontAwesomeIcon icon={faTerminal} class="mr-2 h-4 w-4" />
+        <FontAwesomeIcon icon={faTerminal} class="mr-2 h-4 w-4"/>
         GNU/Linux
       </button>
       <button
         class="btn hover:bg-primary/90 hover:text-primary-foreground rounded-none border-r border-muted/60 py-2 px-4 h-12"
         data-install-command-button="windows"
       >
-        <FontAwesomeIcon icon={faDesktop} class="mr-2 h-4 w-4" />
+        <FontAwesomeIcon icon={faDesktop} class="mr-2 h-4 w-4"/>
         Windows Server
       </button>
       <button
         class="btn hover:bg-primary/90 hover:text-primary-foreground rounded-none border-r border-muted/60 py-2 px-4 h-12"
         data-install-command-button="docker"
       >
-        <FontAwesomeIcon icon={faBox} class="mr-2 h-4 w-4" />
+        <FontAwesomeIcon icon={faBox} class="mr-2 h-4 w-4"/>
         Docker
       </button>
     </div>
     <div class="bg-secondary/50 p-4">
       <div class="bg-muted/30 rounded-md flex">
         <pre
-          class="text-sm sm:text-base overflow-x-auto p-2 grow self-center"><code class="text-foreground" data-install-command>Command unavailable</code></pre>
+          class="text-sm sm:text-base overflow-x-auto p-2 grow self-center"
+        ><code class="text-foreground" data-install-command>Command unavailable</code></pre>
 
         <button
           class="btn p-0 bg-secondary/50 hover:bg-accent h-7 w-7 min-w-7 sm:h-8 sm:w-8 sm:min-w-8 m-1 text-muted-foreground hover:text-accent-foreground cursor-pointer"
           data-install-command-copy-button
         >
           <span data-install-command-copy-icon
-            ><FontAwesomeIcon icon={faCopy} class="w-4 !h-4" /></span
+            ><FontAwesomeIcon icon={faCopy} class="w-4 !h-4"/></span
           >
           <span data-install-command-copy-done-icon class="hidden"
             ><FontAwesomeIcon
@@ -63,105 +64,101 @@ import FontAwesomeIcon from "../FontAwesomeIcon.astro";
 </install-command>
 
 <script>
-  import { track } from "@plausible-analytics/tracker";
+import { track } from "@plausible-analytics/tracker";
 
-  const commands: Record<string, string> = {
-    linux: 'sudo bash -c "$(curl -fsSL https://get.ferron.sh/v2)"',
-    windows: 'powershell -c "irm https://get.ferron.sh/v2-win | iex"',
-    docker:
-      "docker pull ferronserver/ferron:2 && docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:2"
-  };
+const commands: Record<string, string> = {
+  linux: 'sudo bash -c "$(curl -fsSL https://get.ferron.sh/v2)"',
+  windows: 'powershell -c "irm https://get.ferron.sh/v2-win | iex"',
+  docker:
+    "docker pull ferronserver/ferron:2 && docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:2"
+};
 
-  const defaultPlatform = "linux";
+const defaultPlatform = "linux";
 
-  class InstallCommand extends HTMLElement {
-    connectedCallback() {
-      const buttons = this.querySelectorAll("[data-install-command-button]");
-      const installCommand: HTMLElement | null = this.querySelector(
-        "[data-install-command]"
-      );
+class InstallCommand extends HTMLElement {
+  connectedCallback() {
+    const buttons = this.querySelectorAll("[data-install-command-button]");
+    const installCommand: HTMLElement | null = this.querySelector(
+      "[data-install-command]"
+    );
 
-      let selectedPlatform = defaultPlatform;
+    let selectedPlatform = defaultPlatform;
 
-      buttons.forEach((button) => {
-        const clickListener = (target: HTMLElement) => {
-          const platform =
-            target.getAttribute("data-install-command-button") || "";
-          selectedPlatform = platform;
+    buttons.forEach((button) => {
+      const clickListener = (target: HTMLElement) => {
+        const platform =
+          target.getAttribute("data-install-command-button") || "";
+        selectedPlatform = platform;
 
-          const command = commands[platform] || "Command not found";
-          if (installCommand) {
-            installCommand.innerText = command;
-          }
-
-          buttons.forEach((button) => {
-            if (
-              button.getAttribute("data-install-command-button") === platform
-            ) {
-              button.classList.remove("bg-inherit", "text-inherit");
-              button.classList.add("bg-primary", "text-primary-foreground");
-            } else {
-              button.classList.add("bg-inherit", "text-inherit");
-              button.classList.remove("bg-primary", "text-primary-foreground");
-            }
-          });
-        };
-
-        button.addEventListener("click", () => {
-          clickListener(button as HTMLElement);
-        });
-
-        if (
-          button.getAttribute("data-install-command-button") === defaultPlatform
-        ) {
-          clickListener(button as HTMLElement);
+        const command = commands[platform] || "Command not found";
+        if (installCommand) {
+          installCommand.innerText = command;
         }
+
+        buttons.forEach((button) => {
+          if (button.getAttribute("data-install-command-button") === platform) {
+            button.classList.remove("bg-inherit", "text-inherit");
+            button.classList.add("bg-primary", "text-primary-foreground");
+          } else {
+            button.classList.add("bg-inherit", "text-inherit");
+            button.classList.remove("bg-primary", "text-primary-foreground");
+          }
+        });
+      };
+
+      button.addEventListener("click", () => {
+        clickListener(button as HTMLElement);
       });
 
-      let isCopied = false;
+      if (
+        button.getAttribute("data-install-command-button") === defaultPlatform
+      ) {
+        clickListener(button as HTMLElement);
+      }
+    });
 
-      const copyButton = this.querySelector(
-        "[data-install-command-copy-button]"
-      );
-      const copyIcon = this.querySelector("[data-install-command-copy-icon]");
-      const copyDoneIcon = this.querySelector(
-        "[data-install-command-copy-done-icon]"
-      );
+    let isCopied = false;
 
-      if (copyButton) {
-        copyButton.addEventListener("click", () => {
-          if (!isCopied && installCommand) {
-            const command = installCommand.innerText;
+    const copyButton = this.querySelector("[data-install-command-copy-button]");
+    const copyIcon = this.querySelector("[data-install-command-copy-icon]");
+    const copyDoneIcon = this.querySelector(
+      "[data-install-command-copy-done-icon]"
+    );
 
-            navigator.clipboard.writeText(command);
+    if (copyButton) {
+      copyButton.addEventListener("click", () => {
+        if (!isCopied && installCommand) {
+          const command = installCommand.innerText;
 
-            isCopied = true;
+          navigator.clipboard.writeText(command);
+
+          isCopied = true;
+          if (copyIcon) {
+            copyIcon.classList.add("hidden");
+          }
+          if (copyDoneIcon) {
+            copyDoneIcon.classList.remove("hidden");
+          }
+
+          setTimeout(() => {
+            isCopied = false;
             if (copyIcon) {
-              copyIcon.classList.add("hidden");
+              copyIcon.classList.remove("hidden");
             }
             if (copyDoneIcon) {
-              copyDoneIcon.classList.remove("hidden");
+              copyDoneIcon.classList.add("hidden");
             }
+          }, 2000);
 
-            setTimeout(() => {
-              isCopied = false;
-              if (copyIcon) {
-                copyIcon.classList.remove("hidden");
-              }
-              if (copyDoneIcon) {
-                copyDoneIcon.classList.add("hidden");
-              }
-            }, 2000);
-
-            // Track the command copying button clicks; the Plausible event name is "install-command-copy".
-            track("install-command-copy", {
-              props: { variant: selectedPlatform }
-            });
-          }
-        });
-      }
+          // Track the command copying button clicks; the Plausible event name is "install-command-copy".
+          track("install-command-copy", {
+            props: { variant: selectedPlatform }
+          });
+        }
+      });
     }
   }
+}
 
-  customElements.define("install-command", InstallCommand);
+customElements.define("install-command", InstallCommand);
 </script>

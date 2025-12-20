@@ -19,6 +19,12 @@
       "trailingCommas": "none"
     }
   },
+  "html": {
+    "experimentalFullSupportEnabled": true,
+    "formatter": {
+      "enabled": true
+    }
+  },
   "overrides": [
     {
       "includes": ["website/**/*"],
