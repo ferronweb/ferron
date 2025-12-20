@@ -40,11 +40,6 @@ static AUTHORIZATION_HEADER: LazyLock<HeaderName> = LazyLock::new(|| header::AUT
 static UPGRADE_HEADER: LazyLock<HeaderName> = LazyLock::new(|| header::UPGRADE);
 static VARY_HEADER: LazyLock<HeaderName> = LazyLock::new(|| header::VARY);
 
-// Cache header values to avoid allocations
-static CACHE_HIT: LazyLock<HeaderValue> = LazyLock::new(|| HeaderValue::from_static("HIT"));
-static CACHE_MISS: LazyLock<HeaderValue> = LazyLock::new(|| HeaderValue::from_static("MISS"));
-static CACHE_BYPASS: LazyLock<HeaderValue> = LazyLock::new(|| HeaderValue::from_static("BYPASS"));
-
 // Protocol prefixes
 const HTTP_PREFIX: &str = "http://";
 const HTTPS_PREFIX: &str = "https://";
@@ -658,12 +653,16 @@ impl ModuleHandlers for CacheModuleHandlers {
   ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Box<dyn Error>> {
     // Fast path for common cases
     if self.no_store {
-      response.headers_mut().insert(CACHE_HEADER_NAME, CACHE_BYPASS.clone());
+      response
+        .headers_mut()
+        .insert(CACHE_HEADER_NAME, HeaderValue::from_static("BYPASS"));
       return Ok(response);
     }
 
     if self.cached {
-      response.headers_mut().insert(CACHE_HEADER_NAME, CACHE_HIT.clone());
+      response
+        .headers_mut()
+        .insert(CACHE_HEADER_NAME, HeaderValue::from_static("HIT"));
       self.metric_cache_hit = Some(true);
       return Ok(response);
     } else {
@@ -697,7 +696,9 @@ impl ModuleHandlers for CacheModuleHandlers {
         let stream_body = StreamBody::new(chained_stream.map_ok(Frame::data));
         let response_body = BodyExt::boxed(stream_body);
 
-        response_parts.headers.insert(CACHE_HEADER_NAME, CACHE_MISS.clone());
+        response_parts
+          .headers
+          .insert(CACHE_HEADER_NAME, HeaderValue::from_static("MISS"));
 
         return Ok(Response::from_parts(response_parts, response_body));
       }
@@ -762,11 +763,15 @@ impl ModuleHandlers for CacheModuleHandlers {
       let stream_body = StreamBody::new(cached_stream.map_ok(Frame::data));
       let response_body = BodyExt::boxed(stream_body);
 
-      response_parts.headers.insert(CACHE_HEADER_NAME, CACHE_MISS.clone());
+      response_parts
+        .headers
+        .insert(CACHE_HEADER_NAME, HeaderValue::from_static("MISS"));
 
       Ok(Response::from_parts(response_parts, response_body))
     } else {
-      response_parts.headers.insert(CACHE_HEADER_NAME, CACHE_MISS.clone());
+      response_parts
+        .headers
+        .insert(CACHE_HEADER_NAME, HeaderValue::from_static("MISS"));
 
       Ok(Response::from_parts(response_parts, response_body))
     }
