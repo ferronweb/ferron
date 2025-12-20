@@ -447,7 +447,7 @@ impl ModuleLoader for CacheModuleLoader {
 #[allow(clippy::type_complexity)]
 struct CacheModule {
   cache: Arc<CacheInner>,
-  vary_cache: Arc<quick_cache::sync::Cache<String, Arc<SmallVec<[String; 16]>>>>,
+  vary_cache: Arc<quick_cache::sync::Cache<String, Arc<HeaderList>>>,
   track_evictions: Arc<AtomicUsize>,
 }
 
@@ -475,7 +475,7 @@ impl Module for CacheModule {
 #[allow(clippy::type_complexity)]
 struct CacheModuleHandlers {
   cache: Arc<CacheInner>,
-  vary_cache: Arc<quick_cache::sync::Cache<String, Arc<SmallVec<[String; 16]>>>>,
+  vary_cache: Arc<quick_cache::sync::Cache<String, Arc<HeaderList>>>,
   cache_vary_headers_configured: HeaderList,
   cache_ignore_headers_configured: HeaderList,
   maximum_cached_response_size: Option<u64>,
