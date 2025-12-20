@@ -41,6 +41,7 @@
     "@biomejs/biome": "^2.3.8",
     "@commitlint/cli": "^20.1.0",
     "@commitlint/config-conventional": "^20.0.0",
+    "esbuild": "^0.27.2",
     "lint-staged": "^16.2.4",
     "prettier": "^3.6.2",
     "prettier-plugin-astro": "^0.14.1"
