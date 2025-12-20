@@ -1,5 +1,3 @@
-#[cfg(feature = "cache")]
-mod atomic_cache;
 #[cfg(feature = "replace")]
 mod body_replacer;
 #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
@@ -15,8 +13,6 @@ mod send_read_stream;
 #[cfg(any(feature = "dcompress", feature = "fcgi"))]
 mod split_stream_by_map;
 
-#[cfg(feature = "cache")]
-pub use atomic_cache::*;
 #[cfg(feature = "replace")]
 pub use body_replacer::*;
 #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
