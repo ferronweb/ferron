@@ -1,0 +1,58 @@
+name: Build installer (Ferron 2.x)
+
+on:
+  push:
+    branches: ["develop-2.x"]
+    paths:
+      - "build-installer/**"
+      - "installer/**"
+      - ".github/workflows/installer-v2.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: develop-2.x
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ./build-installer -> target
+
+      - name: Generate the installers
+        run: "cargo run --manifest-path build-installer/Cargo.toml"
+
+      - name: Create the installers ZIP archive
+        uses: thedoctor0/zip-release@0.7.6
+        with:
+          type: "zip"
+          filename: "../installers.zip"
+          directory: "dist"
+
+      - name: Set up SSH
+        uses: LuisEnMarroquin/setup-ssh-action@v3.0.0
+        with:
+          ORIGIN: ${{ secrets.SSH_HOSTNAME }}
+          SSHKEY: ${{ secrets.SSH_KEY }}
+          NAME: ferron-servers
+          PORT: ${{ secrets.SSH_PORT }}
+          USER: ${{ secrets.SSH_USERNAME }}
+
+      - name: Upload the installers
+        shell: bash
+        run: |
+          scp installer.zip ferron-servers:.
+
+          # The "move-ferron2-installer" is a custom command that uploads the installers to the server
+          ssh ferron-servers "sudo move-ferron2-installer && rm installer.zip"

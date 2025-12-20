@@ -1,0 +1,4 @@
+Templates replaced by `build-installer` program:
+
+- `%{FERRON_CONFIG}` (`install-template.sh`, `updater-template.sh`) - Ferron configuration file
+- `%{FERRON_UPDATER}` (`installer-template.sh`) - Ferron updater script
