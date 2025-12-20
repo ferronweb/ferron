@@ -1,3 +1,5 @@
+This directory contains the templates used to build installers for Ferron 2.
+
 Templates replaced by `build-installer` program:
 
 - `%{FERRON_CONFIG}` (`install-template.sh`, `updater-template.sh`) - Ferron configuration file
