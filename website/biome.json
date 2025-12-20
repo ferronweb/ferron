@@ -12,7 +12,19 @@
     }
   },
   "files": {
-    "includes": ["website/src/**/*", "website/astro.config.mjs"]
+    "includes": [
+      "src/**/*",
+      "*.mjs",
+      "*.js",
+      "*.json",
+      "../docs/**/*",
+      "../blog/**/*"
+    ]
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
   },
   "javascript": {
     "formatter": {
@@ -27,14 +39,6 @@
     }
   },
   "overrides": [
-    {
-      "includes": ["website/**/*"],
-      "css": {
-        "parser": {
-          "tailwindDirectives": true
-        }
-      }
-    },
     {
       "includes": ["**/*.svelte", "**/*.astro", "**/*.vue"],
       "linter": {
