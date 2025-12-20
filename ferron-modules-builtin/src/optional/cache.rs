@@ -276,22 +276,27 @@ struct CustomLifecycle<Key, Val> {
 impl<Key, Val> quick_cache::Lifecycle<Key, Val> for CustomLifecycle<Key, Val> {
   type RequestState = <quick_cache::sync::DefaultLifecycle<Key, Val> as quick_cache::Lifecycle<Key, Val>>::RequestState;
 
+  #[inline]
   fn before_evict(&self, state: &mut Self::RequestState, key: &Key, val: &mut Val) {
     self.inner.before_evict(state, key, val)
   }
 
+  #[inline]
   fn begin_request(&self) -> Self::RequestState {
     self.inner.begin_request()
   }
 
+  #[inline]
   fn end_request(&self, state: Self::RequestState) {
     self.inner.end_request(state)
   }
 
+  #[inline]
   fn is_pinned(&self, key: &Key, val: &Val) -> bool {
     self.inner.is_pinned(key, val)
   }
 
+  #[inline]
   fn on_evict(&self, state: &mut Self::RequestState, key: Key, val: Val) {
     // Track an eviction
     self.track_evictions.fetch_add(1, Ordering::Relaxed);
