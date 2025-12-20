@@ -38,7 +38,7 @@
     /* Equivalent to `md:<class>` in Tailwind CSS */
     @supports selector(::-webkit-scrollbar) {
       body ::-webkit-scrollbar {
-        @apply h-2 w-2;
+        @apply size-2;
       }
 
       body ::-webkit-scrollbar-track {
@@ -126,19 +126,19 @@
   }
 
   .icon-badge {
-    @apply bg-primary/10 w-12 h-12 rounded-lg flex items-center justify-center;
+    @apply bg-primary/10 size-12 rounded-lg flex items-center justify-center;
   }
 
   .icon-badge svg {
-    @apply h-6 w-6 text-primary;
+    @apply size-6 text-primary;
   }
 
   .icon-badge-large {
-    @apply w-14 h-14;
+    @apply size-14;
   }
 
   .icon-badge-large svg {
-    @apply h-9 w-9;
+    @apply size-9;
   }
 
   .badge {

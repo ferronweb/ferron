@@ -100,7 +100,7 @@ if (begPage < 1) {
                     alt={post.data.title || null}
                     width={750}
                     height={450}
-                    class={`object-cover w-full h-full`}
+                    class={`object-cover size-full`}
                   />
                 </div>
                 <div
@@ -128,7 +128,7 @@ if (begPage < 1) {
                       <span class="whitespace-nowrap">
                         <FontAwesomeIcon
                           icon={faCalendar}
-                          class="!w-4 !h-4 me-0.5 inline-block align-middle"
+                          class="!size-4 me-0.5 inline-block align-middle"
                         />
                         <span class="align-middle">
                           <span class="sr-only">Published on: </span>
@@ -142,7 +142,7 @@ if (begPage < 1) {
                       <span class="whitespace-nowrap">
                         <FontAwesomeIcon
                           icon={faUser}
-                          class="!w-4 !h-4 me-0.5 inline-block align-middle"
+                          class="!size-4 me-0.5 inline-block align-middle"
                         />
                         <span class="align-middle">
                           <span class="sr-only">Author: </span>
@@ -167,7 +167,7 @@ if (begPage < 1) {
                 {currentPage > 1 && (
                   <li>
                     <a
-                      class="btn p-0 h-10 w-10 shadow-none"
+                      class="btn p-0 size-10 shadow-none"
                       href={
                         currentPage - 1 == 1
                           ? "/blog"
@@ -182,7 +182,7 @@ if (begPage < 1) {
                   (_, i) => (
                     <li>
                       <a
-                        class={`btn p-0 h-10 w-10 shadow-none ${currentPage === begPage + i ? "btn-primary" : ""}`}
+                        class={`btn p-0 size-10 shadow-none ${currentPage === begPage + i ? "btn-primary" : ""}`}
                         href={
                           begPage + i == 1 ? "/blog" : `/blog/${begPage + i}`
                         }
@@ -195,7 +195,7 @@ if (begPage < 1) {
                 {currentPage < lastPage && (
                   <li>
                     <a
-                      class="btn p-0 h-10 w-10 shadow-none"
+                      class="btn p-0 size-10 shadow-none"
                       href={
                         currentPage + 1 == 1
                           ? "/blog"

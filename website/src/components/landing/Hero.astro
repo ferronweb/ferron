@@ -8,19 +8,19 @@ import InstallCommand from "./InstallCommand.astro";
 <section class="relative overflow-hidden">
   <!-- Background Elements -->
   <div class="absolute inset-0 z-0 blur-3xl blur-fix-performance">
-    <div class="absolute w-full h-full bg-secondary/20"></div>
-    <div class="relative w-full h-full max-w-480 mx-auto">
+    <div class="absolute size-full bg-secondary/20"></div>
+    <div class="relative size-full max-w-480 mx-auto">
       <div
-        class="absolute -top-24 -left-30 w-128 h-128 bg-primary/15 md:bg-primary/20 rounded-full blur-3xl blur-fix-performance opacity-70"
+        class="absolute -top-24 -left-30 size-128 bg-primary/15 md:bg-primary/20 rounded-full blur-3xl blur-fix-performance opacity-70"
       ></div>
       <div
-        class="absolute -bottom-24 -right-30 w-128 h-128 bg-accent/15 md:bg-accent/20 rounded-full blur-3xl blur-fix-performance opacity-70"
+        class="absolute -bottom-24 -right-30 size-128 bg-accent/15 md:bg-accent/20 rounded-full blur-3xl blur-fix-performance opacity-70"
       ></div>
       <div
-        class="absolute -bottom-8 -left-8 w-160 h-160 bg-background/80 rounded-full blur-3xl blur-fix-performance opacity-70 md:opacity-100"
+        class="absolute -bottom-8 -left-8 size-160 bg-background/80 rounded-full blur-3xl blur-fix-performance opacity-70 md:opacity-100"
       ></div>
       <div
-        class="absolute -top-8 -right-8 w-160 h-160 bg-background/80 rounded-full blur-3xl blur-fix-performance opacity-70 md:opacity-100"
+        class="absolute -top-8 -right-8 size-160 bg-background/80 rounded-full blur-3xl blur-fix-performance opacity-70 md:opacity-100"
       ></div>
     </div>
   </div>
@@ -50,11 +50,11 @@ import InstallCommand from "./InstallCommand.astro";
         </p>
         <div class="flex flex-col sm:flex-row gap-4 max-w-md w-full xl:w-auto">
           <a href="#install" class="btn btn-primary group">
-            <FontAwesomeIcon icon={faDownload} class="mr-2 !h-5 !w-5"/>
+            <FontAwesomeIcon icon={faDownload} class="mr-2 !size-5"/>
             Start installation
             <FontAwesomeIcon
               icon={faArrowRight}
-              class="ml-2 !h-4 !w-4 transition-transform group-hover:translate-x-1"
+              class="ml-2 !size-4 transition-transform group-hover:translate-x-1"
             />
           </a>
           <a href="/docs" class="btn btn-secondary"> Documentation </a>
