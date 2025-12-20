@@ -1,4 +1,4 @@
-name: Build installer (Ferron 2.x)
+name: Build installers (Ferron 2.x)
 
 on:
   push:
@@ -37,7 +37,7 @@ jobs:
         uses: thedoctor0/zip-release@0.7.6
         with:
           type: "zip"
-          filename: "../installers.zip"
+          filename: "../installer.zip"
           directory: "dist"
 
       - name: Set up SSH
