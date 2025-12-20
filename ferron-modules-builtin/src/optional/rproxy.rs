@@ -1910,10 +1910,10 @@ fn construct_proxy_request_parts(
   // X-Forwarded-* headers to send the client's data to a server that's behind the reverse proxy
   let remote_addr_str = socket_data.remote_addr.ip().to_canonical().to_string();
   request_parts.headers.insert(
-    HeaderName::from_static("x-forwarded-[a-z]+"),
+    HeaderName::from_static("x-forwarded-for"),
     (if let Some(ref forwarded_for) = request_parts
       .headers
-      .get(HeaderName::from_static("x-forwarded-[a-z]+"))
+      .get(HeaderName::from_static("x-forwarded-for"))
       .and_then(|h| h.to_str().ok())
     {
       if trust_x_forwarded_for {
@@ -1930,28 +1930,28 @@ fn construct_proxy_request_parts(
   if !trust_x_forwarded_for
     || !request_parts
       .headers
-      .contains_key(HeaderName::from_static("x-forwarded-[a-z]+"))
+      .contains_key(HeaderName::from_static("x-forwarded-proto"))
   {
     if socket_data.encrypted {
       request_parts
         .headers
-        .insert(HeaderName::from_static("x-forwarded-[a-z]+"), "https".parse()?);
+        .insert(HeaderName::from_static("x-forwarded-proto"), "https".parse()?);
     } else {
       request_parts
         .headers
-        .insert(HeaderName::from_static("x-forwarded-[a-z]+"), "http".parse()?);
+        .insert(HeaderName::from_static("x-forwarded-proto"), "http".parse()?);
     }
   }
 
   if !trust_x_forwarded_for
     || !request_parts
       .headers
-      .contains_key(HeaderName::from_static("x-forwarded-[a-z]+"))
+      .contains_key(HeaderName::from_static("x-forwarded-host"))
   {
     if let Some(original_host) = original_host {
       request_parts
         .headers
-        .insert(HeaderName::from_static("x-forwarded-[a-z]+"), original_host);
+        .insert(HeaderName::from_static("x-forwarded-host"), original_host);
     }
   }
 

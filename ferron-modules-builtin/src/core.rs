@@ -788,7 +788,7 @@ impl ModuleHandlers for CoreModuleHandlers {
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
       {
-        if let Some(x_forwarded_for_value) = request.headers().get(HeaderName::from_static("x-forwarded-[a-z]+")) {
+        if let Some(x_forwarded_for_value) = request.headers().get(HeaderName::from_static("x-forwarded-for")) {
           let x_forwarded_for = x_forwarded_for_value.to_str()?;
 
           let prepared_remote_ip_str = match x_forwarded_for.split(",").nth(0) {
