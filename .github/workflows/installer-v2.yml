@@ -2,7 +2,7 @@ name: Build installers (Ferron 2.x)
 
 on:
   push:
-    branches: ["develop-2.x"]
+    branches: ["2.x"]
     paths:
       - "build-installer/**"
       - "installer/**"
@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: develop-2.x
+          ref: 2.x
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
