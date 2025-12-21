@@ -105,6 +105,7 @@ pub fn create_http_handler(
 }
 
 /// HTTP handler function
+#[inline]
 #[allow(clippy::too_many_arguments)]
 async fn http_handler_fn(
   configurations: Arc<ServerConfigurations>,
@@ -648,6 +649,7 @@ async fn http_tcp_handler_fn(
 }
 
 /// HTTP/3 handler function
+#[inline]
 #[allow(clippy::too_many_arguments)]
 async fn http_quic_handler_fn(
   connection_attempt: quinn::Incoming,
