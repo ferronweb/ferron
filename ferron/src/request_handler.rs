@@ -23,10 +23,10 @@ use hyper::body::{Body, Bytes, Frame};
 use hyper::header::{self, HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
 use hyper_tungstenite::is_upgrade_request;
-use rustls_acme::ResolvesServerCertAcme;
 use tokio::fs;
 use tokio::io::BufReader;
 use tokio::time::timeout;
+use tokio_rustls_acme2::ResolvesServerCertAcme;
 use tokio_util::io::ReaderStream;
 use yaml_rust2::Yaml;
 
