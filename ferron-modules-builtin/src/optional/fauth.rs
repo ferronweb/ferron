@@ -5,8 +5,6 @@ use std::sync::Arc;
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use bytes::Bytes;
-#[cfg(feature = "runtime-monoio")]
-use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
 use hyper::header::{self, HeaderName};
@@ -26,14 +24,12 @@ use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
-#[cfg(feature = "runtime-monoio")]
-use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
 
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
 use ferron_common::util::NoServerVerifier;
 #[cfg(feature = "runtime-monoio")]
-use ferron_common::util::SendRwStream;
+use ferron_common::util::SendAsyncIo;
 use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value, get_values};
 
@@ -386,13 +382,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
       if !encrypted {
         #[cfg(feature = "runtime-monoio")]
-        let rw = {
-          let send_rw_stream = SendRwStream::new(stream);
-          let (sink, stream) = send_rw_stream.split();
-          let reader = StreamReader::new(stream);
-          let writer = SinkWriter::new(CopyToBytes::new(sink));
-          tokio::io::join(reader, writer)
-        };
+        let rw = SendAsyncIo::new(stream);
         #[cfg(feature = "runtime-tokio")]
         let rw = stream;
 
@@ -444,13 +434,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
         let enable_http2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
 
         #[cfg(feature = "runtime-monoio")]
-        let rw = {
-          let send_rw_stream = SendRwStream::new(tls_stream);
-          let (sink, stream) = send_rw_stream.split();
-          let reader = StreamReader::new(stream);
-          let writer = SinkWriter::new(CopyToBytes::new(sink));
-          tokio::io::join(reader, writer)
-        };
+        let rw = SendAsyncIo::new(tls_stream);
         #[cfg(feature = "runtime-tokio")]
         let rw = tls_stream;
 
