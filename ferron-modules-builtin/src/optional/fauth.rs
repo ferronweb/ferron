@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use std::error::Error;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use bytes::Bytes;
 #[cfg(feature = "runtime-monoio")]
@@ -25,7 +25,6 @@ use rustls_platform_verifier::BuilderVerifierExt;
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
-use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
 #[cfg(feature = "runtime-monoio")]
 use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
@@ -38,18 +37,19 @@ use ferron_common::util::SendRwStream;
 use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value, get_values};
 
-const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: u32 = 32;
+const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: usize = 32;
 
 enum SendRequest {
   Http1(hyper::client::conn::http1::SendRequest<BoxBody<Bytes, std::io::Error>>),
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
 
+type Connections = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
+
 /// A forwarded authentication module loader
 #[allow(clippy::type_complexity)]
 pub struct ForwardedAuthenticationModuleLoader {
   cache: ModuleCache<ForwardedAuthenticationModule>,
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
 }
 
 impl Default for ForwardedAuthenticationModuleLoader {
@@ -61,14 +61,8 @@ impl Default for ForwardedAuthenticationModuleLoader {
 impl ForwardedAuthenticationModuleLoader {
   /// Creates a new module loader
   pub fn new() -> Self {
-    let mut connections_vec = Vec::new();
-    for _ in 0..DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST {
-      connections_vec.push(RwLock::new(HashMap::new()));
-    }
-
     Self {
-      cache: ModuleCache::new(vec![]),
-      connections: Arc::new(connections_vec),
+      cache: ModuleCache::new(vec!["auth_to"]),
     }
   }
 }
@@ -83,9 +77,13 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
     Ok(
       self
         .cache
-        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |config| {
           Ok(Arc::new(ForwardedAuthenticationModule {
-            connections: self.connections.clone(),
+            auth_to: get_entry!("auth_to", config)
+              .and_then(|e| e.values.first())
+              .and_then(|v| v.as_str())
+              .map(|v| Arc::new(v.to_owned())),
+            connections: Arc::new(async_channel::bounded(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST)),
           }))
         })?,
     )
@@ -145,12 +143,14 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
 /// A forwarded authentication module
 #[allow(clippy::type_complexity)]
 struct ForwardedAuthenticationModule {
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
+  auth_to: Option<Arc<String>>,
+  connections: Connections,
 }
 
 impl Module for ForwardedAuthenticationModule {
   fn get_module_handlers(&self) -> Box<dyn ModuleHandlers> {
     Box::new(ForwardedAuthenticationModuleHandlers {
+      auth_to: self.auth_to.clone(),
       connections: self.connections.clone(),
     })
   }
@@ -159,7 +159,8 @@ impl Module for ForwardedAuthenticationModule {
 /// Handlers for the forwarded authentication proxy module
 #[allow(clippy::type_complexity)]
 struct ForwardedAuthenticationModuleHandlers {
-  connections: Arc<Vec<RwLock<HashMap<String, SendRequest>>>>,
+  auth_to: Option<Arc<String>>,
+  connections: Connections,
 }
 
 #[async_trait(?Send)]
@@ -178,10 +179,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
       .into_iter()
       .filter_map(|v| v.as_str().map(|v| v.to_string()))
       .collect::<Vec<_>>();
-    if let Some(auth_to) = get_entry!("auth_to", config)
-      .and_then(|e| e.values.first())
-      .and_then(|v| v.as_str())
-    {
+    if let Some(auth_to) = self.auth_to.as_deref() {
       let (request_parts, request_body) = request.into_parts();
 
       let auth_request_url = auth_to.parse::<hyper::Uri>()?;
@@ -290,47 +288,32 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
       let original_request = Request::from_parts(request_parts, request_body);
 
-      let connections = &self.connections[rand::random_range(..self.connections.len())];
-
-      let rwlock_read = connections.read().await;
-      let sender_read_option = rwlock_read.get(&addr);
-
-      if let Some(sender_read) = sender_read_option {
-        if match sender_read {
-          SendRequest::Http1(sender) => !sender.is_closed(),
-          SendRequest::Http2(sender) => !sender.is_closed(),
-        } {
-          drop(rwlock_read);
-          let mut rwlock_write = connections.write().await;
-          let sender_option = rwlock_write.get_mut(&addr);
-
-          if let Some(sender) = sender_option {
-            if match sender {
+      let connections = {
+        let (sender, receiver) = &*self.connections;
+        loop {
+          if let Ok(mut send_request) = receiver.try_recv() {
+            if match &mut send_request {
               SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
               SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
             } {
               let result = http_forwarded_auth_kept_alive(
-                sender,
+                send_request,
                 auth_request,
                 error_logger,
                 original_request,
                 forwarded_auth_copy_headers,
+                sender,
               )
               .await;
-              drop(rwlock_write);
               return result;
             } else {
-              drop(rwlock_write);
+              continue;
             }
-          } else {
-            drop(rwlock_write);
           }
-        } else {
-          drop(rwlock_read);
+          break;
         }
-      } else {
-        drop(rwlock_read);
-      }
+        sender
+      };
 
       let stream = match TcpStream::connect(&addr).await {
         Ok(stream) => stream,
@@ -415,7 +398,6 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
         http_forwarded_auth(
           connections,
-          addr,
           rw,
           auth_request,
           error_logger,
@@ -474,7 +456,6 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
         http_forwarded_auth(
           connections,
-          addr,
           rw,
           auth_request,
           error_logger,
@@ -498,8 +479,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
 #[allow(clippy::too_many_arguments)]
 async fn http_forwarded_auth(
-  connections: &RwLock<HashMap<String, SendRequest>>,
-  connect_addr: String,
+  connections: &Sender<SendRequest>,
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
@@ -613,22 +593,21 @@ async fn http_forwarded_auth(
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
-    let mut rwlock_write = connections.write().await;
-    rwlock_write.insert(connect_addr, sender);
-    drop(rwlock_write);
+    connections.try_send(sender).unwrap_or_default();
   }
 
   Ok(response)
 }
 
 async fn http_forwarded_auth_kept_alive(
-  sender: &mut SendRequest,
+  mut sender: SendRequest,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   mut original_request: Request<BoxBody<Bytes, std::io::Error>>,
   forwarded_auth_copy_headers: Vec<String>,
+  connections_tx: &Sender<SendRequest>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  let send_request_result = match sender {
+  let send_request_result = match &mut sender {
     SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
     SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
   };
@@ -677,6 +656,13 @@ async fn http_forwarded_auth_kept_alive(
       new_remote_address: None,
     }
   };
+
+  if !(match &sender {
+    SendRequest::Http1(sender) => sender.is_closed(),
+    SendRequest::Http2(sender) => sender.is_closed(),
+  }) {
+    connections_tx.send(sender).await.unwrap_or_default();
+  }
 
   Ok(response)
 }
