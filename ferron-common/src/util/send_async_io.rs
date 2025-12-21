@@ -12,6 +12,7 @@ pub struct SendAsyncIo<T> {
 
 impl<T> SendAsyncIo<T> {
   /// Creates a new SendAsyncIo wrapper around the given AsyncRead or AsyncWrite.
+  #[inline]
   pub fn new(inner: T) -> Self {
     SendAsyncIo {
       thread_id: std::thread::current().id(),
@@ -21,6 +22,7 @@ impl<T> SendAsyncIo<T> {
 }
 
 impl<T: AsyncRead + Unpin> AsyncRead for SendAsyncIo<T> {
+  #[inline]
   fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<std::io::Result<()>> {
     if std::thread::current().id() != self.thread_id {
       panic!("SendAsyncIo can only be used from the same thread it was created on");
@@ -30,6 +32,7 @@ impl<T: AsyncRead + Unpin> AsyncRead for SendAsyncIo<T> {
 }
 
 impl<T: AsyncWrite + Unpin> AsyncWrite for SendAsyncIo<T> {
+  #[inline]
   fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<std::io::Result<usize>> {
     if std::thread::current().id() != self.thread_id {
       panic!("SendAsyncIo can only be used from the same thread it was created on");
@@ -37,6 +40,7 @@ impl<T: AsyncWrite + Unpin> AsyncWrite for SendAsyncIo<T> {
     Pin::new(&mut self.inner).poll_write(cx, buf)
   }
 
+  #[inline]
   fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
     if std::thread::current().id() != self.thread_id {
       panic!("SendAsyncIo can only be used from the same thread it was created on");
@@ -44,6 +48,7 @@ impl<T: AsyncWrite + Unpin> AsyncWrite for SendAsyncIo<T> {
     Pin::new(&mut self.inner).poll_flush(cx)
   }
 
+  #[inline]
   fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
     if std::thread::current().id() != self.thread_id {
       panic!("SendAsyncIo can only be used from the same thread it was created on");
@@ -51,6 +56,7 @@ impl<T: AsyncWrite + Unpin> AsyncWrite for SendAsyncIo<T> {
     Pin::new(&mut self.inner).poll_shutdown(cx)
   }
 
+  #[inline]
   fn poll_write_vectored(
     mut self: Pin<&mut Self>,
     cx: &mut Context<'_>,
@@ -62,6 +68,7 @@ impl<T: AsyncWrite + Unpin> AsyncWrite for SendAsyncIo<T> {
     Pin::new(&mut self.inner).poll_write_vectored(cx, bufs)
   }
 
+  #[inline]
   fn is_write_vectored(&self) -> bool {
     if std::thread::current().id() != self.thread_id {
       panic!("SendAsyncIo can only be used from the same thread it was created on");
@@ -71,6 +78,7 @@ impl<T: AsyncWrite + Unpin> AsyncWrite for SendAsyncIo<T> {
 }
 
 impl<T> Drop for SendAsyncIo<T> {
+  #[inline]
   fn drop(&mut self) {
     if std::thread::current().id() != self.thread_id {
       panic!("SendAsyncIo can only be used from the same thread it was created on");
