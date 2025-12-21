@@ -1,8 +1,18 @@
+/// Constructs a FastCGI name-value pair
 pub fn construct_fastcgi_name_value_pair(name: &[u8], value: &[u8]) -> Vec<u8> {
-  let mut name_value_pair = Vec::new();
+  // Name and value lengths (for determining the vector allocation size)
+  let name_length = name.len();
+  let value_length = value.len();
+
+  // Allocate the vector with the preallocated capacity
+  let mut name_value_pair = Vec::with_capacity(
+    if name_length < 128 { 1 } else { 4 }
+      + if value_length < 128 { 1 } else { 4 }
+      + name_length
+      + value_length,
+  );
 
   // Name length
-  let name_length = name.len();
   if name_length < 128 {
     name_value_pair.extend_from_slice(&(name_length as u8).to_be_bytes());
   } else {
@@ -10,7 +20,6 @@ pub fn construct_fastcgi_name_value_pair(name: &[u8], value: &[u8]) -> Vec<u8> {
   }
 
   // Value length
-  let value_length = value.len();
   if value_length < 128 {
     name_value_pair.extend_from_slice(&(value_length as u8).to_be_bytes());
   } else {

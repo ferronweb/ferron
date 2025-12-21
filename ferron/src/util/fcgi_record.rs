@@ -1,5 +1,14 @@
+/// Constructs a FastCGI record
 pub fn construct_fastcgi_record(record_type: u8, request_id: u16, content: &[u8]) -> Vec<u8> {
-  let mut record = Vec::new();
+  // Content and padding lengths (for determining the vector allocation size)
+  let content_length = content.len() as u16;
+  let padding_length = match (content_length % 8) as u8 {
+    0 => 0,
+    remainder => 8 - remainder,
+  };
+
+  // Allocate the vector with the preallocated capacity
+  let mut record = Vec::with_capacity(8 + (content_length as usize) + (padding_length as usize));
 
   // FastCGI version: FCGI_VERSION_1
   record.push(1);
@@ -11,15 +20,9 @@ pub fn construct_fastcgi_record(record_type: u8, request_id: u16, content: &[u8]
   record.extend_from_slice(&(request_id.to_be_bytes()));
 
   // Content length
-  let content_length = content.len() as u16;
   record.extend_from_slice(&(content_length.to_be_bytes()));
 
   // Padding length
-  let content_length_modulo = (content_length % 8) as u8;
-  let padding_length = match content_length_modulo {
-    0 => 0,
-    _ => 8 - content_length_modulo,
-  };
   record.extend_from_slice(&(padding_length.to_be_bytes()));
 
   // Reserved
