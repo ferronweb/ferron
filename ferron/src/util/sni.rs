@@ -38,9 +38,7 @@ impl ResolvesServerCert for CustomSniResolver {
           return self.cert_keys.get(configured_hostname).cloned();
         }
       }
-      self.fallback_cert_key.clone()
-    } else {
-      self.fallback_cert_key.clone()
     }
+    self.fallback_cert_key.clone()
   }
 }
