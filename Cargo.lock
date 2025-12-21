@@ -196,8 +196,8 @@ dependencies = [
 
 [[package]]
 name = "async-compression"
-version = "0.4.30"
-source = "git+https://github.com/DorianNiemiecSVRJS/async-compression.git?branch=0.4.28#d210ef1a5ded94d657a27427ed51ccca02ff7fef"
+version = "0.4.36"
+source = "git+https://github.com/DorianNiemiecSVRJS/async-compression.git?branch=0.4.28#047a5ce864dc544ef9d5885ed9e95ccc8cfa3fc6"
 dependencies = [
  "compression-codecs",
  "compression-core",
@@ -971,8 +971,8 @@ dependencies = [
 
 [[package]]
 name = "compression-codecs"
-version = "0.4.30"
-source = "git+https://github.com/DorianNiemiecSVRJS/async-compression.git?branch=0.4.28#d210ef1a5ded94d657a27427ed51ccca02ff7fef"
+version = "0.4.35"
+source = "git+https://github.com/DorianNiemiecSVRJS/async-compression.git?branch=0.4.28#047a5ce864dc544ef9d5885ed9e95ccc8cfa3fc6"
 dependencies = [
  "brotli",
  "compression-core",
@@ -984,8 +984,8 @@ dependencies = [
 
 [[package]]
 name = "compression-core"
-version = "0.4.29"
-source = "git+https://github.com/DorianNiemiecSVRJS/async-compression.git?branch=0.4.28#d210ef1a5ded94d657a27427ed51ccca02ff7fef"
+version = "0.4.31"
+source = "git+https://github.com/DorianNiemiecSVRJS/async-compression.git?branch=0.4.28#047a5ce864dc544ef9d5885ed9e95ccc8cfa3fc6"
 
 [[package]]
 name = "concurrent-queue"
