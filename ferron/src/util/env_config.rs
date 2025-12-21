@@ -4,7 +4,26 @@ use yaml_rust2::Yaml;
 /// Apply environment variable overrides with prefix FERRON_ to the provided YAML configuration.
 /// Maps directly to the fields in the global section of ferron.yaml.
 pub fn apply_env_vars_to_config(yaml_config: &mut Yaml) {
-  let global_hash = match yaml_config["global"].as_mut_hash() {
+  let yaml_config_hash = match yaml_config.as_mut_hash() {
+    Some(h) => h,
+    None => return,
+  };
+
+  let global_yaml = match yaml_config_hash.get_mut(&Yaml::String("global".to_string())) {
+    Some(y) => y,
+    None => {
+      yaml_config_hash.insert(
+        Yaml::String("global".to_owned()),
+        Yaml::Hash(yaml_rust2::yaml::Hash::new()),
+      );
+      match yaml_config_hash.get_mut(&Yaml::String("global".to_string())) {
+        Some(y) => y,
+        None => return,
+      }
+    }
+  };
+
+  let global_hash = match global_yaml.as_mut_hash() {
     Some(h) => h,
     None => return,
   };
