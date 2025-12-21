@@ -9,7 +9,6 @@ use std::{
 
 use ferron_common::observability::ObservabilityBackendChannels;
 use glob::glob;
-use kdl::{KdlDocument, KdlNode, KdlValue};
 
 use crate::config::{
   parse_conditional_data, Conditional, ConditionalData, Conditions, ErrorHandlerStatus, ServerConfiguration,
@@ -18,19 +17,87 @@ use crate::config::{
 
 use super::ConfigurationAdapter;
 
-fn kdl_node_to_configuration_entry(kdl_node: &KdlNode) -> ServerConfigurationEntry {
+fn kdlite_error_near(pos: usize, file_contents: &str) -> String {
+  let part = file_contents
+    .split_at_checked(pos)
+    .map(|split| split.1.split_at_checked(50).map_or(split.1, |split2| split2.0))
+    .and_then(|part| if part.is_empty() { None } else { Some(part) });
+  part.map_or("<end or out of bounds>".to_string(), |p| {
+    snailquote::escape(p).to_string()
+  })
+}
+
+fn display_kdlite_error(err: &kdlite::stream::Error, file_contents: &str) -> String {
+  match err {
+    kdlite::stream::Error::ExpectedSpace(index) => {
+      format!("Expected space near {}", kdlite_error_near(*index, file_contents))
+    }
+    kdlite::stream::Error::ExpectedCloseParen(index) => {
+      format!("Expected `)` near {}", kdlite_error_near(*index, file_contents))
+    }
+    kdlite::stream::Error::ExpectedComment(index) => format!(
+      "Expected single-line comment near {}",
+      kdlite_error_near(*index, file_contents)
+    ),
+    kdlite::stream::Error::ExpectedNewline(index) => {
+      format!("Expected newline near {}", kdlite_error_near(*index, file_contents))
+    }
+    kdlite::stream::Error::ExpectedString(index) => {
+      format!("Expected string near {}", kdlite_error_near(*index, file_contents))
+    }
+    kdlite::stream::Error::ExpectedValue(index) => {
+      format!("Expected value near {}", kdlite_error_near(*index, file_contents))
+    }
+    kdlite::stream::Error::UnexpectedCloseBracket(index) => {
+      format!("Unexpected `}}` near {}", kdlite_error_near(*index, file_contents))
+    }
+    kdlite::stream::Error::UnexpectedNewline(index) => {
+      format!("Unexpected newline near {}", kdlite_error_near(*index, file_contents))
+    }
+    kdlite::stream::Error::InvalidNumber(index) => {
+      format!("Invalid number near {}", kdlite_error_near(*index, file_contents))
+    }
+    kdlite::stream::Error::BadKeyword(index) => {
+      format!("Invalid keyword name near {}", kdlite_error_near(*index, file_contents))
+    }
+    kdlite::stream::Error::BadIdentifier(index) => format!(
+      "Invalid identifier name near {}",
+      kdlite_error_near(*index, file_contents)
+    ),
+    kdlite::stream::Error::BadEscape(index) => format!(
+      "Invalid escape sequence near {}",
+      kdlite_error_near(*index, file_contents)
+    ),
+    kdlite::stream::Error::BadIndent(index) => {
+      format!("Invalid indentation near {}", kdlite_error_near(*index, file_contents))
+    }
+    kdlite::stream::Error::MultipleChildren(index) => format!(
+      "Multiple children for one KDL node near {}",
+      kdlite_error_near(*index, file_contents)
+    ),
+    kdlite::stream::Error::UnexpectedEof => "Unexpected end of file".to_string(),
+    kdlite::stream::Error::BannedChar(ch, index) => format!(
+      "Invalid character `{}` near {}",
+      ch.escape_default(),
+      kdlite_error_near(*index, file_contents)
+    ),
+    _ => "Unknown error".to_string(),
+  }
+}
+
+fn kdl_node_to_configuration_entry(kdl_node: &kdlite::dom::Node) -> ServerConfigurationEntry {
   let mut values = Vec::new();
   let mut props = HashMap::new();
-  for kdl_entry in kdl_node.iter() {
-    let value = match kdl_entry.value().to_owned() {
-      KdlValue::String(value) => ServerConfigurationValue::String(value),
-      KdlValue::Integer(value) => ServerConfigurationValue::Integer(value),
-      KdlValue::Float(value) => ServerConfigurationValue::Float(value),
-      KdlValue::Bool(value) => ServerConfigurationValue::Bool(value),
-      KdlValue::Null => ServerConfigurationValue::Null,
+  for kdl_entry in &kdl_node.entries {
+    let value = match &kdl_entry.value {
+      kdlite::dom::Value::String(value) => ServerConfigurationValue::String(value.to_string()),
+      kdlite::dom::Value::Integer(value) => ServerConfigurationValue::Integer(*value),
+      kdlite::dom::Value::Float(value) => ServerConfigurationValue::Float(*value),
+      kdlite::dom::Value::Bool(value) => ServerConfigurationValue::Bool(*value),
+      kdlite::dom::Value::Null => ServerConfigurationValue::Null,
     };
-    if let Some(prop_name) = kdl_entry.name() {
-      props.insert(prop_name.value().to_string(), value);
+    if let Some(prop_name) = kdl_entry.key() {
+      props.insert(prop_name.to_string(), value);
     } else {
       values.push(value);
     }
@@ -76,15 +143,12 @@ fn load_configuration_inner(
   };
 
   // Parse the configuration file contents
-  let kdl_document: KdlDocument = match file_contents.parse() {
+  let kdl_document = match kdlite::dom::Document::parse(&file_contents) {
     Ok(document) => document,
-    Err(err) => {
-      let err: miette::Error = err.into();
-      Err(anyhow::anyhow!(
-        "Failed to parse the server configuration file: {:?}",
-        err
-      ))?
-    }
+    Err(err) => Err(anyhow::anyhow!(
+      "Failed to parse the server configuration file: {}",
+      display_kdlite_error(&err, &file_contents)
+    ))?,
   };
 
   // Loaded configuration vector
@@ -94,14 +158,17 @@ fn load_configuration_inner(
   let mut loaded_conditions: HashMap<String, Vec<ConditionalData>> = HashMap::new();
 
   // KDL configuration snippets
-  let mut snippets: HashMap<String, KdlDocument> = HashMap::new();
+  let mut snippets: HashMap<String, kdlite::dom::Document> = HashMap::new();
 
   // Iterate over KDL nodes
-  for kdl_node in kdl_document {
-    let global_name = kdl_node.name().value();
-    let children = kdl_node.children();
+  for kdl_node in &kdl_document.nodes {
+    let global_name = kdl_node.name();
+    let children = &kdl_node.children;
     if global_name == "snippet" {
-      if let Some(snippet_name) = kdl_node.get(0).and_then(|v| v.as_string()) {
+      if let Some(snippet_name) = kdl_node.entry(0).and_then(|v| match &v.value {
+        kdlite::dom::Value::String(v) => Some(&**v),
+        _ => None,
+      }) {
         if let Some(children) = children {
           snippets.insert(snippet_name.to_string(), children.to_owned());
         } else {
@@ -162,26 +229,29 @@ fn load_configuration_inner(
         };
 
         let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
-        for kdl_node in children.nodes() {
+        for kdl_node in &children.nodes {
           #[allow(clippy::too_many_arguments)]
           fn kdl_iterate_fn(
             canonical_pathbuf: &PathBuf,
             host_filter: &(Option<String>, Option<IpAddr>, Option<u16>, bool),
             configurations: &mut Vec<ServerConfiguration>,
             configuration_entries: &mut HashMap<String, ServerConfigurationEntries>,
-            kdl_node: &KdlNode,
+            kdl_node: &kdlite::dom::Node,
             conditions: &mut Option<&mut Conditions>,
             is_error_config: bool,
             loaded_conditions: &mut HashMap<String, Vec<ConditionalData>>,
-            snippets: &HashMap<String, KdlDocument>,
+            snippets: &HashMap<String, kdlite::dom::Document>,
           ) -> Result<(), Box<dyn Error + Send + Sync>> {
             let (hostname, ip, port, is_host) = host_filter;
-            let kdl_node_name = kdl_node.name().value();
-            let children = kdl_node.children();
+            let kdl_node_name = kdl_node.name();
+            let children = &kdl_node.children;
             if kdl_node_name == "use" {
-              if let Some(snippet_name) = kdl_node.entry(0).and_then(|e| e.value().as_string()) {
+              if let Some(snippet_name) = kdl_node.entry(0).and_then(|e| match &e.value {
+                kdlite::dom::Value::String(s) => Some(&**s),
+                _ => None,
+              }) {
                 if let Some(snippet) = snippets.get(snippet_name) {
-                  for kdl_node in snippet.nodes() {
+                  for kdl_node in &snippet.nodes {
                     kdl_iterate_fn(
                       canonical_pathbuf,
                       host_filter,
@@ -213,13 +283,16 @@ fn load_configuration_inner(
               let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
               if let Some(children) = children {
                 if let Some(location) = kdl_node.entry(0) {
-                  if let Some(location_str) = location.value().as_string() {
+                  if let Some(location_str) = match &location.value {
+                    kdlite::dom::Value::String(s) => Some(&**s),
+                    _ => None,
+                  } {
                     let mut conditions = Conditions {
                       location_prefix: location_str.to_string(),
                       conditionals: vec![],
                     };
                     let mut loaded_conditions = loaded_conditions.clone();
-                    for kdl_node in children.nodes() {
+                    for kdl_node in &children.nodes {
                       kdl_iterate_fn(
                         canonical_pathbuf,
                         host_filter,
@@ -234,7 +307,10 @@ fn load_configuration_inner(
                     }
                     if kdl_node
                       .entry("remove_base")
-                      .and_then(|e| e.value().as_bool())
+                      .and_then(|e| match &e.value {
+                        kdlite::dom::Value::Bool(b) => Some(*b),
+                        _ => None,
+                      })
                       .unwrap_or(false)
                     {
                       configuration_entries.insert(
@@ -284,11 +360,14 @@ fn load_configuration_inner(
               }
               if let Some(children) = children {
                 if let Some(condition_name) = kdl_node.entry(0) {
-                  if let Some(condition_name_str) = condition_name.value().as_string() {
+                  if let Some(condition_name_str) = match &condition_name.value {
+                    kdlite::dom::Value::String(s) => Some(&**s),
+                    _ => None,
+                  } {
                     let mut conditions_data = Vec::new();
 
                     let mut nodes_stack = Vec::new();
-                    nodes_stack.push(children.nodes().iter());
+                    nodes_stack.push(children.nodes.iter());
 
                     while let Some(kdl_node) = {
                       let mut last_iterator_item = None;
@@ -300,11 +379,14 @@ fn load_configuration_inner(
                       }
                       last_iterator_item
                     } {
-                      let name = kdl_node.name().value();
+                      let name = kdl_node.name();
                       if name == "use" {
-                        if let Some(snippet_name) = kdl_node.get(0).and_then(|v| v.as_string()) {
+                        if let Some(snippet_name) = kdl_node.entry(0).and_then(|v| match &v.value {
+                          kdlite::dom::Value::String(s) => Some(&**s),
+                          _ => None,
+                        }) {
                           if let Some(snippet) = snippets.get(snippet_name) {
-                            nodes_stack.push(snippet.nodes().iter());
+                            nodes_stack.push(snippet.nodes.iter());
                             continue;
                           } else {
                             Err(anyhow::anyhow!(
@@ -350,7 +432,10 @@ fn load_configuration_inner(
               let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
               if let Some(children) = children {
                 if let Some(condition_name) = kdl_node.entry(0) {
-                  if let Some(condition_name_str) = condition_name.value().as_string() {
+                  if let Some(condition_name_str) = match &condition_name.value {
+                    kdlite::dom::Value::String(s) => Some(&**s),
+                    _ => None,
+                  } {
                     let mut new_conditions = if let Some(conditions) = conditions {
                       conditions.clone()
                     } else {
@@ -369,7 +454,7 @@ fn load_configuration_inner(
                     }
 
                     let mut loaded_conditions = loaded_conditions.clone();
-                    for kdl_node in children.nodes() {
+                    for kdl_node in &children.nodes {
                       kdl_iterate_fn(
                         canonical_pathbuf,
                         host_filter,
@@ -421,7 +506,10 @@ fn load_configuration_inner(
               let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
               if let Some(children) = children {
                 if let Some(condition_name) = kdl_node.entry(0) {
-                  if let Some(condition_name_str) = condition_name.value().as_string() {
+                  if let Some(condition_name_str) = match &condition_name.value {
+                    kdlite::dom::Value::String(s) => Some(&**s),
+                    _ => None,
+                  } {
                     let mut new_conditions = if let Some(conditions) = conditions {
                       conditions.clone()
                     } else {
@@ -442,7 +530,7 @@ fn load_configuration_inner(
                     }
 
                     let mut loaded_conditions = loaded_conditions.clone();
-                    for kdl_node in children.nodes() {
+                    for kdl_node in &children.nodes {
                       kdl_iterate_fn(
                         canonical_pathbuf,
                         host_filter,
@@ -494,9 +582,12 @@ fn load_configuration_inner(
               let mut configuration_entries: HashMap<String, ServerConfigurationEntries> = HashMap::new();
               if let Some(children) = children {
                 if let Some(error_status_code) = kdl_node.entry(0) {
-                  if let Some(error_status_code) = error_status_code.value().as_integer() {
+                  if let Some(error_status_code) = match &error_status_code.value {
+                    kdlite::dom::Value::Integer(i) => Some(*i),
+                    _ => None,
+                  } {
                     let mut loaded_conditions = loaded_conditions.clone();
-                    for kdl_node in children.nodes() {
+                    for kdl_node in &children.nodes {
                       kdl_iterate_fn(
                         canonical_pathbuf,
                         host_filter,
@@ -531,8 +622,8 @@ fn load_configuration_inner(
                     ))?
                   }
                 } else {
-                  for kdl_node in children.nodes() {
-                    let kdl_node_name = kdl_node.name().value();
+                  for kdl_node in &children.nodes {
+                    let kdl_node_name = kdl_node.name();
                     let value = kdl_node_to_configuration_entry(kdl_node);
                     if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
                       entries.inner.push(value);
@@ -608,11 +699,14 @@ fn load_configuration_inner(
     } else if global_name == "include" {
       // Get the list of included files and include the configurations
       let mut include_files = Vec::new();
-      for include_one in kdl_node.entries() {
-        if include_one.name().is_some() {
+      for include_one in &kdl_node.entries {
+        if include_one.key().is_some() {
           continue;
         }
-        if let Some(include_glob) = include_one.value().as_string() {
+        if let Some(include_glob) = match &include_one.value {
+          kdlite::dom::Value::String(s) => Some(&**s),
+          _ => None,
+        } {
           let include_glob_pathbuf = match PathBuf::from_str(include_glob) {
             Ok(pathbuf) => pathbuf,
             Err(err) => {
