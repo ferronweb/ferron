@@ -11,7 +11,6 @@ use std::time::Duration;
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use bytes::Bytes;
-use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender};
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Body;
@@ -19,8 +18,6 @@ use hyper::header::{self, HeaderName, HeaderValue};
 use hyper::{HeaderMap, Request, Response, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::{TokioExecutor, TokioIo};
-#[cfg(feature = "runtime-monoio")]
-use monoio::io::IntoPollIo;
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
 #[cfg(all(feature = "runtime-monoio", unix))]
@@ -40,8 +37,11 @@ use tokio_rustls::TlsConnector;
 
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
+use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender};
 #[cfg(feature = "runtime-monoio")]
-use ferron_common::util::SendAsyncIo;
+use ferron_common::util::SendTcpStreamPoll;
+#[cfg(all(feature = "runtime-monoio", unix))]
+use ferron_common::util::SendUnixStreamPoll;
 use ferron_common::util::{NoServerVerifier, TtlCache};
 use ferron_common::{
   config::ServerConfiguration,
@@ -68,11 +68,11 @@ type Connections = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
 
 enum Connection {
   #[cfg(feature = "runtime-monoio")]
-  Tcp(monoio::net::tcp::stream_poll::TcpStreamPoll),
+  Tcp(SendTcpStreamPoll),
   #[cfg(not(feature = "runtime-monoio"))]
   Tcp(TcpStream),
   #[cfg(all(feature = "runtime-monoio", unix))]
-  Unix(monoio::net::unix::stream_poll::UnixStreamPoll),
+  Unix(SendUnixStreamPoll),
   #[cfg(all(not(feature = "runtime-monoio"), unix))]
   Unix(UnixStream),
 }
@@ -758,7 +758,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             };
 
             #[cfg(feature = "runtime-monoio")]
-            let stream = match stream.into_poll_io() {
+            let stream = match SendUnixStreamPoll::new_comp_io(stream) {
               Ok(stream) => stream,
               Err(err) => {
                 if enable_health_check {
@@ -881,7 +881,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           };
 
           #[cfg(feature = "runtime-monoio")]
-          let stream = match stream.into_poll_io() {
+          let stream = match SendTcpStreamPoll::new_comp_io(stream) {
             Ok(stream) => stream,
             Err(err) => {
               if enable_health_check {
@@ -1062,12 +1062,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         }
 
         let sender = if !encrypted {
-          #[cfg(feature = "runtime-monoio")]
-          let rw = SendAsyncIo::new(stream);
-          #[cfg(feature = "runtime-tokio")]
-          let rw = stream;
-
-          let sender = match http_proxy_handshake(rw, enable_http2_only_config).await {
+          let sender = match http_proxy_handshake(stream, enable_http2_only_config).await {
             Ok(sender) => sender,
             Err(err) => {
               if enable_health_check {
@@ -1161,12 +1156,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           // Enable HTTP/2 when the ALPN protocol is "h2"
           let enable_http2 = enable_http2_config && tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
 
-          #[cfg(feature = "runtime-monoio")]
-          let rw = SendAsyncIo::new(tls_stream);
-          #[cfg(feature = "runtime-tokio")]
-          let rw = tls_stream;
-
-          let sender = match http_proxy_handshake(rw, enable_http2).await {
+          let sender = match http_proxy_handshake(tls_stream, enable_http2).await {
             Ok(sender) => sender,
             Err(err) => {
               if enable_health_check {

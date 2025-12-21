@@ -5,14 +5,14 @@ use std::sync::Arc;
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use bytes::Bytes;
+#[cfg(feature = "runtime-monoio")]
+use ferron_common::util::SendTcpStreamPoll;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
 use hyper::header::{self, HeaderName};
 use hyper::{Method, Request, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::{TokioExecutor, TokioIo};
-#[cfg(feature = "runtime-monoio")]
-use monoio::io::IntoPollIo;
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
 #[cfg(feature = "runtime-monoio")]
@@ -28,8 +28,6 @@ use tokio_rustls::TlsConnector;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
 use ferron_common::util::NoServerVerifier;
-#[cfg(feature = "runtime-monoio")]
-use ferron_common::util::SendAsyncIo;
 use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value, get_values};
 
@@ -366,7 +364,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
       };
 
       #[cfg(feature = "runtime-monoio")]
-      let stream = match stream.into_poll_io() {
+      let stream = match SendTcpStreamPoll::new_comp_io(stream) {
         Ok(stream) => stream,
         Err(err) => {
           error_logger.log(&format!("Bad gateway: {err}")).await;
@@ -381,14 +379,9 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
       };
 
       if !encrypted {
-        #[cfg(feature = "runtime-monoio")]
-        let rw = SendAsyncIo::new(stream);
-        #[cfg(feature = "runtime-tokio")]
-        let rw = stream;
-
         http_forwarded_auth(
           connections,
-          rw,
+          stream,
           auth_request,
           error_logger,
           original_request,
@@ -433,14 +426,9 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
         // Enable HTTP/2 when the ALPN protocol is "h2"
         let enable_http2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
 
-        #[cfg(feature = "runtime-monoio")]
-        let rw = SendAsyncIo::new(tls_stream);
-        #[cfg(feature = "runtime-tokio")]
-        let rw = tls_stream;
-
         http_forwarded_auth(
           connections,
-          rw,
+          tls_stream,
           auth_request,
           error_logger,
           original_request,
