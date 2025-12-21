@@ -1538,6 +1538,7 @@ async fn http_proxy_handshake(
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
+#[inline]
 async fn http_proxy(
   mut sender: SendRequest,
   connections: Option<&Sender<SendRequest>>,
@@ -1674,6 +1675,7 @@ async fn http_proxy(
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
+#[inline]
 async fn http_proxy_kept_alive(
   mut sender: SendRequest,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,

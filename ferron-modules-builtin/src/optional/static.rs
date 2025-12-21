@@ -174,6 +174,7 @@ static NON_COMPRESSIBLE_FILE_EXTENSIONS: LazyLock<BTreeSet<&'static str>> = Lazy
 });
 
 /// Generates a directory listing
+#[inline]
 pub async fn generate_directory_listing(
   directory: ReadDir,
   request_path: &str,
@@ -326,6 +327,7 @@ pub async fn generate_directory_listing(
 }
 
 /// Parses the HTTP "Range" header value
+#[inline]
 fn parse_range_header(range_str: &str, default_end: u64) -> Option<(u64, u64)> {
   if let Some(range_part) = range_str.strip_prefix("bytes=") {
     let parts: Vec<&str> = range_part.split('-').take(2).collect();
@@ -349,6 +351,7 @@ fn parse_range_header(range_str: &str, default_end: u64) -> Option<(u64, u64)> {
 }
 
 /// Extracts inner ETag
+#[inline]
 fn extract_etag_inner(input: &str, weak: bool) -> Option<String> {
   // Remove the surrounding double quotes and preceding "W/"
   let weak_might_removed = if weak {
@@ -366,6 +369,7 @@ fn extract_etag_inner(input: &str, weak: bool) -> Option<String> {
 }
 
 /// Converts strong ETag to weak one, if it's not a weak one
+#[inline]
 fn etag_strong_to_weak(input: &str) -> String {
   if input.starts_with("W/") {
     input.to_string()
