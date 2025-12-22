@@ -174,6 +174,7 @@ static NON_COMPRESSIBLE_FILE_EXTENSIONS: LazyLock<BTreeSet<&'static str>> = Lazy
 });
 
 /// Generates a directory listing
+#[inline]
 pub async fn generate_directory_listing(
   directory: ReadDir,
   request_path: &str,
@@ -326,9 +327,10 @@ pub async fn generate_directory_listing(
 }
 
 /// Parses the HTTP "Range" header value
+#[inline]
 fn parse_range_header(range_str: &str, default_end: u64) -> Option<(u64, u64)> {
   if let Some(range_part) = range_str.strip_prefix("bytes=") {
-    let parts: Vec<&str> = range_part.split('-').collect();
+    let parts: Vec<&str> = range_part.split('-').take(2).collect();
     if parts.len() == 2 {
       if parts[0].is_empty() {
         if let Ok(end) = u64::from_str(parts[1]) {
@@ -349,6 +351,7 @@ fn parse_range_header(range_str: &str, default_end: u64) -> Option<(u64, u64)> {
 }
 
 /// Extracts inner ETag
+#[inline]
 fn extract_etag_inner(input: &str, weak: bool) -> Option<String> {
   // Remove the surrounding double quotes and preceding "W/"
   let weak_might_removed = if weak {
@@ -362,15 +365,11 @@ fn extract_etag_inner(input: &str, weak: bool) -> Option<String> {
   let trimmed = weak_might_removed.trim_matches('"');
 
   // Split the string at the hyphen and take the first part
-  let parts: Vec<&str> = trimmed.split('-').collect();
-  if parts.is_empty() {
-    None
-  } else {
-    Some(parts[0].to_string())
-  }
+  trimmed.split('-').next().map(ToOwned::to_owned)
 }
 
 /// Converts strong ETag to weak one, if it's not a weak one
+#[inline]
 fn etag_strong_to_weak(input: &str) -> String {
   if input.starts_with("W/") {
     input.to_string()
@@ -564,7 +563,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
           response: Some(
             Response::builder()
               .status(StatusCode::NO_CONTENT)
-              .header(header::ALLOW, "GET, POST, HEAD, OPTIONS")
+              .header(header::ALLOW, HeaderValue::from_static("GET, POST, HEAD, OPTIONS"))
               .body(Empty::new().map_err(|e| match e {}).boxed())
               .unwrap_or_default(),
           ),
@@ -578,9 +577,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
       // All other methods are not allowed
       _ => {
         let mut header_map = HeaderMap::new();
-        if let Ok(header_value) = HeaderValue::from_str("GET, POST, HEAD, OPTIONS") {
-          header_map.insert(header::ALLOW, header_value);
-        };
+        header_map.insert(header::ALLOW, HeaderValue::from_static("GET, POST, HEAD, OPTIONS"));
         return Ok(ResponseData {
           request: Some(request),
           response: None,
@@ -673,6 +670,59 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
           path.join(decoded_relative_path)
         }
       };
+
+      // Check for possible path traversal attack, if the URL sanitizer is disabled.
+      if get_value!("disable_url_sanitizer", config)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+      {
+        // Canonicalize the file path
+        #[cfg(feature = "runtime-monoio")]
+        let canonicalize_result = {
+          let joined_pathbuf = joined_pathbuf.clone();
+          monoio::spawn_blocking(move || std::fs::canonicalize(joined_pathbuf))
+            .await
+            .unwrap_or(Err(std::io::Error::other(
+              "Can't spawn a blocking task to obtain the canonical file path",
+            )))
+        };
+        #[cfg(feature = "runtime-tokio")]
+        let canonicalize_result = fs::canonicalize(&joined_pathbuf).await;
+
+        let canonical_joined_pathbuf = match canonicalize_result {
+          Ok(pathbuf) => pathbuf,
+          Err(_) => joined_pathbuf.clone(),
+        };
+
+        // Canonicalize the webroot
+        #[cfg(feature = "runtime-monoio")]
+        let canonicalize_result = {
+          let wwwroot = wwwroot.to_owned();
+          monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot))
+            .await
+            .unwrap_or(Err(std::io::Error::other(
+              "Can't spawn a blocking task to obtain the canonical file path",
+            )))
+        };
+        #[cfg(feature = "runtime-tokio")]
+        let canonicalize_result = fs::canonicalize(wwwroot).await;
+
+        let canonical_wwwroot = match canonicalize_result {
+          Ok(pathbuf) => pathbuf,
+          Err(_) => PathBuf::from_str(wwwroot)?,
+        };
+
+        // Return 403 Forbidden if the path is outside the webroot
+        if !canonical_joined_pathbuf.starts_with(&canonical_wwwroot) {
+          return Ok(ResponseData {
+            request: Some(request),
+            response: None,
+            response_status: Some(StatusCode::FORBIDDEN),
+            response_headers: None,
+            new_remote_address: None,
+          });
+        }
+      }
 
       // Get file metadata (platform-specific implementation)
       // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
@@ -843,7 +893,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                         let mut not_modified_response = Response::builder()
                           .status(StatusCode::NOT_MODIFIED)
                           .header(header::ETAG, etag_strong_to_weak(&etag_original))
-                          .header(header::VARY, vary)
+                          .header(header::VARY, HeaderValue::from_static(vary))
                           .body(Empty::new().map_err(|e| match e {}).boxed())?;
                         if let Some(cache_control) = cache_control {
                           not_modified_response
@@ -862,9 +912,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   }
                   Err(_) => {
                     let mut header_map = HeaderMap::new();
-                    if let Ok(vary) = HeaderValue::from_str(vary) {
-                      header_map.insert(header::VARY, vary);
-                    }
+                    header_map.insert(header::VARY, HeaderValue::from_static(vary));
                     return Ok(ResponseData {
                       request: Some(request),
                       response: None,
@@ -888,9 +936,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                         if etag_extracted != etag {
                           let mut header_map = HeaderMap::new();
                           header_map.insert(header::ETAG, if_match_value.clone());
-                          if let Ok(vary) = HeaderValue::from_str(vary) {
-                            header_map.insert(header::VARY, vary);
-                          }
+                          header_map.insert(header::VARY, HeaderValue::from_static(vary));
                           return Ok(ResponseData {
                             request: Some(request),
                             response: None,
@@ -904,9 +950,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   }
                   Err(_) => {
                     let mut header_map = HeaderMap::new();
-                    if let Ok(vary) = HeaderValue::from_str(vary) {
-                      header_map.insert(header::VARY, vary);
-                    }
+                    header_map.insert(header::VARY, HeaderValue::from_static(vary));
                     return Ok(ResponseData {
                       request: Some(request),
                       response: None,
@@ -958,9 +1002,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 Ok(value) => Some(value),
                 Err(_) => {
                   let mut header_map = HeaderMap::new();
-                  if let Ok(vary) = HeaderValue::from_str(vary) {
-                    header_map.insert(header::VARY, vary);
-                  }
+                  header_map.insert(header::VARY, HeaderValue::from_static(vary));
                   return Ok(ResponseData {
                     request: Some(request),
                     response: None,
@@ -980,9 +1022,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               // Can't satisfy range request for empty files
               if file_length == 0 {
                 let mut header_map = HeaderMap::new();
-                if let Ok(vary) = HeaderValue::from_str(vary) {
-                  header_map.insert(header::VARY, vary);
-                }
+                header_map.insert(header::VARY, HeaderValue::from_static(vary));
                 return Ok(ResponseData {
                   request: Some(request),
                   response: None,
@@ -996,9 +1036,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 // Validate the requested range is within file bounds
                 if range_end > file_length - 1 || range_begin > file_length - 1 || range_begin > range_end {
                   let mut header_map = HeaderMap::new();
-                  if let Ok(vary) = HeaderValue::from_str(vary) {
-                    header_map.insert(header::VARY, vary);
-                  }
+                  header_map.insert(header::VARY, HeaderValue::from_static(vary));
                   return Ok(ResponseData {
                     request: Some(request),
                     response: None,
@@ -1033,7 +1071,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   response_builder = response_builder.header(header::CACHE_CONTROL, cache_control);
                 }
 
-                response_builder = response_builder.header(header::VARY, vary);
+                response_builder = response_builder.header(header::VARY, HeaderValue::from_static(vary));
 
                 let response = match request_method {
                   &Method::HEAD => response_builder.body(Empty::new().map_err(|e| match e {}).boxed())?,
@@ -1097,9 +1135,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 });
               } else {
                 let mut header_map = HeaderMap::new();
-                if let Ok(vary) = HeaderValue::from_str(vary) {
-                  header_map.insert(header::VARY, vary);
-                }
+                header_map.insert(header::VARY, HeaderValue::from_static(vary));
 
                 return Ok(ResponseData {
                   request: Some(request),
@@ -1244,7 +1280,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               // Build full file response
               let mut response_builder = Response::builder()
                 .status(StatusCode::OK)
-                .header(header::ACCEPT_RANGES, "bytes");
+                .header(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
 
               // Include ETag in response with suffix based on compression method
               if let Some(etag) = etag_option {
@@ -1274,13 +1310,14 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
               // Set appropriate Content-Encoding header based on compression method
               if use_brotli {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, "br");
+                response_builder = response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("br"));
               } else if use_zstd {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, "zstd");
+                response_builder = response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("zstd"));
               } else if use_deflate {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, "deflate");
+                response_builder =
+                  response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("deflate"));
               } else if use_gzip {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, "gzip");
+                response_builder = response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
               } else {
                 // Only include Content-Length for uncompressed responses
                 // Content-Length header + HTTP compression = broken HTTP responses!

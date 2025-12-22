@@ -169,6 +169,11 @@ function BuildWithPackage
     Package
 }
 
+function Installer
+{
+    & cargo run --manifest-path build-installer/Cargo.toml
+}
+
 function Clean
 {
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build-workspace, build-release, dist, packaging/deb/ferron_* packaging/deb/md5sums.tmp
@@ -183,5 +188,5 @@ if ($args.Count -gt 0)
     & $args[0]
 } else
 {
-    Write-Host "Available commands: Run, RunDev, Build, BuildDev, Smoketest, SmoketestDev, PrepareBuild, FixConflicts, Package, BuildWithPackage, Clean"
+    Write-Host "Available commands: Run, RunDev, Build, BuildDev, Smoketest, SmoketestDev, PrepareBuild, FixConflicts, Package, BuildWithPackage, Installer, Clean"
 }

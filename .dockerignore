@@ -6,6 +6,7 @@
 # Compiled binaries and generated documentation
 /target/
 /build-prepare/target/
+/build-installer/target/
 
 # Profiling data
 /perf.data
@@ -60,3 +61,7 @@ Dockerfile*
 
 # GitHub-related files
 /.github/
+
+# Installer source and builder (they're not needed when building a Docker image)
+/installer/
+/build-installer/

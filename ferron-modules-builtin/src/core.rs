@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
+use hyper::header::HeaderName;
 use hyper::{header, Request, Response, StatusCode, Uri};
 
 use ferron_common::config::ServerConfiguration;
@@ -666,6 +667,18 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
+    if let Some(log_entries) = get_entries_for_validation!("disable_url_sanitizer", config, used_properties) {
+      for log_entry in &log_entries.inner {
+        if log_entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `disable_url_sanitizer` configuration property must have exactly one value"
+          ))?
+        } else if !log_entry.values[0].is_bool() {
+          Err(anyhow::anyhow!("Invalid URL sanitizer disabling option"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -775,7 +788,7 @@ impl ModuleHandlers for CoreModuleHandlers {
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
       {
-        if let Some(x_forwarded_for_value) = request.headers().get("x-forwarded-for") {
+        if let Some(x_forwarded_for_value) = request.headers().get(HeaderName::from_static("x-forwarded-for")) {
           let x_forwarded_for = x_forwarded_for_value.to_str()?;
 
           let prepared_remote_ip_str = match x_forwarded_for.split(",").nth(0) {

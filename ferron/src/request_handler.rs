@@ -115,7 +115,7 @@ async fn generate_error_response(
   if let Some(content_length) = content_length {
     response_builder = response_builder.header(header::CONTENT_LENGTH, content_length);
   }
-  response_builder = response_builder.header(header::CONTENT_TYPE, "text/html");
+  response_builder = response_builder.header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"));
 
   response_builder.body(response_body).unwrap_or_default()
 }
@@ -481,7 +481,7 @@ pub async fn request_handler(
               }
               let response = Response::builder()
                 .status(StatusCode::BAD_REQUEST)
-                .header(header::CONTENT_TYPE, "text/html")
+                .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
                 .body(
                   Full::new(Bytes::from(generate_default_error_page(StatusCode::BAD_REQUEST, None)))
                     .map_err(|e| match e {})
@@ -561,7 +561,7 @@ pub async fn request_handler(
         }
         let response = Response::builder()
           .status(StatusCode::BAD_REQUEST)
-          .header(header::CONTENT_TYPE, "text/html")
+          .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
           .body(
             Full::new(Bytes::from(generate_default_error_page(StatusCode::BAD_REQUEST, None)))
               .map_err(|e| match e {})
@@ -674,7 +674,7 @@ pub async fn request_handler(
       }
       let response = Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .header(header::CONTENT_TYPE, "text/html")
+        .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
         .body(
           Full::new(Bytes::from(generate_default_error_page(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -752,7 +752,7 @@ pub async fn request_handler(
       }
       let response = Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .header(header::CONTENT_TYPE, "text/html")
+        .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
         .body(
           Full::new(Bytes::from(generate_default_error_page(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -828,111 +828,194 @@ pub async fn request_handler(
     request = Request::from_parts(request_parts, request_body);
   }
 
-  // Sanitize the URL
-  let url_pathname = request.uri().path();
-  let sanitized_url_pathname = match sanitize_url(
-    url_pathname,
-    get_value!("allow_double_slashes", configuration)
-      .and_then(|v| v.as_bool())
-      .unwrap_or(false),
-  ) {
-    Ok(sanitized_url) => sanitized_url,
-    Err(err) => {
-      for logger in &configuration.observability.log_channels {
-        logger
-          .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
-          .await
-          .unwrap_or_default();
-      }
-      let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
+  // Sanitize the URL, if the URL sanitizer is enabled
+  if !get_value!("disable_url_sanitizer", configuration)
+    .and_then(|v| v.as_bool())
+    .unwrap_or(false)
+  {
+    let url_pathname = request.uri().path();
+    let sanitized_url_pathname = match sanitize_url(
+      url_pathname,
+      get_value!("allow_double_slashes", configuration)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false),
+    ) {
+      Ok(sanitized_url) => sanitized_url,
+      Err(err) => {
+        for logger in &configuration.observability.log_channels {
+          logger
+            .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
+            .await
+            .unwrap_or_default();
+        }
+        let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
 
-      // Determine headers to add/remove/replace
-      let mut headers_to_add = HeaderMap::new();
-      let mut headers_to_replace = HeaderMap::new();
-      let mut headers_to_remove = Vec::new();
-      let (request_parts, _) = request.into_parts();
-      if let Some(custom_headers) = get_entries!("header", configuration) {
-        for custom_header in custom_headers.inner.iter().rev() {
-          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-            if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-              if !headers_to_add.contains_key(header_name) {
-                if let Ok(header_name) = HeaderName::from_str(header_name) {
-                  if let Ok(header_value) =
-                    HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts, None))
-                  {
-                    headers_to_add.insert(header_name, header_value);
+        // Determine headers to add/remove/replace
+        let mut headers_to_add = HeaderMap::new();
+        let mut headers_to_replace = HeaderMap::new();
+        let mut headers_to_remove = Vec::new();
+        let (request_parts, _) = request.into_parts();
+        if let Some(custom_headers) = get_entries!("header", configuration) {
+          for custom_header in custom_headers.inner.iter().rev() {
+            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+              if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                if !headers_to_add.contains_key(header_name) {
+                  if let Ok(header_name) = HeaderName::from_str(header_name) {
+                    if let Ok(header_value) =
+                      HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts, None))
+                    {
+                      headers_to_add.insert(header_name, header_value);
+                    }
                   }
                 }
               }
             }
           }
         }
-      }
-      if let Some(custom_headers) = get_entries!("header_replace", configuration) {
-        for custom_header in custom_headers.inner.iter().rev() {
-          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-            if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-              if let Ok(header_name) = HeaderName::from_str(header_name) {
-                if let Ok(header_value) =
-                  HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts, None))
-                {
-                  headers_to_replace.insert(header_name, header_value);
+        if let Some(custom_headers) = get_entries!("header_replace", configuration) {
+          for custom_header in custom_headers.inner.iter().rev() {
+            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+              if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                if let Ok(header_name) = HeaderName::from_str(header_name) {
+                  if let Ok(header_value) =
+                    HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts, None))
+                  {
+                    headers_to_replace.insert(header_name, header_value);
+                  }
                 }
               }
             }
           }
         }
-      }
-      if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
-        for custom_header in custom_headers_to_remove.inner.iter().rev() {
-          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-            if let Ok(header_name) = HeaderName::from_str(header_name) {
-              headers_to_remove.push(header_name);
+        if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
+          for custom_header in custom_headers_to_remove.inner.iter().rev() {
+            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+              if let Ok(header_name) = HeaderName::from_str(header_name) {
+                headers_to_remove.push(header_name);
+              }
             }
           }
         }
-      }
 
-      return Ok(
-        finalize_response_and_log(
-          response,
-          http3_alt_port,
-          headers_to_add,
-          headers_to_replace,
-          headers_to_remove,
-          &configuration.observability.log_channels,
-          &log_request_parts,
-          &socket_data,
-          None,
-          log_date_format,
-          log_format,
+        return Ok(
+          finalize_response_and_log(
+            response,
+            http3_alt_port,
+            headers_to_add,
+            headers_to_replace,
+            headers_to_remove,
+            &configuration.observability.log_channels,
+            &log_request_parts,
+            &socket_data,
+            None,
+            log_date_format,
+            log_format,
+          )
+          .await,
+        );
+      }
+    };
+
+    if sanitized_url_pathname != url_pathname {
+      let (mut parts, body) = request.into_parts();
+      let orig_uri = parts.uri.clone();
+      let mut url_parts = parts.uri.into_parts();
+      url_parts.path_and_query = Some(
+        match format!(
+          "{}{}",
+          sanitized_url_pathname,
+          match url_parts.path_and_query {
+            Some(path_and_query) => {
+              match path_and_query.query() {
+                Some(query) => format!("?{query}"),
+                None => String::from(""),
+              }
+            }
+            None => String::from(""),
+          }
         )
-        .await,
-      );
-    }
-  };
-
-  if sanitized_url_pathname != url_pathname {
-    let (mut parts, body) = request.into_parts();
-    let orig_uri = parts.uri.clone();
-    let mut url_parts = parts.uri.into_parts();
-    url_parts.path_and_query = Some(
-      match format!(
-        "{}{}",
-        sanitized_url_pathname,
-        match url_parts.path_and_query {
-          Some(path_and_query) => {
-            match path_and_query.query() {
-              Some(query) => format!("?{query}"),
-              None => String::from(""),
+        .parse()
+        {
+          Ok(path_and_query) => path_and_query,
+          Err(err) => {
+            for logger in &configuration.observability.log_channels {
+              logger
+                .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
+                .await
+                .unwrap_or_default();
             }
+
+            let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
+
+            parts.uri = orig_uri;
+
+            // Determine headers to add/remove/replace
+            let mut headers_to_add = HeaderMap::new();
+            let mut headers_to_replace = HeaderMap::new();
+            let mut headers_to_remove = Vec::new();
+            if let Some(custom_headers) = get_entries!("header", configuration) {
+              for custom_header in custom_headers.inner.iter().rev() {
+                if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                  if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                    if !headers_to_add.contains_key(header_name) {
+                      if let Ok(header_name) = HeaderName::from_str(header_name) {
+                        if let Ok(header_value) =
+                          HeaderValue::from_str(&replace_header_placeholders(header_value, &parts, None))
+                        {
+                          headers_to_add.insert(header_name, header_value);
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            if let Some(custom_headers) = get_entries!("header_replace", configuration) {
+              for custom_header in custom_headers.inner.iter().rev() {
+                if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                  if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                    if let Ok(header_name) = HeaderName::from_str(header_name) {
+                      if let Ok(header_value) =
+                        HeaderValue::from_str(&replace_header_placeholders(header_value, &parts, None))
+                      {
+                        headers_to_replace.insert(header_name, header_value);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
+              for custom_header in custom_headers_to_remove.inner.iter().rev() {
+                if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                  if let Ok(header_name) = HeaderName::from_str(header_name) {
+                    headers_to_remove.push(header_name);
+                  }
+                }
+              }
+            }
+
+            return Ok(
+              finalize_response_and_log(
+                response,
+                http3_alt_port,
+                headers_to_add,
+                headers_to_replace,
+                headers_to_remove,
+                &configuration.observability.log_channels,
+                &log_request_parts,
+                &socket_data,
+                None,
+                log_date_format,
+                log_format,
+              )
+              .await,
+            );
           }
-          None => String::from(""),
-        }
-      )
-      .parse()
-      {
-        Ok(path_and_query) => path_and_query,
+        },
+      );
+      parts.uri = match hyper::Uri::from_parts(url_parts) {
+        Ok(uri) => uri,
         Err(err) => {
           for logger in &configuration.observability.log_channels {
             logger
@@ -1008,170 +1091,93 @@ pub async fn request_handler(
             .await,
           );
         }
-      },
-    );
-    parts.uri = match hyper::Uri::from_parts(url_parts) {
-      Ok(uri) => uri,
-      Err(err) => {
-        for logger in &configuration.observability.log_channels {
-          logger
-            .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
-            .await
-            .unwrap_or_default();
+      };
+      let configuration_option =
+        configurations.find_configuration(&parts, hostname_determinant.as_deref(), &socket_data);
+      request = Request::from_parts(parts, body);
+      match configuration_option {
+        Ok(Some(new_configuration)) => {
+          configuration = new_configuration;
+          log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
+          log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
         }
+        Ok(None) => {}
+        Err(err) => {
+          for logger in &configuration.observability.log_channels {
+            logger
+              .send(LogMessage::new(
+                format!("Cannot determine server configuration: {err}"),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
+          let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
 
-        let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
-
-        parts.uri = orig_uri;
-
-        // Determine headers to add/remove/replace
-        let mut headers_to_add = HeaderMap::new();
-        let mut headers_to_replace = HeaderMap::new();
-        let mut headers_to_remove = Vec::new();
-        if let Some(custom_headers) = get_entries!("header", configuration) {
-          for custom_header in custom_headers.inner.iter().rev() {
-            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-              if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-                if !headers_to_add.contains_key(header_name) {
-                  if let Ok(header_name) = HeaderName::from_str(header_name) {
-                    if let Ok(header_value) =
-                      HeaderValue::from_str(&replace_header_placeholders(header_value, &parts, None))
-                    {
-                      headers_to_add.insert(header_name, header_value);
+          // Determine headers to add/remove/replace
+          let mut headers_to_add = HeaderMap::new();
+          let mut headers_to_replace = HeaderMap::new();
+          let mut headers_to_remove = Vec::new();
+          let (request_parts, _) = request.into_parts();
+          if let Some(custom_headers) = get_entries!("header", configuration) {
+            for custom_header in custom_headers.inner.iter().rev() {
+              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                  if !headers_to_add.contains_key(header_name) {
+                    if let Ok(header_name) = HeaderName::from_str(header_name) {
+                      if let Ok(header_value) =
+                        HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts, None))
+                      {
+                        headers_to_add.insert(header_name, header_value);
+                      }
                     }
                   }
                 }
               }
             }
           }
-        }
-        if let Some(custom_headers) = get_entries!("header_replace", configuration) {
-          for custom_header in custom_headers.inner.iter().rev() {
-            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-              if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-                if let Ok(header_name) = HeaderName::from_str(header_name) {
-                  if let Ok(header_value) =
-                    HeaderValue::from_str(&replace_header_placeholders(header_value, &parts, None))
-                  {
-                    headers_to_replace.insert(header_name, header_value);
-                  }
-                }
-              }
-            }
-          }
-        }
-        if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
-          for custom_header in custom_headers_to_remove.inner.iter().rev() {
-            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-              if let Ok(header_name) = HeaderName::from_str(header_name) {
-                headers_to_remove.push(header_name);
-              }
-            }
-          }
-        }
-
-        return Ok(
-          finalize_response_and_log(
-            response,
-            http3_alt_port,
-            headers_to_add,
-            headers_to_replace,
-            headers_to_remove,
-            &configuration.observability.log_channels,
-            &log_request_parts,
-            &socket_data,
-            None,
-            log_date_format,
-            log_format,
-          )
-          .await,
-        );
-      }
-    };
-    let configuration_option = configurations.find_configuration(&parts, hostname_determinant.as_deref(), &socket_data);
-    request = Request::from_parts(parts, body);
-    match configuration_option {
-      Ok(Some(new_configuration)) => {
-        configuration = new_configuration;
-        log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
-        log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
-      }
-      Ok(None) => {}
-      Err(err) => {
-        for logger in &configuration.observability.log_channels {
-          logger
-            .send(LogMessage::new(
-              format!("Cannot determine server configuration: {err}"),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
-        }
-        let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
-
-        // Determine headers to add/remove/replace
-        let mut headers_to_add = HeaderMap::new();
-        let mut headers_to_replace = HeaderMap::new();
-        let mut headers_to_remove = Vec::new();
-        let (request_parts, _) = request.into_parts();
-        if let Some(custom_headers) = get_entries!("header", configuration) {
-          for custom_header in custom_headers.inner.iter().rev() {
-            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-              if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-                if !headers_to_add.contains_key(header_name) {
+          if let Some(custom_headers) = get_entries!("header_replace", configuration) {
+            for custom_header in custom_headers.inner.iter().rev() {
+              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
                   if let Ok(header_name) = HeaderName::from_str(header_name) {
                     if let Ok(header_value) =
                       HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts, None))
                     {
-                      headers_to_add.insert(header_name, header_value);
+                      headers_to_replace.insert(header_name, header_value);
                     }
                   }
                 }
               }
             }
           }
-        }
-        if let Some(custom_headers) = get_entries!("header_replace", configuration) {
-          for custom_header in custom_headers.inner.iter().rev() {
-            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-              if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+          if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
+            for custom_header in custom_headers_to_remove.inner.iter().rev() {
+              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
                 if let Ok(header_name) = HeaderName::from_str(header_name) {
-                  if let Ok(header_value) =
-                    HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts, None))
-                  {
-                    headers_to_replace.insert(header_name, header_value);
-                  }
+                  headers_to_remove.push(header_name);
                 }
               }
             }
           }
-        }
-        if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
-          for custom_header in custom_headers_to_remove.inner.iter().rev() {
-            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-              if let Ok(header_name) = HeaderName::from_str(header_name) {
-                headers_to_remove.push(header_name);
-              }
-            }
-          }
-        }
 
-        return Ok(
-          finalize_response_and_log(
-            response,
-            http3_alt_port,
-            headers_to_add,
-            headers_to_replace,
-            headers_to_remove,
-            &configuration.observability.log_channels,
-            &log_request_parts,
-            &socket_data,
-            None,
-            log_date_format,
-            log_format,
-          )
-          .await,
-        );
+          return Ok(
+            finalize_response_and_log(
+              response,
+              http3_alt_port,
+              headers_to_add,
+              headers_to_replace,
+              headers_to_remove,
+              &configuration.observability.log_channels,
+              &log_request_parts,
+              &socket_data,
+              None,
+              log_date_format,
+              log_format,
+            )
+            .await,
+          );
+        }
       }
     }
   }
@@ -1228,14 +1234,12 @@ pub async fn request_handler(
     let response = match request.method() {
       &Method::OPTIONS => Response::builder()
         .status(StatusCode::NO_CONTENT)
-        .header(header::ALLOW, "GET, POST, HEAD, OPTIONS")
+        .header(header::ALLOW, HeaderValue::from_static("GET, POST, HEAD, OPTIONS"))
         .body(Empty::new().map_err(|e| match e {}).boxed())
         .unwrap_or_default(),
       _ => {
         let mut header_map = HeaderMap::new();
-        if let Ok(header_value) = HeaderValue::from_str("GET, POST, HEAD, OPTIONS") {
-          header_map.insert(header::ALLOW, header_value);
-        };
+        header_map.insert(header::ALLOW, HeaderValue::from_static("GET, POST, HEAD, OPTIONS"));
         generate_error_response(StatusCode::BAD_REQUEST, &configuration, &Some(header_map)).await
       }
     };

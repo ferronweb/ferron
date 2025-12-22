@@ -397,7 +397,9 @@ example.com {
 - `rewrite_log [rewrite_log: bool]`
   - This directive specifies whenever URL rewriting operations are logged into the error log. Default: `rewrite_log #false`
 - `no_trailing_redirect [no_trailing_redirect: bool]`
-  - This directive specifies whenerver not to redirect the URL without a trailing slash to one with a trailing slash, if it refers to a directory. Default: `no_trailing_redirect #false`
+  - This directive specifies whenever not to redirect the URL without a trailing slash to one with a trailing slash, if it refers to a directory. Default: `no_trailing_redirect #false`
+- `disable_url_sanitizer [disable_url_sanitizer: bool]` (Ferron UNRELEASED or newer)
+  - This directive specifies whenever URL sanitation is disabled. Disabling URL sanitation allows the server to process the request URL as is, without rewriting the URL with potential path traversal sequences; this can be useful for certain applications that require raw URLs, for [RFC 3986 compliance](https://datatracker.ietf.org/doc/html/rfc3986#section-2.2). **Disabling URL sanitation may lead to risk of path traversal vulnerabilities, although built-in static file serving, CGI, SCGI and FastCGI module functionality would perform additional checks to prevent path traversal attacks.** Default: `disable_url_sanitizer #false`
 
 **Configuration example:**
 
@@ -799,8 +801,10 @@ Ferron supports the following placeholders for header values, subconditions, rev
 - `{scheme}` - the scheme of the request URI (`http` or `https`), applicable only for subconditions, reverse proxying and redirect destinations.
 - `{client_ip}` - the client IP address, applicable only for subconditions, reverse proxying and redirect destinations.
 - `{client_port}` - the client port number, applicable only for subconditions, reverse proxying and redirect destinations.
+- `{client_ip_canonical}` (Ferron UNRELEASED or newer) - the client IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`), applicable only for subconditions, reverse proxying and redirect destinations.
 - `{server_ip}` - the server IP address, applicable only for subconditions, reverse proxying and redirect destinations.
 - `{server_port}` - the server port number, applicable only for subconditions, reverse proxying and redirect destinations.
+- `{server_ip_canonical}` (Ferron UNRELEASED or newer) - the server IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`), applicable only for subconditions, reverse proxying and redirect destinations.
 
 ## Log placeholders
 
@@ -814,8 +818,10 @@ Ferron 2.0.0 and newer supports the following placeholders for access logs:
 - `{scheme}` - the scheme of the request URI (`http` or `https`).
 - `{client_ip}` - the client IP address.
 - `{client_port}` - the client port number.
+- `{client_ip_canonical}` (Ferron UNRELEASED or newer) - the client IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`).
 - `{server_ip}` - the server IP address.
 - `{server_port}` - the server port number.
+- `{server_ip_canonical}` (Ferron UNRELEASED or newer) - the server IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`).
 - `{auth_user}` - the username of the authenticated user (`-`, if not authenticated)
 - `{timestamp}` - the formatted timestamp of the entry
 - `{status_code}` - the HTTP status code of the response

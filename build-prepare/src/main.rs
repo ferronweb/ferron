@@ -401,11 +401,10 @@ fn process_ferron_load_modules(build_config: &yaml_rust2::Yaml) -> Result<()> {
   let old_build_rs = "build-workspace/ferron-load-modules/build.rs";
   let new_build_rs = "build-workspace/ferron-load-modules/build_with_modules.rs";
 
-  if Path::new(old_build_rs).exists() {
-    fs::remove_file(old_build_rs).map_err(BuildError::IoError)?;
-  }
-
   if Path::new(new_build_rs).exists() {
+    if Path::new(old_build_rs).exists() {
+      fs::remove_file(old_build_rs).map_err(BuildError::IoError)?;
+    }
     fs::rename(new_build_rs, old_build_rs).map_err(BuildError::IoError)?;
     println!("Replaced build.rs with build_with_modules.rs");
   } else {

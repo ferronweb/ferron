@@ -79,6 +79,7 @@ make smoketest-dev # Perform a smoke test, for development and debugging
 make package # Package the web server to a ZIP archive (run it after building it)
 make package-deb # Package the web server to a Debian package (run it after building it)
 make package-rpm # Package the web server to an RPM package (run it after building it)
+make installer # Build installers for Ferron 2
 ```
 
 Or a `build.ps1` build script, if you're on Windows:
@@ -103,6 +104,9 @@ powershell -ExecutionPolicy Bypass .\build.ps1 SmoketestDev
 
 REM Package the web server to a ZIP archive (run it after building it)
 powershell -ExecutionPolicy Bypass .\build.ps1 Package
+
+REM Build installers for Ferron 2
+powershell -ExecutionPolicy Bypass .\build.ps1 Installer
 ```
 
 You can also create a ZIP archive that can be used by the Ferron installer:

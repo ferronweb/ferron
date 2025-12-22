@@ -11,18 +11,13 @@ use std::time::Duration;
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use bytes::Bytes;
-use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender};
-#[cfg(feature = "runtime-monoio")]
-use futures_util::stream::StreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Body;
-use hyper::header::{HeaderName, HeaderValue};
-use hyper::{header, HeaderMap, Request, Response, StatusCode, Uri, Version};
+use hyper::header::{self, HeaderName, HeaderValue};
+use hyper::{HeaderMap, Request, Response, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::{TokioExecutor, TokioIo};
-#[cfg(feature = "runtime-monoio")]
-use monoio::io::IntoPollIo;
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
 #[cfg(all(feature = "runtime-monoio", unix))]
@@ -39,13 +34,14 @@ use tokio::net::TcpStream;
 use tokio::net::UnixStream;
 use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
-#[cfg(feature = "runtime-monoio")]
-use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
 
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
+use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender};
 #[cfg(feature = "runtime-monoio")]
-use ferron_common::util::SendRwStream;
+use ferron_common::util::SendTcpStreamPoll;
+#[cfg(all(feature = "runtime-monoio", unix))]
+use ferron_common::util::SendUnixStreamPoll;
 use ferron_common::util::{NoServerVerifier, TtlCache};
 use ferron_common::{
   config::ServerConfiguration,
@@ -72,11 +68,11 @@ type Connections = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
 
 enum Connection {
   #[cfg(feature = "runtime-monoio")]
-  Tcp(monoio::net::tcp::stream_poll::TcpStreamPoll),
+  Tcp(SendTcpStreamPoll),
   #[cfg(not(feature = "runtime-monoio"))]
   Tcp(TcpStream),
   #[cfg(all(feature = "runtime-monoio", unix))]
-  Unix(monoio::net::unix::stream_poll::UnixStreamPoll),
+  Unix(SendUnixStreamPoll),
   #[cfg(all(not(feature = "runtime-monoio"), unix))]
   Unix(UnixStream),
 }
@@ -762,7 +758,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             };
 
             #[cfg(feature = "runtime-monoio")]
-            let stream = match stream.into_poll_io() {
+            let stream = match SendUnixStreamPoll::new_comp_io(stream) {
               Ok(stream) => stream,
               Err(err) => {
                 if enable_health_check {
@@ -885,7 +881,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           };
 
           #[cfg(feature = "runtime-monoio")]
-          let stream = match stream.into_poll_io() {
+          let stream = match SendTcpStreamPoll::new_comp_io(stream) {
             Ok(stream) => stream,
             Err(err) => {
               if enable_health_check {
@@ -1066,18 +1062,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         }
 
         let sender = if !encrypted {
-          #[cfg(feature = "runtime-monoio")]
-          let rw = {
-            let send_rw_stream = SendRwStream::new(stream);
-            let (sink, stream) = send_rw_stream.split();
-            let reader = StreamReader::new(stream);
-            let writer = SinkWriter::new(CopyToBytes::new(sink));
-            tokio::io::join(reader, writer)
-          };
-          #[cfg(feature = "runtime-tokio")]
-          let rw = stream;
-
-          let sender = match http_proxy_handshake(rw, enable_http2_only_config).await {
+          let sender = match http_proxy_handshake(stream, enable_http2_only_config).await {
             Ok(sender) => sender,
             Err(err) => {
               if enable_health_check {
@@ -1171,18 +1156,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           // Enable HTTP/2 when the ALPN protocol is "h2"
           let enable_http2 = enable_http2_config && tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
 
-          #[cfg(feature = "runtime-monoio")]
-          let rw = {
-            let send_rw_stream = SendRwStream::new(tls_stream);
-            let (sink, stream) = send_rw_stream.split();
-            let reader = StreamReader::new(stream);
-            let writer = SinkWriter::new(CopyToBytes::new(sink));
-            tokio::io::join(reader, writer)
-          };
-          #[cfg(feature = "runtime-tokio")]
-          let rw = tls_stream;
-
-          let sender = match http_proxy_handshake(rw, enable_http2).await {
+          let sender = match http_proxy_handshake(tls_stream, enable_http2).await {
             Ok(sender) => sender,
             Err(err) => {
               if enable_health_check {
@@ -1538,6 +1512,7 @@ async fn http_proxy_handshake(
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
+#[inline]
 async fn http_proxy(
   mut sender: SendRequest,
   connections: Option<&Sender<SendRequest>>,
@@ -1674,6 +1649,7 @@ async fn http_proxy(
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
+#[inline]
 async fn http_proxy_kept_alive(
   mut sender: SendRequest,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
@@ -1910,10 +1886,10 @@ fn construct_proxy_request_parts(
   // X-Forwarded-* headers to send the client's data to a server that's behind the reverse proxy
   let remote_addr_str = socket_data.remote_addr.ip().to_canonical().to_string();
   request_parts.headers.insert(
-    "x-forwarded-for",
+    HeaderName::from_static("x-forwarded-for"),
     (if let Some(ref forwarded_for) = request_parts
       .headers
-      .get("x-forwarded-for")
+      .get(HeaderName::from_static("x-forwarded-for"))
       .and_then(|h| h.to_str().ok())
     {
       if trust_x_forwarded_for {
@@ -1927,17 +1903,31 @@ fn construct_proxy_request_parts(
     .parse()?,
   );
 
-  if !trust_x_forwarded_for || !request_parts.headers.contains_key("x-forwarded-proto") {
+  if !trust_x_forwarded_for
+    || !request_parts
+      .headers
+      .contains_key(HeaderName::from_static("x-forwarded-proto"))
+  {
     if socket_data.encrypted {
-      request_parts.headers.insert("x-forwarded-proto", "https".parse()?);
+      request_parts
+        .headers
+        .insert(HeaderName::from_static("x-forwarded-proto"), "https".parse()?);
     } else {
-      request_parts.headers.insert("x-forwarded-proto", "http".parse()?);
+      request_parts
+        .headers
+        .insert(HeaderName::from_static("x-forwarded-proto"), "http".parse()?);
     }
   }
 
-  if !trust_x_forwarded_for || !request_parts.headers.contains_key("x-forwarded-host") {
+  if !trust_x_forwarded_for
+    || !request_parts
+      .headers
+      .contains_key(HeaderName::from_static("x-forwarded-host"))
+  {
     if let Some(original_host) = original_host {
-      request_parts.headers.insert("x-forwarded-host", original_host);
+      request_parts
+        .headers
+        .insert(HeaderName::from_static("x-forwarded-host"), original_host);
     }
   }
 

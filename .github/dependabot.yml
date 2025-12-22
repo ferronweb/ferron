@@ -48,6 +48,11 @@ updates:
     schedule:
       interval: "weekly"
     target-branch: "develop-2.x"
+  - package-ecosystem: "cargo"
+    directory: "/build-installer"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop-2.x"
   - package-ecosystem: "npm"
     directory: "/website"
     schedule:

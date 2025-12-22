@@ -90,6 +90,9 @@ build-with-package: build package
 build-with-package-deb: build package-deb
 build-with-package-rpm: build package-rpm
 
+installer:
+	cargo run --manifest-path build-installer/Cargo.toml
+
 clean:
 	rm -rf build-workspace build-release dist packaging/deb/ferron_* packaging/deb/md5sums.tmp packaging/rpm/data packaging/rpm/ferron.spec packaging/rpm/rpm
 	cargo clean

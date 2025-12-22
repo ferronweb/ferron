@@ -27,7 +27,7 @@ FERRON_LOG_PID=$!
 sleep 5
 
 # Perform the smoke test
-GOT=$(curl -sk https://localhost:8443/test.txt)
+GOT=$(curl -m 5 -sk https://localhost:8443/test.txt)
 EXPECTED=$(cat wwwroot/test.txt)
 if [ "$GOT" = "$EXPECTED" ]; then
     echo "Test passed"

@@ -192,6 +192,44 @@ impl ModuleHandlers for ScgiModuleHandlers {
       };
 
       let joined_pathbuf = wwwroot.join(decoded_relative_path);
+
+      // Check for possible path traversal attack, if the URL sanitizer is disabled.
+      if get_value!("disable_url_sanitizer", config)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+      {
+        // Canonicalize the file path
+        #[cfg(feature = "runtime-monoio")]
+        let canonicalize_result = {
+          let joined_pathbuf = joined_pathbuf.clone();
+          monoio::spawn_blocking(move || std::fs::canonicalize(joined_pathbuf))
+            .await
+            .unwrap_or(Err(std::io::Error::other(
+              "Can't spawn a blocking task to obtain the canonical file path",
+            )))
+        };
+        #[cfg(feature = "runtime-tokio")]
+        let canonicalize_result = tokio::fs::canonicalize(&joined_pathbuf).await;
+
+        let canonical_joined_pathbuf = match canonicalize_result {
+          Ok(pathbuf) => pathbuf,
+          Err(_) => joined_pathbuf.clone(),
+        };
+
+        // Webroot is already canonicalized, so no need to canonicalize it again
+
+        // Return 403 Forbidden if the path is outside the webroot
+        if !canonical_joined_pathbuf.starts_with(wwwroot) {
+          return Ok(ResponseData {
+            request: Some(request),
+            response: None,
+            response_status: Some(StatusCode::FORBIDDEN),
+            response_headers: None,
+            new_remote_address: None,
+          });
+        }
+      }
+
       let execute_pathbuf = joined_pathbuf;
       let execute_path_info = request_path.strip_prefix("/").map(|s| s.to_string());
 

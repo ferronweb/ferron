@@ -1,6 +1,7 @@
 # Compiled binaries and generated documentation
 /target/
 /build-prepare/target/
+/build-installer/target/
 
 # Profiling data
 /perf.data
