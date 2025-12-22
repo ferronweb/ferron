@@ -291,28 +291,23 @@ fn before_starting_server(
         tls_config_builder_wants_versions.with_safe_default_protocol_versions()?
       } else {
         let tls_versions = [("TLSv1.2", &TLS12), ("TLSv1.3", &TLS13)];
-        let min_tls_version_index =
-          min_tls_version_option.map_or(Some(0), |v| tls_versions.iter().position(|p| p.0 == v));
-        let max_tls_version_index = max_tls_version_option.map_or(Some(tls_versions.len() - 1), |v| {
-          tls_versions.iter().position(|p| p.0 == v)
-        });
-        if let Some(min_tls_version_index) = min_tls_version_index {
-          if let Some(max_tls_version_index) = max_tls_version_index {
-            if max_tls_version_index < min_tls_version_index {
-              Err(anyhow::anyhow!("Maximum TLS version is older than minimum TLS version"))?
-            }
-            tls_config_builder_wants_versions.with_protocol_versions(
-              &tls_versions[min_tls_version_index..=max_tls_version_index]
-                .iter()
-                .map(|p| p.1)
-                .collect::<Vec<_>>(),
-            )?
-          } else {
-            Err(anyhow::anyhow!("Invalid maximum TLS version"))?
-          }
-        } else {
-          Err(anyhow::anyhow!("Invalid minimum TLS version"))?
+        let min_tls_version_index = min_tls_version_option
+          .map_or(Some(0), |v| tls_versions.iter().position(|p| p.0 == v))
+          .ok_or(anyhow::anyhow!("Invalid minimum TLS version"))?;
+        let max_tls_version_index = max_tls_version_option
+          .map_or(Some(tls_versions.len() - 1), |v| {
+            tls_versions.iter().position(|p| p.0 == v)
+          })
+          .ok_or(anyhow::anyhow!("Invalid maximum TLS version"))?;
+        if max_tls_version_index < min_tls_version_index {
+          Err(anyhow::anyhow!("Maximum TLS version is older than minimum TLS version"))?
         }
+        tls_config_builder_wants_versions.with_protocol_versions(
+          &tls_versions[min_tls_version_index..=max_tls_version_index]
+            .iter()
+            .map(|p| p.1)
+            .collect::<Vec<_>>(),
+        )?
       };
 
       let tls_config_builder_wants_server_cert = if let Some(client_cert_path) = global_configuration
@@ -633,10 +628,11 @@ fn before_starting_server(
               let dns_provider: Option<Arc<dyn ferron_common::dns::DnsProvider + Send + Sync>> =
                 if &*challenge_type_str.to_uppercase() != "DNS-01" {
                   None
-                } else if let Some(provider_name) = challenge_params.get("provider") {
-                  Some(get_dns_provider(provider_name, &challenge_params)?)
                 } else {
-                  Err(anyhow::anyhow!("No DNS provider specified"))?
+                  let provider_name = challenge_params
+                    .get("provider")
+                    .ok_or(anyhow::anyhow!("No DNS provider specified"))?;
+                  Some(get_dns_provider(provider_name, &challenge_params)?)
                 };
               let acme_cache_path_option = get_value!("auto_tls_cache", server_configuration)
                 .map_or(acme_default_directory.as_deref(), |v| {
@@ -735,11 +731,8 @@ fn before_starting_server(
                   },
                   profile: get_value!("auto_tls_profile", server_configuration)
                     .and_then(|v| v.as_str().map(|s| s.to_string())),
-                  cache_path: if let Some(acme_cache_path) = acme_cache_path_option.clone() {
-                    match PathBuf::from_str(&acme_cache_path) {
-                      Ok(pathbuf) => Some(pathbuf),
-                      Err(_) => Err(anyhow::anyhow!("Invalid ACME cache path"))?,
-                    }
+                  cache_path: if let Some(acme_cache_path) = acme_cache_path_option.as_ref() {
+                    Some(PathBuf::from_str(acme_cache_path).map_err(|_| anyhow::anyhow!("Invalid ACME cache path"))?)
                   } else {
                     None
                   },
@@ -760,11 +753,9 @@ fn before_starting_server(
                 automatic_tls_used_sni_hostnames.insert((automatic_tls_port, sni_hostname));
               } else if let Some(sni_hostname) = sni_hostname {
                 let (account_cache_path, cert_cache_path) =
-                  if let Some(acme_cache_path) = acme_cache_path_option.clone() {
-                    let mut pathbuf = match PathBuf::from_str(&acme_cache_path) {
-                      Ok(pathbuf) => pathbuf,
-                      Err(_) => Err(anyhow::anyhow!("Invalid ACME cache path"))?,
-                    };
+                  if let Some(acme_cache_path) = acme_cache_path_option.as_deref() {
+                    let mut pathbuf =
+                      PathBuf::from_str(acme_cache_path).map_err(|_| anyhow::anyhow!("Invalid ACME cache path"))?;
                     let base_pathbuf = pathbuf.clone();
                     let append_hash = base64::engine::general_purpose::URL_SAFE_NO_PAD
                       .encode(xxh3_128(format!("{automatic_tls_port}-{sni_hostname}").as_bytes()).to_be_bytes());
@@ -802,12 +793,12 @@ fn before_starting_server(
                   eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab", server_configuration) {
                     if let Some(eab_key_id) = eab_key_entry.values.first().and_then(|v| v.as_str()) {
                       if let Some(eab_key_hmac) = eab_key_entry.values.get(1).and_then(|v| v.as_str()) {
-                        match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(eab_key_hmac) {
-                          Ok(decoded_key) => {
-                            Some(Arc::new(ExternalAccountKey::new(eab_key_id.to_string(), &decoded_key)))
-                          }
-                          Err(err) => Err(anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
-                        }
+                        Some(Arc::new(ExternalAccountKey::new(
+                          eab_key_id.to_string(),
+                          &base64::engine::general_purpose::URL_SAFE_NO_PAD
+                            .decode(eab_key_hmac)
+                            .map_err(|err| anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
+                        )))
                       } else {
                         None
                       }
@@ -1341,15 +1332,12 @@ fn before_starting_server(
         .map_err(|_| anyhow::anyhow!("Can't access the QUIC listeners"))?;
       let mut listened_socket_addresses = Vec::new();
       let mut quic_listened_socket_addresses = Vec::new();
-      let listen_ip_addr = match global_configuration
+      let listen_ip_addr = global_configuration
         .as_deref()
         .and_then(|c| get_value!("listen_ip", c))
         .and_then(|v| v.as_str())
         .map_or(Ok(IpAddr::V6(Ipv6Addr::UNSPECIFIED)), |a| a.parse())
-      {
-        Ok(addr) => addr,
-        Err(_) => Err(anyhow::anyhow!("Invalid IP address to listen to"))?,
-      };
+        .map_err(|_| anyhow::anyhow!("Invalid IP address to listen to"))?;
       for (tcp_port, encrypted) in nonencrypted_ports
         .iter()
         .map(|p| (*p, false))
