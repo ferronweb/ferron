@@ -900,25 +900,39 @@ async fn server_event_loop(
   let tls_config_builder_wants_versions =
     ServerConfig::builder_with_provider(Arc::new(crypto_provider_cloned));
 
-  // Very simple minimum and maximum TLS version logic for now...
   let min_tls_version_option = yaml_config["global"]["tlsMinVersion"].as_str();
   let max_tls_version_option = yaml_config["global"]["tlsMaxVersion"].as_str();
-  let tls_config_builder_wants_verifier = match min_tls_version_option {
-    Some("TLSv1.3") => match max_tls_version_option {
-      Some("TLSv1.2") => {
-        logger
-          .send(LogMessage::new(
-            String::from("The maximum TLS version is older than the minimum TLS version"),
-            true,
-          ))
-          .await
-          .unwrap_or_default();
-        Err(anyhow::anyhow!(String::from(
-          "The maximum TLS version is older than the minimum TLS version"
-        )))?
-      }
-      Some("TLSv1.3") | None => {
-        match tls_config_builder_wants_versions.with_protocol_versions(&[&TLS13]) {
+  let tls_config_builder_wants_verifier = if min_tls_version_option.is_none()
+    && max_tls_version_option.is_none()
+  {
+    tls_config_builder_wants_versions.with_safe_default_protocol_versions()?
+  } else {
+    let tls_versions = [("TLSv1.2", &TLS12), ("TLSv1.3", &TLS13)];
+    let min_tls_version_index =
+      min_tls_version_option.map_or(Some(0), |v| tls_versions.iter().position(|p| p.0 == v));
+    let max_tls_version_index = max_tls_version_option.map_or(Some(tls_versions.len() - 1), |v| {
+      tls_versions.iter().position(|p| p.0 == v)
+    });
+    if let Some(min_tls_version_index) = min_tls_version_index {
+      if let Some(max_tls_version_index) = max_tls_version_index {
+        if max_tls_version_index < min_tls_version_index {
+          logger
+            .send(LogMessage::new(
+              String::from("Maximum TLS version is older than minimum TLS version"),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+          Err(anyhow::anyhow!(
+            "Maximum TLS version is older than minimum TLS version"
+          ))?
+        }
+        match tls_config_builder_wants_versions.with_protocol_versions(
+          &tls_versions[min_tls_version_index..=max_tls_version_index]
+            .iter()
+            .map(|p| p.1)
+            .collect::<Vec<_>>(),
+        ) {
           Ok(builder) => builder,
           Err(err) => {
             logger
@@ -934,56 +948,7 @@ async fn server_event_loop(
             ))?
           }
         }
-      }
-      _ => {
-        logger
-          .send(LogMessage::new(
-            String::from("Invalid maximum TLS version"),
-            true,
-          ))
-          .await
-          .unwrap_or_default();
-        Err(anyhow::anyhow!(String::from("Invalid maximum TLS version")))?
-      }
-    },
-    Some("TLSv1.2") | None => match max_tls_version_option {
-      Some("TLSv1.2") => {
-        match tls_config_builder_wants_versions.with_protocol_versions(&[&TLS12]) {
-          Ok(builder) => builder,
-          Err(err) => {
-            logger
-              .send(LogMessage::new(
-                format!("Couldn't create the TLS server configuration: {err}"),
-                true,
-              ))
-              .await
-              .unwrap_or_default();
-            Err(anyhow::anyhow!(
-              "Couldn't create the TLS server configuration: {}",
-              err
-            ))?
-          }
-        }
-      }
-      Some("TLSv1.3") | None => {
-        match tls_config_builder_wants_versions.with_protocol_versions(&[&TLS12, &TLS13]) {
-          Ok(builder) => builder,
-          Err(err) => {
-            logger
-              .send(LogMessage::new(
-                format!("Couldn't create the TLS server configuration: {err}"),
-                true,
-              ))
-              .await
-              .unwrap_or_default();
-            Err(anyhow::anyhow!(
-              "Couldn't create the TLS server configuration: {}",
-              err
-            ))?
-          }
-        }
-      }
-      _ => {
+      } else {
         logger
           .send(LogMessage::new(
             String::from("Invalid maximum TLS version"),
@@ -991,10 +956,9 @@ async fn server_event_loop(
           ))
           .await
           .unwrap_or_default();
-        Err(anyhow::anyhow!(String::from("Invalid maximum TLS version")))?
+        Err(anyhow::anyhow!("Invalid maximum TLS version"))?
       }
-    },
-    _ => {
+    } else {
       logger
         .send(LogMessage::new(
           String::from("Invalid minimum TLS version"),
@@ -1002,7 +966,7 @@ async fn server_event_loop(
         ))
         .await
         .unwrap_or_default();
-      Err(anyhow::anyhow!(String::from("Invalid minimum TLS version")))?
+      Err(anyhow::anyhow!("Invalid minimum TLS version"))?
     }
   };
 
