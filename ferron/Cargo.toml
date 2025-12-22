@@ -87,6 +87,7 @@ h3-quinn = "0.0.10"
 quinn = "0.11.7"
 httpdate = "1.0.3"
 cidr = "0.3.2"
+ahash = { version = "0.8.12", optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4.4"
@@ -95,7 +96,7 @@ shiba = { workspace = true }
 [features]
 default = ["cache", "cgi", "fauth", "fcgi", "fproxy", "rproxy", "scgi"]
 asgi = ["pyo3", "pyo3-async-runtimes"]
-cache = ["cache_control"]
+cache = ["cache_control", "ahash"]
 cgi = ["httparse", "memchr"]
 example = []
 fauth = []

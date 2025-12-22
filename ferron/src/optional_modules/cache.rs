@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::error::Error;
-use std::hash::RandomState;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -9,6 +8,7 @@ use crate::ferron_common::{
   ServerModuleHandlers, SocketData,
 };
 use crate::ferron_common::{HyperResponse, WithRuntime};
+use ahash::RandomState;
 use async_trait::async_trait;
 use cache_control::{Cachability, CacheControl};
 use futures_util::{StreamExt, TryStreamExt};
@@ -33,7 +33,7 @@ pub fn server_module_init(
 
   Ok(Box::new(CacheModule::new(
     Arc::new(RwLock::new(LinkedHashMap::with_hasher(RandomState::new()))),
-    Arc::new(RwLock::new(HashMap::new())),
+    Arc::new(RwLock::new(HashMap::with_hasher(RandomState::new()))),
     maximum_cache_entries,
   )))
 }
@@ -55,7 +55,7 @@ struct CacheModule {
       >,
     >,
   >,
-  vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+  vary_cache: Arc<RwLock<HashMap<String, Vec<String>, RandomState>>>,
   maximum_cache_entries: Option<usize>,
 }
 
@@ -77,7 +77,7 @@ impl CacheModule {
         >,
       >,
     >,
-    vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+    vary_cache: Arc<RwLock<HashMap<String, Vec<String>, RandomState>>>,
     maximum_cache_entries: Option<usize>,
   ) -> Self {
     Self {
@@ -125,7 +125,7 @@ struct CacheModuleHandlers {
       >,
     >,
   >,
-  vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+  vary_cache: Arc<RwLock<HashMap<String, Vec<String>, RandomState>>>,
   maximum_cache_entries: Option<usize>,
   cache_vary_headers_configured: Vec<String>,
   cache_ignore_headers_configured: Vec<String>,
