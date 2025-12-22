@@ -298,8 +298,11 @@ fn before_starting_server(
         });
         if let Some(min_tls_version_index) = min_tls_version_index {
           if let Some(max_tls_version_index) = max_tls_version_index {
+            if max_tls_version_index < min_tls_version_index {
+              Err(anyhow::anyhow!("Maximum TLS version is older than minimum TLS version"))?
+            }
             tls_config_builder_wants_versions.with_protocol_versions(
-              &tls_versions[min_tls_version_index..max_tls_version_index]
+              &tls_versions[min_tls_version_index..=max_tls_version_index]
                 .iter()
                 .map(|p| p.1)
                 .collect::<Vec<_>>(),
