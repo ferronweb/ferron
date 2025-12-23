@@ -4,6 +4,13 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 1.3.7
+
+**Released in December 23, 2025**
+
+- Added support for accepting CIDR ranges for IP blocklists (backported from Ferron 2).
+- Fixed a panic when the global web server configuration is not present in the configuration file.
+
 ## Ferron 2.2.1
 
 **Released in December 5, 2025**
