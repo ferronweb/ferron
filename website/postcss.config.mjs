@@ -1,11 +1,11 @@
 // From https://gist.github.com/alexanderbuhler/2386befd7b6b3be3695667cb5cb5e709 and transformed from CommonJS to ES modules
 
-import postcss from "postcss";
-import valueParser from "postcss-value-parser";
-import postcssMediaMinmax from "postcss-media-minmax";
 import postcssOklabFunction from "@csstools/postcss-oklab-function";
-import postcssNesting from "postcss-nesting";
 import autoprefixer from "autoprefixer";
+import postcss from "postcss";
+import postcssMediaMinmax from "postcss-media-minmax";
+import postcssNesting from "postcss-nesting";
+import valueParser from "postcss-value-parser";
 
 const propertyInjectPlugin = () => {
   return {
