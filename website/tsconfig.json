@@ -2,7 +2,7 @@
   "extends": "astro/tsconfigs/strict",
   "include": [
     ".astro/types.d.ts",
-    "src/asciinema-player.ts",
+    "src/asciinema-player.d.ts",
     "src/**/*",
     "../docs/docLinks.ts"
   ],
