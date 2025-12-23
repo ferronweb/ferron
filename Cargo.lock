@@ -2002,9 +2002,9 @@ dependencies = [
 
 [[package]]
 name = "rasn"
-version = "0.28.1"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3bae6a9d0997284956e6340ba878ff27ac97edd16c10c7217dd13f4f55a4dd9"
+checksum = "9081a9e4bfa889ac3d4c5f1329d1802c0d9e89c25b7ca688ce2f97310e49213f"
 dependencies = [
  "bitvec",
  "bitvec-nom2",
@@ -2025,9 +2025,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-derive"
-version = "0.28.1"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d30671578ceaa2eaae5169bd47dfb8270cc8200b9c43401c9a23629b840102b"
+checksum = "33bfba4b924023d83b301ad2c555a99ee70e4a0a2cf65b3cc72bc1615fcc21d6"
 dependencies = [
  "proc-macro2",
  "rasn-derive-impl",
@@ -2036,9 +2036,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-derive-impl"
-version = "0.28.1"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be4f81181ec7120b423997cda0d08758d153077458ec80276ff9f6acb93d308a"
+checksum = "14c32e08959f4117a9df9014d6cade57220866050f5d5b9da83f5723fc7eb0b5"
 dependencies = [
  "either",
  "itertools 0.13.0",
@@ -2050,9 +2050,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-ocsp"
-version = "0.28.1"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05bd201bac785535bd00fd00646fe1787bb25ca8d7c928fbfc5f129ae37ffd53"
+checksum = "8cb76e5fe4cd87f9255b2f2c4fe381c68e58ef205035701928bd6806860fd935"
 dependencies = [
  "rasn",
  "rasn-pkix",
@@ -2060,9 +2060,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-pkix"
-version = "0.28.1"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af99f6de65b70491a57cbc25810a2627e870cd9befbba220ae8430c5ad7f62a2"
+checksum = "1f5947272c1c9b5b6144bf840afd2f5f749852f6a5da6585a70ac14051a4e6d6"
 dependencies = [
  "rasn",
 ]
@@ -2121,9 +2121,9 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
 name = "reqwest"
-version = "0.12.26"
+version = "0.12.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b4c14b2d9afca6a60277086b0cc6a6ae0b568f6f7916c943a8cdc79f8be240f"
+checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
 dependencies = [
  "base64",
  "bytes",
@@ -2405,9 +2405,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.145"
+version = "1.0.146"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "402a6f66d8c709116cf22f558eab210f5a50187f702eb4d7e5ef38d9a7f1c79c"
+checksum = "217ca874ae0207aac254aa02c957ded05585a90892cc8d87f9e5fa49669dadd8"
 dependencies = [
  "itoa",
  "memchr",
