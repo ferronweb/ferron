@@ -19,7 +19,7 @@ const docLinks = Astro.props.docLinks;
 
 <header class="sticky top-0 z-50 w-full border-b print:hidden">
   <div
-    class="bg-background/95 supports-[backdrop-filter]:bg-background/80 backdrop-blur"
+    class="bg-background/95 supports-backdrop-filter:bg-background/80 backdrop-blur"
   >
     <div
       class="max-w-384 w-full mx-auto ps-4 pe-2 md:px-8 flex h-15 items-center justify-between"
@@ -167,7 +167,7 @@ const docLinks = Astro.props.docLinks;
     </div>
   </div>
   <div
-    class="hidden md:hidden bg-background supports-[backdrop-filter]:bg-background/90 backdrop-blur size-full overflow-auto z-60 fixed top-0 shrink-0 duration-1000"
+    class="hidden md:hidden bg-background supports-backdrop-filter:bg-background/90 backdrop-blur size-full overflow-auto z-60 fixed top-0 shrink-0 duration-1000"
     data-mobile-menu
   >
     <div class="flex flex-row justify-between px-4 pt-4 md:gap-10">
@@ -281,7 +281,7 @@ const docLinks = Astro.props.docLinks;
   {
     docLinks ? (
       <div
-        class="hidden bg-background supports-[backdrop-filter]:bg-background/80 backdrop-blur size-full overflow-auto z-70 fixed top-0 shrink-0"
+        class="hidden bg-background supports-backdrop-filter:bg-background/80 backdrop-blur size-full overflow-auto z-70 fixed top-0 shrink-0"
         data-search-menu
       >
         <div class="flex p-4">

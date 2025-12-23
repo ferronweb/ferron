@@ -9,10 +9,10 @@ import FontAwesomeIcon from "../FontAwesomeIcon.astro";
     class="absolute text-primary/10 size-24! -top-4 -left-1 rotate-180"
   />
   <div class="flex flex-col h-full">
-    <p class="text-base mb-6 flex-grow">{Astro.props.testimonial}</p>
+    <p class="text-base mb-6 grow">{Astro.props.testimonial}</p>
     <div class="border-t pt-4">
       <div class="flex flex-row">
-        <div class="flex-grow">
+        <div class="grow">
           <p class="font-semibold">{Astro.props.name}</p>
           {
             Astro.props.description ? (
