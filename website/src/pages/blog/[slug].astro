@@ -138,40 +138,44 @@ const { Content } = await render(Astro.props.post);
             href={`https://x.com/intent/tweet?text=${encodeURIComponent(data.title || "")}&url=${encodeURIComponent(Astro.url.href)}`}
             target="_blank"
             rel="noopener noreferrer"
+            class="flex items-center"
           >
             <FontAwesomeIcon
               icon={faXTwitter}
-              class="size-6 text-muted-foreground hover:text-primary transition-colors"
+              class="size-6! text-muted-foreground hover:text-primary transition-colors align-text-top!"
             />
           </a>
           <a
             href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(Astro.url.href)}`}
             target="_blank"
             rel="noopener noreferrer"
+            class="flex items-center"
           >
             <FontAwesomeIcon
               icon={faFacebook}
-              class="size-6 text-muted-foreground hover:text-primary transition-colors"
+              class="size-6! text-muted-foreground hover:text-primary transition-colors align-text-top!"
             />
           </a>
           <a
             href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(Astro.url.href)}`}
             target="_blank"
             rel="noopener noreferrer"
+            class="flex items-center"
           >
             <FontAwesomeIcon
               icon={faLinkedin}
-              class="size-6 text-muted-foreground hover:text-primary transition-colors"
+              class="size-6! text-muted-foreground hover:text-primary transition-colors align-text-top!"
             />
           </a>
           <a
             href={`https://threads.com/intent/post?text=${encodeURIComponent(`${data.title} - ${Astro.url.href}`)}`}
             target="_blank"
             rel="noopener noreferrer"
+            class="flex items-center"
           >
             <FontAwesomeIcon
               icon={faThreads}
-              class="size-6 text-muted-foreground hover:text-primary transition-colors"
+              class="size-6! text-muted-foreground hover:text-primary transition-colors align-text-top!"
             />
           </a>
         </div>
