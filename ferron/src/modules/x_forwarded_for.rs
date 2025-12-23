@@ -7,6 +7,7 @@ use crate::ferron_common::{
 };
 use crate::ferron_common::{HyperUpgraded, WithRuntime};
 use async_trait::async_trait;
+use hyper::header::HeaderName;
 use hyper::StatusCode;
 use hyper_tungstenite::HyperWebsocket;
 use tokio::runtime::Handle;
@@ -46,7 +47,10 @@ impl ServerModuleHandlers for XForwardedForModuleHandlers {
       if config["enableIPSpoofing"].as_bool() == Some(true) {
         let hyper_request = request.get_hyper_request();
 
-        if let Some(x_forwarded_for_value) = hyper_request.headers().get("x-forwarded-for") {
+        if let Some(x_forwarded_for_value) = hyper_request
+          .headers()
+          .get(HeaderName::from_static("x-forwarded-for"))
+        {
           let x_forwarded_for = x_forwarded_for_value.to_str()?;
 
           let prepared_remote_ip_str = match x_forwarded_for.split(",").nth(0) {

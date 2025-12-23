@@ -23,10 +23,10 @@ use hyper::body::{Body, Bytes, Frame};
 use hyper::header::{self, HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
 use hyper_tungstenite::is_upgrade_request;
-use rustls_acme::ResolvesServerCertAcme;
 use tokio::fs;
 use tokio::io::BufReader;
 use tokio::time::timeout;
+use tokio_rustls_acme2::ResolvesServerCertAcme;
 use tokio_util::io::ReaderStream;
 use yaml_rust2::Yaml;
 
@@ -96,7 +96,8 @@ async fn generate_error_response(
   if let Some(content_length) = content_length {
     response_builder = response_builder.header(header::CONTENT_LENGTH, content_length);
   }
-  response_builder = response_builder.header(header::CONTENT_TYPE, "text/html");
+  response_builder =
+    response_builder.header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"));
 
   response_builder.body(response_body).unwrap_or_default()
 }
@@ -271,7 +272,7 @@ async fn request_handler_wrapped(
               }
               let response = Response::builder()
                 .status(StatusCode::BAD_REQUEST)
-                .header(header::CONTENT_TYPE, "text/html")
+                .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
                 .body(
                   Full::new(Bytes::from(generate_default_error_page(
                     StatusCode::BAD_REQUEST,
@@ -354,7 +355,7 @@ async fn request_handler_wrapped(
         }
         let response = Response::builder()
           .status(StatusCode::BAD_REQUEST)
-          .header(header::CONTENT_TYPE, "text/html")
+          .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
           .body(
             Full::new(Bytes::from(generate_default_error_page(
               StatusCode::BAD_REQUEST,
@@ -446,7 +447,7 @@ async fn request_handler_wrapped(
       }
       let response = Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .header(header::CONTENT_TYPE, "text/html")
+        .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
         .body(
           Full::new(Bytes::from(generate_default_error_page(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -811,14 +812,18 @@ async fn request_handler_wrapped(
     let response = match request.method() {
       &Method::OPTIONS => Response::builder()
         .status(StatusCode::NO_CONTENT)
-        .header(header::ALLOW, "GET, POST, HEAD, OPTIONS")
+        .header(
+          header::ALLOW,
+          HeaderValue::from_static("GET, POST, HEAD, OPTIONS"),
+        )
         .body(Empty::new().map_err(|e| match e {}).boxed())
         .unwrap_or_default(),
       _ => {
         let mut header_map = HeaderMap::new();
-        if let Ok(header_value) = HeaderValue::from_str("GET, POST, HEAD, OPTIONS") {
-          header_map.insert(header::ALLOW, header_value);
-        };
+        header_map.insert(
+          header::ALLOW,
+          HeaderValue::from_static("GET, POST, HEAD, OPTIONS"),
+        );
         generate_error_response(StatusCode::BAD_REQUEST, &combined_config, &Some(header_map)).await
       }
     };

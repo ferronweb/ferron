@@ -80,7 +80,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
@@ -153,20 +153,20 @@ jobs:
           # The "move-ferron-archive" is a custom command that moves the ZIP archive to be served by the download server
           ssh ferron-servers "sudo move-ferron-archive ${{ env.FERRON_VERSION }} ${{ matrix.target }}"
 
-      - name: Release Ferron to GitHub
-        uses: ncipollo/release-action@v1
-        with:
-          allowUpdates: true
-          artifacts: "ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip"
-          tag: "${{ env.FERRON_VERSION }}"
-          commit: "main"
+      # - name: Release Ferron to GitHub
+      #   uses: ncipollo/release-action@v1
+      #   with:
+      #     allowUpdates: true
+      #     artifacts: "ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip"
+      #     tag: "${{ env.FERRON_VERSION }}"
+      #     commit: "main"
 
   docs:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: main
 
@@ -223,19 +223,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@28fdb31ff34708d19615a74d67103ddc2ea9725c
+        uses: docker/login-action@v3.6.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@28fdb31ff34708d19615a74d67103ddc2ea9725c
+        uses: docker/login-action@v3.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -263,11 +263,11 @@ jobs:
           TAG_TYPE=${{ matrix.group }}
           FERRON_MAJOR_VERSION=$(echo "$FERRON_VERSION" | cut -d '.' -f 1)
           if [ "$TAG_TYPE" = "latest" ] || [ "$TAG_TYPE" = "" ]; then
-            DOCKER_HUB_TAGS="ferronserver/ferron:$FERRON_VERSION,ferronserver/ferron:$FERRON_MAJOR_VERSION,ferronserver/ferron:latest"
-            DOCKER_GHCR_TAGS="ghcr.io/ferronweb/ferron:$FERRON_VERSION,ghcr.io/ferronweb/ferron:$FERRON_MAJOR_VERSION,ghcr.io/ferronweb/ferron:latest"
+            DOCKER_HUB_TAGS="ferronserver/ferron:$FERRON_VERSION,ferronserver/ferron:$FERRON_MAJOR_VERSION"
+            DOCKER_GHCR_TAGS="ghcr.io/ferronweb/ferron:$FERRON_VERSION,ghcr.io/ferronweb/ferron:$FERRON_MAJOR_VERSION"
           else
-            DOCKER_HUB_TAGS="ferronserver/ferron:$FERRON_VERSION-$TAG_TYPE,ferronserver/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE,ferronserver/ferron:$TAG_TYPE"
-            DOCKER_GHCR_TAGS="ghcr.io/ferronweb/ferron:$FERRON_VERSION-$TAG_TYPE,ghcr.io/ferronweb/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE,ghcr.io/ferronweb/ferron:$TAG_TYPE"
+            DOCKER_HUB_TAGS="ferronserver/ferron:$FERRON_VERSION-$TAG_TYPE,ferronserver/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE"
+            DOCKER_GHCR_TAGS="ghcr.io/ferronweb/ferron:$FERRON_VERSION-$TAG_TYPE,ghcr.io/ferronweb/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE"
           fi
           echo "DOCKER_TAGS=$DOCKER_HUB_TAGS,$DOCKER_GHCR_TAGS" >> $GITHUB_ENV
 
@@ -276,7 +276,7 @@ jobs:
 
       - name: Build and push Docker image
         id: push
-        uses: docker/build-push-action@9e436ba9f2d7bcd1d038c8e55d039d37896ddc5d
+        uses: docker/build-push-action@v6.18.0
         with:
           context: .
           file: ${{ matrix.dockerfile }}

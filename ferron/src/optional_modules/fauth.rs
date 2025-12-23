@@ -15,8 +15,8 @@ use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
 use hyper::body::Bytes;
 use hyper::client::conn::http1::SendRequest;
-use hyper::header::HeaderName;
-use hyper::{header, Method, Request, StatusCode, Uri, Version};
+use hyper::header::{self, HeaderName};
+use hyper::{Method, Request, StatusCode, Uri, Version};
 use hyper_tungstenite::HyperWebsocket;
 use hyper_util::rt::TokioIo;
 use rustls::pki_types::ServerName;
@@ -36,20 +36,20 @@ pub fn server_module_init(
   let mut roots: RootCertStore = RootCertStore::empty();
   let certs_result = load_native_certs();
   if !certs_result.errors.is_empty() {
-    Err(anyhow::anyhow!(format!(
+    Err(anyhow::anyhow!(
       "Couldn't load the native certificate store: {}",
       certs_result.errors[0]
-    )))?
+    ))?
   }
   let certs = certs_result.certs;
 
   for cert in certs {
     match roots.add(cert) {
       Ok(_) => (),
-      Err(err) => Err(anyhow::anyhow!(format!(
+      Err(err) => Err(anyhow::anyhow!(
         "Couldn't add a certificate to the certificate store: {}",
         err
-      )))?,
+      ))?,
     }
   }
 
@@ -204,7 +204,7 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
         // X-Forwarded-* headers to send the client's data to a forwarded authentication server
         auth_hyper_request_parts.headers.insert(
-          "x-forwarded-for",
+          HeaderName::from_static("x-forwarded-for"),
           socket_data
             .remote_addr
             .ip()
@@ -214,27 +214,30 @@ impl ServerModuleHandlers for ForwardedAuthenticationModuleHandlers {
         );
 
         if socket_data.encrypted {
-          auth_hyper_request_parts
-            .headers
-            .insert("x-forwarded-proto", "https".parse()?);
+          auth_hyper_request_parts.headers.insert(
+            HeaderName::from_static("x-forwarded-proto"),
+            "https".parse()?,
+          );
         } else {
-          auth_hyper_request_parts
-            .headers
-            .insert("x-forwarded-proto", "http".parse()?);
+          auth_hyper_request_parts.headers.insert(
+            HeaderName::from_static("x-forwarded-proto"),
+            "http".parse()?,
+          );
         }
 
         if let Some(original_host) = original_host {
           auth_hyper_request_parts
             .headers
-            .insert("x-forwarded-host", original_host);
+            .insert(HeaderName::from_static("x-forwarded-host"), original_host);
         }
 
-        auth_hyper_request_parts
-          .headers
-          .insert("x-forwarded-uri", path_and_query.parse()?);
+        auth_hyper_request_parts.headers.insert(
+          HeaderName::from_static("x-forwarded-uri"),
+          path_and_query.parse()?,
+        );
 
         auth_hyper_request_parts.headers.insert(
-          "x-forwarded-method",
+          HeaderName::from_static("x-forwarded-method"),
           hyper_request_parts.method.as_str().parse()?,
         );
 

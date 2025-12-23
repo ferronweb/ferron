@@ -1,4 +1,4 @@
-use memmem::{Searcher, TwoWaySearcher};
+use memchr::memmem::Finder;
 use std::io::Error;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -33,10 +33,10 @@ where
   // Asynchronous method to get the response headers
   pub async fn get_head(&mut self) -> Result<&[u8], Error> {
     let mut temp_buf = [0u8; RESPONSE_BUFFER_CAPACITY];
-    let rnrn = TwoWaySearcher::new(b"\r\n\r\n");
-    let nrnr = TwoWaySearcher::new(b"\n\r\n\r");
-    let nn = TwoWaySearcher::new(b"\n\n");
-    let rr = TwoWaySearcher::new(b"\r\r");
+    let rnrn = Finder::new(b"\r\n\r\n");
+    let nrnr = Finder::new(b"\n\r\n\r");
+    let nn = Finder::new(b"\n\n");
+    let rr = Finder::new(b"\r\r");
     let to_parse_length;
 
     loop {
@@ -61,18 +61,16 @@ where
       self.response_buf.extend_from_slice(&temp_buf[..read_bytes]);
 
       // Search for the "\r\n\r\n" sequence in the response buffer
-      if let Some(rnrn_index) = rnrn.search_in(&self.response_buf[begin_rnrn_or_nrnr_search..]) {
+      if let Some(rnrn_index) = rnrn.find(&self.response_buf[begin_rnrn_or_nrnr_search..]) {
         to_parse_length = begin_rnrn_or_nrnr_search + rnrn_index + 4;
         break;
-      } else if let Some(nrnr_index) =
-        nrnr.search_in(&self.response_buf[begin_rnrn_or_nrnr_search..])
-      {
+      } else if let Some(nrnr_index) = nrnr.find(&self.response_buf[begin_rnrn_or_nrnr_search..]) {
         to_parse_length = begin_rnrn_or_nrnr_search + nrnr_index + 4;
         break;
-      } else if let Some(nn_index) = nn.search_in(&self.response_buf[begin_rr_or_nn_search..]) {
+      } else if let Some(nn_index) = nn.find(&self.response_buf[begin_rr_or_nn_search..]) {
         to_parse_length = begin_rr_or_nn_search + nn_index + 2;
         break;
-      } else if let Some(rr_index) = rr.search_in(&self.response_buf[begin_rr_or_nn_search..]) {
+      } else if let Some(rr_index) = rr.find(&self.response_buf[begin_rr_or_nn_search..]) {
         to_parse_length = begin_rr_or_nn_search + rr_index + 2;
         break;
       }

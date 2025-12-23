@@ -1,5 +1,5 @@
 # Use the official Rust image as a build stage
-FROM rust:bookworm AS builder
+FROM rust:trixie AS builder
 
 # Set the working directory
 WORKDIR /usr/src/ferron
@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/git \
     mkdir .dist && cp target/release/ferron target/release/ferron-passwd .dist
 
 # Use a Distroless base image for the final image
-FROM gcr.io/distroless/cc-debian12:nonroot
+FROM gcr.io/distroless/cc-debian13:nonroot
 
 # Copy the compiled binaries from the builder stage
 COPY --from=builder /usr/src/ferron/.dist /usr/sbin

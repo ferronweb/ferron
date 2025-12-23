@@ -50,7 +50,10 @@ impl ServerModuleHandlers for DefaultHandlerChecksModuleHandlers {
             .response(
               Response::builder()
                 .status(StatusCode::NO_CONTENT)
-                .header(header::ALLOW, "GET, POST, HEAD, OPTIONS")
+                .header(
+                  header::ALLOW,
+                  HeaderValue::from_static("GET, POST, HEAD, OPTIONS"),
+                )
                 .body(Empty::new().map_err(|e| match e {}).boxed())
                 .unwrap_or_default(),
             )
@@ -59,9 +62,10 @@ impl ServerModuleHandlers for DefaultHandlerChecksModuleHandlers {
         &Method::GET | &Method::POST | &Method::HEAD => Ok(ResponseData::builder(request).build()),
         _ => {
           let mut header_map = HeaderMap::new();
-          if let Ok(header_value) = HeaderValue::from_str("GET, POST, HEAD, OPTIONS") {
-            header_map.insert(header::ALLOW, header_value);
-          };
+          header_map.insert(
+            header::ALLOW,
+            HeaderValue::from_static("GET, POST, HEAD, OPTIONS"),
+          );
           Ok(
             ResponseData::builder(request)
               .status(StatusCode::METHOD_NOT_ALLOWED)

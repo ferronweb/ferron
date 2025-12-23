@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::error::Error;
-use std::hash::RandomState;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -9,16 +8,16 @@ use crate::ferron_common::{
   ServerModuleHandlers, SocketData,
 };
 use crate::ferron_common::{HyperResponse, WithRuntime};
+use ahash::RandomState;
 use async_trait::async_trait;
 use cache_control::{Cachability, CacheControl};
 use futures_util::{StreamExt, TryStreamExt};
 use hashlink::LinkedHashMap;
 use http_body_util::{BodyExt, Full, StreamBody};
 use hyper::body::{Bytes, Frame};
-use hyper::header::HeaderValue;
+use hyper::header::{HeaderName, HeaderValue};
 use hyper::{header, HeaderMap, Method, Response, StatusCode};
 use hyper_tungstenite::HyperWebsocket;
-use itertools::Itertools;
 use tokio::runtime::Handle;
 use tokio::sync::RwLock;
 
@@ -34,7 +33,7 @@ pub fn server_module_init(
 
   Ok(Box::new(CacheModule::new(
     Arc::new(RwLock::new(LinkedHashMap::with_hasher(RandomState::new()))),
-    Arc::new(RwLock::new(HashMap::new())),
+    Arc::new(RwLock::new(HashMap::with_hasher(RandomState::new()))),
     maximum_cache_entries,
   )))
 }
@@ -56,7 +55,7 @@ struct CacheModule {
       >,
     >,
   >,
-  vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+  vary_cache: Arc<RwLock<HashMap<String, Vec<String>, RandomState>>>,
   maximum_cache_entries: Option<usize>,
 }
 
@@ -78,7 +77,7 @@ impl CacheModule {
         >,
       >,
     >,
-    vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+    vary_cache: Arc<RwLock<HashMap<String, Vec<String>, RandomState>>>,
     maximum_cache_entries: Option<usize>,
   ) -> Self {
     Self {
@@ -126,7 +125,7 @@ struct CacheModuleHandlers {
       >,
     >,
   >,
-  vary_cache: Arc<RwLock<HashMap<String, Vec<String>>>>,
+  vary_cache: Arc<RwLock<HashMap<String, Vec<String>, RandomState>>>,
   maximum_cache_entries: Option<usize>,
   cache_vary_headers_configured: Vec<String>,
   cache_ignore_headers_configured: Vec<String>,
@@ -319,14 +318,16 @@ impl ServerModuleHandlers for CacheModuleHandlers {
   ) -> Result<HyperResponse, Box<dyn Error + Send + Sync>> {
     WithRuntime::new(self.handle.clone(), async move {
       if self.no_store {
-        response
-          .headers_mut()
-          .insert(CACHE_HEADER_NAME, HeaderValue::from_str("BYPASS")?);
+        response.headers_mut().insert(
+          HeaderName::from_static(CACHE_HEADER_NAME),
+          HeaderValue::from_static("BYPASS"),
+        );
         Ok(response)
       } else if self.cached {
-        response
-          .headers_mut()
-          .insert(CACHE_HEADER_NAME, HeaderValue::from_str("HIT")?);
+        response.headers_mut().insert(
+          HeaderName::from_static(CACHE_HEADER_NAME),
+          HeaderValue::from_static("HIT"),
+        );
         Ok(response)
       } else if let Some(cache_key) = &self.cache_key {
         let (mut response_parts, mut response_body) = response.into_parts();
@@ -376,9 +377,10 @@ impl ServerModuleHandlers for CacheModuleHandlers {
             let chained_stream = cached_stream.chain(response_stream);
             let stream_body = StreamBody::new(chained_stream.map_ok(Frame::data));
             let response_body = BodyExt::boxed(stream_body);
-            response_parts
-              .headers
-              .insert(CACHE_HEADER_NAME, HeaderValue::from_str("MISS")?);
+            response_parts.headers.insert(
+              HeaderName::from_static(CACHE_HEADER_NAME),
+              HeaderValue::from_static("MISS"),
+            );
             let response = Response::from_parts(response_parts, response_body);
             Ok(response)
           } else {
@@ -393,11 +395,13 @@ impl ServerModuleHandlers for CacheModuleHandlers {
             let mut processed_vary_orig = self.cache_vary_headers_configured.clone();
             processed_vary_orig.append(&mut response_vary);
 
-            let processed_vary = processed_vary_orig
+            let mut processed_vary = processed_vary_orig
               .iter()
-              .unique()
               .map(|s| s.to_owned())
               .collect::<Vec<String>>();
+
+            processed_vary.sort_unstable();
+            processed_vary.dedup();
 
             if !processed_vary.contains(&"*".to_string()) {
               let cache_key_with_vary = format!(
@@ -466,16 +470,18 @@ impl ServerModuleHandlers for CacheModuleHandlers {
               futures_util::stream::once(async move { Ok(Bytes::from(response_body_buffer)) });
             let stream_body = StreamBody::new(cached_stream.map_ok(Frame::data));
             let response_body = BodyExt::boxed(stream_body);
-            response_parts
-              .headers
-              .insert(CACHE_HEADER_NAME, HeaderValue::from_str("MISS")?);
+            response_parts.headers.insert(
+              HeaderName::from_static(CACHE_HEADER_NAME),
+              HeaderValue::from_static("MISS"),
+            );
             let response = Response::from_parts(response_parts, response_body);
             Ok(response)
           }
         } else {
-          response_parts
-            .headers
-            .insert(CACHE_HEADER_NAME, HeaderValue::from_str("MISS")?);
+          response_parts.headers.insert(
+            HeaderName::from_static(CACHE_HEADER_NAME),
+            HeaderValue::from_static("MISS"),
+          );
           let response = Response::from_parts(response_parts, response_body);
           Ok(response)
         }
