@@ -57,7 +57,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
 - **disableNonEncryptedServer** (_bool_)
   - Option to disable the HTTP server if the HTTPS server is running. When set to `true`, the server will only accept HTTPS connections and will disable the HTTP server. Default: `false`
 - **blocklist** (_Array&lt;String&gt;_)
-  - IP block list. This setting specifies an array of IP addresses that the server will block from accessing its services. The block list will only work with non-forward proxy requests. Default: None
+  - IP block list. This setting specifies an array of IP addresses (and CIDR ranges, starting from Ferron 1.3.7) that the server will block from accessing its services. The block list will only work with non-forward proxy requests. Default: None
 - **enableOCSPStapling** (_bool_)
   - Option to enable OCSP stapling. When set to `true`, the server will use OCSP stapling to provide certificate revocation status to clients. Certificates with `Must-Staple` extension will not work with automatic TLS enabled. Default: `true`
 - **environmentVariables** (_Object_)
@@ -166,7 +166,7 @@ Ferron can be configured in the `ferron.yaml` file. Below is the description of 
     - **userList** (_Array&lt;String&gt;_)
       - List of users allowed to access. This setting specifies an array of usernames that are allowed to access the resource associated with the status code. Default: None
     - **users** (_Array&lt;String&gt;_)
-      - List of IP addresses allowed to access. This setting specifies an array of IP addresses that are allowed to access the resource associated with the status code. Default: None
+      - List of IP addresses allowed to access. This setting specifies an array of IP addresses (and CIDR ranges, starting from Ferron 1.3.7) that are allowed to access the resource associated with the status code. Default: None
 - **errorPages** (_Array&lt;Object&gt;_)
   - Custom error pages. This setting specifies an array of custom error pages that the server will use for specific HTTP status codes. Default: None
   - **Sub-properties**:
