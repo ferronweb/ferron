@@ -130,7 +130,7 @@
   }
 
   .icon-badge svg {
-    @apply !size-6 text-primary;
+    @apply size-6! text-primary;
   }
 
   .icon-badge-large {
@@ -138,7 +138,7 @@
   }
 
   .icon-badge-large svg {
-    @apply !size-9;
+    @apply size-9!;
   }
 
   .badge {

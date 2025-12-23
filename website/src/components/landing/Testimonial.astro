@@ -6,7 +6,7 @@ import FontAwesomeIcon from "../FontAwesomeIcon.astro";
 <div class="card card-hover relative inline-block mb-8 w-full">
   <FontAwesomeIcon
     icon={faQuoteRight}
-    class="absolute text-primary/10 !size-24 -top-4 -left-1 rotate-180"
+    class="absolute text-primary/10 size-24! -top-4 -left-1 rotate-180"
   />
   <div class="flex flex-col h-full">
     <p class="text-base mb-6 flex-grow">{Astro.props.testimonial}</p>
@@ -28,7 +28,7 @@ import FontAwesomeIcon from "../FontAwesomeIcon.astro";
           <a href={Astro.props.sourceLink} target="_blank" aria-label="Source">
             <FontAwesomeIcon
               icon={Astro.props.sourceIcon}
-              class="inline-block !size-6 self-center"
+              class="inline-block size-6! self-center"
             />
           </a>
         </div>

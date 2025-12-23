@@ -57,7 +57,7 @@ const { Content } = await render(Astro.props.post);
   }}
 >
   <main
-    class="max-w-5xl container mx-auto pt-4 pb-8 md:pt-24 md:pb-28 flex flex-col items-center !px-4"
+    class="max-w-5xl container mx-auto pt-4 pb-8 md:pt-24 md:pb-28 flex flex-col items-center px-4!"
   >
     <div
       class="w-full mx-auto flex flex-row justify-between items-center print:hidden"
@@ -84,7 +84,7 @@ const { Content } = await render(Astro.props.post);
               <span class="whitespace-nowrap">
                 <FontAwesomeIcon
                   icon={faCalendar}
-                  class="!size-5 me-1 !inline-block !align-middle"
+                  class="size-5! me-1 inline-block! align-middle!"
                 />
                 <span class="align-middle">
                   <>
@@ -100,7 +100,7 @@ const { Content } = await render(Astro.props.post);
               <span class="whitespace-nowrap">
                 <FontAwesomeIcon
                   icon={faUser}
-                  class="!size-5 me-1 !inline-block !align-middle"
+                  class="size-5! me-1 inline-block! align-middle!"
                 />
                 <span class="align-middle">
                   <>
@@ -122,7 +122,7 @@ const { Content } = await render(Astro.props.post);
       </div>
     </header>
     <article
-      class="prose w-full max-w-full md:prose-lg print:prose-pre:!whitespace-pre-wrap print:prose-pre:!overflow-x-visible"
+      class="prose w-full max-w-full md:prose-lg print:prose-pre:whitespace-pre-wrap! print:prose-pre:overflow-x-visible!"
     >
       <Content/>
     </article>
