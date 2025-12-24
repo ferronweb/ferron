@@ -34,6 +34,7 @@ use xxhash_rust::xxh3::xxh3_128;
 
 use crate::tls_util::load_host_resolver;
 use ferron_common::dns::DnsProvider;
+use ferron_common::logging::ErrorLogger;
 
 pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 const SECONDS_BEFORE_RENEWAL: u64 = 86400; // 1 day before expiration
@@ -311,9 +312,13 @@ pub async fn check_certificate_validity_or_install_cached(
 }
 
 /// Provisions TLS certificates using the ACME protocol.
-pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub async fn provision_certificate(
+  config: &mut AcmeConfig,
+  error_logger: &ErrorLogger,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
   let account_cache_key = get_account_cache_key(config);
   let certificate_cache_key = get_certificate_cache_key(config);
+  let mut had_cache_error = false;
 
   let acme_account = if let Some(acme_account) = config.account.take() {
     acme_account
@@ -337,12 +342,24 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
         )
         .await?;
 
-      set_in_cache(
+      if let Err(err) = set_in_cache(
         &config.account_cache,
         &account_cache_key,
         serde_json::to_vec(&account_credentials)?,
       )
-      .await?;
+      .await
+      {
+        if !had_cache_error {
+          error_logger
+            .log(&format!(
+              "Failed to access the ACME cache: {}. Ferron can't use ACME caching",
+              err
+            ))
+            .await;
+          had_cache_error = true;
+        }
+      }
+
       account
     }
   };
@@ -464,12 +481,23 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
       private_key_pem: private_key_pem.clone(),
     };
 
-    set_in_cache(
+    if let Err(err) = set_in_cache(
       &config.certificate_cache,
       &certificate_cache_key,
       serde_json::to_vec(&certificate_cache_data)?,
     )
-    .await?;
+    .await
+    {
+      if !had_cache_error {
+        error_logger
+          .log(&format!(
+            "Failed to access the ACME cache: {}. Ferron can't use ACME caching",
+            err
+          ))
+          .await;
+        had_cache_error = true;
+      }
+    }
 
     let certs = CertificateDer::pem_slice_iter(certificate_chain_pem.as_bytes())
       .collect::<Result<Vec<_>, _>>()

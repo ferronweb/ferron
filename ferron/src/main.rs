@@ -20,7 +20,7 @@ use std::time::Duration;
 use async_channel::{Receiver, Sender};
 use base64::Engine;
 use clap::{Arg, ArgAction, ArgMatches, Command};
-use ferron_common::logging::LogMessage;
+use ferron_common::logging::{ErrorLogger, LogMessage};
 use ferron_common::{get_entry, get_value, get_values};
 use ferron_load_modules::{get_dns_provider, obtain_module_loaders, obtain_observability_backend_loaders};
 use human_panic::{setup_panic, Metadata};
@@ -1113,21 +1113,17 @@ fn before_starting_server(
             });
           }
 
+          let error_logger = ErrorLogger::new_multiple(
+            global_configuration_clone
+              .as_ref()
+              .map_or(vec![], |c| c.observability.log_channels.clone()),
+          );
           loop {
             for acme_config in &mut *acme_configs_mutex.lock().await {
-              if let Err(acme_error) = provision_certificate(acme_config).await {
-                for acme_logger in global_configuration_clone
-                  .as_ref()
-                  .map_or(&vec![], |c| &c.observability.log_channels)
-                {
-                  acme_logger
-                    .send(LogMessage::new(
-                      format!("Error while obtaining a TLS certificate: {acme_error}"),
-                      true,
-                    ))
-                    .await
-                    .unwrap_or_default();
-                }
+              if let Err(acme_error) = provision_certificate(acme_config, &error_logger).await {
+                error_logger
+                  .log(&format!("Error while obtaining a TLS certificate: {acme_error}"))
+                  .await
               }
             }
             tokio::time::sleep(Duration::from_secs(10)).await;
