@@ -468,8 +468,10 @@ pub async fn provision_certificate(
   }
 
   let acme_order_status = acme_order.poll_ready(&RetryPolicy::default()).await?;
-  if acme_order_status != OrderStatus::Ready {
-    Err(anyhow::anyhow!("ACME order is not ready",))?;
+  match acme_order_status {
+    OrderStatus::Ready => (), // It's alright!
+    OrderStatus::Invalid => Err(anyhow::anyhow!("ACME order is invalid"))?,
+    _ => Err(anyhow::anyhow!("ACME order is not ready"))?,
   }
 
   let finalize_closure = async {
