@@ -392,6 +392,7 @@ fn before_starting_server(
           }
         });
 
+      let mut proxied_tls_domains: HashMap<String, String> = HashMap::new();
       let mut tls_ports: HashMap<u16, CustomSniResolver> = HashMap::new();
       #[allow(clippy::type_complexity)]
       let mut tls_port_locks: HashMap<u16, Arc<tokio::sync::RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>> =
@@ -448,6 +449,17 @@ fn before_starting_server(
           .unwrap_or(false);
 
         let https_port = server_configuration.filters.port.or(default_https_port);
+
+        // Check for a `proxy_tls` directive in the server configuration block
+        if let Some(proxied_tls_domain) = get_value!("proxy_tls", server_configuration) {
+          // Woops apparently this automatically adds 443 to the * block listened ports which is definitely not what we want
+          // but it works with globals so hey this is just a PoC
+          proxied_tls_domains.insert(
+            server_configuration.filters.hostname.clone().unwrap(),
+            proxied_tls_domain.as_str().unwrap().to_string(),
+          );
+          tls_ports.insert(https_port.unwrap_or(443), CustomSniResolver::new());
+        }
 
         let sni_hostname = server_configuration.filters.hostname.clone().or_else(|| {
           // !!! UNTESTED, many clients don't send SNI hostname when accessing via IP address anyway
@@ -1431,6 +1443,7 @@ fn before_starting_server(
           acme_tls_alpn_01_configs.clone(),
           acme_http_01_resolvers.clone(),
           enable_proxy_protocol,
+          proxied_tls_domains.clone(),
         )?);
       }
 
