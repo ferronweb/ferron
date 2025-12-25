@@ -102,22 +102,12 @@ where
 /// Returns the index of the separator and the length of the separator.
 #[inline]
 fn search_header_body_separator(slice: &[u8]) -> Option<(usize, usize)> {
-  let mut last_chars: SmallVec<[u8; 4]> = SmallVec::with_capacity(4);
-  let mut index = 2;
-  let mut separator_half_at_beginning = false;
-  if slice.len() <= 2 {
+  if slice.len() < 2 {
     // Slice too short
     return None;
   }
-  if &slice[..2] == b"\r\n" || &slice[..2] == b"\n\r" {
-    // "\r\n" or "\n\r" at the beginning of the slice
-    last_chars.extend_from_slice(&slice[..2]);
-    separator_half_at_beginning = true;
-  }
-  if separator_half_at_beginning && slice[2] == last_chars[1] {
-    // Prevent false "\n\n" inside "\r\n\n" or "\r\r" inside "\n\r\r", both at the beginning
-    last_chars.clear();
-  }
+  let mut last_chars: SmallVec<[u8; 4]> = SmallVec::with_capacity(4);
+  let mut index = 0;
   while let Some(found_index) = memchr2(b'\r', b'\n', &slice[index..]) {
     if found_index > 0 {
       // Not "\n\n", "\r\n\r\n", "\r\r", nor "\n\n"...
@@ -166,6 +156,26 @@ mod tests {
 
     let head = response.get_head().await.unwrap();
     assert_eq!(head, b"Content-Type: text/plain\n\n");
+  }
+
+  #[tokio::test]
+  async fn test_get_head_empty() {
+    let data = b"\r\n\r\n";
+    let mut stream = Builder::new().read(data).build();
+    let mut response = CgiResponse::new(&mut stream);
+
+    let head = response.get_head().await.unwrap();
+    assert_eq!(head, b"\r\n\r\n");
+  }
+
+  #[tokio::test]
+  async fn test_get_head_empty_nn() {
+    let data = b"\n\n";
+    let mut stream = Builder::new().read(data).build();
+    let mut response = CgiResponse::new(&mut stream);
+
+    let head = response.get_head().await.unwrap();
+    assert_eq!(head, b"\n\n");
   }
 
   #[tokio::test]
