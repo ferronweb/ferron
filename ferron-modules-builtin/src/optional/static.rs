@@ -38,7 +38,7 @@ use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 #[cfg(feature = "runtime-monoio")]
-use ferron_common::util::MonoioFileStream;
+use ferron_common::util::MonoioFileStreamNoSpawn;
 use ferron_common::util::{anti_xss, sizify, ModuleCache, TtlCache};
 use ferron_common::{format_page, get_entries, get_entries_for_validation, get_entry, get_value};
 
@@ -1104,7 +1104,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
                     // Construct a boxed body
                     #[cfg(feature = "runtime-monoio")]
-                    let file_stream = MonoioFileStream::new(file, Some(range_begin), Some(range_end + 1));
+                    let file_stream = MonoioFileStreamNoSpawn::new(file, Some(range_begin), Some(range_end + 1));
                     #[cfg(feature = "runtime-tokio")]
                     let file_stream = {
                       let mut file = file;
@@ -1358,7 +1358,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
                   // Create a file stream.
                   #[cfg(feature = "runtime-monoio")]
-                  let file_stream = MonoioFileStream::new(file, None, Some(content_length));
+                  let file_stream = MonoioFileStreamNoSpawn::new(file, None, Some(content_length));
                   #[cfg(feature = "runtime-tokio")]
                   let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 

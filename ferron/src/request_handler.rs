@@ -22,7 +22,7 @@ use crate::config::{ServerConfiguration, ServerConfigurations};
 use crate::get_value;
 use crate::runtime::timeout;
 #[cfg(feature = "runtime-monoio")]
-use crate::util::MonoioFileStream;
+use crate::util::MonoioFileStreamNoSpawn;
 use crate::util::{
   generate_default_error_page, replace_header_placeholders, replace_log_placeholders, sanitize_url, SERVER_SOFTWARE,
 };
@@ -86,7 +86,7 @@ async fn generate_error_response(
           };
 
           #[cfg(feature = "runtime-monoio")]
-          let file_stream = MonoioFileStream::new(file, None, content_length);
+          let file_stream = MonoioFileStreamNoSpawn::new(file, None, content_length);
           #[cfg(feature = "runtime-tokio")]
           let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
