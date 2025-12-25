@@ -1517,6 +1517,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 new_remote_address: None,
               });
             } else {
+              // Directory listing is disabled
               return Ok(ResponseData {
                 request: Some(request),
                 response: None,
@@ -1526,6 +1527,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               });
             }
           } else {
+            // Static file serving can't be used on anything that's not a file or directory in Ferron
             return Ok(ResponseData {
               request: Some(request),
               response: None,
