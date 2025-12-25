@@ -20,14 +20,11 @@ use monoio::net::TcpStream;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
-#[cfg(feature = "runtime-tokio")]
 use tokio_util::io::ReaderStream;
 use tokio_util::io::StreamReader;
 
 use crate::util::cgi::CgiResponse;
 use crate::util::Copier;
-#[cfg(feature = "runtime-monoio")]
-use crate::util::SendReadStream;
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
@@ -622,10 +619,9 @@ async fn execute_scgi(
 
   response_builder = response_builder.status(status_code);
 
-  #[cfg(feature = "runtime-monoio")]
-  let reader_stream = SendReadStream::new(cgi_response);
-  #[cfg(feature = "runtime-tokio")]
   let reader_stream = ReaderStream::new(cgi_response);
+  #[cfg(feature = "runtime-monoio")]
+  let reader_stream = send_wrapper::SendWrapper::new(reader_stream);
   let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
   let boxed_body = stream_body.boxed();
 
