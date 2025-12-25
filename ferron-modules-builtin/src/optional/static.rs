@@ -267,7 +267,8 @@ pub async fn generate_directory_listing(
         );
 
         let row = format!(
-          "<tr><td class=\"directory-filename\">{}</td><td class=\"directory-size\">{}</td><td class=\"directory-date\">{}</td></tr>",
+          "<tr><td class=\"directory-filename\">{}</td>\
+          <td class=\"directory-size\">{}</td><td class=\"directory-date\">{}</td></tr>",
           filename_link,
           match metadata.is_file() {
             true => anti_xss(&sizify(metadata.len(), false)),
@@ -293,7 +294,8 @@ pub async fn generate_directory_listing(
           anti_xss(&filename)
         );
         let row = format!(
-          "<tr><td class=\"directory-filename\">{filename_link}</td><td class=\"directory-size\">-</td><td class=\"directory-date\">-</td></tr>"
+          "<tr><td class=\"directory-filename\">{filename_link}</td>\
+          <td class=\"directory-size\">-</td><td class=\"directory-date\">-</td></tr>"
         );
         table_rows.push(row);
       }
@@ -301,20 +303,28 @@ pub async fn generate_directory_listing(
   }
 
   if table_rows.len() <= min_table_rows_length {
-    table_rows.push("<tr><td class=\"directory-filename\">🤷 No files found</td><td class=\"directory-size\"></td><td class=\"directory-date\"></td></tr>".to_string());
+    table_rows.push(
+      "<tr><td class=\"directory-filename\">🤷 No files found</td>\
+        <td class=\"directory-size\"></td><td class=\"directory-date\"></td></tr>"
+        .to_string(),
+    );
   }
 
   Ok(format_page!(
     format!(
       "<h1>Directory: {}</h1>
       <table>
-      <tr><th class=\"directory-filename\">Filename</th><th class=\"directory-size\">Size</th><th class=\"directory-date\">Date</th></tr>
+      <tr><th class=\"directory-filename\">Filename</th><th class=\"directory-size\">Size</th>\
+      <th class=\"directory-date\">Date</th></tr>
       {}
     </table>{}",
       anti_xss(request_path),
       table_rows.join(""),
       match description {
-        Some(description) => format!("<hr><pre class=\"directory-description\">{}</pre>", anti_xss(&description)),
+        Some(description) => format!(
+          "<hr><pre class=\"directory-description\">{}</pre>",
+          anti_xss(&description)
+        ),
         None => "".to_string(),
       }
     ),
