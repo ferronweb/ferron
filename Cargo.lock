@@ -2608,7 +2608,7 @@ dependencies = [
 [[package]]
 name = "monoio"
 version = "0.2.4"
-source = "git+https://github.com/DorianNiemiecSVRJS/monoio.git#80009e4138bdee088dc2e25fb9cc2b17cec1e7ad"
+source = "git+https://github.com/DorianNiemiecSVRJS/monoio.git#d829560b83efd4df4327827a8c15f4f5a3661258"
 dependencies = [
  "auto-const-array",
  "bytes",
@@ -2644,7 +2644,7 @@ dependencies = [
 [[package]]
 name = "monoio-macros"
 version = "0.1.0"
-source = "git+https://github.com/DorianNiemiecSVRJS/monoio.git#80009e4138bdee088dc2e25fb9cc2b17cec1e7ad"
+source = "git+https://github.com/DorianNiemiecSVRJS/monoio.git#d829560b83efd4df4327827a8c15f4f5a3661258"
 dependencies = [
  "proc-macro2",
  "quote",
