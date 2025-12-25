@@ -8,7 +8,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::future::Either;
-use futures_util::stream::{StreamExt, TryStreamExt};
+use futures_util::stream::TryStreamExt;
 use hashlink::LinkedHashMap;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, StreamBody};
@@ -30,6 +30,7 @@ use tokio_util::sync::CancellationToken;
 use crate::util::cgi::CgiResponse;
 use crate::util::fcgi::{
   construct_fastcgi_name_value_pair, construct_fastcgi_record, FcgiDecodedData, FcgiDecoder, FcgiEncoder,
+  FcgiProcessedStream,
 };
 use crate::util::{Copier, ReadToEndFuture, SplitStreamByMapExt};
 use ferron_common::config::ServerConfiguration;
@@ -37,8 +38,6 @@ use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use ferron_common::util::{ModuleCache, TtlCache, SERVER_SOFTWARE};
 use ferron_common::{get_entries, get_entries_for_validation, get_entry, get_value};
-
-const MAX_RESPONSE_CHANNEL_CAPACITY: usize = 2;
 
 /// A FastCGI module loader
 #[allow(clippy::type_complexity)]
@@ -1002,25 +1001,9 @@ async fn execute_fastcgi(
 
   response_builder = response_builder.status(status_code);
 
-  let mut reader_stream = ReaderStream::new(cgi_response);
-  let (reader_stream_tx, reader_stream_rx) = async_channel::bounded(MAX_RESPONSE_CHANNEL_CAPACITY);
+  let reader_stream = ReaderStream::new(cgi_response);
   let stderr_cancel = CancellationToken::new();
-  let stderr_cancel_clone = stderr_cancel.clone();
-  ferron_common::runtime::spawn(async move {
-    while let Some(chunk) = reader_stream.next().await {
-      if chunk.as_ref().is_ok_and(|c| c.is_empty()) {
-        // Received empty STDOUT chunk, likely indicating end of output
-        break;
-      }
-      if reader_stream_tx.send(chunk).await.is_err() {
-        // Pipe is probably closed, stop sending data
-        stderr_cancel_clone.cancel();
-        break;
-      }
-    }
-    reader_stream_tx.close();
-  });
-  let stream_body = StreamBody::new(reader_stream_rx.map_ok(Frame::data));
+  let stream_body = StreamBody::new(FcgiProcessedStream::new(reader_stream, stderr_cancel.clone()).map_ok(Frame::data));
   let boxed_body = BodyExt::boxed(stream_body);
 
   let response = response_builder.body(boxed_body)?;

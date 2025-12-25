@@ -1497,6 +1497,7 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
+ "send_wrapper",
  "sha2",
  "shiba",
  "smallvec",
