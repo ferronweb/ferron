@@ -90,6 +90,7 @@ impl<R> AsyncRead for CgiResponse<R>
 where
   R: AsyncRead + Unpin,
 {
+  #[inline]
   fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<std::io::Result<()>> {
     // If the response header length is known and the buffer contains more data than the header length
     if let Some(response_head_length) = self.response_head_length {
