@@ -16,6 +16,7 @@ pub struct MonoioFileStreamNoSpawn {
   file: Arc<SendWrapper<File>>,
   current_pos: u64,
   end: Option<u64>,
+  finished: bool,
   read_future: Option<Pin<Box<dyn Future<Output = Option<Result<Bytes, std::io::Error>>> + Send + Sync>>>,
 }
 
@@ -26,6 +27,7 @@ impl MonoioFileStreamNoSpawn {
       file: Arc::new(SendWrapper::new(file)),
       current_pos: start.unwrap_or(0),
       end,
+      finished: false,
       read_future: None,
     }
   }
@@ -34,12 +36,10 @@ impl MonoioFileStreamNoSpawn {
 impl Stream for MonoioFileStreamNoSpawn {
   type Item = Result<Bytes, std::io::Error>;
 
+  #[inline]
   fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-    if let Some(end) = &self.end {
-      if self.current_pos >= *end {
-        // EOF
-        return Poll::Ready(None);
-      }
+    if self.finished {
+      return Poll::Ready(None);
     }
     if self.read_future.is_none() {
       self.read_future = Some(Box::pin(SendWrapper::new(read_chunk(
@@ -59,10 +59,19 @@ impl Stream for MonoioFileStreamNoSpawn {
       Poll::Ready(Some(Ok(chunk))) => {
         let _ = self.read_future.take();
         self.current_pos += chunk.len() as u64;
+        if let Some(end) = &self.end {
+          if self.current_pos >= *end {
+            // EOF
+            self.finished = true;
+          }
+        }
         Poll::Ready(Some(Ok(chunk)))
       }
       Poll::Ready(option) => {
         let _ = self.read_future.take();
+        if option.is_none() {
+          self.finished = true;
+        }
         Poll::Ready(option)
       }
       Poll::Pending => Poll::Pending,
@@ -70,6 +79,7 @@ impl Stream for MonoioFileStreamNoSpawn {
   }
 }
 
+#[inline]
 async fn read_chunk(file: Arc<SendWrapper<File>>, pos: u64, end: Option<u64>) -> Option<Result<Bytes, std::io::Error>> {
   let buffer_sz = end.map_or(MAX_BUFFER_SIZE, |n| ((n - pos) as usize).min(MAX_BUFFER_SIZE));
   if buffer_sz == 0 {
