@@ -8,7 +8,8 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use async_channel::{Receiver, Sender};
+use arc_swap::ArcSwap;
+use async_channel::{Receiver, Sender, TrySendError};
 use async_trait::async_trait;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
@@ -48,6 +49,9 @@ use ferron_common::{
   util::{replace_header_placeholders, ModuleCache},
 };
 use ferron_common::{get_entries, get_entries_for_validation, get_value};
+use tokio_util::sync::CancellationToken;
+
+use crate::util::ProcessingRequestGuard;
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: usize = 48;
 
@@ -64,7 +68,11 @@ enum SendRequest {
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
 
-type Connections = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
+type Connections = (
+  Arc<(Sender<SendRequest>, Receiver<SendRequest>)>,
+  Arc<AtomicUsize>,
+  Arc<ArcSwap<CancellationToken>>,
+);
 
 enum Connection {
   #[cfg(feature = "runtime-monoio")]
@@ -244,12 +252,16 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                       (
                         v,
                         e.props.get("unix").and_then(|v| v.as_str()).map(|s| s.to_owned()),
-                        Arc::new(async_channel::bounded(
-                          get_value!("proxy_keepalive_idle_conns", config)
-                            .and_then(|v| v.as_i128())
-                            .map(|v| v as usize)
-                            .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST),
-                        )),
+                        (
+                          Arc::new(async_channel::bounded(
+                            get_value!("proxy_keepalive_idle_conns", config)
+                              .and_then(|v| v.as_i128())
+                              .map(|v| v as usize)
+                              .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST),
+                          )),
+                          Arc::new(AtomicUsize::new(0)),
+                          Arc::new(ArcSwap::from_pointee(CancellationToken::new())),
+                        ),
                       )
                     })
                 })
@@ -662,9 +674,10 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             .and_then(|v| v.as_bool())
             .unwrap_or(true)
         {
-          let (sender, receiver) = &*connections;
+          let (sender, receiver) = &*connections.0;
           loop {
             if let Ok(mut send_request) = receiver.try_recv() {
+              let processing_request_guard = ProcessingRequestGuard::new(connections.1.clone(), connections.2.clone());
               if match &mut send_request {
                 SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
                 SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
@@ -677,6 +690,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
                   proxy_intercept_errors,
                   tracked_connection,
                   sender,
+                  processing_request_guard,
                 )
                 .await;
                 return result;
@@ -1646,6 +1660,7 @@ async fn http_proxy(
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
 /// * `tracked_connection` - The optional tracked connection to the backend server
 /// * `connections_tx` - The sender part of idle keep-alive connection queue
+/// * `processing_request_guard` - The guard for the processing request
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
@@ -1657,6 +1672,7 @@ async fn http_proxy_kept_alive(
   proxy_intercept_errors: bool,
   tracked_connection: Option<Arc<()>>,
   connections_tx: &Sender<SendRequest>,
+  processing_request_guard: ProcessingRequestGuard,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
@@ -1759,11 +1775,23 @@ async fn http_proxy_kept_alive(
     }
   };
 
+  let request_counter = processing_request_guard.get_request_counter();
+  let cancel_token = processing_request_guard.get_cancel_token();
+  // The request has been (at least partially) processed
+  drop(processing_request_guard);
+
   if !(match &sender {
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
-    connections_tx.send(sender).await.unwrap_or_default();
+    if let Err(TrySendError::Full(sender)) = connections_tx.try_send(sender) {
+      if request_counter.load(Ordering::Relaxed) > 0 {
+        ferron_common::runtime::select! {
+          _ = connections_tx.send(sender) => {},
+          _ = cancel_token.cancelled() => {}
+        }
+      }
+    }
   }
 
   Ok(response)

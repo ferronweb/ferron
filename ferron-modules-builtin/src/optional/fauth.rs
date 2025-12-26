@@ -1,8 +1,10 @@
 use std::error::Error;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use async_channel::{Receiver, Sender};
+use arc_swap::ArcSwap;
+use async_channel::{Receiver, Sender, TrySendError};
 use async_trait::async_trait;
 use bytes::Bytes;
 #[cfg(feature = "runtime-monoio")]
@@ -30,6 +32,9 @@ use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData,
 use ferron_common::util::NoServerVerifier;
 use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value, get_values};
+use tokio_util::sync::CancellationToken;
+
+use crate::util::ProcessingRequestGuard;
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: usize = 32;
 
@@ -38,7 +43,11 @@ enum SendRequest {
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
 
-type Connections = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
+type Connections = (
+  Arc<(Sender<SendRequest>, Receiver<SendRequest>)>,
+  Arc<AtomicUsize>,
+  Arc<ArcSwap<CancellationToken>>,
+);
 
 /// A forwarded authentication module loader
 #[allow(clippy::type_complexity)]
@@ -77,7 +86,11 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
               .and_then(|e| e.values.first())
               .and_then(|v| v.as_str())
               .map(|v| Arc::new(v.to_owned())),
-            connections: Arc::new(async_channel::bounded(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST)),
+            connections: (
+              Arc::new(async_channel::bounded(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST)),
+              Arc::new(AtomicUsize::new(0)),
+              Arc::new(ArcSwap::from_pointee(CancellationToken::new())),
+            ),
           }))
         })?,
     )
@@ -283,9 +296,11 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
       let original_request = Request::from_parts(request_parts, request_body);
 
       let connections = {
-        let (sender, receiver) = &*self.connections;
+        let (sender, receiver) = &*self.connections.0;
         loop {
           if let Ok(mut send_request) = receiver.try_recv() {
+            let processing_request_guard =
+              ProcessingRequestGuard::new(self.connections.1.clone(), self.connections.2.clone());
             if match &mut send_request {
               SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
               SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
@@ -297,6 +312,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
                 original_request,
                 forwarded_auth_copy_headers,
                 sender,
+                processing_request_guard,
               )
               .await;
               return result;
@@ -578,6 +594,7 @@ async fn http_forwarded_auth_kept_alive(
   mut original_request: Request<BoxBody<Bytes, std::io::Error>>,
   forwarded_auth_copy_headers: Vec<String>,
   connections_tx: &Sender<SendRequest>,
+  processing_request_guard: ProcessingRequestGuard,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let send_request_result = match &mut sender {
     SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
@@ -629,11 +646,23 @@ async fn http_forwarded_auth_kept_alive(
     }
   };
 
+  let request_counter = processing_request_guard.get_request_counter();
+  let cancel_token = processing_request_guard.get_cancel_token();
+  // The request has been (at least partially) processed
+  drop(processing_request_guard);
+
   if !(match &sender {
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
-    connections_tx.send(sender).await.unwrap_or_default();
+    if let Err(TrySendError::Full(sender)) = connections_tx.try_send(sender) {
+      if request_counter.load(Ordering::Relaxed) > 0 {
+        ferron_common::runtime::select! {
+          _ = connections_tx.send(sender) => {},
+          _ = cancel_token.cancelled() => {}
+        }
+      }
+    }
   }
 
   Ok(response)
