@@ -46,3 +46,6 @@ Thumbs.db
 /packaging/rpm/data/
 /packaging/rpm/rpm/
 /packaging/rpm/ferron.spec
+
+.cargo_home
+.target

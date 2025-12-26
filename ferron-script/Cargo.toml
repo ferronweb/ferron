@@ -1,0 +1,20 @@
+[package]
+name = "ferron-script"
+version = "2.1.0"
+edition = "2021"
+
+[dependencies]
+ferron-common = { workspace = true }
+anyhow = "1.0.98"
+async-trait = "0.1.88"
+bytes = { version = "1.10.1" }
+http-body-util = "0.1.3"
+hyper = { version = "1.6.0", features = ["full"] }
+rhai = { version = "1.17.1", features = ["sync"] }
+tokio = { version = "1.45.0", features = ["fs", "rt", "rt-multi-thread", "sync", "time"] }
+sha2 = "0.10.9"
+humantime = "2.1.0"
+parking_lot = "0.12.3"
+hex = "0.4.3"
+
+ 

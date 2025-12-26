@@ -8,6 +8,9 @@ mod status_codes;
 mod trailing;
 mod util;
 
+#[cfg(feature = "script")]
+pub use ferron_script::ScriptExecModuleLoader;
+
 pub use blocklist::*;
 pub use buffer::*;
 pub use core::*;

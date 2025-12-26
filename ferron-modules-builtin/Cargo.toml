@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 # Ferron internal dependencies
 ferron-common = { workspace = true }
+ferron-script = { path = "../ferron-script", optional = true }
 
 # Error Handling & Utilities
 anyhow = "1.0.98"
@@ -111,6 +112,7 @@ default = [
     "runtime-monoio",
     "scgi",
     "static",
+    "script",
 ]
 default-tokio = [
     "cache",
@@ -125,6 +127,7 @@ default-tokio = [
     "runtime-tokio",
     "scgi",
     "static",
+    "script",
 ]
 cache = ["cache_control", "quick_cache"]
 cgi = ["httparse", "memchr"]
@@ -139,3 +142,4 @@ runtime-monoio = ["async-process", "monoio", "monoio-compat", "send_wrapper"]
 runtime-tokio = ["hyper-util/tokio"]
 scgi = ["httparse", "memchr"]
 static = ["new_mime_guess", "async-compression", "sha2"]
+script = ["ferron-script"]

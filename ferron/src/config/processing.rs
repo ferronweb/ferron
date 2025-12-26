@@ -537,6 +537,7 @@ mod tests {
       inner: vec![ServerConfigurationEntry {
         values,
         props: HashMap::new(),
+        children: HashMap::new(),
       }],
     }
   }
@@ -545,6 +546,7 @@ mod tests {
     let entry = ServerConfigurationEntry {
       values: vec![value],
       props: HashMap::new(),
+      children: HashMap::new(),
     };
     (key.to_string(), ServerConfigurationEntries { inner: vec![entry] })
   }

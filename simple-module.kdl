@@ -1,0 +1,4 @@
+globals {}
+:8080 {
+  root "wwwroot"
+}

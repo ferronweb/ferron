@@ -5,6 +5,7 @@ members = [
     "ferron-dns-builtin",
     "ferron-load-modules",
     "ferron-modules-builtin",
+    "ferron-script",
     "ferron-passwd",
     "ferron-yaml2kdl-core",
     "ferron-yaml2kdl", "ferron-precompress", "ferron-observability-builtin",
@@ -40,4 +41,4 @@ codegen-units = 1
 panic = "abort"
 
 [workspace.metadata.cargo-shear]
-ignored = ["shiba", "ferron-modules-builtin", "ferron-dns-builtin", "ferron-observability-builtin"]
+ignored = ["shiba", "ferron-dns-builtin", "ferron-observability-builtin"]

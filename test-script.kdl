@@ -1,0 +1,22 @@
+globals {
+  log "access.log"
+  error_log "error.log"
+}
+
+:8080 {
+  module "script-exec" {
+    script "auth-check" {
+      file "scripts/auth.rhai"
+      trigger "on_request_start"
+      failure_policy "block"
+    }
+    
+    script "test-script" {
+      file "scripts/example.rhai"
+      trigger "on_response_ready"
+      failure_policy "skip"
+    }
+  }
+
+  root "wwwroot"
+}

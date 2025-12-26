@@ -19,6 +19,7 @@ use super::ConfigurationAdapter;
 fn kdl_node_to_configuration_entry(kdl_node: &KdlNode) -> ServerConfigurationEntry {
   let mut values = Vec::new();
   let mut props = HashMap::new();
+  let mut children = HashMap::new();
   for kdl_entry in kdl_node.iter() {
     let value = match kdl_entry.value().to_owned() {
       KdlValue::String(value) => ServerConfigurationValue::String(value),
@@ -37,7 +38,21 @@ fn kdl_node_to_configuration_entry(kdl_node: &KdlNode) -> ServerConfigurationEnt
     // If KDL node doesn't have any arguments, add the "#true" KDL value
     values.push(ServerConfigurationValue::Bool(true));
   }
-  ServerConfigurationEntry { values, props }
+  if let Some(children_nodes) = kdl_node.children() {
+    for child in children_nodes.nodes() {
+      let entry = kdl_node_to_configuration_entry(child);
+      children
+        .entry(child.name().value().to_string())
+        .or_insert_with(ServerConfigurationEntries::default)
+        .inner
+        .push(entry);
+    }
+  }
+  ServerConfigurationEntry {
+    values,
+    props,
+    children,
+  }
 }
 
 /// A legacy YAML configuration adapter that utilizes `ferron-yaml2kdl-core` component
@@ -223,6 +238,7 @@ impl ConfigurationAdapter for YamlLegacyConfigurationAdapter {
                           inner: vec![ServerConfigurationEntry {
                             values: vec![ServerConfigurationValue::String(location_str.to_string())],
                             props: HashMap::new(),
+                            children: HashMap::new(),
                           }],
                         },
                       );
