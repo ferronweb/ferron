@@ -1376,7 +1376,7 @@ fn before_starting_server(
             break;
           }
         }
-        if enable_uring != *uring_enabled_locked || !contains {
+        if !contains {
           // Shut down the QUIC listener
           value.0.cancel();
 
@@ -1480,7 +1480,6 @@ fn before_starting_server(
               socket_address,
               tls_config,
               listener_handler_tx.clone(),
-              enable_uring,
               global_logger.clone(),
               first_startup,
             )?,
