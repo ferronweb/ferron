@@ -669,9 +669,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .and_then(|v| v.as_bool())
           .unwrap_or(false);
 
-        let (connections, processing_request_guard) = if (enable_http2_only_config
-          || !enable_http2_config
-          || !is_http_upgrade)
+        let connections = if (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
           && get_value!("proxy_keepalive", config)
             .and_then(|v| v.as_bool())
             .unwrap_or(true)
@@ -702,15 +700,9 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             }
             break;
           }
-          (
-            Some(sender),
-            Some(ProcessingRequestGuard::new(
-              connections.1.clone(),
-              connections.2.clone(),
-            )),
-          )
+          Some(sender)
         } else {
-          (None, None)
+          None
         };
 
         let stream = if let Some(proxy_unix_str) = &proxy_unix {
@@ -1221,7 +1213,6 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           error_logger,
           proxy_intercept_errors,
           tracked_connection,
-          processing_request_guard,
         )
         .await;
       } else {
@@ -1543,7 +1534,6 @@ async fn http_proxy(
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
   tracked_connection: Option<Arc<()>>,
-  processing_request_guard: Option<ProcessingRequestGuard>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
@@ -1638,7 +1628,6 @@ async fn http_proxy(
       new_remote_address: None,
     }
   };
-  drop(processing_request_guard);
 
   // Store the HTTP connection in the connection pool for future reuse if it's still open
   if let Some(connections) = connections {
@@ -1786,6 +1775,7 @@ async fn http_proxy_kept_alive(
     }
   };
 
+  let request_counter = processing_request_guard.get_request_counter();
   let cancel_token = processing_request_guard.get_cancel_token();
   // The request has been (at least partially) processed
   drop(processing_request_guard);
@@ -1795,9 +1785,11 @@ async fn http_proxy_kept_alive(
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
     if let Err(TrySendError::Full(sender)) = connections_tx.try_send(sender) {
-      ferron_common::runtime::select! {
-        _ = connections_tx.send(sender) => {},
-        _ = cancel_token.cancelled() => {}
+      if request_counter.load(Ordering::Relaxed) > 0 {
+        ferron_common::runtime::select! {
+          _ = connections_tx.send(sender) => {},
+          _ = cancel_token.cancelled() => {}
+        }
       }
     }
   }
