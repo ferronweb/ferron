@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
@@ -580,8 +579,6 @@ async fn http_forwarded_auth_kept_alive(
   forwarded_auth_copy_headers: Vec<String>,
   connections_tx: &Sender<SendRequest>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  let instant = std::time::Instant::now();
-
   let send_request_result = match &mut sender {
     SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
     SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
@@ -636,9 +633,7 @@ async fn http_forwarded_auth_kept_alive(
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
-    // Return the sender to the pool with a timeout, so that connections aren't stuck
-    let max_send_wait_duration = instant.elapsed().saturating_mul(2).max(Duration::from_millis(100));
-    let _ = ferron_common::runtime::timeout(max_send_wait_duration, connections_tx.send(sender)).await;
+    connections_tx.send(sender).await.unwrap_or_default();
   }
 
   Ok(response)
