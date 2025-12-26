@@ -18,17 +18,14 @@ impl ProcessingRequestGuard {
   }
 
   /// Gets the cancellation token for the request
+  #[inline]
   pub fn get_cancel_token(&self) -> Arc<CancellationToken> {
     self.cancel.load().clone()
-  }
-
-  /// Gets the request counter
-  pub fn get_request_counter(&self) -> Arc<AtomicUsize> {
-    self.requests.clone()
   }
 }
 
 impl Drop for ProcessingRequestGuard {
+  #[inline]
   fn drop(&mut self) {
     let prev_value = self.requests.fetch_sub(1, Ordering::Relaxed);
     if prev_value == 1 {

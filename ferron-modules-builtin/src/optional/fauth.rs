@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
@@ -295,7 +295,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
       let original_request = Request::from_parts(request_parts, request_body);
 
-      let connections = {
+      let (connections, processing_request_guard) = {
         let (sender, receiver) = &*self.connections.0;
         loop {
           if let Ok(mut send_request) = receiver.try_recv() {
@@ -322,7 +322,10 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           }
           break;
         }
-        sender
+        (
+          sender,
+          ProcessingRequestGuard::new(self.connections.1.clone(), self.connections.2.clone()),
+        )
       };
 
       let stream = match TcpStream::connect(&addr).await {
@@ -403,6 +406,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           original_request,
           forwarded_auth_copy_headers,
           false,
+          processing_request_guard,
         )
         .await
       } else {
@@ -450,6 +454,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           original_request,
           forwarded_auth_copy_headers,
           enable_http2,
+          processing_request_guard,
         )
         .await
       }
@@ -474,6 +479,7 @@ async fn http_forwarded_auth(
   mut original_request: Request<BoxBody<Bytes, std::io::Error>>,
   forwarded_auth_copy_headers: Vec<String>,
   use_http2: bool,
+  processing_request_guard: ProcessingRequestGuard,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   #[cfg(feature = "runtime-monoio")]
   let io = MonoioIo::new(stream);
@@ -576,6 +582,7 @@ async fn http_forwarded_auth(
       new_remote_address: None,
     }
   };
+  drop(processing_request_guard);
 
   if !(match &sender {
     SendRequest::Http1(sender) => sender.is_closed(),
@@ -646,7 +653,6 @@ async fn http_forwarded_auth_kept_alive(
     }
   };
 
-  let request_counter = processing_request_guard.get_request_counter();
   let cancel_token = processing_request_guard.get_cancel_token();
   // The request has been (at least partially) processed
   drop(processing_request_guard);
@@ -656,11 +662,11 @@ async fn http_forwarded_auth_kept_alive(
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
     if let Err(TrySendError::Full(sender)) = connections_tx.try_send(sender) {
-      if request_counter.load(Ordering::Relaxed) > 0 {
-        ferron_common::runtime::select! {
-          _ = connections_tx.send(sender) => {},
-          _ = cancel_token.cancelled() => {}
-        }
+      ferron_common::runtime::select! {
+        biased;
+
+        _ = connections_tx.send(sender) => {},
+        _ = cancel_token.cancelled() => {}
       }
     }
   }
