@@ -34,7 +34,15 @@ use crate::util::read_proxy_header;
 #[cfg(feature = "runtime-monoio")]
 use crate::util::SendTcpStreamPoll;
 
-// Tokio local executor
+static HTTP3_INVALID_HEADERS: [hyper::header::HeaderName; 5] = [
+  hyper::header::HeaderName::from_static("keep-alive"),
+  hyper::header::HeaderName::from_static("proxy-connection"),
+  hyper::header::TRANSFER_ENCODING,
+  hyper::header::TE,
+  hyper::header::UPGRADE,
+];
+
+/// Tokio local executor
 #[cfg(feature = "runtime-tokio")]
 #[derive(Clone, Copy, Debug)]
 pub struct TokioLocalExecutor;
@@ -751,8 +759,21 @@ async fn http_quic_handler_fn(
                   return;
                 }
               };
+              let response_headers = response.headers_mut();
               if let Ok(http_date) = httpdate::fmt_http_date(SystemTime::now()).try_into() {
-                response.headers_mut().entry(hyper::header::DATE).or_insert(http_date);
+                response_headers.entry(hyper::header::DATE).or_insert(http_date);
+              }
+              for header in &HTTP3_INVALID_HEADERS {
+                response_headers.remove(header);
+              }
+              if let Some(connection_header) = response_headers
+                .remove(hyper::header::CONNECTION)
+                .as_ref()
+                .and_then(|v| v.to_str().ok())
+              {
+                for name in connection_header.split(',') {
+                  response_headers.remove(name.trim());
+                }
               }
               let (response_parts, mut response_body) = response.into_parts();
               if let Err(err) = send.send_response(Response::from_parts(response_parts, ())).await {
