@@ -1471,7 +1471,6 @@ name = "ferron-modules-builtin"
 version = "2.2.1"
 dependencies = [
  "anyhow",
- "async-channel",
  "async-compression",
  "async-process",
  "async-trait",

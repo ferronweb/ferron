@@ -56,7 +56,6 @@ monoio = { version = "0.2.4", optional = true, features = [
     "threadpool",
 ] }
 monoio-compat = { version = "0.2.2", optional = true, features = ["hyper"] }
-async-channel = "2.3.1"
 async-trait = "0.1.88"
 futures-util = { version = "0.3.31", features = ["sink"] }
 pin-project-lite = "0.2.16"
@@ -130,7 +129,7 @@ default-tokio = [
 cache = ["cache_control", "quick_cache"]
 cgi = ["httparse", "memchr"]
 dcompress = ["async-compression"]
-fauth = ["rand"]
+fauth = ["rand", "flume"]
 fcgi = ["tokio-util/codec", "httparse", "memchr"]
 fproxy = []
 limit = ["tokenbucket"]

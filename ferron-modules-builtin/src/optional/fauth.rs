@@ -2,11 +2,11 @@ use std::error::Error;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use bytes::Bytes;
 #[cfg(feature = "runtime-monoio")]
 use ferron_common::util::SendTcpStreamPoll;
+use flume::{Receiver, Sender, TrySendError};
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
 use hyper::header::{self, HeaderName};
@@ -77,7 +77,7 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
               .and_then(|e| e.values.first())
               .and_then(|v| v.as_str())
               .map(|v| Arc::new(v.to_owned())),
-            connections: Arc::new(async_channel::bounded(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST)),
+            connections: Arc::new(flume::bounded(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST)),
           }))
         })?,
     )
@@ -633,7 +633,12 @@ async fn http_forwarded_auth_kept_alive(
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
-    connections_tx.send(sender).await.unwrap_or_default();
+    if let Err(TrySendError::Full(sender)) = connections_tx.try_send(sender) {
+      let send_fut = connections_tx.clone().into_send_async(sender);
+      ferron_common::runtime::spawn(async move {
+        let _ = send_fut.await;
+      });
+    };
   }
 
   Ok(response)
