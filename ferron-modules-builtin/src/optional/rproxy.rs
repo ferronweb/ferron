@@ -8,9 +8,9 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use bytes::Bytes;
+use flume::{Receiver, Sender, TrySendError};
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Body;
@@ -244,7 +244,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                       (
                         v,
                         e.props.get("unix").and_then(|v| v.as_str()).map(|s| s.to_owned()),
-                        Arc::new(async_channel::bounded(
+                        Arc::new(flume::bounded(
                           get_value!("proxy_keepalive_idle_conns", config)
                             .and_then(|v| v.as_i128())
                             .map(|v| v as usize)
@@ -1763,7 +1763,12 @@ async fn http_proxy_kept_alive(
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
-    connections_tx.send(sender).await.unwrap_or_default();
+    if let Err(TrySendError::Full(sender)) = connections_tx.try_send(sender) {
+      let send_fut = connections_tx.clone().into_send_async(sender);
+      ferron_common::runtime::spawn(async move {
+        let _ = send_fut.await;
+      });
+    };
   }
 
   Ok(response)
