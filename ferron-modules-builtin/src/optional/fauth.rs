@@ -8,13 +8,13 @@ use async_trait::async_trait;
 use bytes::Bytes;
 #[cfg(feature = "runtime-monoio")]
 use ferron_common::util::SendTcpStreamPoll;
-use flume::{Receiver, Sender, TrySendError};
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
 use hyper::header::{self, HeaderName};
 use hyper::{Method, Request, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::{TokioExecutor, TokioIo};
+use kanal::{AsyncReceiver, AsyncSender};
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
 #[cfg(feature = "runtime-monoio")]
@@ -43,7 +43,7 @@ enum SendRequest {
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
 
-type ConnectionsInner = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
+type ConnectionsInner = Arc<(AsyncSender<SendRequest>, AsyncReceiver<SendRequest>)>;
 type Connections = (ConnectionsInner, Arc<AtomicUsize>, Arc<ArcSwap<CancellationToken>>);
 
 /// A forwarded authentication module loader
@@ -84,7 +84,7 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
               .and_then(|v| v.as_str())
               .map(|v| Arc::new(v.to_owned())),
             connections: (
-              Arc::new(flume::bounded(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST)),
+              Arc::new(kanal::bounded_async(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST)),
               Arc::new(AtomicUsize::new(0)),
               Arc::new(ArcSwap::new(Arc::new(CancellationToken::new()))),
             ),
@@ -296,7 +296,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
         let (sender, receiver) = &*self.connections.0;
         let pending_connections = PendingConnectionGuard::new(self.connections.1.clone(), self.connections.2.clone());
         loop {
-          if let Ok(mut send_request) = receiver.try_recv() {
+          if let Ok(Some(mut send_request)) = receiver.try_recv() {
             if match &mut send_request {
               SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
               SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
@@ -465,7 +465,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
 #[allow(clippy::too_many_arguments)]
 async fn http_forwarded_auth(
-  connections: &Sender<SendRequest>,
+  connections: &AsyncSender<SendRequest>,
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
@@ -594,7 +594,7 @@ async fn http_forwarded_auth_kept_alive(
   error_logger: &ErrorLogger,
   mut original_request: Request<BoxBody<Bytes, std::io::Error>>,
   forwarded_auth_copy_headers: Vec<String>,
-  connections_tx: &Sender<SendRequest>,
+  connections_tx: &AsyncSender<SendRequest>,
   pending_connections: PendingConnectionGuard,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let send_request_result = match &mut sender {
@@ -655,11 +655,11 @@ async fn http_forwarded_auth_kept_alive(
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
-    if let Err(TrySendError::Full(sender)) = connections_tx.try_send(sender) {
-      ferron_common::runtime::select! {
-        _ = connections_tx.clone().into_send_async(sender) => {},
-        _ = cancel_token.cancelled() => {}
-      };
+    let mut sender_option = Some(sender);
+    if connections_tx.try_send_option(&mut sender_option) == Ok(false) {
+      if let Some(sender) = sender_option {
+        cancel_token.run_until_cancelled(connections_tx.send(sender)).await;
+      }
     }
   }
 

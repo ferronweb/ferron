@@ -11,7 +11,6 @@ use std::time::Duration;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use bytes::Bytes;
-use flume::{Receiver, Sender, TrySendError};
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Body;
@@ -19,6 +18,7 @@ use hyper::header::{self, HeaderName, HeaderValue};
 use hyper::{HeaderMap, Request, Response, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::{TokioExecutor, TokioIo};
+use kanal::{AsyncReceiver, AsyncSender};
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
 #[cfg(all(feature = "runtime-monoio", unix))]
@@ -68,7 +68,7 @@ enum SendRequest {
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
 
-type ConnectionsInner = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
+type ConnectionsInner = Arc<(AsyncSender<SendRequest>, AsyncReceiver<SendRequest>)>;
 type Connections = (ConnectionsInner, Arc<AtomicUsize>, Arc<ArcSwap<CancellationToken>>);
 
 enum Connection {
@@ -250,7 +250,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                         v,
                         e.props.get("unix").and_then(|v| v.as_str()).map(|s| s.to_owned()),
                         (
-                          Arc::new(flume::bounded(
+                          Arc::new(kanal::bounded_async(
                             get_value!("proxy_keepalive_idle_conns", config)
                               .and_then(|v| v.as_i128())
                               .map(|v| v as usize)
@@ -666,42 +666,41 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .and_then(|v| v.as_bool())
           .unwrap_or(false);
 
-        let (connections, pending_connections) =
-          if (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
-            && get_value!("proxy_keepalive", config)
-              .and_then(|v| v.as_bool())
-              .unwrap_or(true)
-          {
-            let (sender, receiver) = &*connections.0;
-            let pending_connections = PendingConnectionGuard::new(connections.1.clone(), connections.2.clone());
-            loop {
-              if let Ok(mut send_request) = receiver.try_recv() {
-                if match &mut send_request {
-                  SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-                  SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-                } {
-                  let proxy_request = Request::from_parts(proxy_request_parts, request_body);
-                  let result = http_proxy_kept_alive(
-                    send_request,
-                    proxy_request,
-                    error_logger,
-                    proxy_intercept_errors,
-                    tracked_connection,
-                    sender,
-                    pending_connections,
-                  )
-                  .await;
-                  return result;
-                } else {
-                  continue;
-                }
+        let connections = if (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
+          && get_value!("proxy_keepalive", config)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true)
+        {
+          let (sender, receiver) = &*connections.0;
+          loop {
+            if let Ok(Some(mut send_request)) = receiver.try_recv() {
+              let pending_connections = PendingConnectionGuard::new(connections.1.clone(), connections.2.clone());
+              if match &mut send_request {
+                SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+                SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+              } {
+                let proxy_request = Request::from_parts(proxy_request_parts, request_body);
+                let result = http_proxy_kept_alive(
+                  send_request,
+                  proxy_request,
+                  error_logger,
+                  proxy_intercept_errors,
+                  tracked_connection,
+                  sender,
+                  pending_connections,
+                )
+                .await;
+                return result;
+              } else {
+                continue;
               }
-              break;
             }
-            (Some(sender), Some(pending_connections))
-          } else {
-            (None, None)
-          };
+            break;
+          }
+          Some(sender)
+        } else {
+          None
+        };
 
         let stream = if let Some(proxy_unix_str) = &proxy_unix {
           #[cfg(not(unix))]
@@ -1211,7 +1210,6 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           error_logger,
           proxy_intercept_errors,
           tracked_connection,
-          pending_connections,
         )
         .await;
       } else {
@@ -1522,19 +1520,17 @@ async fn http_proxy_handshake(
 /// * `error_logger` - Logger for reporting errors
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
 /// * `tracked_connection` - The optional tracked connection to the backend server
-/// * `pending_connections` - The optional pending connection guard
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
 #[inline]
 async fn http_proxy(
   mut sender: SendRequest,
-  connections: Option<&Sender<SendRequest>>,
+  connections: Option<&AsyncSender<SendRequest>>,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
   tracked_connection: Option<Arc<()>>,
-  pending_connections: Option<PendingConnectionGuard>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
@@ -1630,8 +1626,6 @@ async fn http_proxy(
     }
   };
 
-  drop(pending_connections);
-
   // Store the HTTP connection in the connection pool for future reuse if it's still open
   if let Some(connections) = connections {
     if !(match &sender {
@@ -1674,7 +1668,7 @@ async fn http_proxy_kept_alive(
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
   tracked_connection: Option<Arc<()>>,
-  connections_tx: &Sender<SendRequest>,
+  connections_tx: &AsyncSender<SendRequest>,
   pending_connections: PendingConnectionGuard,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
@@ -1786,11 +1780,11 @@ async fn http_proxy_kept_alive(
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
-    if let Err(TrySendError::Full(sender)) = connections_tx.try_send(sender) {
-      ferron_common::runtime::select! {
-        _ = connections_tx.clone().into_send_async(sender) => {},
-        _ = cancel_token.cancelled() => {}
-      };
+    let mut sender_option = Some(sender);
+    if connections_tx.try_send_option(&mut sender_option) == Ok(false) {
+      if let Some(sender) = sender_option {
+        cancel_token.run_until_cancelled(connections_tx.send(sender)).await;
+      }
     }
   }
 
