@@ -796,7 +796,7 @@ fn before_starting_server(
                         Some(Arc::new(ExternalAccountKey::new(
                           eab_key_id.to_string(),
                           &base64::engine::general_purpose::URL_SAFE_NO_PAD
-                            .decode(eab_key_hmac)
+                            .decode(eab_key_hmac.trim_end_matches('='))
                             .map_err(|err| anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
                         )))
                       } else {
