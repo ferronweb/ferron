@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
+use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use bytes::Bytes;
 use flume::{Receiver, Sender, TrySendError};
@@ -48,6 +49,9 @@ use ferron_common::{
   util::{replace_header_placeholders, ModuleCache},
 };
 use ferron_common::{get_entries, get_entries_for_validation, get_value};
+use tokio_util::sync::CancellationToken;
+
+use crate::util::PendingConnectionGuard;
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: usize = 48;
 
@@ -64,7 +68,8 @@ enum SendRequest {
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
 
-type Connections = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
+type ConnectionsInner = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
+type Connections = (ConnectionsInner, Arc<AtomicUsize>, Arc<ArcSwap<CancellationToken>>);
 
 enum Connection {
   #[cfg(feature = "runtime-monoio")]
@@ -244,12 +249,16 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                       (
                         v,
                         e.props.get("unix").and_then(|v| v.as_str()).map(|s| s.to_owned()),
-                        Arc::new(flume::bounded(
-                          get_value!("proxy_keepalive_idle_conns", config)
-                            .and_then(|v| v.as_i128())
-                            .map(|v| v as usize)
-                            .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST),
-                        )),
+                        (
+                          Arc::new(flume::bounded(
+                            get_value!("proxy_keepalive_idle_conns", config)
+                              .and_then(|v| v.as_i128())
+                              .map(|v| v as usize)
+                              .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST),
+                          )),
+                          Arc::new(AtomicUsize::new(0)),
+                          Arc::new(ArcSwap::from_pointee(CancellationToken::new())),
+                        ),
                       )
                     })
                 })
@@ -657,39 +666,42 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .and_then(|v| v.as_bool())
           .unwrap_or(false);
 
-        let connections = if (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
-          && get_value!("proxy_keepalive", config)
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true)
-        {
-          let (sender, receiver) = &*connections;
-          loop {
-            if let Ok(mut send_request) = receiver.try_recv() {
-              if match &mut send_request {
-                SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-                SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-              } {
-                let proxy_request = Request::from_parts(proxy_request_parts, request_body);
-                let result = http_proxy_kept_alive(
-                  send_request,
-                  proxy_request,
-                  error_logger,
-                  proxy_intercept_errors,
-                  tracked_connection,
-                  sender,
-                )
-                .await;
-                return result;
-              } else {
-                continue;
+        let (connections, pending_connections) =
+          if (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
+            && get_value!("proxy_keepalive", config)
+              .and_then(|v| v.as_bool())
+              .unwrap_or(true)
+          {
+            let (sender, receiver) = &*connections.0;
+            let pending_connections = PendingConnectionGuard::new(connections.1.clone(), connections.2.clone());
+            loop {
+              if let Ok(mut send_request) = receiver.try_recv() {
+                if match &mut send_request {
+                  SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+                  SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+                } {
+                  let proxy_request = Request::from_parts(proxy_request_parts, request_body);
+                  let result = http_proxy_kept_alive(
+                    send_request,
+                    proxy_request,
+                    error_logger,
+                    proxy_intercept_errors,
+                    tracked_connection,
+                    sender,
+                    pending_connections,
+                  )
+                  .await;
+                  return result;
+                } else {
+                  continue;
+                }
               }
+              break;
             }
-            break;
-          }
-          Some(sender)
-        } else {
-          None
-        };
+            (Some(sender), Some(pending_connections))
+          } else {
+            (None, None)
+          };
 
         let stream = if let Some(proxy_unix_str) = &proxy_unix {
           #[cfg(not(unix))]
@@ -1199,6 +1211,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           error_logger,
           proxy_intercept_errors,
           tracked_connection,
+          pending_connections,
         )
         .await;
       } else {
@@ -1509,6 +1522,7 @@ async fn http_proxy_handshake(
 /// * `error_logger` - Logger for reporting errors
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
 /// * `tracked_connection` - The optional tracked connection to the backend server
+/// * `pending_connections` - The optional pending connection guard
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
@@ -1520,6 +1534,7 @@ async fn http_proxy(
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
   tracked_connection: Option<Arc<()>>,
+  pending_connections: Option<PendingConnectionGuard>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
@@ -1615,6 +1630,8 @@ async fn http_proxy(
     }
   };
 
+  drop(pending_connections);
+
   // Store the HTTP connection in the connection pool for future reuse if it's still open
   if let Some(connections) = connections {
     if !(match &sender {
@@ -1646,6 +1663,7 @@ async fn http_proxy(
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
 /// * `tracked_connection` - The optional tracked connection to the backend server
 /// * `connections_tx` - The sender part of idle keep-alive connection queue
+/// * `pending_connections` - The pending connection guard
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
@@ -1657,6 +1675,7 @@ async fn http_proxy_kept_alive(
   proxy_intercept_errors: bool,
   tracked_connection: Option<Arc<()>>,
   connections_tx: &Sender<SendRequest>,
+  pending_connections: PendingConnectionGuard,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
@@ -1759,16 +1778,20 @@ async fn http_proxy_kept_alive(
     }
   };
 
+  let cancel_token_arcswap = pending_connections.cancel_token();
+  let cancel_token = cancel_token_arcswap.load();
+  drop(pending_connections);
+
   if !(match &sender {
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
     if let Err(TrySendError::Full(sender)) = connections_tx.try_send(sender) {
-      let send_fut = connections_tx.clone().into_send_async(sender);
-      ferron_common::runtime::spawn(async move {
-        let _ = send_fut.await;
-      });
-    };
+      ferron_common::runtime::select! {
+        _ = connections_tx.clone().into_send_async(sender) => {},
+        _ = cancel_token.cancelled() => {}
+      };
+    }
   }
 
   Ok(response)

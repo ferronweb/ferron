@@ -1,7 +1,9 @@
 use std::error::Error;
 use std::str::FromStr;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use bytes::Bytes;
 #[cfg(feature = "runtime-monoio")]
@@ -30,6 +32,9 @@ use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData,
 use ferron_common::util::NoServerVerifier;
 use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value, get_values};
+use tokio_util::sync::CancellationToken;
+
+use crate::util::PendingConnectionGuard;
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: usize = 32;
 
@@ -38,7 +43,8 @@ enum SendRequest {
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
 
-type Connections = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
+type ConnectionsInner = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
+type Connections = (ConnectionsInner, Arc<AtomicUsize>, Arc<ArcSwap<CancellationToken>>);
 
 /// A forwarded authentication module loader
 #[allow(clippy::type_complexity)]
@@ -77,7 +83,11 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
               .and_then(|e| e.values.first())
               .and_then(|v| v.as_str())
               .map(|v| Arc::new(v.to_owned())),
-            connections: Arc::new(flume::bounded(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST)),
+            connections: (
+              Arc::new(flume::bounded(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST)),
+              Arc::new(AtomicUsize::new(0)),
+              Arc::new(ArcSwap::new(Arc::new(CancellationToken::new()))),
+            ),
           }))
         })?,
     )
@@ -282,8 +292,9 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
       let original_request = Request::from_parts(request_parts, request_body);
 
-      let connections = {
-        let (sender, receiver) = &*self.connections;
+      let (connections, pending_connections) = {
+        let (sender, receiver) = &*self.connections.0;
+        let pending_connections = PendingConnectionGuard::new(self.connections.1.clone(), self.connections.2.clone());
         loop {
           if let Ok(mut send_request) = receiver.try_recv() {
             if match &mut send_request {
@@ -297,6 +308,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
                 original_request,
                 forwarded_auth_copy_headers,
                 sender,
+                pending_connections,
               )
               .await;
               return result;
@@ -306,7 +318,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           }
           break;
         }
-        sender
+        (sender, pending_connections)
       };
 
       let stream = match TcpStream::connect(&addr).await {
@@ -387,6 +399,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           original_request,
           forwarded_auth_copy_headers,
           false,
+          pending_connections,
         )
         .await
       } else {
@@ -434,6 +447,7 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
           original_request,
           forwarded_auth_copy_headers,
           enable_http2,
+          pending_connections,
         )
         .await
       }
@@ -458,6 +472,7 @@ async fn http_forwarded_auth(
   mut original_request: Request<BoxBody<Bytes, std::io::Error>>,
   forwarded_auth_copy_headers: Vec<String>,
   use_http2: bool,
+  pending_connections: PendingConnectionGuard,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   #[cfg(feature = "runtime-monoio")]
   let io = MonoioIo::new(stream);
@@ -561,6 +576,8 @@ async fn http_forwarded_auth(
     }
   };
 
+  drop(pending_connections);
+
   if !(match &sender {
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
@@ -578,6 +595,7 @@ async fn http_forwarded_auth_kept_alive(
   mut original_request: Request<BoxBody<Bytes, std::io::Error>>,
   forwarded_auth_copy_headers: Vec<String>,
   connections_tx: &Sender<SendRequest>,
+  pending_connections: PendingConnectionGuard,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let send_request_result = match &mut sender {
     SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
@@ -629,16 +647,20 @@ async fn http_forwarded_auth_kept_alive(
     }
   };
 
+  let cancel_token_arcswap = pending_connections.cancel_token();
+  let cancel_token = cancel_token_arcswap.load();
+  drop(pending_connections);
+
   if !(match &sender {
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
     if let Err(TrySendError::Full(sender)) = connections_tx.try_send(sender) {
-      let send_fut = connections_tx.clone().into_send_async(sender);
-      ferron_common::runtime::spawn(async move {
-        let _ = send_fut.await;
-      });
-    };
+      ferron_common::runtime::select! {
+        _ = connections_tx.clone().into_send_async(sender) => {},
+        _ = cancel_token.cancelled() => {}
+      };
+    }
   }
 
   Ok(response)

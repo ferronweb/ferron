@@ -1452,6 +1452,7 @@ name = "ferron-modules-builtin"
 version = "2.2.1"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "async-compression",
  "async-process",
  "async-trait",
