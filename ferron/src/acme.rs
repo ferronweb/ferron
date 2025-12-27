@@ -266,44 +266,41 @@ pub async fn check_certificate_validity_or_install_cached(
   if let Some(serialized_certificate_cache_data) =
     get_from_cache(&config.certificate_cache, &certificate_cache_key).await
   {
-    let certificate_data = serde_json::from_slice::<CertificateCacheData>(&serialized_certificate_cache_data)?;
-    let certs = CertificateDer::pem_slice_iter(certificate_data.certificate_chain_pem.as_bytes())
-      .collect::<Result<Vec<_>, _>>()
-      .map_err(|e| match e {
-        rustls_pki_types::pem::Error::Io(err) => err,
-        err => std::io::Error::other(err),
-      })?;
-    if let Some(certificate) = certs.first() {
-      if let Some(acme_account) = acme_account {
-        if config
-          .renewal_info
-          .as_ref()
-          .is_none_or(|v| v.1.elapsed() > Duration::ZERO)
-        {
-          if let Ok(certificate_id) = CertificateIdentifier::try_from(certificate) {
-            if let Ok(renewal_info) = acme_account.renewal_info(&certificate_id).await {
-              let mut renewal_instant = Instant::now();
-              renewal_instant -= renewal_info.1;
-              config.renewal_info = Some((renewal_info.0, renewal_instant));
+    if let Ok(certificate_data) = serde_json::from_slice::<CertificateCacheData>(&serialized_certificate_cache_data) {
+      // Corrupted certificates would be skipped
+      if let Ok(certs) =
+        CertificateDer::pem_slice_iter(certificate_data.certificate_chain_pem.as_bytes()).collect::<Result<Vec<_>, _>>()
+      {
+        if let Some(certificate) = certs.first() {
+          if let Some(acme_account) = acme_account {
+            if config
+              .renewal_info
+              .as_ref()
+              .is_none_or(|v| v.1.elapsed() > Duration::ZERO)
+            {
+              if let Ok(certificate_id) = CertificateIdentifier::try_from(certificate) {
+                if let Ok(renewal_info) = acme_account.renewal_info(&certificate_id).await {
+                  let mut renewal_instant = Instant::now();
+                  renewal_instant -= renewal_info.1;
+                  config.renewal_info = Some((renewal_info.0, renewal_instant));
+                }
+              }
+            }
+          }
+          if check_certificate_validity(certificate, config.renewal_info.as_ref().map(|i| &i.0))? {
+            // Corrupted private key would be skipped
+            if let Ok(private_key) = PrivateKeyDer::from_pem_slice(certificate_data.private_key_pem.as_bytes()) {
+              let signing_key = CryptoProvider::get_default()
+                .ok_or(anyhow::anyhow!("Cannot get default crypto provider"))?
+                .key_provider
+                .load_private_key(private_key)?;
+
+              *config.certified_key_lock.write().await = Some(Arc::new(CertifiedKey::new(certs, signing_key)));
+
+              return Ok(true);
             }
           }
         }
-      }
-      if check_certificate_validity(certificate, config.renewal_info.as_ref().map(|i| &i.0))? {
-        let private_key = (match PrivateKeyDer::from_pem_slice(certificate_data.private_key_pem.as_bytes()) {
-          Ok(private_key) => Ok(private_key),
-          Err(rustls_pki_types::pem::Error::Io(err)) => Err(err),
-          Err(err) => Err(std::io::Error::other(err)),
-        })?;
-
-        let signing_key = CryptoProvider::get_default()
-          .ok_or(anyhow::anyhow!("Cannot get default crypto provider"))?
-          .key_provider
-          .load_private_key(private_key)?;
-
-        *config.certified_key_lock.write().await = Some(Arc::new(CertifiedKey::new(certs, signing_key)));
-
-        return Ok(true);
       }
     }
   }
@@ -326,8 +323,10 @@ pub async fn provision_certificate(
     let acme_account_builder =
       Account::builder_with_http(Box::new(HttpsClientForAcme::new(config.rustls_client_config.clone())));
 
-    if let Some(account_credentials_serialized) = get_from_cache(&config.account_cache, &account_cache_key).await {
-      let account_credentials = serde_json::from_slice::<AccountCredentials>(&account_credentials_serialized)?;
+    if let Some(account_credentials) = get_from_cache(&config.account_cache, &account_cache_key)
+      .await
+      .and_then(|c| serde_json::from_slice::<AccountCredentials>(&c).ok())
+    {
       acme_account_builder.from_credentials(account_credentials).await?
     } else {
       let (account, account_credentials) = acme_account_builder
