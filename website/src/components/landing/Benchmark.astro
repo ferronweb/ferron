@@ -55,7 +55,8 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
       <p>
         {Astro.props.higherIsBetter ? "Higher is better" : "Lower is better"}|
         Benchmarks run on {Astro.props.system}, with the{" "}
-        <code>{Astro.props.command}</code>command
+        <code>{Astro.props.command}</code>
+        {" "}command
         {
           Astro.props.date
             ? ` | Benchmarks performed on ${format(Astro.props.date, "MMMM d, yyyy")}`
