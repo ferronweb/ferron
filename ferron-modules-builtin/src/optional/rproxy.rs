@@ -1875,11 +1875,11 @@ async fn http_proxy_kept_alive(
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
-    let mut sender_option = Some(sender);
-    if connections_tx.try_send_option(&mut sender_option) == Ok(false) {
-      if let Some(sender) = sender_option {
-        cancel_token.run_until_cancelled(connections_tx.send(sender)).await;
-      }
+    ferron_common::runtime::select! {
+      biased;
+
+      _ = connections_tx.send(sender) => {},
+      _ = cancel_token.cancelled() => {}
     }
   }
 
