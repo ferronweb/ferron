@@ -33,7 +33,7 @@ use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 #[cfg(all(feature = "runtime-tokio", unix))]
 use tokio::net::UnixStream;
-use tokio::sync::RwLock;
+use tokio::sync::{OwnedSemaphorePermit, RwLock, Semaphore};
 use tokio_rustls::TlsConnector;
 
 use ferron_common::logging::ErrorLogger;
@@ -54,6 +54,7 @@ use tokio_util::sync::CancellationToken;
 use crate::util::PendingConnectionGuard;
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: usize = 48;
+const DEFAULT_NEW_CONCURRENT_CONNECTIONS: usize = 8192;
 
 #[allow(clippy::type_complexity)]
 enum LoadBalancerAlgorithm {
@@ -145,14 +146,24 @@ impl AsyncWrite for Connection {
 /// A tracked response body
 struct TrackedBody<B> {
   inner: B,
-  _tracker: Arc<()>,
+  _tracker: Option<Arc<()>>,
+  _tracker_semaphore: Option<OwnedSemaphorePermit>,
 }
 
 impl<B> TrackedBody<B> {
   fn new(inner: B, tracker: Arc<()>) -> Self {
     Self {
       inner,
-      _tracker: tracker,
+      _tracker: Some(tracker),
+      _tracker_semaphore: None,
+    }
+  }
+
+  fn new_semaphore(inner: B, tracker: OwnedSemaphorePermit) -> Self {
+    Self {
+      inner,
+      _tracker: None,
+      _tracker_semaphore: Some(tracker),
     }
   }
 }
@@ -184,6 +195,7 @@ where
 #[allow(clippy::type_complexity)]
 pub struct ReverseProxyModuleLoader {
   cache: ModuleCache<ReverseProxyModule>,
+  concurrency_limiter: Option<Arc<Semaphore>>,
 }
 
 impl Default for ReverseProxyModuleLoader {
@@ -203,6 +215,7 @@ impl ReverseProxyModuleLoader {
         "lb_algorithm",
         "proxy_keepalive_idle_conns",
       ]),
+      concurrency_limiter: None,
     }
   }
 }
@@ -211,9 +224,28 @@ impl ModuleLoader for ReverseProxyModuleLoader {
   fn load_module(
     &mut self,
     config: &ServerConfiguration,
-    _global_config: Option<&ServerConfiguration>,
+    global_config: Option<&ServerConfiguration>,
     _secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
+    let concurrency_limiter = global_config
+      .and_then(|c| get_value!("proxy_concurrent_new_conns", c))
+      .map_or(Some(DEFAULT_NEW_CONCURRENT_CONNECTIONS), |v| {
+        if v.is_null() {
+          None
+        } else {
+          Some(
+            v.as_i128()
+              .map(|v| v as usize)
+              .unwrap_or(DEFAULT_NEW_CONCURRENT_CONNECTIONS),
+          )
+        }
+      })
+      .map(|cl| {
+        self
+          .concurrency_limiter
+          .get_or_insert(Arc::new(Semaphore::new(cl)))
+          .clone()
+      });
     Ok(
       self
         .cache
@@ -267,6 +299,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
             health_check_max_fails: get_value!("lb_health_check_max_fails", config)
               .and_then(|v| v.as_i128())
               .unwrap_or(3) as u64,
+            concurrency_limiter,
           }))
         })?,
     )
@@ -500,6 +533,21 @@ impl ModuleLoader for ReverseProxyModuleLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("proxy_concurrent_new_conns", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          return Err(
+            anyhow::anyhow!("The `proxy_concurrent_new_conns` configuration property must have exactly one value")
+              .into(),
+          );
+        } else if (!entry.values[0].is_integer() && !entry.values[0].is_null())
+          || entry.values[0].as_i128().is_some_and(|v| v < 0)
+        {
+          return Err(anyhow::anyhow!("Invalid global maximum new concurrent connections configuration").into());
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -511,6 +559,7 @@ struct ReverseProxyModule {
   load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
   proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
   health_check_max_fails: u64,
+  concurrency_limiter: Option<Arc<Semaphore>>,
 }
 
 impl Module for ReverseProxyModule {
@@ -522,6 +571,7 @@ impl Module for ReverseProxyModule {
       health_check_max_fails: self.health_check_max_fails,
       selected_backends_metrics: None,
       unhealthy_backends_metrics: None,
+      concurrency_limiter: self.concurrency_limiter.clone(),
     })
   }
 }
@@ -535,6 +585,7 @@ struct ReverseProxyModuleHandlers {
   health_check_max_fails: u64,
   selected_backends_metrics: Option<Vec<(String, Option<String>)>>,
   unhealthy_backends_metrics: Option<Vec<(String, Option<String>)>>,
+  concurrency_limiter: Option<Arc<Semaphore>>,
 }
 
 #[async_trait(?Send)]
@@ -666,41 +717,70 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .and_then(|v| v.as_bool())
           .unwrap_or(false);
 
-        let connections = if (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
-          && get_value!("proxy_keepalive", config)
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true)
-        {
-          let (sender, receiver) = &*connections.0;
-          loop {
-            if let Ok(Some(mut send_request)) = receiver.try_recv() {
-              let pending_connections = PendingConnectionGuard::new(connections.1.clone(), connections.2.clone());
-              if match &mut send_request {
-                SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-                SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-              } {
-                let proxy_request = Request::from_parts(proxy_request_parts, request_body);
-                let result = http_proxy_kept_alive(
-                  send_request,
-                  proxy_request,
-                  error_logger,
-                  proxy_intercept_errors,
-                  tracked_connection,
-                  sender,
-                  pending_connections,
-                )
-                .await;
-                return result;
-              } else {
-                continue;
+        let (connections, concurrency_limit_permit) =
+          if (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
+            && get_value!("proxy_keepalive", config)
+              .and_then(|v| v.as_bool())
+              .unwrap_or(true)
+          {
+            let (sender, receiver) = &*connections.0;
+            let permit_option;
+            loop {
+              let recv_future = async {
+                match receiver.try_recv() {
+                  Ok(None) => {
+                    if proxy_unix.is_some() {
+                      // Don't enforce concurrency limit when using Unix sockets
+                      return (Ok(None), None);
+                    }
+                    if let Some(concurrency_limiter) = &self.concurrency_limiter {
+                      ferron_common::runtime::select! {
+                        biased;
+
+                        permit = concurrency_limiter.clone().acquire_owned() => {
+                          (Ok(None), permit.ok())
+                        }
+                        result = receiver.recv() => {
+                          (result.map(Some), None)
+                        }
+                      }
+                    } else {
+                      (Ok(None), None)
+                    }
+                  }
+                  result => (result, None),
+                }
+              };
+              let (send_request_result, permit_option_new) = recv_future.await;
+              if let Ok(Some(mut send_request)) = send_request_result {
+                let pending_connections = PendingConnectionGuard::new(connections.1.clone(), connections.2.clone());
+                if match &mut send_request {
+                  SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+                  SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+                } {
+                  let proxy_request = Request::from_parts(proxy_request_parts, request_body);
+                  let result = http_proxy_kept_alive(
+                    send_request,
+                    proxy_request,
+                    error_logger,
+                    proxy_intercept_errors,
+                    tracked_connection,
+                    sender,
+                    pending_connections,
+                  )
+                  .await;
+                  return result;
+                } else {
+                  continue;
+                }
               }
+              permit_option = permit_option_new;
+              break;
             }
-            break;
-          }
-          Some(sender)
-        } else {
-          None
-        };
+            (Some(sender), permit_option)
+          } else {
+            (None, None)
+          };
 
         let stream = if let Some(proxy_unix_str) = &proxy_unix {
           #[cfg(not(unix))]
@@ -1210,6 +1290,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           error_logger,
           proxy_intercept_errors,
           tracked_connection,
+          concurrency_limit_permit,
         )
         .await;
       } else {
@@ -1531,6 +1612,7 @@ async fn http_proxy(
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
   tracked_connection: Option<Arc<()>>,
+  concurrency_limit_permit: Option<OwnedSemaphorePermit>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
@@ -1603,7 +1685,7 @@ async fn http_proxy(
   }
   let proxy_response = Response::from_parts(proxy_response_parts, proxy_response_body);
 
-  let response = if proxy_intercept_errors && status_code.as_u16() >= 400 {
+  let mut response = if proxy_intercept_errors && status_code.as_u16() >= 400 {
     ResponseData {
       request: None,
       response: None,
@@ -1627,12 +1709,25 @@ async fn http_proxy(
   };
 
   // Store the HTTP connection in the connection pool for future reuse if it's still open
+  let mut stored = false;
   if let Some(connections) = connections {
     if !(match &sender {
       SendRequest::Http1(sender) => sender.is_closed(),
       SendRequest::Http2(sender) => sender.is_closed(),
     }) {
-      connections.try_send(sender).unwrap_or_default();
+      stored = connections.try_send(sender) != Ok(true);
+    }
+  }
+  if !stored {
+    if let Some(concurrency_limit_permit) = concurrency_limit_permit {
+      if let Some(response_inner) = response.response.take() {
+        let (response_inner_parts, response_inner_body) = response_inner.into_parts();
+        let response_inner = Response::from_parts(
+          response_inner_parts,
+          TrackedBody::new_semaphore(response_inner_body, concurrency_limit_permit).boxed(),
+        );
+        response.response = Some(response_inner);
+      }
     }
   }
 

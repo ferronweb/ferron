@@ -270,6 +270,19 @@ This configuration reference organizes directives by both **scope** (where they 
 }
 ```
 
+### Reverse proxy & load balancing
+
+- `proxy_concurrent_new_conns <proxy_concurrent_new_conns: integer|null>` (_rproxy_ module; Ferron UNRELEASED or newer)
+  - This directive specifies the limit of newly-established TCP connections to backend servers, to prevent exhaustion of network resources. If set as `proxy_concurrent_new_conns #null`, the reverse proxy can theoretically establish an unlimited number of connections. Default: `proxy_concurrent_new_conns 8192`
+
+**Configuration example:**
+
+```kdl
+* {
+    proxy_concurrent_new_conns 16384
+}
+```
+
 ## Global and virtual host directives
 
 ### TLS/SSL & security
