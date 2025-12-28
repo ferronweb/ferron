@@ -8,9 +8,9 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use bytes::Bytes;
+use connpool::{Item, Pool};
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Body;
@@ -18,7 +18,6 @@ use hyper::header::{self, HeaderName, HeaderValue};
 use hyper::{HeaderMap, Request, Response, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use kanal::{AsyncReceiver, AsyncSender};
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
 #[cfg(all(feature = "runtime-monoio", unix))]
@@ -33,7 +32,7 @@ use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 #[cfg(all(feature = "runtime-tokio", unix))]
 use tokio::net::UnixStream;
-use tokio::sync::{OwnedSemaphorePermit, RwLock, Semaphore};
+use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
 
 use ferron_common::logging::ErrorLogger;
@@ -49,12 +48,8 @@ use ferron_common::{
   util::{replace_header_placeholders, ModuleCache},
 };
 use ferron_common::{get_entries, get_entries_for_validation, get_value};
-use tokio_util::sync::CancellationToken;
 
-use crate::util::PendingConnectionGuard;
-
-const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: usize = 48;
-const DEFAULT_NEW_CONCURRENT_CONNECTIONS: usize = 8192;
+const DEFAULT_CONCURRENT_CONNECTIONS: usize = 16384;
 
 #[allow(clippy::type_complexity)]
 enum LoadBalancerAlgorithm {
@@ -69,8 +64,8 @@ enum SendRequest {
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
 
-type ConnectionsInner = Arc<(AsyncSender<SendRequest>, AsyncReceiver<SendRequest>)>;
-type Connections = (ConnectionsInner, Arc<AtomicUsize>, Arc<ArcSwap<CancellationToken>>);
+type ConnectionPool = Arc<Pool<(String, Option<String>), SendRequest>>;
+type ConnectionPoolItem<'a> = Item<'a, (String, Option<String>), SendRequest>;
 
 enum Connection {
   #[cfg(feature = "runtime-monoio")]
@@ -147,7 +142,6 @@ impl AsyncWrite for Connection {
 struct TrackedBody<B> {
   inner: B,
   _tracker: Option<Arc<()>>,
-  _tracker_semaphore: Option<OwnedSemaphorePermit>,
 }
 
 impl<B> TrackedBody<B> {
@@ -155,15 +149,6 @@ impl<B> TrackedBody<B> {
     Self {
       inner,
       _tracker: Some(tracker),
-      _tracker_semaphore: None,
-    }
-  }
-
-  fn new_semaphore(inner: B, tracker: OwnedSemaphorePermit) -> Self {
-    Self {
-      inner,
-      _tracker: None,
-      _tracker_semaphore: Some(tracker),
     }
   }
 }
@@ -195,7 +180,9 @@ where
 #[allow(clippy::type_complexity)]
 pub struct ReverseProxyModuleLoader {
   cache: ModuleCache<ReverseProxyModule>,
-  concurrency_limiter: Option<Arc<Semaphore>>,
+  connections: Option<ConnectionPool>,
+  #[cfg(unix)]
+  unix_connections: Option<ConnectionPool>,
 }
 
 impl Default for ReverseProxyModuleLoader {
@@ -213,9 +200,10 @@ impl ReverseProxyModuleLoader {
         "lb_health_check_window",
         "lb_health_check_max_fails",
         "lb_algorithm",
-        "proxy_keepalive_idle_conns",
       ]),
-      concurrency_limiter: None,
+      connections: None,
+      #[cfg(unix)]
+      unix_connections: None,
     }
   }
 }
@@ -227,29 +215,79 @@ impl ModuleLoader for ReverseProxyModuleLoader {
     global_config: Option<&ServerConfiguration>,
     _secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
-    let concurrency_limiter = global_config
-      .and_then(|c| get_value!("proxy_concurrent_new_conns", c))
-      .map_or(Some(DEFAULT_NEW_CONCURRENT_CONNECTIONS), |v| {
+    let concurrency_limit = global_config
+      .and_then(|c| get_value!("proxy_concurrent_conns", c))
+      .map_or(Some(DEFAULT_CONCURRENT_CONNECTIONS), |v| {
         if v.is_null() {
           None
         } else {
           Some(
             v.as_i128()
               .map(|v| v as usize)
-              .unwrap_or(DEFAULT_NEW_CONCURRENT_CONNECTIONS),
+              .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS),
           )
         }
-      })
-      .map(|cl| {
-        self
-          .concurrency_limiter
-          .get_or_insert(Arc::new(Semaphore::new(cl)))
-          .clone()
       });
+    let connections = self
+      .connections
+      .get_or_insert(Arc::new(if let Some(limit) = concurrency_limit {
+        Pool::new(limit)
+      } else {
+        Pool::new_unbounded()
+      }))
+      .clone();
+    #[cfg(unix)]
+    let unix_connections = self
+      .unix_connections
+      .get_or_insert(Arc::new(if let Some(limit) = concurrency_limit {
+        Pool::new(limit)
+      } else {
+        Pool::new_unbounded()
+      }))
+      .clone();
     Ok(
       self
         .cache
-        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |config| {
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |config| {
+          let proxy_to_raw = get_entries!("proxy", config).map_or(vec![], |e| {
+            e.inner
+              .iter()
+              .filter_map(|e| {
+                e.values
+                  .first()
+                  .and_then(|v| v.as_str().map(|s| s.to_owned()))
+                  .map(|v| {
+                    (
+                      v,
+                      e.props.get("unix").and_then(|v| v.as_str()).map(|s| s.to_owned()),
+                      e.props.get("keepalive").and_then(|v| v.as_i128()).map(|v| v as usize),
+                    )
+                  })
+              })
+              .collect()
+          });
+          let proxy_to = proxy_to_raw
+            .into_iter()
+            .map(|(proxy_to, proxy_unix, local_limit)| {
+              let is_unix_socket = proxy_unix.is_some();
+              (
+                proxy_to,
+                proxy_unix,
+                local_limit.and_then(|local_limit| {
+                  if is_unix_socket {
+                    #[cfg(unix)]
+                    let limit_index = Some(unix_connections.set_local_limit(local_limit));
+                    #[cfg(not(unix))]
+                    let limit_index = None;
+
+                    limit_index
+                  } else {
+                    Some(connections.set_local_limit(local_limit))
+                  }
+                }),
+              )
+            })
+            .collect();
           Ok(Arc::new(ReverseProxyModule {
             failed_backends: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(
               get_value!("lb_health_check_window", config)
@@ -270,36 +308,13 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                 ))?,
               })
             },
-            proxy_to: Arc::new(get_entries!("proxy", config).map_or(vec![], |e| {
-              e.inner
-                .iter()
-                .filter_map(|e| {
-                  e.values
-                    .first()
-                    .and_then(|v| v.as_str().map(|s| s.to_owned()))
-                    .map(|v| {
-                      (
-                        v,
-                        e.props.get("unix").and_then(|v| v.as_str()).map(|s| s.to_owned()),
-                        (
-                          Arc::new(kanal::bounded_async(
-                            get_value!("proxy_keepalive_idle_conns", config)
-                              .and_then(|v| v.as_i128())
-                              .map(|v| v as usize)
-                              .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST),
-                          )),
-                          Arc::new(AtomicUsize::new(0)),
-                          Arc::new(ArcSwap::from_pointee(CancellationToken::new())),
-                        ),
-                      )
-                    })
-                })
-                .collect()
-            })),
+            proxy_to: Arc::new(proxy_to),
             health_check_max_fails: get_value!("lb_health_check_max_fails", config)
               .and_then(|v| v.as_i128())
               .unwrap_or(3) as u64,
-            concurrency_limiter,
+            connections,
+            #[cfg(unix)]
+            unix_connections,
           }))
         })?,
     )
@@ -368,6 +383,10 @@ impl ModuleLoader for ReverseProxyModuleLoader {
           Err(anyhow::anyhow!("Invalid proxy backend server"))?
         } else if !entry.props.get("unix").is_none_or(|v| v.is_string()) {
           Err(anyhow::anyhow!("Invalid proxy Unix socket path"))?
+        } else if let Some(prop) = entry.props.get("keepalive") {
+          if !prop.is_null() && prop.as_i128().unwrap_or(0) < 1 {
+            Err(anyhow::anyhow!("Invalid proxy keep-alive limit for a backend server"))?
+          }
         }
 
         #[cfg(not(unix))]
@@ -493,22 +512,6 @@ impl ModuleLoader for ReverseProxyModuleLoader {
       }
     }
 
-    if let Some(entries) = get_entries_for_validation!("proxy_keepalive_idle_conns", config, used_properties) {
-      for entry in &entries.inner {
-        if entry.values.len() != 1 {
-          Err(anyhow::anyhow!(
-            "The `proxy_keepalive_idle_conns` configuration property must have exactly one value"
-          ))?
-        } else if !entry.values[0].is_integer() && !entry.values[0].is_null() {
-          Err(anyhow::anyhow!("Invalid proxy keep-alive idle connections"))?
-        } else if let Some(value) = entry.values[0].as_i128() {
-          if value < 1 {
-            Err(anyhow::anyhow!("Invalid proxy keep-alive idle connections"))?
-          }
-        }
-      }
-    }
-
     if let Some(entries) = get_entries_for_validation!("proxy_http2_only", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
@@ -533,17 +536,16 @@ impl ModuleLoader for ReverseProxyModuleLoader {
       }
     }
 
-    if let Some(entries) = get_entries_for_validation!("proxy_concurrent_new_conns", config, used_properties) {
+    if let Some(entries) = get_entries_for_validation!("proxy_concurrent_conns", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
           return Err(
-            anyhow::anyhow!("The `proxy_concurrent_new_conns` configuration property must have exactly one value")
-              .into(),
+            anyhow::anyhow!("The `proxy_concurrent_conns` configuration property must have exactly one value").into(),
           );
         } else if (!entry.values[0].is_integer() && !entry.values[0].is_null())
           || entry.values[0].as_i128().is_some_and(|v| v < 0)
         {
-          return Err(anyhow::anyhow!("Invalid global maximum new concurrent connections configuration").into());
+          return Err(anyhow::anyhow!("Invalid global maximum concurrent connections configuration").into());
         }
       }
     }
@@ -557,9 +559,11 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 struct ReverseProxyModule {
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
   load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
-  proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
+  proxy_to: Arc<Vec<(String, Option<String>, Option<usize>)>>,
   health_check_max_fails: u64,
-  concurrency_limiter: Option<Arc<Semaphore>>,
+  connections: ConnectionPool,
+  #[cfg(unix)]
+  unix_connections: ConnectionPool,
 }
 
 impl Module for ReverseProxyModule {
@@ -571,7 +575,9 @@ impl Module for ReverseProxyModule {
       health_check_max_fails: self.health_check_max_fails,
       selected_backends_metrics: None,
       unhealthy_backends_metrics: None,
-      concurrency_limiter: self.concurrency_limiter.clone(),
+      connections: self.connections.clone(),
+      #[cfg(unix)]
+      unix_connections: self.unix_connections.clone(),
     })
   }
 }
@@ -581,11 +587,13 @@ impl Module for ReverseProxyModule {
 struct ReverseProxyModuleHandlers {
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
   load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
-  proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
+  proxy_to: Arc<Vec<(String, Option<String>, Option<usize>)>>,
   health_check_max_fails: u64,
   selected_backends_metrics: Option<Vec<(String, Option<String>)>>,
   unhealthy_backends_metrics: Option<Vec<(String, Option<String>)>>,
-  concurrency_limiter: Option<Arc<Semaphore>>,
+  connections: ConnectionPool,
+  #[cfg(unix)]
+  unix_connections: ConnectionPool,
 }
 
 #[async_trait(?Send)]
@@ -623,11 +631,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let proxy_intercept_errors = get_value!("proxy_intercept_errors", config)
       .and_then(|v| v.as_bool())
       .unwrap_or(false);
-    let mut proxy_to_vector = self
-      .proxy_to
-      .iter()
-      .map(|e| (&*e.0, e.1.as_deref(), e.2.clone()))
-      .collect();
+    let mut proxy_to_vector = self.proxy_to.iter().map(|e| (&*e.0, e.1.as_deref(), e.2)).collect();
     let load_balancer_algorithm = self.load_balancer_algorithm.clone();
     let connection_track = match &*load_balancer_algorithm {
       LoadBalancerAlgorithm::LeastConnections(connection_track) => Some(connection_track),
@@ -641,7 +645,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let mut request_parts = Some(request_parts);
 
     loop {
-      if let Some((proxy_to, proxy_unix, connections)) = determine_proxy_to(
+      if let Some((proxy_to, proxy_unix, local_limit_index)) = determine_proxy_to(
         &mut proxy_to_vector,
         &self.failed_backends,
         enable_health_check,
@@ -717,70 +721,53 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .and_then(|v| v.as_bool())
           .unwrap_or(false);
 
-        let (connections, concurrency_limit_permit) =
-          if (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
-            && get_value!("proxy_keepalive", config)
-              .and_then(|v| v.as_bool())
-              .unwrap_or(true)
-          {
-            let (sender, receiver) = &*connections.0;
-            let permit_option;
-            loop {
-              let recv_future = async {
-                match receiver.try_recv() {
-                  Ok(None) => {
-                    if proxy_unix.is_some() {
-                      // Don't enforce concurrency limit when using Unix sockets
-                      return (Ok(None), None);
-                    }
-                    if let Some(concurrency_limiter) = &self.concurrency_limiter {
-                      ferron_common::runtime::select! {
-                        biased;
-
-                        permit = concurrency_limiter.clone().acquire_owned() => {
-                          (Ok(None), permit.ok())
-                        }
-                        result = receiver.recv() => {
-                          (result.map(Some), None)
-                        }
-                      }
-                    } else {
-                      (Ok(None), None)
-                    }
-                  }
-                  result => (result, None),
-                }
-              };
-              let (send_request_result, permit_option_new) = recv_future.await;
-              if let Ok(Some(mut send_request)) = send_request_result {
-                let pending_connections = PendingConnectionGuard::new(connections.1.clone(), connections.2.clone());
-                if match &mut send_request {
+        let connection_pool_item = if (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
+          && get_value!("proxy_keepalive", config)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true)
+        {
+          #[cfg(unix)]
+          let connections = if proxy_unix.is_some() {
+            &self.unix_connections
+          } else {
+            &self.connections
+          };
+          #[cfg(not(unix))]
+          let connections = &self.connections;
+          let mut sender = None;
+          loop {
+            if let Some(mut send_request_item) = connections
+              .pull_with_local_limit((proxy_to.clone(), proxy_unix.clone()), local_limit_index)
+              .await
+            {
+              if let Some(send_request) = send_request_item.inner_mut() {
+                if match send_request {
                   SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
                   SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
                 } {
                   let proxy_request = Request::from_parts(proxy_request_parts, request_body);
                   let result = http_proxy_kept_alive(
-                    send_request,
+                    send_request_item,
                     proxy_request,
                     error_logger,
                     proxy_intercept_errors,
                     tracked_connection,
-                    sender,
-                    pending_connections,
                   )
                   .await;
                   return result;
                 } else {
+                  send_request_item.take();
                   continue;
                 }
               }
-              permit_option = permit_option_new;
-              break;
+              sender = Some(send_request_item);
             }
-            (Some(sender), permit_option)
-          } else {
-            (None, None)
-          };
+            break;
+          }
+          sender
+        } else {
+          None
+        };
 
         let stream = if let Some(proxy_unix_str) = &proxy_unix {
           #[cfg(not(unix))]
@@ -1285,12 +1272,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 
         return http_proxy(
           sender,
-          connections,
+          connection_pool_item,
           proxy_request,
           error_logger,
           proxy_intercept_errors,
           tracked_connection,
-          concurrency_limit_permit,
         )
         .await;
       } else {
@@ -1380,7 +1366,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 /// * `usize` - The index of the selected backend server.
 async fn select_backend_index(
   load_balancer_algorithm: &LoadBalancerAlgorithm,
-  backends: &[(&str, Option<&str>, Connections)],
+  backends: &[(&str, Option<&str>, Option<usize>)],
 ) -> usize {
   match load_balancer_algorithm {
     LoadBalancerAlgorithm::TwoRandomChoices(connection_track) => {
@@ -1393,8 +1379,8 @@ async fn select_backend_index(
       if backends.len() > 1 && random_choice2 >= random_choice1 {
         random_choice2 += 1;
       }
-      let backend1 = backends[random_choice1].clone();
-      let backend2 = backends[random_choice2].clone();
+      let backend1 = backends[random_choice1];
+      let backend2 = backends[random_choice2];
       let connection_track_key1 = (backend1.0.to_string(), backend1.1.as_ref().map(|s| s.to_string()));
       let connection_track_key2 = (backend2.0.to_string(), backend2.1.as_ref().map(|s| s.to_string()));
       let connection_track_read = connection_track.read().await;
@@ -1482,15 +1468,15 @@ async fn select_backend_index(
 /// * `load_balancer_algorithm` - The load balancing algorithm to use
 ///
 /// # Returns
-/// * `Option<(String, Option<String>, Connections)>` - The URL, the optional Unix socket path,
+/// * `Option<(String, Option<String>)>` - The URL, the optional Unix socket path,
 ///   and the connections of the selected backend server, or None if no valid backend exists
 async fn determine_proxy_to(
-  proxy_to_vector: &mut Vec<(&str, Option<&str>, Connections)>,
+  proxy_to_vector: &mut Vec<(&str, Option<&str>, Option<usize>)>,
   failed_backends: &RwLock<TtlCache<(String, Option<String>), u64>>,
   enable_health_check: bool,
   health_check_max_fails: u64,
   load_balancer_algorithm: &LoadBalancerAlgorithm,
-) -> Option<(String, Option<String>, Connections)> {
+) -> Option<(String, Option<String>, Option<usize>)> {
   let mut proxy_to = None;
   // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
   // The "proxy" directive is validated though.
@@ -1501,8 +1487,8 @@ async fn determine_proxy_to(
     let proxy_to_borrowed = proxy_to_vector.remove(0);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
     let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-    let proxy_to_connections = proxy_to_borrowed.2.clone();
-    proxy_to = Some((proxy_to_url, proxy_to_header, proxy_to_connections));
+    let local_limit_index = proxy_to_borrowed.2;
+    proxy_to = Some((proxy_to_url, proxy_to_header, local_limit_index));
   } else if enable_health_check {
     loop {
       if !proxy_to_vector.is_empty() {
@@ -1510,8 +1496,8 @@ async fn determine_proxy_to(
         let proxy_to_borrowed = proxy_to_vector.remove(index);
         let proxy_to_url = proxy_to_borrowed.0.to_string();
         let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-        let proxy_to_connections = proxy_to_borrowed.2.clone();
-        proxy_to = Some((proxy_to_url.clone(), proxy_to_header.clone(), proxy_to_connections));
+        let local_limit_index = proxy_to_borrowed.2;
+        proxy_to = Some((proxy_to_url.clone(), proxy_to_header.clone(), local_limit_index));
         let failed_backends_read = failed_backends.read().await;
         let failed_backend_fails = match failed_backends_read.get(&(proxy_to_url, proxy_to_header)) {
           Some(fails) => fails,
@@ -1531,8 +1517,8 @@ async fn determine_proxy_to(
     let proxy_to_borrowed = proxy_to_vector.remove(index);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
     let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-    let proxy_to_connections = proxy_to_borrowed.2.clone();
-    proxy_to = Some((proxy_to_url, proxy_to_header, proxy_to_connections));
+    let local_limit_index = proxy_to_borrowed.2;
+    proxy_to = Some((proxy_to_url, proxy_to_header, local_limit_index));
   }
 
   proxy_to
@@ -1605,14 +1591,13 @@ async fn http_proxy_handshake(
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
 #[inline]
-async fn http_proxy(
+async fn http_proxy<'a>(
   mut sender: SendRequest,
-  connections: Option<&AsyncSender<SendRequest>>,
+  connection_pool_item: Option<ConnectionPoolItem<'a>>,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
   tracked_connection: Option<Arc<()>>,
-  concurrency_limit_permit: Option<OwnedSemaphorePermit>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
@@ -1685,7 +1670,7 @@ async fn http_proxy(
   }
   let proxy_response = Response::from_parts(proxy_response_parts, proxy_response_body);
 
-  let mut response = if proxy_intercept_errors && status_code.as_u16() >= 400 {
+  let response = if proxy_intercept_errors && status_code.as_u16() >= 400 {
     ResponseData {
       request: None,
       response: None,
@@ -1709,25 +1694,12 @@ async fn http_proxy(
   };
 
   // Store the HTTP connection in the connection pool for future reuse if it's still open
-  let mut stored = false;
-  if let Some(connections) = connections {
+  if let Some(mut connection_pool_item) = connection_pool_item {
     if !(match &sender {
       SendRequest::Http1(sender) => sender.is_closed(),
       SendRequest::Http2(sender) => sender.is_closed(),
     }) {
-      stored = connections.try_send(sender) != Ok(true);
-    }
-  }
-  if !stored {
-    if let Some(concurrency_limit_permit) = concurrency_limit_permit {
-      if let Some(response_inner) = response.response.take() {
-        let (response_inner_parts, response_inner_body) = response_inner.into_parts();
-        let response_inner = Response::from_parts(
-          response_inner_parts,
-          TrackedBody::new_semaphore(response_inner_body, concurrency_limit_permit).boxed(),
-        );
-        response.response = Some(response_inner);
-      }
+      connection_pool_item.inner_mut().replace(sender);
     }
   }
 
@@ -1757,18 +1729,21 @@ async fn http_proxy(
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
 #[inline]
-async fn http_proxy_kept_alive(
-  mut sender: SendRequest,
+async fn http_proxy_kept_alive<'a>(
+  mut connection_pool_item: ConnectionPoolItem<'a>,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
   tracked_connection: Option<Arc<()>>,
-  connections_tx: &AsyncSender<SendRequest>,
-  pending_connections: PendingConnectionGuard,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
   let proxy_request = Request::from_parts(proxy_request_parts, proxy_request_body);
+
+  let mut sender = connection_pool_item
+    .inner_mut()
+    .take()
+    .ok_or(anyhow::anyhow!("Connection pool item should have a sender"))?;
 
   let send_request_result = match &mut sender {
     SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
@@ -1867,20 +1842,11 @@ async fn http_proxy_kept_alive(
     }
   };
 
-  let cancel_token_arcswap = pending_connections.cancel_token();
-  let cancel_token = cancel_token_arcswap.load();
-  drop(pending_connections);
-
   if !(match &sender {
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
-    ferron_common::runtime::select! {
-      biased;
-
-      _ = connections_tx.send(sender) => {},
-      _ = cancel_token.cancelled() => {}
-    }
+    connection_pool_item.inner_mut().replace(sender);
   }
 
   Ok(response)
