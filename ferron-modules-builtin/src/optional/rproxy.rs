@@ -890,6 +890,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
                       if !inner_item_2.wait_ready(keepalive_idle_timeout).await {
                         // Connection closed or timed out
                         inner_item.take();
+                        return Err(());
                       }
                       let _ = inner_item;
                       Ok(send_request_item)
