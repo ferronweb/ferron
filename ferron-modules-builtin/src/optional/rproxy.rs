@@ -1928,10 +1928,7 @@ async fn http_proxy_kept_alive(
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
   let proxy_request = Request::from_parts(proxy_request_parts, proxy_request_body);
 
-  let send_request_result = match &mut sender {
-    SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
-    SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
-  };
+  let send_request_result = sender.send_request(proxy_request).await;
   let connection_pool_item = Arc::new(connection_pool_item);
 
   // Send the request over the existing connection and await the response
