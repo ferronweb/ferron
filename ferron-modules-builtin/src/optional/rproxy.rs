@@ -94,11 +94,17 @@ impl SendRequest {
   #[inline]
   async fn send_request(
     &mut self,
-    request: Request<BoxBody<Bytes, std::io::Error>>,
+    mut request: Request<BoxBody<Bytes, std::io::Error>>,
   ) -> Result<Response<hyper::body::Incoming>, hyper::Error> {
     match self {
-      SendRequest::Http1(sender) => sender.send_request(request).await,
-      SendRequest::Http2(sender) => sender.send_request(request).await,
+      SendRequest::Http1(sender) => {
+        *request.version_mut() = Version::HTTP_11;
+        sender.send_request(request).await
+      }
+      SendRequest::Http2(sender) => {
+        *request.version_mut() = Version::HTTP_2;
+        sender.send_request(request).await
+      }
     }
   }
 }
@@ -2226,8 +2232,6 @@ fn construct_proxy_request_parts(
       while request_parts.headers.remove(&header_to_remove).is_some() {}
     }
   }
-
-  request_parts.version = Version::HTTP_11;
 
   Ok(request_parts)
 }
