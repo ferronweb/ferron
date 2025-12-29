@@ -90,6 +90,17 @@ impl SendRequest {
       SendRequest::Http2(sender) => sender.is_ready() && !sender.is_closed(),
     }
   }
+
+  #[inline]
+  async fn send_request(
+    &mut self,
+    request: Request<BoxBody<Bytes, std::io::Error>>,
+  ) -> Result<Response<hyper::body::Incoming>, hyper::Error> {
+    match self {
+      SendRequest::Http1(sender) => sender.send_request(request).await,
+      SendRequest::Http2(sender) => sender.send_request(request).await,
+    }
+  }
 }
 
 struct SendRequestWrapper {
@@ -1761,10 +1772,7 @@ async fn http_proxy(
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
   let proxy_request = Request::from_parts(proxy_request_parts, proxy_request_body);
 
-  let send_request_result = match &mut sender {
-    SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
-    SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
-  };
+  let send_request_result = sender.send_request(proxy_request).await;
   let connection_pool_item = Arc::new(connection_pool_item);
 
   let proxy_response = match send_request_result {
