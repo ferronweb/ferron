@@ -491,8 +491,8 @@ example.com {
 
 ### Reverse proxy & load balancing
 
-- `proxy <proxy_to: string|null> [unix=<unix_socket_path: string>] [limit=<conn_limit: integer|null>]` (_rproxy_ module)
-  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported via the `unix` prop set to the path to the socket (and the main value is set to the URL of the website), supported only on Unix and Unix-like systems. Established connections can be limited by the `limit` prop (Ferron UNRELEASED and newer); this can be useful for backend server that don't utilize event-driven I/O. This directive can be specified multiple times. Default: none
+- `proxy <proxy_to: string|null> [unix=<unix_socket_path: string>] [limit=<conn_limit: integer|null>] [idle_timeout=<idle_timeout: integer|null>]` (_rproxy_ module)
+  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported via the `unix` prop set to the path to the socket (and the main value is set to the URL of the website), supported only on Unix and Unix-like systems. Established connections can be limited by the `limit` prop (Ferron UNRELEASED and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron UNRELEASED and newer); by default it is set to `60000` (60 seconds). This directive can be specified multiple times. Default: none
 - `lb_health_check [enable_lb_health_check: bool]` (_rproxy_ module)
   - This directive specifies whenever the load balancer passive health check is enabled. Default: `lb_health_check #false`
 - `lb_health_check_max_fails <max_fails: integer>` (_rproxy_ module)
