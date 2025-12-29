@@ -992,9 +992,9 @@ dependencies = [
 
 [[package]]
 name = "connpool"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ece5c7e383a4b0b23269e5396441532c7846f221d1c7d758f123b70234480e27"
+checksum = "08570dddcc35bf42d1e7d239ec3f6bcedd9e8468701d299f3e0aea0722bca1b9"
 dependencies = [
  "ahash",
  "quick_cache",

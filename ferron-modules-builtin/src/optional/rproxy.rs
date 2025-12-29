@@ -65,7 +65,7 @@ enum SendRequest {
 }
 
 type ConnectionPool = Arc<Pool<(String, Option<String>), SendRequest>>;
-type ConnectionPoolItem<'a> = Item<'a, (String, Option<String>), SendRequest>;
+type ConnectionPoolItem = Item<(String, Option<String>), SendRequest>;
 
 enum Connection {
   #[cfg(feature = "runtime-monoio")]
@@ -142,13 +142,15 @@ impl AsyncWrite for Connection {
 struct TrackedBody<B> {
   inner: B,
   _tracker: Option<Arc<()>>,
+  _tracker_pool: Option<Arc<ConnectionPoolItem>>,
 }
 
 impl<B> TrackedBody<B> {
-  fn new(inner: B, tracker: Arc<()>) -> Self {
+  fn new(inner: B, tracker: Arc<()>, tracker_pool: Option<Arc<ConnectionPoolItem>>) -> Self {
     Self {
       inner,
       _tracker: Some(tracker),
+      _tracker_pool: tracker_pool,
     }
   }
 }
@@ -721,11 +723,11 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .and_then(|v| v.as_bool())
           .unwrap_or(false);
 
-        let connection_pool_item = if (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
+        let enable_keepalive = (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
           && get_value!("proxy_keepalive", config)
             .and_then(|v| v.as_bool())
-            .unwrap_or(true)
-        {
+            .unwrap_or(true);
+        let connection_pool_item = {
           #[cfg(unix)]
           let connections = if proxy_unix.is_some() {
             &self.unix_connections
@@ -762,9 +764,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             sender = send_request_item;
             break;
           }
-          Some(sender)
-        } else {
-          None
+          sender
         };
 
         let stream = if let Some(proxy_unix_str) = &proxy_unix {
@@ -1275,6 +1275,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           error_logger,
           proxy_intercept_errors,
           tracked_connection,
+          enable_keepalive,
         )
         .await;
       } else {
@@ -1579,23 +1580,24 @@ async fn http_proxy_handshake(
 ///
 /// # Parameters
 /// * `sender` - The sender for the HTTP request
-/// * `connections` - Optional connection queue for storing and reusing HTTP connections
-/// * `connect_addr` - The address (host:port) to connect to
+/// * `connection_pool_item` - The connection pool item for the backend server
 /// * `proxy_request` - The HTTP request to forward to the backend
 /// * `error_logger` - Logger for reporting errors
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
 /// * `tracked_connection` - The optional tracked connection to the backend server
+/// * `enable_keepalive` - Whether to enable keepalive for the connection
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
 #[inline]
-async fn http_proxy<'a>(
+async fn http_proxy(
   mut sender: SendRequest,
-  connection_pool_item: Option<ConnectionPoolItem<'a>>,
+  connection_pool_item: ConnectionPoolItem,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
   tracked_connection: Option<Arc<()>>,
+  enable_keepalive: bool,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
@@ -1605,6 +1607,7 @@ async fn http_proxy<'a>(
     SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
     SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
   };
+  let connection_pool_item = Arc::new(connection_pool_item);
 
   let proxy_response = match send_request_result {
     Ok(response) => response,
@@ -1630,6 +1633,7 @@ async fn http_proxy<'a>(
       Ok(upgraded_backend) => {
         // Needed to wrap in monoio::spawn call, since otherwise HTTP upgrades wouldn't work...
         let error_logger = error_logger.clone();
+        let connection_pool_item = connection_pool_item.clone();
         ferron_common::runtime::spawn(async move {
           // Try to upgrade the client connection
           match hyper::upgrade::on(proxy_request_cloned).await {
@@ -1651,6 +1655,7 @@ async fn http_proxy<'a>(
                 tokio::io::copy_bidirectional(&mut upgraded_backend, &mut upgraded_proxy)
                   .await
                   .unwrap_or_default();
+                drop(connection_pool_item);
               });
             }
             Err(err) => {
@@ -1680,7 +1685,21 @@ async fn http_proxy<'a>(
     let (response_parts, response_body) = proxy_response.into_parts();
     let mut boxed_body = response_body.map_err(|e| std::io::Error::other(e.to_string())).boxed();
     if let Some(tracked_connection) = tracked_connection {
-      boxed_body = TrackedBody::new(boxed_body, tracked_connection).boxed();
+      boxed_body = TrackedBody::new(
+        boxed_body,
+        tracked_connection,
+        if enable_keepalive
+          && !(match &sender {
+            SendRequest::Http1(sender) => sender.is_closed(),
+            SendRequest::Http2(sender) => sender.is_closed(),
+          })
+        {
+          None
+        } else {
+          Some(connection_pool_item.clone())
+        },
+      )
+      .boxed();
     }
     ResponseData {
       request: None,
@@ -1692,14 +1711,20 @@ async fn http_proxy<'a>(
   };
 
   // Store the HTTP connection in the connection pool for future reuse if it's still open
-  if let Some(mut connection_pool_item) = connection_pool_item {
-    if !(match &sender {
+  if enable_keepalive
+    && !(match &sender {
       SendRequest::Http1(sender) => sender.is_closed(),
       SendRequest::Http2(sender) => sender.is_closed(),
-    }) {
-      connection_pool_item.inner_mut().replace(sender);
-    }
+    })
+  {
+    // Safety: this Arc is cloned twice (when there's HTTP upgrade and when keepalive is disabled),
+    // but the clones' inner value isn't modified, so no race condition.
+    // We could wrap this value in a Mutex, but it's not really necessary in this case.
+    let connection_pool_item = unsafe { &mut *(Arc::as_ptr(&connection_pool_item) as *mut ConnectionPoolItem) };
+    connection_pool_item.inner_mut().replace(sender);
   }
+
+  drop(connection_pool_item);
 
   Ok(response)
 }
@@ -1716,19 +1741,17 @@ async fn http_proxy<'a>(
 /// when an existing connection to the same backend server is available and reusable.
 ///
 /// # Parameters
-/// * `sender` - The existing HTTP client connection to the backend
+/// * `connection_pool_item` - The connection pool item for the backend server, with the inner connection
 /// * `proxy_request` - The HTTP request to forward to the backend
 /// * `error_logger` - Logger for reporting errors
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
 /// * `tracked_connection` - The optional tracked connection to the backend server
-/// * `connections_tx` - The sender part of idle keep-alive connection queue
-/// * `pending_connections` - The pending connection guard
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
 #[inline]
-async fn http_proxy_kept_alive<'a>(
-  mut connection_pool_item: ConnectionPoolItem<'a>,
+async fn http_proxy_kept_alive(
+  mut connection_pool_item: ConnectionPoolItem,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
@@ -1747,6 +1770,7 @@ async fn http_proxy_kept_alive<'a>(
     SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
     SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
   };
+  let connection_pool_item = Arc::new(connection_pool_item);
 
   // Send the request over the existing connection and await the response
   let proxy_response = match send_request_result {
@@ -1772,6 +1796,7 @@ async fn http_proxy_kept_alive<'a>(
       Ok(upgraded_backend) => {
         // Needed to wrap in monoio::spawn call, since otherwise HTTP upgrades wouldn't work...
         let error_logger = error_logger.clone();
+        let connection_pool_item = connection_pool_item.clone();
         ferron_common::runtime::spawn(async move {
           // Try to upgrade the client connection
           match hyper::upgrade::on(proxy_request_cloned).await {
@@ -1793,6 +1818,7 @@ async fn http_proxy_kept_alive<'a>(
                 tokio::io::copy_bidirectional(&mut upgraded_backend, &mut upgraded_proxy)
                   .await
                   .unwrap_or_default();
+                drop(connection_pool_item);
               });
             }
             Err(err) => {
@@ -1829,7 +1855,19 @@ async fn http_proxy_kept_alive<'a>(
     let (response_parts, response_body) = proxy_response.into_parts();
     let mut boxed_body = response_body.map_err(|e| std::io::Error::other(e.to_string())).boxed();
     if let Some(tracked_connection) = tracked_connection {
-      boxed_body = TrackedBody::new(boxed_body, tracked_connection).boxed();
+      boxed_body = TrackedBody::new(
+        boxed_body,
+        tracked_connection,
+        if !(match &sender {
+          SendRequest::Http1(sender) => sender.is_closed(),
+          SendRequest::Http2(sender) => sender.is_closed(),
+        }) {
+          None
+        } else {
+          Some(connection_pool_item.clone())
+        },
+      )
+      .boxed();
     }
     ResponseData {
       request: None,
@@ -1844,8 +1882,14 @@ async fn http_proxy_kept_alive<'a>(
     SendRequest::Http1(sender) => sender.is_closed(),
     SendRequest::Http2(sender) => sender.is_closed(),
   }) {
+    // Safety: this Arc is cloned twice (when there's HTTP upgrade and when keepalive is disabled),
+    // but the clones' inner value isn't modified, so no race condition.
+    // We could wrap this value in a Mutex, but it's not really necessary in this case.
+    let connection_pool_item = unsafe { &mut *(Arc::as_ptr(&connection_pool_item) as *mut ConnectionPoolItem) };
     connection_pool_item.inner_mut().replace(sender);
   }
+
+  drop(connection_pool_item);
 
   Ok(response)
 }
