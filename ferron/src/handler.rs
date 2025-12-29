@@ -692,15 +692,17 @@ async fn http_quic_handler_fn(
               let (request, stream) = match resolver.resolve_request().await {
                 Ok(resolved) => resolved,
                 Err(err) => {
-                  for logging_tx in configurations
-                    .find_global_configuration()
-                    .as_ref()
-                    .map_or(&vec![], |c| &c.observability.log_channels)
-                  {
-                    logging_tx
-                      .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                      .await
-                      .unwrap_or_default();
+                  if !err.is_h3_no_error() {
+                    for logging_tx in configurations
+                      .find_global_configuration()
+                      .as_ref()
+                      .map_or(&vec![], |c| &c.observability.log_channels)
+                    {
+                      logging_tx
+                        .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+                        .await
+                        .unwrap_or_default();
+                    }
                   }
                   return;
                 }
@@ -777,15 +779,17 @@ async fn http_quic_handler_fn(
               }
               let (response_parts, mut response_body) = response.into_parts();
               if let Err(err) = send.send_response(Response::from_parts(response_parts, ())).await {
-                for logging_tx in configurations
-                  .find_global_configuration()
-                  .as_ref()
-                  .map_or(&vec![], |c| &c.observability.log_channels)
-                {
-                  logging_tx
-                    .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                    .await
-                    .unwrap_or_default();
+                if !err.is_h3_no_error() {
+                  for logging_tx in configurations
+                    .find_global_configuration()
+                    .as_ref()
+                    .map_or(&vec![], |c| &c.observability.log_channels)
+                  {
+                    logging_tx
+                      .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+                      .await
+                      .unwrap_or_default();
+                  }
                 }
                 return;
               }
@@ -797,15 +801,17 @@ async fn http_quic_handler_fn(
                       match frame.into_data() {
                         Ok(data) => {
                           if let Err(err) = send.send_data(data).await {
-                            for logging_tx in configurations
-                              .find_global_configuration()
-                              .as_ref()
-                              .map_or(&vec![], |c| &c.observability.log_channels)
-                            {
-                              logging_tx
-                                .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                                .await
-                                .unwrap_or_default();
+                            if !err.is_h3_no_error() {
+                              for logging_tx in configurations
+                                .find_global_configuration()
+                                .as_ref()
+                                .map_or(&vec![], |c| &c.observability.log_channels)
+                              {
+                                logging_tx
+                                  .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+                                  .await
+                                  .unwrap_or_default();
+                              }
                             }
                             return;
                           }
@@ -832,15 +838,17 @@ async fn http_quic_handler_fn(
                         Ok(trailers) => {
                           had_trailers = true;
                           if let Err(err) = send.send_trailers(trailers).await {
-                            for logging_tx in configurations
-                              .find_global_configuration()
-                              .as_ref()
-                              .map_or(&vec![], |c| &c.observability.log_channels)
-                            {
-                              logging_tx
-                                .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                                .await
-                                .unwrap_or_default();
+                            if !err.is_h3_no_error() {
+                              for logging_tx in configurations
+                                .find_global_configuration()
+                                .as_ref()
+                                .map_or(&vec![], |c| &c.observability.log_channels)
+                              {
+                                logging_tx
+                                  .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+                                  .await
+                                  .unwrap_or_default();
+                              }
                             }
                             return;
                           }
@@ -875,21 +883,24 @@ async fn http_quic_handler_fn(
                         .await
                         .unwrap_or_default();
                     }
+
                     return;
                   }
                 }
               }
               if !had_trailers {
                 if let Err(err) = send.finish().await {
-                  for logging_tx in configurations
-                    .find_global_configuration()
-                    .as_ref()
-                    .map_or(&vec![], |c| &c.observability.log_channels)
-                  {
-                    logging_tx
-                      .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                      .await
-                      .unwrap_or_default();
+                  if !err.is_h3_no_error() {
+                    for logging_tx in configurations
+                      .find_global_configuration()
+                      .as_ref()
+                      .map_or(&vec![], |c| &c.observability.log_channels)
+                    {
+                      logging_tx
+                        .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+                        .await
+                        .unwrap_or_default();
+                    }
                   }
                 }
               }
@@ -897,15 +908,17 @@ async fn http_quic_handler_fn(
           }
           Ok(None) => break,
           Err(err) => {
-            for logging_tx in configurations
-              .find_global_configuration()
-              .as_ref()
-              .map_or(&vec![], |c| &c.observability.log_channels)
-            {
-              logging_tx
-                .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                .await
-                .unwrap_or_default();
+            if !err.is_h3_no_error() {
+              for logging_tx in configurations
+                .find_global_configuration()
+                .as_ref()
+                .map_or(&vec![], |c| &c.observability.log_channels)
+              {
+                logging_tx
+                  .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+                  .await
+                  .unwrap_or_default();
+              }
             }
             return;
           }
