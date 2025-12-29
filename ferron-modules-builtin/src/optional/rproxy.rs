@@ -1636,6 +1636,7 @@ async fn select_backend_index<'a>(
 ///   The URL, the optional Unix socket path,
 ///   the local limit index of the selected backend server,
 ///   and the keepalive timeout, or None if no valid backend exists
+#[inline]
 async fn determine_proxy_to<'a>(
   proxy_to_vector: &mut Vec<ProxyToVectorContentsBorrowed<'a>>,
   failed_backends: &RwLock<TtlCache<(String, Option<String>), u64>>,
@@ -2052,6 +2053,7 @@ async fn http_proxy_kept_alive(
 }
 
 /// Constructs a proxy request based on the original request.
+#[inline]
 fn construct_proxy_request_parts(
   mut request_parts: hyper::http::request::Parts,
   config: &ServerConfiguration,
