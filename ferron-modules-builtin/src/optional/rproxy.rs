@@ -260,7 +260,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                     (
                       v,
                       e.props.get("unix").and_then(|v| v.as_str()).map(|s| s.to_owned()),
-                      e.props.get("keepalive").and_then(|v| v.as_i128()).map(|v| v as usize),
+                      e.props.get("limit").and_then(|v| v.as_i128()).map(|v| v as usize),
                     )
                   })
               })
@@ -383,9 +383,9 @@ impl ModuleLoader for ReverseProxyModuleLoader {
           Err(anyhow::anyhow!("Invalid proxy backend server"))?
         } else if !entry.props.get("unix").is_none_or(|v| v.is_string()) {
           Err(anyhow::anyhow!("Invalid proxy Unix socket path"))?
-        } else if let Some(prop) = entry.props.get("keepalive") {
+        } else if let Some(prop) = entry.props.get("limit") {
           if !prop.is_null() && prop.as_i128().unwrap_or(0) < 1 {
-            Err(anyhow::anyhow!("Invalid proxy keep-alive limit for a backend server"))?
+            Err(anyhow::anyhow!("Invalid proxy connection limit for a backend server"))?
           }
         }
 
@@ -734,37 +734,35 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           };
           #[cfg(not(unix))]
           let connections = &self.connections;
-          let mut sender = None;
+          let sender;
           loop {
-            if let Some(mut send_request_item) = connections
-              .pull_with_local_limit((proxy_to.clone(), proxy_unix.clone()), local_limit_index)
-              .await
-            {
-              if let Some(send_request) = send_request_item.inner_mut() {
-                if match send_request {
-                  SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-                  SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-                } {
-                  let proxy_request = Request::from_parts(proxy_request_parts, request_body);
-                  let result = http_proxy_kept_alive(
-                    send_request_item,
-                    proxy_request,
-                    error_logger,
-                    proxy_intercept_errors,
-                    tracked_connection,
-                  )
-                  .await;
-                  return result;
-                } else {
-                  send_request_item.take();
-                  continue;
-                }
+            let mut send_request_item = connections
+              .pull_with_wait_local_limit((proxy_to.clone(), proxy_unix.clone()), local_limit_index)
+              .await;
+            if let Some(send_request) = send_request_item.inner_mut() {
+              if match send_request {
+                SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+                SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+              } {
+                let proxy_request = Request::from_parts(proxy_request_parts, request_body);
+                let result = http_proxy_kept_alive(
+                  send_request_item,
+                  proxy_request,
+                  error_logger,
+                  proxy_intercept_errors,
+                  tracked_connection,
+                )
+                .await;
+                return result;
+              } else {
+                send_request_item.take();
+                continue;
               }
-              sender = Some(send_request_item);
             }
+            sender = send_request_item;
             break;
           }
-          sender
+          Some(sender)
         } else {
           None
         };

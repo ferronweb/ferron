@@ -62,7 +62,7 @@ pin-project-lite = "0.2.16"
 tokio-util = { version = "0.7.15", features = ["compat"] }
 kanal = { version = "0.1.1", optional = true }
 arc-swap = { version = "1.8.0", optional = true }
-connpool = { version = "0.1.0", optional = true }
+connpool = { version = "0.1.1", optional = true }
 
 # Process & System Integration
 async-process = { version = "2.3.0", optional = true }
