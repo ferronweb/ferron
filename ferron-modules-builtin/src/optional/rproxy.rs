@@ -2226,7 +2226,7 @@ fn construct_proxy_request_parts(
     }
   }
 
-  request_parts.version = Version::HTTP_11;
+  request_parts.version = Version::default();
 
   Ok(request_parts)
 }
