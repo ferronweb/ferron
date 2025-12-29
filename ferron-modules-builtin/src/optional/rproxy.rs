@@ -5,12 +5,13 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use connpool::{Item, Pool};
+use futures_util::FutureExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Body;
@@ -106,16 +107,30 @@ impl SendRequestWrapper {
   }
 
   #[inline]
-  async fn get(mut self, timeout: Option<Duration>) -> Option<SendRequest> {
+  fn get(&mut self, timeout: Option<Duration>) -> (Option<SendRequest>, bool) {
+    let inner_mut = if let Some(inner) = self.inner.as_mut() {
+      inner
+    } else {
+      return (None, false);
+    };
+    if inner_mut.is_closed() {
+      return (None, false);
+    } else if inner_mut.is_ready() && timeout.is_some_and(|t| self.instant.elapsed() > t) {
+      return (None, true);
+    }
+    (if inner_mut.is_ready() { self.inner.take() } else { None }, true)
+  }
+
+  #[inline]
+  async fn wait_ready(&mut self, timeout: Option<Duration>) -> bool {
+    if self.inner.is_none() {
+      return false;
+    }
     let mut inner = self.inner.take().expect("inner is None");
     if inner.is_ready() && timeout.is_some_and(|t| self.instant.elapsed() > t) {
-      return None;
+      return false;
     }
-    if inner.ready().await {
-      Some(inner)
-    } else {
-      None
-    }
+    inner.ready().await
   }
 }
 
@@ -814,27 +829,85 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           #[cfg(not(unix))]
           let connections = &self.connections;
           let sender;
+          let mut send_request_items = Vec::new();
           loop {
-            let mut send_request_item = connections
+            let mut send_request_item = if send_request_items.is_empty() {
+              connections
+                .pull_with_wait_local_limit((proxy_to.clone(), proxy_unix.clone()), local_limit_index)
+                .await
+            } else if let Poll::Ready(send_request_item_option) = connections
               .pull_with_wait_local_limit((proxy_to.clone(), proxy_unix.clone()), local_limit_index)
-              .await;
-            if let Some(send_request) = send_request_item.inner_mut().take() {
-              if let Some(send_request) = send_request.get(keepalive_idle_timeout).await {
-                let proxy_request = Request::from_parts(proxy_request_parts, request_body);
-                let result = http_proxy_kept_alive(
-                  send_request,
-                  send_request_item,
-                  proxy_request,
-                  error_logger,
-                  proxy_intercept_errors,
-                  tracked_connection,
-                )
-                .await;
-                return result;
-              } else {
-                continue;
+              .boxed_local()
+              .poll_unpin(&mut Context::from_waker(Waker::noop()))
+            {
+              send_request_item_option
+            } else {
+              let send_request_items_taken = send_request_items;
+              send_request_items = Vec::new();
+              let fetch_nonready_send_request_fut = async {
+                let result = futures_util::future::select_ok(send_request_items_taken).await;
+                if let Ok((item, send_request_items_smaller)) = result {
+                  send_request_items = send_request_items_smaller;
+                  item
+                } else {
+                  futures_util::future::pending().await
+                }
+              };
+              ferron_common::runtime::select! {
+                item = connections
+                  .pull_with_wait_local_limit((proxy_to.clone(), proxy_unix.clone()), local_limit_index)
+                => {
+                  item
+                },
+                item = fetch_nonready_send_request_fut => {
+                  item
+                }
+              }
+            };
+            if let Some(send_request) = send_request_item.inner_mut() {
+              match send_request.get(keepalive_idle_timeout) {
+                (Some(send_request), true) => {
+                  // Connection ready, send a request to it
+                  send_request_items.clear();
+                  let _ = send_request_item.inner_mut().take();
+                  let proxy_request = Request::from_parts(proxy_request_parts, request_body);
+                  let result = http_proxy_kept_alive(
+                    send_request,
+                    send_request_item,
+                    proxy_request,
+                    error_logger,
+                    proxy_intercept_errors,
+                    tracked_connection,
+                  )
+                  .await;
+                  return result;
+                }
+                (None, true) => {
+                  // Connection not ready
+                  send_request_items.push(Box::pin(async move {
+                    let inner_item = send_request_item.inner_mut();
+                    if let Some(inner_item_2) = inner_item {
+                      if !inner_item_2.wait_ready(keepalive_idle_timeout).await {
+                        // Connection closed or timed out
+                        inner_item.take();
+                      }
+                      let _ = inner_item;
+                      Ok(send_request_item)
+                    } else {
+                      Err(())
+                    }
+                  }));
+                  continue;
+                }
+                (_, false) => {
+                  // Connection closed
+                  send_request_items.clear();
+                  let _ = send_request_item.inner_mut().take();
+                  continue;
+                }
               }
             }
+            send_request_items.clear();
             sender = send_request_item;
             break;
           }
