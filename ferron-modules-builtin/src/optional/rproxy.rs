@@ -64,6 +64,24 @@ enum SendRequest {
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
 
+impl SendRequest {
+  #[inline]
+  fn is_closed(&self) -> bool {
+    match self {
+      SendRequest::Http1(sender) => sender.is_closed(),
+      SendRequest::Http2(sender) => sender.is_closed(),
+    }
+  }
+
+  #[inline]
+  async fn is_ready(&mut self) -> bool {
+    match self {
+      SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+      SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+    }
+  }
+}
+
 type ConnectionPool = Arc<Pool<(String, Option<String>), SendRequest>>;
 type ConnectionPoolItem = Item<(String, Option<String>), SendRequest>;
 
@@ -742,10 +760,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
               .pull_with_wait_local_limit((proxy_to.clone(), proxy_unix.clone()), local_limit_index)
               .await;
             if let Some(send_request) = send_request_item.inner_mut() {
-              if match send_request {
-                SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-                SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-              } {
+              if send_request.is_ready().await {
                 let proxy_request = Request::from_parts(proxy_request_parts, request_body);
                 let result = http_proxy_kept_alive(
                   send_request_item,
@@ -1688,12 +1703,7 @@ async fn http_proxy(
       boxed_body = TrackedBody::new(
         boxed_body,
         tracked_connection,
-        if enable_keepalive
-          && !(match &sender {
-            SendRequest::Http1(sender) => sender.is_closed(),
-            SendRequest::Http2(sender) => sender.is_closed(),
-          })
-        {
+        if enable_keepalive && !sender.is_closed() {
           None
         } else {
           Some(connection_pool_item.clone())
@@ -1711,12 +1721,7 @@ async fn http_proxy(
   };
 
   // Store the HTTP connection in the connection pool for future reuse if it's still open
-  if enable_keepalive
-    && !(match &sender {
-      SendRequest::Http1(sender) => sender.is_closed(),
-      SendRequest::Http2(sender) => sender.is_closed(),
-    })
-  {
+  if enable_keepalive && !sender.is_closed() {
     // Safety: this Arc is cloned twice (when there's HTTP upgrade and when keepalive is disabled),
     // but the clones' inner value isn't modified, so no race condition.
     // We could wrap this value in a Mutex, but it's not really necessary in this case.
@@ -1858,10 +1863,7 @@ async fn http_proxy_kept_alive(
       boxed_body = TrackedBody::new(
         boxed_body,
         tracked_connection,
-        if !(match &sender {
-          SendRequest::Http1(sender) => sender.is_closed(),
-          SendRequest::Http2(sender) => sender.is_closed(),
-        }) {
+        if !sender.is_closed() {
           None
         } else {
           Some(connection_pool_item.clone())
@@ -1878,10 +1880,7 @@ async fn http_proxy_kept_alive(
     }
   };
 
-  if !(match &sender {
-    SendRequest::Http1(sender) => sender.is_closed(),
-    SendRequest::Http2(sender) => sender.is_closed(),
-  }) {
+  if !sender.is_closed() {
     // Safety: this Arc is cloned twice (when there's HTTP upgrade and when keepalive is disabled),
     // but the clones' inner value isn't modified, so no race condition.
     // We could wrap this value in a Mutex, but it's not really necessary in this case.
