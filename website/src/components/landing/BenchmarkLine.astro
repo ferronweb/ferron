@@ -5,9 +5,7 @@ interface Props {
   data: object[];
   command: string;
   unit: string;
-  competitor1: string;
-  competitor2: string;
-  competitor3: string;
+  competitors: string[];
   description: string;
   title: string;
   date: Date;
@@ -15,7 +13,7 @@ interface Props {
   system: string;
 }
 
-const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
+const { data, unit, competitors } = Astro.props;
 ---
 
 <div
@@ -38,9 +36,7 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
       data-props={JSON.stringify({
         data,
         unit,
-        competitor1,
-        competitor2,
-        competitor3
+        competitors
       })}
       class="min-h-80 grow"
     >
@@ -84,9 +80,7 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
     name: string;
     concurrency: string | number;
     ferron: string | number;
-    competitor1: string | number;
-    competitor2: string | number;
-    competitor3: string | number;
+    competitors: (string | number)[];
   }
 
   Chart.register([
@@ -103,9 +97,13 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
   const mutedForegroundColor = style.getPropertyValue("--muted-foreground");
   const borderColor = style.getPropertyValue("--border");
   const primaryColor = style.getPropertyValue("--primary");
-  const chart1 = style.getPropertyValue("--chart-1");
-  const chart2 = style.getPropertyValue("--chart-2");
-  const chart3 = style.getPropertyValue("--chart-3");
+  const chartColors = [
+    style.getPropertyValue("--chart-1"),
+    style.getPropertyValue("--chart-2"),
+    style.getPropertyValue("--chart-3"),
+    style.getPropertyValue("--chart-4"),
+    style.getPropertyValue("--chart-5")
+  ];
   const fontFamily = style.getPropertyValue("--font-funnel-sans");
 
   class BenchmarkChart extends HTMLElement {
@@ -128,27 +126,15 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
               backgroundColor: `hsla(${primaryColor}, 1)`,
               pointStyle: false
             },
-            {
-              label: props.competitor1,
-              data: props.data.map((item: BenchmarkData) => item.competitor1),
-              borderColor: `hsla(${chart1}, 1)`,
-              backgroundColor: `hsla(${chart1}, 1)`,
+            ...props.competitors.map((competitor: string, index: number) => ({
+              label: competitor,
+              data: props.data.map(
+                (item: BenchmarkData) => item.competitors[index]
+              ),
+              borderColor: `hsla(${chartColors[index]}, 1)`,
+              backgroundColor: `hsla(${chartColors[index]}, 1)`,
               pointStyle: false
-            },
-            {
-              label: props.competitor2,
-              data: props.data.map((item: BenchmarkData) => item.competitor2),
-              borderColor: `hsla(${chart2}, 1)`,
-              backgroundColor: `hsla(${chart2}, 1)`,
-              pointStyle: false
-            },
-            {
-              label: props.competitor3,
-              data: props.data.map((item: BenchmarkData) => item.competitor3),
-              borderColor: `hsla(${chart3}, 1)`,
-              backgroundColor: `hsla(${chart3}, 1)`,
-              pointStyle: false
-            }
+            }))
           ]
         },
         options: {

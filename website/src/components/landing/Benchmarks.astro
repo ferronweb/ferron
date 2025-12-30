@@ -22,30 +22,22 @@ import BenchmarkLine from "./BenchmarkLine.astro";
           {
             name: "1KB file",
             ferron: 124552.78,
-            competitor1: 93459.1,
-            competitor2: 25384.9,
-            competitor3: 100983.17
+            competitors: [93459.1, 25384.9, 100983.17],
           },
           {
             name: "100KB file",
             ferron: 26228.44,
-            competitor1: 11720.13,
-            competitor2: 17797.22,
-            competitor3: 29259.29
+            competitors: [11720.13, 17797.22, 29259.29],
           },
           {
             name: "1MB file",
             ferron: 2537.57,
-            competitor1: 1278.84,
-            competitor2: 4618.48,
-            competitor3: 3306.1
+            competitors: [1278.84, 4618.48, 3306.1],
           }
         ]}
         unit={"req/s"}
         higherIsBetter={true}
-        competitor1={"lighttpd"}
-        competitor2={"Apache httpd"}
-        competitor3={"Caddy"}
+        competitors={["lighttpd", "Apache httpd", "Caddy"]}
         command="ferrbench -c 1000 -d 60s -t 12 -h https://localhost --http2"
         date={new Date("2025-09-19")}
         system={"AMD Ryzen 5 8600G, 32GB RAM"}
@@ -56,9 +48,7 @@ import BenchmarkLine from "./BenchmarkLine.astro";
         data={reverseProxyThroughput}
         unit={"req/s"}
         higherIsBetter={true}
-        competitor1={"Traefik"}
-        competitor2={"NGINX mainline"}
-        competitor3={"Caddy"}
+        competitors={["Traefik", "NGINX mainline", "Caddy"]}
         command="ferrbench -c $CONCURRENCY -d 5s -t 16 -h https://localhost --http2"
         date={new Date("2025-10-26")}
         system={"AMD Ryzen 7 8700G, 32GB RAM"}
@@ -69,9 +59,7 @@ import BenchmarkLine from "./BenchmarkLine.astro";
         data={reverseProxyLatency}
         unit={"ms"}
         higherIsBetter={false}
-        competitor1={"Traefik"}
-        competitor2={"NGINX mainline"}
-        competitor3={"Caddy"}
+        competitors={["Traefik", "NGINX mainline", "Caddy"]}
         command="ferrbench -c $CONCURRENCY -d 5s -t 16 -h https://localhost --http2"
         date={new Date("2025-10-26")}
         system={"AMD Ryzen 7 8700G, 32GB RAM"}
@@ -83,23 +71,17 @@ import BenchmarkLine from "./BenchmarkLine.astro";
           {
             name: "Hello World PHP script",
             ferron: 44364.78,
-            competitor1: 45255.49,
-            competitor2: 43767.75,
-            competitor3: 34664.32
+            competitors: [45255.49, 43767.75, 34664.32]
           },
           {
             name: "Fresh WordPress",
             ferron: 223.91,
-            competitor1: 225.86,
-            competitor2: 222.74,
-            competitor3: 223.08
+            competitors: [225.86, 222.74, 223.08]
           }
         ]}
         unit={"req/s"}
         higherIsBetter={true}
-        competitor1={"lighttpd"}
-        competitor2={"Apache httpd"}
-        competitor3={"Caddy"}
+        competitors={["lighttpd", "Apache httpd", "Caddy"]}
         command="ferrbench -c 100 -d 60s -t 12 -h https://localhost --http2"
         date={new Date("2025-06-13")}
         system={"AMD Ryzen 5 8600G, 32GB RAM"}
