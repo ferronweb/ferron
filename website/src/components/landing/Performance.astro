@@ -1,0 +1,56 @@
+---
+import {
+  faArrowRight,
+  faGlobe,
+  faMicrochip,
+  faNetworkWired,
+  faSliders
+} from "@fortawesome/free-solid-svg-icons";
+import FontAwesomeIcon from "../FontAwesomeIcon.astro";
+import PerformancePoint from "./PerformancePoint.astro";
+---
+
+<section id="benchmarks" class="py-20">
+  <div class="container">
+    <div class="text-center mb-16">
+      <h2 class="text-3xl md:text-4xl font-bold mb-4">
+        Performance built for real traffic
+      </h2>
+      <p class="text-muted-foreground text-lg max-w-2xl mx-auto">
+        Ferron delivers high performance under real-world web workloads, without
+        requiring expert-level tuning.
+      </p>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-screen-lg mx-auto">
+      <PerformancePoint
+        icon={faNetworkWired}
+        title="High concurrency"
+        description="Handles large numbers of simultaneous connections without artificial keep-alive limits or backend pool starvation."
+      />
+      <PerformancePoint
+        icon={faGlobe}
+        title="Modern protocols"
+        description="Optimized for modern protocols (HTTP/2 and even experimentally HTTP/3), allowing for efficient multiplexing and low-latency connections."
+      />
+      <PerformancePoint
+        icon={faMicrochip}
+        title="Efficient by design"
+        description="Asynchronous event-driven architecture provides predictable performance and lower memory usage under load."
+      />
+      <PerformancePoint
+        icon={faSliders}
+        title="No tuning required"
+        description="High performance out of the box; you don't have to adjust worker counts, pools, or any other hidden limits."
+      />
+    </div>
+    <div class="mt-10 flex justify-center">
+      <a href="/benchmarks" class="btn btn-primary group">
+        View benchmarks
+        <FontAwesomeIcon
+          icon={faArrowRight}
+          class="ml-2 size-4! transition-transform group-hover:translate-x-1"
+        />
+      </a>
+    </div>
+  </div>
+</section>

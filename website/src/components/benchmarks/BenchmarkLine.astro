@@ -11,6 +11,7 @@ interface Props {
   date: Date;
   higherIsBetter: boolean;
   system: string;
+  class?: string;
 }
 
 const { data, unit, competitors } = Astro.props;
@@ -18,7 +19,7 @@ const { data, unit, competitors } = Astro.props;
 
 <div
   data-slot="card"
-  class="card px-0 rounded-xl flex flex-col overflow-hidden"
+  class={`card px-0 rounded-xl flex flex-col overflow-hidden ${Astro.props.class || ''}`}
 >
   <div
     data-slot="card-header"
@@ -32,7 +33,7 @@ const { data, unit, competitors } = Astro.props;
     </div>
   </div>
   <div data-slot="card-content" class="px-6 grow flex flex-col">
-    <benchmark-chart
+    <benchmark-chart-line
       data-props={JSON.stringify({
         data,
         unit,
@@ -44,7 +45,7 @@ const { data, unit, competitors } = Astro.props;
       <div class="relative min-h-80 size-full">
         <canvas></canvas>
       </div>
-    </benchmark-chart>
+    </benchmark-chart-line>
     <div
       class="mt-4 text-center max-w-full prose prose-sm text-muted-foreground"
     >
@@ -65,25 +66,28 @@ const { data, unit, competitors } = Astro.props;
 
 <script>
   import {
-    BarController,
-    BarElement,
     CategoryScale,
     Chart,
     type ChartItem,
     Legend,
     LinearScale,
+    LineController,
+    LineElement,
+    PointElement,
     Tooltip
   } from "chart.js";
 
   interface BenchmarkData {
     name: string;
+    concurrency: string | number;
     ferron: string | number;
     competitors: (string | number)[];
   }
 
   Chart.register([
-    BarController,
-    BarElement,
+    LineController,
+    LineElement,
+    PointElement,
     CategoryScale,
     LinearScale,
     Legend,
@@ -112,21 +116,25 @@ const { data, unit, competitors } = Astro.props;
       Chart.defaults.color = `hsla(${mutedForegroundColor}, 1)`;
       Chart.defaults.borderColor = `hsla(${borderColor}, 1)`;
       new Chart(canvas as ChartItem, {
-        type: "bar",
+        type: "line",
         data: {
-          labels: props.data.map((item: BenchmarkData) => item.name),
+          labels: props.data.map((item: BenchmarkData) => item.concurrency),
           datasets: [
             {
               label: "Ferron",
               data: props.data.map((item: BenchmarkData) => item.ferron),
-              backgroundColor: `hsla(${primaryColor}, 1)`
+              borderColor: `hsla(${primaryColor}, 1)`,
+              backgroundColor: `hsla(${primaryColor}, 1)`,
+              pointStyle: false
             },
             ...props.competitors.map((competitor: string, index: number) => ({
               label: competitor,
               data: props.data.map(
                 (item: BenchmarkData) => item.competitors[index]
               ),
-              backgroundColor: `hsla(${chartColors[index]}, 1)`
+              borderColor: `hsla(${chartColors[index]}, 1)`,
+              backgroundColor: `hsla(${chartColors[index]}, 1)`,
+              pointStyle: false
             }))
           ]
         },
@@ -135,8 +143,9 @@ const { data, unit, competitors } = Astro.props;
 
           scales: {
             x: {
-              grid: {
-                display: false
+              title: {
+                display: true,
+                text: "Concurrent requests"
               }
             },
             y: {
@@ -152,5 +161,5 @@ const { data, unit, competitors } = Astro.props;
     }
   }
 
-  customElements.define("benchmark-chart", BenchmarkChart);
+  customElements.define("benchmark-chart-line", BenchmarkChart);
 </script>

@@ -1,0 +1,113 @@
+---
+import reverseProxyLatency from "../assets/benchmarks/reverseProxyLatency";
+import reverseProxyThroughput from "../assets/benchmarks/reverseProxyThroughput";
+import Benchmark from "../components/benchmarks/Benchmark.astro";
+import BenchmarkLine from "../components/benchmarks/BenchmarkLine.astro";
+import MainLayout from "../layouts/MainLayout.astro";
+---
+
+<MainLayout
+  title="Benchmarks"
+  description="See how Ferron compares to other web servers in terms of performance."
+>
+  <main
+    id="benchmarks"
+    class="max-w-screen-xl mx-auto px-4! py-6 md:py-28 flex items-center justify-center flex-col"
+  >
+    <h1 class="text-4xl md:text-6xl pb-1 md:pb-2 font-bold">Benchmarks</h1>
+    <p
+      class="max-w-xl text-center text-muted-foreground flex items-center justify-center mt-2 mb-6 md:mb-8 md:text-lg"
+    >
+      See how Ferron compares to other web servers in terms of performance for
+      various use cases.
+    </p>
+    <h2 class="text-3xl font-bold mt-6 mb-4 self-start align-start">
+      Reverse proxying
+    </h2>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <BenchmarkLine
+        title="Reverse proxy performance"
+        description={'Requests per second when proxying to a "Hello World" Axum application (higher is better)'}
+        data={reverseProxyThroughput}
+        unit={"req/s"}
+        higherIsBetter={true}
+        competitors={["Traefik", "NGINX mainline", "Caddy"]}
+        command="ferrbench -c $CONCURRENCY -d 5s -t 16 -h https://localhost --http2"
+        date={new Date("2025-10-26")}
+        system={"AMD Ryzen 7 8700G, 32GB RAM"}
+      />
+      <BenchmarkLine
+        title="Latency under load (reverse proxy)"
+        description={'Average response time under high concurrency proxying to a "Hello World" Axum application (lower is better)'}
+        data={reverseProxyLatency}
+        unit={"ms"}
+        higherIsBetter={false}
+        competitors={["Traefik", "NGINX mainline", "Caddy"]}
+        command="ferrbench -c $CONCURRENCY -d 5s -t 16 -h https://localhost --http2"
+        date={new Date("2025-10-26")}
+        system={"AMD Ryzen 7 8700G, 32GB RAM"}
+      />
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div class="flex flex-col">
+        <h2 class="text-3xl font-bold mt-6 mb-4  self-start align-start">
+          Static file serving
+        </h2>
+        <Benchmark
+          title="Static file serving"
+          description="Requests per second when serving static files (higher is better)"
+          data={[
+          {
+            name: "1KB file",
+            ferron: 124552.78,
+            competitors: [93459.1, 25384.9, 100983.17],
+          },
+          {
+            name: "100KB file",
+            ferron: 26228.44,
+            competitors: [11720.13, 17797.22, 29259.29],
+          },
+          {
+            name: "1MB file",
+            ferron: 2537.57,
+            competitors: [1278.84, 4618.48, 3306.1],
+          }
+        ]}
+          unit={"req/s"}
+          higherIsBetter={true}
+          competitors={["lighttpd", "Apache httpd", "Caddy"]}
+          command="ferrbench -c 1000 -d 60s -t 12 -h https://localhost --http2"
+          date={new Date("2025-09-19")}
+          system={"AMD Ryzen 5 8600G, 32GB RAM"}
+          class="grow"
+        />
+      </div>
+      <div class="flex flex-col">
+        <h2 class="text-3xl font-bold mt-6 mb-4 self-start align-start">PHP</h2>
+        <Benchmark
+          title="PHP performance"
+          description="Requests per second when serving PHP through PHP-FPM (higher is better)"
+          data={[
+          {
+            name: "Hello World PHP script",
+            ferron: 44364.78,
+            competitors: [45255.49, 43767.75, 34664.32]
+          },
+          {
+            name: "Fresh WordPress",
+            ferron: 223.91,
+            competitors: [225.86, 222.74, 223.08]
+          }
+        ]}
+          unit={"req/s"}
+          higherIsBetter={true}
+          competitors={["lighttpd", "Apache httpd", "Caddy"]}
+          command="ferrbench -c 100 -d 60s -t 12 -h https://localhost --http2"
+          date={new Date("2025-06-13")}
+          system={"AMD Ryzen 5 8600G, 32GB RAM"}
+          class="grow"
+        />
+      </div>
+    </div>
+  </main>
+</MainLayout>
