@@ -21,7 +21,20 @@ import MainLayout from "../layouts/MainLayout.astro";
       See how Ferron compares to other web servers in terms of performance for
       various use cases.
     </p>
-    <h2 class="text-3xl font-bold mt-6 mb-4 self-start align-start">
+    <h2 class="text-2xl md:text-3xl font-bold mt-6 mb-4 self-start text-start">
+      How to read the benchmarks?
+    </h2>
+    <p class="my-2 text-start self-start text-base md:text-lg">
+      Ferron is designed for predictable, high-performance behavior under
+      real-world web workloads, including TLS, HTTP/2, connection reuse, and
+      high concurrency, rather than for winning isolated microbenchmarks.
+    </p>
+    <p class="my-2 text-start self-start text-base md:text-lg">
+      The results below are grouped according to common deployment scenarios to
+      help you evaluate performance in contexts that may match how you would
+      actually run Ferron.
+    </p>
+    <h2 class="text-2xl md:text-3xl font-bold mt-6 mb-4 self-start text-start">
       Reverse proxying
     </h2>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -50,7 +63,9 @@ import MainLayout from "../layouts/MainLayout.astro";
     </div>
     <div class="grid grid-cols-1 lg:grid-cols-2 lg:gap-8">
       <div class="flex flex-col">
-        <h2 class="text-3xl font-bold mt-6 mb-4  self-start align-start">
+        <h2
+          class="text-2xl md:text-3xl font-bold mt-6 mb-4  self-start align-start"
+        >
           Static file serving
         </h2>
         <Benchmark
@@ -83,7 +98,11 @@ import MainLayout from "../layouts/MainLayout.astro";
         />
       </div>
       <div class="flex flex-col">
-        <h2 class="text-3xl font-bold mt-6 mb-4 self-start align-start">PHP</h2>
+        <h2
+          class="text-2xl md:text-3xl font-bold mt-6 mb-4 self-start align-start"
+        >
+          PHP
+        </h2>
         <Benchmark
           title="PHP performance"
           description="Requests per second when serving PHP through PHP-FPM (higher is better)"
@@ -109,5 +128,27 @@ import MainLayout from "../layouts/MainLayout.astro";
         />
       </div>
     </div>
+    <h2 class="text-2xl md:text-3xl font-bold mt-6 mb-4 self-start text-start">
+      Interpreting small differences
+    </h2>
+    <p class="my-2 text-start self-start text-base md:text-lg">
+      In practice, differences on the order of 10–20% in synthetic throughput or
+      latency benchmarks often translate to little or no perceptible difference
+      for end users:
+    </p>
+    <ul
+      class="list-disc list-inside marker:text-muted-foreground my-4 text-start self-start text-base md:text-lg"
+    >
+      <li>Browsers are limited by network latency and TLS handshakes.</li>
+      <li>HTTP/2 and HTTP/3 multiplex requests over shared connections.</li>
+      <li>
+        Static assets are typically cached at the server, CDN, or browser level.
+      </li>
+    </ul>
+    <p class="my-2 text-start self-start text-base md:text-lg">
+      For most real-world deployments, stability under load, tail latency (for
+      example, 99th percentile response time), and operational simplicity have a
+      greater impact than small throughput differences measured in isolation.
+    </p>
   </main>
 </MainLayout>
