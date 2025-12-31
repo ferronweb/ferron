@@ -147,8 +147,8 @@ impl SendRequestWrapper {
 
 type ProxyToVectorContentsBorrowed<'a> = (&'a str, Option<&'a str>, Option<usize>, Option<Duration>);
 
-type ConnectionPool = Arc<Pool<(String, Option<String>), SendRequestWrapper>>;
-type ConnectionPoolItem = Item<(String, Option<String>), SendRequestWrapper>;
+type ConnectionPool = Arc<Pool<(String, Option<String>, Option<IpAddr>), SendRequestWrapper>>;
+type ConnectionPoolItem = Item<(String, Option<String>, Option<IpAddr>), SendRequestWrapper>;
 
 enum Connection {
   #[cfg(feature = "runtime-monoio")]
@@ -818,6 +818,8 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           None
         };
 
+        let proxy_header = get_value!("proxy_proxy_header", config).and_then(|v| v.as_str());
+
         let is_http_upgrade = proxy_request_parts.headers.contains_key(header::UPGRADE);
         let enable_http2_only_config = get_value!("proxy_http2_only", config)
           .and_then(|v| v.as_bool())
@@ -841,13 +843,23 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           let connections = &self.connections;
           let sender;
           let mut send_request_items = Vec::new();
+          let proxy_client_ip = match proxy_header {
+            Some("v1") | Some("v2") => Some(socket_data.remote_addr.ip().to_canonical()),
+            _ => None,
+          };
           loop {
             let mut send_request_item = if send_request_items.is_empty() {
               connections
-                .pull_with_wait_local_limit((proxy_to.clone(), proxy_unix.clone()), local_limit_index)
+                .pull_with_wait_local_limit(
+                  (proxy_to.clone(), proxy_unix.clone(), proxy_client_ip),
+                  local_limit_index,
+                )
                 .await
             } else if let Poll::Ready(send_request_item_option) = connections
-              .pull_with_wait_local_limit((proxy_to.clone(), proxy_unix.clone()), local_limit_index)
+              .pull_with_wait_local_limit(
+                (proxy_to.clone(), proxy_unix.clone(), proxy_client_ip),
+                local_limit_index,
+              )
               .boxed_local()
               .poll_unpin(&mut Context::from_waker(Waker::noop()))
             {
@@ -866,7 +878,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
               };
               ferron_common::runtime::select! {
                 item = connections
-                  .pull_with_wait_local_limit((proxy_to.clone(), proxy_unix.clone()), local_limit_index)
+                  .pull_with_wait_local_limit((proxy_to.clone(), proxy_unix.clone(), proxy_client_ip), local_limit_index)
                 => {
                   item
                 },
@@ -1150,7 +1162,6 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           Connection::Tcp(stream)
         };
 
-        let proxy_header = get_value!("proxy_proxy_header", config).and_then(|v| v.as_str());
         let proxy_header_to_write = match proxy_header {
           Some("v1") => {
             let is_ipv4 = socket_data.local_addr.ip().to_canonical().is_ipv4()
