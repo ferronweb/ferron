@@ -12,6 +12,7 @@ interface Props {
   higherIsBetter: boolean;
   system: string;
   class?: string;
+  note?: string;
 }
 
 const { data, unit, competitors } = Astro.props;
@@ -47,7 +48,7 @@ const { data, unit, competitors } = Astro.props;
       </div>
     </benchmark-chart-line>
     <div
-      class="mt-4 text-center max-w-full prose prose-sm text-muted-foreground"
+      class="mt-4 text-center max-w-full prose prose-sm text-muted-foreground prose-p:leading-snug"
     >
       <p>
         {Astro.props.higherIsBetter ? "Higher is better" : "Lower is better"}|
@@ -60,6 +61,9 @@ const { data, unit, competitors } = Astro.props;
             : ""
         }
       </p>
+      {Astro.props.note && (
+        <p><strong>Note:</strong> {Astro.props.note}</p>
+      )}
     </div>
   </div>
 </div>
