@@ -1,7 +1,6 @@
 use std::collections::{BTreeSet, HashSet};
 use std::error::Error;
 use std::ffi::OsStr;
-use std::fmt::Write;
 #[cfg(feature = "runtime-monoio")]
 use std::fs::ReadDir;
 #[cfg(feature = "runtime-tokio")]
@@ -9,7 +8,7 @@ use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use async_compression::brotli::EncoderParams;
 use async_compression::tokio::bufread::{BrotliEncoder, DeflateEncoder, GzipEncoder, ZstdEncoder};
@@ -26,7 +25,6 @@ use hyper::header::{self, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
 #[cfg(feature = "runtime-monoio")]
 use monoio::fs;
-use sha2::{Digest, Sha256};
 #[cfg(feature = "runtime-tokio")]
 use tokio::fs::{self, ReadDir};
 #[cfg(feature = "runtime-tokio")]
@@ -850,8 +848,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 metadata.len(),
                 match metadata.modified() {
                   Ok(mtime) => {
-                    let datetime: DateTime<Local> = mtime.into();
-                    datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+                    (match mtime.duration_since(SystemTime::UNIX_EPOCH) {
+                      Ok(duration) => duration.as_secs() as i128,
+                      Err(error) => -(error.duration().as_secs() as i128),
+                    })
+                    .to_string()
                   }
                   Err(_) => String::from(""),
                 }
@@ -864,16 +865,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 Some(etag) => etag,
                 None => {
                   let etag_cache_key_clone = etag_cache_key.clone();
-                  let etag = ferron_common::runtime::spawn_blocking(move || {
-                    let mut hasher = Sha256::new();
-                    hasher.update(etag_cache_key_clone);
-                    hasher.finalize().iter().fold(String::new(), |mut output, b| {
-                      let _ = write!(output, "{b:02x}");
-                      output
-                    })
-                  })
-                  .await
-                  .map_err(|_| anyhow::anyhow!("Can't spawn a blocking task to hash an ETag"))?;
+                  let etag = format!("{:016x}", xxhash_rust::xxh3::xxh3_64(etag_cache_key_clone.as_bytes()));
 
                   let mut rwlock_write = self.etag_cache.write().await;
                   rwlock_write.insert(etag_cache_key, etag.clone());

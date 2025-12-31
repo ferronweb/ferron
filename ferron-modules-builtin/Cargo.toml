@@ -35,7 +35,7 @@ rustls-pki-types = "1.12.0"
 rustls-platform-verifier = "0.6.0"
 webpki-roots = "1.0.2"
 password-auth = { workspace = true }
-sha2 = { version = "0.10.9", optional = true }
+xxhash-rust = { version = "0.8.15", features = ["std", "xxh3"], optional = true }
 base64 = "0.22.1"
 rand = { version = "0.9.1", optional = true }
 
@@ -139,4 +139,4 @@ rproxy = ["rand", "ppp", "kanal", "arc-swap"]
 runtime-monoio = ["async-process", "monoio", "monoio-compat", "send_wrapper"]
 runtime-tokio = ["hyper-util/tokio"]
 scgi = ["httparse", "memchr"]
-static = ["new_mime_guess", "async-compression", "sha2"]
+static = ["new_mime_guess", "async-compression", "xxhash-rust"]

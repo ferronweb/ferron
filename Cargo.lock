@@ -1480,7 +1480,6 @@ dependencies = [
  "rustls-pki-types",
  "rustls-platform-verifier",
  "send_wrapper",
- "sha2",
  "shiba",
  "smallvec",
  "tokenbucket",
@@ -1490,6 +1489,7 @@ dependencies = [
  "tokio-util",
  "urlencoding",
  "webpki-roots 1.0.4",
+ "xxhash-rust",
 ]
 
 [[package]]
