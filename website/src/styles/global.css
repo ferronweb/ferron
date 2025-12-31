@@ -108,64 +108,60 @@
   }
 }
 
-@layer components {
-  .btn {
-    @apply inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground shadow hover:bg-primary/90 hover:text-primary-foreground h-10 px-8 cursor-pointer;
-  }
+@utility btn {
+  @apply inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground shadow hover:bg-primary/90 hover:text-primary-foreground h-10 px-8 cursor-pointer;
+}
 
-  .btn-primary {
-    @apply bg-primary text-primary-foreground;
-  }
+@utility btn-primary {
+  @apply bg-primary text-primary-foreground;
+}
 
-  .btn-secondary {
-    @apply border border-input bg-background hover:bg-accent hover:text-accent-foreground;
-  }
+@utility btn-secondary {
+  @apply border border-input bg-background hover:bg-accent hover:text-accent-foreground;
+}
 
-  .card {
-    @apply bg-card text-card-foreground backdrop-blur-sm border border-muted/60 rounded-lg shadow-sm p-6;
-  }
+@utility card {
+  @apply bg-card text-card-foreground backdrop-blur-sm border border-muted/60 rounded-lg shadow-sm p-6;
+}
 
-  .icon-badge {
-    @apply bg-primary/10 size-12 rounded-lg flex items-center justify-center;
-  }
+@utility icon-badge {
+  @apply bg-primary/10 size-12 rounded-lg flex items-center justify-center;
 
-  .icon-badge svg {
+  svg {
     @apply size-6! text-primary;
-  }
-
-  .icon-badge-large {
-    @apply size-14;
-  }
-
-  .icon-badge-large svg {
-    @apply size-9!;
-  }
-
-  .badge {
-    @apply inline-block px-4 py-1 bg-primary/10 rounded-full text-primary font-medium text-sm backdrop-blur-sm;
   }
 }
 
-@layer utilities {
-  .container {
-    margin-inline: auto;
-    padding-inline: 2rem;
-  }
+@utility icon-badge-large {
+  @apply size-14;
 
-  .card-hover {
-    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10;
+  svg {
+    @apply size-8!;
   }
+}
 
-  .blur-fix-performance {
-    /* Utility class for fixing performance issues on Safari */
-    /* Had to use CSS variables, since without them, "trasform: translate3d(0,0,0)" gets converted to "transform: translate(0)"... */
-    --blur-fix-performance: 0;
-    transform: translate3d(
-      var(--blur-fix-performance),
-      var(--blur-fix-performance),
-      var(--blur-fix-performance)
-    );
-  }
+@utility badge {
+  @apply inline-block px-4 py-1 bg-primary/10 rounded-full text-primary font-medium text-sm backdrop-blur-sm;
+}
+
+@utility container {
+  margin-inline: auto;
+  padding-inline: 2rem;
+}
+
+@utility card-hover {
+  @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10;
+}
+
+@utility blur-fix-performance {
+  /* Utility class for fixing performance issues on Safari */
+  /* Had to use CSS variables, since without them, "trasform: translate3d(0,0,0)" gets converted to "transform: translate(0)"... */
+  --blur-fix-performance: 0;
+  transform: translate3d(
+    var(--blur-fix-performance),
+    var(--blur-fix-performance),
+    var(--blur-fix-performance)
+  );
 }
 
 .pagefind-ui {
