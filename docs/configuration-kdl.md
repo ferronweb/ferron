@@ -499,7 +499,7 @@ example.com {
 - `lb_retry_connection [enable_lb_retry_connection: bool]` (_rproxy_ module)
   - This directive specifies whether the load balancer should retry connections to another backend server, in case of TCP connection or TLS handshake failure. Default: `lb_retry_connection #true`
 - `lb_algorithm <lb_algorithm: string>` (_rproxy_ module)
-  - This directive specifies the load balancing algorithm to be used. The supported algorithms are `random` (random selection), `round-robin` (round-robin), `least_conn` (least connections, "connections" would mean concurrent requests here), and `two_random` (power of two random choices; after two random choices, the backend server with the least concurrent requests is chosen). Default: `lb_algorithm "two_random"`
+  - This directive specifies the load balancing algorithm to be used. The supported algorithms are `random` (random selection), `round_robin` (round-robin), `least_conn` (least connections, "connections" would mean concurrent requests here), and `two_random` (power of two random choices; after two random choices, the backend server with the least concurrent requests is chosen). Default: `lb_algorithm "two_random"`
 - `lb_health_check_window <lb_health_check_window: integer>` (_rproxy_ module)
   - This directive specifies the window size (in milliseconds) for load balancer health checks. Default: `lb_health_check_window 5000`
 - `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module)
