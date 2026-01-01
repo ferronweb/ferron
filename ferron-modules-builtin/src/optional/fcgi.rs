@@ -743,7 +743,7 @@ async fn execute_fastcgi_with_environment_variables(
   }
 
   if socket_data.encrypted {
-    environment_variables.insert("HTTPS".to_string(), "ON".to_string());
+    environment_variables.insert("HTTPS".to_string(), "on".to_string());
   }
 
   for (header_name, header_value) in request.headers().iter() {
