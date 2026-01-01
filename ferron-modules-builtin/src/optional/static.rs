@@ -886,8 +886,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               let etag = match etag_locked_option {
                 Some(etag) => etag,
                 None => {
-                  let etag_cache_key_clone = etag_cache_key.clone();
-                  let etag = format!("{:016x}", xxhash_rust::xxh3::xxh3_64(etag_cache_key_clone.as_bytes()));
+                  let etag = format!("{:016x}", xxhash_rust::xxh3::xxh3_64(etag_cache_key.as_bytes()));
 
                   let mut rwlock_write = self.etag_cache.write().await;
                   rwlock_write.insert(etag_cache_key, etag.clone());
