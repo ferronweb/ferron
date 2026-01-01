@@ -124,12 +124,18 @@ impl SendRequestWrapper {
     } else {
       return (None, false);
     };
-    if inner_mut.is_closed() {
+    if inner_mut.is_closed() || (inner_mut.is_ready() && timeout.is_some_and(|t| self.instant.elapsed() > t)) {
       return (None, false);
-    } else if inner_mut.is_ready() && timeout.is_some_and(|t| self.instant.elapsed() > t) {
-      return (None, true);
     }
-    (if inner_mut.is_ready() { self.inner.take() } else { None }, true)
+    (
+      if inner_mut.is_ready() {
+        self.inner.take()
+      } else {
+        self.instant = Instant::now();
+        None
+      },
+      true,
+    )
   }
 
   #[inline]
