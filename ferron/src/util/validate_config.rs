@@ -727,17 +727,12 @@ pub fn validate_config(
     Err(anyhow::anyhow!("Invalid directory listing enabling option"))?
   }
 
-  if used_properties.contains("enableAutomaticTLS") {
-    if !is_global {
-      Err(anyhow::anyhow!(
-        "Automatic TLS enabling configuration is not allowed in host configuration"
-      ))?
-    }
-    if config["enableAutomaticTLS"].as_bool().is_none() {
-      Err(anyhow::anyhow!(
-        "Invalid automatic TLS enabling option value"
-      ))?
-    }
+  if used_properties.contains("enableAutomaticTLS")
+    && config["enableAutomaticTLS"].as_bool().is_none()
+  {
+    Err(anyhow::anyhow!(
+      "Invalid automatic TLS enabling option value"
+    ))?
   }
 
   if used_properties.contains("useAutomaticTLSHTTPChallenge") {
