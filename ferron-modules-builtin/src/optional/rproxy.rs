@@ -682,6 +682,7 @@ impl Module for ReverseProxyModule {
       health_check_max_fails: self.health_check_max_fails,
       selected_backends_metrics: None,
       unhealthy_backends_metrics: None,
+      connection_reused: false,
       connections: self.connections.clone(),
       #[cfg(unix)]
       unix_connections: self.unix_connections.clone(),
@@ -698,6 +699,7 @@ struct ReverseProxyModuleHandlers {
   health_check_max_fails: u64,
   selected_backends_metrics: Option<Vec<(String, Option<String>)>>,
   unhealthy_backends_metrics: Option<Vec<(String, Option<String>)>>,
+  connection_reused: bool,
   connections: ConnectionPool,
   #[cfg(unix)]
   unix_connections: ConnectionPool,
@@ -898,6 +900,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
                 (Some(send_request), true) => {
                   // Connection ready, send a request to it
                   send_request_items.clear();
+                  self.connection_reused = true;
                   let _ = send_request_item.inner_mut().take();
                   let proxy_request = Request::from_parts(proxy_request_parts, request_body);
                   let result = http_proxy_kept_alive(
@@ -1528,6 +1531,19 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .await;
       }
     }
+    metrics_sender
+      .send(Metric::new(
+        "ferron.proxy.requests",
+        vec![(
+          "ferron.proxy.connection_reused",
+          MetricAttributeValue::Bool(self.connection_reused),
+        )],
+        MetricType::Counter,
+        MetricValue::U64(1),
+        Some("{request}"),
+        Some("Number of reverse proxy requests."),
+      ))
+      .await;
   }
 }
 
