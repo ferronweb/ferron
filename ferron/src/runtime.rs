@@ -19,6 +19,8 @@ pub fn new_runtime(future: impl Future, enable_uring: bool) -> Result<(), Box<dy
     rt.block_on(future);
     return Ok(());
   }
+  #[cfg(not(target_os = "linux"))]
+  let _ = enable_uring;
 
   // `io_uring` is either disabled or not supported
   let mut rt = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
