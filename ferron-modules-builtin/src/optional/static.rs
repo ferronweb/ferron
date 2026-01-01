@@ -390,6 +390,7 @@ fn etag_strong_to_weak(input: &str) -> String {
 pub struct StaticFileServingModuleLoader {
   cache: ModuleCache<StaticFileServingModule>,
   pathbuf_cache: Arc<RwLock<TtlCache<String, PathBuf>>>,
+  path_traversal_check_cache: Arc<RwLock<TtlCache<PathBuf, bool>>>,
   etag_cache: Arc<RwLock<LruCache<String, String>>>,
 }
 
@@ -405,6 +406,7 @@ impl StaticFileServingModuleLoader {
     Self {
       cache: ModuleCache::new(vec![]),
       pathbuf_cache: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(100)))),
+      path_traversal_check_cache: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(100)))),
       etag_cache: Arc::new(RwLock::new(LruCache::new(1000))),
     }
   }
@@ -423,6 +425,7 @@ impl ModuleLoader for StaticFileServingModuleLoader {
         .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
           Ok(Arc::new(StaticFileServingModule {
             pathbuf_cache: self.pathbuf_cache.clone(),
+            path_traversal_check_cache: self.path_traversal_check_cache.clone(),
             etag_cache: self.etag_cache.clone(),
           }))
         })?,
@@ -527,6 +530,7 @@ impl ModuleLoader for StaticFileServingModuleLoader {
 /// A static file serving module
 struct StaticFileServingModule {
   pathbuf_cache: Arc<RwLock<TtlCache<String, PathBuf>>>,
+  path_traversal_check_cache: Arc<RwLock<TtlCache<PathBuf, bool>>>,
   etag_cache: Arc<RwLock<LruCache<String, String>>>,
 }
 
@@ -534,6 +538,7 @@ impl Module for StaticFileServingModule {
   fn get_module_handlers(&self) -> Box<dyn ModuleHandlers> {
     Box::new(StaticFileServingModuleHandlers {
       pathbuf_cache: self.pathbuf_cache.clone(),
+      path_traversal_check_cache: self.path_traversal_check_cache.clone(),
       etag_cache: self.etag_cache.clone(),
     })
   }
@@ -542,6 +547,7 @@ impl Module for StaticFileServingModule {
 /// Handlers for the static file serving module
 struct StaticFileServingModuleHandlers {
   pathbuf_cache: Arc<RwLock<TtlCache<String, PathBuf>>>,
+  path_traversal_check_cache: Arc<RwLock<TtlCache<PathBuf, bool>>>,
   etag_cache: Arc<RwLock<LruCache<String, String>>>,
 }
 
@@ -684,44 +690,60 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
       {
-        // Canonicalize the file path
-        #[cfg(feature = "runtime-monoio")]
-        let canonicalize_result = {
-          let joined_pathbuf = joined_pathbuf.clone();
-          monoio::spawn_blocking(move || std::fs::canonicalize(joined_pathbuf))
-            .await
-            .unwrap_or(Err(std::io::Error::other(
-              "Can't spawn a blocking task to obtain the canonical file path",
-            )))
-        };
-        #[cfg(feature = "runtime-tokio")]
-        let canonicalize_result = fs::canonicalize(&joined_pathbuf).await;
+        let rwlock_read = self.path_traversal_check_cache.read().await;
+        let allowed_option = rwlock_read.get(&joined_pathbuf);
+        drop(rwlock_read);
+        let allowed = match allowed_option {
+          Some(allowed) => allowed,
+          None => {
+            // Canonicalize the file path
+            #[cfg(feature = "runtime-monoio")]
+            let canonicalize_result = {
+              let joined_pathbuf = joined_pathbuf.clone();
+              monoio::spawn_blocking(move || std::fs::canonicalize(joined_pathbuf))
+                .await
+                .unwrap_or(Err(std::io::Error::other(
+                  "Can't spawn a blocking task to obtain the canonical file path",
+                )))
+            };
+            #[cfg(feature = "runtime-tokio")]
+            let canonicalize_result = fs::canonicalize(&joined_pathbuf).await;
 
-        let canonical_joined_pathbuf = match canonicalize_result {
-          Ok(pathbuf) => pathbuf,
-          Err(_) => joined_pathbuf.clone(),
-        };
+            let canonical_joined_pathbuf = match canonicalize_result {
+              Ok(pathbuf) => pathbuf,
+              Err(_) => joined_pathbuf.clone(),
+            };
 
-        // Canonicalize the webroot
-        #[cfg(feature = "runtime-monoio")]
-        let canonicalize_result = {
-          let wwwroot = wwwroot.to_owned();
-          monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot))
-            .await
-            .unwrap_or(Err(std::io::Error::other(
-              "Can't spawn a blocking task to obtain the canonical file path",
-            )))
-        };
-        #[cfg(feature = "runtime-tokio")]
-        let canonicalize_result = fs::canonicalize(wwwroot).await;
+            // Canonicalize the webroot
+            #[cfg(feature = "runtime-monoio")]
+            let canonicalize_result = {
+              let wwwroot = wwwroot.to_owned();
+              monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot))
+                .await
+                .unwrap_or(Err(std::io::Error::other(
+                  "Can't spawn a blocking task to obtain the canonical file path",
+                )))
+            };
+            #[cfg(feature = "runtime-tokio")]
+            let canonicalize_result = fs::canonicalize(wwwroot).await;
 
-        let canonical_wwwroot = match canonicalize_result {
-          Ok(pathbuf) => pathbuf,
-          Err(_) => PathBuf::from_str(wwwroot)?,
+            let canonical_wwwroot = match canonicalize_result {
+              Ok(pathbuf) => pathbuf,
+              Err(_) => PathBuf::from_str(wwwroot)?,
+            };
+
+            let allowed = canonical_joined_pathbuf.starts_with(&canonical_wwwroot);
+
+            let mut rwlock_write = self.path_traversal_check_cache.write().await;
+            rwlock_write.insert(joined_pathbuf.clone(), allowed);
+            drop(rwlock_write);
+
+            allowed
+          }
         };
 
         // Return 403 Forbidden if the path is outside the webroot
-        if !canonical_joined_pathbuf.starts_with(&canonical_wwwroot) {
+        if !allowed {
           return Ok(ResponseData {
             request: Some(request),
             response: None,
