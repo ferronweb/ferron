@@ -934,7 +934,6 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
                 }
                 (_, false) => {
                   // Connection closed
-                  send_request_items.clear();
                   let _ = send_request_item.inner_mut().take();
                   continue;
                 }
