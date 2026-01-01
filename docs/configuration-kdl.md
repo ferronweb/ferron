@@ -272,8 +272,8 @@ This configuration reference organizes directives by both **scope** (where they 
 
 ### Reverse proxy & load balancing
 
-- `proxy_concurrent_new_conns <proxy_concurrent_new_conns: integer|null>` (_rproxy_ module; Ferron UNRELEASED or newer)
-  - This directive specifies the limit of newly-established TCP connections to backend servers, to prevent exhaustion of network resources. If set as `proxy_concurrent_new_conns #null`, the reverse proxy can theoretically establish an unlimited number of connections. Default: `proxy_concurrent_new_conns 8192`
+- `proxy_concurrent_conns <proxy_concurrent_conns: integer|null>` (_rproxy_ module; Ferron UNRELEASED or newer)
+  - This directive specifies the limit of TCP connections being established to backend servers, to prevent exhaustion of network resources. If set as `proxy_concurrent_conns #null`, the reverse proxy can theoretically establish an unlimited number of connections. Default: `proxy_concurrent_conns 16384`
 
 **Configuration example:**
 
@@ -491,8 +491,8 @@ example.com {
 
 ### Reverse proxy & load balancing
 
-- `proxy <proxy_to: string|null> [unix=<unix_socket_path: string>]` (_rproxy_ module)
-  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported via the `unix` prop set to the path to the socket (and the main value is set to the URL of the website), supported only on Unix and Unix-like systems. This directive can be specified multiple times. Default: none
+- `proxy <proxy_to: string|null> [unix=<unix_socket_path: string>] [limit=<conn_limit: integer|null>] [idle_timeout=<idle_timeout: integer|null>]` (_rproxy_ module)
+  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported via the `unix` prop set to the path to the socket (and the main value is set to the URL of the website), supported only on Unix and Unix-like systems. Established connections can be limited by the `limit` prop (Ferron UNRELEASED and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron UNRELEASED and newer); by default it is set to `60000` (60 seconds). This directive can be specified multiple times. Default: none
 - `lb_health_check [enable_lb_health_check: bool]` (_rproxy_ module)
   - This directive specifies whenever the load balancer passive health check is enabled. Default: `lb_health_check #false`
 - `lb_health_check_max_fails <max_fails: integer>` (_rproxy_ module)
@@ -517,8 +517,7 @@ example.com {
   - This directive specifies the load balancing algorithm to be used. The supported algorithms are `random` (random selection), `round-robin` (round-robin), `least_conn` (least connections, "connections" would mean concurrent requests here), and `two_random` (power of two random choices; after two random choices, the backend server with the least concurrent requests is chosen). Default: `lb_algorithm "two_random"`
 - `lb_health_check_window <lb_health_check_window: integer>` (_rproxy_ module)
   - This directive specifies the window size (in milliseconds) for load balancer health checks. Default: `lb_health_check_window 5000`
-- `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module)
-  - This directive specifies the maximum number of idle connections to backend servers to keep alive. Default: `proxy_keepalive_idle_conns 48`
+- `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module; Ferron 2.2.1 or older; **REMOVED**)  - This directive used to specify the maximum number of idle connections to backend servers to keep alive. The default was `proxy_keepalive_idle_conns 48`. In Ferron UNRELEASED and newer, this directive is no longer supported.
 - `proxy_http2_only [enable_proxy_http2_only: bool]` (_rproxy_ module; Ferron 2.1.0 or newer)
   - This directive specifies whenever the reverse proxy uses HTTP/2 protocol (without HTTP/1.1 fallback) when connecting to backend servers. When the backend server is connected via HTTPS, the reverse proxy negotiates HTTP/2 during the TLS handshake. When the backend server is connected via HTTP, the reverse proxy uses HTTP/2 with prior knowledge. This directive can be used when proxying gRPC requests. Default: `proxy_http2_only #false`
 - `proxy_proxy_header <proxy_version_version: string|null>` (_rproxy_ module; Ferron 2.1.0 or newer)
