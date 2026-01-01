@@ -532,7 +532,7 @@ async fn execute_scgi(
         },
       }
     }
-    _ => Err(anyhow::anyhow!("Only HTTP and HTTPS reverse proxy URLs are supported."))?,
+    _ => Err(anyhow::anyhow!("Only TCP and Unix socket URLs are supported."))?,
   };
 
   // Create environment variable netstring

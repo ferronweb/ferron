@@ -878,7 +878,7 @@ async fn execute_fastcgi(
         },
       }
     }
-    _ => Err(anyhow::anyhow!("Only HTTP and HTTPS reverse proxy URLs are supported."))?,
+    _ => Err(anyhow::anyhow!("Only TCP and Unix socket URLs are supported."))?,
   };
 
   // Construct and send BEGIN_REQUEST record
