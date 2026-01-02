@@ -1,0 +1,189 @@
+name: Cross-platform compilation test (Ferron 2.x)
+
+on:
+  push:
+    branches: ["develop-2.x"]
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "Cross.toml"
+      - "ferron/**"
+      - "ferron-common/**"
+      - "ferron-dns-builtin/**"
+      - "ferron-load-modules/**"
+      - "ferron-modules-builtin/**"
+      - "ferron-passwd/**"
+      - "ferron-precompress/**"
+      - "ferron-yaml2kdl/**"
+      - "ferron-yaml2kdl-core/**"
+      - "ferron-build.yaml"
+      - "ferron-build-override.yaml"
+      - "smoketest/**"
+      - ".github/workflows/crossplatform-v2.yml"
+  pull_request:
+    branches: ["develop-2.x"]
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "Cross.toml"
+      - "ferron/**"
+      - "ferron-common/**"
+      - "ferron-dns-builtin/**"
+      - "ferron-load-modules/**"
+      - "ferron-modules-builtin/**"
+      - "ferron-passwd/**"
+      - "ferron-precompress/**"
+      - "ferron-yaml2kdl/**"
+      - "ferron-yaml2kdl-core/**"
+      - "ferron-build.yaml"
+      - "ferron-build-override.yaml"
+      - "smoketest/**"
+      - ".github/workflows/crossplatform-v2.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: ${{ matrix.runner }}
+
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+            smoketest: true
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+            command: cross
+            smoketest: true
+          - target: i686-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: i686-unknown-linux-musl
+            runner: ubuntu-latest
+            command: cross
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-latest
+            command: cross
+          - target: armv7-unknown-linux-gnueabihf
+            runner: ubuntu-latest
+            command: cross
+          - target: armv7-unknown-linux-musleabihf
+            runner: ubuntu-latest
+            command: cross
+          - target: riscv64gc-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: riscv64gc-unknown-linux-musl
+            runner: ubuntu-latest
+            command: cross
+          - target: s390x-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: powerpc64le-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: x86_64-unknown-freebsd
+            runner: ubuntu-latest
+            command: cross
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            command: cargo
+            smoketest: true
+          - target: i686-pc-windows-msvc
+            runner: windows-latest
+            command: cargo
+          - target: aarch64-pc-windows-msvc
+            runner: windows-latest
+            command: cargo
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            command: cargo
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            command: cargo
+            smoketest: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: "${{ matrix.target }}"
+
+      - name: Setup cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            build-prepare/target/
+            target/
+          key: CompileTestFerron2-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: CompileTestFerron2-${{ runner.os }}-${{ matrix.target }}-
+
+      - name: Setup NASM
+        if: matrix.runner == 'windows-latest'
+        uses: ilammy/setup-nasm@v1
+
+      - name: Install Cross
+        if: matrix.command == 'cross'
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cross --force
+
+      - name: Install bindgen-cli
+        if: matrix.command != 'cross'
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm bindgen-cli --force
+
+      - name: Build binaries
+        shell: bash
+        run: |
+          cargo run --manifest-path build-prepare/Cargo.toml
+          cd build-workspace
+          while [ "$OLD_CONFLICTING_PACKAGES" != "$CONFLICTING_PACKAGES" ] || [ "$OLD_CONFLICTING_PACKAGES" = "" ]; do \
+              OLD_CONFLICTING_PACKAGES=$CONFLICTING_PACKAGES; \
+              CONFLICTING_PACKAGES=$( (cargo update -w --dry-run 2>&1 || true) | (grep -E '^error: failed to select a version for (the requirement )?`[^ `]+' || true) | sed -E 's|[^`]*`([^ `]+).*|\1|' | xargs); \
+              if [ "$CONFLICTING_PACKAGES" = "" ]; then \
+                  break; \
+              fi; \
+              if [ "$OLD_CONFLICTING_PACKAGES" = "$CONFLICTING_PACKAGES" ]; then \
+                  echo "Couldn't resolve Cargo conflicts" >&2; \
+                  exit 1; \
+              fi; \
+              if [ "$CONFLICTING_PACKAGES" != "" ]; then \
+                  cargo update $CONFLICTING_PACKAGES || true; \
+              fi; \
+          done
+          RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 ${{ matrix.command }} build --verbose --target-dir ../target --target ${{ matrix.target }} ${{ matrix.options }}
+          cd ..
+
+      - name: Smoke test the binary (Unix-like)
+        if: matrix.runner != 'windows-latest' && matrix.smoketest == true
+        shell: bash
+        run: |
+          FERRON="$(pwd)/target/${{ matrix.target }}/debug/ferron" bash smoketest/smoketest.sh
+
+      - name: Smoke test the binary (Windows)
+        if: matrix.runner == 'windows-latest' && matrix.smoketest == true
+        shell: powershell
+        run: |
+          $env:FERRON = $PWD.Path + '\target\${{ matrix.target }}\debug\ferron'
+          powershell -ExecutionPolicy Bypass .\smoketest\smoketest.ps1
