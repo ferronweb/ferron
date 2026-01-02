@@ -120,7 +120,6 @@ clap = { version = "4.5.38", features = ["cargo"] }
 dirs = "6.0.0"
 
 # Performance & Utilities
-mimalloc = { workspace = true }
 smallvec = { version = "1.15.0", features = [
     "write",
     "union",
@@ -133,6 +132,12 @@ shadow-rs = { version = "1.2.0", default-features = false }
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 # Process metrics
 procfs = { version = "0.18.0", default-features = false }
+
+[target.'cfg(target_arch = "x86")'.dependencies]
+mimalloc = { workspace = true } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
+
+[target.'cfg(not(target_arch = "x86"))'.dependencies]
+mimalloc = { workspace = true, features = ["v3"] }
 
 [dev-dependencies]
 shiba = { workspace = true }

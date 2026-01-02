@@ -14,7 +14,7 @@ resolver = "2"
 
 [workspace.dependencies]
 kdl = "6.3.4"
-mimalloc = { version = "0.1.46", features = ["v3"] }
+mimalloc = { version = "0.1.46" }
 password-auth = { version = "1.0.0", features = ["pbkdf2", "argon2", "scrypt"] }
 shiba = "0.1.1"
 ferron-common = { path = "./ferron-common", default-features = false }
