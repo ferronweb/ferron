@@ -1,3 +1,4 @@
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::IpAddr;
@@ -231,11 +232,11 @@ impl AsyncWrite for Connection {
 struct TrackedBody<B> {
   inner: B,
   _tracker: Option<Arc<()>>,
-  _tracker_pool: Option<Arc<ConnectionPoolItem>>,
+  _tracker_pool: Option<Arc<UnsafeCell<ConnectionPoolItem>>>,
 }
 
 impl<B> TrackedBody<B> {
-  fn new(inner: B, tracker: Arc<()>, tracker_pool: Option<Arc<ConnectionPoolItem>>) -> Self {
+  fn new(inner: B, tracker: Arc<()>, tracker_pool: Option<Arc<UnsafeCell<ConnectionPoolItem>>>) -> Self {
     Self {
       inner,
       _tracker: Some(tracker),
@@ -266,6 +267,11 @@ where
     self.inner.size_hint()
   }
 }
+
+// Safety: after construction, the value inside `UnsafeCell` is never mutated.
+// All accesses after sharing are read-only, so sharing across threads is safe.
+unsafe impl<B> Send for TrackedBody<B> where B: Send {}
+unsafe impl<B> Sync for TrackedBody<B> where B: Sync {}
 
 /// A reverse proxy module loader
 #[allow(clippy::type_complexity)]
@@ -1806,7 +1812,8 @@ async fn http_proxy(
   let proxy_request = Request::from_parts(proxy_request_parts, proxy_request_body);
 
   let send_request_result = sender.send_request(proxy_request).await;
-  let connection_pool_item = Arc::new(connection_pool_item);
+  #[allow(clippy::arc_with_non_send_sync)]
+  let connection_pool_item = Arc::new(UnsafeCell::new(connection_pool_item));
 
   let proxy_response = match send_request_result {
     Ok(response) => response,
@@ -1890,6 +1897,7 @@ async fn http_proxy(
         if enable_keepalive && !sender.is_closed() {
           None
         } else {
+          // Safety: this should be not modified, see the "unsafe" block below
           Some(connection_pool_item.clone())
         },
       )
@@ -1909,7 +1917,7 @@ async fn http_proxy(
     // Safety: this Arc is cloned twice (when there's HTTP upgrade and when keepalive is disabled),
     // but the clones' inner value isn't modified, so no race condition.
     // We could wrap this value in a Mutex, but it's not really necessary in this case.
-    let connection_pool_item = unsafe { &mut *(Arc::as_ptr(&connection_pool_item) as *mut ConnectionPoolItem) };
+    let connection_pool_item = unsafe { &mut *connection_pool_item.get() };
     connection_pool_item
       .inner_mut()
       .replace(SendRequestWrapper::new(sender));
@@ -1955,7 +1963,8 @@ async fn http_proxy_kept_alive(
   let proxy_request = Request::from_parts(proxy_request_parts, proxy_request_body);
 
   let send_request_result = sender.send_request(proxy_request).await;
-  let connection_pool_item = Arc::new(connection_pool_item);
+  #[allow(clippy::arc_with_non_send_sync)]
+  let connection_pool_item = Arc::new(UnsafeCell::new(connection_pool_item));
 
   // Send the request over the existing connection and await the response
   let proxy_response = match send_request_result {
@@ -2046,6 +2055,7 @@ async fn http_proxy_kept_alive(
         if !sender.is_closed() {
           None
         } else {
+          // Safety: this should be not modified, see the "unsafe" block below
           Some(connection_pool_item.clone())
         },
       )
@@ -2064,7 +2074,7 @@ async fn http_proxy_kept_alive(
     // Safety: this Arc is cloned twice (when there's HTTP upgrade and when keepalive is disabled),
     // but the clones' inner value isn't modified, so no race condition.
     // We could wrap this value in a Mutex, but it's not really necessary in this case.
-    let connection_pool_item = unsafe { &mut *(Arc::as_ptr(&connection_pool_item) as *mut ConnectionPoolItem) };
+    let connection_pool_item = unsafe { &mut *connection_pool_item.get() };
     connection_pool_item
       .inner_mut()
       .replace(SendRequestWrapper::new(sender));
