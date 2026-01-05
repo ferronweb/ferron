@@ -28,12 +28,12 @@ import ProblemPoint from "./ProblemPoint.astro";
       <ProblemPoint
         icon={faShieldVirus}
         title="Security concerns"
-        description="Many popular web servers (including Apache and NGINX) are written in programming languages and use libraries that aren't designed for memory safety. This caused many issues, such as Heartbleed in OpenSSL, putting servers at unnecessary risk."
+        description="Many popular web servers (such as Apache and NGINX) are written in memory-unsafe languages (like C) and rely on low-level libraries. While mature and widely audited, this class of software has historically been more vulnerable to memory-safety bugs, such as Heartbleed in OpenSSL, increasing the potential impact of defects."
       />
       <ProblemPoint
         icon={faTrafficLight}
         title="Performance bottlenecks"
-        description="Apache's architecture can struggle under modern workloads, often underperforming compared to newer, leaner servers. This means wasted resources and slower response times for your website visitors."
+        description="Apache's traditional process- and thread-based architectures can be less efficient under high concurrency and modern workloads, often needing more resources to achieve the same throughput as newer, event-driven servers."
       />
     </div>
   </div>
