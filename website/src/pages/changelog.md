@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.3.1
+
+**Released in January 6, 2026**
+
+- The server now gracefully handles canceled I/O operations that could previously cause a crash under rare conditions (when io_uring is disabled).
+
 ## Ferron 2.3.0
 
 **Released in January 6, 2026**
