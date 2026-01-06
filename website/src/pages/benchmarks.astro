@@ -30,9 +30,20 @@ import MainLayout from "../layouts/MainLayout.astro";
       high concurrency, rather than for winning isolated microbenchmarks.
     </p>
     <p class="my-2 text-start self-start text-base md:text-lg">
+      Ferron also prioritizes correctness, scalability, and modern protocol
+      support under extreme concurrency. While it may not always lead in peak
+      static file serving throughput, it demonstrates stable performance, and
+      strong behavior under load.
+    </p>
+    <p class="my-2 text-start self-start text-base md:text-lg">
       The results below are grouped according to common deployment scenarios to
       help you evaluate performance in contexts that may match how you would
       actually run Ferron.
+    </p>
+    <p class="my-2 text-start self-start text-base md:text-lg">
+      Note: The static file serving benchmarks focus on medium and large static
+      files under HTTP/2, highlighting sustained throughput and backpressure
+      behavior rather than small-file protocol overhead.
     </p>
     <h2 class="text-2xl md:text-3xl font-bold mt-6 mb-4 self-start text-start">
       Reverse proxying
@@ -44,21 +55,25 @@ import MainLayout from "../layouts/MainLayout.astro";
         data={reverseProxyThroughput}
         unit={"req/s"}
         higherIsBetter={true}
-        competitors={["Traefik", "NGINX mainline", "Caddy"]}
-        command="ferrbench -c $CONCURRENCY -d 5s -t 16 -h https://localhost --http2"
-        date={new Date("2025-10-26")}
+        competitors={["Traefik", "HAProxy", "Caddy", "NGINX mainline"]}
+        command="h2load -n $(($CONCURRENCY * 100)) -c $CONCURRENCY -t 16 https://localhost"
+        date={new Date("2026-01-05")}
         system={"AMD Ryzen 7 8700G, 32GB RAM"}
+        linuxVersion={"6.14.0-27-generic"}
+        note={'During the NGINX benchmark runs h2load logged "Process Request Failures".'}
       />
       <BenchmarkLine
         title="Latency under load (reverse proxy)"
-        description={'Average response time under high concurrency proxying to a "Hello World" Axum application (lower is better)'}
+        description={'Mean response time under high concurrency proxying to a "Hello World" Axum application (lower is better)'}
         data={reverseProxyLatency}
         unit={"ms"}
         higherIsBetter={false}
-        competitors={["Traefik", "NGINX mainline", "Caddy"]}
-        command="ferrbench -c $CONCURRENCY -d 5s -t 16 -h https://localhost --http2"
-        date={new Date("2025-10-26")}
+        competitors={["Traefik", "HAProxy", "Caddy", "NGINX mainline"]}
+        command="h2load -n $(($CONCURRENCY * 100)) -c $CONCURRENCY -t 16 https://localhost"
+        date={new Date("2026-01-05")}
         system={"AMD Ryzen 7 8700G, 32GB RAM"}
+        linuxVersion={"6.14.0-27-generic"}
+        note={'During the NGINX benchmark runs h2load logged "Process Request Failures".'}
       />
     </div>
     <div class="grid grid-cols-1 lg:grid-cols-2 lg:gap-8">
@@ -73,27 +88,29 @@ import MainLayout from "../layouts/MainLayout.astro";
           description="Requests per second when serving static files (higher is better)"
           data={[
           {
-            name: "1KB file",
-            ferron: 124552.78,
-            competitors: [93459.1, 25384.9, 100983.17],
-          },
-          {
             name: "100KB file",
-            ferron: 26228.44,
-            competitors: [11720.13, 17797.22, 29259.29],
+            ferron: 58593.90,
+            competitors: [69325.60, 46405.5, 43178.6, 81833.0],
           },
           {
             name: "1MB file",
-            ferron: 2537.57,
-            competitors: [1278.84, 4618.48, 3306.1],
+            ferron: 6719.40,
+            competitors: [7560.50, 9705.0, 6714.30, 9267.50],
+          },
+          {
+            name: "10MB file",
+            ferron: 644.80,
+            competitors: [718.40, 984.60, 630.70, 945.80],
           }
-        ]}
+         ]}
           unit={"req/s"}
           higherIsBetter={true}
-          competitors={["lighttpd", "Apache httpd", "Caddy"]}
-          command="ferrbench -c 1000 -d 60s -t 12 -h https://localhost --http2"
-          date={new Date("2025-09-19")}
-          system={"AMD Ryzen 5 8600G, 32GB RAM"}
+          competitors={["Ferron (no io_uring)", "Apache (mpm_event)", "Caddy", "NGINX mainline"]}
+          command="h2load --duration 10s -c 100 -t 16 -m 8 https://localhost"
+          date={new Date("2026-01-05")}
+          system={"AMD Ryzen 7 8700G, 32GB RAM"}
+          linuxVersion={"6.14.0-27-generic"}
+          note={'During the Apache and NGINX benchmark runs h2load logged "Process Request Failures". For 100 KiB file and NGINX, 1s duration was used instead.'}
           class="grow"
         />
       </div>
