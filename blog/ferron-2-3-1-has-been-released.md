@@ -1,7 +1,7 @@
 ---
 title: "Ferron 2.3.1 has been released"
 description: We are excited to announce the release of Ferron 2.3.1. This release brings a canceled I/O operation crash fix.
-date: 2025-01-06 15:06:00
+date: 2026-01-06 15:06:00
 cover: ./covers/ferron-2-3-1-has-been-released.png
 ---
 
