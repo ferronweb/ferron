@@ -14,8 +14,6 @@ mod monoio_file_stream_no_spawn;
 mod no_server_verifier;
 mod parse_q_value_header;
 #[cfg(feature = "runtime-monoio")]
-mod send_net_io;
-#[cfg(feature = "runtime-monoio")]
 mod send_rw_stream;
 mod sizify;
 mod ttl_cache;
@@ -33,8 +31,6 @@ pub use monoio_file_stream::*;
 pub use monoio_file_stream_no_spawn::*;
 pub use no_server_verifier::*;
 pub use parse_q_value_header::*;
-#[cfg(feature = "runtime-monoio")]
-pub use send_net_io::*;
 #[cfg(feature = "runtime-monoio")]
 pub use send_rw_stream::*;
 pub use sizify::*;

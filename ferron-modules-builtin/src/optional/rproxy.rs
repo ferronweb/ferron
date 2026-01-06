@@ -40,16 +40,17 @@ use tokio_rustls::TlsConnector;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
 use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender};
-#[cfg(feature = "runtime-monoio")]
-use ferron_common::util::SendTcpStreamPoll;
-#[cfg(all(feature = "runtime-monoio", unix))]
-use ferron_common::util::SendUnixStreamPoll;
 use ferron_common::util::{NoServerVerifier, TtlCache};
 use ferron_common::{
   config::ServerConfiguration,
   util::{replace_header_placeholders, ModuleCache},
 };
 use ferron_common::{get_entries, get_entries_for_validation, get_value};
+
+#[cfg(feature = "runtime-monoio")]
+use crate::util::{SendTcpStreamPoll, SendTcpStreamPollDropGuard};
+#[cfg(all(feature = "runtime-monoio", unix))]
+use crate::util::{SendUnixStreamPoll, SendUnixStreamPollDropGuard};
 
 const DEFAULT_CONCURRENT_CONNECTIONS: usize = 16384;
 const DEFAULT_KEEPALIVE_IDLE_TIMEOUT: u64 = 60000;
@@ -157,6 +158,14 @@ type ProxyToVectorContentsBorrowed<'a> = (&'a str, Option<&'a str>, Option<usize
 type ConnectionPool = Arc<Pool<(String, Option<String>, Option<IpAddr>), SendRequestWrapper>>;
 type ConnectionPoolItem = Item<(String, Option<String>, Option<IpAddr>), SendRequestWrapper>;
 
+#[cfg(feature = "runtime-monoio")]
+#[allow(unused)]
+enum DropGuard {
+  Tcp(SendTcpStreamPollDropGuard),
+  #[cfg(unix)]
+  Unix(SendUnixStreamPollDropGuard),
+}
+
 enum Connection {
   #[cfg(feature = "runtime-monoio")]
   Tcp(SendTcpStreamPoll),
@@ -166,6 +175,17 @@ enum Connection {
   Unix(SendUnixStreamPoll),
   #[cfg(all(not(feature = "runtime-monoio"), unix))]
   Unix(UnixStream),
+}
+
+#[cfg(feature = "runtime-monoio")]
+impl Connection {
+  unsafe fn get_drop_guard(&mut self) -> DropGuard {
+    match self {
+      Connection::Tcp(stream) => DropGuard::Tcp(stream.get_drop_guard()),
+      #[cfg(unix)]
+      Connection::Unix(stream) => DropGuard::Unix(stream.get_drop_guard()),
+    }
+  }
 }
 
 impl AsyncRead for Connection {
@@ -1321,8 +1341,13 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           };
         }
 
+        // Safety: the drop guard is dropped when the connection future is completed,
+        // and after the underlying connection is moved across threads,
+        // see the "http_proxy_handshake" function.
+        let drop_guard = unsafe { stream.get_drop_guard() };
+
         let sender = if !encrypted {
-          let sender = match http_proxy_handshake(stream, enable_http2_only_config).await {
+          let sender = match http_proxy_handshake(stream, enable_http2_only_config, drop_guard).await {
             Ok(sender) => sender,
             Err(err) => {
               if enable_health_check {
@@ -1416,7 +1441,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           // Enable HTTP/2 when the ALPN protocol is "h2"
           let enable_http2 = enable_http2_config && tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
 
-          let sender = match http_proxy_handshake(tls_stream, enable_http2).await {
+          let sender = match http_proxy_handshake(tls_stream, enable_http2, drop_guard).await {
             Ok(sender) => sender,
             Err(err) => {
               if enable_health_check {
@@ -1742,6 +1767,7 @@ async fn determine_proxy_to<'a>(
 async fn http_proxy_handshake(
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   use_http2: bool,
+  #[cfg(feature = "runtime-monoio")] drop_guard: DropGuard,
 ) -> Result<SendRequest, Box<dyn Error + Send + Sync>> {
   // Convert the async stream to a Monoio- or Tokio-compatible I/O type
   #[cfg(feature = "runtime-monoio")]
@@ -1761,6 +1787,7 @@ async fn http_proxy_handshake(
     // Spawn a task to drive the connection
     ferron_common::runtime::spawn(async move {
       conn.await.unwrap_or_default();
+      drop(drop_guard);
     });
 
     SendRequest::Http2(sender)
@@ -1771,6 +1798,7 @@ async fn http_proxy_handshake(
     let conn_with_upgrades = conn.with_upgrades();
     ferron_common::runtime::spawn(async move {
       conn_with_upgrades.await.unwrap_or_default();
+      drop(drop_guard);
     });
 
     SendRequest::Http1(sender)

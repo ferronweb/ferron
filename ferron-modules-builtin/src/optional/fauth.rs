@@ -6,8 +6,6 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use bytes::Bytes;
-#[cfg(feature = "runtime-monoio")]
-use ferron_common::util::SendTcpStreamPoll;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
 use hyper::header::{self, HeaderName};
@@ -35,6 +33,8 @@ use ferron_common::{get_entries_for_validation, get_entry, get_value, get_values
 use tokio_util::sync::CancellationToken;
 
 use crate::util::PendingConnectionGuard;
+#[cfg(feature = "runtime-monoio")]
+use crate::util::SendTcpStreamPoll;
 
 const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: usize = 32;
 

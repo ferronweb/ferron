@@ -10,6 +10,8 @@ pub mod fcgi;
 mod pending_connection_guard;
 #[cfg(feature = "fcgi")]
 mod read_to_end_move;
+#[cfg(all(feature = "runtime-monoio", any(feature = "rproxy", feature = "fauth")))]
+mod send_net_io;
 #[cfg(any(feature = "dcompress", feature = "fcgi"))]
 mod split_stream_by_map;
 
@@ -21,5 +23,7 @@ pub use copy_move::*;
 pub use pending_connection_guard::*;
 #[cfg(feature = "fcgi")]
 pub use read_to_end_move::*;
+#[cfg(all(feature = "runtime-monoio", any(feature = "rproxy", feature = "fauth")))]
+pub use send_net_io::*;
 #[cfg(any(feature = "dcompress", feature = "fcgi"))]
 pub use split_stream_by_map::*;

@@ -14,6 +14,10 @@ use hyper::{Request, Response};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::{TokioIo, TokioTimer};
 #[cfg(feature = "runtime-monoio")]
+use monoio::io::IntoPollIo;
+#[cfg(feature = "runtime-monoio")]
+use monoio::net::tcp::stream_poll::TcpStreamPoll;
+#[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
 #[cfg(feature = "runtime-monoio")]
 use monoio_compat::hyper::{MonoioExecutor, MonoioIo, MonoioTimer};
@@ -32,7 +36,7 @@ use crate::listener_handler_communication::ConnectionData;
 use crate::request_handler::request_handler;
 use crate::util::read_proxy_header;
 #[cfg(feature = "runtime-monoio")]
-use crate::util::SendTcpStreamPoll;
+use crate::util::SendAsyncIo;
 
 static HTTP3_INVALID_HEADERS: [hyper::header::HeaderName; 5] = [
   hyper::header::HeaderName::from_static("keep-alive"),
@@ -222,10 +226,10 @@ async fn http_handler_fn(
 #[cfg(feature = "runtime-monoio")]
 enum MaybeTlsStream {
   /// TLS stream
-  Tls(TlsStream<SendTcpStreamPoll>),
+  Tls(TlsStream<SendAsyncIo<TcpStreamPoll>>),
 
   /// Plain TCP stream
-  Plain(SendTcpStreamPoll),
+  Plain(SendAsyncIo<TcpStreamPoll>),
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -255,8 +259,8 @@ async fn http_tcp_handler_fn(
 ) {
   let _connection_reference = Arc::downgrade(&connection_reference);
   #[cfg(feature = "runtime-monoio")]
-  let tcp_stream = match SendTcpStreamPoll::new_comp_io(tcp_stream) {
-    Ok(stream) => stream,
+  let tcp_stream = match tcp_stream.into_poll_io() {
+    Ok(stream) => SendAsyncIo::new(stream),
     Err(err) => {
       for logging_tx in configurations
         .find_global_configuration()
