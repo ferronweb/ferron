@@ -1,6 +1,6 @@
 [package]
 name = "ferron-yaml2kdl"
-version = "2.2.1"
+version = "2.3.0"
 edition = "2021"
 
 [package.metadata.winresource]

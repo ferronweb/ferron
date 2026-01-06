@@ -272,7 +272,7 @@ This configuration reference organizes directives by both **scope** (where they 
 
 ### Reverse proxy & load balancing
 
-- `proxy_concurrent_conns <proxy_concurrent_conns: integer|null>` (_rproxy_ module; Ferron UNRELEASED or newer)
+- `proxy_concurrent_conns <proxy_concurrent_conns: integer|null>` (_rproxy_ module; Ferron 2.3.0 or newer)
   - This directive specifies the limit of TCP connections being established to backend servers, to prevent exhaustion of network resources. If set as `proxy_concurrent_conns #null`, the reverse proxy can theoretically establish an unlimited number of connections. Default: `proxy_concurrent_conns 16384`
 
 **Configuration example:**
@@ -411,7 +411,7 @@ example.com {
   - This directive specifies whenever URL rewriting operations are logged into the error log. Default: `rewrite_log #false`
 - `no_trailing_redirect [no_trailing_redirect: bool]`
   - This directive specifies whenever not to redirect the URL without a trailing slash to one with a trailing slash, if it refers to a directory. Default: `no_trailing_redirect #false`
-- `disable_url_sanitizer [disable_url_sanitizer: bool]` (Ferron UNRELEASED or newer)
+- `disable_url_sanitizer [disable_url_sanitizer: bool]` (Ferron 2.3.0 or newer)
   - This directive specifies whenever URL sanitation is disabled. Disabling URL sanitation allows the server to process the request URL as is, without rewriting the URL with potential path traversal sequences; this can be useful for certain applications that require raw URLs, for [RFC 3986 compliance](https://datatracker.ietf.org/doc/html/rfc3986#section-2.2). **Disabling URL sanitation may lead to risk of path traversal vulnerabilities, although built-in static file serving, CGI, SCGI and FastCGI module functionality would perform additional checks to prevent path traversal attacks.** Default: `disable_url_sanitizer #false`
 
 **Configuration example:**
@@ -492,7 +492,7 @@ example.com {
 ### Reverse proxy & load balancing
 
 - `proxy <proxy_to: string|null> [unix=<unix_socket_path: string>] [limit=<conn_limit: integer|null>] [idle_timeout=<idle_timeout: integer|null>]` (_rproxy_ module)
-  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported via the `unix` prop set to the path to the socket (and the main value is set to the URL of the website), supported only on Unix and Unix-like systems. Established connections can be limited by the `limit` prop (Ferron UNRELEASED and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron UNRELEASED and newer); by default it is set to `60000` (60 seconds). This directive can be specified multiple times. Default: none
+  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported via the `unix` prop set to the path to the socket (and the main value is set to the URL of the website), supported only on Unix and Unix-like systems. Established connections can be limited by the `limit` prop (Ferron 2.3.0 and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron 2.3.0 and newer); by default it is set to `60000` (60 seconds). This directive can be specified multiple times. Default: none
 - `lb_health_check [enable_lb_health_check: bool]` (_rproxy_ module)
   - This directive specifies whenever the load balancer passive health check is enabled. Default: `lb_health_check #false`
 - `lb_health_check_max_fails <max_fails: integer>` (_rproxy_ module)
@@ -517,7 +517,7 @@ example.com {
   - This directive specifies the load balancing algorithm to be used. The supported algorithms are `random` (random selection), `round-robin` (round-robin), `least_conn` (least connections, "connections" would mean concurrent requests here), and `two_random` (power of two random choices; after two random choices, the backend server with the least concurrent requests is chosen). Default: `lb_algorithm "two_random"`
 - `lb_health_check_window <lb_health_check_window: integer>` (_rproxy_ module)
   - This directive specifies the window size (in milliseconds) for load balancer health checks. Default: `lb_health_check_window 5000`
-- `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module; Ferron 2.2.1 or older; **REMOVED**)  - This directive used to specify the maximum number of idle connections to backend servers to keep alive. The default was `proxy_keepalive_idle_conns 48`. In Ferron UNRELEASED and newer, this directive is no longer supported.
+- `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module; Ferron 2.2.1 or older; **REMOVED**) - This directive used to specify the maximum number of idle connections to backend servers to keep alive. The default was `proxy_keepalive_idle_conns 48`. In Ferron 2.3.0 and newer, this directive is no longer supported.
 - `proxy_http2_only [enable_proxy_http2_only: bool]` (_rproxy_ module; Ferron 2.1.0 or newer)
   - This directive specifies whenever the reverse proxy uses HTTP/2 protocol (without HTTP/1.1 fallback) when connecting to backend servers. When the backend server is connected via HTTPS, the reverse proxy negotiates HTTP/2 during the TLS handshake. When the backend server is connected via HTTP, the reverse proxy uses HTTP/2 with prior knowledge. This directive can be used when proxying gRPC requests. Default: `proxy_http2_only #false`
 - `proxy_proxy_header <proxy_version_version: string|null>` (_rproxy_ module; Ferron 2.1.0 or newer)
@@ -813,10 +813,10 @@ Ferron supports the following placeholders for header values, subconditions, rev
 - `{scheme}` - the scheme of the request URI (`http` or `https`), applicable only for subconditions, reverse proxying and redirect destinations.
 - `{client_ip}` - the client IP address, applicable only for subconditions, reverse proxying and redirect destinations.
 - `{client_port}` - the client port number, applicable only for subconditions, reverse proxying and redirect destinations.
-- `{client_ip_canonical}` (Ferron UNRELEASED or newer) - the client IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`), applicable only for subconditions, reverse proxying and redirect destinations.
+- `{client_ip_canonical}` (Ferron 2.3.0 or newer) - the client IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`), applicable only for subconditions, reverse proxying and redirect destinations.
 - `{server_ip}` - the server IP address, applicable only for subconditions, reverse proxying and redirect destinations.
 - `{server_port}` - the server port number, applicable only for subconditions, reverse proxying and redirect destinations.
-- `{server_ip_canonical}` (Ferron UNRELEASED or newer) - the server IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`), applicable only for subconditions, reverse proxying and redirect destinations.
+- `{server_ip_canonical}` (Ferron 2.3.0 or newer) - the server IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`), applicable only for subconditions, reverse proxying and redirect destinations.
 
 ## Log placeholders
 
@@ -830,10 +830,10 @@ Ferron 2.0.0 and newer supports the following placeholders for access logs:
 - `{scheme}` - the scheme of the request URI (`http` or `https`).
 - `{client_ip}` - the client IP address.
 - `{client_port}` - the client port number.
-- `{client_ip_canonical}` (Ferron UNRELEASED or newer) - the client IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`).
+- `{client_ip_canonical}` (Ferron 2.3.0 or newer) - the client IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`).
 - `{server_ip}` - the server IP address.
 - `{server_port}` - the server port number.
-- `{server_ip_canonical}` (Ferron UNRELEASED or newer) - the server IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`).
+- `{server_ip_canonical}` (Ferron 2.3.0 or newer) - the server IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`).
 - `{auth_user}` - the username of the authenticated user (`-`, if not authenticated)
 - `{timestamp}` - the formatted timestamp of the entry
 - `{status_code}` - the HTTP status code of the response

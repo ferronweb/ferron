@@ -57,7 +57,7 @@ Metrics in Ferron are specified with OpenTelemetry-style names. Below are the me
   - **Attributes**
     - `ferron.proxy.backend_url` - Backend server URL.
     - `ferron.proxy.backend_unix_path` - Backend server Unix socket path.
-- **`ferron.proxy.requests`** (unit: `{request}`; _rproxy_ module; Ferron UNRELEASED or newer)
+- **`ferron.proxy.requests`** (unit: `{request}`; _rproxy_ module; Ferron 2.3.0 or newer)
   - Number of reverse proxy requests.
   - **Attributes**
     - `ferron.proxy.connection_reused` - Whether an HTTP client connection was reused.
