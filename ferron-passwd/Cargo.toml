@@ -1,6 +1,6 @@
 [package]
 name = "ferron-passwd"
-version = "2.2.1"
+version = "2.3.0"
 edition = "2021"
 
 [package.metadata.winresource]
@@ -10,7 +10,12 @@ ProductName = "Ferron password utility"
 clap = { version = "4.5.28", features = ["derive"] }
 password-auth = { workspace = true }
 rpassword = "7.4.0"
-mimalloc = { workspace = true }
+
+[target.'cfg(target_arch = "x86")'.dependencies]
+mimalloc = { workspace = true } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
+
+[target.'cfg(not(target_arch = "x86"))'.dependencies]
+mimalloc = { workspace = true, features = ["v3"] }
 
 [dev-dependencies]
 shiba = { workspace = true }

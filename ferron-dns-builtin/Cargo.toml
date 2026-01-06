@@ -1,6 +1,6 @@
 [package]
 name = "ferron-dns-builtin"
-version = "2.2.1"
+version = "2.3.0"
 edition = "2021"
 
 [dependencies]
@@ -37,4 +37,3 @@ desec = ["desec_api"]
 porkbun = ["porkbun-api"]
 rfc2136 = ["dns-update", "base64", "hyper"]
 route53 = ["aws-config", "aws-credential-types", "aws-sdk-route53"]
-hyper = ["dep:hyper"]

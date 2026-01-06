@@ -1,6 +1,6 @@
 [package]
 name = "ferron-precompress"
-version = "2.2.1"
+version = "2.3.0"
 edition = "2021"
 
 [package.metadata.winresource]
@@ -10,9 +10,14 @@ ProductName = "Ferron precompression utility"
 brotli = "8.0.2"
 clap = { version = "4.5.38", features = ["cargo"] }
 flate2 = { version = "1.1.4", default-features = false, features = ["zlib-rs"] }
-mimalloc = { workspace = true }
 rayon = "1.11.0"
 zstd = "0.13.3"
+
+[target.'cfg(target_arch = "x86")'.dependencies]
+mimalloc = { workspace = true } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
+
+[target.'cfg(not(target_arch = "x86"))'.dependencies]
+mimalloc = { workspace = true, features = ["v3"] }
 
 [dev-dependencies]
 shiba = { workspace = true }

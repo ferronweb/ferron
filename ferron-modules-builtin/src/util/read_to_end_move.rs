@@ -29,6 +29,7 @@ where
 {
   type Output = io::Result<Vec<u8>>;
 
+  #[inline]
   fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
     let mut buf = [0; 1024];
     let mut read_buf = ReadBuf::new(&mut buf);

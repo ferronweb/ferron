@@ -1,6 +1,6 @@
 [package]
 name = "ferron-modules-builtin"
-version = "2.2.1"
+version = "2.3.0"
 edition = "2021"
 
 [dependencies]
@@ -10,8 +10,9 @@ ferron-common = { workspace = true }
 # Error Handling & Utilities
 anyhow = "1.0.98"
 chrono = "0.4.41"
-fancy-regex = "0.16.1"
+fancy-regex = "0.17.0"
 urlencoding = "2.1.3"
+send_wrapper = { version = "0.6.0", optional = true, features = ["futures"] }
 
 # HTTP/Web Server Core
 hyper = { version = "1.6.0", features = ["full"] }
@@ -34,7 +35,7 @@ rustls-pki-types = "1.12.0"
 rustls-platform-verifier = "0.6.0"
 webpki-roots = "1.0.2"
 password-auth = { workspace = true }
-sha2 = { version = "0.10.9", optional = true }
+xxhash-rust = { version = "0.8.15", features = ["std", "xxh3"], optional = true }
 base64 = "0.22.1"
 rand = { version = "0.9.1", optional = true }
 
@@ -55,11 +56,13 @@ monoio = { version = "0.2.4", optional = true, features = [
     "threadpool",
 ] }
 monoio-compat = { version = "0.2.2", optional = true, features = ["hyper"] }
-async-channel = "2.3.1"
 async-trait = "0.1.88"
 futures-util = { version = "0.3.31", features = ["sink"] }
 pin-project-lite = "0.2.16"
 tokio-util = { version = "0.7.15", features = ["compat"] }
+kanal = { version = "0.1.1", optional = true }
+arc-swap = { version = "1.8.0", optional = true }
+connpool = { version = "0.2.0", optional = true }
 
 # Process & System Integration
 async-process = { version = "2.3.0", optional = true }
@@ -80,6 +83,7 @@ async-compression = { version = "0.4.30", optional = true, features = [
 # Caching
 cache_control = { version = "0.2.0", optional = true }
 hashlink = "0.11.0"
+quick_cache = { version = "0.6.18", optional = true }
 
 # Rate limitation
 tokenbucket = { version = "0.1.6", optional = true }
@@ -90,13 +94,10 @@ smallvec = { version = "1.15.0", features = [
     "union",
     "const_generics",
 ] }
-papaya = { version = "0.2.1", optional = true }
-ahash = { version = "0.8.12", optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4.4"
 shiba = { workspace = true }
-fastrand = "2.3.0"
 
 [features]
 default = [
@@ -123,20 +124,20 @@ default-tokio = [
     "limit",
     "replace",
     "rproxy",
-    "runtime-monoio",
+    "runtime-tokio",
     "scgi",
     "static",
 ]
-cache = ["cache_control", "papaya", "ahash"]
-cgi = ["async-process", "httparse", "memchr"]
+cache = ["cache_control", "quick_cache"]
+cgi = ["httparse", "memchr"]
 dcompress = ["async-compression"]
-fauth = ["rand"]
+fauth = ["rand", "kanal", "arc-swap"]
 fcgi = ["tokio-util/codec", "httparse", "memchr"]
 fproxy = []
 limit = ["tokenbucket"]
 replace = ["memchr"]
-rproxy = ["rand", "ppp"]
-runtime-monoio = ["monoio", "monoio-compat"]
+rproxy = ["rand", "ppp", "connpool"]
+runtime-monoio = ["async-process", "monoio", "monoio-compat", "send_wrapper"]
 runtime-tokio = ["hyper-util/tokio"]
 scgi = ["httparse", "memchr"]
-static = ["new_mime_guess", "async-compression", "sha2"]
+static = ["new_mime_guess", "async-compression", "xxhash-rust"]

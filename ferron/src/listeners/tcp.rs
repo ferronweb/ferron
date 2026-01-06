@@ -4,7 +4,7 @@ use std::{error::Error, time::Duration};
 use async_channel::Sender;
 use ferron_common::logging::LogMessage;
 #[cfg(feature = "runtime-monoio")]
-use monoio::net::{ListenerOpts, TcpListener};
+use monoio::net::TcpListener;
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
@@ -25,21 +25,34 @@ pub fn create_tcp_listener(
   let shutdown_rx = shutdown_tx.clone();
   let (listen_error_tx, listen_error_rx) = async_channel::unbounded();
   std::thread::Builder::new()
-        .name(format!("TCP listener for {address}"))
-        .spawn(move || {
-            crate::runtime::new_runtime(async move {
-      crate::runtime::select! {
-      result = tcp_listener_fn(address, encrypted, tx, &listen_error_tx, logging_tx, first_startup, tcp_buffer_sizes) => {
-          if let Some(error) = result.err() {
-              listen_error_tx.send(Some(error)).await.unwrap_or_default();
-          }
-        }
-        _ = shutdown_rx.cancelled() => {
+    .name(format!("TCP listener for {address}"))
+    .spawn(move || {
+      crate::runtime::new_runtime(
+        async move {
+          let tcp_listener_future = tcp_listener_fn(
+            address,
+            encrypted,
+            tx,
+            &listen_error_tx,
+            logging_tx,
+            first_startup,
+            tcp_buffer_sizes,
+          );
+          crate::runtime::select! {
+            result = tcp_listener_future => {
+              if let Some(error) = result.err() {
+                  listen_error_tx.send(Some(error)).await.unwrap_or_default();
+              }
+            }
+            _ = shutdown_rx.cancelled() => {
 
-        }
-      }
-    }, enable_uring).unwrap();
-        })?;
+            }
+          }
+        },
+        enable_uring,
+      )
+      .unwrap();
+    })?;
 
   if let Some(error) = listen_error_rx.recv_blocking()? {
     Err(error)?;
@@ -61,27 +74,22 @@ async fn tcp_listener_fn(
   let mut listener_result;
   let mut tries: u64 = 0;
   loop {
-    #[cfg(feature = "runtime-monoio")]
-    let listener_opts = {
-      let mut listener_opts = ListenerOpts::new()
-        .reuse_addr(!cfg!(windows))
-        .reuse_port(false)
-        .backlog(-1);
-      if let Some(tcp_send_buffer_size) = tcp_buffer_sizes.0 {
-        listener_opts = listener_opts.send_buf_size(tcp_send_buffer_size);
-      }
-      if let Some(tcp_recv_buffer_size) = tcp_buffer_sizes.1 {
-        listener_opts = listener_opts.recv_buf_size(tcp_recv_buffer_size);
-      }
-      listener_opts
-    };
-    #[cfg(feature = "runtime-monoio")]
-    let listener_result2 = TcpListener::bind_with_config(address, &listener_opts);
-    #[cfg(feature = "runtime-tokio")]
-    let listener_result2 = (|| {
-      let listener = std::net::TcpListener::bind(address)?;
-      listener.set_nonblocking(true).unwrap_or_default();
-      let listener_socket2 = socket2::Socket::from(listener);
+    listener_result = (|| {
+      // Create a new socket
+      let listener_socket2 = socket2::Socket::new(
+        if address.is_ipv6() {
+          socket2::Domain::IPV6
+        } else {
+          socket2::Domain::IPV4
+        },
+        socket2::Type::STREAM,
+        Some(socket2::Protocol::TCP),
+      )?;
+
+      // Set socket options
+      listener_socket2.set_reuse_address(!cfg!(windows)).unwrap_or_default();
+      #[cfg(unix)]
+      listener_socket2.set_reuse_port(false).unwrap_or_default();
       if let Some(tcp_send_buffer_size) = tcp_buffer_sizes.0 {
         listener_socket2
           .set_send_buffer_size(tcp_send_buffer_size)
@@ -92,9 +100,26 @@ async fn tcp_listener_fn(
           .set_recv_buffer_size(tcp_recv_buffer_size)
           .unwrap_or_default();
       }
+      if address.is_ipv6() {
+        listener_socket2.set_only_v6(false).unwrap_or_default();
+      }
+
+      #[cfg(feature = "runtime-monoio")]
+      let is_poll_io = monoio::utils::is_legacy();
+      #[cfg(feature = "runtime-tokio")]
+      let is_poll_io = true;
+
+      if is_poll_io {
+        listener_socket2.set_nonblocking(true).unwrap_or_default();
+      }
+
+      // Bind the socket to the address
+      listener_socket2.bind(&address.into())?;
+      listener_socket2.listen(-1)?;
+
+      // Wrap the socket into a TcpListener
       TcpListener::from_std(listener_socket2.into())
     })();
-    listener_result = listener_result2;
     if first_startup || listener_result.is_ok() {
       break;
     }

@@ -42,8 +42,10 @@ if ($env:CARGO_FINAL_EXTRA_ARGS)
     $cargoFinalExtraArgs = "$cargoFinalExtraArgs $env:CARGO_FINAL_EXTRA_ARGS"
 }
 
-# There would be a static file serving performance degradation when using Monoio, so we're compiling with Tokio
-$cargoFinalExtraArgs = "--no-default-features -F ferron/runtime-tokio $cargoFinalExtraArgs"
+if ($env:NO_MONOIO)
+{
+    $cargoFinalExtraArgs = "--no-default-features -F ferron/runtime-tokio $cargoFinalExtraArgs"
+}
 
 # Split the arguments (to avoid being interpreted as one large argument)
 $cargoFinalExtraArgs = $cargoFinalExtraArgs -Split ' '
@@ -167,6 +169,11 @@ function BuildWithPackage
     Package
 }
 
+function Installer
+{
+    & cargo run --manifest-path build-installer/Cargo.toml
+}
+
 function Clean
 {
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build-workspace, build-release, dist, packaging/deb/ferron_* packaging/deb/md5sums.tmp
@@ -181,5 +188,5 @@ if ($args.Count -gt 0)
     & $args[0]
 } else
 {
-    Write-Host "Available commands: Run, RunDev, Build, BuildDev, Smoketest, SmoketestDev, PrepareBuild, FixConflicts, Package, BuildWithPackage, Clean"
+    Write-Host "Available commands: Run, RunDev, Build, BuildDev, Smoketest, SmoketestDev, PrepareBuild, FixConflicts, Package, BuildWithPackage, Installer, Clean"
 }

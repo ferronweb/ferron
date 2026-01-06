@@ -25,3 +25,8 @@ ferron-http01-ondemand {
   auto_tls_on_demand
   root "/var/www/ferron" // Serve "Ferron is installed successfully" page
 }
+
+ferron-brokencache {
+  auto_tls_cache "/ferron-cache" // This shouldn't be able to be accessed by a non-root user
+  root "/var/www/ferron" // Serve "Ferron is installed successfully" page
+}

@@ -1,3 +1,4 @@
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::error::Error;
 use std::net::IpAddr;
@@ -5,24 +6,20 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::task::{Context, Poll};
-use std::time::Duration;
+use std::task::{Context, Poll, Waker};
+use std::time::{Duration, Instant};
 
-use async_channel::{Receiver, Sender};
 use async_trait::async_trait;
 use bytes::Bytes;
-use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender};
-#[cfg(feature = "runtime-monoio")]
-use futures_util::stream::StreamExt;
+use connpool::{Item, Pool};
+use futures_util::FutureExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Body;
-use hyper::header::{HeaderName, HeaderValue};
-use hyper::{header, HeaderMap, Request, Response, StatusCode, Uri, Version};
+use hyper::header::{self, HeaderName, HeaderValue};
+use hyper::{HeaderMap, Request, Response, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::{TokioExecutor, TokioIo};
-#[cfg(feature = "runtime-monoio")]
-use monoio::io::IntoPollIo;
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
 #[cfg(all(feature = "runtime-monoio", unix))]
@@ -39,13 +36,14 @@ use tokio::net::TcpStream;
 use tokio::net::UnixStream;
 use tokio::sync::RwLock;
 use tokio_rustls::TlsConnector;
-#[cfg(feature = "runtime-monoio")]
-use tokio_util::io::{CopyToBytes, SinkWriter, StreamReader};
 
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
+use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender};
 #[cfg(feature = "runtime-monoio")]
-use ferron_common::util::SendRwStream;
+use ferron_common::util::SendTcpStreamPoll;
+#[cfg(all(feature = "runtime-monoio", unix))]
+use ferron_common::util::SendUnixStreamPoll;
 use ferron_common::util::{NoServerVerifier, TtlCache};
 use ferron_common::{
   config::ServerConfiguration,
@@ -53,7 +51,8 @@ use ferron_common::{
 };
 use ferron_common::{get_entries, get_entries_for_validation, get_value};
 
-const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: usize = 48;
+const DEFAULT_CONCURRENT_CONNECTIONS: usize = 16384;
+const DEFAULT_KEEPALIVE_IDLE_TIMEOUT: u64 = 60000;
 
 #[allow(clippy::type_complexity)]
 enum LoadBalancerAlgorithm {
@@ -68,15 +67,103 @@ enum SendRequest {
   Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
 }
 
-type Connections = Arc<(Sender<SendRequest>, Receiver<SendRequest>)>;
+impl SendRequest {
+  #[inline]
+  fn is_closed(&self) -> bool {
+    match self {
+      SendRequest::Http1(sender) => sender.is_closed(),
+      SendRequest::Http2(sender) => sender.is_closed(),
+    }
+  }
+
+  #[inline]
+  async fn ready(&mut self) -> bool {
+    match self {
+      SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+      SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
+    }
+  }
+
+  #[inline]
+  fn is_ready(&self) -> bool {
+    match self {
+      SendRequest::Http1(sender) => sender.is_ready() && !sender.is_closed(),
+      SendRequest::Http2(sender) => sender.is_ready() && !sender.is_closed(),
+    }
+  }
+
+  #[inline]
+  async fn send_request(
+    &mut self,
+    request: Request<BoxBody<Bytes, std::io::Error>>,
+  ) -> Result<Response<hyper::body::Incoming>, hyper::Error> {
+    match self {
+      SendRequest::Http1(sender) => sender.send_request(request).await,
+      SendRequest::Http2(sender) => sender.send_request(request).await,
+    }
+  }
+}
+
+struct SendRequestWrapper {
+  inner: Option<SendRequest>,
+  instant: Instant,
+}
+
+impl SendRequestWrapper {
+  #[inline]
+  fn new(inner: SendRequest) -> Self {
+    Self {
+      inner: Some(inner),
+      instant: Instant::now(),
+    }
+  }
+
+  #[inline]
+  fn get(&mut self, timeout: Option<Duration>) -> (Option<SendRequest>, bool) {
+    let inner_mut = if let Some(inner) = self.inner.as_mut() {
+      inner
+    } else {
+      return (None, false);
+    };
+    if inner_mut.is_closed() || (inner_mut.is_ready() && timeout.is_some_and(|t| self.instant.elapsed() > t)) {
+      return (None, false);
+    }
+    (
+      if inner_mut.is_ready() {
+        self.inner.take()
+      } else {
+        self.instant = Instant::now();
+        None
+      },
+      true,
+    )
+  }
+
+  #[inline]
+  async fn wait_ready(&mut self, timeout: Option<Duration>) -> bool {
+    if self.inner.is_none() {
+      return false;
+    }
+    let mut inner = self.inner.take().expect("inner is None");
+    if inner.is_ready() && timeout.is_some_and(|t| self.instant.elapsed() > t) {
+      return false;
+    }
+    inner.ready().await
+  }
+}
+
+type ProxyToVectorContentsBorrowed<'a> = (&'a str, Option<&'a str>, Option<usize>, Option<Duration>);
+
+type ConnectionPool = Arc<Pool<(String, Option<String>, Option<IpAddr>), SendRequestWrapper>>;
+type ConnectionPoolItem = Item<(String, Option<String>, Option<IpAddr>), SendRequestWrapper>;
 
 enum Connection {
   #[cfg(feature = "runtime-monoio")]
-  Tcp(monoio::net::tcp::stream_poll::TcpStreamPoll),
+  Tcp(SendTcpStreamPoll),
   #[cfg(not(feature = "runtime-monoio"))]
   Tcp(TcpStream),
   #[cfg(all(feature = "runtime-monoio", unix))]
-  Unix(monoio::net::unix::stream_poll::UnixStreamPoll),
+  Unix(SendUnixStreamPoll),
   #[cfg(all(not(feature = "runtime-monoio"), unix))]
   Unix(UnixStream),
 }
@@ -144,14 +231,16 @@ impl AsyncWrite for Connection {
 /// A tracked response body
 struct TrackedBody<B> {
   inner: B,
-  _tracker: Arc<()>,
+  _tracker: Option<Arc<()>>,
+  _tracker_pool: Option<Arc<UnsafeCell<ConnectionPoolItem>>>,
 }
 
 impl<B> TrackedBody<B> {
-  fn new(inner: B, tracker: Arc<()>) -> Self {
+  fn new(inner: B, tracker: Arc<()>, tracker_pool: Option<Arc<UnsafeCell<ConnectionPoolItem>>>) -> Self {
     Self {
       inner,
-      _tracker: tracker,
+      _tracker: Some(tracker),
+      _tracker_pool: tracker_pool,
     }
   }
 }
@@ -179,10 +268,18 @@ where
   }
 }
 
+// Safety: after construction, the value inside `UnsafeCell` is never mutated.
+// All accesses after sharing are read-only, so sharing across threads is safe.
+unsafe impl<B> Send for TrackedBody<B> where B: Send {}
+unsafe impl<B> Sync for TrackedBody<B> where B: Sync {}
+
 /// A reverse proxy module loader
 #[allow(clippy::type_complexity)]
 pub struct ReverseProxyModuleLoader {
   cache: ModuleCache<ReverseProxyModule>,
+  connections: Option<ConnectionPool>,
+  #[cfg(unix)]
+  unix_connections: Option<ConnectionPool>,
 }
 
 impl Default for ReverseProxyModuleLoader {
@@ -200,8 +297,10 @@ impl ReverseProxyModuleLoader {
         "lb_health_check_window",
         "lb_health_check_max_fails",
         "lb_algorithm",
-        "proxy_keepalive_idle_conns",
       ]),
+      connections: None,
+      #[cfg(unix)]
+      unix_connections: None,
     }
   }
 }
@@ -210,13 +309,92 @@ impl ModuleLoader for ReverseProxyModuleLoader {
   fn load_module(
     &mut self,
     config: &ServerConfiguration,
-    _global_config: Option<&ServerConfiguration>,
+    global_config: Option<&ServerConfiguration>,
     _secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
+    let concurrency_limit = global_config
+      .and_then(|c| get_value!("proxy_concurrent_conns", c))
+      .map_or(Some(DEFAULT_CONCURRENT_CONNECTIONS), |v| {
+        if v.is_null() {
+          None
+        } else {
+          Some(
+            v.as_i128()
+              .map(|v| v as usize)
+              .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS),
+          )
+        }
+      });
+    let connections = self
+      .connections
+      .get_or_insert(Arc::new(if let Some(limit) = concurrency_limit {
+        Pool::new(limit)
+      } else {
+        Pool::new_unbounded()
+      }))
+      .clone();
+    #[cfg(unix)]
+    let unix_connections = self
+      .unix_connections
+      .get_or_insert(Arc::new(if let Some(limit) = concurrency_limit {
+        Pool::new(limit)
+      } else {
+        Pool::new_unbounded()
+      }))
+      .clone();
     Ok(
       self
         .cache
-        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |config| {
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |config| {
+          let proxy_to_raw = get_entries!("proxy", config).map_or(vec![], |e| {
+            e.inner
+              .iter()
+              .filter_map(|e| {
+                e.values
+                  .first()
+                  .and_then(|v| v.as_str().map(|s| s.to_owned()))
+                  .map(|v| {
+                    (
+                      v,
+                      e.props.get("unix").and_then(|v| v.as_str()).map(|s| s.to_owned()),
+                      e.props.get("limit").and_then(|v| v.as_i128()).map(|v| v as usize),
+                      e.props
+                        .get("idle_timeout")
+                        .map_or(Some(DEFAULT_KEEPALIVE_IDLE_TIMEOUT), |v| {
+                          if v.is_null() {
+                            None
+                          } else {
+                            Some(v.as_i128().map(|v| v as u64).unwrap_or(DEFAULT_KEEPALIVE_IDLE_TIMEOUT))
+                          }
+                        }),
+                    )
+                  })
+              })
+              .collect()
+          });
+          let proxy_to = proxy_to_raw
+            .into_iter()
+            .map(|(proxy_to, proxy_unix, local_limit, keepalive_idle_timeout)| {
+              let is_unix_socket = proxy_unix.is_some();
+              (
+                proxy_to,
+                proxy_unix,
+                local_limit.and_then(|local_limit| {
+                  if is_unix_socket {
+                    #[cfg(unix)]
+                    let limit_index = Some(unix_connections.set_local_limit(local_limit));
+                    #[cfg(not(unix))]
+                    let limit_index = None;
+
+                    limit_index
+                  } else {
+                    Some(connections.set_local_limit(local_limit))
+                  }
+                }),
+                keepalive_idle_timeout.map(Duration::from_millis),
+              )
+            })
+            .collect();
           Ok(Arc::new(ReverseProxyModule {
             failed_backends: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(
               get_value!("lb_health_check_window", config)
@@ -237,31 +415,13 @@ impl ModuleLoader for ReverseProxyModuleLoader {
                 ))?,
               })
             },
-            proxy_to: Arc::new(get_entries!("proxy", config).map_or(vec![], |e| {
-              e.inner
-                .iter()
-                .filter_map(|e| {
-                  e.values
-                    .first()
-                    .and_then(|v| v.as_str().map(|s| s.to_owned()))
-                    .map(|v| {
-                      (
-                        v,
-                        e.props.get("unix").and_then(|v| v.as_str()).map(|s| s.to_owned()),
-                        Arc::new(async_channel::bounded(
-                          get_value!("proxy_keepalive_idle_conns", config)
-                            .and_then(|v| v.as_i128())
-                            .map(|v| v as usize)
-                            .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST),
-                        )),
-                      )
-                    })
-                })
-                .collect()
-            })),
+            proxy_to: Arc::new(proxy_to),
             health_check_max_fails: get_value!("lb_health_check_max_fails", config)
               .and_then(|v| v.as_i128())
               .unwrap_or(3) as u64,
+            connections,
+            #[cfg(unix)]
+            unix_connections,
           }))
         })?,
     )
@@ -330,6 +490,16 @@ impl ModuleLoader for ReverseProxyModuleLoader {
           Err(anyhow::anyhow!("Invalid proxy backend server"))?
         } else if !entry.props.get("unix").is_none_or(|v| v.is_string()) {
           Err(anyhow::anyhow!("Invalid proxy Unix socket path"))?
+        } else if let Some(prop) = entry.props.get("limit") {
+          if !prop.is_null() && prop.as_i128().unwrap_or(0) < 1 {
+            Err(anyhow::anyhow!("Invalid proxy connection limit for a backend server"))?
+          }
+        } else if let Some(prop) = entry.props.get("idle_timeout") {
+          if !prop.is_null() && prop.as_i128().unwrap_or(0) < 1 {
+            Err(anyhow::anyhow!(
+              "Invalid proxy idle keep-alive connection timeout for a backend server"
+            ))?
+          }
         }
 
         #[cfg(not(unix))]
@@ -455,22 +625,6 @@ impl ModuleLoader for ReverseProxyModuleLoader {
       }
     }
 
-    if let Some(entries) = get_entries_for_validation!("proxy_keepalive_idle_conns", config, used_properties) {
-      for entry in &entries.inner {
-        if entry.values.len() != 1 {
-          Err(anyhow::anyhow!(
-            "The `proxy_keepalive_idle_conns` configuration property must have exactly one value"
-          ))?
-        } else if !entry.values[0].is_integer() && !entry.values[0].is_null() {
-          Err(anyhow::anyhow!("Invalid proxy keep-alive idle connections"))?
-        } else if let Some(value) = entry.values[0].as_i128() {
-          if value < 1 {
-            Err(anyhow::anyhow!("Invalid proxy keep-alive idle connections"))?
-          }
-        }
-      }
-    }
-
     if let Some(entries) = get_entries_for_validation!("proxy_http2_only", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {
@@ -495,6 +649,20 @@ impl ModuleLoader for ReverseProxyModuleLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("proxy_concurrent_conns", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          return Err(
+            anyhow::anyhow!("The `proxy_concurrent_conns` configuration property must have exactly one value").into(),
+          );
+        } else if (!entry.values[0].is_integer() && !entry.values[0].is_null())
+          || entry.values[0].as_i128().is_some_and(|v| v < 0)
+        {
+          return Err(anyhow::anyhow!("Invalid global maximum concurrent connections configuration").into());
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -504,8 +672,11 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 struct ReverseProxyModule {
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
   load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
-  proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
+  proxy_to: Arc<Vec<(String, Option<String>, Option<usize>, Option<Duration>)>>,
   health_check_max_fails: u64,
+  connections: ConnectionPool,
+  #[cfg(unix)]
+  unix_connections: ConnectionPool,
 }
 
 impl Module for ReverseProxyModule {
@@ -517,6 +688,10 @@ impl Module for ReverseProxyModule {
       health_check_max_fails: self.health_check_max_fails,
       selected_backends_metrics: None,
       unhealthy_backends_metrics: None,
+      connection_reused: false,
+      connections: self.connections.clone(),
+      #[cfg(unix)]
+      unix_connections: self.unix_connections.clone(),
     })
   }
 }
@@ -526,10 +701,14 @@ impl Module for ReverseProxyModule {
 struct ReverseProxyModuleHandlers {
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
   load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
-  proxy_to: Arc<Vec<(String, Option<String>, Connections)>>,
+  proxy_to: Arc<Vec<(String, Option<String>, Option<usize>, Option<Duration>)>>,
   health_check_max_fails: u64,
   selected_backends_metrics: Option<Vec<(String, Option<String>)>>,
   unhealthy_backends_metrics: Option<Vec<(String, Option<String>)>>,
+  connection_reused: bool,
+  connections: ConnectionPool,
+  #[cfg(unix)]
+  unix_connections: ConnectionPool,
 }
 
 #[async_trait(?Send)]
@@ -570,7 +749,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let mut proxy_to_vector = self
       .proxy_to
       .iter()
-      .map(|e| (&*e.0, e.1.as_deref(), e.2.clone()))
+      .map(|e| (&*e.0, e.1.as_deref(), e.2, e.3))
       .collect();
     let load_balancer_algorithm = self.load_balancer_algorithm.clone();
     let connection_track = match &*load_balancer_algorithm {
@@ -585,7 +764,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
     let mut request_parts = Some(request_parts);
 
     loop {
-      if let Some((proxy_to, proxy_unix, connections)) = determine_proxy_to(
+      if let Some((proxy_to, proxy_unix, local_limit_index, keepalive_idle_timeout)) = determine_proxy_to(
         &mut proxy_to_vector,
         &self.failed_backends,
         enable_health_check,
@@ -653,6 +832,8 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           None
         };
 
+        let proxy_header = get_value!("proxy_proxy_header", config).and_then(|v| v.as_str());
+
         let is_http_upgrade = proxy_request_parts.headers.contains_key(header::UPGRADE);
         let enable_http2_only_config = get_value!("proxy_http2_only", config)
           .and_then(|v| v.as_bool())
@@ -661,38 +842,114 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .and_then(|v| v.as_bool())
           .unwrap_or(false);
 
-        let connections = if (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
+        let enable_keepalive = (enable_http2_only_config || !enable_http2_config || !is_http_upgrade)
           && get_value!("proxy_keepalive", config)
             .and_then(|v| v.as_bool())
-            .unwrap_or(true)
-        {
-          let (sender, receiver) = &*connections;
+            .unwrap_or(true);
+        let connection_pool_item = {
+          #[cfg(unix)]
+          let connections = if proxy_unix.is_some() {
+            &self.unix_connections
+          } else {
+            &self.connections
+          };
+          #[cfg(not(unix))]
+          let connections = &self.connections;
+          let sender;
+          let mut send_request_items = Vec::new();
+          let proxy_client_ip = match proxy_header {
+            Some("v1") | Some("v2") => Some(socket_data.remote_addr.ip().to_canonical()),
+            _ => None,
+          };
           loop {
-            if let Ok(mut send_request) = receiver.try_recv() {
-              if match &mut send_request {
-                SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-                SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-              } {
-                let proxy_request = Request::from_parts(proxy_request_parts, request_body);
-                let result = http_proxy_kept_alive(
-                  send_request,
-                  proxy_request,
-                  error_logger,
-                  proxy_intercept_errors,
-                  tracked_connection,
-                  sender,
+            let mut send_request_item = if send_request_items.is_empty() {
+              connections
+                .pull_with_wait_local_limit(
+                  (proxy_to.clone(), proxy_unix.clone(), proxy_client_ip),
+                  local_limit_index,
                 )
-                .await;
-                return result;
-              } else {
-                continue;
+                .await
+            } else if let Poll::Ready(send_request_item_option) = connections
+              .pull_with_wait_local_limit(
+                (proxy_to.clone(), proxy_unix.clone(), proxy_client_ip),
+                local_limit_index,
+              )
+              .boxed_local()
+              .poll_unpin(&mut Context::from_waker(Waker::noop()))
+            {
+              send_request_item_option
+            } else {
+              let send_request_items_taken = send_request_items;
+              send_request_items = Vec::new();
+              let fetch_nonready_send_request_fut = async {
+                let result = futures_util::future::select_ok(send_request_items_taken).await;
+                if let Ok((item, send_request_items_smaller)) = result {
+                  send_request_items = send_request_items_smaller;
+                  item
+                } else {
+                  futures_util::future::pending().await
+                }
+              };
+              ferron_common::runtime::select! {
+                item = connections
+                  .pull_with_wait_local_limit((proxy_to.clone(), proxy_unix.clone(), proxy_client_ip), local_limit_index)
+                => {
+                  item
+                },
+                item = fetch_nonready_send_request_fut => {
+                  item
+                }
+              }
+            };
+            if let Some(send_request) = send_request_item.inner_mut() {
+              match send_request.get(keepalive_idle_timeout) {
+                (Some(send_request), true) => {
+                  // Connection ready, send a request to it
+                  send_request_items.clear();
+                  self.connection_reused = true;
+                  let _ = send_request_item.inner_mut().take();
+                  let proxy_request = Request::from_parts(proxy_request_parts, request_body);
+                  let result = http_proxy_kept_alive(
+                    send_request,
+                    send_request_item,
+                    proxy_request,
+                    error_logger,
+                    proxy_intercept_errors,
+                    tracked_connection,
+                  )
+                  .await;
+                  return result;
+                }
+                (None, true) => {
+                  // Connection not ready
+                  send_request_items.push(Box::pin(async move {
+                    let inner_item = send_request_item.inner_mut();
+                    if let Some(inner_item_2) = inner_item {
+                      if !inner_item_2.wait_ready(keepalive_idle_timeout).await {
+                        // Connection closed or timed out
+                        inner_item.take();
+                        return Err(());
+                      }
+                      let _ = inner_item;
+                      Ok(send_request_item)
+                    } else {
+                      Err(())
+                    }
+                  }));
+                  continue;
+                }
+                (_, false) => {
+                  // Connection closed
+                  let _ = send_request_item.inner_mut().take();
+                  continue;
+                }
               }
             }
+            send_request_items.clear();
+            sender = send_request_item;
             break;
           }
-          Some(sender)
-        } else {
-          None
+          sender
         };
 
         let stream = if let Some(proxy_unix_str) = &proxy_unix {
@@ -762,7 +1019,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             };
 
             #[cfg(feature = "runtime-monoio")]
-            let stream = match stream.into_poll_io() {
+            let stream = match SendUnixStreamPoll::new_comp_io(stream) {
               Ok(stream) => stream,
               Err(err) => {
                 if enable_health_check {
@@ -885,7 +1142,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           };
 
           #[cfg(feature = "runtime-monoio")]
-          let stream = match stream.into_poll_io() {
+          let stream = match SendTcpStreamPoll::new_comp_io(stream) {
             Ok(stream) => stream,
             Err(err) => {
               if enable_health_check {
@@ -919,7 +1176,6 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           Connection::Tcp(stream)
         };
 
-        let proxy_header = get_value!("proxy_proxy_header", config).and_then(|v| v.as_str());
         let proxy_header_to_write = match proxy_header {
           Some("v1") => {
             let is_ipv4 = socket_data.local_addr.ip().to_canonical().is_ipv4()
@@ -1066,18 +1322,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         }
 
         let sender = if !encrypted {
-          #[cfg(feature = "runtime-monoio")]
-          let rw = {
-            let send_rw_stream = SendRwStream::new(stream);
-            let (sink, stream) = send_rw_stream.split();
-            let reader = StreamReader::new(stream);
-            let writer = SinkWriter::new(CopyToBytes::new(sink));
-            tokio::io::join(reader, writer)
-          };
-          #[cfg(feature = "runtime-tokio")]
-          let rw = stream;
-
-          let sender = match http_proxy_handshake(rw, enable_http2_only_config).await {
+          let sender = match http_proxy_handshake(stream, enable_http2_only_config).await {
             Ok(sender) => sender,
             Err(err) => {
               if enable_health_check {
@@ -1171,18 +1416,7 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           // Enable HTTP/2 when the ALPN protocol is "h2"
           let enable_http2 = enable_http2_config && tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
 
-          #[cfg(feature = "runtime-monoio")]
-          let rw = {
-            let send_rw_stream = SendRwStream::new(tls_stream);
-            let (sink, stream) = send_rw_stream.split();
-            let reader = StreamReader::new(stream);
-            let writer = SinkWriter::new(CopyToBytes::new(sink));
-            tokio::io::join(reader, writer)
-          };
-          #[cfg(feature = "runtime-tokio")]
-          let rw = tls_stream;
-
-          let sender = match http_proxy_handshake(rw, enable_http2).await {
+          let sender = match http_proxy_handshake(tls_stream, enable_http2).await {
             Ok(sender) => sender,
             Err(err) => {
               if enable_health_check {
@@ -1220,11 +1454,12 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 
         return http_proxy(
           sender,
-          connections,
+          connection_pool_item,
           proxy_request,
           error_logger,
           proxy_intercept_errors,
           tracked_connection,
+          enable_keepalive,
         )
         .await;
       } else {
@@ -1301,6 +1536,19 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
           .await;
       }
     }
+    metrics_sender
+      .send(Metric::new(
+        "ferron.proxy.requests",
+        vec![(
+          "ferron.proxy.connection_reused",
+          MetricAttributeValue::Bool(self.connection_reused),
+        )],
+        MetricType::Counter,
+        MetricValue::U64(1),
+        Some("{request}"),
+        Some("Number of reverse proxy requests."),
+      ))
+      .await;
   }
 }
 
@@ -1312,9 +1560,9 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
 ///
 /// # Returns
 /// * `usize` - The index of the selected backend server.
-async fn select_backend_index(
+async fn select_backend_index<'a>(
   load_balancer_algorithm: &LoadBalancerAlgorithm,
-  backends: &[(&str, Option<&str>, Connections)],
+  backends: &[ProxyToVectorContentsBorrowed<'a>],
 ) -> usize {
   match load_balancer_algorithm {
     LoadBalancerAlgorithm::TwoRandomChoices(connection_track) => {
@@ -1327,8 +1575,8 @@ async fn select_backend_index(
       if backends.len() > 1 && random_choice2 >= random_choice1 {
         random_choice2 += 1;
       }
-      let backend1 = backends[random_choice1].clone();
-      let backend2 = backends[random_choice2].clone();
+      let backend1 = backends[random_choice1];
+      let backend2 = backends[random_choice2];
       let connection_track_key1 = (backend1.0.to_string(), backend1.1.as_ref().map(|s| s.to_string()));
       let connection_track_key2 = (backend2.0.to_string(), backend2.1.as_ref().map(|s| s.to_string()));
       let connection_track_read = connection_track.read().await;
@@ -1366,7 +1614,7 @@ async fn select_backend_index(
     LoadBalancerAlgorithm::LeastConnections(connection_track) => {
       let mut min_indexes = Vec::new();
       let mut min_connections = None;
-      for (index, (uri, unix, _)) in backends.iter().enumerate() {
+      for (index, (uri, unix, _, _)) in backends.iter().enumerate() {
         let connection_track_key = (uri.to_string(), unix.as_ref().map(|s| s.to_string()));
         let connection_track_read = connection_track.read().await;
         let connection_count = if let Some(connection_count) = connection_track_read.get(&connection_track_key) {
@@ -1416,15 +1664,18 @@ async fn select_backend_index(
 /// * `load_balancer_algorithm` - The load balancing algorithm to use
 ///
 /// # Returns
-/// * `Option<(String, Option<String>, Connections)>` - The URL, the optional Unix socket path,
-///   and the connections of the selected backend server, or None if no valid backend exists
-async fn determine_proxy_to(
-  proxy_to_vector: &mut Vec<(&str, Option<&str>, Connections)>,
+/// * `Option<(String, Option<String>, Option<usize>, Option<Duration>)>` -
+///   The URL, the optional Unix socket path,
+///   the local limit index of the selected backend server,
+///   and the keepalive timeout, or None if no valid backend exists
+#[inline]
+async fn determine_proxy_to<'a>(
+  proxy_to_vector: &mut Vec<ProxyToVectorContentsBorrowed<'a>>,
   failed_backends: &RwLock<TtlCache<(String, Option<String>), u64>>,
   enable_health_check: bool,
   health_check_max_fails: u64,
   load_balancer_algorithm: &LoadBalancerAlgorithm,
-) -> Option<(String, Option<String>, Connections)> {
+) -> Option<(String, Option<String>, Option<usize>, Option<Duration>)> {
   let mut proxy_to = None;
   // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
   // The "proxy" directive is validated though.
@@ -1435,8 +1686,9 @@ async fn determine_proxy_to(
     let proxy_to_borrowed = proxy_to_vector.remove(0);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
     let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-    let proxy_to_connections = proxy_to_borrowed.2.clone();
-    proxy_to = Some((proxy_to_url, proxy_to_header, proxy_to_connections));
+    let local_limit_index = proxy_to_borrowed.2;
+    let keepalive_idle_timeout = proxy_to_borrowed.3;
+    proxy_to = Some((proxy_to_url, proxy_to_header, local_limit_index, keepalive_idle_timeout));
   } else if enable_health_check {
     loop {
       if !proxy_to_vector.is_empty() {
@@ -1444,8 +1696,14 @@ async fn determine_proxy_to(
         let proxy_to_borrowed = proxy_to_vector.remove(index);
         let proxy_to_url = proxy_to_borrowed.0.to_string();
         let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-        let proxy_to_connections = proxy_to_borrowed.2.clone();
-        proxy_to = Some((proxy_to_url.clone(), proxy_to_header.clone(), proxy_to_connections));
+        let local_limit_index = proxy_to_borrowed.2;
+        let keepalive_idle_timeout = proxy_to_borrowed.3;
+        proxy_to = Some((
+          proxy_to_url.clone(),
+          proxy_to_header.clone(),
+          local_limit_index,
+          keepalive_idle_timeout,
+        ));
         let failed_backends_read = failed_backends.read().await;
         let failed_backend_fails = match failed_backends_read.get(&(proxy_to_url, proxy_to_header)) {
           Some(fails) => fails,
@@ -1465,8 +1723,9 @@ async fn determine_proxy_to(
     let proxy_to_borrowed = proxy_to_vector.remove(index);
     let proxy_to_url = proxy_to_borrowed.0.to_string();
     let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-    let proxy_to_connections = proxy_to_borrowed.2.clone();
-    proxy_to = Some((proxy_to_url, proxy_to_header, proxy_to_connections));
+    let local_limit_index = proxy_to_borrowed.2;
+    let keepalive_idle_timeout = proxy_to_borrowed.3;
+    proxy_to = Some((proxy_to_url, proxy_to_header, local_limit_index, keepalive_idle_timeout));
   }
 
   proxy_to
@@ -1529,31 +1788,32 @@ async fn http_proxy_handshake(
 ///
 /// # Parameters
 /// * `sender` - The sender for the HTTP request
-/// * `connections` - Optional connection queue for storing and reusing HTTP connections
-/// * `connect_addr` - The address (host:port) to connect to
+/// * `connection_pool_item` - The connection pool item for the backend server
 /// * `proxy_request` - The HTTP request to forward to the backend
 /// * `error_logger` - Logger for reporting errors
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
 /// * `tracked_connection` - The optional tracked connection to the backend server
+/// * `enable_keepalive` - Whether to enable keepalive for the connection
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
+#[inline]
 async fn http_proxy(
   mut sender: SendRequest,
-  connections: Option<&Sender<SendRequest>>,
+  connection_pool_item: ConnectionPoolItem,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
   tracked_connection: Option<Arc<()>>,
+  enable_keepalive: bool,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
   let proxy_request = Request::from_parts(proxy_request_parts, proxy_request_body);
 
-  let send_request_result = match &mut sender {
-    SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
-    SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
-  };
+  let send_request_result = sender.send_request(proxy_request).await;
+  #[allow(clippy::arc_with_non_send_sync)]
+  let connection_pool_item = Arc::new(UnsafeCell::new(connection_pool_item));
 
   let proxy_response = match send_request_result {
     Ok(response) => response,
@@ -1579,6 +1839,7 @@ async fn http_proxy(
       Ok(upgraded_backend) => {
         // Needed to wrap in monoio::spawn call, since otherwise HTTP upgrades wouldn't work...
         let error_logger = error_logger.clone();
+        let connection_pool_item = connection_pool_item.clone();
         ferron_common::runtime::spawn(async move {
           // Try to upgrade the client connection
           match hyper::upgrade::on(proxy_request_cloned).await {
@@ -1600,6 +1861,7 @@ async fn http_proxy(
                 tokio::io::copy_bidirectional(&mut upgraded_backend, &mut upgraded_proxy)
                   .await
                   .unwrap_or_default();
+                drop(connection_pool_item);
               });
             }
             Err(err) => {
@@ -1629,7 +1891,17 @@ async fn http_proxy(
     let (response_parts, response_body) = proxy_response.into_parts();
     let mut boxed_body = response_body.map_err(|e| std::io::Error::other(e.to_string())).boxed();
     if let Some(tracked_connection) = tracked_connection {
-      boxed_body = TrackedBody::new(boxed_body, tracked_connection).boxed();
+      boxed_body = TrackedBody::new(
+        boxed_body,
+        tracked_connection,
+        if enable_keepalive && !sender.is_closed() {
+          None
+        } else {
+          // Safety: this should be not modified, see the "unsafe" block below
+          Some(connection_pool_item.clone())
+        },
+      )
+      .boxed();
     }
     ResponseData {
       request: None,
@@ -1641,14 +1913,17 @@ async fn http_proxy(
   };
 
   // Store the HTTP connection in the connection pool for future reuse if it's still open
-  if let Some(connections) = connections {
-    if !(match &sender {
-      SendRequest::Http1(sender) => sender.is_closed(),
-      SendRequest::Http2(sender) => sender.is_closed(),
-    }) {
-      connections.try_send(sender).unwrap_or_default();
-    }
+  if enable_keepalive && !sender.is_closed() {
+    // Safety: this Arc is cloned twice (when there's HTTP upgrade and when keepalive is disabled),
+    // but the clones' inner value isn't modified, so no race condition.
+    // We could wrap this value in a Mutex, but it's not really necessary in this case.
+    let connection_pool_item = unsafe { &mut *connection_pool_item.get() };
+    connection_pool_item
+      .inner_mut()
+      .replace(SendRequestWrapper::new(sender));
   }
+
+  drop(connection_pool_item);
 
   Ok(response)
 }
@@ -1665,31 +1940,31 @@ async fn http_proxy(
 /// when an existing connection to the same backend server is available and reusable.
 ///
 /// # Parameters
-/// * `sender` - The existing HTTP client connection to the backend
+/// * `sender` - The inner connection to the backend server
+/// * `connection_pool_item` - The connection pool item for the backend server, with the inner connection
 /// * `proxy_request` - The HTTP request to forward to the backend
 /// * `error_logger` - Logger for reporting errors
 /// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
 /// * `tracked_connection` - The optional tracked connection to the backend server
-/// * `connections_tx` - The sender part of idle keep-alive connection queue
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
+#[inline]
 async fn http_proxy_kept_alive(
   mut sender: SendRequest,
+  connection_pool_item: ConnectionPoolItem,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   proxy_intercept_errors: bool,
   tracked_connection: Option<Arc<()>>,
-  connections_tx: &Sender<SendRequest>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
   let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
   let proxy_request = Request::from_parts(proxy_request_parts, proxy_request_body);
 
-  let send_request_result = match &mut sender {
-    SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
-    SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
-  };
+  let send_request_result = sender.send_request(proxy_request).await;
+  #[allow(clippy::arc_with_non_send_sync)]
+  let connection_pool_item = Arc::new(UnsafeCell::new(connection_pool_item));
 
   // Send the request over the existing connection and await the response
   let proxy_response = match send_request_result {
@@ -1715,6 +1990,7 @@ async fn http_proxy_kept_alive(
       Ok(upgraded_backend) => {
         // Needed to wrap in monoio::spawn call, since otherwise HTTP upgrades wouldn't work...
         let error_logger = error_logger.clone();
+        let connection_pool_item = connection_pool_item.clone();
         ferron_common::runtime::spawn(async move {
           // Try to upgrade the client connection
           match hyper::upgrade::on(proxy_request_cloned).await {
@@ -1736,6 +2012,7 @@ async fn http_proxy_kept_alive(
                 tokio::io::copy_bidirectional(&mut upgraded_backend, &mut upgraded_proxy)
                   .await
                   .unwrap_or_default();
+                drop(connection_pool_item);
               });
             }
             Err(err) => {
@@ -1772,7 +2049,17 @@ async fn http_proxy_kept_alive(
     let (response_parts, response_body) = proxy_response.into_parts();
     let mut boxed_body = response_body.map_err(|e| std::io::Error::other(e.to_string())).boxed();
     if let Some(tracked_connection) = tracked_connection {
-      boxed_body = TrackedBody::new(boxed_body, tracked_connection).boxed();
+      boxed_body = TrackedBody::new(
+        boxed_body,
+        tracked_connection,
+        if !sender.is_closed() {
+          None
+        } else {
+          // Safety: this should be not modified, see the "unsafe" block below
+          Some(connection_pool_item.clone())
+        },
+      )
+      .boxed();
     }
     ResponseData {
       request: None,
@@ -1783,17 +2070,23 @@ async fn http_proxy_kept_alive(
     }
   };
 
-  if !(match &sender {
-    SendRequest::Http1(sender) => sender.is_closed(),
-    SendRequest::Http2(sender) => sender.is_closed(),
-  }) {
-    connections_tx.send(sender).await.unwrap_or_default();
+  if !sender.is_closed() {
+    // Safety: this Arc is cloned twice (when there's HTTP upgrade and when keepalive is disabled),
+    // but the clones' inner value isn't modified, so no race condition.
+    // We could wrap this value in a Mutex, but it's not really necessary in this case.
+    let connection_pool_item = unsafe { &mut *connection_pool_item.get() };
+    connection_pool_item
+      .inner_mut()
+      .replace(SendRequestWrapper::new(sender));
   }
+
+  drop(connection_pool_item);
 
   Ok(response)
 }
 
 /// Constructs a proxy request based on the original request.
+#[inline]
 fn construct_proxy_request_parts(
   mut request_parts: hyper::http::request::Parts,
   config: &ServerConfiguration,
@@ -1910,10 +2203,10 @@ fn construct_proxy_request_parts(
   // X-Forwarded-* headers to send the client's data to a server that's behind the reverse proxy
   let remote_addr_str = socket_data.remote_addr.ip().to_canonical().to_string();
   request_parts.headers.insert(
-    "x-forwarded-for",
+    HeaderName::from_static("x-forwarded-for"),
     (if let Some(ref forwarded_for) = request_parts
       .headers
-      .get("x-forwarded-for")
+      .get(HeaderName::from_static("x-forwarded-for"))
       .and_then(|h| h.to_str().ok())
     {
       if trust_x_forwarded_for {
@@ -1927,17 +2220,31 @@ fn construct_proxy_request_parts(
     .parse()?,
   );
 
-  if !trust_x_forwarded_for || !request_parts.headers.contains_key("x-forwarded-proto") {
+  if !trust_x_forwarded_for
+    || !request_parts
+      .headers
+      .contains_key(HeaderName::from_static("x-forwarded-proto"))
+  {
     if socket_data.encrypted {
-      request_parts.headers.insert("x-forwarded-proto", "https".parse()?);
+      request_parts
+        .headers
+        .insert(HeaderName::from_static("x-forwarded-proto"), "https".parse()?);
     } else {
-      request_parts.headers.insert("x-forwarded-proto", "http".parse()?);
+      request_parts
+        .headers
+        .insert(HeaderName::from_static("x-forwarded-proto"), "http".parse()?);
     }
   }
 
-  if !trust_x_forwarded_for || !request_parts.headers.contains_key("x-forwarded-host") {
+  if !trust_x_forwarded_for
+    || !request_parts
+      .headers
+      .contains_key(HeaderName::from_static("x-forwarded-host"))
+  {
     if let Some(original_host) = original_host {
-      request_parts.headers.insert("x-forwarded-host", original_host);
+      request_parts
+        .headers
+        .insert(HeaderName::from_static("x-forwarded-host"), original_host);
     }
   }
 
@@ -1961,7 +2268,7 @@ fn construct_proxy_request_parts(
     }
   }
 
-  request_parts.version = Version::HTTP_11;
+  request_parts.version = Version::default();
 
   Ok(request_parts)
 }

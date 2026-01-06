@@ -60,6 +60,7 @@ where
   type Data = Bytes;
   type Error = B::Error;
 
+  #[inline]
   fn poll_frame(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
     let this = self.project();
     let frame_raw = match this.inner.poll_frame(cx) {

@@ -8,7 +8,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::future::Either;
-use futures_util::stream::{StreamExt, TryStreamExt};
+use futures_util::stream::TryStreamExt;
 use hashlink::LinkedHashMap;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, StreamBody};
@@ -30,6 +30,7 @@ use tokio_util::sync::CancellationToken;
 use crate::util::cgi::CgiResponse;
 use crate::util::fcgi::{
   construct_fastcgi_name_value_pair, construct_fastcgi_record, FcgiDecodedData, FcgiDecoder, FcgiEncoder,
+  FcgiProcessedStream,
 };
 use crate::util::{Copier, ReadToEndFuture, SplitStreamByMapExt};
 use ferron_common::config::ServerConfiguration;
@@ -37,8 +38,6 @@ use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use ferron_common::util::{ModuleCache, TtlCache, SERVER_SOFTWARE};
 use ferron_common::{get_entries, get_entries_for_validation, get_entry, get_value};
-
-const MAX_RESPONSE_CHANNEL_CAPACITY: usize = 2;
 
 /// A FastCGI module loader
 #[allow(clippy::type_complexity)]
@@ -297,6 +296,44 @@ impl ModuleHandlers for FcgiModuleHandlers {
           };
 
           let joined_pathbuf = wwwroot.join(decoded_relative_path);
+
+          // Check for possible path traversal attack, if the URL sanitizer is disabled.
+          if get_value!("disable_url_sanitizer", config)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+          {
+            // Canonicalize the file path
+            #[cfg(feature = "runtime-monoio")]
+            let canonicalize_result = {
+              let joined_pathbuf = joined_pathbuf.clone();
+              monoio::spawn_blocking(move || std::fs::canonicalize(joined_pathbuf))
+                .await
+                .unwrap_or(Err(std::io::Error::other(
+                  "Can't spawn a blocking task to obtain the canonical file path",
+                )))
+            };
+            #[cfg(feature = "runtime-tokio")]
+            let canonicalize_result = tokio::fs::canonicalize(&joined_pathbuf).await;
+
+            let canonical_joined_pathbuf = match canonicalize_result {
+              Ok(pathbuf) => pathbuf,
+              Err(_) => joined_pathbuf.clone(),
+            };
+
+            // Webroot is already canonicalized, so no need to canonicalize it again
+
+            // Return 403 Forbidden if the path is outside the webroot
+            if !canonical_joined_pathbuf.starts_with(wwwroot) {
+              return Ok(ResponseData {
+                request: Some(request),
+                response: None,
+                response_status: Some(StatusCode::FORBIDDEN),
+                response_headers: None,
+                new_remote_address: None,
+              });
+            }
+          }
+
           execute_pathbuf = Some(joined_pathbuf);
           execute_path_info = stripped_request_path.strip_prefix("/").map(|s| s.to_string());
         }
@@ -706,7 +743,7 @@ async fn execute_fastcgi_with_environment_variables(
   }
 
   if socket_data.encrypted {
-    environment_variables.insert("HTTPS".to_string(), "ON".to_string());
+    environment_variables.insert("HTTPS".to_string(), "on".to_string());
   }
 
   for (header_name, header_value) in request.headers().iter() {
@@ -841,7 +878,7 @@ async fn execute_fastcgi(
         },
       }
     }
-    _ => Err(anyhow::anyhow!("Only HTTP and HTTPS reverse proxy URLs are supported."))?,
+    _ => Err(anyhow::anyhow!("Only TCP and Unix socket URLs are supported."))?,
   };
 
   // Construct and send BEGIN_REQUEST record
@@ -964,25 +1001,9 @@ async fn execute_fastcgi(
 
   response_builder = response_builder.status(status_code);
 
-  let mut reader_stream = ReaderStream::new(cgi_response);
-  let (reader_stream_tx, reader_stream_rx) = async_channel::bounded(MAX_RESPONSE_CHANNEL_CAPACITY);
+  let reader_stream = ReaderStream::new(cgi_response);
   let stderr_cancel = CancellationToken::new();
-  let stderr_cancel_clone = stderr_cancel.clone();
-  ferron_common::runtime::spawn(async move {
-    while let Some(chunk) = reader_stream.next().await {
-      if chunk.as_ref().is_ok_and(|c| c.is_empty()) {
-        // Received empty STDOUT chunk, likely indicating end of output
-        break;
-      }
-      if reader_stream_tx.send(chunk).await.is_err() {
-        // Pipe is probably closed, stop sending data
-        stderr_cancel_clone.cancel();
-        break;
-      }
-    }
-    reader_stream_tx.close();
-  });
-  let stream_body = StreamBody::new(reader_stream_rx.map_ok(Frame::data));
+  let stream_body = StreamBody::new(FcgiProcessedStream::new(reader_stream, stderr_cancel.clone()).map_ok(Frame::data));
   let boxed_body = BodyExt::boxed(stream_body);
 
   let response = response_builder.body(boxed_body)?;

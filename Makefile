@@ -29,15 +29,13 @@ ifndef CARGO_FINAL
 	CARGO_FINAL = cargo
 endif
 
-.PHONY: build
+all: build
 
 smoketest-dev: build-dev
-	export FERRON="$(CARGO_TARGET_ROOT)/debug/ferron"
-	smoketest/smoketest.sh
+	FERRON="$(PWD)/$(CARGO_TARGET_ROOT)/debug/ferron" smoketest/smoketest.sh
 
 smoketest: build
-	export FERRON="$(CARGO_TARGET_ROOT)/release/ferron"
-	smoketest/smoketest.sh
+	FERRON="$(PWD)/$(CARGO_TARGET_ROOT)/release/ferron" smoketest/smoketest.sh
 
 run: build
 	if ! [ -f "ferron.kdl" ]; then cp ferron-test.kdl ferron.kdl; fi
@@ -91,6 +89,9 @@ package-rpm:
 build-with-package: build package
 build-with-package-deb: build package-deb
 build-with-package-rpm: build package-rpm
+
+installer:
+	cargo run --manifest-path build-installer/Cargo.toml
 
 clean:
 	rm -rf build-workspace build-release dist packaging/deb/ferron_* packaging/deb/md5sums.tmp packaging/rpm/data packaging/rpm/ferron.spec packaging/rpm/rpm

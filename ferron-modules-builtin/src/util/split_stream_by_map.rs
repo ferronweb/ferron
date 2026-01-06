@@ -22,7 +22,7 @@ use pin_project_lite::pin_project;
 use tokio::sync::Mutex;
 
 pin_project! {
-struct SplitByMap<I, L, R, S, P> {
+  struct SplitByMap<I, L, R, S, P> {
     buf_left: Option<L>,
     buf_right: Option<R>,
     waker_left: Option<Waker>,
@@ -31,7 +31,7 @@ struct SplitByMap<I, L, R, S, P> {
     stream: S,
     predicate: P,
     item: PhantomData<I>,
-}
+  }
 }
 
 impl<I, L, R, S, P> SplitByMap<I, L, R, S, P>

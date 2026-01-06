@@ -9,12 +9,12 @@ members = [
     "ferron-yaml2kdl-core",
     "ferron-yaml2kdl", "ferron-precompress", "ferron-observability-builtin",
 ]
-exclude = ["build-prepare", "dockertest"]
+exclude = ["build-prepare", "build-installer", "dockertest"]
 resolver = "2"
 
 [workspace.dependencies]
 kdl = "6.3.4"
-mimalloc = "0.1.46"
+mimalloc = { version = "0.1.46" }
 password-auth = { version = "1.0.0", features = ["pbkdf2", "argon2", "scrypt"] }
 shiba = "0.1.1"
 ferron-common = { path = "./ferron-common", default-features = false }

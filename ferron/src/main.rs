@@ -2,8 +2,7 @@ mod acme;
 mod config;
 mod handler;
 mod listener_handler_communication;
-mod listener_quic;
-mod listener_tcp;
+mod listeners;
 mod request_handler;
 mod runtime;
 mod tls_util;
@@ -21,18 +20,11 @@ use std::time::Duration;
 use async_channel::{Receiver, Sender};
 use base64::Engine;
 use clap::{Arg, ArgAction, ArgMatches, Command};
-use config::adapters::ConfigurationAdapter;
-use config::processing::{load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration};
-use config::ServerConfigurations;
-use ferron_common::logging::LogMessage;
+use ferron_common::logging::{ErrorLogger, LogMessage};
 use ferron_common::{get_entry, get_value, get_values};
 use ferron_load_modules::{get_dns_provider, obtain_module_loaders, obtain_observability_backend_loaders};
-use handler::create_http_handler;
 use human_panic::{setup_panic, Metadata};
 use instant_acme::{ChallengeType, ExternalAccountKey, LetsEncrypt};
-use listener_handler_communication::ConnectionData;
-use listener_quic::create_quic_listener;
-use listener_tcp::create_tcp_listener;
 use mimalloc::MiMalloc;
 use rustls::client::WebPkiServerVerifier;
 use rustls::crypto::aws_lc_rs::cipher_suite::*;
@@ -45,7 +37,6 @@ use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use rustls_native_certs::load_native_certs;
 use rustls_platform_verifier::BuilderVerifierExt;
 use shadow_rs::shadow;
-use tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
 use tokio_util::sync::CancellationToken;
 use xxhash_rust::xxh3::xxh3_128;
 
@@ -54,6 +45,15 @@ use crate::acme::{
   provision_certificate, AcmeCache, AcmeConfig, AcmeOnDemandConfig, AcmeResolver, TlsAlpn01Resolver,
   ACME_TLS_ALPN_NAME,
 };
+use crate::config::adapters::ConfigurationAdapter;
+use crate::config::processing::{
+  load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration,
+};
+use crate::config::ServerConfigurations;
+use crate::handler::create_http_handler;
+use crate::listener_handler_communication::ConnectionData;
+use crate::listeners::{create_quic_listener, create_tcp_listener};
+use crate::tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
 use crate::util::{is_localhost, match_hostname, NoServerVerifier};
 
 // Set the global allocator to use mimalloc for performance optimization
@@ -234,10 +234,10 @@ fn before_starting_server(
               "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256" => TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
               "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384" => TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
               "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256" => TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-              _ => Err(anyhow::anyhow!(format!(
+              _ => Err(anyhow::anyhow!(
                 "The \"{}\" cipher suite is not supported",
                 cipher_suite
-              )))?,
+              ))?,
             };
             cipher_suites.push(cipher_suite_to_add);
           }
@@ -260,10 +260,7 @@ fn before_starting_server(
               "x25519" => X25519,
               "x25519mklem768" => X25519MLKEM768,
               "mklem768" => MLKEM768,
-              _ => Err(anyhow::anyhow!(format!(
-                "The \"{}\" ECDH curve is not supported",
-                ecdh_curve
-              )))?,
+              _ => Err(anyhow::anyhow!("The \"{}\" ECDH curve is not supported", ecdh_curve))?,
             };
             kx_groups.push(kx_group_to_add);
           }
@@ -294,25 +291,23 @@ fn before_starting_server(
         tls_config_builder_wants_versions.with_safe_default_protocol_versions()?
       } else {
         let tls_versions = [("TLSv1.2", &TLS12), ("TLSv1.3", &TLS13)];
-        let min_tls_version_index =
-          min_tls_version_option.map_or(Some(0), |v| tls_versions.iter().position(|p| p.0 == v));
-        let max_tls_version_index = max_tls_version_option.map_or(Some(tls_versions.len() - 1), |v| {
-          tls_versions.iter().position(|p| p.0 == v)
-        });
-        if let Some(min_tls_version_index) = min_tls_version_index {
-          if let Some(max_tls_version_index) = max_tls_version_index {
-            tls_config_builder_wants_versions.with_protocol_versions(
-              &tls_versions[min_tls_version_index..max_tls_version_index]
-                .iter()
-                .map(|p| p.1)
-                .collect::<Vec<_>>(),
-            )?
-          } else {
-            Err(anyhow::anyhow!("Invalid maximum TLS version"))?
-          }
-        } else {
-          Err(anyhow::anyhow!("Invalid minimum TLS version"))?
+        let min_tls_version_index = min_tls_version_option
+          .map_or(Some(0), |v| tls_versions.iter().position(|p| p.0 == v))
+          .ok_or(anyhow::anyhow!("Invalid minimum TLS version"))?;
+        let max_tls_version_index = max_tls_version_option
+          .map_or(Some(tls_versions.len() - 1), |v| {
+            tls_versions.iter().position(|p| p.0 == v)
+          })
+          .ok_or(anyhow::anyhow!("Invalid maximum TLS version"))?;
+        if max_tls_version_index < min_tls_version_index {
+          Err(anyhow::anyhow!("Maximum TLS version is older than minimum TLS version"))?
         }
+        tls_config_builder_wants_versions.with_protocol_versions(
+          &tls_versions[min_tls_version_index..=max_tls_version_index]
+            .iter()
+            .map(|p| p.1)
+            .collect::<Vec<_>>(),
+        )?
       };
 
       let tls_config_builder_wants_server_cert = if let Some(client_cert_path) = global_configuration
@@ -501,24 +496,19 @@ fn before_starting_server(
                   if !is_sni_hostname_used {
                     let certs = match load_certs(cert_path) {
                       Ok(certs) => certs,
-                      Err(err) => Err(anyhow::anyhow!(format!(
+                      Err(err) => Err(anyhow::anyhow!(
                         "Cannot load the \"{}\" TLS certificate: {}",
-                        cert_path, err
-                      )))?,
+                        cert_path,
+                        err
+                      ))?,
                     };
                     let key = match load_private_key(key_path) {
                       Ok(key) => key,
-                      Err(err) => Err(anyhow::anyhow!(format!(
-                        "Cannot load the \"{}\" private key: {}",
-                        key_path, err
-                      )))?,
+                      Err(err) => Err(anyhow::anyhow!("Cannot load the \"{}\" private key: {}", key_path, err))?,
                     };
                     let signing_key = match crypto_provider.key_provider.load_private_key(key) {
                       Ok(key) => key,
-                      Err(err) => Err(anyhow::anyhow!(format!(
-                        "Cannot load the \"{}\" private key: {}",
-                        key_path, err
-                      )))?,
+                      Err(err) => Err(anyhow::anyhow!("Cannot load the \"{}\" private key: {}", key_path, err))?,
                     };
                     let certified_key = Arc::new(CertifiedKey::new(certs, signing_key));
                     if let Some(certified_keys) = certified_keys_to_preload.get_mut(&https_port) {
@@ -638,10 +628,11 @@ fn before_starting_server(
               let dns_provider: Option<Arc<dyn ferron_common::dns::DnsProvider + Send + Sync>> =
                 if &*challenge_type_str.to_uppercase() != "DNS-01" {
                   None
-                } else if let Some(provider_name) = challenge_params.get("provider") {
-                  Some(get_dns_provider(provider_name, &challenge_params)?)
                 } else {
-                  Err(anyhow::anyhow!("No DNS provider specified"))?
+                  let provider_name = challenge_params
+                    .get("provider")
+                    .ok_or(anyhow::anyhow!("No DNS provider specified"))?;
+                  Some(get_dns_provider(provider_name, &challenge_params)?)
                 };
               let acme_cache_path_option = get_value!("auto_tls_cache", server_configuration)
                 .map_or(acme_default_directory.as_deref(), |v| {
@@ -740,11 +731,8 @@ fn before_starting_server(
                   },
                   profile: get_value!("auto_tls_profile", server_configuration)
                     .and_then(|v| v.as_str().map(|s| s.to_string())),
-                  cache_path: if let Some(acme_cache_path) = acme_cache_path_option.clone() {
-                    match PathBuf::from_str(&acme_cache_path) {
-                      Ok(pathbuf) => Some(pathbuf),
-                      Err(_) => Err(anyhow::anyhow!("Invalid ACME cache path"))?,
-                    }
+                  cache_path: if let Some(acme_cache_path) = acme_cache_path_option.as_ref() {
+                    Some(PathBuf::from_str(acme_cache_path).map_err(|_| anyhow::anyhow!("Invalid ACME cache path"))?)
                   } else {
                     None
                   },
@@ -765,11 +753,9 @@ fn before_starting_server(
                 automatic_tls_used_sni_hostnames.insert((automatic_tls_port, sni_hostname));
               } else if let Some(sni_hostname) = sni_hostname {
                 let (account_cache_path, cert_cache_path) =
-                  if let Some(acme_cache_path) = acme_cache_path_option.clone() {
-                    let mut pathbuf = match PathBuf::from_str(&acme_cache_path) {
-                      Ok(pathbuf) => pathbuf,
-                      Err(_) => Err(anyhow::anyhow!("Invalid ACME cache path"))?,
-                    };
+                  if let Some(acme_cache_path) = acme_cache_path_option.as_deref() {
+                    let mut pathbuf =
+                      PathBuf::from_str(acme_cache_path).map_err(|_| anyhow::anyhow!("Invalid ACME cache path"))?;
                     let base_pathbuf = pathbuf.clone();
                     let append_hash = base64::engine::general_purpose::URL_SAFE_NO_PAD
                       .encode(xxh3_128(format!("{automatic_tls_port}-{sni_hostname}").as_bytes()).to_be_bytes());
@@ -807,12 +793,12 @@ fn before_starting_server(
                   eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab", server_configuration) {
                     if let Some(eab_key_id) = eab_key_entry.values.first().and_then(|v| v.as_str()) {
                       if let Some(eab_key_hmac) = eab_key_entry.values.get(1).and_then(|v| v.as_str()) {
-                        match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(eab_key_hmac) {
-                          Ok(decoded_key) => {
-                            Some(Arc::new(ExternalAccountKey::new(eab_key_id.to_string(), &decoded_key)))
-                          }
-                          Err(err) => Err(anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
-                        }
+                        Some(Arc::new(ExternalAccountKey::new(
+                          eab_key_id.to_string(),
+                          &base64::engine::general_purpose::URL_SAFE_NO_PAD
+                            .decode(eab_key_hmac.trim_end_matches('='))
+                            .map_err(|err| anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
+                        )))
                       } else {
                         None
                       }
@@ -1127,21 +1113,17 @@ fn before_starting_server(
             });
           }
 
+          let error_logger = ErrorLogger::new_multiple(
+            global_configuration_clone
+              .as_ref()
+              .map_or(vec![], |c| c.observability.log_channels.clone()),
+          );
           loop {
             for acme_config in &mut *acme_configs_mutex.lock().await {
-              if let Err(acme_error) = provision_certificate(acme_config).await {
-                for acme_logger in global_configuration_clone
-                  .as_ref()
-                  .map_or(&vec![], |c| &c.observability.log_channels)
-                {
-                  acme_logger
-                    .send(LogMessage::new(
-                      format!("Error while obtaining a TLS certificate: {acme_error}"),
-                      true,
-                    ))
-                    .await
-                    .unwrap_or_default();
-                }
+              if let Err(acme_error) = provision_certificate(acme_config, &error_logger).await {
+                error_logger
+                  .log(&format!("Error while obtaining a TLS certificate: {acme_error}"))
+                  .await
               }
             }
             tokio::time::sleep(Duration::from_secs(10)).await;
@@ -1231,7 +1213,9 @@ fn before_starting_server(
             // Sleep for 1 second
             tokio::time::sleep(Duration::from_secs(1)).await;
 
-            if let Ok(stat) = procfs::process::Process::myself().and_then(|p| p.stat()) {
+            if let Ok(Ok(stat)) =
+              tokio::task::spawn_blocking(|| procfs::process::Process::myself().and_then(|p| p.stat())).await
+            {
               let cpu_user_time = stat.utime as f64 / procfs::ticks_per_second() as f64;
               let cpu_system_time = stat.stime as f64 / procfs::ticks_per_second() as f64;
               let cpu_user_time_increase = cpu_user_time - previous_cpu_user_time;
@@ -1283,7 +1267,10 @@ fn before_starting_server(
                     MetricType::Gauge,
                     MetricValue::F64(cpu_user_utilization),
                     Some("1"),
-                    Some("Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process."),
+                    Some(
+                      "Difference in process.cpu.time since the last measurement, \
+                       divided by the elapsed time and number of CPUs available to the process.",
+                    ),
                   ))
                   .await
                   .unwrap_or_default();
@@ -1295,7 +1282,10 @@ fn before_starting_server(
                     MetricType::Gauge,
                     MetricValue::F64(cpu_system_utilization),
                     Some("1"),
-                    Some("Difference in process.cpu.time since the last measurement, divided by the elapsed time and number of CPUs available to the process."),
+                    Some(
+                      "Difference in process.cpu.time since the last measurement, \
+                      divided by the elapsed time and number of CPUs available to the process.",
+                    ),
                   ))
                   .await
                   .unwrap_or_default();
@@ -1338,15 +1328,12 @@ fn before_starting_server(
         .map_err(|_| anyhow::anyhow!("Can't access the QUIC listeners"))?;
       let mut listened_socket_addresses = Vec::new();
       let mut quic_listened_socket_addresses = Vec::new();
-      let listen_ip_addr = match global_configuration
+      let listen_ip_addr = global_configuration
         .as_deref()
         .and_then(|c| get_value!("listen_ip", c))
         .and_then(|v| v.as_str())
         .map_or(Ok(IpAddr::V6(Ipv6Addr::UNSPECIFIED)), |a| a.parse())
-      {
-        Ok(addr) => addr,
-        Err(_) => Err(anyhow::anyhow!("Invalid IP address to listen to"))?,
-      };
+        .map_err(|_| anyhow::anyhow!("Invalid IP address to listen to"))?;
       for (tcp_port, encrypted) in nonencrypted_ports
         .iter()
         .map(|p| (*p, false))
@@ -1389,7 +1376,7 @@ fn before_starting_server(
             break;
           }
         }
-        if enable_uring != *uring_enabled_locked || !contains {
+        if !contains {
           // Shut down the QUIC listener
           value.0.cancel();
 
@@ -1493,7 +1480,6 @@ fn before_starting_server(
               socket_address,
               tls_config,
               listener_handler_tx.clone(),
-              enable_uring,
               global_logger.clone(),
               first_startup,
             )?,

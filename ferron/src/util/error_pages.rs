@@ -9,10 +9,14 @@ pub fn generate_default_error_page(status_code: hyper::StatusCode, server_admini
     None => format!("{}", status_code.as_u16()),
   };
 
-  let error_500 = format!("The server encountered an unexpected error. You may need to contact the server administrator{} to resolve the error.", match server_administrator_email {
-        Some(email_address) => format!(" at {email_address}"),
-        None => String::from("")
-    });
+  let error_500 = format!(
+    "The server encountered an unexpected error. \
+      You may need to contact the server administrator{} to resolve the error.",
+    match server_administrator_email {
+      Some(email_address) => format!(" at {email_address}"),
+      None => String::from(""),
+    }
+  );
   let status_code_description = match status_code.as_u16() {
     200 => "The request was successful!",
     201 => "A new resource was successfully created.",
@@ -78,7 +82,7 @@ pub fn generate_default_error_page(status_code: hyper::StatusCode, server_admini
         "<span class=\"error-message\">{}</span>",
         anti_xss(r)
       )),
-      status_code_description
+      &anti_xss(status_code_description)
     ),
     &status_code_name,
     vec![
