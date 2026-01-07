@@ -36,7 +36,7 @@
     "tailwindcss": "^4.1.14"
   },
   "devDependencies": {
-    "@commitlint/cli": "^20.1.0",
+    "@commitlint/cli": "^20.3.0",
     "@commitlint/config-conventional": "^20.0.0",
     "@typescript-eslint/parser": "^8.52.0",
     "eslint": "^9.38.0",
