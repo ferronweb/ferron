@@ -2230,7 +2230,11 @@ fn construct_proxy_request_parts(
   // Connection header to enable HTTP/1.1 keep-alive
   if let Some(connection_header) = request_parts.headers.get(&header::CONNECTION) {
     let connection_str = String::from_utf8_lossy(connection_header.as_bytes());
-    if connection_str.to_lowercase().split(",").any(|c| c == "keep-alive") {
+    if connection_str
+      .to_lowercase()
+      .split(",")
+      .all(|c| c != "keep-alive" && c != "upgrade")
+    {
       request_parts
         .headers
         .insert(header::CONNECTION, format!("keep-alive, {connection_str}").parse()?);
