@@ -62,6 +62,10 @@ modules:
 
 dns:
   - builtin: true
+    id: bunny
+    cargo_feature: bunny
+    provider: BunnyDnsProvider
+  - builtin: true
     id: cloudflare
     cargo_feature: cloudflare
     provider: CloudflareDnsProvider
@@ -69,6 +73,14 @@ dns:
     id: desec
     cargo_feature: desec
     provider: DesecDnsProvider
+  - builtin: true
+    id: digitalocean
+    cargo_feature: digitalocean
+    provider: DigitalOceanDnsProvider
+  - builtin: true
+    id: ovh
+    cargo_feature: ovh
+    provider: OvhDnsProvider
   - builtin: true
     id: porkbun
     cargo_feature: porkbun

@@ -30,9 +30,12 @@ base64 = { version = "0.22.1", optional = true }
 hyper = { version = "1.6.0", optional = true }
 
 [features]
-default = ["cloudflare", "desec", "porkbun", "rfc2136", "route53"]
+default = ["bunny", "cloudflare", "desec", "digitalocean", "ovh", "porkbun", "rfc2136", "route53"]
+bunny = ["dns-update"]
 cloudflare = ["dns-update"]
 desec = ["dns-update"]
+digitalocean = ["dns-update"]
+ovh = ["dns-update"]
 porkbun = ["porkbun-api"]
 rfc2136 = ["dns-update", "base64", "hyper"]
 route53 = ["aws-config", "aws-credential-types", "aws-sdk-route53"]
