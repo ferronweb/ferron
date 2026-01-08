@@ -1220,14 +1220,15 @@ dependencies = [
 
 [[package]]
 name = "dns-update"
-version = "0.1.2"
-source = "git+https://github.com/DorianNiemiecSVRJS/dns-update.git#329db6f1d9877ecc0bc744fb3f59a38c0f59daa2"
+version = "0.1.6"
+source = "git+https://github.com/DorianNiemiecSVRJS/dns-update.git#cd20df5d7e83990784a47435cbae951efd4068a4"
 dependencies = [
  "hickory-client",
  "reqwest",
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "sha1",
  "tokio",
 ]
 

@@ -129,7 +129,7 @@ impl DnsProvider for Rfc2136DnsProvider {
     let full_domain = format!("{subdomain}.{domain_name}");
     self
       .client
-      .delete(full_domain, domain_name)
+      .delete(full_domain, domain_name, dns_update::DnsRecordType::TXT)
       .await
       .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())
