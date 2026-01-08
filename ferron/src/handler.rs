@@ -669,7 +669,7 @@ async fn http_quic_handler_fn(
 ) {
   match connection_attempt.await {
     Ok(connection) => {
-      let _connection_reference = Arc::downgrade(&connection_reference);
+      let connection_reference = Arc::downgrade(&connection_reference);
       let mut h3_conn: h3::server::Connection<h3_quinn::Connection, Bytes> =
         match h3::server::Connection::new(h3_quinn::Connection::new(connection)).await {
           Ok(h3_conn) => h3_conn,
@@ -688,11 +688,35 @@ async fn http_quic_handler_fn(
           }
         };
 
+      let mut is_cancelled = false;
+
       loop {
-        match h3_conn.accept().await {
+        let cancelled_fut = async {
+          if is_cancelled {
+            futures_util::future::pending().await
+          } else {
+            let output = shutdown_rx.cancelled().await;
+            is_cancelled = true;
+            output
+          }
+        };
+
+        match crate::runtime::select! {
+            biased;
+
+            _ = cancelled_fut => {
+              h3_conn.shutdown(0).await.unwrap_or_default();
+              return;
+            }
+            result = h3_conn.accept() => {
+              result
+            }
+        } {
           Ok(Some(resolver)) => {
             let configurations = configurations.clone();
+            let connection_reference = connection_reference.clone();
             crate::runtime::spawn(async move {
+              let _connection_reference = connection_reference;
               let (request, stream) = match resolver.resolve_request().await {
                 Ok(resolved) => resolved,
                 Err(err) => {
@@ -926,9 +950,6 @@ async fn http_quic_handler_fn(
             }
             return;
           }
-        }
-        if shutdown_rx.is_cancelled() {
-          h3_conn.shutdown(0).await.unwrap_or_default();
         }
       }
     }
