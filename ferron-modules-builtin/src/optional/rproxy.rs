@@ -142,14 +142,15 @@ impl SendRequestWrapper {
 
   #[inline]
   async fn wait_ready(&mut self, timeout: Option<Duration>) -> bool {
-    if self.inner.is_none() {
-      return false;
+    match self.inner.as_mut() {
+      None => false,
+      Some(inner) => {
+        if inner.is_ready() && timeout.is_some_and(|t| self.instant.elapsed() > t) {
+          return false;
+        }
+        inner.ready().await
+      }
     }
-    let mut inner = self.inner.take().expect("inner is None");
-    if inner.is_ready() && timeout.is_some_and(|t| self.instant.elapsed() > t) {
-      return false;
-    }
-    inner.ready().await
   }
 }
 
