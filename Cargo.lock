@@ -1162,20 +1162,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "desec_api"
-version = "0.4.0"
-source = "git+https://github.com/DorianNiemiecSVRJS/desec_api.git#29484b85e1680f6aca13835d09ab20113ab5962b"
-dependencies = [
- "const_format",
- "log",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tokio",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1419,7 +1405,6 @@ dependencies = [
  "aws-credential-types",
  "aws-sdk-route53",
  "base64",
- "desec_api",
  "dns-update",
  "ferron-common",
  "hyper",
