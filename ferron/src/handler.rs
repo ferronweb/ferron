@@ -688,23 +688,11 @@ async fn http_quic_handler_fn(
           }
         };
 
-      let mut is_cancelled = false;
-
       loop {
-        let cancelled_fut = async {
-          if is_cancelled {
-            futures_util::future::pending().await
-          } else {
-            let output = shutdown_rx.cancelled().await;
-            is_cancelled = true;
-            output
-          }
-        };
-
         match crate::runtime::select! {
             biased;
 
-            _ = cancelled_fut => {
+            _ = shutdown_rx.cancelled() => {
               h3_conn.shutdown(0).await.unwrap_or_default();
               return;
             }
