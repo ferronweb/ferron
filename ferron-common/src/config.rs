@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hasher;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -7,10 +7,12 @@ use std::{cmp::Ordering, collections::HashMap};
 use fancy_regex::Regex;
 
 use crate::modules::Module;
+use crate::observability::ObservabilityBackendChannels;
 use crate::util::IpBlockList;
 
 /// Conditional data
 #[non_exhaustive]
+#[repr(u8)]
 #[derive(Clone, Debug)]
 pub enum ConditionalData {
   IsRemoteIp(IpBlockList),
@@ -22,6 +24,8 @@ pub enum ConditionalData {
   IsRegex(String, Regex),
   IsNotRegex(String, Regex),
   IsRego(Arc<regorus::Engine>),
+  SetConstant(String, String),
+  IsLanguage(String),
 }
 
 impl PartialEq for ConditionalData {
@@ -36,12 +40,43 @@ impl PartialEq for ConditionalData {
       (Self::IsRegex(v1, v2), Self::IsRegex(v3, v4)) => v1 == v3 && v2.as_str() == v4.as_str(),
       (Self::IsNotRegex(v1, v2), Self::IsNotRegex(v3, v4)) => v1 == v3 && v2.as_str() == v4.as_str(),
       (Self::IsRego(v1), Self::IsRego(v2)) => v1.get_policies().ok() == v2.get_policies().ok(),
+      (Self::SetConstant(v1, v2), Self::SetConstant(v3, v4)) => v1 == v3 && v2 == v4,
+      (Self::IsLanguage(v1), Self::IsLanguage(v2)) => v1 == v2,
       _ => false,
     }
   }
 }
 
 impl Eq for ConditionalData {}
+
+impl Ord for ConditionalData {
+  fn cmp(&self, other: &Self) -> Ordering {
+    match (self, other) {
+      (Self::IsRemoteIp(v1), Self::IsRemoteIp(v2)) => v1.cmp(v2),
+      (Self::IsForwardedFor(v1), Self::IsForwardedFor(v2)) => v1.cmp(v2),
+      (Self::IsNotRemoteIp(v1), Self::IsNotRemoteIp(v2)) => v1.cmp(v2),
+      (Self::IsNotForwardedFor(v1), Self::IsNotForwardedFor(v2)) => v1.cmp(v2),
+      (Self::IsEqual(v1, v2), Self::IsEqual(v3, v4)) => v1.cmp(v3).then(v2.cmp(v4)),
+      (Self::IsNotEqual(v1, v2), Self::IsNotEqual(v3, v4)) => v1.cmp(v3).then(v2.cmp(v4)),
+      (Self::IsRegex(v1, v2), Self::IsRegex(v3, v4)) => v1.cmp(v3).then(v2.as_str().cmp(v4.as_str())),
+      (Self::IsNotRegex(v1, v2), Self::IsNotRegex(v3, v4)) => v1.cmp(v3).then(v2.as_str().cmp(v4.as_str())),
+      (Self::IsRego(v1), Self::IsRego(v2)) => v1.get_policies().ok().cmp(&v2.get_policies().ok()),
+      (Self::SetConstant(v1, v2), Self::SetConstant(v3, v4)) => v1.cmp(v3).then(v2.cmp(v4)),
+      _ => {
+        // SAFETY: See https://doc.rust-lang.org/core/mem/fn.discriminant.html
+        let discriminant_self = unsafe { *<*const _>::from(self).cast::<u8>() };
+        let discriminant_other = unsafe { *<*const _>::from(other).cast::<u8>() };
+        discriminant_self.cmp(&discriminant_other)
+      }
+    }
+  }
+}
+
+impl PartialOrd for ConditionalData {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
+  }
+}
 
 fn count_logical_slashes(s: &str) -> usize {
   if s.is_empty() {
@@ -51,7 +86,7 @@ fn count_logical_slashes(s: &str) -> usize {
   let trimmed = s.trim_end_matches('/');
   if trimmed.is_empty() {
     // Trimmed input is empty, but the original wasn't, probably input with only slashes
-    return 1;
+    return 0;
   }
 
   let mut count = 0;
@@ -96,7 +131,7 @@ impl PartialOrd for Conditions {
 }
 
 /// The enum containing a conditional
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
 pub enum Conditional {
   /// "if" condition
   If(Vec<ConditionalData>),
@@ -116,6 +151,9 @@ pub struct ServerConfiguration {
 
   /// Loaded modules
   pub modules: Vec<Arc<dyn Module + Send + Sync>>,
+
+  /// Loaded observability backend channels
+  pub observability: ObservabilityBackendChannels,
 }
 
 impl Debug for ServerConfiguration {
@@ -128,7 +166,7 @@ impl Debug for ServerConfiguration {
 }
 
 /// A error handler status code
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ErrorHandlerStatus {
   /// Any status code
   Any,
@@ -218,8 +256,57 @@ impl PartialOrd for ServerConfigurationFilters {
   }
 }
 
+impl Display for ServerConfigurationFilters {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    if !self.is_host {
+      write!(f, "\"globals\" block")
+    } else {
+      let mut blocks = Vec::new();
+      if self.ip.is_some() || self.hostname.is_some() || self.port.is_some() {
+        let mut name = String::new();
+        if let Some(hostname) = &self.hostname {
+          name.push_str(hostname);
+          if let Some(ip) = self.ip {
+            name.push_str(&format!("({ip})"));
+          }
+        } else if let Some(ip) = self.ip {
+          name.push_str(&ip.to_string());
+        }
+        if let Some(port) = self.port {
+          name.push_str(&format!(":{port}"));
+        }
+        if !name.is_empty() {
+          blocks.push(format!("\"{name}\" host block",));
+        }
+      }
+      if let Some(condition) = &self.condition {
+        let mut name = String::new();
+        if !condition.location_prefix.is_empty() {
+          name.push_str(&format!("\"{}\" location", condition.location_prefix));
+        }
+        if !condition.conditionals.is_empty() {
+          if !name.is_empty() {
+            name.push_str(" and ");
+          }
+          name.push_str("some conditional blocks");
+        } else {
+          name.push_str(" block");
+        }
+        blocks.push(name);
+      }
+      if let Some(error_handler_status) = &self.error_handler_status {
+        match error_handler_status {
+          ErrorHandlerStatus::Any => blocks.push("\"error_status\" block".to_string()),
+          ErrorHandlerStatus::Status(status) => blocks.push(format!("\"error_status {status}\" block")),
+        }
+      }
+      write!(f, "{}", blocks.join(" -> "))
+    }
+  }
+}
+
 /// A specific list of Ferron server configuration entries
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct ServerConfigurationEntries {
   /// Vector of configuration entries
   pub inner: Vec<ServerConfigurationEntry>,

@@ -523,6 +523,12 @@ impl ModuleHandlers for StatusCodesModuleHandlers {
                 new_remote_address: None,
               });
             } else {
+              if status_code == StatusCode::OK {
+                // `status 200` directive can be a misconfiguration
+                error_logger
+                  .log("\"status 200\" used without a response body. Ferron will return a default page.")
+                  .await;
+              }
               return Ok(ResponseData {
                 request: Some(Request::from_parts(request_parts, request_body)),
                 response: None,

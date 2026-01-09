@@ -42,14 +42,14 @@ env:
 
 jobs:
   test:
-    runs-on: warp-ubuntu-latest-x64-8x
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup cache
-        uses: WarpBuilds/rust-cache@v2
+        uses: Swatinem/rust-cache@v2
 
       - name: Run Cargo tests
         run: cargo test --workspace --verbose
@@ -82,10 +82,10 @@ jobs:
           FERRON="$(pwd)/target/debug/ferron" bash smoketest/smoketest.sh
 
   check:
-    runs-on: warp-ubuntu-latest-x64-8x
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -93,7 +93,7 @@ jobs:
           components: clippy, rustfmt
 
       - name: Setup cache
-        uses: WarpBuilds/rust-cache@v2
+        uses: Swatinem/rust-cache@v2
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -102,10 +102,10 @@ jobs:
         run: cargo clippy --workspace -- -D warnings
 
   depcheck:
-    runs-on: ubuntu-latest # GitHub-hosted runner
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install "cargo shear"
         run: |

@@ -1,26 +1,24 @@
 ---
-import MainLayout from "../layouts/MainLayout.astro";
 import Benefits from "../components/landing/Benefits.astro";
-import Benchmarks from "../components/landing/Benchmarks.astro";
-import Installation from "../components/landing/Installation.astro";
-import Hero from "../components/landing/Hero.astro";
-import Testimonials from "../components/landing/Testimonials.astro";
 import BottomCTA from "../components/landing/BottomCTA.astro";
 import Configuration from "../components/landing/Configuration.astro";
-import AutomaticTLS from "../components/landing/AutomaticTLS.astro";
+import Hero from "../components/landing/Hero.astro";
+import Installation from "../components/landing/Installation.astro";
+import Performance from "../components/landing/Performance.astro";
 import Problem from "../components/landing/Problem.astro";
+import Testimonials from "../components/landing/Testimonials.astro";
+import MainLayout from "../layouts/MainLayout.astro";
 ---
 
 <MainLayout
   description="Ferron is a high-performance web server with built-in TLS certificate management. Designed for speed, security and ease of configuration."
 >
-  <Hero />
-  <Problem />
-  <Benefits />
-  <AutomaticTLS />
-  <Benchmarks />
-  <Installation />
-  <Configuration />
-  <Testimonials />
-  <BottomCTA />
+  <Hero/>
+  <Problem/>
+  <Benefits/>
+  <Performance/>
+  <Installation/>
+  <Configuration/>
+  <Testimonials/>
+  <BottomCTA/>
 </MainLayout>

@@ -7,6 +7,7 @@ use std::{
   str::FromStr,
 };
 
+use ferron_common::observability::ObservabilityBackendChannels;
 use glob::glob;
 use kdl::{KdlDocument, KdlNode, KdlValue};
 
@@ -257,6 +258,7 @@ fn load_configuration_inner(
                         error_handler_status: None,
                       },
                       modules: vec![],
+                      observability: ObservabilityBackendChannels::new(),
                     });
                   } else {
                     let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
@@ -285,9 +287,35 @@ fn load_configuration_inner(
                   if let Some(condition_name_str) = condition_name.value().as_string() {
                     let mut conditions_data = Vec::new();
 
-                    for kdl_node in children.nodes() {
-                      let value = kdl_node_to_configuration_entry(kdl_node);
+                    let mut nodes_stack = Vec::new();
+                    nodes_stack.push(children.nodes().iter());
+
+                    while let Some(kdl_node) = {
+                      let mut last_iterator_item = None;
+                      while last_iterator_item.is_none() && !nodes_stack.is_empty() {
+                        last_iterator_item = nodes_stack.last_mut().and_then(|i| i.next());
+                        if last_iterator_item.is_none() {
+                          nodes_stack.pop();
+                        }
+                      }
+                      last_iterator_item
+                    } {
                       let name = kdl_node.name().value();
+                      if name == "use" {
+                        if let Some(snippet_name) = kdl_node.get(0).and_then(|v| v.as_string()) {
+                          if let Some(snippet) = snippets.get(snippet_name) {
+                            nodes_stack.push(snippet.nodes().iter());
+                            continue;
+                          } else {
+                            Err(anyhow::anyhow!(
+                              "Snippet not defined: {snippet_name}. You might need to define it before using it"
+                            ))?;
+                          }
+                        } else {
+                          Err(anyhow::anyhow!("Invalid `use` statement"))?;
+                        }
+                      }
+                      let value = kdl_node_to_configuration_entry(kdl_node);
                       conditions_data.push(match parse_conditional_data(name, value) {
                         Ok(d) => d,
                         Err(err) => Err(anyhow::anyhow!(
@@ -366,6 +394,7 @@ fn load_configuration_inner(
                         error_handler_status: None,
                       },
                       modules: vec![],
+                      observability: ObservabilityBackendChannels::new(),
                     });
                   } else {
                     let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
@@ -438,6 +467,7 @@ fn load_configuration_inner(
                         error_handler_status: None,
                       },
                       modules: vec![],
+                      observability: ObservabilityBackendChannels::new(),
                     });
                   } else {
                     let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
@@ -490,6 +520,7 @@ fn load_configuration_inner(
                         error_handler_status: Some(ErrorHandlerStatus::Status(error_status_code as u16)),
                       },
                       modules: vec![],
+                      observability: ObservabilityBackendChannels::new(),
                     });
                   } else {
                     let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
@@ -523,6 +554,7 @@ fn load_configuration_inner(
                       error_handler_status: Some(ErrorHandlerStatus::Any),
                     },
                     modules: vec![],
+                    observability: ObservabilityBackendChannels::new(),
                   });
                 }
               } else {
@@ -570,6 +602,7 @@ fn load_configuration_inner(
             error_handler_status: None,
           },
           modules: vec![],
+          observability: ObservabilityBackendChannels::new(),
         });
       }
     } else if global_name == "include" {

@@ -26,7 +26,7 @@ use rustls::{
   sign::CertifiedKey,
   ClientConfig,
 };
-use rustls_pki_types::{CertificateDer, PrivateKeyDer};
+use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use serde::{Deserialize, Serialize};
 use tokio::{io::AsyncWriteExt, sync::RwLock, time::Instant};
 use x509_parser::prelude::{FromDer, X509Certificate};
@@ -34,6 +34,7 @@ use xxhash_rust::xxh3::xxh3_128;
 
 use crate::tls_util::load_host_resolver;
 use ferron_common::dns::DnsProvider;
+use ferron_common::logging::ErrorLogger;
 
 pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 const SECONDS_BEFORE_RENEWAL: u64 = 86400; // 1 day before expiration
@@ -265,46 +266,41 @@ pub async fn check_certificate_validity_or_install_cached(
   if let Some(serialized_certificate_cache_data) =
     get_from_cache(&config.certificate_cache, &certificate_cache_key).await
   {
-    let certificate_data = serde_json::from_slice::<CertificateCacheData>(&serialized_certificate_cache_data)?;
-    let certs = rustls_pemfile::certs(&mut std::io::Cursor::new(
-      certificate_data.certificate_chain_pem.as_bytes(),
-    ))
-    .collect::<Result<Vec<_>, _>>()?;
-    if let Some(certificate) = certs.first() {
-      if let Some(acme_account) = acme_account {
-        if config
-          .renewal_info
-          .as_ref()
-          .is_none_or(|v| v.1.elapsed() > Duration::ZERO)
-        {
-          if let Ok(certificate_id) = CertificateIdentifier::try_from(certificate) {
-            if let Ok(renewal_info) = acme_account.renewal_info(&certificate_id).await {
-              let mut renewal_instant = Instant::now();
-              renewal_instant -= renewal_info.1;
-              config.renewal_info = Some((renewal_info.0, renewal_instant));
+    if let Ok(certificate_data) = serde_json::from_slice::<CertificateCacheData>(&serialized_certificate_cache_data) {
+      // Corrupted certificates would be skipped
+      if let Ok(certs) =
+        CertificateDer::pem_slice_iter(certificate_data.certificate_chain_pem.as_bytes()).collect::<Result<Vec<_>, _>>()
+      {
+        if let Some(certificate) = certs.first() {
+          if let Some(acme_account) = acme_account {
+            if config
+              .renewal_info
+              .as_ref()
+              .is_none_or(|v| v.1.elapsed() > Duration::ZERO)
+            {
+              if let Ok(certificate_id) = CertificateIdentifier::try_from(certificate) {
+                if let Ok(renewal_info) = acme_account.renewal_info(&certificate_id).await {
+                  let mut renewal_instant = Instant::now();
+                  renewal_instant -= renewal_info.1;
+                  config.renewal_info = Some((renewal_info.0, renewal_instant));
+                }
+              }
+            }
+          }
+          if check_certificate_validity(certificate, config.renewal_info.as_ref().map(|i| &i.0))? {
+            // Corrupted private key would be skipped
+            if let Ok(private_key) = PrivateKeyDer::from_pem_slice(certificate_data.private_key_pem.as_bytes()) {
+              let signing_key = CryptoProvider::get_default()
+                .ok_or(anyhow::anyhow!("Cannot get default crypto provider"))?
+                .key_provider
+                .load_private_key(private_key)?;
+
+              *config.certified_key_lock.write().await = Some(Arc::new(CertifiedKey::new(certs, signing_key)));
+
+              return Ok(true);
             }
           }
         }
-      }
-      if check_certificate_validity(certificate, config.renewal_info.as_ref().map(|i| &i.0))? {
-        let private_key =
-          (match rustls_pemfile::private_key(&mut std::io::Cursor::new(certificate_data.private_key_pem.as_bytes())) {
-            Ok(Some(private_key)) => Ok(private_key),
-            Ok(None) => Err(std::io::Error::new(
-              std::io::ErrorKind::InvalidData,
-              "Invalid private key",
-            )),
-            Err(err) => Err(err),
-          })?;
-
-        let signing_key = CryptoProvider::get_default()
-          .ok_or(anyhow::anyhow!("Cannot get default crypto provider"))?
-          .key_provider
-          .load_private_key(private_key)?;
-
-        *config.certified_key_lock.write().await = Some(Arc::new(CertifiedKey::new(certs, signing_key)));
-
-        return Ok(true);
       }
     }
   }
@@ -313,9 +309,13 @@ pub async fn check_certificate_validity_or_install_cached(
 }
 
 /// Provisions TLS certificates using the ACME protocol.
-pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub async fn provision_certificate(
+  config: &mut AcmeConfig,
+  error_logger: &ErrorLogger,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
   let account_cache_key = get_account_cache_key(config);
   let certificate_cache_key = get_certificate_cache_key(config);
+  let mut had_cache_error = false;
 
   let acme_account = if let Some(acme_account) = config.account.take() {
     acme_account
@@ -323,8 +323,10 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
     let acme_account_builder =
       Account::builder_with_http(Box::new(HttpsClientForAcme::new(config.rustls_client_config.clone())));
 
-    if let Some(account_credentials_serialized) = get_from_cache(&config.account_cache, &account_cache_key).await {
-      let account_credentials = serde_json::from_slice::<AccountCredentials>(&account_credentials_serialized)?;
+    if let Some(account_credentials) = get_from_cache(&config.account_cache, &account_cache_key)
+      .await
+      .and_then(|c| serde_json::from_slice::<AccountCredentials>(&c).ok())
+    {
       acme_account_builder.from_credentials(account_credentials).await?
     } else {
       let (account, account_credentials) = acme_account_builder
@@ -339,12 +341,24 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
         )
         .await?;
 
-      set_in_cache(
+      if let Err(err) = set_in_cache(
         &config.account_cache,
         &account_cache_key,
         serde_json::to_vec(&account_credentials)?,
       )
-      .await?;
+      .await
+      {
+        if !had_cache_error {
+          error_logger
+            .log(&format!(
+              "Failed to access the ACME cache: {}. Ferron can't use ACME caching",
+              err
+            ))
+            .await;
+          had_cache_error = true;
+        }
+      }
+
       account
     }
   };
@@ -453,8 +467,10 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
   }
 
   let acme_order_status = acme_order.poll_ready(&RetryPolicy::default()).await?;
-  if acme_order_status != OrderStatus::Ready {
-    Err(anyhow::anyhow!("ACME order is not ready",))?;
+  match acme_order_status {
+    OrderStatus::Ready => (), // It's alright!
+    OrderStatus::Invalid => Err(anyhow::anyhow!("ACME order is invalid"))?,
+    _ => Err(anyhow::anyhow!("ACME order is not ready"))?,
   }
 
   let finalize_closure = async {
@@ -466,22 +482,34 @@ pub async fn provision_certificate(config: &mut AcmeConfig) -> Result<(), Box<dy
       private_key_pem: private_key_pem.clone(),
     };
 
-    set_in_cache(
+    if let Err(err) = set_in_cache(
       &config.certificate_cache,
       &certificate_cache_key,
       serde_json::to_vec(&certificate_cache_data)?,
     )
-    .await?;
+    .await
+    {
+      if !had_cache_error {
+        error_logger
+          .log(&format!(
+            "Failed to access the ACME cache: {}. Ferron can't use ACME caching",
+            err
+          ))
+          .await;
+        had_cache_error = true;
+      }
+    }
 
-    let certs = rustls_pemfile::certs(&mut std::io::Cursor::new(certificate_chain_pem.as_bytes()))
-      .collect::<Result<Vec<_>, _>>()?;
-    let private_key = (match rustls_pemfile::private_key(&mut std::io::Cursor::new(private_key_pem.as_bytes())) {
-      Ok(Some(private_key)) => Ok(private_key),
-      Ok(None) => Err(std::io::Error::new(
-        std::io::ErrorKind::InvalidData,
-        "Invalid private key",
-      )),
-      Err(err) => Err(err),
+    let certs = CertificateDer::pem_slice_iter(certificate_chain_pem.as_bytes())
+      .collect::<Result<Vec<_>, _>>()
+      .map_err(|e| match e {
+        rustls_pki_types::pem::Error::Io(err) => err,
+        err => std::io::Error::other(err),
+      })?;
+    let private_key = (match PrivateKeyDer::from_pem_slice(private_key_pem.as_bytes()) {
+      Ok(private_key) => Ok(private_key),
+      Err(rustls_pki_types::pem::Error::Io(err)) => Err(err),
+      Err(err) => Err(std::io::Error::other(err)),
     })?;
 
     let signing_key = CryptoProvider::get_default()

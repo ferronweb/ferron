@@ -1,9 +1,14 @@
 use std::{
-  collections::{HashMap, HashSet},
+  collections::{BTreeMap, HashMap, HashSet, VecDeque},
   error::Error,
+  net::IpAddr,
 };
 
-use ferron_common::modules::ModuleLoader;
+use ferron_common::{
+  config::{Conditional, ErrorHandlerStatus},
+  modules::ModuleLoader,
+  observability::{ObservabilityBackendChannels, ObservabilityBackendLoader},
+};
 
 use super::{ServerConfiguration, ServerConfigurationFilters};
 
@@ -14,63 +19,59 @@ use super::{ServerConfiguration, ServerConfigurationFilters};
 /// filter criteria (hostname, IP, port, location prefix, and error handler status).
 /// For configurations with identical filters, their entries are merged.
 pub fn merge_duplicates(mut server_configurations: Vec<ServerConfiguration>) -> Vec<ServerConfiguration> {
-  // The resulting list of unique configurations after merging
-  let mut server_configurations_without_duplicates = Vec::new();
+  // Sort configurations by filter criteria
+  server_configurations.sort_by(|a, b| {
+    (
+      &a.filters.is_host,
+      &a.filters.port,
+      &a.filters.ip,
+      &a.filters.hostname,
+      &a.filters
+        .condition
+        .as_ref()
+        .map(|s| (&s.location_prefix, &s.conditionals)),
+      &a.filters.error_handler_status,
+    )
+      .cmp(&(
+        &b.filters.is_host,
+        &b.filters.port,
+        &b.filters.ip,
+        &b.filters.hostname,
+        &b.filters
+          .condition
+          .as_ref()
+          .map(|s| (&s.location_prefix, &s.conditionals)),
+        &b.filters.error_handler_status,
+      ))
+  });
 
-  // Process each configuration one by one
+  // Convert server configurations to a double-ended queue
+  let mut server_configurations = VecDeque::from(server_configurations);
+
+  let mut result = Vec::new();
   while !server_configurations.is_empty() {
-    // Take the first configuration from the list
-    let mut server_configuration = server_configurations.remove(0);
-    let mut server_configurations_index = 0;
-
-    // Compare this configuration with all remaining ones
-    while server_configurations_index < server_configurations.len() {
-      // Get the current configuration to compare with
-      let server_configuration_source = &server_configurations[server_configurations_index];
-
-      // Check if all filter criteria match exactly between the two configurations
-      if server_configuration_source.filters.is_host == server_configuration.filters.is_host
-        && server_configuration_source.filters.hostname == server_configuration.filters.hostname
-        && server_configuration_source.filters.ip == server_configuration.filters.ip
-        && server_configuration_source.filters.port == server_configuration.filters.port
-        && server_configuration_source.filters.condition == server_configuration.filters.condition
-        && server_configuration_source.filters.error_handler_status == server_configuration.filters.error_handler_status
+    if let Some(mut current) = server_configurations.pop_front() {
+      // Merge all adjacent configurations with matching filters
+      while !server_configurations.is_empty()
+        && server_configurations[0].filters.is_host == current.filters.is_host
+        && server_configurations[0].filters.hostname == current.filters.hostname
+        && server_configurations[0].filters.ip == current.filters.ip
+        && server_configurations[0].filters.port == current.filters.port
+        && server_configurations[0].filters.condition == current.filters.condition
+        && server_configurations[0].filters.error_handler_status == current.filters.error_handler_status
       {
-        // Clone the entries from the matching configuration
-        let mut cloned_hashmap = server_configuration_source.entries.clone();
-        let moved_hashmap_iterator = server_configuration.entries.into_iter();
-
-        // Merge entries from both configurations
-        for (property_name, mut property) in moved_hashmap_iterator {
-          match cloned_hashmap.get_mut(&property_name) {
-            Some(obtained_property) => {
-              // If property exists in both configurations, combine their values
-              obtained_property.inner.append(&mut property.inner);
-            }
-            None => {
-              // If property only exists in current configuration, add it
-              cloned_hashmap.insert(property_name, property);
-            }
+        if let Some(server_configuration) = server_configurations.pop_front() {
+          // Merge entries
+          for (k, v) in server_configuration.entries {
+            current.entries.entry(k).or_default().inner.extend(v.inner);
           }
         }
-
-        // Update entries with merged result
-        server_configuration.entries = cloned_hashmap;
-
-        // Remove the processed configuration from the list
-        server_configurations.remove(server_configurations_index);
-      } else {
-        // Move to next configuration if no match
-        server_configurations_index += 1;
       }
+      result.push(current);
     }
-
-    // Add the processed configuration (with any merged entries) to the result list
-    server_configurations_without_duplicates.push(server_configuration);
   }
 
-  // Return the deduplicated configurations
-  server_configurations_without_duplicates
+  result
 }
 
 /// Removes empty Ferron configurations and add an empty global configuration, if not present
@@ -114,12 +115,127 @@ pub fn remove_and_add_global_configuration(
           error_handler_status: None,
         },
         modules: vec![],
+        observability: ObservabilityBackendChannels::new(),
       },
     );
   }
 
   // Return the processed configurations
   new_server_configurations
+}
+
+/// Configuration filter enum for a trie
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]
+enum ServerConfigurationFilter {
+  /// Whether the configuration represents a host block
+  IsHost(bool),
+
+  /// The port
+  Port(Option<u16>),
+
+  /// The IP address
+  Ip(Option<IpAddr>),
+
+  /// The hostname
+  Hostname(Option<String>),
+
+  /// The conditions
+  Condition(Option<(String, Vec<Conditional>)>),
+
+  /// The error handler status code
+  ErrorHandlerStatus(Option<ErrorHandlerStatus>),
+}
+
+/// Configuration filter trie
+struct ServerConfigurationFilterTrie {
+  children: BTreeMap<ServerConfigurationFilter, ServerConfigurationFilterTrie>,
+  index: Option<usize>,
+}
+
+impl ServerConfigurationFilterTrie {
+  /// Creates an empty ConfigurationFilterTrie.
+  pub fn new() -> Self {
+    Self {
+      children: BTreeMap::new(),
+      index: None,
+    }
+  }
+
+  /// Inserts new filters with index into the trie.
+  pub fn insert(&mut self, filters: ServerConfigurationFilters, filters_index: usize) {
+    let no_host = !filters.is_host;
+    let no_port = filters.port.is_none();
+    let no_ip = filters.ip.is_none();
+    let no_hostname = filters.hostname.is_none();
+    let no_condition = filters.condition.is_none();
+    let no_error_handler_status = filters.error_handler_status.is_none();
+
+    let filter_vec = vec![
+      ServerConfigurationFilter::IsHost(filters.is_host),
+      ServerConfigurationFilter::Port(filters.port),
+      ServerConfigurationFilter::Ip(filters.ip),
+      ServerConfigurationFilter::Hostname(filters.hostname),
+      ServerConfigurationFilter::Condition(filters.condition.map(|s| (s.location_prefix, s.conditionals))),
+      ServerConfigurationFilter::ErrorHandlerStatus(filters.error_handler_status),
+    ];
+
+    let mut current_node = self;
+    for filter in filter_vec {
+      if match &filter {
+        ServerConfigurationFilter::IsHost(_) => {
+          no_host && no_port && no_ip && no_hostname && no_condition && no_error_handler_status
+        }
+        ServerConfigurationFilter::Port(_) => {
+          no_port && no_ip && no_hostname && no_condition && no_error_handler_status
+        }
+        ServerConfigurationFilter::Ip(_) => no_ip && no_hostname && no_condition && no_error_handler_status,
+        ServerConfigurationFilter::Hostname(_) => no_hostname && no_condition && no_error_handler_status,
+        ServerConfigurationFilter::Condition(_) => no_condition && no_error_handler_status,
+        ServerConfigurationFilter::ErrorHandlerStatus(_) => no_error_handler_status,
+      } && current_node.index.is_none()
+      {
+        current_node.index = Some(filters_index);
+      }
+      if !current_node.children.contains_key(&filter) {
+        current_node.children.insert(filter.clone(), Self::new());
+      }
+      match current_node.children.get_mut(&filter) {
+        Some(node) => current_node = node,
+        None => unreachable!(),
+      }
+    }
+  }
+
+  /// Finds indices by the filters in the trie.
+  pub fn find_indices(&self, filters: ServerConfigurationFilters) -> Vec<usize> {
+    let filter_vec = vec![
+      ServerConfigurationFilter::IsHost(filters.is_host),
+      ServerConfigurationFilter::Port(filters.port),
+      ServerConfigurationFilter::Ip(filters.ip),
+      ServerConfigurationFilter::Hostname(filters.hostname),
+      ServerConfigurationFilter::Condition(filters.condition.map(|s| (s.location_prefix, s.conditionals))),
+      ServerConfigurationFilter::ErrorHandlerStatus(filters.error_handler_status),
+    ];
+
+    let mut current_node = self;
+    let mut indices = Vec::new();
+    for filter in filter_vec {
+      if indices.last() != current_node.index.as_ref() {
+        if let Some(index) = current_node.index {
+          indices.push(index);
+        }
+      }
+      let child = current_node.children.get(&filter);
+      match child {
+        Some(child) => {
+          current_node = child;
+        }
+        None => break,
+      }
+    }
+    indices.reverse();
+    indices
+  }
 }
 
 /// Pre-merges Ferron configurations
@@ -129,115 +245,33 @@ pub fn remove_and_add_global_configuration(
 /// inherit and override properties from less specific ones. It handles matching logic based
 /// on specificity of filters (error handlers, location prefixes, hostnames, IPs, ports).
 pub fn premerge_configuration(mut server_configurations: Vec<ServerConfiguration>) -> Vec<ServerConfiguration> {
-  // Sort server configurations vector, based on the ascending specifity, to simplify the merging algorithm
+  // Sort server configurations vector, based on the ascending specifity, to make the algorithm easier to implement
   server_configurations.sort_by(|a, b| a.filters.cmp(&b.filters));
-  let mut new_server_configurations = Vec::new();
 
-  // Process configurations from most specific to least specific
+  // Initialize a trie to store server configurations based on their filters
+  let mut server_configuration_filter_trie = ServerConfigurationFilterTrie::new();
+  for (index, server_configuration) in server_configurations.iter().enumerate() {
+    server_configuration_filter_trie.insert(server_configuration.filters.clone(), index);
+  }
+
+  // Initialize a vector to store the new server configurations
+  let mut new_server_configurations = Vec::with_capacity(server_configurations.len());
+
+  // Pre-merge server configurations
   while let Some(mut server_configuration) = server_configurations.pop() {
-    // Track which configurations should be merged into the current one
-    let mut layers_indexes = Vec::new();
-    // Check each remaining configuration in reverse order (from most to least specific)
-    for sc2_index in (0..server_configurations.len()).rev() {
-      // A bit complex matching logic to determine inheritance relationships...
-      // sc1 is the current configuration, sc2 is the potential parent configuration
-      let sc1 = &server_configuration.filters;
-      let sc2 = &server_configurations[sc2_index].filters;
-
-      // Determine if filter criteria match or if parent has wildcard (None) values
-      // A None in parent (sc2) means it matches any value in child (sc1)
-      let is_host_match = !sc2.is_host || sc1.is_host == sc2.is_host;
-      let ports_match = sc2.port.is_none() || sc1.port == sc2.port;
-      let ips_match = sc2.ip.is_none() || sc1.ip == sc2.ip;
-      let hostnames_match = sc2.hostname.is_none() || sc1.hostname == sc2.hostname;
-      let conditions_match = sc2.condition.is_none() || sc1.condition == sc2.condition;
-
-      // Case 1: Child has error handler but parent doesn't, and all other filters match
-      // This is for error handler inheritance
-      let case1 = sc1.error_handler_status.is_some()
-        && sc2.error_handler_status.is_none()
-        && conditions_match
-        && hostnames_match
-        && ips_match
-        && ports_match
-        && is_host_match;
-
-      // Case 2: Condition inheritance
-      // Child has condition but parent doesn't, and all other filters match
-      let case2 = sc1.error_handler_status.is_none()
-        && sc2.error_handler_status.is_none()
-        && sc1.condition.is_some()
-        && sc2.condition.is_none()
-        && hostnames_match
-        && ips_match
-        && ports_match
-        && is_host_match;
-
-      // Case 3: Hostname inheritance
-      // Child has hostname but parent doesn't, and all other filters match
-      let case3 = sc1.error_handler_status.is_none()
-        && sc2.error_handler_status.is_none()
-        && sc1.condition.is_none()
-        && sc2.condition.is_none()
-        && sc1.hostname.is_some()
-        && sc2.hostname.is_none()
-        && ips_match
-        && ports_match
-        && is_host_match;
-
-      // Case 4: IP address inheritance
-      // Child has IP but parent doesn't, and all other filters match
-      let case4 = sc1.error_handler_status.is_none()
-        && sc2.error_handler_status.is_none()
-        && sc1.condition.is_none()
-        && sc2.condition.is_none()
-        && sc1.hostname.is_none()
-        && sc2.hostname.is_none()
-        && sc1.ip.is_some()
-        && sc2.ip.is_none()
-        && ports_match
-        && is_host_match;
-
-      // Case 5: Port inheritance
-      // Child has port but parent doesn't, and all other filters are None
-      let case5 = sc1.error_handler_status.is_none()
-        && sc2.error_handler_status.is_none()
-        && sc1.condition.is_none()
-        && sc2.condition.is_none()
-        && sc1.hostname.is_none()
-        && sc2.hostname.is_none()
-        && sc1.ip.is_none()
-        && sc2.ip.is_none()
-        && sc1.port.is_some()
-        && sc2.port.is_none()
-        && is_host_match;
-
-      // Case 6: Host block flag inheritance
-      // Child has host block flag but parent doesn't, and all other filters are None
-      let case6 = sc1.error_handler_status.is_none()
-        && sc2.error_handler_status.is_none()
-        && sc1.condition.is_none()
-        && sc2.condition.is_none()
-        && sc1.hostname.is_none()
-        && sc2.hostname.is_none()
-        && sc1.ip.is_none()
-        && sc2.ip.is_none()
-        && sc1.port.is_none()
-        && sc2.port.is_none()
-        && sc1.is_host
-        && !sc2.is_host;
-
-      // If any inheritance case matches, this configuration should inherit from the parent
-      if case1 || case2 || case3 || case4 || case5 || case6 {
-        layers_indexes.push(sc2_index);
-      }
-    }
+    // Get the layers indexes
+    let layers_indexes = server_configuration_filter_trie.find_indices(server_configuration.filters.clone());
 
     // Start with current configuration's entries
     let mut configuration_entries = server_configuration.entries;
 
     // Process all parent configurations that this one should inherit from
     for layer_index in layers_indexes {
+      // If layer index is out of bounds, skip it
+      if layer_index >= server_configurations.len() {
+        continue;
+      }
+
       // Track which properties have been processed in this layer
       let mut properties_in_layer = HashSet::new();
       // Clone parent configuration's entries
@@ -288,6 +322,7 @@ pub fn premerge_configuration(mut server_configurations: Vec<ServerConfiguration
 pub fn load_modules(
   server_configurations: Vec<ServerConfiguration>,
   server_modules: &mut [Box<dyn ModuleLoader + Send + Sync>],
+  server_observability_backends: &mut [Box<dyn ObservabilityBackendLoader + Send + Sync>],
   secondary_runtime: &tokio::runtime::Runtime,
 ) -> (
   Vec<ServerConfiguration>,
@@ -309,11 +344,11 @@ pub fn load_modules(
     // Track which properties are used by modules
     let mut used_properties = HashSet::new();
 
-    // Process each available server module
-    for server_module in server_modules.iter_mut() {
-      // Get module requirements
-      let requirements = server_module.get_requirements();
-      // Check if this module's requirements are satisfied by this configuration
+    // Process each available observability backend
+    for server_observability_backend in server_observability_backends.iter_mut() {
+      // Get observability backend requirements
+      let requirements = server_observability_backend.get_requirements();
+      // Check if this observability backend's requirements are satisfied by this configuration
       let mut requirements_met = true;
       for requirement in requirements {
         requirements_met = false;
@@ -328,30 +363,98 @@ pub fn load_modules(
           break;
         }
       }
-      // Validate the configuration against this module
-      match server_module.validate_configuration(&server_configuration, &mut used_properties) {
+      // Validate the configuration against this observability backend
+      match server_observability_backend.validate_configuration(&server_configuration, &mut used_properties) {
         Ok(_) => (),
         Err(error) => {
           // Store the first error encountered
           if first_server_module_error.is_none() {
-            first_server_module_error.replace(error);
+            first_server_module_error
+              .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
           }
-          // Skip remaining modules for this configuration if validation fails
+          // Skip remaining observability backends for this configuration if validation fails
           break;
         }
       }
-      // Only load module if its requirements are met
+      // Only load observability backend if its requirements are met
       if requirements_met {
-        // Load the module with current configuration and global configuration
-        match server_module.load_module(&server_configuration, global_configuration.as_ref(), secondary_runtime) {
-          Ok(loaded_module) => server_configuration.modules.push(loaded_module),
+        // Load the observability backend with current configuration and global configuration
+        match server_observability_backend.load_observability_backend(
+          &server_configuration,
+          global_configuration.as_ref(),
+          secondary_runtime,
+        ) {
+          Ok(loaded_observability_backend) => {
+            if let Some(channel) = loaded_observability_backend.get_log_channel() {
+              server_configuration.observability.add_log_channel(channel);
+            }
+            if let Some(channel) = loaded_observability_backend.get_metric_channel() {
+              server_configuration.observability.add_metric_channel(channel);
+            }
+            if let Some(channel) = loaded_observability_backend.get_trace_channel() {
+              server_configuration.observability.add_trace_channel(channel);
+            }
+          }
           Err(error) => {
             // Store the first error encountered
             if first_server_module_error.is_none() {
-              first_server_module_error.replace(error);
+              first_server_module_error
+                .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
             }
-            // Skip remaining modules for this configuration if loading fails
+            // Skip remaining observability backends for this configuration if loading fails
             break;
+          }
+        }
+      }
+    }
+
+    if first_server_module_error.is_none() {
+      // Process each available server module
+      for server_module in server_modules.iter_mut() {
+        // Get module requirements
+        let requirements = server_module.get_requirements();
+        // Check if this module's requirements are satisfied by this configuration
+        let mut requirements_met = true;
+        for requirement in requirements {
+          requirements_met = false;
+          // Check if the required property exists and has a non-null value
+          if server_configuration
+            .entries
+            .get(requirement)
+            .and_then(|e| e.get_value())
+            .is_some_and(|v| !v.is_null() && v.as_bool().unwrap_or(true))
+          {
+            requirements_met = true;
+            break;
+          }
+        }
+        // Validate the configuration against this module
+        match server_module.validate_configuration(&server_configuration, &mut used_properties) {
+          Ok(_) => (),
+          Err(error) => {
+            // Store the first error encountered
+            if first_server_module_error.is_none() {
+              first_server_module_error
+                .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
+            }
+            // Skip remaining modules for this configuration if validation fails
+            break;
+          }
+        }
+        // Only load module if its requirements are met
+        if requirements_met {
+          // Load the module with current configuration and global configuration
+          match server_module.load_module(&server_configuration, global_configuration.as_ref(), secondary_runtime) {
+            Ok(loaded_module) => server_configuration.modules.push(loaded_module),
+            Err(error) => {
+              // Store the first error encountered
+              if first_server_module_error.is_none() {
+                first_server_module_error
+                  .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
+              }
+              // Skip remaining modules for this configuration if loading fails
+              break;
+            }
           }
         }
       }
@@ -469,6 +572,7 @@ mod tests {
       },
       entries: entries.into_iter().collect(),
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     }
   }
 
@@ -508,12 +612,14 @@ mod tests {
       filters: filters_2,
       entries: config1_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let config2 = ServerConfiguration {
       filters,
       entries: config2_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let merged = merge_duplicates(vec![config1, config2]);
@@ -564,15 +670,80 @@ mod tests {
       filters: filters1,
       entries: config1_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let config2 = ServerConfiguration {
       filters: filters2,
       entries: config2_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let merged = merge_duplicates(vec![config1, config2]);
+    assert_eq!(merged.len(), 2);
+  }
+
+  #[test]
+  fn handles_filters_then_unique_then_duplicate() {
+    let filters1 = make_filters(
+      true,
+      Some("example.com"),
+      Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
+      Some(8080),
+      Some("/api"),
+      None,
+    );
+
+    let filters2 = make_filters(
+      true,
+      Some("example.org"),
+      Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
+      Some(8080),
+      Some("/api"),
+      None,
+    );
+
+    let mut config1_entries = HashMap::new();
+    config1_entries.insert(
+      "route".to_string(),
+      make_entry(vec![ServerConfigurationValue::String("v1".to_string())]),
+    );
+
+    let mut config2_entries = HashMap::new();
+    config2_entries.insert(
+      "route".to_string(),
+      make_entry(vec![ServerConfigurationValue::String("v2".to_string())]),
+    );
+
+    let mut config3_entries = HashMap::new();
+    config3_entries.insert(
+      "route".to_string(),
+      make_entry(vec![ServerConfigurationValue::String("v3".to_string())]),
+    );
+
+    let config1 = ServerConfiguration {
+      filters: filters1.clone(),
+      entries: config1_entries,
+      modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
+    };
+
+    let config2 = ServerConfiguration {
+      filters: filters2,
+      entries: config2_entries,
+      modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
+    };
+
+    let config3 = ServerConfiguration {
+      filters: filters1,
+      entries: config3_entries,
+      modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
+    };
+
+    let merged = merge_duplicates(vec![config1, config2, config3]);
     assert_eq!(merged.len(), 2);
   }
 
@@ -612,12 +783,14 @@ mod tests {
       filters: filters_2,
       entries: config1_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let config2 = ServerConfiguration {
       filters,
       entries: config2_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     let merged = merge_duplicates(vec![config1, config2]);

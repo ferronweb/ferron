@@ -1,6 +1,6 @@
 [package]
 name = "ferron-load-modules"
-version = "2.0.0-rc.1"
+version = "2.3.2"
 edition = "2021"
 
 [dependencies]
@@ -8,6 +8,7 @@ ferron-common = { workspace = true }
 ferron-modules-builtin = { workspace = true, features = [
     "cache",
     "cgi",
+    "dcompress",
     "fauth",
     "fcgi",
     "fproxy",
@@ -24,13 +25,17 @@ ferron-dns-builtin = { workspace = true, features = [
     "rfc2136",
     "route53",
 ] }
+ferron-observability-builtin = { workspace = true, features = [
+    "logfile",
+    "otlp"
+] }
 anyhow = "1.0.98"
 
 [dev-dependencies]
 shiba = { workspace = true }
 
 [build-dependencies]
-yaml-rust2 = "0.10.2"
+yaml-rust2 = "0.11.0"
 toml = "0.9.2"
 
 [features]
@@ -43,3 +48,6 @@ runtime-tokio = [
     "ferron-common/runtime-tokio",
     "ferron-modules-builtin/runtime-tokio",
 ]
+
+[package.metadata.cargo-shear]
+ignored = ["anyhow"]

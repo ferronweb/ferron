@@ -2,7 +2,7 @@
 title: Server configuration
 ---
 
-Ferron 2.0.0-beta.1 and newer can be configured in a [KDL-format](https://kdl.dev/) configuration file (often named `ferron.kdl`). Below are the descriptions of configuration properties for this server.
+Ferron 2.0.0 and newer can be configured in a [KDL-format](https://kdl.dev/) configuration file (often named `ferron.kdl`). Below are the descriptions of configuration properties for this server.
 
 ## Configuration blocks
 
@@ -10,7 +10,7 @@ At the top level of the server configration, the confguration blocks representin
 
 ```kdl
 globals {
-  // Global configuration that doesn't imply any virtual host (Ferron 2.0.0-beta.13 or newer)
+  // Global configuration that doesn't imply any virtual host
 }
 
 * {
@@ -48,8 +48,7 @@ api.example.com {
     }
   }
 
-  // In Ferron 2.0.0-beta.14 and earlier, the location configuration order was important; in this host configuration, first the "/v1" location is checked, then the "/" location.
-  // In Ferron 2.0.0-beta.15 and newer, the location and conditionals' configuration order is automatically determined based on the location and conditionals' depth
+  // The location and conditionals' configuration order is automatically determined based on the location and conditionals' depth
   location "/" {
     // ...
   }
@@ -61,7 +60,7 @@ api.example.com {
 }
 
 example.com,example.org {
-  // Configuration for example.com and example.org (Ferron 2.0.0-beta.13 or newer)
+  // Configuration for example.com and example.org
   // The virtual host identifiers (like example.com or "192.168.1.1") are comma-separated, but adding spaces will not be interpreted,
   // For example "example.com, example.org" will not work for "example.org", but "example.com,example.org" will work.
 }
@@ -72,21 +71,22 @@ with-conditions.example.com {
   }
 
   if "SOME_CONDITION" {
-    // Conditional configuration (Ferron 2.0.0-beta.15 or newer)
+    // Conditional configuration
     // Conditions can be nested
   }
 
   if_not "SOME_CONDITION" {
-    // Configuration, in case of condition not being met (Ferron 2.0.0-beta.15 or newer)
+    // Configuration, in case of condition not being met
   }
 }
 
 snippet "EXAMPLE" {
-  // Example snippet configuration (Ferron 2.0.0-beta.15 or newer)
+  // Example snippet configuration
+  // Snippets containing subconditions can also be used in conditions in Ferron 2.1.0 or newer
 }
 
 with-snippet.example.com {
-  // Import from snippet (Ferron 2.0.0-beta.15 or newer)
+  // Import from snippet
   use "EXAMPLE"
 }
 
@@ -163,18 +163,18 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies the supported TLS cipher suites. If using the HTTP/3 protocol (which is experimental in Ferron), the `TLS_AES_128_GCM_SHA256` cipher suite needs to be enabled (it's enabled by default), otherwise the HTTP/3 server wouldn’t start at all. This directive can be specified multiple times. Default: default TLS cipher suite for Rustls
 - `tls_ecdh_curves <ecdh_curve: string> [<ecdh_curve: string> ...]`
   - This directive specifies the supported TLS ECDH curves. This directive can be specified multiple times. Default: default ECDH curves for Rustls
-- `tls_client_certificate [enable_tls_client_certificate: bool]`
-  - This directive specifies whenever the TLS client certificate verification is enabled. Default: `tls_client_certificate #false`
+- `tls_client_certificate [tls_client_certificate: bool|string]`
+  - This directive specifies whether the TLS client certificate verification is enabled. If set to `#true`, the client certificate will be verified against the system certificate store. If set to a string, the client certificate will be verified against the certificate authority in the specified path. Default: `tls_client_certificate #false`
+- `tls_min_version <tls_min_version: string>`
+  - This directive specifies the minimum TLS version (TLSv1.2 or TLSv1.3) that the server will accept. Default: `tls_min_version "TLSv1.2"`
+- `tls_max_version <tls_max_version: string>`
+  - This directive specifies the maximum TLS version (TLSv1.2 or TLSv1.3) that the server will accept. Default: `tls_max_version "TLSv1.3"`
 - `ocsp_stapling [enable_ocsp_stapling: bool]`
-  - This directive specifies whenever OCSP stapling is enabled. Default: `ocsp_stapling #true`
-- `block <blocked_ip: string> [<blocked_ip: string> ...]`
-  - This directive specifies IP addresses to be blocked. This directive can be specified multiple times. Default: none
-- `allow <allowed_ip: string> [<allowed_ip: string> ...]` (Ferron 2.0.0-beta.9 or newer)
-  - This directive specifies IP addresses to be allowed. This directive can be specified multiple times. Default: none
-- `auto_tls_on_demand_ask <auto_tls_on_demand_ask_url: string|null>` (Ferron 2.0.0-beta.13 or newer)
-  - This directive specifies the URL to be used for asking whenever to the hostname for automatic TLS on demand is allowed. The server will append the `domain` query parameter with the domain name for the certificate to issue as a value to the URL. It's recommended to configure this option when using automatic TLS on demand to prevent abuse. Default: `auto_tls_on_demand_ask #null`
-- `auto_tls_on_demand_ask_no_verification [auto_tls_on_demand_ask_no_verification: bool]` (Ferron 2.0.0-beta.13 or newer)
-  - This directive specifies whenever the server should not verify the TLS certificate of the automatic TLS on demand asking endpoint. Default: `auto_tls_on_demand_ask_no_verification #false`
+  - This directive specifies whether OCSP stapling is enabled. Default: `ocsp_stapling #true`
+- `auto_tls_on_demand_ask <auto_tls_on_demand_ask_url: string|null>`
+  - This directive specifies the URL to be used for asking whether to the hostname for automatic TLS on demand is allowed. The server will append the `domain` query parameter with the domain name for the certificate to issue as a value to the URL. It's recommended to configure this option when using automatic TLS on demand to prevent abuse. Default: `auto_tls_on_demand_ask #null`
+- `auto_tls_on_demand_ask_no_verification [auto_tls_on_demand_ask_no_verification: bool]`
+  - This directive specifies whether the server should not verify the TLS certificate of the automatic TLS on demand asking endpoint. Default: `auto_tls_on_demand_ask_no_verification #false`
 
 **Configuration example:**
 
@@ -184,8 +184,6 @@ This configuration reference organizes directives by both **scope** (where they 
     tls_ecdh_curves "secp256r1" "secp384r1"
     tls_client_certificate #false
     ocsp_stapling
-    block "192.168.1.100" "10.0.0.5"
-    allow "192.168.1.0/24" "10.0.0.0/8"
     auto_tls_on_demand_ask "https://auth.example.com/check"
     auto_tls_on_demand_ask_no_verification #false
 }
@@ -210,12 +208,12 @@ This configuration reference organizes directives by both **scope** (where they 
 - `h2_max_header_list_size <h2_max_header_list_size: integer>`
   - This directive specifies the maximum HTTP/2 frame size. Default: Hyper defaults
 - `h2_enable_connect_protocol [h2_enable_connect_protocol: bool]`
-  - This directive specifies whenever the CONNECT protocol in HTTP/2 is enabled. Default: Hyper defaults
-- `protocol_proxy [enable_proxy_protocol: bool]` (Ferron 2.0.0-beta.10 or newer)
-  - This directive specifies whenever the PROXY protocol acceptation is enabled. If enabled, the server will expect the PROXY protocol header at the beginning of each connection. Default: `protocol_proxy #false`
-- `buffer_request <request_buffer_size: integer|null>` (Ferron 2.0.0-beta.14 or newer)
+  - This directive specifies whether the CONNECT protocol in HTTP/2 is enabled. Default: Hyper defaults
+- `protocol_proxy [enable_proxy_protocol: bool]`
+  - This directive specifies whether the PROXY protocol acceptation is enabled. If enabled, the server will expect the PROXY protocol header at the beginning of each connection. Default: `protocol_proxy #false`
+- `buffer_request <request_buffer_size: integer|null>`
   - This directive specifies the buffer size in bytes for incoming requests. If set as `buffer_request #null`, the request buffer is disabled. The request buffer can serve as an additional protection for underlying backend servers against Slowloris-style attacks. Default: `buffer_request #null`
-- `buffer_response <response_buffer_size: integer|null>` (Ferron 2.0.0-beta.14 or newer)
+- `buffer_response <response_buffer_size: integer|null>`
   - This directive specifies the buffer size in bytes for outgoing responses. If set as `buffer_response #null`, the response buffer is disabled. Default: `buffer_response #null`
 
 **Configuration example:**
@@ -255,7 +253,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `listen_ip <listen_ip: string>`
   - This directive specifies the IP address to listen. Default: `listen_ip "::1"`
 - `io_uring [enable_io_uring: bool]`
-  - This directive specifies whenever `io_uring` is enabled. This directive has no effect for systems that don't support `io_uring` and for web server builds that use Tokio instead of Monoio. Default: `io_uring #true`
+  - This directive specifies whether `io_uring` is enabled. This directive has no effect for systems that don't support `io_uring` and for web server builds that use Tokio instead of Monoio. Default: `io_uring #true`
 - `tcp_send_buffer <tcp_send_buffer: integer>`
   - This directive specifies the send buffer size in bytes for TCP listeners. Default: none
 - `tcp_recv_buffer <tcp_recv_buffer: integer>`
@@ -272,6 +270,19 @@ This configuration reference organizes directives by both **scope** (where they 
 }
 ```
 
+### Reverse proxy & load balancing
+
+- `proxy_concurrent_conns <proxy_concurrent_conns: integer|null>` (_rproxy_ module; Ferron 2.3.0 or newer)
+  - This directive specifies the limit of TCP connections being established to backend servers, to prevent exhaustion of network resources. If set as `proxy_concurrent_conns #null`, the reverse proxy can theoretically establish an unlimited number of connections. Default: `proxy_concurrent_conns 16384`
+
+**Configuration example:**
+
+```kdl
+* {
+    proxy_concurrent_new_conns 16384
+}
+```
+
 ## Global and virtual host directives
 
 ### TLS/SSL & security
@@ -279,24 +290,24 @@ This configuration reference organizes directives by both **scope** (where they 
 - `tls <certificate_path: string> <private_key_path: string>`
   - This directive specifies the path to the TLS certificate and private key. Default: none
 - `auto_tls [enable_automatic_tls: bool]`
-  - This directive specifies whenever automatic TLS is enabled. Default: `auto_tls #true` when port isn't explicitly specified and if the hostname doesn't look like a local address (`127.0.0.1`, `::1`, `localhost`), otherwise `auto_tls #false`
+  - This directive specifies whether automatic TLS is enabled. Default: `auto_tls #true` when port isn't explicitly specified and if the hostname doesn't look like a local address (`127.0.0.1`, `::1`, `localhost`), otherwise `auto_tls #false`
 - `auto_tls_contact <auto_tls_contact: string|null>`
   - This directive specifies the email address used to register an ACME account for automatic TLS. Default: `auto_tls_contact #null`
 - `auto_tls_cache <auto_tls_cache: string|null>`
   - This directive specifies the directory to store cached ACME data, such as cached account data and certifies. Default: OS-specific directory, for example on GNU/Linux it can be `/home/user/.local/share/ferron-acme` for the "user" user, on macOS it can be `/Users/user/Library/Application Support/ferron-acme` for the "user" user, on Windows it can be `C:\Users\user\AppData\Local\ferron-acme` for the "user" user. On Docker, it would be `/var/lib/ferron-acme`.
 - `auto_tls_letsencrypt_production [enable_auto_tls_letsencrypt_production: bool]`
-  - This directive specifies whenever the production Let's Encrypt ACME endpoint is used. If set as `auto_tls_letsencrypt_production #false`, the staging Let's Encrypt ACME endpoint is used. Default: `auto_tls_letsencrypt_production #true`
+  - This directive specifies whether the production Let's Encrypt ACME endpoint is used. If set as `auto_tls_letsencrypt_production #false`, the staging Let's Encrypt ACME endpoint is used. Default: `auto_tls_letsencrypt_production #true`
 - `auto_tls_challenge <acme_challenge_type: string> [provider=<acme_challenge_provider: string>] [...]`
-  - This directive specifies the used ACME challenge type. The supported types are `"http-01"` (HTTP-01 ACME challenge), `"tls-alpn-01"` (TLS-ALPN-01 ACME challenge) and `"dns-01"` (DNS-01 ACME challenge; Ferron 2.0.0-beta.9 or newer). The `provider` prop defines the DNS provider to use for DNS-01 challenges. Additional props can be passed as parameters for the DNS provider, see automatic TLS documentation. Default: `auto_tls_challenge "tls-alpn-01"`
-- `auto_tls_directory <auto_tls_directory: string>` (Ferron 2.0.0-beta.3 or newer)
+  - This directive specifies the used ACME challenge type. The supported types are `"http-01"` (HTTP-01 ACME challenge), `"tls-alpn-01"` (TLS-ALPN-01 ACME challenge) and `"dns-01"` (DNS-01 ACME challenge). The `provider` prop defines the DNS provider to use for DNS-01 challenges. Additional props can be passed as parameters for the DNS provider, see automatic TLS documentation. Default: `auto_tls_challenge "tls-alpn-01"`
+- `auto_tls_directory <auto_tls_directory: string>`
   - This directive specifies the ACME directory URL from which the certificates are obtained. Overrides `auto_tls_letsencrypt_production` directive. Default: none
-- `auto_tls_no_verification [auto_tls_no_verification: bool]` (Ferron 2.0.0-beta.3 or newer)
-  - This directive specifies whenever to disable the certificate verification of the ACME server. Default: `auto_tls_no_verification #false`
-- `auto_tls_profile <auto_tls_profile: string|null>` (Ferron 2.0.0-beta.9 or newer)
+- `auto_tls_no_verification [auto_tls_no_verification: bool]`
+  - This directive specifies whether to disable the certificate verification of the ACME server. Default: `auto_tls_no_verification #false`
+- `auto_tls_profile <auto_tls_profile: string|null>`
   - This directive specifies the ACME profile to use for the certificates. Default: `auto_tls_profile #null`
-- `auto_tls_on_demand <auto_tls_on_demand: bool>` (Ferron 2.0.0-beta.13 or newer)
-  - This directive specifies whenever to enable the automatic TLS on demand. The functionality obtains TLS certificates automatically when a website is accessed for the first time. It's recommended to use either HTTP-01 or TLS-ALPN-01 ACME challenges, as DNS-01 ACME challenges might be slower due to DNS propagation delays. It's also recommended to configure the `auto_tls_on_demand_ask` directive alongside this directive. Default: `auto_tls_on_demand #false`
-- `auto_tls_eab (<auto_tls_eab_key_id: string> <auto_tls_eab_key_hmac: string>)|<auto_tls_eab_disabled: null>` (Ferron 2.0.0-beta.15 or newer)
+- `auto_tls_on_demand <auto_tls_on_demand: bool>`
+  - This directive specifies whether to enable the automatic TLS on demand. The functionality obtains TLS certificates automatically when a website is accessed for the first time. It's recommended to use either HTTP-01 or TLS-ALPN-01 ACME challenges, as DNS-01 ACME challenges might be slower due to DNS propagation delays. It's also recommended to configure the `auto_tls_on_demand_ask` directive alongside this directive. Default: `auto_tls_on_demand #false`
+- `auto_tls_eab (<auto_tls_eab_key_id: string> <auto_tls_eab_key_hmac: string>)|<auto_tls_eab_disabled: null>`
   - This directive specifies the EAB key ID and HMAC for the ACME External Account Binding. The HMAC key value is encoded in a URL-safe Base64 encoding. If set as `auto_tls_eab_disabled #null`, the EAB is disabled. Default: `auto_tls_eab_disabled #null`
 
 **Configuration example:**
@@ -318,22 +329,6 @@ manual-tls.example.com {
 }
 ```
 
-### Logging
-
-- `log <log_file_path: string>`
-  - This directive specifies the path to the access log file, which contains the HTTP response logs in Combined Log Format. This directive was global-only until Ferron 2.0.0-beta.3. Default: none
-- `error_log <error_log_file_path: string>`
-  - This directive specifies the path to the error log file. This directive was global-only until Ferron 2.0.0-beta.3. Default: none
-
-**Configuration example:**
-
-```kdl
-example.com {
-    log "/var/log/ferron/example.com.access.log"
-    error_log "/var/log/ferron/example.com.error.log"
-}
-```
-
 ## Directives
 
 ### Headers & response customization
@@ -344,9 +339,9 @@ example.com {
   - This directive specifies the server administrator's email address to be used in the default 500 Internal Server Error page. Default: none
 - `error_page <status_code: integer> <path: string>`
   - This directive specifies a custom error page to be served by the web server. Default: none
-- `header_remove <header_name: string>` (Ferron 2.0.0-beta.5 or newer)
+- `header_remove <header_name: string>`
   - This directive specifies a header to be removed from HTTP responses. This directive can be specified multiple times. Default: none
-- `header_replace <header_name: string> <header_value: string>` (Ferron 2.0.0-beta.9 or newer)
+- `header_replace <header_name: string> <header_value: string>`
   - This directive specifies a header to be added to HTTP responses, potentially replacing existing headers. The header values supports placeholders like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
 
 **Configuration example:**
@@ -371,11 +366,15 @@ example.com {
 ### Security & access control
 
 - `trust_x_forwarded_for [trust_x_forwarded_for: bool]`
-  - This directive specifies whenever to trust the value of the `X-Forwarded-For` header. It's recommended to configure this directive if behind a reverse proxy. Default: `trust_x_forwarded_for #false`
+  - This directive specifies whether to trust the value of the `X-Forwarded-For` header. It's recommended to configure this directive if behind a reverse proxy. Default: `trust_x_forwarded_for #false`
 - `status <status_code: integer> [url=<url: string>|regex=<regex: string>] [location=<location: string>] [realm=<realm: string>] [brute_protection=<enable_brute_protection: bool>] [users=<users: string>] [allowed=<allowed: string>] [not_allowed=<not_allowed: string>] [body=<response_body: string>]`
-  - This directive specifies the custom status code. This directive can be specified multiple times. The `url` prop specifies the request path for this status code. The `regex` prop specifies the regular expression (like `^/ferron(?:$|[/#?])`) for the custom status code. The `location` prop specifies the destination for the redirect; it supports placeholders (on Ferron 2.0.0-beta.15 and newer) like `{path}` which will be replaced with the request path. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whenever the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. The `allowed` prop is a comma-separated list of IP addresses applicable for the status code. The `not_allowed` prop is a comma-separated list of IP addresses not applicable for the status code. The `body` prop (Ferron 2.0.0-beta.5 or newer) specifies the response body to be sent. Default: none
+  - This directive specifies the custom status code. This directive can be specified multiple times. The `url` prop specifies the request path for this status code. The `regex` prop specifies the regular expression (like `^/ferron(?:$|[/#?])`) for the custom status code. The `location` prop specifies the destination for the redirect; it supports placeholders like `{path}` which will be replaced with the request path. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whether the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. The `allowed` prop is a comma-separated list of IP addresses applicable for the status code. The `not_allowed` prop is a comma-separated list of IP addresses not applicable for the status code. The `body` prop specifies the response body to be sent. Default: none
 - `user [username: string] [password_hash: string]`
   - This directive specifies an user with a password hash used for the HTTP basic authentication (it can be either Argon2, PBKDF2, or `scrypt` one). It's recommended to use the `ferron-passwd` tool to generate the password hash. This directive can be specified multiple times. Default: none
+- `block (<blocked_ip: string> [<blocked_ip: string> ...])|<not_specified: null>`
+  - This directive specifies IP addresses and CIDR ranges to be blocked. If set as `block #null`, this directive is ignored. This directive was global-only before Ferron 2.1.0. This directive can be specified multiple times. Default: none
+- `allow (<allowed_ip: string> [<allowed_ip: string> ...])|<not_specified: null>`
+  - This directive specifies IP addresses and CIDR ranges to be allowed. If set as `allow #null`, this directive is ignored. This directive was global-only before Ferron 2.1.0. This directive can be specified multiple times. Default: none
 
 **Configuration example:**
 
@@ -389,25 +388,31 @@ example.com {
     status 301 url="/old-page" location="/new-page"
 
     // User definitions for authentication (use `ferron-passwd` to generate password hashes)
-    users "admin" "$2b$10$hashedpassword12345"
-    users "moderator" "$2b$10$anotherhashedpassword"
+    user "admin" "$2b$10$hashedpassword12345"
+    user "moderator" "$2b$10$anotherhashedpassword"
+
+    // Limit who can access the site
+    block "192.168.1.100" "10.0.0.5"
+    allow "192.168.1.0/24" "10.0.0.0/8"
 }
 ```
 
 ### URL processing & routing
 
 - `allow_double_slashes [allow_double_slashes: bool]`
-  - This directive specifies whenever double slashes are allowed in the URL. Default: `allow_double_slashes #false`
+  - This directive specifies whether double slashes are allowed in the URL. Default: `allow_double_slashes #false`
 - `no_redirect_to_https [no_redirect_to_https: bool]`
-  - This directive specifies whenever not to redirect from HTTP URL to HTTPS URL. This directive is always effectively set to `no_redirect_to_https` when the server port is explicitly specified in the configuration. Default: `no_redirect_to_https #false`
+  - This directive specifies whether not to redirect from HTTP URL to HTTPS URL. This directive is always effectively set to `no_redirect_to_https` when the server port is explicitly specified in the configuration. Default: `no_redirect_to_https #false`
 - `wwwredirect [enable_wwwredirect: bool]`
-  - This directive specifies whenever to redirect from URL without "www." to URL with "www.". Default: `wwwredirect #false`
+  - This directive specifies whether to redirect from URL without "www." to URL with "www.". Default: `wwwredirect #false`
 - `rewrite <regex: string> <replacement: string> [directory=<directory: bool>] [file=<file: bool>] [last=<last: bool>] [allow_double_slashes=<allow_double_slashes: bool>]`
-  - This directive specifies the URL rewriting rule. This directive can be specified multiple times. The first value is a regular expression (like `^/ferron(?:$|[/#?])`). The `directory` prop specifies whenever the rewrite rule is applied when the path would correspond to directory (if `#false`, then it's not applied). The `file` prop specifies whenever the rewrite rule is applied when the path would correspond to file (if `#false`, then it's not applied). The `last` prop specifies whenever the rewrite rule is the last rule applied. The `allow_double_slashes` prop specifies whenever the rewrite rule allows double slashes in the request URL. Default: none
+  - This directive specifies the URL rewriting rule. This directive can be specified multiple times. The first value is a regular expression (like `^/ferron(?:$|[/#?])`). The `directory` prop specifies whether the rewrite rule is applied when the path would correspond to directory (if `#false`, then it's not applied). The `file` prop specifies whether the rewrite rule is applied when the path would correspond to file (if `#false`, then it's not applied). The `last` prop specifies whether the rewrite rule is the last rule applied. The `allow_double_slashes` prop specifies whether the rewrite rule allows double slashes in the request URL. Default: none
 - `rewrite_log [rewrite_log: bool]`
-  - This directive specifies whenever URL rewriting operations are logged into the error log. Default: `rewrite_log #false`
+  - This directive specifies whether URL rewriting operations are logged into the error log. Default: `rewrite_log #false`
 - `no_trailing_redirect [no_trailing_redirect: bool]`
-  - This directive specifies whenerver not to redirect the URL without a trailing slash to one with a trailing slash, if it refers to a directory. Default: `no_trailing_redirect #false`
+  - This directive specifies whenever not to redirect the URL without a trailing slash to one with a trailing slash, if it refers to a directory. Default: `no_trailing_redirect #false`
+- `disable_url_sanitizer [disable_url_sanitizer: bool]` (Ferron 2.3.0 or newer)
+  - This directive specifies whenever URL sanitation is disabled. Disabling URL sanitation allows the server to process the request URL as is, without rewriting the URL with potential path traversal sequences; this can be useful for certain applications that require raw URLs, for [RFC 3986 compliance](https://datatracker.ietf.org/doc/html/rfc3986#section-2.2). **Disabling URL sanitation may lead to risk of path traversal vulnerabilities, although built-in static file serving, CGI, SCGI and FastCGI module functionality would perform additional checks to prevent path traversal attacks.** Default: `disable_url_sanitizer #false`
 
 **Configuration example:**
 
@@ -432,13 +437,19 @@ example.com {
 - `root <webroot: string|null>`
   - This directive specifies the webroot from which static files are served. If set as `root #null`, the static file serving functionality is disabled. Default: none
 - `etag [enable_etag: bool]` (_static_ module)
-  - This directive specifies whenever the ETag header is enabled. Default: `etag #true`
+  - This directive specifies whether the ETag header is enabled. Default: `etag #true`
 - `compressed [enable_compression: bool]` (_static_ module)
-  - This directive specifies whenever the HTTP compression for static files is enabled. Default: `compressed #true`
+  - This directive specifies whether the HTTP compression for static files is enabled. Default: `compressed #true`
 - `directory_listing [enable_directory_listing: bool]` (_static_ module)
-  - This directive specifies whenever the directory listings are enabled. Default: `directory_listing #false`
-- `precompressed [enable_precompression: bool]` (_static_ module; Ferron 2.0.0-beta.18 or newer)
-  - This directive specifies whenever serving the precompressed static files is enabled. The precompressed static files would additionally have `.gz` extension for gzip, `.deflate` for Deflate, `.br` for Brotli, or `.zst` for Zstandard. Default: `precompressed #false`
+  - This directive specifies whether the directory listings are enabled. Default: `directory_listing #false`
+- `precompressed [enable_precompression: bool]` (_static_ module)
+  - This directive specifies whether serving the precompressed static files is enabled. The precompressed static files would additionally have `.gz` extension for gzip, `.deflate` for Deflate, `.br` for Brotli, or `.zst` for Zstandard. Default: `precompressed #false`
+- `mime_type <file_extension: string> <mime_type: string>` (_static_ module; Ferron 2.1.0 or newer)
+  - This directive specifies an additional MIME type corresponding to a file extension (like `.html`) for static files. Default: none
+- `index <index_file: string> [<another_index_file: string> ...]` (_static_ module; Ferron 2.1.0 or newer)
+  - This directive specifies the index files to be used when a directory is requested. Default: `index "index.html" "index.htm" "index.html"` (static file serving), `index "index.php" "index.cgi" "index.html" "index.htm" "index.html"` (CGI, FastCGI)
+- `dynamic_compressed [enable_dynamic_content_compression: bool]` (_dcompress_ module; Ferron 2.1.0 or newer)
+  - This directive specifies whether the HTTP compression for dynamic content is enabled. Default: `dynamic_compressed #false`
 
 **Configuration example:**
 
@@ -457,14 +468,14 @@ example.com {
 ### Caching
 
 - `cache [enable_cache: bool]` (_cache_ module)
-  - This directive specifies whenever the HTTP cache is enabled. Default: `cache #false`
+  - This directive specifies whether the HTTP cache is enabled. Default: `cache #false`
 - `cache_max_response_size <cache_max_response_size: integer|null>` (_cache_ module)
   - This directive specifies the maximum size of the response (in bytes) that can be stored in the HTTP cache. If set as `cache_max_response_size #null`, the cache can theoretically store responses of any size. Default: `cache_max_response_size 2097152`
 - `cache_vary <varying_request_header: string> [<varying_request_header: string> ...]` (_cache_ module)
   - This directive specifies the request headers that are used to vary the cache entries. This directive can be specified multiple times. Default: none
 - `cache_ignore <ignored_response_header: string> [<ignored_response_header: string> ...]` (_cache_ module)
   - This directive specifies the response headers that are ignored when caching the response. This directive can be specified multiple times. Default: none
-- `file_cache_control <cache_control: string|null>` (_static_ module; Ferron 2.0.0-beta.9 or newer)
+- `file_cache_control <cache_control: string|null>` (_static_ module)
   - This directive specifies the Cache-Control header value for static files. If set as `file_cache_control #null`, the Cache-Control header is not set. Default: `file_cache_control #null`
 
 **Configuration example:**
@@ -480,34 +491,37 @@ example.com {
 
 ### Reverse proxy & load balancing
 
-- `proxy <proxy_to: string|null> [unix=<unix_socket_path: string>]` (_rproxy_ module)
-  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported (Ferron 2.0.0-beta.19 and newer) via the `unix` prop set to the path to the socket, supported only on Unix and Unix-like systems. This directive can be specified multiple times. Default: none
+- `proxy <proxy_to: string|null> [unix=<unix_socket_path: string>] [limit=<conn_limit: integer|null>] [idle_timeout=<idle_timeout: integer|null>]` (_rproxy_ module)
+  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported via the `unix` prop set to the path to the socket (and the main value is set to the URL of the website), supported only on Unix and Unix-like systems. Established connections can be limited by the `limit` prop (Ferron 2.3.0 and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron 2.3.0 and newer); by default it is set to `60000` (60 seconds). This directive can be specified multiple times. Default: none
 - `lb_health_check [enable_lb_health_check: bool]` (_rproxy_ module)
-  - This directive specifies whenever the load balancer passive health check is enabled. Default: `lb_health_check #false`
+  - This directive specifies whether the load balancer passive health check is enabled. Default: `lb_health_check #false`
 - `lb_health_check_max_fails <max_fails: integer>` (_rproxy_ module)
   - This directive specifies the maximum number of consecutive failures before the load balancer marks a backend as unhealthy. Default: `lb_health_check_max_fails 3`
 - `proxy_no_verification [proxy_no_verification: bool]` (_rproxy_ module)
-  - This directive specifies whenever the reverse proxy should not verify the TLS certificate of the backend. Default: `proxy_no_verification #false`
+  - This directive specifies whether the reverse proxy should not verify the TLS certificate of the backend. Default: `proxy_no_verification #false`
 - `proxy_intercept_errors [proxy_intercept_errors: bool]` (_rproxy_ module)
-  - This directive specifies whenever the reverse proxy should intercept errors from the backend. Default: `proxy_intercept_errors #false`
-- `proxy_request_header <header_name: string> <header_value: string>` (_rproxy_ module; Ferron 2.0.0-beta.5 or newer)
-  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy. The header values supports placeholders (on Ferron 2.0.0-beta.9 and newer) like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
-- `proxy_request_header_remove <header_name: string>` (_rproxy_ module; Ferron 2.0.0-beta.5 or newer)
+  - This directive specifies whether the reverse proxy should intercept errors from the backend. Default: `proxy_intercept_errors #false`
+- `proxy_request_header <header_name: string> <header_value: string>` (_rproxy_ module)
+  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy. The header values supports placeholders like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
+- `proxy_request_header_remove <header_name: string>` (_rproxy_ module)
   - This directive specifies a header to be removed from HTTP requests sent by the reverse proxy. This directive can be specified multiple times. Default: none
-- `proxy_keepalive [proxy_keepalive: bool]` (_rproxy_ module; Ferron 2.0.0-beta.5 or newer)
-  - This directive specifies whenever the reverse proxy should keep the connection to the backend alive. Default: `proxy_keepalive #true`
-- `proxy_request_header_replace <header_name: string> <header_value: string>` (_rproxy_ module; Ferron 2.0.0-beta.9 or newer)
-  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy, potentially replacing existing headers. The header values supports placeholders (on Ferron 2.0.0-beta.9 and newer) like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
-- `proxy_http2 [enable_proxy_http2: bool]` (_rproxy_ module; Ferron 2.0.0-beta.13 or newer)
-  - This directive specifies whenever the reverse proxy can use HTTP/2 protocol when connecting to backend servers. Default: `proxy_http2 #false`
-- `lb_retry_connection [enable_lb_retry_connection: bool]` (_rproxy_ module; Ferron 2.0.0-beta.15 or newer)
-  - This directive specifies whenever the load balancer should retry connections to another backend server, in case of TCP connection or TLS handshake failure. Default: `lb_retry_connection #true`
-- `lb_algorithm <lb_algorithm: string>` (_rproxy_ module; Ferron 2.0.0-rc.1 or newer)
-  - This directive specifies the load balancing algorithm to be used. The supported algorithms are `random` (random selection), `round-robin` (round-robin), `least_conn` (least connections, "connections" would mean concurrent requests here), and `two_random` (power of two random choices; after two random choices, the backend server with the least concurrent requests is chosen). Default: `lb_algorithm "two_random"`
+- `proxy_keepalive [proxy_keepalive: bool]` (_rproxy_ module)
+  - This directive specifies whether the reverse proxy should keep the connection to the backend alive. Default: `proxy_keepalive #true`
+- `proxy_request_header_replace <header_name: string> <header_value: string>` (_rproxy_ module)
+  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy, potentially replacing existing headers. The header values supports placeholders like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
+- `proxy_http2 [enable_proxy_http2: bool]` (_rproxy_ module)
+  - This directive specifies whether the reverse proxy can use HTTP/2 protocol when connecting to backend servers. This directive would have effect only if the backend server supports HTTP/2 and is connected via HTTPS. Default: `proxy_http2 #false`
+- `lb_retry_connection [enable_lb_retry_connection: bool]` (_rproxy_ module)
+  - This directive specifies whether the load balancer should retry connections to another backend server, in case of TCP connection or TLS handshake failure. Default: `lb_retry_connection #true`
+- `lb_algorithm <lb_algorithm: string>` (_rproxy_ module)
+  - This directive specifies the load balancing algorithm to be used. The supported algorithms are `random` (random selection), `round_robin` (round-robin), `least_conn` (least connections, "connections" would mean concurrent requests here), and `two_random` (power of two random choices; after two random choices, the backend server with the least concurrent requests is chosen). Default: `lb_algorithm "two_random"`
 - `lb_health_check_window <lb_health_check_window: integer>` (_rproxy_ module)
-  - This directive specifies the window size (in milliseconds) for load balancer health checks. This directive was global-only before Ferron 2.0.0-rc.1. Default: `lb_health_check_window 5000`
-- `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module; Ferron 2.0.0-rc.1 or newer)
-  - This directive specifies the maximum number of idle connections to backend servers to keep alive. Default: `proxy_keepalive_idle_conns 48`
+  - This directive specifies the window size (in milliseconds) for load balancer health checks. Default: `lb_health_check_window 5000`
+- `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module; Ferron 2.2.1 or older; **REMOVED**) - This directive used to specify the maximum number of idle connections to backend servers to keep alive. The default was `proxy_keepalive_idle_conns 48`. In Ferron 2.3.0 and newer, this directive is no longer supported.
+- `proxy_http2_only [enable_proxy_http2_only: bool]` (_rproxy_ module; Ferron 2.1.0 or newer)
+  - This directive specifies whether the reverse proxy uses HTTP/2 protocol (without HTTP/1.1 fallback) when connecting to backend servers. When the backend server is connected via HTTPS, the reverse proxy negotiates HTTP/2 during the TLS handshake. When the backend server is connected via HTTP, the reverse proxy uses HTTP/2 with prior knowledge. This directive can be used when proxying gRPC requests. Default: `proxy_http2_only #false`
+- `proxy_proxy_header <proxy_version_version: string|null>` (_rproxy_ module; Ferron 2.1.0 or newer)
+  - This directive specifies the version of the PROXY protocol header to be sent to backend servers when acting as a reverse proxy. Supported versions are `"v1"` (PROXY protocol version 1) and `"v2"` (PROXY protocol version 2). If specified with `#null` value, no PROXY protocol header is sent. Default: `proxy_proxy_header #null`
 
 **Configuration example:**
 
@@ -541,7 +555,7 @@ api.example.com {
 ### Forward proxy
 
 - `forward_proxy [enable_forward_proxy: bool]` (_fproxy_ module)
-  - This directive specifies whenever the forward proxy functionality is enabled. Default: `forward_proxy #false`
+  - This directive specifies whether the forward proxy functionality is enabled. Default: `forward_proxy #false`
 
 **Configuration example:**
 
@@ -556,7 +570,7 @@ api.example.com {
 - `auth_to <auth_to: string|null>` (_fauth_ module)
   - This directive specifies the URL to which the web server should send requests for forwarded authentication. Default: none
 - `auth_to_no_verification [auth_to_no_verification: bool]` (_fauth_ module)
-  - This directive specifies whenever the server should not verify the TLS certificate of the backend authentication server. Default: `auth_to_no_verification #false`
+  - This directive specifies whether the server should not verify the TLS certificate of the backend authentication server. Default: `auth_to_no_verification #false`
 - `auth_to_copy <request_header_to_copy: string> [<request_header_to_copy: string> ...]` (_fauth_ module)
   - This directive specifies the request headers that will be copied and sent to the forwarded authentication backend server. This directive can be specified multiple times. Default: none
 
@@ -574,25 +588,25 @@ app.example.com {
 ### CGI & application servers
 
 - `cgi [enable_cgi: bool]` (_cgi_ module)
-  - This directive specifies whenever the CGI handler is enabled. Default: `cgi #false`
+  - This directive specifies whether the CGI handler is enabled. Default: `cgi #false`
 - `cgi_extension <cgi_extension: string|null>` (_cgi_ module)
   - This directive specifies CGI script extensions, which will be handled via the CGI handler outside the `cgi-bin` directory. This directive can be specified multiple times. Default: none
 - `cgi_interpreter <cgi_extension: string> <cgi_interpreter: string|null> [<cgi_interpreter_argument: string> ...]` (_cgi_ module)
   - This directive specifies CGI script interpreters used by the CGI handler. If CGI interpreter is set to `#null`, the default interpreter settings will be disabled. This directive can be specified multiple times. Default: specified for `.pl`, `.py`, `.sh`, `.ksh`, `.csh`, `.rb` and `.php` extensions, and additionally `.exe`, `.bat` and `.vbs` extensions for Windows
 - `cgi_environment <environment_variable_name: string> <environment_variable_value: string>` (_cgi_ module)
-  - This directive specifies an environment variable passed into CGI applications. Default: none
+  - This directive specifies an environment variable passed into CGI applications. This directive can be specified multiple times. Default: none
 - `scgi <scgi_to: string|null>` (_scgi_ module)
-  - This directive specifies whenever SCGI is enabled and the base URL to which the SCGI client will send requests. TCP (for example `tcp://localhost:4000/`) and Unix socket URLs (only on Unix systems; for example `unix:///run/scgi.sock`) are supported. Default: `scgi #null`
+  - This directive specifies whether SCGI is enabled and the base URL to which the SCGI client will send requests. TCP (for example `tcp://localhost:4000/`) and Unix socket URLs (only on Unix systems; for example `unix:///run/scgi.sock`) are supported. Default: `scgi #null`
 - `scgi_environment <environment_variable_name: string> <environment_variable_value: string>` (_scgi_ module)
-  - This directive specifies an environment variable passed into SCGI server. Default: none
+  - This directive specifies an environment variable passed into SCGI server. This directive can be specified multiple times. Default: none
 - `fcgi <fcgi_to: string|null> [pass=<fcgi_pass: bool>]` (_fcgi_ module)
-  - This directive specifies whenever FastCGI is enabled and the base URL to which the FastCGI client will send requests. The `pass` prop specified whenever to pass the all the requests to the FastCGI request handler. TCP (for example `tcp://localhost:4000/`) and Unix socket URLs (only on Unix systems; for example `unix:///run/scgi.sock`) are supported. Default: `fcgi #null pass=#true`
+  - This directive specifies whether FastCGI is enabled and the base URL to which the FastCGI client will send requests. The `pass` prop specified whether to pass the all the requests to the FastCGI request handler. TCP (for example `tcp://localhost:4000/`) and Unix socket URLs (only on Unix systems; for example `unix:///run/scgi.sock`) are supported. Default: `fcgi #null pass=#true`
 - `fcgi_php <fcgi_php_to: string|null>` (_fcgi_ module)
-  - This directive specifies whenever PHP through FastCGI is enabled and the base URL to which the FastCGI client will send requests for ".php" files. TCP (for example `tcp://localhost:4000/`) and Unix socket URLs (only on Unix systems; for example `unix:///run/scgi.sock`) are supported. Default: `fcgi_php #null`
+  - This directive specifies whether PHP through FastCGI is enabled and the base URL to which the FastCGI client will send requests for ".php" files. TCP (for example `tcp://localhost:4000/`) and Unix socket URLs (only on Unix systems; for example `unix:///run/scgi.sock`) are supported. Default: `fcgi_php #null`
 - `fcgi_extension <fcgi_extension: string|null>` (_fcgi_ module)
   - This directive specifies file extensions, which will be handled via the FastCGI handle. This directive can be specified multiple times. Default: none
 - `fcgi_environment <environment_variable_name: string> <environment_variable_value: string>` (_fcgi_ module)
-  - This directive specifies an environment variable passed into FastCGI server. Default: none
+  - This directive specifies an environment variable passed into FastCGI server. This directive can be specified multiple times. Default: none
 
 **Configuration example:**
 
@@ -619,18 +633,19 @@ fastcgi.example.com {
     fcgi "tcp://localhost:9000/" pass=#true
     fcgi_php "tcp://localhost:9000/"
     fcgi_extension ".php" ".php5"
-    fcgi_environment "SCRIPT_FILENAME" "/var/www/example.com{path}"
     fcgi_environment "DOCUMENT_ROOT" "/var/www/example.com"
 }
 ```
 
 ### Content processing
 
-- `replace <searched_string: string> <replaced_string: string> [once=<replace_once: bool>]` (_replace_ module; Ferron 2.0.0-beta.2 or newer)
-  - This directive specifies the string to be replaced in a response body, and a replacement string. The `once` prop specifies whenever the string will be replaced once, by default this prop is set to `#true`. Default: none
-- `replace_last_modified [preserve_last_modified: bool]` (_replace_ module; Ferron 2.0.0-beta.2 or newer)
-  - This directive specifies whenever to preserve the "Last-Modified" header in the response. Default: `replace_last_modified #false`
-- `replace_filter_types <filter_type: string> [<filter_type: string> ...]` (_replace_ module; Ferron 2.0.0-beta.2 or newer)
+Disabling HTTP compression is required for string replacement.
+
+- `replace <searched_string: string> <replaced_string: string> [once=<replace_once: bool>]` (_replace_ module)
+  - This directive specifies the string to be replaced in a response body, and a replacement string. The `once` prop specifies whether the string will be replaced once, by default this prop is set to `#true`. This directive can be specified multiple times. Default: none
+- `replace_last_modified [preserve_last_modified: bool]` (_replace_ module)
+  - This directive specifies whether to preserve the "Last-Modified" header in the response. Default: `replace_last_modified #false`
+- `replace_filter_types <filter_type: string> [<filter_type: string> ...]` (_replace_ module)
   - This directive specifies the response MIME type filters. The filter can be either a specific MIME type (like `text/html`) or a wildcard (`*`) specifying that responses with all MIME types are processed for replacement. This directive can be specified multiple times. Default: `replace_filter_types "text/html"`
 
 **Configuration example:**
@@ -651,8 +666,8 @@ example.com {
 
 ### Rate limiting
 
-- `limit [enable_limit: bool] [rate=<rate: integer|float>] [burst=<rate: integer|float>]` (_limit_ module; Ferron 2.0.0-beta.2 or newer)
-  - This directive specifies whenever the rate limiting is enabled. The `rate` prop specifies the maximum average amount of requests per second, defaults to 25 requests per second. The `burst` prop specifies the maximum peak amount of requests per second, defaults to 4 times the maximum average amount of requests per second. Default: `limit #false`
+- `limit [enable_limit: bool] [rate=<rate: integer|float>] [burst=<rate: integer|float>]` (_limit_ module)
+  - This directive specifies whether the rate limiting is enabled. The `rate` prop specifies the maximum average amount of requests per second, defaults to 25 requests per second. The `burst` prop specifies the maximum peak amount of requests per second, defaults to 4 times the maximum average amount of requests per second. Default: `limit #false`
 
 **Configuration example:**
 
@@ -674,10 +689,24 @@ example.com {
 
 ### Logging
 
-- `log_date_format <log_date_format: string>` (Ferron 2.0.0-beta.19 or newer)
+- `log_date_format <log_date_format: string>`
   - This directive specifies the date format (according to POSIX) for the access log file. Default: `"%d/%b/%Y:%H:%M:%S %z"`
-- `log_format <log_format: string>` (Ferron 2.0.0-beta.19 or newer)
+- `log_format <log_format: string>`
   - This directive specifies the entry format for the access log file. The placeholders can be found in the reference below the section specifying. Default: `"{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""` (Combined Log Format)
+- `log <log_file_path: string>` (_logfile_ observability backend)
+  - This directive specifies the path to the access log file, which contains the HTTP response logs in Combined Log Format. This directive was a global and virtual host directive before Ferron 2.2.0. Default: none
+- `error_log <error_log_file_path: string>` (_logfile_ observability backend)
+  - This directive specifies the path to the error log file. This directive was a global and virtual host directive before Ferron 2.2.0. Default: none
+- `otlp_no_verification [otlp_no_verification: bool]` (_otlp_ observability backend; Ferron 2.2.0 or newer)
+  - This directive specifies whether the server should not verify the TLS certificate of the OTLP (OpenTelemetry Protocol) endpoint. Default: `otlp_no_verification #false`
+- `otlp_service_name <otlp_service_name: string>` (_otlp_ observability backend; Ferron 2.2.0 or newer)
+  - This directive specifies the service name to be used in the OTLP (OpenTelemetry Protocol) endpoint. Default: `otlp_service_name "ferron"`
+- `otlp_logs <otlp_logs_endpoint: string|null> [authorization=<otlp_logs_authorization: string>] [protocol=<otlp_logs_protocol: string>]` (_otlp_ observability backend; Ferron 2.2.0 or newer)
+  - This directive specifies the endpoint URL to be used for logging logs into the OTLP (OpenTelemetry Protocol) endpoint. The `authorization` prop is a value for `Authorization` HTTP header, if HTTP protocol is used. The `protocol` prop specifies a protocol to use (`grpc` for gRPC, `http/protobuf` for HTTP with protobuf data, `http/json` for HTTP with JSON data). HTTP and HTTPS (only for HTTP-based protocols) URLs are supported. Default: `otlp_logs #null protocol="grpc"`
+- `otlp_metrics <otlp_metrics_endpoint: string|null> [authorization=<otlp_metrics_authorization: string>] [protocol=<otlp_metrics_protocol: string>]` (_otlp_ observability backend; Ferron 2.2.0 or newer)
+  - This directive specifies the endpoint URL to be used for logging metrics into the OTLP (OpenTelemetry Protocol) endpoint. The `authorization` prop is a value for `Authorization` HTTP header, if HTTP protocol is used. The `protocol` prop specifies a protocol to use (`grpc` for gRPC, `http/protobuf` for HTTP with protobuf data, `http/json` for HTTP with JSON data). HTTP and HTTPS (only for HTTP-based protocols) URLs are supported. Default: `otlp_metrics #null protocol="grpc"`
+- `otlp_traces <otlp_traces_endpoint: string|null> [authorization=<otlp_traces_authorization: string>] [protocol=<otlp_traces_protocol: string>]` (_otlp_ observability backend; Ferron 2.2.0 or newer)
+  - This directive specifies the endpoint URL to be used for logging traces into the OTLP (OpenTelemetry Protocol) endpoint. The `authorization` prop is a value for `Authorization` HTTP header, if HTTP protocol is used. The `protocol` prop specifies a protocol to use (`grpc` for gRPC, `http/protobuf` for HTTP with protobuf data, `http/json` for HTTP with JSON data). HTTP and HTTPS (only for HTTP-based protocols) URLs are supported. Default: `otlp_traces #null protocol="grpc"`
 
 **Configuration example:**
 
@@ -686,36 +715,45 @@ example.com {
     log_date_format "%d/%b/%Y:%H:%M:%S %z"
     log_format "{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""
 }
+
+example.com {
+    log "/var/log/ferron/example.com.access.log"
+    error_log "/var/log/ferron/example.com.error.log"
+}
 ```
 
 ## Subconditions
 
-Ferron 2.0.0-beta.15 and newer supports conditional configuration based on conditions. This allows you to configure different settings based on the request method, path, or other conditions.
+Ferron 2.0.0 and newer supports conditional configuration based on conditions. This allows you to configure different settings based on the request method, path, or other conditions.
 
 Below is the list of supported subconditions:
 
-- `is_remote_ip <remote_ip: string> [<remote_ip: string> ...]` (Ferron 2.0.0-beta.15 or newer)
+- `is_remote_ip <remote_ip: string> [<remote_ip: string> ...]`
   - This subcondition checks if the request is coming from a specific remote IP address or a list of IP addresses.
-- `is_forwarded_for <remote_ip: string> [<remote_ip: string> ...]` (Ferron 2.0.0-beta.15 or newer)
+- `is_forwarded_for <remote_ip: string> [<remote_ip: string> ...]`
   - This subcondition checks if the request (with respect for `X-Forwarded-For` header) is coming from a specific forwarded IP address or a list of IP addresses.
-- `is_not_remote_ip <remote_ip: string> [<remote_ip: string> ...]` (Ferron 2.0.0-beta.15 or newer)
+- `is_not_remote_ip <remote_ip: string> [<remote_ip: string> ...]`
   - This subcondition checks if the request is not coming from a specific remote IP address or a list of IP addresses.
-- `is_not_forwarded_for <remote_ip: string> [<remote_ip: string> ...]` (Ferron 2.0.0-beta.15 or newer)
+- `is_not_forwarded_for <remote_ip: string> [<remote_ip: string> ...]`
   - This subcondition checks if the request (with respect for `X-Forwarded-For` header) is not coming from a specific forwarded IP address or a list of IP addresses.
-- `is_equal <left_side: string> <right_side: string>` (Ferron 2.0.0-beta.15 or newer)
+- `is_equal <left_side: string> <right_side: string>`
   - This subcondition checks if the left side is equal to the right side.
-- `is_not_equal <left_side: string> <right_side: string>` (Ferron 2.0.0-beta.15 or newer)
+- `is_not_equal <left_side: string> <right_side: string>`
   - This subcondition checks if the left side is not equal to the right side.
-- `is_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]` (Ferron 2.0.0-beta.15 or newer)
+- `is_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]`
   - This subcondition checks if the value matches the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
-- `is_not_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]` (Ferron 2.0.0-beta.15 or newer)
+- `is_not_regex <value: string> <regex: string> [case_insensitive=<case_insensitive: bool>]`
   - This subcondition checks if the value does not match the regular expression. The `case_insensitive` prop specifies whether the regex should be case insensitive (`#false` by default).
-- `is_rego <rego_policy: string>` (Ferron 2.0.0-rc.1 or newer)
+- `is_rego <rego_policy: string>`
   - This subcondition evaluates a Rego policy.
+- `set_constant <key: string> <value: string>` (Ferron 2.1.0 or newer)
+  - This subcondition sets a constant value.
+- `is_language <language: string>` (Ferron 2.1.0 or newer)
+  - This subcondition checks if the language is the preferred language specified in the `Accept-Language` header. This subcondition uses `LANGUAGES` constant, which is a comma-separated list of preferred language codes (such as `en-US` or `fr-FR`).
 
 ## Rego subconditions
 
-Ferron 2.0.0-rc.1 and newer supports more advanced subconditions with Rego policies embedded in Ferron configuration.
+Ferron 2.0.0 and newer supports more advanced subconditions with Rego policies embedded in Ferron configuration.
 
 When writing Rego policies for Ferron subconditions, you need to set the package name to `ferron` (`package ferron` line). Ferron checks the `pass` result of the policy.
 
@@ -729,6 +767,7 @@ Inputs for Rego-based subconditions (`input`) are as follows:
 - `input.socket_data.server_ip` (string) - the server's IP address.
 - `input.socket_data.server_port` (number) - the server's port.
 - `input.socket_data.encrypted` (boolean) - whether the connection is encrypted.
+- `input.constants` (array<string, string>; Ferron 2.1.0 or newer) - the constants set by `set_constant` subconditions.
 
 You can read more about Rego in [Open Policy Agent documentation](https://www.openpolicyagent.org/docs/policy-language).
 
@@ -767,19 +806,21 @@ example.com {
 Ferron supports the following placeholders for header values, subconditions, reverse proxying, and redirect destinations:
 
 - `{path}` - the request URI with path (for example, `/index.html`)
-- `{path_and_query}` (Ferron 2.0.0-beta.19 or newer) - the request URI with path and query string (for example, `/index.html?param=value`)
-- `{method}` (Ferron 2.0.0-beta.9 or newer) - the request method
-- `{version}` (Ferron 2.0.0-beta.9 or newer) - the HTTP version of the request
-- `{header:<header_name>}` (Ferron 2.0.0-beta.9 or newer) - the header value of the request URI
-- `{scheme}` (Ferron 2.0.0-beta.9 or newer) - the scheme of the request URI (`http` or `https`), applicable only for subconditions, reverse proxying and redirect destinations.
-- `{client_ip}` (Ferron 2.0.0-beta.9 or newer) - the client IP address, applicable only for subconditions, reverse proxying and redirect destinations.
-- `{client_port}` (Ferron 2.0.0-beta.9 or newer) - the client port number, applicable only for subconditions, reverse proxying and redirect destinations.
-- `{server_ip}` (Ferron 2.0.0-beta.9 or newer) - the server IP address, applicable only for subconditions, reverse proxying and redirect destinations.
-- `{server_port}` (Ferron 2.0.0-beta.9 or newer) - the server port number, applicable only for subconditions, reverse proxying and redirect destinations.
+- `{path_and_query}` - the request URI with path and query string (for example, `/index.html?param=value`)
+- `{method}` - the request method
+- `{version}` - the HTTP version of the request
+- `{header:<header_name>}` - the header value of the request URI
+- `{scheme}` - the scheme of the request URI (`http` or `https`), applicable only for subconditions, reverse proxying and redirect destinations.
+- `{client_ip}` - the client IP address, applicable only for subconditions, reverse proxying and redirect destinations.
+- `{client_port}` - the client port number, applicable only for subconditions, reverse proxying and redirect destinations.
+- `{client_ip_canonical}` (Ferron 2.3.0 or newer) - the client IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`), applicable only for subconditions, reverse proxying and redirect destinations.
+- `{server_ip}` - the server IP address, applicable only for subconditions, reverse proxying and redirect destinations.
+- `{server_port}` - the server port number, applicable only for subconditions, reverse proxying and redirect destinations.
+- `{server_ip_canonical}` (Ferron 2.3.0 or newer) - the server IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`), applicable only for subconditions, reverse proxying and redirect destinations.
 
 ## Log placeholders
 
-Ferron 2.0.0-beta.19 and newer supports the following placeholders for access logs:
+Ferron 2.0.0 and newer supports the following placeholders for access logs:
 
 - `{path}` - the request URI with path (for example, `/index.html`)
 - `{path_and_query}` - the request URI with path and query string (for example, `/index.html?param=value`)
@@ -789,12 +830,60 @@ Ferron 2.0.0-beta.19 and newer supports the following placeholders for access lo
 - `{scheme}` - the scheme of the request URI (`http` or `https`).
 - `{client_ip}` - the client IP address.
 - `{client_port}` - the client port number.
+- `{client_ip_canonical}` (Ferron 2.3.0 or newer) - the client IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`).
 - `{server_ip}` - the server IP address.
 - `{server_port}` - the server port number.
+- `{server_ip_canonical}` (Ferron 2.3.0 or newer) - the server IP address in canonical form (IPv4-mapped IPv6 addresses, like `::ffff:127.0.0.1`, are converted to IPv4, like `127.0.0.1`).
 - `{auth_user}` - the username of the authenticated user (`-`, if not authenticated)
 - `{timestamp}` - the formatted timestamp of the entry
 - `{status_code}` - the HTTP status code of the response
 - `{content_length}` - the content length of the response (`-`, if not available)
+
+## Language-specific content configuration example
+
+Below is an example of Ferron configuration involving conditionals to serve language-specific content:
+
+```kdl
+// Snippet for common language settings
+snippet "LANG_COMMON" {
+    set_constant "LANGUAGES" "en,de,pl"
+}
+
+example.com {
+    // Generic response
+    status 200 body="lang: Unknown"
+
+    condition "LANG_PL" {
+        use "LANG_COMMON"
+        is_language "pl"
+    }
+
+    condition "LANG_DE" {
+        use "LANG_COMMON"
+        is_language "de"
+    }
+
+    condition "LANG_EN" {
+        use "LANG_COMMON"
+        is_language "en"
+    }
+
+    if "LANG_PL" {
+        // Polish language
+        status 200 body="lang: Polski"
+    }
+
+    if "LANG_DE" {
+        // German language
+        status 200 body="lang: Deutsch"
+    }
+
+    if "LANG_EN" {
+        // English language
+        status 200 body="lang: English"
+    }
+}
+```
 
 ## Location block example
 
@@ -894,8 +983,8 @@ snippet "static_caching" {
 snippet "admin_protection" {
     // Admin area protection
     status 401 realm="Admin Area" users="admin,superuser"
-    users "admin" "$2b$10$hashedpassword12345"
-    users "superuser" "$2b$10$anotherhashpassword67890"
+    user "admin" "$2b$10$hashedpassword12345"
+    user "superuser" "$2b$10$anotherhashpassword67890"
     limit rate=10 burst=20
 }
 
@@ -1051,7 +1140,7 @@ example.com {
 
     // API endpoints
     location "/api" {
-        if "is_api_request"
+        if "is_api_request" {
             // Add headers that aren't inherited
             use "security_headers"
             header "Strict-Transport-Security" "max-age=31536000; includeSubDomains"

@@ -1,5 +1,6 @@
 globals {
   auto_tls_directory "https://pebble:14000/dir"
+  auto_tls_eab "kid-3" "HjudV5qnbreN-n9WyFSH-t4HXuEx_XFen45zuxY-G1h6fr74V3cUM_dVlwQZBWmc"
   auto_tls_no_verification
 }
 
@@ -22,5 +23,10 @@ ferron-http01 {
 ferron-http01-ondemand {
   auto_tls_challenge "http-01"
   auto_tls_on_demand
+  root "/var/www/ferron" // Serve "Ferron is installed successfully" page
+}
+
+ferron-brokencache {
+  auto_tls_cache "/ferron-cache" // This shouldn't be able to be accessed by a non-root user
   root "/var/www/ferron" // Serve "Ferron is installed successfully" page
 }

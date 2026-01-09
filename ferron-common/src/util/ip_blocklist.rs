@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv6Addr};
 
@@ -16,6 +17,22 @@ impl Default for IpBlockList {
   }
 }
 
+impl Ord for IpBlockList {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self
+      .blocked_ips
+      .iter()
+      .cmp(other.blocked_ips.iter())
+      .then(self.blocked_cidrs.iter().cmp(other.blocked_cidrs.iter()))
+  }
+}
+
+impl PartialOrd for IpBlockList {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    Some(self.cmp(other))
+  }
+}
+
 impl IpBlockList {
   /// Creates a new empty block list
   pub fn new() -> Self {
@@ -30,9 +47,7 @@ impl IpBlockList {
     for ip_str in ip_list {
       match ip_str {
         "localhost" => {
-          self
-            .blocked_ips
-            .insert(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)));
+          self.blocked_ips.insert(IpAddr::V6(Ipv6Addr::LOCALHOST));
         }
         _ => {
           if let Ok(ip) = ip_str.parse::<IpAddr>() {

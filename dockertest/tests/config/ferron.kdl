@@ -2,6 +2,11 @@ snippet "WORDPRESS_SCAN" {
   status 403
 }
 
+aunrel:80 {
+  // Some unrelated configuration
+  status 403
+}
+
 ferron:80 {
   root "/var/www/ferron"
 
@@ -35,8 +40,13 @@ ferron:80 {
     use "WORDPRESS_SCAN"
   }
 
-  // Deny WordPress scan
+  // Deny some scanner scan
   if "SOMESCANNER_SCAN" {
     status 403
+  }
+
+  // Redirect non-existent URLs to the basic.txt file
+  error_config 404 {
+    status 302 regex="^/(?!basic\\.txt(?:$|[?#]))" location="/basic.txt"
   }
 }

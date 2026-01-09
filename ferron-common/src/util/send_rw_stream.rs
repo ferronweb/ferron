@@ -112,18 +112,22 @@ impl SendRwStream {
 impl Sink<Bytes> for SendRwStream {
   type Error = std::io::Error;
 
+  #[inline]
   fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
     Pin::new(&mut self.tx).poll_close(cx)
   }
 
+  #[inline]
   fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
     Pin::new(&mut self.tx).poll_flush(cx)
   }
 
+  #[inline]
   fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
     Pin::new(&mut self.tx).poll_ready(cx)
   }
 
+  #[inline]
   fn start_send(mut self: Pin<&mut Self>, item: Bytes) -> Result<(), Self::Error> {
     Pin::new(&mut self.tx).start_send(item)
   }
@@ -132,12 +136,14 @@ impl Sink<Bytes> for SendRwStream {
 impl Stream for SendRwStream {
   type Item = Result<Bytes, std::io::Error>;
 
+  #[inline]
   fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     Pin::new(&mut self.rx).poll_next(cx)
   }
 }
 
 impl Drop for SendRwStream {
+  #[inline]
   fn drop(&mut self) {
     self.rx.close();
     self.read_cancel.cancel();
@@ -150,12 +156,14 @@ struct SenderWrap<T> {
 }
 
 impl<T> SenderWrap<T> {
+  #[inline]
   fn send(&self, data: T) -> async_channel::Send<'_, T> {
     self.inner.send(data)
   }
 }
 
 impl<T> Drop for SenderWrap<T> {
+  #[inline]
   fn drop(&mut self) {
     self.inner.close();
   }

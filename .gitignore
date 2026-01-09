@@ -1,6 +1,7 @@
 # Compiled binaries and generated documentation
 /target/
 /build-prepare/target/
+/build-installer/target/
 
 # Profiling data
 /perf.data
@@ -42,3 +43,6 @@ Thumbs.db
 # Temporary files used during packaging
 /packaging/deb/ferron_*
 /packaging/deb/md5sums.tmp
+/packaging/rpm/data/
+/packaging/rpm/rpm/
+/packaging/rpm/ferron.spec

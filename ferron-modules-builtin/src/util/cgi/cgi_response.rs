@@ -1,4 +1,4 @@
-use memchr::memmem::Finder;
+use memchr::memchr2;
 use smallvec::SmallVec;
 use std::io::Error;
 use std::pin::Pin;
@@ -34,10 +34,6 @@ where
   /// Asynchronous method to get the response headers
   pub async fn get_head(&mut self) -> Result<&[u8], Error> {
     let mut temp_buf = [0u8; RESPONSE_BUFFER_CAPACITY];
-    let rnrn = Finder::new(b"\r\n\r\n");
-    let nrnr = Finder::new(b"\n\r\n\r");
-    let nn = Finder::new(b"\n\n");
-    let rr = Finder::new(b"\r\r");
     let to_parse_length;
 
     loop {
@@ -57,22 +53,12 @@ where
       }
 
       // Determine the starting point for searching the "\r\n\r\n" sequence
-      let begin_rnrn_or_nrnr_search = self.response_buf.len().saturating_sub(3);
-      let begin_rr_or_nn_search = self.response_buf.len().saturating_sub(1);
+      let begin_search = self.response_buf.len().saturating_sub(3);
       self.response_buf.extend_from_slice(&temp_buf[..read_bytes]);
 
       // Search for the "\r\n\r\n" sequence in the response buffer
-      if let Some(rnrn_index) = rnrn.find(&self.response_buf[begin_rnrn_or_nrnr_search..]) {
-        to_parse_length = begin_rnrn_or_nrnr_search + rnrn_index + 4;
-        break;
-      } else if let Some(nrnr_index) = nrnr.find(&self.response_buf[begin_rnrn_or_nrnr_search..]) {
-        to_parse_length = begin_rnrn_or_nrnr_search + nrnr_index + 4;
-        break;
-      } else if let Some(nn_index) = nn.find(&self.response_buf[begin_rr_or_nn_search..]) {
-        to_parse_length = begin_rr_or_nn_search + nn_index + 2;
-        break;
-      } else if let Some(rr_index) = rr.find(&self.response_buf[begin_rr_or_nn_search..]) {
-        to_parse_length = begin_rr_or_nn_search + rr_index + 2;
+      if let Some((separator_index, separator_len)) = search_header_body_separator(&self.response_buf[begin_search..]) {
+        to_parse_length = begin_search + separator_index + separator_len;
         break;
       }
     }
@@ -90,6 +76,7 @@ impl<R> AsyncRead for CgiResponse<R>
 where
   R: AsyncRead + Unpin,
 {
+  #[inline]
   fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<std::io::Result<()>> {
     // If the response header length is known and the buffer contains more data than the header length
     if let Some(response_head_length) = self.response_head_length {
@@ -109,6 +96,40 @@ where
       other => other,
     }
   }
+}
+
+/// Searches for the header/body separator in a given slice.
+/// Returns the index of the separator and the length of the separator.
+#[inline]
+fn search_header_body_separator(slice: &[u8]) -> Option<(usize, usize)> {
+  if slice.len() < 2 {
+    // Slice too short
+    return None;
+  }
+  let mut last_chars: SmallVec<[u8; 4]> = SmallVec::with_capacity(4);
+  let mut index = 0;
+  while let Some(found_index) = memchr2(b'\r', b'\n', &slice[index..]) {
+    if found_index > 0 {
+      // Not "\n\n", "\r\n\r\n", "\r\r", nor "\n\n"...
+      last_chars.clear();
+    }
+    let ch = slice[index + found_index];
+    if last_chars.get(last_chars.len().saturating_sub(1)) == Some(&ch) {
+      // "\n\n" or "\r\r"
+      return Some((index + found_index - 1, 2));
+    } else {
+      last_chars.push(ch);
+    }
+    if last_chars.len() == 4 {
+      // "\r\n\r\n" or "\n\r\n\r"
+      return Some((index + found_index - 3, 4));
+    }
+    index += found_index + 1;
+    if index >= slice.len() {
+      break;
+    }
+  }
+  None
 }
 
 #[cfg(test)]
@@ -135,6 +156,26 @@ mod tests {
 
     let head = response.get_head().await.unwrap();
     assert_eq!(head, b"Content-Type: text/plain\n\n");
+  }
+
+  #[tokio::test]
+  async fn test_get_head_empty() {
+    let data = b"\r\n\r\n";
+    let mut stream = Builder::new().read(data).build();
+    let mut response = CgiResponse::new(&mut stream);
+
+    let head = response.get_head().await.unwrap();
+    assert_eq!(head, b"\r\n\r\n");
+  }
+
+  #[tokio::test]
+  async fn test_get_head_empty_nn() {
+    let data = b"\n\n";
+    let mut stream = Builder::new().read(data).build();
+    let mut response = CgiResponse::new(&mut stream);
+
+    let head = response.get_head().await.unwrap();
+    assert_eq!(head, b"\n\n");
   }
 
   #[tokio::test]

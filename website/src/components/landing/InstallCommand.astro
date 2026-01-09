@@ -18,40 +18,41 @@ import FontAwesomeIcon from "../FontAwesomeIcon.astro";
         class="btn hover:bg-primary/90 hover:text-primary-foreground rounded-none border-r border-muted/60 py-2 px-4 h-12"
         data-install-command-button="linux"
       >
-        <FontAwesomeIcon icon={faTerminal} class="mr-2 h-4 w-4" />
+        <FontAwesomeIcon icon={faTerminal} class="mr-2 size-4"/>
         GNU/Linux
       </button>
       <button
         class="btn hover:bg-primary/90 hover:text-primary-foreground rounded-none border-r border-muted/60 py-2 px-4 h-12"
         data-install-command-button="windows"
       >
-        <FontAwesomeIcon icon={faDesktop} class="mr-2 h-4 w-4" />
+        <FontAwesomeIcon icon={faDesktop} class="mr-2 size-4"/>
         Windows Server
       </button>
       <button
         class="btn hover:bg-primary/90 hover:text-primary-foreground rounded-none border-r border-muted/60 py-2 px-4 h-12"
         data-install-command-button="docker"
       >
-        <FontAwesomeIcon icon={faBox} class="mr-2 h-4 w-4" />
+        <FontAwesomeIcon icon={faBox} class="mr-2 size-4"/>
         Docker
       </button>
     </div>
     <div class="bg-secondary/50 p-4">
       <div class="bg-muted/30 rounded-md flex">
         <pre
-          class="text-sm sm:text-base overflow-x-auto p-2 grow self-center"><code class="text-foreground" data-install-command>Command unavailable</code></pre>
+          class="text-sm sm:text-base overflow-x-auto p-2 grow self-center"
+        ><code class="text-foreground" data-install-command>Command unavailable</code></pre>
 
         <button
-          class="btn p-0 bg-secondary/50 hover:bg-accent h-7 w-7 min-w-7 sm:h-8 sm:w-8 sm:min-w-8 m-1 text-muted-foreground hover:text-accent-foreground cursor-pointer"
+          class="btn p-0 bg-secondary/50 hover:bg-accent size-7 min-w-7 sm:h-8 sm:w-8 sm:min-w-8 m-1 text-muted-foreground hover:text-accent-foreground cursor-pointer"
           data-install-command-copy-button
         >
           <span data-install-command-copy-icon
-            ><FontAwesomeIcon icon={faCopy} class="w-4 !h-4" /></span
+            ><FontAwesomeIcon icon={faCopy} class="size-4!"/></span
           >
           <span data-install-command-copy-done-icon class="hidden"
             ><FontAwesomeIcon
               icon={faCheck}
-              class="w-4 !h-4"
+              class="size-4!"
               data-install-command-copy-done-icon
             /></span
           >
@@ -63,6 +64,8 @@ import FontAwesomeIcon from "../FontAwesomeIcon.astro";
 </install-command>
 
 <script>
+  import { track } from "@plausible-analytics/tracker";
+
   const commands: Record<string, string> = {
     linux: 'sudo bash -c "$(curl -fsSL https://get.ferron.sh/v2)"',
     windows: 'powershell -c "irm https://get.ferron.sh/v2-win | iex"',
@@ -152,7 +155,7 @@ import FontAwesomeIcon from "../FontAwesomeIcon.astro";
             }, 2000);
 
             // Track the command copying button clicks; the Plausible event name is "install-command-copy".
-            window.plausible.trackEvent("install-command-copy", {
+            track("install-command-copy", {
               props: { variant: selectedPlatform }
             });
           }

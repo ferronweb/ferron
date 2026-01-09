@@ -27,6 +27,9 @@ modules:
     cargo_feature: cache
     loader: CacheModuleLoader
   - builtin: true
+    cargo_feature: dcompress
+    loader: DynamicCompressionModuleLoader
+  - builtin: true
     cargo_feature: replace
     loader: ReplaceModuleLoader
   - builtin: true
@@ -59,6 +62,10 @@ modules:
 
 dns:
   - builtin: true
+    id: bunny
+    cargo_feature: bunny
+    provider: BunnyDnsProvider
+  - builtin: true
     id: cloudflare
     cargo_feature: cloudflare
     provider: CloudflareDnsProvider
@@ -66,6 +73,14 @@ dns:
     id: desec
     cargo_feature: desec
     provider: DesecDnsProvider
+  - builtin: true
+    id: digitalocean
+    cargo_feature: digitalocean
+    provider: DigitalOceanDnsProvider
+  - builtin: true
+    id: ovh
+    cargo_feature: ovh
+    provider: OvhDnsProvider
   - builtin: true
     id: porkbun
     cargo_feature: porkbun
@@ -84,3 +99,11 @@ dns:
   #   id: mock
   #   crate: ferron-dns-mock
   #   provider: MockDnsProvider
+
+observability:
+  - builtin: true
+    cargo_feature: logfile
+    loader: LogFileObservabilityBackendLoader
+  - builtin: true
+    cargo_feature: otlp
+    loader: OtlpObservabilityBackendLoader

@@ -9,16 +9,17 @@
 <p align="center">
   <b>Ferron</b> - a fast, memory-safe web server written in Rust
 </p>
-<p align="center">
-  <a href="https://ferron.sh/docs" target="_blank"><img alt="Static Badge" src="https://img.shields.io/badge/Documentation-orange"></a>
-  <a href="https://ferron.sh" target="_blank"><img alt="Website" src="https://img.shields.io/website?url=https%3A%2F%2Fferron.sh"></a>
-  <a href="https://matrix.to/#/#ferronweb:matrix.org" target="_blank"><img alt="Chat" src="https://img.shields.io/matrix/ferronweb%3Amatrix.org"></a>
-  <a href="https://x.com/ferron_web" target="_blank"><img alt="X (formerly Twitter) Follow" src="https://img.shields.io/twitter/follow/ferron_web"></a>
-  <a href="https://hub.docker.com/r/ferronserver/ferron" target="_blank"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/ferronserver/ferron"></a>
-  <a href="https://github.com/ferronweb/ferron" target="_blank"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/ferronweb/ferron"></a>
-</p>
 
 * * *
+
+<p align="center">
+  <a href="https://ferron.sh/docs" target="_blank"><img alt="Static Badge" src="https://img.shields.io/badge/Documentation-orange?style=for-the-badge"></a>
+  <a href="https://ferron.sh" target="_blank"><img alt="Website" src="https://img.shields.io/website?url=https%3A%2F%2Fferron.sh&style=for-the-badge"></a>
+  <a href="https://matrix.to/#/#ferronweb:matrix.org" target="_blank"><img alt="Chat" src="https://img.shields.io/matrix/ferronweb%3Amatrix.org?style=for-the-badge"></a>
+  <a href="https://x.com/ferron_web" target="_blank"><img alt="X (formerly Twitter) Follow" src="https://img.shields.io/twitter/follow/ferron_web?style=for-the-badge"></a>
+  <a href="https://hub.docker.com/r/ferronserver/ferron" target="_blank"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/ferronserver/ferron?style=for-the-badge"></a>
+  <a href="https://github.com/ferronweb/ferron" target="_blank"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/ferronweb/ferron?style=for-the-badge"></a>
+</p>
 
 ## Features
 
@@ -77,6 +78,8 @@ make smoketest # Perform a smoke test
 make smoketest-dev # Perform a smoke test, for development and debugging
 make package # Package the web server to a ZIP archive (run it after building it)
 make package-deb # Package the web server to a Debian package (run it after building it)
+make package-rpm # Package the web server to an RPM package (run it after building it)
+make installer # Build installers for Ferron 2
 ```
 
 Or a `build.ps1` build script, if you're on Windows:
@@ -101,6 +104,9 @@ powershell -ExecutionPolicy Bypass .\build.ps1 SmoketestDev
 
 REM Package the web server to a ZIP archive (run it after building it)
 powershell -ExecutionPolicy Bypass .\build.ps1 Package
+
+REM Build installers for Ferron 2
+powershell -ExecutionPolicy Bypass .\build.ps1 Installer
 ```
 
 You can also create a ZIP archive that can be used by the Ferron installer:
@@ -143,6 +149,10 @@ You can check the [Ferron documentation](https://ferron.sh/docs/configuration-kd
 ## Contributing
 
 See [Ferron contribution page](https://ferron.sh/contribute) for details.
+
+Below is a list of contributors to Ferron. **Thank you to all of them!**
+
+[![Contributor list](./CONTRIBUTORS.svg)](https://github.com/ferronweb/ferron/graphs/contributors)
 
 ## License
 

@@ -1,17 +1,22 @@
 ---
-import { getCollection, render } from "astro:content";
-import MainLayout from "../../layouts/MainLayout.astro";
-import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
-import { faArrowLeft, faArrowRight } from "@fortawesome/free-solid-svg-icons";
-import { format } from "date-fns";
-import blogMissing from "../../assets/blog-missing.png";
 import { Image } from "astro:assets";
+import { getCollection, render } from "astro:content";
 import {
-  faThreads,
-  faXTwitter,
   faFacebook,
-  faLinkedin
+  faLinkedin,
+  faThreads,
+  faXTwitter
 } from "@fortawesome/free-brands-svg-icons";
+import {
+  faArrowLeft,
+  faArrowRight,
+  faCalendar,
+  faUser
+} from "@fortawesome/free-solid-svg-icons";
+import { format, formatISO } from "date-fns";
+import blogMissing from "../../assets/blog-missing.png";
+import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
+import MainLayout from "../../layouts/MainLayout.astro";
 
 export async function getStaticPaths() {
   const posts = await getCollection("blog");
@@ -46,9 +51,13 @@ const { Content } = await render(Astro.props.post);
   title={data.title}
   description={data.description}
   image={data.cover ? data.cover.src : blogMissing.src}
+  articleMetaData={{
+    publishedTime: data.date ? formatISO(data.date) : undefined,
+    authors: data.author ? [data.author] : undefined
+  }}
 >
   <main
-    class="max-w-5xl container mx-auto pt-4 pb-8 md:pt-24 md:pb-28 flex flex-col items-center !px-4"
+    class="max-w-5xl container mx-auto pt-4 pb-8 md:pt-24 md:pb-28 flex flex-col items-center px-4!"
   >
     <div
       class="w-full mx-auto flex flex-row justify-between items-center print:hidden"
@@ -59,24 +68,49 @@ const { Content } = await render(Astro.props.post);
       >
         <FontAwesomeIcon
           icon={faArrowLeft}
-          class="mr-1.5 w-5 h-5 group-hover:translate-x-1 transition-all align-middle inline-block"
+          class="mr-1.5 size-5 group-hover:translate-x-1 transition-all align-middle! inline-block!"
         />
         <span class="align-text-top">Back</span>
       </a>
     </div>
     <header class="text-start mb-6 pb-2 w-full border-b-2 print:pb-0">
       <div class="mb-2">
-        <h1 class="text-4xl md:text-5xl py-3 font-bold">
-          {data.title}
-        </h1>
-        <p class="mb-6 text-base md:text-lg text-muted-foreground print:mb-4">
-          Published on: <time
-            >{
-              data.date === undefined
-                ? "Unknown date"
-                : format(data.date, "MMMM d, yyyy")
-            }</time
-          >
+        <h1 class="text-4xl md:text-5xl py-3 font-bold">{data.title}</h1>
+        <p
+          class="mb-6 text-base md:text-lg text-muted-foreground print:mb-4 flex flex-wrap gap-4"
+        >
+          {
+            data.date !== undefined ? (
+              <span class="whitespace-nowrap">
+                <FontAwesomeIcon
+                  icon={faCalendar}
+                  class="size-5! me-1 inline-block! align-middle!"
+                />
+                <span class="align-middle">
+                  <>
+                    <span class="sr-only">Published on: </span>
+                    <time>{format(data.date, "MMMM d, yyyy")}</time>
+                  </>
+                </span>
+              </span>
+            ) : null
+          }
+          {
+            data.author !== undefined ? (
+              <span class="whitespace-nowrap">
+                <FontAwesomeIcon
+                  icon={faUser}
+                  class="size-5! me-1 inline-block! align-middle!"
+                />
+                <span class="align-middle">
+                  <>
+                    <span class="sr-only">Author: </span>
+                    <span>{data.author}</span>
+                  </>
+                </span>
+              </span>
+            ) : null
+          }
         </p>
         <Image
           src={data.cover || blogMissing}
@@ -88,9 +122,9 @@ const { Content } = await render(Astro.props.post);
       </div>
     </header>
     <article
-      class="prose w-full max-w-full md:prose-lg print:prose-pre:!whitespace-pre-wrap print:prose-pre:!overflow-x-visible"
+      class="prose w-full max-w-full md:prose-lg print:prose-pre:whitespace-pre-wrap! print:prose-pre:overflow-x-visible!"
     >
-      <Content />
+      <Content/>
     </article>
     <div class="mt-6 pt-6 border-t-2 w-full text-lg print:hidden">
       <div
@@ -104,40 +138,44 @@ const { Content } = await render(Astro.props.post);
             href={`https://x.com/intent/tweet?text=${encodeURIComponent(data.title || "")}&url=${encodeURIComponent(Astro.url.href)}`}
             target="_blank"
             rel="noopener noreferrer"
+            class="flex items-center"
           >
             <FontAwesomeIcon
               icon={faXTwitter}
-              class="w-6 h-6 text-muted-foreground hover:text-primary transition-colors"
+              class="size-6! text-muted-foreground hover:text-primary transition-colors align-text-top!"
             />
           </a>
           <a
             href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(Astro.url.href)}`}
             target="_blank"
             rel="noopener noreferrer"
+            class="flex items-center"
           >
             <FontAwesomeIcon
               icon={faFacebook}
-              class="w-6 h-6 text-muted-foreground hover:text-primary transition-colors"
+              class="size-6! text-muted-foreground hover:text-primary transition-colors align-text-top!"
             />
           </a>
           <a
             href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(Astro.url.href)}`}
             target="_blank"
             rel="noopener noreferrer"
+            class="flex items-center"
           >
             <FontAwesomeIcon
               icon={faLinkedin}
-              class="w-6 h-6 text-muted-foreground hover:text-primary transition-colors"
+              class="size-6! text-muted-foreground hover:text-primary transition-colors align-text-top!"
             />
           </a>
           <a
             href={`https://threads.com/intent/post?text=${encodeURIComponent(`${data.title} - ${Astro.url.href}`)}`}
             target="_blank"
             rel="noopener noreferrer"
+            class="flex items-center"
           >
             <FontAwesomeIcon
               icon={faThreads}
-              class="w-6 h-6 text-muted-foreground hover:text-primary transition-colors"
+              class="size-6! text-muted-foreground hover:text-primary transition-colors align-text-top!"
             />
           </a>
         </div>
@@ -154,7 +192,7 @@ const { Content } = await render(Astro.props.post);
               <div class="self-start text-primary group-hover:text-accent">
                 <FontAwesomeIcon
                   icon={faArrowLeft}
-                  class="me-2 w-5 h-5 group-hover:-translate-x-1 transition-all align-middle inline-block"
+                  class="me-2 size-5 group-hover:-translate-x-1 transition-all align-middle inline-block"
                 />
               </div>
               <span class="inline-block self-center">
@@ -191,7 +229,7 @@ const { Content } = await render(Astro.props.post);
               <div class="self-start text-primary group-hover:text-accent">
                 <FontAwesomeIcon
                   icon={faArrowRight}
-                  class="ms-2 w-5 h-5 group-hover:translate-x-1 transition-all align-middle inline-block"
+                  class="ms-2 size-5 group-hover:translate-x-1 transition-all align-middle inline-block"
                 />
               </div>
             </a>

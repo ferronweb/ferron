@@ -1,15 +1,17 @@
 ---
+import { Image } from "astro:assets";
 import { getCollection } from "astro:content";
-import MainLayout from "../../layouts/MainLayout.astro";
-import { format } from "date-fns";
-import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
 import {
+  faCalendar,
   faChevronLeft,
   faChevronRight,
-  faExternalLink
+  faExternalLink,
+  faUser
 } from "@fortawesome/free-solid-svg-icons";
+import { format } from "date-fns";
 import blogMissing from "../../assets/blog-missing.png";
-import { Image } from "astro:assets";
+import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
+import MainLayout from "../../layouts/MainLayout.astro";
 
 // prettier-ignore
 export async function getStaticPaths() {
@@ -28,15 +30,17 @@ export async function getStaticPaths() {
   });
   const pages = [];
   while (sortedPosts.length > 0) {
-    pages.push(sortedPosts.splice(0, pages.length == 0 ? 7 : 6));
+    pages.push(sortedPosts.splice(0, pages.length === 0 ? 7 : 6));
   }
   return pages.map((page, index) => ({
-    params: { page: index == 0 ? undefined : (index + 1).toString() },
-    props: { page: {
-      data: page,
-      currentPage: index + 1,
-      lastPage: pages.length
-    } }
+    params: { page: index === 0 ? undefined : (index + 1).toString() },
+    props: {
+      page: {
+        data: page,
+        currentPage: index + 1,
+        lastPage: pages.length
+      }
+    }
   }));
 }
 
@@ -60,7 +64,7 @@ if (begPage < 1) {
 >
   <main
     id="blog"
-    class="max-w-screen-xl mx-auto !px-4 py-6 md:py-28 flex items-center justify-center flex-col"
+    class="max-w-screen-xl mx-auto px-4! py-6 md:py-28 flex items-center justify-center flex-col"
   >
     <h1 class="text-4xl md:text-6xl pb-1 md:pb-2 font-bold">Ferron Blog</h1>
     <p
@@ -73,11 +77,6 @@ if (begPage < 1) {
     >
       {
         data.map((post, index) => {
-          const formattedDate =
-            post.data.date === undefined
-              ? "Unknown date"
-              : format(new Date(post.data.date), "MMMM d, yyyy");
-
           const truncatedDescription =
             post.data.description === undefined
               ? ""
@@ -101,7 +100,7 @@ if (begPage < 1) {
                     alt={post.data.title || null}
                     width={750}
                     height={450}
-                    class={`object-cover w-full h-full`}
+                    class={`object-cover size-full`}
                   />
                 </div>
                 <div
@@ -123,9 +122,34 @@ if (begPage < 1) {
                     {truncatedDescription}
                   </p>
                   <p
-                    class={`text-xs ${currentPage === 1 && index === 0 ? "md:text-sm" : ""} text-muted-foreground mt-2`}
+                    class={`text-xs ${currentPage === 1 && index === 0 ? "md:text-sm" : ""} text-muted-foreground mt-2 flex flex-wrap gap-2`}
                   >
-                    Published on: <time>{formattedDate}</time>
+                    {post.data.date !== undefined ? (
+                      <span class="whitespace-nowrap">
+                        <FontAwesomeIcon
+                          icon={faCalendar}
+                          class="size-4! me-0.5 inline-block! align-middle!"
+                        />
+                        <span class="align-middle">
+                          <span class="sr-only">Published on: </span>
+                          <time>
+                            {format(new Date(post.data.date), "MMMM d, yyyy")}
+                          </time>
+                        </span>
+                      </span>
+                    ) : null}
+                    {post.data.author !== undefined ? (
+                      <span class="whitespace-nowrap">
+                        <FontAwesomeIcon
+                          icon={faUser}
+                          class="size-4! me-0.5 inline-block! align-middle!"
+                        />
+                        <span class="align-middle">
+                          <span class="sr-only">Author: </span>
+                          {post.data.author}
+                        </span>
+                      </span>
+                    ) : null}
                   </p>
                 </div>
               </a>
@@ -143,7 +167,7 @@ if (begPage < 1) {
                 {currentPage > 1 && (
                   <li>
                     <a
-                      class="btn p-0 h-10 w-10 shadow-none"
+                      class="btn p-0 size-10 shadow-none"
                       href={
                         currentPage - 1 == 1
                           ? "/blog"
@@ -158,7 +182,7 @@ if (begPage < 1) {
                   (_, i) => (
                     <li>
                       <a
-                        class={`btn p-0 h-10 w-10 shadow-none ${currentPage === begPage + i ? "btn-primary" : ""}`}
+                        class={`btn p-0 size-10 shadow-none ${currentPage === begPage + i ? "btn-primary" : ""}`}
                         href={
                           begPage + i == 1 ? "/blog" : `/blog/${begPage + i}`
                         }
@@ -171,7 +195,7 @@ if (begPage < 1) {
                 {currentPage < lastPage && (
                   <li>
                     <a
-                      class="btn p-0 h-10 w-10 shadow-none"
+                      class="btn p-0 size-10 shadow-none"
                       href={
                         currentPage + 1 == 1
                           ? "/blog"

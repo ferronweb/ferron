@@ -33,6 +33,12 @@ export default [
     label: "Debian/Ubuntu",
   },
   {
+    href: "/docs/installation/rpm",
+    target: "_self",
+    sub: true,
+    label: "RHEL/Fedora",
+  },
+  {
     href: "/docs/installation/docker",
     target: "_self",
     sub: true,
@@ -103,6 +109,12 @@ export default [
     target: "_self",
     sub: true,
     label: "Server modules",
+  },
+  {
+    href: "/docs/observability",
+    target: "_self",
+    sub: true,
+    label: "Observability backends",
   },
   {
     href: "/docs/automatic-tls",

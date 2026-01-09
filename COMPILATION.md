@@ -85,3 +85,44 @@ dns:
     cargo_feature: mock
     provider: MockProvider
 ```
+
+## Observability backends
+
+You can also decide what observability backends to include in your Ferron installation by copying the `ferron-build.yaml` file to `ferron-build-override.yaml`, and editing the file.
+
+The supported observability backends are defined in the `observability` section, which is a list of supported observability backends to be included in the build. Below are the supported properties for the observability backends:
+
+- **builtin** (_bool_)
+  - Determines if support for a specific observability backend is built-in (in the `ferron-observability-builtin` crate). Default: `false`
+- **cargo_feature** (_String_)
+  - The Cargo feature for `ferron-observability-builtin` crate to enable for support for a specific observability backend. Used with built-in support. Default: none
+- **git** (_String_)
+  - The Git repository URL for support for a specific observability backend. Default: none
+- **branch** (_String_)
+  - The Git branch for support for a specific observability backend. Used with Git repositories. Default: none
+- **path** (_String_)
+  - The local path (absolute paths are recommended) to support for a specific observability backend. Default: none
+- **crate** (_String_)
+  - The name of the Rust crate corresponding to support for a specific observability backend. Used with observability backend support crates from Git or local paths. Default: none
+- **loader** (_String_)
+  - The name of the struct name that will be used to load support for a specific observability backend (usually ends with `ObservabilityBackendLoader`). The struct must have a `new` method. Default: none
+
+For example, you can specify observability backend support from a Git repository:
+
+```yaml
+observability:
+  # ...
+  - git: https://git.example.com/ferron-observability-example.git
+    crate: ferron-observability-example
+    loader: ExampleObservabilityBackendLoader
+```
+
+Or a built-in observability backend:
+
+```yaml
+observability:
+  # ...
+  - builtin: true
+    cargo_feature: example
+    loader: ExampleObservabilityBackendLoader
+```

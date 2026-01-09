@@ -8,6 +8,7 @@ use std::{collections::HashMap, error::Error};
 use ferron_common::config::{
   ServerConfigurationEntries, ServerConfigurationEntry, ServerConfigurationFilters, ServerConfigurationValue,
 };
+use ferron_common::observability::ObservabilityBackendChannels;
 
 use crate::config::{
   adapters::{kdl::KdlConfigurationAdapter, ConfigurationAdapter},
@@ -74,6 +75,7 @@ impl ConfigurationAdapter for DockerAutoConfigurationAdapter {
       },
       entries: embedded_global_configuration_entries,
       modules: vec![],
+      observability: ObservabilityBackendChannels::new(),
     };
 
     // Insert the embedded global configuration at the beginning of the configuration vector

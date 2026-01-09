@@ -56,6 +56,14 @@ pub fn replace_header_placeholders(
               output.push_str("{client_port}");
             }
           }
+          "client_ip_canonical" => {
+            if let Some(socket_data) = socket_data {
+              output.push_str(&socket_data.remote_addr.ip().to_canonical().to_string());
+            } else {
+              // No socket data, leave it as is
+              output.push_str("{client_ip_canonical}");
+            }
+          }
           "server_ip" => {
             if let Some(socket_data) = socket_data {
               output.push_str(&socket_data.local_addr.ip().to_string());
@@ -70,6 +78,14 @@ pub fn replace_header_placeholders(
             } else {
               // No socket data, leave it as is
               output.push_str("{server_port}");
+            }
+          }
+          "server_ip_canonical" => {
+            if let Some(socket_data) = socket_data {
+              output.push_str(&socket_data.local_addr.ip().to_canonical().to_string());
+            } else {
+              // No socket data, leave it as is
+              output.push_str("{server_ip_canonical}");
             }
           }
           _ => {

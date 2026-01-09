@@ -45,17 +45,14 @@ env:
 
 jobs:
   dockertest:
-    runs-on: warp-ubuntu-latest-x64-8x
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: |
-            network=host
 
       - name: Set up Docker Compose
         uses: docker/setup-compose-action@v1
@@ -67,8 +64,8 @@ jobs:
           context: .
           file: Dockerfile.test
           load: true
-          cache-from: type=gha,url=http://127.0.0.1:49160/,version=1
-          cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       # Build the test runner image to cache it for the test suite
       - name: Build the test runner image
@@ -76,8 +73,8 @@ jobs:
         with:
           context: ./dockertest/runner
           load: true
-          cache-from: type=gha,url=http://127.0.0.1:49160/,version=1
-          cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Run the test suite
         shell: bash

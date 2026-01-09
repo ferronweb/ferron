@@ -1,13 +1,13 @@
 // @ts-check
-import { defineConfig, fontProviders } from "astro/config";
+
+import sitemap from "@astrojs/sitemap";
 
 import tailwindcss from "@tailwindcss/vite";
-import sitemap from "@astrojs/sitemap";
+import { defineConfig, fontProviders } from "astro/config";
 import pagefind from "astro-pagefind";
-
-import kdl from "./kdl.tmLanguage.json";
-
 import rehypeWrap from "rehype-wrap";
+import { visit } from "unist-util-visit";
+import kdl from "./kdl.tmLanguage.json";
 
 // https://astro.build/config
 export default defineConfig({
@@ -24,7 +24,9 @@ export default defineConfig({
     sitemap(),
     pagefind(),
     (await import("astro-compress")).default({
-      HTML: true // This setting wouldn't work with React (it would cause hydration errors), but since the website uses vanilla JS, it's safe to enable.
+      HTML: true, // This setting wouldn't work with React (it would cause hydration errors), but since the website uses vanilla JS, it's safe to enable.
+      CSS: false, // When enabled, it doesn't work with `rolldown-vite` (broken responsive styles)
+      Image: false
     })
   ],
   markdown: {
@@ -36,6 +38,22 @@ export default defineConfig({
       langs: [kdl],
       defaultColor: false
     },
+    remarkPlugins: [
+      function remarkNofollowLinks() {
+        return (tree, file) => {
+          const data = file.data.astro?.frontmatter || {};
+          if (!data.nofollow) return;
+
+          // Traverse Markdown AST
+          visit(tree, "link", (node) => {
+            // Add rel="nofollow" via data.hProperties (used by rehype)
+            node.data ??= {};
+            node.data.hProperties ??= {};
+            node.data.hProperties.rel = "nofollow";
+          });
+        };
+      }
+    ],
     rehypePlugins: [
       [rehypeWrap, { wrapper: "div.overflow-x-auto", selector: "table" }]
     ]

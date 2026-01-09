@@ -1,0 +1,165 @@
+---
+import { format } from "date-fns";
+
+interface Props {
+  data: object[];
+  command: string;
+  unit: string;
+  competitors: string[];
+  description: string;
+  title: string;
+  date: Date;
+  higherIsBetter: boolean;
+  system: string;
+  class?: string;
+  note?: string;
+  linuxVersion?: string;
+}
+
+const { data, unit, competitors } = Astro.props;
+---
+
+<div
+  data-slot="card"
+  class={`card px-0 rounded-xl flex flex-col overflow-hidden ${Astro.props.class || ''}`}
+>
+  <div
+    data-slot="card-header"
+    class="grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6 pb-2"
+  >
+    <div data-slot="card-title" class="leading-none font-semibold">
+      <h3 class="text-lg">{Astro.props.title}</h3>
+    </div>
+    <div data-slot="card-description" class="text-muted-foreground text-sm">
+      {Astro.props.description}
+    </div>
+  </div>
+  <div data-slot="card-content" class="px-6 grow flex flex-col">
+    <benchmark-chart
+      data-props={JSON.stringify({
+        data,
+        unit,
+        competitors
+      })}
+      class="min-h-80 grow"
+    >
+      <!-- Had to use <div> elements for the chart to resize properly -->
+      <div class="relative min-h-80 size-full">
+        <canvas></canvas>
+      </div>
+    </benchmark-chart>
+    <div
+      class="mt-4 text-center max-w-full prose prose-sm text-muted-foreground prose-p:leading-snug"
+    >
+      <p>
+        {Astro.props.higherIsBetter ? "Higher is better" : "Lower is better"}
+        {" "}| Benchmarks run on {Astro.props.system}, with the{" "}
+        <code>{Astro.props.command}</code>
+        {" "}command
+        {
+          Astro.props.linuxVersion ? ` | Linux kernel version ${Astro.props.linuxVersion}` : ""
+        }
+        {
+          Astro.props.date
+            ? ` | Benchmarks performed on ${format(Astro.props.date, "MMMM d, yyyy")}`
+            : ""
+        }
+      </p>
+      {Astro.props.note && (
+        <p><strong>Note:</strong> {Astro.props.note}</p>
+      )}
+    </div>
+  </div>
+</div>
+
+<script>
+  import {
+    BarController,
+    BarElement,
+    CategoryScale,
+    Chart,
+    type ChartItem,
+    Legend,
+    LinearScale,
+    Tooltip
+  } from "chart.js";
+
+  interface BenchmarkData {
+    name: string;
+    ferron: string | number;
+    competitors: (string | number)[];
+  }
+
+  Chart.register([
+    BarController,
+    BarElement,
+    CategoryScale,
+    LinearScale,
+    Legend,
+    Tooltip
+  ]);
+
+  const style = getComputedStyle(document.body);
+  const mutedForegroundColor = style.getPropertyValue("--muted-foreground");
+  const borderColor = style.getPropertyValue("--border");
+  const primaryColor = style.getPropertyValue("--primary");
+  const chartColors = [
+    style.getPropertyValue("--chart-1"),
+    style.getPropertyValue("--chart-2"),
+    style.getPropertyValue("--chart-3"),
+    style.getPropertyValue("--chart-4"),
+    style.getPropertyValue("--chart-5")
+  ];
+  const fontFamily = style.getPropertyValue("--font-funnel-sans");
+
+  class BenchmarkChart extends HTMLElement {
+    connectedCallback() {
+      const props = JSON.parse(this.dataset.props || "{}");
+      const canvas = this.querySelector("canvas");
+      Chart.defaults.font.family = fontFamily;
+      Chart.defaults.font.size = 14;
+      Chart.defaults.color = `hsla(${mutedForegroundColor}, 1)`;
+      Chart.defaults.borderColor = `hsla(${borderColor}, 1)`;
+      new Chart(canvas as ChartItem, {
+        type: "bar",
+        data: {
+          labels: props.data.map((item: BenchmarkData) => item.name),
+          datasets: [
+            {
+              label: "Ferron",
+              data: props.data.map((item: BenchmarkData) => item.ferron),
+              backgroundColor: `hsla(${primaryColor}, 1)`
+            },
+            ...props.competitors.map((competitor: string, index: number) => ({
+              label: competitor,
+              data: props.data.map(
+                (item: BenchmarkData) => item.competitors[index]
+              ),
+              backgroundColor: `hsla(${chartColors[index]}, 1)`
+            }))
+          ]
+        },
+        options: {
+          maintainAspectRatio: false,
+
+          scales: {
+            x: {
+              grid: {
+                display: false
+              }
+            },
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: props.unit
+              }
+            }
+          }
+        }
+      });
+    }
+  }
+
+  customElements.define("benchmark-chart", BenchmarkChart);
+</script>

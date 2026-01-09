@@ -1,19 +1,20 @@
 use std::{collections::HashMap, error::Error};
 
 use async_trait::async_trait;
+use dns_update::DnsUpdater;
 
 use ferron_common::dns::{separate_subdomain_from_domain_name, DnsProvider};
 
 /// deSEC DNS provider
 pub struct DesecDnsProvider {
-  client: desec_api::Client,
+  client: DnsUpdater,
 }
 
 impl DesecDnsProvider {
   /// Create a new deSEC DNS provider
-  fn new(api_token: &str) -> Result<Self, desec_api::Error> {
+  fn new(api_token: &str) -> dns_update::Result<Self> {
     Ok(Self {
-      client: desec_api::Client::new(api_token.to_string())?,
+      client: DnsUpdater::new_desec(api_token, None)?,
     })
   }
 
@@ -39,17 +40,19 @@ impl DnsProvider for DesecDnsProvider {
     } else {
       format!("_acme-challenge.{subdomain}")
     };
+    let full_domain = format!("{subdomain}.{domain_name}");
     self
       .client
-      .rrset()
-      .create_rrset(
-        &domain_name,
-        Some(&subdomain),
-        "TXT",
+      .create(
+        full_domain,
+        dns_update::DnsRecord::TXT {
+          content: dns_value.to_string(),
+        },
         3600,
-        &vec![format!("\"{dns_value}\"")],
+        domain_name,
       )
-      .await?;
+      .await
+      .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())
   }
 
@@ -60,11 +63,12 @@ impl DnsProvider for DesecDnsProvider {
     } else {
       format!("_acme-challenge.{subdomain}")
     };
+    let full_domain = format!("{subdomain}.{domain_name}");
     self
       .client
-      .rrset()
-      .delete_rrset(&domain_name, Some(&subdomain), "TXT")
-      .await?;
+      .delete(full_domain, domain_name, dns_update::DnsRecordType::TXT)
+      .await
+      .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())
   }
 }

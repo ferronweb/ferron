@@ -1,709 +1,507 @@
 export default [
   {
-    ferron: "0.05",
-    competitor1: "0.09",
-    competitor2: "0.08",
-    competitor3: "0.10",
-    concurrency: "1"
+    concurrency: "1",
+    ferron: "0.063",
+    competitors: ["0.124", "0.063", "0.126", "0.06"]
   },
   {
-    ferron: "1.32",
-    competitor1: "1.03",
-    competitor2: "0.46",
-    competitor3: "1.45",
-    concurrency: "100"
+    concurrency: "25",
+    ferron: "0.175",
+    competitors: ["0.253", "0.154", "0.291", "0.107"]
   },
   {
-    ferron: "1.70",
-    competitor1: "2.08",
-    competitor2: "0.95",
-    competitor3: "3.15",
-    concurrency: "200"
+    concurrency: "50",
+    ferron: "0.282",
+    competitors: ["0.472", "0.316", "0.546", "0.204"]
   },
   {
-    ferron: "2.40",
-    competitor1: "3.65",
-    competitor2: "1.48",
-    competitor3: "5.03",
-    concurrency: "300"
+    concurrency: "75",
+    ferron: "0.394",
+    competitors: ["0.64", "0.389", "0.814", "0.252"]
   },
   {
-    ferron: "3.45",
-    competitor1: "5.36",
-    competitor2: "2.11",
-    competitor3: "7.05",
-    concurrency: "400"
+    concurrency: "100",
+    ferron: "0.508",
+    competitors: ["0.839", "0.475", "1.08", "0.326"]
   },
   {
-    ferron: "4.47",
-    competitor1: "7.10",
-    competitor2: "2.81",
-    competitor3: "8.95",
-    concurrency: "500"
+    concurrency: "125",
+    ferron: "0.61",
+    competitors: ["1.02", "0.585", "1.57", "0.393"]
   },
   {
-    ferron: "5.02",
-    competitor1: "8.99",
-    competitor2: "3.57",
-    competitor3: "11.06",
-    concurrency: "600"
+    concurrency: "150",
+    ferron: "0.735",
+    competitors: ["1.25", "0.675", "1.70", "0.467"]
   },
   {
-    ferron: "6.33",
-    competitor1: "10.86",
-    competitor2: "4.44",
-    competitor3: "13.23",
-    concurrency: "700"
+    concurrency: "175",
+    ferron: "0.847",
+    competitors: ["1.48", "0.765", "2.14", "0.548"]
   },
   {
-    ferron: "8.38",
-    competitor1: "12.95",
-    competitor2: "5.20",
-    competitor3: "15.97",
-    concurrency: "800"
+    concurrency: "200",
+    ferron: "0.955",
+    competitors: ["1.73", "0.868", "2.36", "0.634"]
   },
   {
-    ferron: "9.42",
-    competitor1: "15.26",
-    competitor2: "6.04",
-    competitor3: "17.59",
-    concurrency: "900"
+    concurrency: "225",
+    ferron: "1.10",
+    competitors: ["1.93", "0.984", "2.75", "0.873"]
   },
   {
-    ferron: "11.07",
-    competitor1: "17.60",
-    competitor2: "6.94",
-    competitor3: "20.29",
-    concurrency: "1000"
+    concurrency: "250",
+    ferron: "1.26",
+    competitors: ["2.09", "1.13", "3.00", "0.789"]
   },
   {
-    ferron: "11.52",
-    competitor1: "19.78",
-    competitor2: "7.83",
-    competitor3: "22.40",
-    concurrency: "1100"
+    concurrency: "275",
+    ferron: "1.37",
+    competitors: ["2.45", "1.20", "3.31", "0.854"]
   },
   {
-    ferron: "10.33",
-    competitor1: "22.36",
-    competitor2: "8.81",
-    competitor3: "24.45",
-    concurrency: "1200"
+    concurrency: "300",
+    ferron: "1.82",
+    competitors: ["2.66", "1.34", "3.68", "0.956"]
   },
   {
-    ferron: "11.03",
-    competitor1: "25.36",
-    competitor2: "9.95",
-    competitor3: "27.03",
-    concurrency: "1300"
+    concurrency: "325",
+    ferron: "1.58",
+    competitors: ["2.84", "1.44", "4.01", "1.04"]
   },
   {
-    ferron: "13.44",
-    competitor1: "27.99",
-    competitor2: "12.76",
-    competitor3: "29.91",
-    concurrency: "1400"
+    concurrency: "350",
+    ferron: "1.86",
+    competitors: ["3.34", "1.57", "4.29", "1.12"]
   },
   {
-    ferron: "15.54",
-    competitor1: "30.41",
-    competitor2: "14.06",
-    competitor3: "32.93",
-    concurrency: "1500"
+    concurrency: "375",
+    ferron: "1.87",
+    competitors: ["3.64", "1.70", "4.75", "1.23"]
   },
   {
-    ferron: "14.64",
-    competitor1: "33.78",
-    competitor2: "15.95",
-    competitor3: "35.38",
-    concurrency: "1600"
+    concurrency: "400",
+    ferron: "2.43",
+    competitors: ["4.02", "1.79", "5.31", "1.31"]
   },
   {
-    ferron: "18.90",
-    competitor1: "35.54",
-    competitor2: "17.18",
-    competitor3: "37.59",
-    concurrency: "1700"
+    concurrency: "425",
+    ferron: "2.43",
+    competitors: ["4.26", "1.95", "5.32", "1.39"]
   },
   {
-    ferron: "15.90",
-    competitor1: "38.07",
-    competitor2: "18.25",
-    competitor3: "41.32",
-    concurrency: "1800"
+    concurrency: "450",
+    ferron: "2.41",
+    competitors: ["4.29", "2.05", "5.69", "1.53"]
   },
   {
-    ferron: "17.87",
-    competitor1: "41.12",
-    competitor2: "19.86",
-    competitor3: "43.59",
-    concurrency: "1900"
+    concurrency: "475",
+    ferron: "2.41",
+    competitors: ["4.83", "2.23", "6.28", "1.59"]
   },
   {
-    ferron: "23.41",
-    competitor1: "44.61",
-    competitor2: "20.51",
-    competitor3: "46.66",
-    concurrency: "2000"
+    concurrency: "500",
+    ferron: "2.54",
+    competitors: ["5.08", "2.33", "6.92", "1.75"]
   },
   {
-    ferron: "22.32",
-    competitor1: "47.76",
-    competitor2: "22.49",
-    competitor3: "49.03",
-    concurrency: "2100"
+    concurrency: "525",
+    ferron: "2.65",
+    competitors: ["5.19", "2.45", "7.29", "1.78"]
   },
   {
-    ferron: "20.12",
-    competitor1: "49.72",
-    competitor2: "23.63",
-    competitor3: "51.47",
-    concurrency: "2200"
+    concurrency: "550",
+    ferron: "2.80",
+    competitors: ["5.67", "2.61", "7.12", "1.89"]
   },
   {
-    ferron: "23.03",
-    competitor1: "54.08",
-    competitor2: "24.05",
-    competitor3: "54.54",
-    concurrency: "2300"
+    concurrency: "575",
+    ferron: "2.88",
+    competitors: ["6.47", "2.68", "7.68", "1.98"]
   },
   {
-    ferron: "21.21",
-    competitor1: "56.56",
-    competitor2: "26.08",
-    competitor3: "57.22",
-    concurrency: "2400"
+    concurrency: "600",
+    ferron: "3.02",
+    competitors: ["6.48", "2.91", "8.72", "2.07"]
   },
   {
-    ferron: "24.00",
-    competitor1: "59.14",
-    competitor2: "28.58",
-    competitor3: "58.94",
-    concurrency: "2500"
+    concurrency: "625",
+    ferron: "3.10",
+    competitors: ["6.85", "3.06", "8.78", "2.14"]
   },
   {
-    ferron: "24.35",
-    competitor1: "65.24",
-    competitor2: "28.43",
-    competitor3: "62.34",
-    concurrency: "2600"
+    concurrency: "650",
+    ferron: "3.24",
+    competitors: ["6.57", "3.10", "8.72", "2.26"]
   },
   {
-    ferron: "24.61",
-    competitor1: "66.07",
-    competitor2: "30.11",
-    competitor3: "64.79",
-    concurrency: "2700"
+    concurrency: "675",
+    ferron: "3.36",
+    competitors: ["6.28", "3.39", "9.89", "2.37"]
   },
   {
-    ferron: "25.74",
-    competitor1: "72.87",
-    competitor2: "31.90",
-    competitor3: "68.77",
-    concurrency: "2800"
+    concurrency: "700",
+    ferron: "3.57",
+    competitors: ["7.76", "3.56", "9.65", "2.42"]
   },
   {
-    ferron: "27.41",
-    competitor1: "75.07",
-    competitor2: "32.63",
-    competitor3: "72.98",
-    concurrency: "2900"
+    concurrency: "725",
+    ferron: "3.78",
+    competitors: ["8.24", "3.73", "10.31", "2.49"]
   },
   {
-    ferron: "28.17",
-    competitor1: "77.64",
-    competitor2: "34.16",
-    competitor3: "74.28",
-    concurrency: "3000"
+    concurrency: "750",
+    ferron: "3.87",
+    competitors: ["8.56", "3.82", "10.3", "2.62"]
   },
   {
-    ferron: "31.27",
-    competitor1: "82.37",
-    competitor2: "35.15",
-    competitor3: "78.12",
-    concurrency: "3100"
+    concurrency: "775",
+    ferron: "4.01",
+    competitors: ["9.53", "3.98", "10.32", "2.71"]
   },
   {
-    ferron: "36.01",
-    competitor1: "89.06",
-    competitor2: "36.01",
-    competitor3: "80.46",
-    concurrency: "3200"
+    concurrency: "800",
+    ferron: "4.13",
+    competitors: ["9.09", "4.06", "11.75", "2.89"]
   },
   {
-    ferron: "29.68",
-    competitor1: "90.27",
-    competitor2: "38.01",
-    competitor3: "85.38",
-    concurrency: "3300"
+    concurrency: "825",
+    ferron: "4.28",
+    competitors: ["9.25", "4.31", "10.94", "2.90"]
   },
   {
-    ferron: "31.72",
-    competitor1: "94.41",
-    competitor2: "38.58",
-    competitor3: "87.93",
-    concurrency: "3400"
+    concurrency: "850",
+    ferron: "4.37",
+    competitors: ["10.77", "4.57", "11.83", "3.01"]
   },
   {
-    ferron: "39.01",
-    competitor1: "100.96",
-    competitor2: "38.65",
-    competitor3: "91.09",
-    concurrency: "3500"
+    concurrency: "875",
+    ferron: "4.53",
+    competitors: ["10.74", "4.69", "13.52", "3.11"]
   },
   {
-    ferron: "34.67",
-    competitor1: "103.51",
-    competitor2: "38.25",
-    competitor3: "94.06",
-    concurrency: "3600"
+    concurrency: "900",
+    ferron: "4.69",
+    competitors: ["11.07", "4.88", "13.39", "3.13"]
   },
   {
-    ferron: "33.67",
-    competitor1: "105.58",
-    competitor2: "40.14",
-    competitor3: "95.78",
-    concurrency: "3700"
+    concurrency: "925",
+    ferron: "4.90",
+    competitors: ["10.78", "4.97", "14.07", "3.29"]
   },
   {
-    ferron: "32.68",
-    competitor1: "111.75",
-    competitor2: "41.03",
-    competitor3: "103.19",
-    concurrency: "3800"
+    concurrency: "950",
+    ferron: "5.80",
+    competitors: ["11.47", "5.04", "14.30", "3.39"]
   },
   {
-    ferron: "42.57",
-    competitor1: "102.00",
-    competitor2: "39.92",
-    competitor3: "106.06",
-    concurrency: "3900"
+    concurrency: "975",
+    ferron: "5.25",
+    competitors: ["10.45", "5.13", "14.25", "3.45"]
   },
   {
-    ferron: "48.77",
-    competitor1: "117.10",
-    competitor2: "41.16",
-    competitor3: "108.36",
-    concurrency: "4000"
+    concurrency: "1000",
+    ferron: "5.19",
+    competitors: ["11.76", "5.52", "20.32", "3.67"]
   },
   {
-    ferron: "51.55",
-    competitor1: "119.41",
-    competitor2: "42.66",
-    competitor3: "117.32",
-    concurrency: "4100"
+    concurrency: "1025",
+    ferron: "5.38",
+    competitors: ["13.35", "5.61", "16.34", "3.59"]
   },
   {
-    ferron: "42.12",
-    competitor1: "123.05",
-    competitor2: "41.95",
-    competitor3: "109.75",
-    concurrency: "4200"
+    concurrency: "1050",
+    ferron: "5.64",
+    competitors: ["13.73", "5.70", "16.16", "3.92"]
   },
   {
-    ferron: "41.47",
-    competitor1: "125.40",
-    competitor2: "44.21",
-    competitor3: "118.63",
-    concurrency: "4300"
+    concurrency: "1075",
+    ferron: "5.73",
+    competitors: ["14.06", "6.03", "16.21", "3.91"]
   },
   {
-    ferron: "39.73",
-    competitor1: "131.33",
-    competitor2: "39.99",
-    competitor3: "118.68",
-    concurrency: "4400"
+    concurrency: "1100",
+    ferron: "5.82",
+    competitors: ["13.23", "5.93", "15.96", "4.09"]
   },
   {
-    ferron: "51.64",
-    competitor1: "109.93",
-    competitor2: "43.97",
-    competitor3: "122.66",
-    concurrency: "4500"
+    concurrency: "1125",
+    ferron: "5.99",
+    competitors: ["14.56", "6.23", "16.76", "4.19"]
   },
   {
-    ferron: "44.45",
-    competitor1: "128.67",
-    competitor2: "46.66",
-    competitor3: "129.37",
-    concurrency: "4600"
+    concurrency: "1150",
+    ferron: "6.10",
+    competitors: ["15.25", "6.49", "16.19", "4.27"]
   },
   {
-    ferron: "47.53",
-    competitor1: "146.75",
-    competitor2: "46.30",
-    competitor3: "130.79",
-    concurrency: "4700"
+    concurrency: "1175",
+    ferron: "6.40",
+    competitors: ["13.12", "6.48", "19.81", "4.37"]
   },
   {
-    ferron: "47.23",
-    competitor1: "141.68",
-    competitor2: "48.14",
-    competitor3: "129.82",
-    concurrency: "4800"
+    concurrency: "1200",
+    ferron: "6.50",
+    competitors: ["16.63", "6.72", "19.89", "4.54"]
   },
   {
-    ferron: "45.98",
-    competitor1: "117.83",
-    competitor2: "48.18",
-    competitor3: "151.86",
-    concurrency: "4900"
+    concurrency: "1225",
+    ferron: "6.57",
+    competitors: ["16.57", "6.88", "19.38", "4.51"]
   },
   {
-    ferron: "47.94",
-    competitor1: "217.51",
-    competitor2: "47.71",
-    competitor3: "149.15",
-    concurrency: "5000"
+    concurrency: "1250",
+    ferron: "6.79",
+    competitors: ["16.98", "6.94", "17.12", "4.81"]
   },
   {
-    ferron: "47.48",
-    competitor1: "174.69",
-    competitor2: "46.13",
-    competitor3: "145.68",
-    concurrency: "5100"
+    concurrency: "1275",
+    ferron: "6.91",
+    competitors: ["17.85", "6.76", "19.84", "4.82"]
   },
   {
-    ferron: "45.71",
-    competitor1: "167.22",
-    competitor2: "50.14",
-    competitor3: "152.45",
-    concurrency: "5200"
+    concurrency: "1300",
+    ferron: "7.06",
+    competitors: ["17.60", "7.53", "20.34", "4.93"]
   },
   {
-    ferron: "46.50",
-    competitor1: "161.26",
-    competitor2: "50.99",
-    competitor3: "155.42",
-    concurrency: "5300"
+    concurrency: "1325",
+    ferron: "7.22",
+    competitors: ["17.72", "7.60", "17.35", "5.09"]
   },
   {
-    ferron: "46.98",
-    competitor1: "168.87",
-    competitor2: "50.99",
-    competitor3: "161.79",
-    concurrency: "5400"
+    concurrency: "1350",
+    ferron: "7.38",
+    competitors: ["18.21", "7.49", "20.2", "5.27"]
   },
   {
-    ferron: "53.23",
-    competitor1: "172.29",
-    competitor2: "60.29",
-    competitor3: "165.52",
-    concurrency: "5500"
+    concurrency: "1375",
+    ferron: "7.49",
+    competitors: ["19.68", "7.82", "21.32", "5.27"]
   },
   {
-    ferron: "50.83",
-    competitor1: "171.30",
-    competitor2: "61.11",
-    competitor3: "162.80",
-    concurrency: "5600"
+    concurrency: "1400",
+    ferron: "7.67",
+    competitors: ["18.98", "8.03", "22.09", "5.57"]
   },
   {
-    ferron: "55.33",
-    competitor1: "182.71",
-    competitor2: "46.59",
-    competitor3: "170.59",
-    concurrency: "5700"
+    concurrency: "1425",
+    ferron: "7.78",
+    competitors: ["19.23", "7.93", "22.18", "5.66"]
   },
   {
-    ferron: "70.78",
-    competitor1: "180.49",
-    competitor2: "45.07",
-    competitor3: "168.38",
-    concurrency: "5800"
+    concurrency: "1450",
+    ferron: "8.04",
+    competitors: ["20.53", "8.32", "20.44", "5.87"]
   },
   {
-    ferron: "55.66",
-    competitor1: "165.24",
-    competitor2: "49.07",
-    competitor3: "182.23",
-    concurrency: "5900"
+    concurrency: "1475",
+    ferron: "8.08",
+    competitors: ["19.44", "8.59", "23.25", "5.89"]
   },
   {
-    ferron: "61.67",
-    competitor1: "206.67",
-    competitor2: "52.22",
-    competitor3: "182.71",
-    concurrency: "6000"
+    concurrency: "1500",
+    ferron: "8.31",
+    competitors: ["21.56", "8.59", "24.73", "5.96"]
   },
   {
-    ferron: "53.49",
-    competitor1: "216.86",
-    competitor2: "48.05",
-    competitor3: "186.81",
-    concurrency: "6100"
+    concurrency: "1525",
+    ferron: "8.37",
+    competitors: ["16.74", "8.92", "25.38", "6.03"]
   },
   {
-    ferron: "56.75",
-    competitor1: "222.16",
-    competitor2: "48.11",
-    competitor3: "188.91",
-    concurrency: "6200"
+    concurrency: "1550",
+    ferron: "8.52",
+    competitors: ["21.58", "9.11", "25.42", "5.99"]
   },
   {
-    ferron: "51.28",
-    competitor1: "205.13",
-    competitor2: "47.69",
-    competitor3: "193.50",
-    concurrency: "6300"
+    concurrency: "1575",
+    ferron: "8.79",
+    competitors: ["22.95", "9.10", "24.65", "6.12"]
   },
   {
-    ferron: "60.65",
-    competitor1: "194.91",
-    competitor2: "46.90",
-    competitor3: "191.43",
-    concurrency: "6400"
+    concurrency: "1600",
+    ferron: "8.79",
+    competitors: ["19.89", "9.27", "20.29", "6.50"]
   },
   {
-    ferron: "62.14",
-    competitor1: "227.90",
-    competitor2: "48.19",
-    competitor3: "285.70",
-    concurrency: "6500"
+    concurrency: "1625",
+    ferron: "8.96",
+    competitors: ["23.62", "9.46", "26.23", "6.49"]
   },
   {
-    ferron: "66.47",
-    competitor1: "220.87",
-    competitor2: "57.27",
-    competitor3: "194.68",
-    concurrency: "6600"
+    concurrency: "1650",
+    ferron: "9.19",
+    competitors: ["24.96", "9.52", "23.19", "6.38"]
   },
   {
-    ferron: "63.07",
-    competitor1: "213.61",
-    competitor2: "45.10",
-    competitor3: "221.86",
-    concurrency: "6700"
+    concurrency: "1675",
+    ferron: "9.36",
+    competitors: ["24.66", "9.60", "23.63", "6.79"]
   },
   {
-    ferron: "66.72",
-    competitor1: "236.98",
-    competitor2: "48.98",
-    competitor3: "216.62",
-    concurrency: "6800"
+    concurrency: "1700",
+    ferron: "9.54",
+    competitors: ["26.53", "10.23", "27.26", "6.78"]
   },
   {
-    ferron: "68.06",
-    competitor1: "248.21",
-    competitor2: "45.68",
-    competitor3: "242.30",
-    concurrency: "6900"
+    concurrency: "1725",
+    ferron: "9.44",
+    competitors: ["26.07", "10.07", "29.06", "7.14"]
   },
   {
-    ferron: "66.76",
-    competitor1: "217.77",
-    competitor2: "52.76",
-    competitor3: "229.60",
-    concurrency: "7000"
+    concurrency: "1750",
+    ferron: "9.68",
+    competitors: ["26.93", "10.49", "34.44", "7.31"]
   },
   {
-    ferron: "70.02",
-    competitor1: "231.54",
-    competitor2: "46.55",
-    competitor3: "245.36",
-    concurrency: "7100"
+    concurrency: "1775",
+    ferron: "9.85",
+    competitors: ["25.79", "10.29", "28.98", "7.60"]
   },
   {
-    ferron: "70.66",
-    competitor1: "255.73",
-    competitor2: "45.92",
-    competitor3: "245.14",
-    concurrency: "7200"
+    concurrency: "1800",
+    ferron: "10.02",
+    competitors: ["27.62", "10.43", "30.64", "7.19"]
   },
   {
-    ferron: "72.16",
-    competitor1: "181.57",
-    competitor2: "61.99",
-    competitor3: "240.35",
-    concurrency: "7300"
+    concurrency: "1825",
+    ferron: "12.12",
+    competitors: ["27.75", "10.64", "30.24", "7.26"]
   },
   {
-    ferron: "74.84",
-    competitor1: "241.25",
-    competitor2: "52.64",
-    competitor3: "258.66",
-    concurrency: "7400"
+    concurrency: "1850",
+    ferron: "10.32",
+    competitors: ["27.34", "10.55", "30.79", "7.40"]
   },
   {
-    ferron: "70.82",
-    competitor1: "277.67",
-    competitor2: "48.03",
-    competitor3: "261.99",
-    concurrency: "7500"
+    concurrency: "1875",
+    ferron: "10.54",
+    competitors: ["29.36", "11.24", "30.58", "7.78"]
   },
   {
-    ferron: "68.20",
-    competitor1: "275.20",
-    competitor2: "47.38",
-    competitor3: "269.26",
-    concurrency: "7600"
+    concurrency: "1900",
+    ferron: "10.56",
+    competitors: ["29.74", "11.08", "24.57", "7.81"]
   },
   {
-    ferron: "75.11",
-    competitor1: "270.97",
-    competitor2: "48.58",
-    competitor3: "246.81",
-    concurrency: "7700"
+    concurrency: "1925",
+    ferron: "10.7",
+    competitors: ["29.83", "11.50", "33.36", "7.95"]
   },
   {
-    ferron: "100.71",
-    competitor1: "191.10",
-    competitor2: "55.85",
-    competitor3: "247.18",
-    concurrency: "7800"
+    concurrency: "1950",
+    ferron: "11.01",
+    competitors: ["30.14", "11.53", "31.63", "7.92"]
   },
   {
-    ferron: "76.00",
-    competitor1: "292.28",
-    competitor2: "36.57",
-    competitor3: "265.18",
-    concurrency: "7900"
+    concurrency: "1975",
+    ferron: "11.08",
+    competitors: ["31.21", "11.58", "32.96", "8.27"]
   },
   {
-    ferron: "78.04",
-    competitor1: "244.20",
-    competitor2: "56.48",
-    competitor3: "285.63",
-    concurrency: "8000"
+    concurrency: "2000",
+    ferron: "11.20",
+    competitors: ["31.55", "11.79", "33.65", "8.17"]
   },
   {
-    ferron: "79.23",
-    competitor1: "243.11",
-    competitor2: "45.66",
-    competitor3: "293.21",
-    concurrency: "8100"
+    concurrency: "2025",
+    ferron: "11.22",
+    competitors: ["32.08", "11.76", "34.15", "8.39"]
   },
   {
-    ferron: "76.72",
-    competitor1: "277.93",
-    competitor2: "50.60",
-    competitor3: "303.19",
-    concurrency: "8200"
+    concurrency: "2050",
+    ferron: "11.61",
+    competitors: ["33.73", "11.61", "32.44", "8.26"]
   },
   {
-    ferron: "81.13",
-    competitor1: "249.95",
-    competitor2: "50.14",
-    competitor3: "278.73",
-    concurrency: "8300"
+    concurrency: "2075",
+    ferron: "11.68",
+    competitors: ["34.09", "12.28", "35.32", "8.78"]
   },
   {
-    ferron: "88.32",
-    competitor1: "219.93",
-    competitor2: "46.37",
-    competitor3: "309.31",
-    concurrency: "8400"
+    concurrency: "2100",
+    ferron: "12.19",
+    competitors: ["33.31", "12.49", "36.98", "8.70"]
   },
   {
-    ferron: "82.32",
-    competitor1: "288.87",
-    competitor2: "42.81",
-    competitor3: "298.39",
-    concurrency: "8500"
+    concurrency: "2125",
+    ferron: "12.11",
+    competitors: ["30.3", "12.21", "36.17", "8.81"]
   },
   {
-    ferron: "81.93",
-    competitor1: "323.53",
-    competitor2: "45.97",
-    competitor3: "335.90",
-    concurrency: "8600"
+    concurrency: "2150",
+    ferron: "12.05",
+    competitors: ["30.07", "13.01", "36.00", "9.06"]
   },
   {
-    ferron: "86.15",
-    competitor1: "323.81",
-    competitor2: "49.83",
-    competitor3: "331.32",
-    concurrency: "8700"
+    concurrency: "2175",
+    ferron: "12.49",
+    competitors: ["32.11", "13.15", "37.59", "9.23"]
   },
   {
-    ferron: "86.39",
-    competitor1: "369.51",
-    competitor2: "57.03",
-    competitor3: "284.91",
-    concurrency: "8800"
+    concurrency: "2200",
+    ferron: "12.31",
+    competitors: ["33.93", "13.45", "37.70", "9.14"]
   },
   {
-    ferron: "84.52",
-    competitor1: "314.78",
-    competitor2: "44.59",
-    competitor3: "340.86",
-    concurrency: "8900"
+    concurrency: "2225",
+    ferron: "12.76",
+    competitors: ["36.50", "13.85", "39.60", "9.40"]
   },
   {
-    ferron: "90.36",
-    competitor1: "186.59",
-    competitor2: "47.67",
-    competitor3: "335.39",
-    concurrency: "9000"
+    concurrency: "2250",
+    ferron: "12.99",
+    competitors: ["33.17", "13.52", "35.24", "9.40"]
   },
   {
-    ferron: "91.95",
-    competitor1: "359.92",
-    competitor2: "48.88",
-    competitor3: "325.15",
-    concurrency: "9100"
+    concurrency: "2275",
+    ferron: "12.96",
+    competitors: ["36.74", "13.80", "39.38", "9.55"]
   },
   {
-    ferron: "91.12",
-    competitor1: "386.44",
-    competitor2: "46.95",
-    competitor3: "355.13",
-    concurrency: "9200"
+    concurrency: "2300",
+    ferron: "13.45",
+    competitors: ["36.18", "13.80", "43.10", "10.03"]
   },
   {
-    ferron: "92.55",
-    competitor1: "378.58",
-    competitor2: "44.38",
-    competitor3: "359.69",
-    concurrency: "9300"
+    concurrency: "2325",
+    ferron: "13.43",
+    competitors: ["37.78", "13.58", "40.46", "9.51"]
   },
   {
-    ferron: "93.73",
-    competitor1: "330.47",
-    competitor2: "51.36",
-    competitor3: "335.53",
-    concurrency: "9400"
+    concurrency: "2350",
+    ferron: "13.63",
+    competitors: ["38.29", "14.15", "39.63", "10.23"]
   },
   {
-    ferron: "97.71",
-    competitor1: "316.14",
-    competitor2: "48.73",
-    competitor3: "359.34",
-    concurrency: "9500"
+    concurrency: "2375",
+    ferron: "13.61",
+    competitors: ["38.13", "14.66", "39.43", "9.87"]
   },
   {
-    ferron: "135.24",
-    competitor1: "398.22",
-    competitor2: "46.72",
-    competitor3: "372.59",
-    concurrency: "9600"
+    concurrency: "2400",
+    ferron: "13.80",
+    competitors: ["39.55", "14.83", "39.75", "10.03"]
   },
   {
-    ferron: "99.89",
-    competitor1: "392.90",
-    competitor2: "49.66",
-    competitor3: "360.28",
-    concurrency: "9700"
+    concurrency: "2425",
+    ferron: "13.87",
+    competitors: ["41.03", "14.90", "43.87", "10.4"]
   },
   {
-    ferron: "96.29",
-    competitor1: "370.16",
-    competitor2: "47.91",
-    competitor3: "380.07",
-    concurrency: "9800"
+    concurrency: "2450",
+    ferron: "14.17",
+    competitors: ["39.53", "15.05", "44.85", "10.27"]
   },
   {
-    ferron: "101.38",
-    competitor1: "359.91",
-    competitor2: "49.10",
-    competitor3: "362.69",
-    concurrency: "9900"
+    concurrency: "2475",
+    ferron: "14.28",
+    competitors: ["41.14", "15.56", "60.42", "10.57"]
   },
   {
-    ferron: "98.72",
-    competitor1: "383.43",
-    competitor2: "57.76",
-    competitor3: "329.14",
-    concurrency: "10000"
+    concurrency: "2500",
+    ferron: "14.43",
+    competitors: ["49.57", "15.32", "44.05", "10.61"]
   }
 ];

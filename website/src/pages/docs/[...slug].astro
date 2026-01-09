@@ -5,7 +5,7 @@ import DocsLayout from "../../layouts/DocsLayout.astro";
 export async function getStaticPaths() {
   const posts = await getCollection("docs");
   return posts.map((post) => ({
-    params: { slug: post.id == "index" ? undefined : post.id },
+    params: { slug: post.id === "index" ? undefined : post.id },
     props: { post }
   }));
 }
@@ -16,6 +16,6 @@ const { Content } = await render(Astro.props.post);
 
 <DocsLayout title={data.title}>
   <div class="prose max-w-full md:prose-lg">
-    <Content />
+    <Content/>
   </div>
 </DocsLayout>

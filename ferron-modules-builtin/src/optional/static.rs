@@ -1,15 +1,14 @@
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::error::Error;
 use std::ffi::OsStr;
-use std::fmt::Write;
 #[cfg(feature = "runtime-monoio")]
 use std::fs::ReadDir;
 #[cfg(feature = "runtime-tokio")]
 use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, LazyLock};
+use std::time::{Duration, SystemTime};
 
 use async_compression::brotli::EncoderParams;
 use async_compression::tokio::bufread::{BrotliEncoder, DeflateEncoder, GzipEncoder, ZstdEncoder};
@@ -26,7 +25,6 @@ use hyper::header::{self, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
 #[cfg(feature = "runtime-monoio")]
 use monoio::fs;
-use sha2::{Digest, Sha256};
 #[cfg(feature = "runtime-tokio")]
 use tokio::fs::{self, ReadDir};
 #[cfg(feature = "runtime-tokio")]
@@ -38,13 +36,143 @@ use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 #[cfg(feature = "runtime-monoio")]
-use ferron_common::util::MonoioFileStream;
+use ferron_common::util::MonoioFileStreamNoSpawn;
 use ferron_common::util::{anti_xss, sizify, ModuleCache, TtlCache};
-use ferron_common::{format_page, get_entries_for_validation, get_entry, get_value};
+use ferron_common::{format_page, get_entries, get_entries_for_validation, get_entry, get_value};
 
 const COMPRESSED_STREAM_READER_BUFFER_SIZE: usize = 16384;
 
+/// A hard-coded list of non-compressible file extensions
+static NON_COMPRESSIBLE_FILE_EXTENSIONS: LazyLock<BTreeSet<&'static str>> = LazyLock::new(|| {
+  BTreeSet::from_iter(vec![
+    "7z",
+    "air",
+    "amlx",
+    "apk",
+    "apng",
+    "appinstaller",
+    "appx",
+    "appxbundle",
+    "arj",
+    "au",
+    "avif",
+    "bdoc",
+    "boz",
+    "br",
+    "bz",
+    "bz2",
+    "caf",
+    "class",
+    "doc",
+    "docx",
+    "dot",
+    "dvi",
+    "ear",
+    "epub",
+    "flv",
+    "gdoc",
+    "gif",
+    "gsheet",
+    "gslides",
+    "gz",
+    "iges",
+    "igs",
+    "jar",
+    "jnlp",
+    "jp2",
+    "jpe",
+    "jpeg",
+    "jpf",
+    "jpg",
+    "jpg2",
+    "jpgm",
+    "jpm",
+    "jpx",
+    "kmz",
+    "latex",
+    "m1v",
+    "m2a",
+    "m2v",
+    "m3a",
+    "m4a",
+    "mesh",
+    "mk3d",
+    "mks",
+    "mkv",
+    "mov",
+    "mp2",
+    "mp2a",
+    "mp3",
+    "mp4",
+    "mp4a",
+    "mp4v",
+    "mpe",
+    "mpeg",
+    "mpg",
+    "mpg4",
+    "mpga",
+    "msg",
+    "msh",
+    "msix",
+    "msixbundle",
+    "odg",
+    "odp",
+    "ods",
+    "odt",
+    "oga",
+    "ogg",
+    "ogv",
+    "ogx",
+    "opus",
+    "p12",
+    "pdf",
+    "pfx",
+    "pgp",
+    "pkpass",
+    "png",
+    "pot",
+    "pps",
+    "ppt",
+    "pptx",
+    "qt",
+    "ser",
+    "silo",
+    "sit",
+    "snd",
+    "spx",
+    "stpxz",
+    "stpz",
+    "swf",
+    "tif",
+    "tiff",
+    "ubj",
+    "usdz",
+    "vbox-extpack",
+    "vrml",
+    "war",
+    "wav",
+    "weba",
+    "webm",
+    "wmv",
+    "wrl",
+    "x3dbz",
+    "x3dvz",
+    "xla",
+    "xlc",
+    "xlm",
+    "xls",
+    "xlsx",
+    "xlt",
+    "xlw",
+    "xpi",
+    "xps",
+    "zip",
+    "zst",
+  ])
+});
+
 /// Generates a directory listing
+#[inline]
 pub async fn generate_directory_listing(
   directory: ReadDir,
   request_path: &str,
@@ -137,7 +265,8 @@ pub async fn generate_directory_listing(
         );
 
         let row = format!(
-          "<tr><td class=\"directory-filename\">{}</td><td class=\"directory-size\">{}</td><td class=\"directory-date\">{}</td></tr>",
+          "<tr><td class=\"directory-filename\">{}</td>\
+          <td class=\"directory-size\">{}</td><td class=\"directory-date\">{}</td></tr>",
           filename_link,
           match metadata.is_file() {
             true => anti_xss(&sizify(metadata.len(), false)),
@@ -163,7 +292,8 @@ pub async fn generate_directory_listing(
           anti_xss(&filename)
         );
         let row = format!(
-          "<tr><td class=\"directory-filename\">{filename_link}</td><td class=\"directory-size\">-</td><td class=\"directory-date\">-</td></tr>"
+          "<tr><td class=\"directory-filename\">{filename_link}</td>\
+          <td class=\"directory-size\">-</td><td class=\"directory-date\">-</td></tr>"
         );
         table_rows.push(row);
       }
@@ -171,20 +301,28 @@ pub async fn generate_directory_listing(
   }
 
   if table_rows.len() <= min_table_rows_length {
-    table_rows.push("<tr><td class=\"directory-filename\">🤷 No files found</td><td class=\"directory-size\"></td><td class=\"directory-date\"></td></tr>".to_string());
+    table_rows.push(
+      "<tr><td class=\"directory-filename\">🤷 No files found</td>\
+        <td class=\"directory-size\"></td><td class=\"directory-date\"></td></tr>"
+        .to_string(),
+    );
   }
 
   Ok(format_page!(
     format!(
       "<h1>Directory: {}</h1>
       <table>
-      <tr><th class=\"directory-filename\">Filename</th><th class=\"directory-size\">Size</th><th class=\"directory-date\">Date</th></tr>
+      <tr><th class=\"directory-filename\">Filename</th><th class=\"directory-size\">Size</th>\
+      <th class=\"directory-date\">Date</th></tr>
       {}
     </table>{}",
       anti_xss(request_path),
       table_rows.join(""),
       match description {
-        Some(description) => format!("<hr><pre class=\"directory-description\">{}</pre>", anti_xss(&description)),
+        Some(description) => format!(
+          "<hr><pre class=\"directory-description\">{}</pre>",
+          anti_xss(&description)
+        ),
         None => "".to_string(),
       }
     ),
@@ -197,9 +335,10 @@ pub async fn generate_directory_listing(
 }
 
 /// Parses the HTTP "Range" header value
+#[inline]
 fn parse_range_header(range_str: &str, default_end: u64) -> Option<(u64, u64)> {
   if let Some(range_part) = range_str.strip_prefix("bytes=") {
-    let parts: Vec<&str> = range_part.split('-').collect();
+    let parts: Vec<&str> = range_part.split('-').take(2).collect();
     if parts.len() == 2 {
       if parts[0].is_empty() {
         if let Ok(end) = u64::from_str(parts[1]) {
@@ -220,6 +359,7 @@ fn parse_range_header(range_str: &str, default_end: u64) -> Option<(u64, u64)> {
 }
 
 /// Extracts inner ETag
+#[inline]
 fn extract_etag_inner(input: &str, weak: bool) -> Option<String> {
   // Remove the surrounding double quotes and preceding "W/"
   let weak_might_removed = if weak {
@@ -233,15 +373,11 @@ fn extract_etag_inner(input: &str, weak: bool) -> Option<String> {
   let trimmed = weak_might_removed.trim_matches('"');
 
   // Split the string at the hyphen and take the first part
-  let parts: Vec<&str> = trimmed.split('-').collect();
-  if parts.is_empty() {
-    None
-  } else {
-    Some(parts[0].to_string())
-  }
+  trimmed.split('-').next().map(ToOwned::to_owned)
 }
 
 /// Converts strong ETag to weak one, if it's not a weak one
+#[inline]
 fn etag_strong_to_weak(input: &str) -> String {
   if input.starts_with("W/") {
     input.to_string()
@@ -254,6 +390,7 @@ fn etag_strong_to_weak(input: &str) -> String {
 pub struct StaticFileServingModuleLoader {
   cache: ModuleCache<StaticFileServingModule>,
   pathbuf_cache: Arc<RwLock<TtlCache<String, PathBuf>>>,
+  path_traversal_check_cache: Arc<RwLock<TtlCache<PathBuf, bool>>>,
   etag_cache: Arc<RwLock<LruCache<String, String>>>,
 }
 
@@ -269,6 +406,7 @@ impl StaticFileServingModuleLoader {
     Self {
       cache: ModuleCache::new(vec![]),
       pathbuf_cache: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(100)))),
+      path_traversal_check_cache: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(100)))),
       etag_cache: Arc::new(RwLock::new(LruCache::new(1000))),
     }
   }
@@ -287,6 +425,7 @@ impl ModuleLoader for StaticFileServingModuleLoader {
         .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
           Ok(Arc::new(StaticFileServingModule {
             pathbuf_cache: self.pathbuf_cache.clone(),
+            path_traversal_check_cache: self.path_traversal_check_cache.clone(),
             etag_cache: self.etag_cache.clone(),
           }))
         })?,
@@ -362,6 +501,28 @@ impl ModuleLoader for StaticFileServingModuleLoader {
       }
     };
 
+    if let Some(entries) = get_entries_for_validation!("mime_type", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 2 {
+          Err(anyhow::anyhow!(
+            "The `mime_type` configuration property must have exactly two values"
+          ))?
+        } else if !entry.values[0].is_string() {
+          Err(anyhow::anyhow!("The file extension must be a string"))?
+        } else if !entry.values[1].is_string() {
+          Err(anyhow::anyhow!("The MIME type must be a string"))?
+        }
+      }
+    };
+
+    if let Some(entries) = get_entries_for_validation!("index", config, used_properties) {
+      for entry in &entries.inner {
+        if !entry.values.iter().all(|v| v.is_string()) {
+          Err(anyhow::anyhow!("An index file name must be a string"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -369,6 +530,7 @@ impl ModuleLoader for StaticFileServingModuleLoader {
 /// A static file serving module
 struct StaticFileServingModule {
   pathbuf_cache: Arc<RwLock<TtlCache<String, PathBuf>>>,
+  path_traversal_check_cache: Arc<RwLock<TtlCache<PathBuf, bool>>>,
   etag_cache: Arc<RwLock<LruCache<String, String>>>,
 }
 
@@ -376,6 +538,7 @@ impl Module for StaticFileServingModule {
   fn get_module_handlers(&self) -> Box<dyn ModuleHandlers> {
     Box::new(StaticFileServingModuleHandlers {
       pathbuf_cache: self.pathbuf_cache.clone(),
+      path_traversal_check_cache: self.path_traversal_check_cache.clone(),
       etag_cache: self.etag_cache.clone(),
     })
   }
@@ -384,6 +547,7 @@ impl Module for StaticFileServingModule {
 /// Handlers for the static file serving module
 struct StaticFileServingModuleHandlers {
   pathbuf_cache: Arc<RwLock<TtlCache<String, PathBuf>>>,
+  path_traversal_check_cache: Arc<RwLock<TtlCache<PathBuf, bool>>>,
   etag_cache: Arc<RwLock<LruCache<String, String>>>,
 }
 
@@ -413,7 +577,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
           response: Some(
             Response::builder()
               .status(StatusCode::NO_CONTENT)
-              .header(header::ALLOW, "GET, POST, HEAD, OPTIONS")
+              .header(header::ALLOW, HeaderValue::from_static("GET, POST, HEAD, OPTIONS"))
               .body(Empty::new().map_err(|e| match e {}).boxed())
               .unwrap_or_default(),
           ),
@@ -427,9 +591,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
       // All other methods are not allowed
       _ => {
         let mut header_map = HeaderMap::new();
-        if let Ok(header_value) = HeaderValue::from_str("GET, POST, HEAD, OPTIONS") {
-          header_map.insert(header::ALLOW, header_value);
-        };
+        header_map.insert(header::ALLOW, HeaderValue::from_static("GET, POST, HEAD, OPTIONS"));
         return Ok(ResponseData {
           request: Some(request),
           response: None,
@@ -465,6 +627,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
         .get::<RequestData>()
         .and_then(|d| d.original_url.as_ref())
         .map_or(request_path, |u| u.path());
+
+      // Get the configured index files
+      let indexes = get_entry!("index", config)
+        .map(|e| e.values.iter().filter_map(|v| v.as_str()).collect::<Vec<&str>>())
+        .unwrap_or(vec!["index.html", "index.htm", "index.xhtml"]);
 
       // Create a cache key that includes IP and hostname filters if present
       let cache_key = format!(
@@ -518,6 +685,75 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
         }
       };
 
+      // Check for possible path traversal attack, if the URL sanitizer is disabled.
+      if get_value!("disable_url_sanitizer", config)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+      {
+        let rwlock_read = self.path_traversal_check_cache.read().await;
+        let allowed_option = rwlock_read.get(&joined_pathbuf);
+        drop(rwlock_read);
+        let allowed = match allowed_option {
+          Some(allowed) => allowed,
+          None => {
+            // Canonicalize the file path
+            #[cfg(feature = "runtime-monoio")]
+            let canonicalize_result = {
+              let joined_pathbuf = joined_pathbuf.clone();
+              monoio::spawn_blocking(move || std::fs::canonicalize(joined_pathbuf))
+                .await
+                .unwrap_or(Err(std::io::Error::other(
+                  "Can't spawn a blocking task to obtain the canonical file path",
+                )))
+            };
+            #[cfg(feature = "runtime-tokio")]
+            let canonicalize_result = fs::canonicalize(&joined_pathbuf).await;
+
+            let canonical_joined_pathbuf = match canonicalize_result {
+              Ok(pathbuf) => pathbuf,
+              Err(_) => joined_pathbuf.clone(),
+            };
+
+            // Canonicalize the webroot
+            #[cfg(feature = "runtime-monoio")]
+            let canonicalize_result = {
+              let wwwroot = wwwroot.to_owned();
+              monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot))
+                .await
+                .unwrap_or(Err(std::io::Error::other(
+                  "Can't spawn a blocking task to obtain the canonical file path",
+                )))
+            };
+            #[cfg(feature = "runtime-tokio")]
+            let canonicalize_result = fs::canonicalize(wwwroot).await;
+
+            let canonical_wwwroot = match canonicalize_result {
+              Ok(pathbuf) => pathbuf,
+              Err(_) => PathBuf::from_str(wwwroot)?,
+            };
+
+            let allowed = canonical_joined_pathbuf.starts_with(&canonical_wwwroot);
+
+            let mut rwlock_write = self.path_traversal_check_cache.write().await;
+            rwlock_write.insert(joined_pathbuf.clone(), allowed);
+            drop(rwlock_write);
+
+            allowed
+          }
+        };
+
+        // Return 403 Forbidden if the path is outside the webroot
+        if !allowed {
+          return Ok(ResponseData {
+            request: Some(request),
+            response: None,
+            response_status: Some(StatusCode::FORBIDDEN),
+            response_headers: None,
+            new_remote_address: None,
+          });
+        }
+      }
+
       // Get file metadata (platform-specific implementation)
       // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
       #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
@@ -538,7 +774,6 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
           if !joined_pathbuf_cached {
             if metadata.is_dir() {
               // Try common index file names
-              let indexes = vec!["index.html", "index.htm", "index.xhtml"];
               for index in indexes {
                 let temp_joined_pathbuf = joined_pathbuf.join(index);
 
@@ -610,136 +845,10 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true)
             {
-              // A hard-coded list of non-compressible file extension
-              let non_compressible_file_extensions = vec![
-                "7z",
-                "air",
-                "amlx",
-                "apk",
-                "apng",
-                "appinstaller",
-                "appx",
-                "appxbundle",
-                "arj",
-                "au",
-                "avif",
-                "bdoc",
-                "boz",
-                "br",
-                "bz",
-                "bz2",
-                "caf",
-                "class",
-                "doc",
-                "docx",
-                "dot",
-                "dvi",
-                "ear",
-                "epub",
-                "flv",
-                "gdoc",
-                "gif",
-                "gsheet",
-                "gslides",
-                "gz",
-                "iges",
-                "igs",
-                "jar",
-                "jnlp",
-                "jp2",
-                "jpe",
-                "jpeg",
-                "jpf",
-                "jpg",
-                "jpg2",
-                "jpgm",
-                "jpm",
-                "jpx",
-                "kmz",
-                "latex",
-                "m1v",
-                "m2a",
-                "m2v",
-                "m3a",
-                "m4a",
-                "mesh",
-                "mk3d",
-                "mks",
-                "mkv",
-                "mov",
-                "mp2",
-                "mp2a",
-                "mp3",
-                "mp4",
-                "mp4a",
-                "mp4v",
-                "mpe",
-                "mpeg",
-                "mpg",
-                "mpg4",
-                "mpga",
-                "msg",
-                "msh",
-                "msix",
-                "msixbundle",
-                "odg",
-                "odp",
-                "ods",
-                "odt",
-                "oga",
-                "ogg",
-                "ogv",
-                "ogx",
-                "opus",
-                "p12",
-                "pdf",
-                "pfx",
-                "pgp",
-                "pkpass",
-                "png",
-                "pot",
-                "pps",
-                "ppt",
-                "pptx",
-                "qt",
-                "ser",
-                "silo",
-                "sit",
-                "snd",
-                "spx",
-                "stpxz",
-                "stpz",
-                "swf",
-                "tif",
-                "tiff",
-                "ubj",
-                "usdz",
-                "vbox-extpack",
-                "vrml",
-                "war",
-                "wav",
-                "weba",
-                "webm",
-                "wmv",
-                "wrl",
-                "x3dbz",
-                "x3dvz",
-                "xla",
-                "xlc",
-                "xlm",
-                "xls",
-                "xlsx",
-                "xlt",
-                "xlw",
-                "xpi",
-                "xps",
-                "zip",
-                "zst",
-              ];
               let file_extension = joined_pathbuf
                 .extension()
                 .map_or_else(|| "".to_string(), |ext| ext.to_string_lossy().to_string());
-              let file_extension_compressible = !non_compressible_file_extensions.contains(&(&file_extension as &str));
+              let file_extension_compressible = !NON_COMPRESSIBLE_FILE_EXTENSIONS.contains(&(&file_extension as &str));
 
               // Only compress files larger than 256 bytes and with compressible extensions
               if metadata.len() > 256 && file_extension_compressible {
@@ -761,8 +870,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 metadata.len(),
                 match metadata.modified() {
                   Ok(mtime) => {
-                    let datetime: DateTime<Local> = mtime.into();
-                    datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+                    (match mtime.duration_since(SystemTime::UNIX_EPOCH) {
+                      Ok(duration) => duration.as_secs() as i128,
+                      Err(error) => -(error.duration().as_secs() as i128),
+                    })
+                    .to_string()
                   }
                   Err(_) => String::from(""),
                 }
@@ -774,17 +886,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               let etag = match etag_locked_option {
                 Some(etag) => etag,
                 None => {
-                  let etag_cache_key_clone = etag_cache_key.clone();
-                  let etag = ferron_common::runtime::spawn_blocking(move || {
-                    let mut hasher = Sha256::new();
-                    hasher.update(etag_cache_key_clone);
-                    hasher.finalize().iter().fold(String::new(), |mut output, b| {
-                      let _ = write!(output, "{b:02x}");
-                      output
-                    })
-                  })
-                  .await
-                  .map_err(|_| anyhow::anyhow!("Can't spawn a blocking task to hash an ETag"))?;
+                  let etag = format!("{:016x}", xxhash_rust::xxh3::xxh3_64(etag_cache_key.as_bytes()));
 
                   let mut rwlock_write = self.etag_cache.write().await;
                   rwlock_write.insert(etag_cache_key, etag.clone());
@@ -814,7 +916,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                         let mut not_modified_response = Response::builder()
                           .status(StatusCode::NOT_MODIFIED)
                           .header(header::ETAG, etag_strong_to_weak(&etag_original))
-                          .header(header::VARY, vary)
+                          .header(header::VARY, HeaderValue::from_static(vary))
                           .body(Empty::new().map_err(|e| match e {}).boxed())?;
                         if let Some(cache_control) = cache_control {
                           not_modified_response
@@ -833,9 +935,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   }
                   Err(_) => {
                     let mut header_map = HeaderMap::new();
-                    if let Ok(vary) = HeaderValue::from_str(vary) {
-                      header_map.insert(header::VARY, vary);
-                    }
+                    header_map.insert(header::VARY, HeaderValue::from_static(vary));
                     return Ok(ResponseData {
                       request: Some(request),
                       response: None,
@@ -859,9 +959,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                         if etag_extracted != etag {
                           let mut header_map = HeaderMap::new();
                           header_map.insert(header::ETAG, if_match_value.clone());
-                          if let Ok(vary) = HeaderValue::from_str(vary) {
-                            header_map.insert(header::VARY, vary);
-                          }
+                          header_map.insert(header::VARY, HeaderValue::from_static(vary));
                           return Ok(ResponseData {
                             request: Some(request),
                             response: None,
@@ -875,9 +973,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   }
                   Err(_) => {
                     let mut header_map = HeaderMap::new();
-                    if let Ok(vary) = HeaderValue::from_str(vary) {
-                      header_map.insert(header::VARY, vary);
-                    }
+                    header_map.insert(header::VARY, HeaderValue::from_static(vary));
                     return Ok(ResponseData {
                       request: Some(request),
                       response: None,
@@ -897,10 +993,31 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               };
             }
 
+            let custom_content_type_option = {
+              let mut custom_content_type = None;
+              if let Some(mime_types_entries) = get_entries!("mime_type", config) {
+                if let Some(extension) = joined_pathbuf.extension().map(|a| format!(".{}", a.to_string_lossy())) {
+                  for entry in mime_types_entries.inner.iter() {
+                    if let Some(key) = entry.values.first().and_then(|v| v.as_str()) {
+                      if key == extension {
+                        if let Some(value) = entry.values.get(1).and_then(|v| v.as_str()) {
+                          custom_content_type = Some(value.to_string());
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              custom_content_type
+            };
+
             // Determine the content type based on file extension
-            let content_type_option = new_mime_guess::from_path(&joined_pathbuf)
-              .first()
-              .map(|mime_type| mime_type.to_string());
+            let content_type_option = custom_content_type_option.or_else(|| {
+              new_mime_guess::from_path(&joined_pathbuf)
+                .first()
+                .map(|mime_type| mime_type.to_string())
+            });
 
             // Handle Range requests for partial content
             let range_header = match request.headers().get(header::RANGE) {
@@ -908,9 +1025,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 Ok(value) => Some(value),
                 Err(_) => {
                   let mut header_map = HeaderMap::new();
-                  if let Ok(vary) = HeaderValue::from_str(vary) {
-                    header_map.insert(header::VARY, vary);
-                  }
+                  header_map.insert(header::VARY, HeaderValue::from_static(vary));
                   return Ok(ResponseData {
                     request: Some(request),
                     response: None,
@@ -930,9 +1045,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               // Can't satisfy range request for empty files
               if file_length == 0 {
                 let mut header_map = HeaderMap::new();
-                if let Ok(vary) = HeaderValue::from_str(vary) {
-                  header_map.insert(header::VARY, vary);
-                }
+                header_map.insert(header::VARY, HeaderValue::from_static(vary));
                 return Ok(ResponseData {
                   request: Some(request),
                   response: None,
@@ -946,9 +1059,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 // Validate the requested range is within file bounds
                 if range_end > file_length - 1 || range_begin > file_length - 1 || range_begin > range_end {
                   let mut header_map = HeaderMap::new();
-                  if let Ok(vary) = HeaderValue::from_str(vary) {
-                    header_map.insert(header::VARY, vary);
-                  }
+                  header_map.insert(header::VARY, HeaderValue::from_static(vary));
                   return Ok(ResponseData {
                     request: Some(request),
                     response: None,
@@ -983,7 +1094,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   response_builder = response_builder.header(header::CACHE_CONTROL, cache_control);
                 }
 
-                response_builder = response_builder.header(header::VARY, vary);
+                response_builder = response_builder.header(header::VARY, HeaderValue::from_static(vary));
 
                 let response = match request_method {
                   &Method::HEAD => response_builder.body(Empty::new().map_err(|e| match e {}).boxed())?,
@@ -1016,7 +1127,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
                     // Construct a boxed body
                     #[cfg(feature = "runtime-monoio")]
-                    let file_stream = MonoioFileStream::new(file, Some(range_begin), Some(range_end + 1));
+                    let file_stream = MonoioFileStreamNoSpawn::new(file, Some(range_begin), Some(range_end + 1));
                     #[cfg(feature = "runtime-tokio")]
                     let file_stream = {
                       let mut file = file;
@@ -1047,9 +1158,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 });
               } else {
                 let mut header_map = HeaderMap::new();
-                if let Ok(vary) = HeaderValue::from_str(vary) {
-                  header_map.insert(header::VARY, vary);
-                }
+                header_map.insert(header::VARY, HeaderValue::from_static(vary));
 
                 return Ok(ResponseData {
                   request: Some(request),
@@ -1078,13 +1187,22 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
                 // Check for browsers with known compression bugs
                 // Some web browsers have broken HTTP compression handling
-                let is_netscape_4_broken_html_compression = user_agent.starts_with("Mozilla/4.");
-                let is_netscape_4_broken_compression = match user_agent.strip_prefix("Mozilla/4.") {
-                  Some(stripped_user_agent) => {
-                    matches!(stripped_user_agent.chars().nth(0), Some('6') | Some('7') | Some('8'))
-                  }
-                  None => false,
-                };
+                let (is_netscape_4_broken_html_compression, is_netscape_4_broken_compression) =
+                  match user_agent.strip_prefix("Mozilla/4.") {
+                    Some(stripped_user_agent) => {
+                      if user_agent.contains(" MSIE ") {
+                        // Internet Explorer "masquerading" as Netscape 4.x
+                        (false, false)
+                      } else {
+                        (
+                          true,
+                          matches!(stripped_user_agent.chars().nth(0), Some('0'))
+                            && matches!(stripped_user_agent.chars().nth(1), Some('6') | Some('7') | Some('8')),
+                        )
+                      }
+                    }
+                    None => (false, false),
+                  };
                 let is_w3m_broken_html_compression = user_agent.starts_with("w3m/");
                 if !(content_type_option == Some("text/html".to_string())
                   && (is_netscape_4_broken_html_compression || is_w3m_broken_html_compression))
@@ -1185,7 +1303,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               // Build full file response
               let mut response_builder = Response::builder()
                 .status(StatusCode::OK)
-                .header(header::ACCEPT_RANGES, "bytes");
+                .header(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
 
               // Include ETag in response with suffix based on compression method
               if let Some(etag) = etag_option {
@@ -1215,13 +1333,14 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
               // Set appropriate Content-Encoding header based on compression method
               if use_brotli {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, "br");
+                response_builder = response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("br"));
               } else if use_zstd {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, "zstd");
+                response_builder = response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("zstd"));
               } else if use_deflate {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, "deflate");
+                response_builder =
+                  response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("deflate"));
               } else if use_gzip {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, "gzip");
+                response_builder = response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
               } else {
                 // Only include Content-Length for uncompressed responses
                 // Content-Length header + HTTP compression = broken HTTP responses!
@@ -1262,7 +1381,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
                   // Create a file stream.
                   #[cfg(feature = "runtime-monoio")]
-                  let file_stream = MonoioFileStream::new(file, None, Some(content_length));
+                  let file_stream = MonoioFileStreamNoSpawn::new(file, None, Some(content_length));
                   #[cfg(feature = "runtime-tokio")]
                   let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
@@ -1411,6 +1530,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 new_remote_address: None,
               });
             } else {
+              // Directory listing is disabled
               return Ok(ResponseData {
                 request: Some(request),
                 response: None,
@@ -1420,6 +1540,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               });
             }
           } else {
+            // Static file serving can't be used on anything that's not a file or directory in Ferron
             return Ok(ResponseData {
               request: Some(request),
               response: None,

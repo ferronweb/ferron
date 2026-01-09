@@ -91,6 +91,61 @@ example.com {
 }
 ```
 
+## Reverse proxying with intact "Host" header
+
+Ferron by default rewrites the "Host" header before sending the request to the backend server, and preserves the original "Host" header value in the "X-Forwarded-Host" header.
+
+However, there are web applications that may not work with this configuration. This can result in host header mismatch errors, and other issues.
+
+In such cases, you can set the "Host" header value to the original value:
+
+```kdl
+// Example configuration with reverse proxy and intact "Host" header. Replace "example.com" with your domain name.
+example.com {
+    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+    proxy_request_header_replace "Host" "{header:Host}"
+}
+```
+
+## Reverse proxying with intact request URL
+
+Ferron by default rewrites the request URL before sending the request to the backend server, to protect against path traversal attacks.
+
+However, there are web applications that may not work with this default configuration. This can result in 404 Not Found errors, and other issues.
+
+In such cases, you can disable the URL sanitizer (although Ferron won't protect the backend server from path traversal attacks, the backend server must protect itself against such attacks):
+
+```kdl
+// Example configuration with reverse proxy and intact request URL. Replace "example.com" with your domain name.
+example.com {
+    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+    disable_url_sanitizer
+}
+```
+
+## Reverse proxy to backends listening on Unix sockets
+
+Ferron supports reverse proxying to backends listening on Unix sockets. To configure Ferron for reverse proxying to backends listening on Unix sockets, you can use this configuration:
+
+```kdl
+// Example configuration with reverse proxy to backends listening on Unix sockets. Replace "example.com" with your domain name.
+example.com {
+    proxy "http://example.com" unix="/run/backend/web.sock" // The "example.com" in the backend URL can be replaced with an arbitrary domain name
+}
+```
+
+## Reverse proxy to gRPC backends
+
+Ferron supports reverse proxying to gRPC backends that accept HTTP/2 requests either via HTTPS, or plaintext with prior knowledge. To configure Ferron for reverse proxying to gRPC backends, you can use this configuration:
+
+```kdl
+// Example configuration with reverse proxy to gRPC backends. Replace "grpc.example.com" with your domain name.
+grpc.example.com {
+    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+    proxy_http2_only // Enables HTTP/2-only proxying to support gRPC proxying
+}
+```
+
 ## Example: Ferron multiplexing to several backend servers
 
 In this example, the `example.com` and `bar.example.com` domains point to a server running Ferron.

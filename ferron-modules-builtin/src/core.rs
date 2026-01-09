@@ -7,14 +7,15 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
+use hyper::header::HeaderName;
 use hyper::{header, Request, Response, StatusCode, Uri};
 
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
+use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
+use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue, MetricsMultiSender};
 use ferron_common::util::{is_localhost, ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value, get_values_for_validation};
-
-use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 
 /// A core module loader
 pub struct CoreModuleLoader {
@@ -108,30 +109,6 @@ impl ModuleLoader for CoreModuleLoader {
           Err(anyhow::anyhow!("The path to the TLS certificate must be a string"))?
         } else if !tls_entry.values[1].is_string() {
           Err(anyhow::anyhow!("The path to the TLS private key must be a string"))?
-        }
-      }
-    };
-
-    if let Some(error_log_entries) = get_entries_for_validation!("error_log", config, used_properties) {
-      for error_log_entry in &error_log_entries.inner {
-        if error_log_entry.values.len() != 1 {
-          Err(anyhow::anyhow!(
-            "The `error_log` configuration property must have exactly one value"
-          ))?
-        } else if !error_log_entry.values[0].is_string() {
-          Err(anyhow::anyhow!("The path to the error log must be a string"))?
-        }
-      }
-    };
-
-    if let Some(log_entries) = get_entries_for_validation!("log", config, used_properties) {
-      for log_entry in &log_entries.inner {
-        if log_entry.values.len() != 1 {
-          Err(anyhow::anyhow!(
-            "The `log` configuration property must have exactly one value"
-          ))?
-        } else if !log_entry.values[0].is_string() {
-          Err(anyhow::anyhow!("The path to the access log must be a string"))?
         }
       }
     };
@@ -636,18 +613,20 @@ impl ModuleLoader for CoreModuleLoader {
 
     if let Some(entries) = get_entries_for_validation!("auto_tls_eab", config, used_properties) {
       for entry in &entries.inner {
-        if (1..=2).contains(&entry.values.len()) {
+        if !(1..=2).contains(&entry.values.len()) {
           Err(anyhow::anyhow!(
             "The `auto_tls_eab` configuration property must have one (if disabled) or two values"
           ))?
-        } else if !entry.values[0].is_null() && entry.values.len() != 2 {
-          Err(anyhow::anyhow!(
-            "The `auto_tls_eab` configuration property must have exactly two values if enabled"
-          ))?
-        } else if !entry.values[0].is_string() {
-          Err(anyhow::anyhow!("Invalid ACME EAB key ID"))?
-        } else if !entry.values[1].is_string() {
-          Err(anyhow::anyhow!("Invalid ACME EAB key"))?
+        } else if !entry.values[0].is_null() {
+          if entry.values.len() != 2 {
+            Err(anyhow::anyhow!(
+              "The `auto_tls_eab` configuration property must have exactly two values if enabled"
+            ))?
+          } else if !entry.values[0].is_string() {
+            Err(anyhow::anyhow!("Invalid ACME EAB key ID"))?
+          } else if !entry.values[1].is_string() {
+            Err(anyhow::anyhow!("Invalid ACME EAB key"))?
+          }
         }
       }
     }
@@ -676,6 +655,30 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
+    if let Some(entries) = get_entries_for_validation!("tls_client_certificate", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `tls_client_certificate` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_bool() && !entry.values[0].is_string() {
+          Err(anyhow::anyhow!("Invalid TLS client certificate enabling option"))?
+        }
+      }
+    };
+
+    if let Some(log_entries) = get_entries_for_validation!("disable_url_sanitizer", config, used_properties) {
+      for log_entry in &log_entries.inner {
+        if log_entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `disable_url_sanitizer` configuration property must have exactly one value"
+          ))?
+        } else if !log_entry.values[0].is_bool() {
+          Err(anyhow::anyhow!("Invalid URL sanitizer disabling option"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -693,6 +696,9 @@ impl Module for CoreModule {
       default_http_port: self.default_http_port,
       default_https_port: self.default_https_port,
       has_https: self.has_https.load(Ordering::Relaxed),
+      request_timer: None,
+      metrics_attributes: None,
+      response_status: None,
     })
   }
 }
@@ -702,6 +708,9 @@ struct CoreModuleHandlers {
   default_http_port: Option<u16>,
   default_https_port: Option<u16>,
   has_https: bool,
+  request_timer: Option<std::time::Instant>,
+  metrics_attributes: Option<Vec<(&'static str, MetricAttributeValue)>>,
+  response_status: Option<hyper::StatusCode>,
 }
 
 #[async_trait(?Send)]
@@ -779,7 +788,7 @@ impl ModuleHandlers for CoreModuleHandlers {
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
       {
-        if let Some(x_forwarded_for_value) = request.headers().get("x-forwarded-for") {
+        if let Some(x_forwarded_for_value) = request.headers().get(HeaderName::from_static("x-forwarded-for")) {
           let x_forwarded_for = x_forwarded_for_value.to_str()?;
 
           let prepared_remote_ip_str = match x_forwarded_for.split(",").nth(0) {
@@ -991,5 +1000,128 @@ impl ModuleHandlers for CoreModuleHandlers {
         new_remote_address: None,
       })
     }
+  }
+
+  async fn response_modifying_handler(
+    &mut self,
+    response: Response<BoxBody<Bytes, std::io::Error>>,
+  ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Box<dyn Error>> {
+    self.response_status = Some(response.status());
+    Ok(response)
+  }
+
+  async fn metric_data_before_handler(
+    &mut self,
+    request: &Request<BoxBody<Bytes, std::io::Error>>,
+    socket_data: &SocketData,
+    metrics_sender: &MetricsMultiSender,
+  ) {
+    let request_method = request.method().clone();
+    let url_scheme = if socket_data.encrypted { "https" } else { "http" };
+    let http_version = match request.version() {
+      hyper::Version::HTTP_09 => Some("0.9"),
+      hyper::Version::HTTP_10 => Some("1.0"),
+      hyper::Version::HTTP_11 => Some("1.1"),
+      hyper::Version::HTTP_2 => Some("2"),
+      hyper::Version::HTTP_3 => Some("3"),
+      _ => None,
+    };
+    let request_timer = std::time::Instant::now();
+    let mut metric_attributes = Vec::new();
+    metric_attributes.push((
+      "http.request.method",
+      MetricAttributeValue::String(request_method.to_string()),
+    ));
+    metric_attributes.push(("url.scheme", MetricAttributeValue::String(url_scheme.to_string())));
+    if let Some(http_version) = http_version {
+      metric_attributes.push((
+        "network.protocol.name",
+        MetricAttributeValue::String("http".to_string()),
+      ));
+      metric_attributes.push((
+        "network.protocol.version",
+        MetricAttributeValue::String(http_version.to_string()),
+      ));
+    }
+    if let Some(request_data) = request.extensions().get::<RequestData>() {
+      if let Some(error_status_code) = &request_data.error_status_code {
+        metric_attributes.push((
+          "ferron.http.request.error_status_code",
+          MetricAttributeValue::I64(error_status_code.as_u16() as i64),
+        ));
+      }
+    }
+
+    metrics_sender
+      .send(Metric::new(
+        "http.server.active_requests",
+        metric_attributes.clone(),
+        MetricType::UpDownCounter,
+        MetricValue::I64(1),
+        Some("{request}"),
+        Some("Number of active HTTP server requests."),
+      ))
+      .await;
+
+    self.metrics_attributes = Some(metric_attributes);
+    self.request_timer = Some(request_timer);
+  }
+
+  async fn metric_data_after_handler(&mut self, metrics_sender: &MetricsMultiSender) {
+    let request_duration = self.request_timer.take().map(|timer| timer.elapsed().as_secs_f64());
+    let metric_attributes = self.metrics_attributes.take().unwrap_or_default();
+    let mut request_count_metric_attributes = metric_attributes.clone();
+    if let Some(status_code) = self.response_status.take() {
+      request_count_metric_attributes.push((
+        "http.response.status_code",
+        MetricAttributeValue::I64(status_code.as_u16() as i64),
+      ));
+      if status_code.is_client_error() || status_code.is_server_error() {
+        request_count_metric_attributes.push((
+          "error.type",
+          MetricAttributeValue::String(status_code.as_u16().to_string()),
+        ));
+      }
+    }
+
+    // One active request less
+    metrics_sender
+      .send(Metric::new(
+        "http.server.active_requests",
+        metric_attributes.clone(),
+        MetricType::UpDownCounter,
+        MetricValue::I64(-1),
+        Some("{request}"),
+        Some("Number of active HTTP server requests."),
+      ))
+      .await;
+
+    if let Some(request_duration) = request_duration {
+      // HTTP request duration
+      metrics_sender
+        .send(Metric::new(
+          "http.server.request.duration",
+          metric_attributes.clone(),
+          MetricType::Histogram(Some(vec![
+            0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
+          ])),
+          MetricValue::F64(request_duration),
+          Some("s"),
+          Some("Duration of HTTP server requests."),
+        ))
+        .await;
+    }
+
+    // Add one HTTP request
+    metrics_sender
+      .send(Metric::new(
+        "ferron.http.server.request_count",
+        request_count_metric_attributes.clone(),
+        MetricType::Counter,
+        MetricValue::U64(1),
+        Some("{request}"),
+        Some("Number of HTTP server requests."),
+      ))
+      .await;
   }
 }

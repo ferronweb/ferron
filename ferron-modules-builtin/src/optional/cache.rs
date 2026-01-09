@@ -1,12 +1,13 @@
 use std::collections::HashSet;
 use std::error::Error;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use ahash::RandomState;
 use async_trait::async_trait;
 use bytes::Bytes;
 use cache_control::{Cachability, CacheControl};
+use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue};
 use futures_util::stream::{StreamExt, TryStreamExt};
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full, StreamBody};
@@ -15,14 +16,9 @@ use hyper::header::{self, HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
 use smallvec::SmallVec;
 
-#[cfg(feature = "runtime-monoio")]
-use monoio::time::Instant;
-#[cfg(feature = "runtime-tokio")]
-use tokio::time::Instant;
-
-use crate::util::AtomicGenericCache;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
+use ferron_common::observability::MetricsMultiSender;
 use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value, get_values};
 
@@ -44,17 +40,19 @@ static AUTHORIZATION_HEADER: LazyLock<HeaderName> = LazyLock::new(|| header::AUT
 static UPGRADE_HEADER: LazyLock<HeaderName> = LazyLock::new(|| header::UPGRADE);
 static VARY_HEADER: LazyLock<HeaderName> = LazyLock::new(|| header::VARY);
 
-// Cache header values to avoid allocations
-static CACHE_HIT: LazyLock<HeaderValue> = LazyLock::new(|| HeaderValue::from_static("HIT"));
-static CACHE_MISS: LazyLock<HeaderValue> = LazyLock::new(|| HeaderValue::from_static("MISS"));
-static CACHE_BYPASS: LazyLock<HeaderValue> = LazyLock::new(|| HeaderValue::from_static("BYPASS"));
-
 // Protocol prefixes
 const HTTP_PREFIX: &str = "http://";
 const HTTPS_PREFIX: &str = "https://";
 
 type HeaderList = SmallVec<[String; MAX_SMALL_HEADER_COUNT]>;
 type CacheEntry = (StatusCode, HeaderMap, Vec<u8>, Instant, Option<Arc<CacheControl>>);
+type CacheInner = quick_cache::sync::Cache<
+  String,
+  CacheEntry,
+  quick_cache::UnitWeighter,
+  quick_cache::DefaultHashBuilder,
+  CustomLifecycle<String, CacheEntry>,
+>;
 
 /// Optimized cache decision with bitflags for faster comparisons
 #[derive(Debug, Clone, Copy)]
@@ -268,6 +266,44 @@ fn build_cache_key(method: &Method, encrypted: bool, host: &str, path: &str, que
   cache_key
 }
 
+/// Custom lifecycle for the cache module
+#[derive(Clone)]
+struct CustomLifecycle<Key, Val> {
+  inner: quick_cache::sync::DefaultLifecycle<Key, Val>,
+  track_evictions: Arc<AtomicUsize>,
+}
+
+impl<Key, Val> quick_cache::Lifecycle<Key, Val> for CustomLifecycle<Key, Val> {
+  type RequestState = <quick_cache::sync::DefaultLifecycle<Key, Val> as quick_cache::Lifecycle<Key, Val>>::RequestState;
+
+  #[inline]
+  fn before_evict(&self, state: &mut Self::RequestState, key: &Key, val: &mut Val) {
+    self.inner.before_evict(state, key, val)
+  }
+
+  #[inline]
+  fn begin_request(&self) -> Self::RequestState {
+    self.inner.begin_request()
+  }
+
+  #[inline]
+  fn end_request(&self, state: Self::RequestState) {
+    self.inner.end_request(state)
+  }
+
+  #[inline]
+  fn is_pinned(&self, key: &Key, val: &Val) -> bool {
+    self.inner.is_pinned(key, val)
+  }
+
+  #[inline]
+  fn on_evict(&self, state: &mut Self::RequestState, key: Key, val: Val) {
+    // Track an eviction
+    self.track_evictions.fetch_add(1, Ordering::Relaxed);
+    self.inner.on_evict(state, key, val)
+  }
+}
+
 /// A cache module loader with optimized initialization
 #[allow(clippy::type_complexity)]
 pub struct CacheModuleLoader {
@@ -303,7 +339,7 @@ impl ModuleLoader for CacheModuleLoader {
           let maximum_cache_entries = global_config
             .and_then(|c| get_entry!("cache_max_entries", c))
             .and_then(|e| e.values.first())
-            .and_then(|v| {
+            .map_or(Some(DEFAULT_MAX_CACHE_ENTRIES), |v| {
               if v.is_null() {
                 None
               } else {
@@ -312,15 +348,29 @@ impl ModuleLoader for CacheModuleLoader {
             });
 
           // Use optimized cache size calculation
-          let cache_size = maximum_cache_entries.map_or(2048, |e| e.clamp(512, 8192));
-          let max_entries = maximum_cache_entries.unwrap_or(0);
+          let track_evictions = Arc::new(AtomicUsize::new(0));
 
           Ok(Arc::new(CacheModule {
-            cache: AtomicGenericCache::new(cache_size, max_entries),
-            vary_cache: Arc::new(papaya::HashMap::with_capacity_and_hasher(
-              cache_size / 4,
-              RandomState::new(),
+            cache: Arc::new(quick_cache::sync::Cache::with(
+              maximum_cache_entries
+                .as_ref()
+                .map_or(usize::MAX, |v| (*v).saturating_add(1)),
+              maximum_cache_entries
+                .as_ref()
+                .map_or(u64::MAX, |v| (*v as u64).saturating_add(1)),
+              quick_cache::UnitWeighter,
+              quick_cache::DefaultHashBuilder::new(),
+              CustomLifecycle {
+                inner: quick_cache::sync::DefaultLifecycle::default(),
+                track_evictions: track_evictions.clone(),
+              },
             )),
+            vary_cache: Arc::new(quick_cache::sync::Cache::new(
+              maximum_cache_entries
+                .as_ref()
+                .map_or(usize::MAX, |v| (*v).saturating_add(1)),
+            )),
+            track_evictions,
           }))
         })?,
     )
@@ -401,8 +451,9 @@ impl ModuleLoader for CacheModuleLoader {
 /// A cache module with optimized data structures
 #[allow(clippy::type_complexity)]
 struct CacheModule {
-  cache: Arc<AtomicGenericCache<String, Option<CacheEntry>>>,
-  vary_cache: Arc<papaya::HashMap<String, Vec<String>, RandomState>>,
+  cache: Arc<CacheInner>,
+  vary_cache: Arc<quick_cache::sync::Cache<String, Arc<HeaderList>>>,
+  track_evictions: Arc<AtomicUsize>,
 }
 
 impl Module for CacheModule {
@@ -418,6 +469,9 @@ impl Module for CacheModule {
       has_authorization: false,
       cached: false,
       no_store: false,
+      metric_cache_hit: None,
+      metric_cache_evictions_expired: None,
+      track_evictions: self.track_evictions.clone(),
     })
   }
 }
@@ -425,8 +479,8 @@ impl Module for CacheModule {
 /// Optimized handlers for the cache module
 #[allow(clippy::type_complexity)]
 struct CacheModuleHandlers {
-  cache: Arc<AtomicGenericCache<String, Option<CacheEntry>>>,
-  vary_cache: Arc<papaya::HashMap<String, Vec<String>, RandomState>>,
+  cache: Arc<CacheInner>,
+  vary_cache: Arc<quick_cache::sync::Cache<String, Arc<HeaderList>>>,
   cache_vary_headers_configured: HeaderList,
   cache_ignore_headers_configured: HeaderList,
   maximum_cached_response_size: Option<u64>,
@@ -435,6 +489,9 @@ struct CacheModuleHandlers {
   has_authorization: bool,
   cached: bool,
   no_store: bool,
+  metric_cache_hit: Option<bool>,
+  metric_cache_evictions_expired: Option<usize>,
+  track_evictions: Arc<AtomicUsize>,
 }
 
 impl CacheModuleHandlers {
@@ -466,23 +523,25 @@ impl CacheModuleHandlers {
     });
   }
 
-  /// Optimized cache cleanup with batching
-  fn cleanup_expired_entries(&self) {
+  /// Optimized cache cleanup with batching (returns number of removed entries)
+  fn cleanup_expired_entries(&self) -> usize {
     let default_max_age = Duration::from_secs(DEFAULT_MAX_AGE);
     let now = Instant::now();
 
-    self.cache.retain(|value, _, _| {
-      if let Some((_, _, _, timestamp, cache_control)) = value {
-        let max_age = cache_control
-          .as_ref()
-          .and_then(|cc| cc.s_max_age.or(cc.max_age))
-          .unwrap_or(default_max_age);
+    let evictions = AtomicUsize::new(0);
+    self.cache.retain(|_, (_, _, _, timestamp, cache_control)| {
+      let max_age = cache_control
+        .as_ref()
+        .and_then(|cc| cc.s_max_age.or(cc.max_age))
+        .unwrap_or(default_max_age);
 
-        now.duration_since(*timestamp) <= max_age
-      } else {
-        false
+      let keep = now.duration_since(*timestamp) <= max_age;
+      if !keep {
+        evictions.fetch_add(1, Ordering::Relaxed);
       }
+      keep
     });
+    evictions.into_inner()
   }
 
   /// Fast cache control evaluation
@@ -539,17 +598,16 @@ impl ModuleHandlers for CacheModuleHandlers {
 
     // Check cache only if not no-cache
     if !cache_decision.no_cache() {
-      let vary_cache_guard = self.vary_cache.pin_owned();
-      if let Some(processed_vary) = vary_cache_guard.get(&cache_key) {
+      if let Some(processed_vary) = self.vary_cache.get(&cache_key) {
         // Use thread-local builder for vary key
         let cache_key_with_vary = VARY_KEY_BUILDER.with(|builder| {
           builder
             .borrow_mut()
-            .build(&cache_key, processed_vary, request.headers())
+            .build(&cache_key, &processed_vary, request.headers())
             .to_string()
         });
 
-        if let Some(Some((status_code, headers, body, timestamp, response_cache_control))) =
+        if let Some((status_code, headers, body, timestamp, response_cache_control)) =
           self.cache.get(&cache_key_with_vary)
         {
           let max_age = response_cache_control
@@ -600,13 +658,20 @@ impl ModuleHandlers for CacheModuleHandlers {
   ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Box<dyn Error>> {
     // Fast path for common cases
     if self.no_store {
-      response.headers_mut().insert(CACHE_HEADER_NAME, CACHE_BYPASS.clone());
+      response
+        .headers_mut()
+        .insert(CACHE_HEADER_NAME, HeaderValue::from_static("BYPASS"));
       return Ok(response);
     }
 
     if self.cached {
-      response.headers_mut().insert(CACHE_HEADER_NAME, CACHE_HIT.clone());
+      response
+        .headers_mut()
+        .insert(CACHE_HEADER_NAME, HeaderValue::from_static("HIT"));
+      self.metric_cache_hit = Some(true);
       return Ok(response);
+    } else {
+      self.metric_cache_hit = Some(false);
     }
 
     let Some(cache_key) = &self.cache_key else {
@@ -636,7 +701,9 @@ impl ModuleHandlers for CacheModuleHandlers {
         let stream_body = StreamBody::new(chained_stream.map_ok(Frame::data));
         let response_body = BodyExt::boxed(stream_body);
 
-        response_parts.headers.insert(CACHE_HEADER_NAME, CACHE_MISS.clone());
+        response_parts
+          .headers
+          .insert(CACHE_HEADER_NAME, HeaderValue::from_static("MISS"));
 
         return Ok(Response::from_parts(response_parts, response_body));
       }
@@ -666,8 +733,7 @@ impl ModuleHandlers for CacheModuleHandlers {
         });
 
         // Update vary cache
-        let vary_cache_guard = self.vary_cache.pin_owned();
-        vary_cache_guard.insert(cache_key.clone(), processed_vary.into_vec());
+        self.vary_cache.insert(cache_key.clone(), Arc::new(processed_vary));
 
         // Prepare headers for caching (remove ignored headers)
         let mut written_headers = response_parts.headers.clone();
@@ -676,22 +742,25 @@ impl ModuleHandlers for CacheModuleHandlers {
         }
 
         // Periodic cleanup
-        self.cleanup_expired_entries();
+        let evictions_expired = self.cleanup_expired_entries();
+        if let Some(evictions_expired_set) = self.metric_cache_evictions_expired.as_mut() {
+          *evictions_expired_set += evictions_expired;
+        }
 
         // Store in cache
-        self
-          .cache
-          .force_insert(
-            cache_key_with_vary,
-            Some((
-              response_parts.status,
-              written_headers,
-              response_body_buffer.clone(),
-              Instant::now(),
-              response_cache_control.map(Arc::new),
-            )),
-          )
-          .unwrap_or_default();
+        self.cache.insert(
+          cache_key_with_vary,
+          (
+            response_parts.status,
+            written_headers,
+            response_body_buffer.clone(),
+            Instant::now(),
+            response_cache_control.map(Arc::new),
+          ),
+        );
+        if self.metric_cache_evictions_expired.is_none() {
+          self.track_evictions.store(0, Ordering::Relaxed);
+        }
       }
 
       // Create response stream efficiently
@@ -699,13 +768,96 @@ impl ModuleHandlers for CacheModuleHandlers {
       let stream_body = StreamBody::new(cached_stream.map_ok(Frame::data));
       let response_body = BodyExt::boxed(stream_body);
 
-      response_parts.headers.insert(CACHE_HEADER_NAME, CACHE_MISS.clone());
+      response_parts
+        .headers
+        .insert(CACHE_HEADER_NAME, HeaderValue::from_static("MISS"));
 
       Ok(Response::from_parts(response_parts, response_body))
     } else {
-      response_parts.headers.insert(CACHE_HEADER_NAME, CACHE_MISS.clone());
+      response_parts
+        .headers
+        .insert(CACHE_HEADER_NAME, HeaderValue::from_static("MISS"));
 
       Ok(Response::from_parts(response_parts, response_body))
+    }
+  }
+
+  async fn metric_data_before_handler(
+    &mut self,
+    _request: &Request<BoxBody<Bytes, std::io::Error>>,
+    _socket_data: &SocketData,
+    _metrics_sender: &MetricsMultiSender,
+  ) {
+    self.metric_cache_evictions_expired = Some(0);
+  }
+
+  async fn metric_data_after_handler(&mut self, metrics_sender: &MetricsMultiSender) {
+    if let Some(cache_hit) = self.metric_cache_hit.take() {
+      // Cache lookups
+      metrics_sender
+        .send(Metric::new(
+          "ferron.cache.lookups",
+          vec![(
+            "ferron.cache.result",
+            MetricAttributeValue::String(if cache_hit {
+              "hit".to_string()
+            } else {
+              "miss".to_string()
+            }),
+          )],
+          MetricType::Counter,
+          MetricValue::U64(1),
+          Some("{lookup}"),
+          Some("Number of times a cache lookup was performed."),
+        ))
+        .await;
+    }
+
+    // Items in cache
+    metrics_sender
+      .send(Metric::new(
+        "ferron.cache.items",
+        vec![],
+        MetricType::Gauge,
+        MetricValue::U64(self.cache.len() as u64),
+        Some("{item}"),
+        Some("Number of items in the cache."),
+      ))
+      .await;
+
+    // Cache evictions
+    let metric_cache_evictions_size = self.track_evictions.swap(0, Ordering::Relaxed);
+    if metric_cache_evictions_size > 0 {
+      metrics_sender
+        .send(Metric::new(
+          "ferron.cache.evictions",
+          vec![(
+            "ferron.cache.eviction_reason",
+            MetricAttributeValue::String("size".to_string()),
+          )],
+          MetricType::Counter,
+          MetricValue::U64(metric_cache_evictions_size as u64),
+          Some("{eviction}"),
+          Some("Number of cache evictions."),
+        ))
+        .await;
+    }
+
+    let metric_cache_evictions_expired = *self.metric_cache_evictions_expired.as_ref().unwrap_or(&0);
+    if metric_cache_evictions_expired > 0 {
+      metrics_sender
+        .send(Metric::new(
+          "ferron.cache.evictions",
+          vec![(
+            "ferron.cache.eviction_reason",
+            MetricAttributeValue::String("expired".to_string()),
+          )],
+          MetricType::Counter,
+          MetricValue::U64(metric_cache_evictions_expired as u64),
+          Some("{eviction}"),
+          Some("Number of cache evictions."),
+        ))
+        .await;
     }
   }
 }

@@ -7,25 +7,25 @@ members = [
     "ferron-modules-builtin",
     "ferron-passwd",
     "ferron-yaml2kdl-core",
-    "ferron-yaml2kdl", "ferron-precompress",
+    "ferron-yaml2kdl", "ferron-precompress", "ferron-observability-builtin",
 ]
-exclude = ["build-prepare", "dockertest"]
+exclude = ["build-prepare", "build-installer", "dockertest"]
 resolver = "2"
 
 [workspace.dependencies]
 kdl = "6.3.4"
-mimalloc = "0.1.46"
+mimalloc = { version = "0.1.46" }
 password-auth = { version = "1.0.0", features = ["pbkdf2", "argon2", "scrypt"] }
 shiba = "0.1.1"
 ferron-common = { path = "./ferron-common", default-features = false }
 ferron-dns-builtin = { path = "./ferron-dns-builtin", default-features = false }
 ferron-load-modules = { path = "./ferron-load-modules", default-features = false }
 ferron-modules-builtin = { path = "./ferron-modules-builtin", default-features = false }
+ferron-observability-builtin = { path = "./ferron-observability-builtin", default-features = false }
 
 [patch.crates-io]
 monoio = { git = "https://github.com/DorianNiemiecSVRJS/monoio.git" }                                           # This is needed for the web server to be able to accept more than one connection on Windows, and to be able to be compiled correctly on FreeBSD
 cache_control = { git = "https://github.com/DorianNiemiecSVRJS/rust-cache-control.git" }                        # This is a fork of "cache-control" crate, with a bugfix related to "s-maxage" directive
-desec_api = { git = "https://github.com/DorianNiemiecSVRJS/desec_api.git" }                                     # This is a fork of "desec_api" crate, with updated dependencies and crypto provider requirement removed
 dns-update = { git = "https://github.com/DorianNiemiecSVRJS/dns-update.git" }                                   # This is a fork of "dns-update" crate, with updated dependencies and crypto provider requirement removed
 async-compression = { git = "https://github.com/DorianNiemiecSVRJS/async-compression.git", branch = "0.4.28"  } # This is a fork of "async-compression" crate that uses "zlib-rs" backend for "flate2" instead of "miniz_oxide"
 
@@ -39,4 +39,4 @@ codegen-units = 1
 panic = "abort"
 
 [workspace.metadata.cargo-shear]
-ignored = ["shiba", "ferron-modules-builtin", "ferron-dns-builtin"]
+ignored = ["shiba", "ferron-modules-builtin", "ferron-dns-builtin", "ferron-observability-builtin"]

@@ -2,6 +2,8 @@
 mod cache;
 #[cfg(feature = "cgi")]
 mod cgi;
+#[cfg(feature = "dcompress")]
+mod dcompress;
 #[cfg(feature = "fauth")]
 mod fauth;
 #[cfg(feature = "fcgi")]
@@ -23,6 +25,8 @@ mod r#static;
 pub use cache::*;
 #[cfg(feature = "cgi")]
 pub use cgi::*;
+#[cfg(feature = "dcompress")]
+pub use dcompress::*;
 #[cfg(feature = "fauth")]
 pub use fauth::*;
 #[cfg(feature = "fcgi")]

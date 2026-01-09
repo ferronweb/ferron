@@ -1,4 +1,3 @@
-use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -6,6 +5,8 @@ use std::time::Duration;
 
 use async_channel::Sender;
 use chrono::{DateTime, Local};
+use ferron_common::logging::{ErrorLogger, LogMessage};
+use ferron_common::observability::{MetricsMultiSender, TraceSignal};
 use futures_util::stream::TryStreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
@@ -19,10 +20,9 @@ use tokio_util::io::ReaderStream;
 
 use crate::config::{ServerConfiguration, ServerConfigurations};
 use crate::get_value;
-use crate::logging::{ErrorLogger, LogMessage, Loggers};
 use crate::runtime::timeout;
 #[cfg(feature = "runtime-monoio")]
-use crate::util::MonoioFileStream;
+use crate::util::MonoioFileStreamNoSpawn;
 use crate::util::{
   generate_default_error_page, replace_header_placeholders, replace_log_placeholders, sanitize_url, SERVER_SOFTWARE,
 };
@@ -86,7 +86,7 @@ async fn generate_error_response(
           };
 
           #[cfg(feature = "runtime-monoio")]
-          let file_stream = MonoioFileStream::new(file, None, content_length);
+          let file_stream = MonoioFileStreamNoSpawn::new(file, None, content_length);
           #[cfg(feature = "runtime-tokio")]
           let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
@@ -115,7 +115,7 @@ async fn generate_error_response(
   if let Some(content_length) = content_length {
     response_builder = response_builder.header(header::CONTENT_LENGTH, content_length);
   }
-  response_builder = response_builder.header(header::CONTENT_TYPE, "text/html");
+  response_builder = response_builder.header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"));
 
   response_builder.body(response_body).unwrap_or_default()
 }
@@ -123,7 +123,7 @@ async fn generate_error_response(
 /// Sends a log message formatted according to the Combined Log Format
 #[allow(clippy::too_many_arguments)]
 async fn log_access(
-  logger: &Sender<LogMessage>,
+  loggers: &Vec<Sender<LogMessage>>,
   request_parts: &hyper::http::request::Parts,
   socket_data: &SocketData,
   auth_user: Option<&str>,
@@ -134,24 +134,24 @@ async fn log_access(
 ) {
   let now: DateTime<Local> = Local::now();
   let formatted_time = now.format(date_format.unwrap_or("%d/%b/%Y:%H:%M:%S %z")).to_string();
-  logger
-    .send(LogMessage::new(
-      replace_log_placeholders(
-        log_format.unwrap_or(
-          "{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" \
-           {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\"",
-        ),
-        request_parts,
-        socket_data,
-        auth_user,
-        &formatted_time,
-        status_code,
-        content_length,
-      ),
-      false,
-    ))
-    .await
-    .unwrap_or_default();
+  let log_message_string = replace_log_placeholders(
+    log_format.unwrap_or(
+      "{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" \
+       {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\"",
+    ),
+    request_parts,
+    socket_data,
+    auth_user,
+    &formatted_time,
+    status_code,
+    content_length,
+  );
+  for logger in loggers {
+    logger
+      .send(LogMessage::new(log_message_string.clone(), false))
+      .await
+      .unwrap_or_default();
+  }
 }
 
 /// Helper function to add custom headers to response
@@ -228,7 +228,7 @@ async fn finalize_response_and_log(
   headers_to_add: HeaderMap,
   headers_to_replace: HeaderMap,
   headers_to_remove: Vec<HeaderName>,
-  logger: &Option<Sender<LogMessage>>,
+  loggers: &Vec<Sender<LogMessage>>,
   request_parts: &Option<hyper::http::request::Parts>,
   socket_data: &SocketData,
   latest_auth_data: Option<&str>,
@@ -249,9 +249,9 @@ async fn finalize_response_and_log(
   let response = Response::from_parts(response_parts, response_body);
 
   if let Some(request_parts) = request_parts {
-    if let Some(logger) = &logger {
+    if !loggers.is_empty() {
       log_access(
-        logger,
+        loggers,
         request_parts,
         socket_data,
         latest_auth_data,
@@ -277,29 +277,79 @@ async fn execute_response_modifying_handlers(
   headers_to_add: HeaderMap,
   headers_to_replace: HeaderMap,
   headers_to_remove: Vec<HeaderName>,
-  logger: &Option<Sender<LogMessage>>,
-  error_log_enabled: bool,
+  loggers: &Vec<Sender<LogMessage>>,
   request_parts: &Option<hyper::http::request::Parts>,
   socket_data: &SocketData,
   latest_auth_data: Option<&str>,
   date_format: Option<&str>,
   log_format: Option<&str>,
-) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Response<BoxBody<Bytes, std::io::Error>>> {
+  metrics_sender: MetricsMultiSender,
+  metrics_enabled: bool,
+  traces_senders: Vec<Sender<TraceSignal>>,
+  traces_enabled: bool,
+  timeout_instant: std::time::Instant,
+  timeout_duration: Option<std::time::Duration>,
+) -> Result<Result<Response<BoxBody<Bytes, std::io::Error>>, Response<BoxBody<Bytes, std::io::Error>>>, anyhow::Error> {
   while let Some(mut executed_handler) = executed_handlers.pop() {
-    let response_status = executed_handler.response_modifying_handler(response).await;
+    if traces_enabled {
+      for trace_sender in &traces_senders {
+        trace_sender
+          .send(TraceSignal::StartSpan(format!(
+            "{}::response_modifying_handler",
+            executed_handler.get_name()
+          )))
+          .await
+          .unwrap_or_default();
+      }
+    }
+    let (response_status, is_timeout) = if let Some(timeout_duration) = &timeout_duration {
+      let elapsed = timeout_instant.elapsed();
+      if let Some(timeout_cur_duration) = timeout_duration.checked_sub(elapsed) {
+        match timeout(
+          timeout_cur_duration,
+          executed_handler.response_modifying_handler(response),
+        )
+        .await
+        {
+          Ok(result) => (result, false),
+          Err(_) => (Err(anyhow::anyhow!("The client or server has timed out").into()), true),
+        }
+      } else {
+        (Err(anyhow::anyhow!("The client or server has timed out").into()), true)
+      }
+    } else {
+      (executed_handler.response_modifying_handler(response).await, false)
+    };
+    if traces_enabled {
+      for trace_sender in &traces_senders {
+        trace_sender
+          .send(TraceSignal::EndSpan(
+            format!("{}::response_modifying_handler", executed_handler.get_name()),
+            response_status.as_ref().err().map(|e| e.to_string()),
+          ))
+          .await
+          .unwrap_or_default();
+      }
+    }
+    if is_timeout {
+      if metrics_enabled {
+        while let Some(mut executed_handler) = executed_handlers.pop() {
+          executed_handler.metric_data_after_handler(&metrics_sender).await;
+        }
+      }
+      Err(anyhow::anyhow!("The client or server has timed out"))?;
+    }
     response = match response_status {
       Ok(response) => response,
       Err(err) => {
-        if error_log_enabled {
-          if let Some(logger) = &logger {
-            logger
-              .send(LogMessage::new(
-                format!("Unexpected error while serving a request: {err}"),
-                true,
-              ))
-              .await
-              .unwrap_or_default();
-          }
+        for logger in loggers {
+          logger
+            .send(LogMessage::new(
+              format!("Unexpected error while serving a request: {err}"),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
         }
 
         let error_response = generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, configuration, &None).await;
@@ -310,7 +360,7 @@ async fn execute_response_modifying_handlers(
           headers_to_add,
           headers_to_replace,
           headers_to_remove,
-          logger,
+          loggers,
           request_parts,
           socket_data,
           latest_auth_data,
@@ -319,39 +369,50 @@ async fn execute_response_modifying_handlers(
         )
         .await;
 
-        return Err(final_response);
+        if metrics_enabled {
+          while let Some(mut executed_handler) = executed_handlers.pop() {
+            executed_handler.metric_data_after_handler(&metrics_sender).await;
+          }
+        }
+
+        return Ok(Err(final_response));
       }
     };
+    if metrics_enabled {
+      executed_handler.metric_data_after_handler(&metrics_sender).await;
+    }
   }
-  Ok(response)
+  Ok(Ok(response))
 }
 
-/// The HTTP request handler
+/// The HTTP request handler, with timeout
 #[allow(clippy::too_many_arguments)]
-async fn request_handler_wrapped(
+pub async fn request_handler(
   mut request: Request<BoxBody<Bytes, std::io::Error>>,
   client_address: SocketAddr,
   server_address: SocketAddr,
   encrypted: bool,
   configurations: Arc<ServerConfigurations>,
-  loggers: Loggers,
   http3_alt_port: Option<u16>,
   acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   proxy_protocol_client_address: Option<SocketAddr>,
   proxy_protocol_server_address: Option<SocketAddr>,
-) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
+) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
   // Global configuration
   let global_configuration = configurations.find_global_configuration();
 
-  // Check if logging is enabled
-  let log_enabled = !global_configuration
+  // Request timeout
+  let timeout_from_config = global_configuration
     .as_deref()
-    .and_then(|c| get_value!("log", c))
-    .is_none_or(|v| v.is_null());
-  let error_log_enabled = !global_configuration
-    .as_deref()
-    .and_then(|c| get_value!("error_log", c))
-    .is_none_or(|v| v.is_null());
+    .and_then(|c| get_entry!("timeout", c))
+    .and_then(|e| e.values.last());
+  let timeout_duration = if timeout_from_config.is_some_and(|v| v.is_null()) {
+    None
+  } else {
+    let timeout_millis = timeout_from_config.and_then(|v| v.as_i128()).unwrap_or(300000) as u64;
+    Some(Duration::from_millis(timeout_millis))
+  };
+  let timeout_instant = std::time::Instant::now();
 
   // Normalize HTTP/2 and HTTP/3 request objects
   match request.version() {
@@ -409,17 +470,18 @@ async fn request_handler_wrapped(
           let host_header_value = match HeaderValue::from_str(host_header_without_dot) {
             Ok(host_header_value) => host_header_value,
             Err(err) => {
-              if error_log_enabled {
-                if let Some(logger) = loggers.find_global_logger() {
-                  logger
-                    .send(LogMessage::new(format!("Host header sanitation error: {err}"), true))
-                    .await
-                    .unwrap_or_default();
-                }
+              for logger in global_configuration
+                .as_ref()
+                .map_or(&vec![], |c| &c.observability.log_channels)
+              {
+                logger
+                  .send(LogMessage::new(format!("Host header sanitation error: {err}"), true))
+                  .await
+                  .unwrap_or_default();
               }
               let response = Response::builder()
                 .status(StatusCode::BAD_REQUEST)
-                .header(header::CONTENT_TYPE, "text/html")
+                .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
                 .body(
                   Full::new(Bytes::from(generate_default_error_page(StatusCode::BAD_REQUEST, None)))
                     .map_err(|e| match e {})
@@ -427,37 +489,35 @@ async fn request_handler_wrapped(
                 )
                 .unwrap_or_default();
 
-              if log_enabled {
-                let (request_parts, _) = request.into_parts();
-                if let Some(logger) = loggers.find_global_logger() {
-                  log_access(
-                    &logger,
-                    &request_parts,
-                    &socket_data,
-                    None,
-                    response.status().as_u16(),
-                    match response.headers().get(header::CONTENT_LENGTH) {
-                      Some(header_value) => match header_value.to_str() {
-                        Ok(header_value) => match header_value.parse::<u64>() {
-                          Ok(content_length) => Some(content_length),
-                          Err(_) => response.body().size_hint().exact(),
-                        },
-                        Err(_) => response.body().size_hint().exact(),
-                      },
-                      None => response.body().size_hint().exact(),
+              let (request_parts, _) = request.into_parts();
+              log_access(
+                global_configuration
+                  .as_ref()
+                  .map_or(&vec![], |c| &c.observability.log_channels),
+                &request_parts,
+                &socket_data,
+                None,
+                response.status().as_u16(),
+                match response.headers().get(header::CONTENT_LENGTH) {
+                  Some(header_value) => match header_value.to_str() {
+                    Ok(header_value) => match header_value.parse::<u64>() {
+                      Ok(content_length) => Some(content_length),
+                      Err(_) => response.body().size_hint().exact(),
                     },
-                    global_configuration
-                      .as_deref()
-                      .and_then(|c| get_value!("log_date_format", c))
-                      .and_then(|v| v.as_str()),
-                    global_configuration
-                      .as_deref()
-                      .and_then(|c| get_value!("log_format", c))
-                      .and_then(|v| v.as_str()),
-                  )
-                  .await;
-                }
-              }
+                    Err(_) => response.body().size_hint().exact(),
+                  },
+                  None => response.body().size_hint().exact(),
+                },
+                global_configuration
+                  .as_deref()
+                  .and_then(|c| get_value!("log_date_format", c))
+                  .and_then(|v| v.as_str()),
+                global_configuration
+                  .as_deref()
+                  .and_then(|c| get_value!("log_format", c))
+                  .and_then(|v| v.as_str()),
+              )
+              .await;
               let (mut response_parts, response_body) = response.into_parts();
               if let Some(http3_alt_port) = http3_alt_port {
                 if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
@@ -490,54 +550,53 @@ async fn request_handler_wrapped(
         }
       }
       Err(err) => {
-        if error_log_enabled {
-          if let Some(logger) = loggers.find_global_logger() {
-            logger
-              .send(LogMessage::new(format!("Host header sanitation error: {err}"), true))
-              .await
-              .unwrap_or_default();
-          }
+        for logger in global_configuration
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels)
+        {
+          logger
+            .send(LogMessage::new(format!("Host header sanitation error: {err}"), true))
+            .await
+            .unwrap_or_default();
         }
         let response = Response::builder()
           .status(StatusCode::BAD_REQUEST)
-          .header(header::CONTENT_TYPE, "text/html")
+          .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
           .body(
             Full::new(Bytes::from(generate_default_error_page(StatusCode::BAD_REQUEST, None)))
               .map_err(|e| match e {})
               .boxed(),
           )
           .unwrap_or_default();
-        if log_enabled {
-          let (request_parts, _) = request.into_parts();
-          if let Some(logger) = loggers.find_global_logger() {
-            log_access(
-              &logger,
-              &request_parts,
-              &socket_data,
-              None,
-              response.status().as_u16(),
-              match response.headers().get(header::CONTENT_LENGTH) {
-                Some(header_value) => match header_value.to_str() {
-                  Ok(header_value) => match header_value.parse::<u64>() {
-                    Ok(content_length) => Some(content_length),
-                    Err(_) => response.body().size_hint().exact(),
-                  },
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                None => response.body().size_hint().exact(),
+        let (request_parts, _) = request.into_parts();
+        log_access(
+          global_configuration
+            .as_ref()
+            .map_or(&vec![], |c| &c.observability.log_channels),
+          &request_parts,
+          &socket_data,
+          None,
+          response.status().as_u16(),
+          match response.headers().get(header::CONTENT_LENGTH) {
+            Some(header_value) => match header_value.to_str() {
+              Ok(header_value) => match header_value.parse::<u64>() {
+                Ok(content_length) => Some(content_length),
+                Err(_) => response.body().size_hint().exact(),
               },
-              global_configuration
-                .as_deref()
-                .and_then(|c| get_value!("log_date_format", c))
-                .and_then(|v| v.as_str()),
-              global_configuration
-                .as_deref()
-                .and_then(|c| get_value!("log_format", c))
-                .and_then(|v| v.as_str()),
-            )
-            .await;
-          }
-        }
+              Err(_) => response.body().size_hint().exact(),
+            },
+            None => response.body().size_hint().exact(),
+          },
+          global_configuration
+            .as_deref()
+            .and_then(|c| get_value!("log_date_format", c))
+            .and_then(|v| v.as_str()),
+          global_configuration
+            .as_deref()
+            .and_then(|c| get_value!("log_format", c))
+            .and_then(|v| v.as_str()),
+        )
+        .await;
         let (mut response_parts, response_body) = response.into_parts();
         if let Some(http3_alt_port) = http3_alt_port {
           if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
@@ -583,7 +642,14 @@ async fn request_handler_wrapped(
   };
 
   let (request_parts, request_body) = request.into_parts();
-  let log_request_parts = if log_enabled { Some(request_parts.clone()) } else { None };
+  let mut log_request_parts = if global_configuration
+    .as_ref()
+    .is_some_and(|c| !c.observability.log_channels.is_empty())
+  {
+    Some(request_parts.clone())
+  } else {
+    None
+  };
   let request = Request::from_parts(request_parts, request_body);
 
   // Find the server configuration
@@ -594,20 +660,21 @@ async fn request_handler_wrapped(
   let mut configuration = match configuration_option {
     Ok(Some(configuration)) => configuration,
     Ok(None) => {
-      if error_log_enabled {
-        if let Some(logger) = loggers.find_global_logger() {
-          logger
-            .send(LogMessage::new(
-              String::from("Cannot determine server configuration"),
-              true,
-            ))
-            .await
-            .unwrap_or_default()
-        }
+      for logger in global_configuration
+        .as_ref()
+        .map_or(&vec![], |c| &c.observability.log_channels)
+      {
+        logger
+          .send(LogMessage::new(
+            String::from("Cannot determine server configuration"),
+            true,
+          ))
+          .await
+          .unwrap_or_default()
       }
       let response = Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .header(header::CONTENT_TYPE, "text/html")
+        .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
         .body(
           Full::new(Bytes::from(generate_default_error_page(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -617,37 +684,35 @@ async fn request_handler_wrapped(
           .boxed(),
         )
         .unwrap_or_default();
-      if log_enabled {
-        let (request_parts, _) = request.into_parts();
-        if let Some(logger) = loggers.find_global_logger() {
-          log_access(
-            &logger,
-            &request_parts,
-            &socket_data,
-            None,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                Err(_) => response.body().size_hint().exact(),
-              },
-              None => response.body().size_hint().exact(),
+      let (request_parts, _) = request.into_parts();
+      log_access(
+        global_configuration
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels),
+        &request_parts,
+        &socket_data,
+        None,
+        response.status().as_u16(),
+        match response.headers().get(header::CONTENT_LENGTH) {
+          Some(header_value) => match header_value.to_str() {
+            Ok(header_value) => match header_value.parse::<u64>() {
+              Ok(content_length) => Some(content_length),
+              Err(_) => response.body().size_hint().exact(),
             },
-            global_configuration
-              .as_deref()
-              .and_then(|c| get_value!("log_date_format", c))
-              .and_then(|v| v.as_str()),
-            global_configuration
-              .as_deref()
-              .and_then(|c| get_value!("log_format", c))
-              .and_then(|v| v.as_str()),
-          )
-          .await;
-        }
-      }
+            Err(_) => response.body().size_hint().exact(),
+          },
+          None => response.body().size_hint().exact(),
+        },
+        global_configuration
+          .as_deref()
+          .and_then(|c| get_value!("log_date_format", c))
+          .and_then(|v| v.as_str()),
+        global_configuration
+          .as_deref()
+          .and_then(|c| get_value!("log_format", c))
+          .and_then(|v| v.as_str()),
+      )
+      .await;
       let (mut response_parts, response_body) = response.into_parts();
       if let Some(http3_alt_port) = http3_alt_port {
         if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
@@ -673,20 +738,21 @@ async fn request_handler_wrapped(
       return Ok(Response::from_parts(response_parts, response_body));
     }
     Err(err) => {
-      if error_log_enabled {
-        if let Some(logger) = loggers.find_global_logger() {
-          logger
-            .send(LogMessage::new(
-              format!("Cannot determine server configuration: {err}"),
-              true,
-            ))
-            .await
-            .unwrap_or_default()
-        }
+      for logger in global_configuration
+        .as_ref()
+        .map_or(&vec![], |c| &c.observability.log_channels)
+      {
+        logger
+          .send(LogMessage::new(
+            format!("Cannot determine server configuration: {err}"),
+            true,
+          ))
+          .await
+          .unwrap_or_default()
       }
       let response = Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .header(header::CONTENT_TYPE, "text/html")
+        .header(header::CONTENT_TYPE, HeaderValue::from_static("text/html"))
         .body(
           Full::new(Bytes::from(generate_default_error_page(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -696,37 +762,35 @@ async fn request_handler_wrapped(
           .boxed(),
         )
         .unwrap_or_default();
-      if log_enabled {
-        let (request_parts, _) = request.into_parts();
-        if let Some(logger) = loggers.find_global_logger() {
-          log_access(
-            &logger,
-            &request_parts,
-            &socket_data,
-            None,
-            response.status().as_u16(),
-            match response.headers().get(header::CONTENT_LENGTH) {
-              Some(header_value) => match header_value.to_str() {
-                Ok(header_value) => match header_value.parse::<u64>() {
-                  Ok(content_length) => Some(content_length),
-                  Err(_) => response.body().size_hint().exact(),
-                },
-                Err(_) => response.body().size_hint().exact(),
-              },
-              None => response.body().size_hint().exact(),
+      let (request_parts, _) = request.into_parts();
+      log_access(
+        global_configuration
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels),
+        &request_parts,
+        &socket_data,
+        None,
+        response.status().as_u16(),
+        match response.headers().get(header::CONTENT_LENGTH) {
+          Some(header_value) => match header_value.to_str() {
+            Ok(header_value) => match header_value.parse::<u64>() {
+              Ok(content_length) => Some(content_length),
+              Err(_) => response.body().size_hint().exact(),
             },
-            global_configuration
-              .as_deref()
-              .and_then(|c| get_value!("log_date_format", c))
-              .and_then(|v| v.as_str()),
-            global_configuration
-              .as_deref()
-              .and_then(|c| get_value!("log_format", c))
-              .and_then(|v| v.as_str()),
-          )
-          .await;
-        }
-      }
+            Err(_) => response.body().size_hint().exact(),
+          },
+          None => response.body().size_hint().exact(),
+        },
+        global_configuration
+          .as_deref()
+          .and_then(|c| get_value!("log_date_format", c))
+          .and_then(|v| v.as_str()),
+        global_configuration
+          .as_deref()
+          .and_then(|c| get_value!("log_format", c))
+          .and_then(|v| v.as_str()),
+      )
+      .await;
       let (mut response_parts, response_body) = response.into_parts();
       if let Some(http3_alt_port) = http3_alt_port {
         if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
@@ -757,299 +821,32 @@ async fn request_handler_wrapped(
   let mut log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
   let mut log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
 
-  // Determine the logger
-  let logger = loggers.find_logger(
-    hostname_determinant.as_deref(),
-    socket_data.local_addr.ip(),
-    socket_data.local_addr.port(),
-  );
-  let log_enabled = !get_value!("log", configuration).is_none_or(|v| v.is_null());
-  let error_log_enabled = !get_value!("error_log", configuration).is_none_or(|v| v.is_null());
+  // Clone the log request parts if logging is enabled and request parts are not already cloned
+  if !configuration.observability.log_channels.is_empty() && log_request_parts.is_none() {
+    let (request_parts, request_body) = request.into_parts();
+    log_request_parts = Some(request_parts.clone());
+    request = Request::from_parts(request_parts, request_body);
+  }
 
-  // Sanitize the URL
-  let url_pathname = request.uri().path();
-  let sanitized_url_pathname = match sanitize_url(
-    url_pathname,
-    get_value!("allow_double_slashes", configuration)
-      .and_then(|v| v.as_bool())
-      .unwrap_or(false),
-  ) {
-    Ok(sanitized_url) => sanitized_url,
-    Err(err) => {
-      if error_log_enabled {
-        if let Some(logger) = &logger {
+  // Sanitize the URL, if the URL sanitizer is enabled
+  if !get_value!("disable_url_sanitizer", configuration)
+    .and_then(|v| v.as_bool())
+    .unwrap_or(false)
+  {
+    let url_pathname = request.uri().path();
+    let sanitized_url_pathname = match sanitize_url(
+      url_pathname,
+      get_value!("allow_double_slashes", configuration)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false),
+    ) {
+      Ok(sanitized_url) => sanitized_url,
+      Err(err) => {
+        for logger in &configuration.observability.log_channels {
           logger
             .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
             .await
             .unwrap_or_default();
-        }
-      }
-      let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
-
-      // Determine headers to add/remove/replace
-      let mut headers_to_add = HeaderMap::new();
-      let mut headers_to_replace = HeaderMap::new();
-      let mut headers_to_remove = Vec::new();
-      let (request_parts, _) = request.into_parts();
-      if let Some(custom_headers) = get_entries!("header", configuration) {
-        for custom_header in custom_headers.inner.iter().rev() {
-          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-            if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-              if !headers_to_add.contains_key(header_name) {
-                if let Ok(header_name) = HeaderName::from_str(header_name) {
-                  if let Ok(header_value) =
-                    HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts, None))
-                  {
-                    headers_to_add.insert(header_name, header_value);
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-      if let Some(custom_headers) = get_entries!("header_replace", configuration) {
-        for custom_header in custom_headers.inner.iter().rev() {
-          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-            if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-              if let Ok(header_name) = HeaderName::from_str(header_name) {
-                if let Ok(header_value) =
-                  HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts, None))
-                {
-                  headers_to_replace.insert(header_name, header_value);
-                }
-              }
-            }
-          }
-        }
-      }
-      if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
-        for custom_header in custom_headers_to_remove.inner.iter().rev() {
-          if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-            if let Ok(header_name) = HeaderName::from_str(header_name) {
-              headers_to_remove.push(header_name);
-            }
-          }
-        }
-      }
-
-      return Ok(
-        finalize_response_and_log(
-          response,
-          http3_alt_port,
-          headers_to_add,
-          headers_to_replace,
-          headers_to_remove,
-          &logger,
-          &log_request_parts,
-          &socket_data,
-          None,
-          log_date_format,
-          log_format,
-        )
-        .await,
-      );
-    }
-  };
-
-  if sanitized_url_pathname != url_pathname {
-    let (mut parts, body) = request.into_parts();
-    let orig_uri = parts.uri.clone();
-    let mut url_parts = parts.uri.into_parts();
-    url_parts.path_and_query = Some(
-      match format!(
-        "{}{}",
-        sanitized_url_pathname,
-        match url_parts.path_and_query {
-          Some(path_and_query) => {
-            match path_and_query.query() {
-              Some(query) => format!("?{query}"),
-              None => String::from(""),
-            }
-          }
-          None => String::from(""),
-        }
-      )
-      .parse()
-      {
-        Ok(path_and_query) => path_and_query,
-        Err(err) => {
-          if error_log_enabled {
-            if let Some(logger) = &logger {
-              logger
-                .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
-                .await
-                .unwrap_or_default();
-            }
-          }
-          let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
-
-          parts.uri = orig_uri;
-
-          // Determine headers to add/remove/replace
-          let mut headers_to_add = HeaderMap::new();
-          let mut headers_to_replace = HeaderMap::new();
-          let mut headers_to_remove = Vec::new();
-          if let Some(custom_headers) = get_entries!("header", configuration) {
-            for custom_header in custom_headers.inner.iter().rev() {
-              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-                if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-                  if !headers_to_add.contains_key(header_name) {
-                    if let Ok(header_name) = HeaderName::from_str(header_name) {
-                      if let Ok(header_value) =
-                        HeaderValue::from_str(&replace_header_placeholders(header_value, &parts, None))
-                      {
-                        headers_to_add.insert(header_name, header_value);
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-          if let Some(custom_headers) = get_entries!("header_replace", configuration) {
-            for custom_header in custom_headers.inner.iter().rev() {
-              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-                if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-                  if let Ok(header_name) = HeaderName::from_str(header_name) {
-                    if let Ok(header_value) =
-                      HeaderValue::from_str(&replace_header_placeholders(header_value, &parts, None))
-                    {
-                      headers_to_replace.insert(header_name, header_value);
-                    }
-                  }
-                }
-              }
-            }
-          }
-          if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
-            for custom_header in custom_headers_to_remove.inner.iter().rev() {
-              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-                if let Ok(header_name) = HeaderName::from_str(header_name) {
-                  headers_to_remove.push(header_name);
-                }
-              }
-            }
-          }
-
-          return Ok(
-            finalize_response_and_log(
-              response,
-              http3_alt_port,
-              headers_to_add,
-              headers_to_replace,
-              headers_to_remove,
-              &logger,
-              &log_request_parts,
-              &socket_data,
-              None,
-              log_date_format,
-              log_format,
-            )
-            .await,
-          );
-        }
-      },
-    );
-    parts.uri = match hyper::Uri::from_parts(url_parts) {
-      Ok(uri) => uri,
-      Err(err) => {
-        if error_log_enabled {
-          if let Some(logger) = &logger {
-            logger
-              .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
-              .await
-              .unwrap_or_default();
-          }
-        }
-        let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
-
-        parts.uri = orig_uri;
-
-        // Determine headers to add/remove/replace
-        let mut headers_to_add = HeaderMap::new();
-        let mut headers_to_replace = HeaderMap::new();
-        let mut headers_to_remove = Vec::new();
-        if let Some(custom_headers) = get_entries!("header", configuration) {
-          for custom_header in custom_headers.inner.iter().rev() {
-            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-              if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-                if !headers_to_add.contains_key(header_name) {
-                  if let Ok(header_name) = HeaderName::from_str(header_name) {
-                    if let Ok(header_value) =
-                      HeaderValue::from_str(&replace_header_placeholders(header_value, &parts, None))
-                    {
-                      headers_to_add.insert(header_name, header_value);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        if let Some(custom_headers) = get_entries!("header_replace", configuration) {
-          for custom_header in custom_headers.inner.iter().rev() {
-            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-              if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
-                if let Ok(header_name) = HeaderName::from_str(header_name) {
-                  if let Ok(header_value) =
-                    HeaderValue::from_str(&replace_header_placeholders(header_value, &parts, None))
-                  {
-                    headers_to_replace.insert(header_name, header_value);
-                  }
-                }
-              }
-            }
-          }
-        }
-        if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
-          for custom_header in custom_headers_to_remove.inner.iter().rev() {
-            if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
-              if let Ok(header_name) = HeaderName::from_str(header_name) {
-                headers_to_remove.push(header_name);
-              }
-            }
-          }
-        }
-
-        return Ok(
-          finalize_response_and_log(
-            response,
-            http3_alt_port,
-            headers_to_add,
-            headers_to_replace,
-            headers_to_remove,
-            &logger,
-            &log_request_parts,
-            &socket_data,
-            None,
-            log_date_format,
-            log_format,
-          )
-          .await,
-        );
-      }
-    };
-    let configuration_option = configurations.find_configuration(&parts, hostname_determinant.as_deref(), &socket_data);
-    request = Request::from_parts(parts, body);
-    match configuration_option {
-      Ok(Some(new_configuration)) => {
-        configuration = new_configuration;
-        log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
-        log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
-      }
-      Ok(None) => {}
-      Err(err) => {
-        if error_log_enabled {
-          if let Some(logger) = &logger {
-            logger
-              .send(LogMessage::new(
-                format!("Cannot determine server configuration: {err}"),
-                true,
-              ))
-              .await
-              .unwrap_or_default();
-          }
         }
         let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
 
@@ -1107,7 +904,7 @@ async fn request_handler_wrapped(
             headers_to_add,
             headers_to_replace,
             headers_to_remove,
-            &logger,
+            &configuration.observability.log_channels,
             &log_request_parts,
             &socket_data,
             None,
@@ -1116,6 +913,271 @@ async fn request_handler_wrapped(
           )
           .await,
         );
+      }
+    };
+
+    if sanitized_url_pathname != url_pathname {
+      let (mut parts, body) = request.into_parts();
+      let orig_uri = parts.uri.clone();
+      let mut url_parts = parts.uri.into_parts();
+      url_parts.path_and_query = Some(
+        match format!(
+          "{}{}",
+          sanitized_url_pathname,
+          match url_parts.path_and_query {
+            Some(path_and_query) => {
+              match path_and_query.query() {
+                Some(query) => format!("?{query}"),
+                None => String::from(""),
+              }
+            }
+            None => String::from(""),
+          }
+        )
+        .parse()
+        {
+          Ok(path_and_query) => path_and_query,
+          Err(err) => {
+            for logger in &configuration.observability.log_channels {
+              logger
+                .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
+                .await
+                .unwrap_or_default();
+            }
+
+            let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
+
+            parts.uri = orig_uri;
+
+            // Determine headers to add/remove/replace
+            let mut headers_to_add = HeaderMap::new();
+            let mut headers_to_replace = HeaderMap::new();
+            let mut headers_to_remove = Vec::new();
+            if let Some(custom_headers) = get_entries!("header", configuration) {
+              for custom_header in custom_headers.inner.iter().rev() {
+                if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                  if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                    if !headers_to_add.contains_key(header_name) {
+                      if let Ok(header_name) = HeaderName::from_str(header_name) {
+                        if let Ok(header_value) =
+                          HeaderValue::from_str(&replace_header_placeholders(header_value, &parts, None))
+                        {
+                          headers_to_add.insert(header_name, header_value);
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            if let Some(custom_headers) = get_entries!("header_replace", configuration) {
+              for custom_header in custom_headers.inner.iter().rev() {
+                if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                  if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                    if let Ok(header_name) = HeaderName::from_str(header_name) {
+                      if let Ok(header_value) =
+                        HeaderValue::from_str(&replace_header_placeholders(header_value, &parts, None))
+                      {
+                        headers_to_replace.insert(header_name, header_value);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
+              for custom_header in custom_headers_to_remove.inner.iter().rev() {
+                if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                  if let Ok(header_name) = HeaderName::from_str(header_name) {
+                    headers_to_remove.push(header_name);
+                  }
+                }
+              }
+            }
+
+            return Ok(
+              finalize_response_and_log(
+                response,
+                http3_alt_port,
+                headers_to_add,
+                headers_to_replace,
+                headers_to_remove,
+                &configuration.observability.log_channels,
+                &log_request_parts,
+                &socket_data,
+                None,
+                log_date_format,
+                log_format,
+              )
+              .await,
+            );
+          }
+        },
+      );
+      parts.uri = match hyper::Uri::from_parts(url_parts) {
+        Ok(uri) => uri,
+        Err(err) => {
+          for logger in &configuration.observability.log_channels {
+            logger
+              .send(LogMessage::new(format!("URL sanitation error: {err}"), true))
+              .await
+              .unwrap_or_default();
+          }
+
+          let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
+
+          parts.uri = orig_uri;
+
+          // Determine headers to add/remove/replace
+          let mut headers_to_add = HeaderMap::new();
+          let mut headers_to_replace = HeaderMap::new();
+          let mut headers_to_remove = Vec::new();
+          if let Some(custom_headers) = get_entries!("header", configuration) {
+            for custom_header in custom_headers.inner.iter().rev() {
+              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                  if !headers_to_add.contains_key(header_name) {
+                    if let Ok(header_name) = HeaderName::from_str(header_name) {
+                      if let Ok(header_value) =
+                        HeaderValue::from_str(&replace_header_placeholders(header_value, &parts, None))
+                      {
+                        headers_to_add.insert(header_name, header_value);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if let Some(custom_headers) = get_entries!("header_replace", configuration) {
+            for custom_header in custom_headers.inner.iter().rev() {
+              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                  if let Ok(header_name) = HeaderName::from_str(header_name) {
+                    if let Ok(header_value) =
+                      HeaderValue::from_str(&replace_header_placeholders(header_value, &parts, None))
+                    {
+                      headers_to_replace.insert(header_name, header_value);
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
+            for custom_header in custom_headers_to_remove.inner.iter().rev() {
+              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                if let Ok(header_name) = HeaderName::from_str(header_name) {
+                  headers_to_remove.push(header_name);
+                }
+              }
+            }
+          }
+
+          return Ok(
+            finalize_response_and_log(
+              response,
+              http3_alt_port,
+              headers_to_add,
+              headers_to_replace,
+              headers_to_remove,
+              &configuration.observability.log_channels,
+              &log_request_parts,
+              &socket_data,
+              None,
+              log_date_format,
+              log_format,
+            )
+            .await,
+          );
+        }
+      };
+      let configuration_option =
+        configurations.find_configuration(&parts, hostname_determinant.as_deref(), &socket_data);
+      request = Request::from_parts(parts, body);
+      match configuration_option {
+        Ok(Some(new_configuration)) => {
+          configuration = new_configuration;
+          log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
+          log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
+        }
+        Ok(None) => {}
+        Err(err) => {
+          for logger in &configuration.observability.log_channels {
+            logger
+              .send(LogMessage::new(
+                format!("Cannot determine server configuration: {err}"),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
+          let response = generate_error_response(StatusCode::BAD_REQUEST, &configuration, &None).await;
+
+          // Determine headers to add/remove/replace
+          let mut headers_to_add = HeaderMap::new();
+          let mut headers_to_replace = HeaderMap::new();
+          let mut headers_to_remove = Vec::new();
+          let (request_parts, _) = request.into_parts();
+          if let Some(custom_headers) = get_entries!("header", configuration) {
+            for custom_header in custom_headers.inner.iter().rev() {
+              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                  if !headers_to_add.contains_key(header_name) {
+                    if let Ok(header_name) = HeaderName::from_str(header_name) {
+                      if let Ok(header_value) =
+                        HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts, None))
+                      {
+                        headers_to_add.insert(header_name, header_value);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if let Some(custom_headers) = get_entries!("header_replace", configuration) {
+            for custom_header in custom_headers.inner.iter().rev() {
+              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                if let Some(header_value) = custom_header.values.get(1).and_then(|v| v.as_str()) {
+                  if let Ok(header_name) = HeaderName::from_str(header_name) {
+                    if let Ok(header_value) =
+                      HeaderValue::from_str(&replace_header_placeholders(header_value, &request_parts, None))
+                    {
+                      headers_to_replace.insert(header_name, header_value);
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if let Some(custom_headers_to_remove) = get_entries!("header_remove", configuration) {
+            for custom_header in custom_headers_to_remove.inner.iter().rev() {
+              if let Some(header_name) = custom_header.values.first().and_then(|v| v.as_str()) {
+                if let Ok(header_name) = HeaderName::from_str(header_name) {
+                  headers_to_remove.push(header_name);
+                }
+              }
+            }
+          }
+
+          return Ok(
+            finalize_response_and_log(
+              response,
+              http3_alt_port,
+              headers_to_add,
+              headers_to_replace,
+              headers_to_remove,
+              &configuration.observability.log_channels,
+              &log_request_parts,
+              &socket_data,
+              None,
+              log_date_format,
+              log_format,
+            )
+            .await,
+          );
+        }
       }
     }
   }
@@ -1172,14 +1234,12 @@ async fn request_handler_wrapped(
     let response = match request.method() {
       &Method::OPTIONS => Response::builder()
         .status(StatusCode::NO_CONTENT)
-        .header(header::ALLOW, "GET, POST, HEAD, OPTIONS")
+        .header(header::ALLOW, HeaderValue::from_static("GET, POST, HEAD, OPTIONS"))
         .body(Empty::new().map_err(|e| match e {}).boxed())
         .unwrap_or_default(),
       _ => {
         let mut header_map = HeaderMap::new();
-        if let Ok(header_value) = HeaderValue::from_str("GET, POST, HEAD, OPTIONS") {
-          header_map.insert(header::ALLOW, header_value);
-        };
+        header_map.insert(header::ALLOW, HeaderValue::from_static("GET, POST, HEAD, OPTIONS"));
         generate_error_response(StatusCode::BAD_REQUEST, &configuration, &Some(header_map)).await
       }
     };
@@ -1190,7 +1250,7 @@ async fn request_handler_wrapped(
         headers_to_add,
         headers_to_replace,
         headers_to_remove,
-        &logger,
+        &configuration.observability.log_channels,
         &log_request_parts,
         &socket_data,
         None,
@@ -1225,7 +1285,7 @@ async fn request_handler_wrapped(
                 headers_to_add,
                 headers_to_replace,
                 headers_to_remove,
-                &logger,
+                &configuration.observability.log_channels,
                 &log_request_parts,
                 &socket_data,
                 None,
@@ -1241,11 +1301,29 @@ async fn request_handler_wrapped(
   };
   drop(acme_http_01_resolvers_inner);
 
-  // Create an error logger
-  let cloned_logger = logger.clone();
-  let error_logger = match (cloned_logger, error_log_enabled) {
-    (Some(cloned_logger), true) => ErrorLogger::new(cloned_logger),
-    _ => ErrorLogger::without_logger(),
+  let mut error_logger = if !configuration.observability.log_channels.is_empty() {
+    ErrorLogger::new_multiple(configuration.observability.log_channels.clone())
+  } else {
+    ErrorLogger::without_logger()
+  };
+  let mut metrics_enabled = !configuration.observability.metric_channels.is_empty();
+  let mut metrics_sender = if metrics_enabled {
+    MetricsMultiSender::new_multiple(configuration.observability.metric_channels.clone())
+  } else {
+    MetricsMultiSender::without_sender()
+  };
+  let mut traces_enabled = !configuration.observability.trace_channels.is_empty();
+  let mut traces_senders = if traces_enabled {
+    let mut traces_senders = Vec::with_capacity(configuration.observability.trace_channels.len());
+    for channel in &configuration.observability.trace_channels {
+      channel.0.send(()).await.unwrap_or_default();
+      if let Ok(channel2) = channel.1.recv().await {
+        traces_senders.push(channel2);
+      }
+    }
+    traces_senders
+  } else {
+    vec![]
   };
 
   // Obtain module handlers
@@ -1284,11 +1362,71 @@ async fn request_handler_wrapped(
   let mut is_error_handler = false;
   let mut handlers_iter: Box<dyn Iterator<Item = Box<dyn ModuleHandlers>>> = Box::new(module_handlers.into_iter());
   while let Some(mut handlers) = handlers_iter.next() {
-    let response_result = handlers
-      .request_handler(request, &configuration, &socket_data, &error_logger)
-      .await;
+    if metrics_enabled {
+      handlers
+        .metric_data_before_handler(&request, &socket_data, &metrics_sender)
+        .await;
+    }
+
+    if traces_enabled {
+      for trace_sender in &traces_senders {
+        trace_sender
+          .send(TraceSignal::StartSpan(format!(
+            "{}::request_handler",
+            handlers.get_name()
+          )))
+          .await
+          .unwrap_or_default();
+      }
+    }
+
+    let (response_result, is_timeout) = if let Some(timeout_duration) = &timeout_duration {
+      let elapsed = timeout_instant.elapsed();
+      if let Some(timeout_cur_duration) = timeout_duration.checked_sub(elapsed) {
+        match timeout(
+          timeout_cur_duration,
+          handlers.request_handler(request, &configuration, &socket_data, &error_logger),
+        )
+        .await
+        {
+          Ok(result) => (result, false),
+          Err(_) => (Err(anyhow::anyhow!("The client or server has timed out").into()), true),
+        }
+      } else {
+        (Err(anyhow::anyhow!("The client or server has timed out").into()), true)
+      }
+    } else {
+      (
+        handlers
+          .request_handler(request, &configuration, &socket_data, &error_logger)
+          .await,
+        false,
+      )
+    };
+
+    if traces_enabled {
+      for trace_sender in &traces_senders {
+        trace_sender
+          .send(TraceSignal::EndSpan(
+            format!("{}::request_handler", handlers.get_name()),
+            response_result.as_ref().err().map(|e| e.to_string()),
+          ))
+          .await
+          .unwrap_or_default();
+      }
+    }
 
     executed_handlers.push(handlers);
+
+    if is_timeout {
+      if metrics_enabled {
+        while let Some(mut executed_handler) = executed_handlers.pop() {
+          executed_handler.metric_data_after_handler(&metrics_sender).await;
+        }
+      }
+      Err(anyhow::anyhow!("The client or server has timed out"))?;
+    }
+
     match response_result {
       Ok(response) => {
         let status = response.response_status;
@@ -1328,33 +1466,34 @@ async fn request_handler_wrapped(
               headers_to_add,
               headers_to_replace,
               headers_to_remove,
-              &logger,
-              error_log_enabled,
+              &configuration.observability.log_channels,
               &log_request_parts,
               &socket_data,
               latest_auth_data.as_deref(),
               log_date_format,
               log_format,
+              metrics_sender,
+              metrics_enabled,
+              traces_senders,
+              traces_enabled,
+              timeout_instant,
+              timeout_duration,
             )
-            .await
+            .await?
             {
               Ok(response) => {
-                if log_enabled {
-                  if let Some(request_parts) = log_request_parts {
-                    if let Some(logger) = loggers.find_global_logger() {
-                      log_access(
-                        &logger,
-                        &request_parts,
-                        &socket_data,
-                        latest_auth_data.as_deref(),
-                        response.status().as_u16(),
-                        extract_content_length(&response),
-                        log_date_format,
-                        log_format,
-                      )
-                      .await;
-                    }
-                  }
+                if let Some(request_parts) = log_request_parts {
+                  log_access(
+                    &configuration.observability.log_channels,
+                    &request_parts,
+                    &socket_data,
+                    latest_auth_data.as_deref(),
+                    response.status().as_u16(),
+                    extract_content_length(&response),
+                    log_date_format,
+                    log_format,
+                  )
+                  .await;
                 }
                 return Ok(response);
               }
@@ -1378,7 +1517,16 @@ async fn request_handler_wrapped(
                   };
                   if let Some(request_cloned) = request_option {
                     configuration = error_configuration;
-                    handlers_iter = Box::new(executed_handlers.into_iter().chain(handlers_iter));
+                    let mut module_handlers = Vec::with_capacity(configuration.modules.len());
+                    for module in &configuration.modules {
+                      module_handlers.push(module.get_module_handlers());
+                    }
+                    handlers_iter = Box::new(module_handlers.into_iter());
+                    if metrics_enabled {
+                      while let Some(mut executed_handler) = executed_handlers.pop() {
+                        executed_handler.metric_data_after_handler(&metrics_sender).await;
+                      }
+                    }
                     executed_handlers = Vec::new();
                     request = request_cloned;
                     if let Some(request_data) = request.extensions_mut().get_mut::<RequestData>() {
@@ -1387,6 +1535,30 @@ async fn request_handler_wrapped(
                     is_error_handler = true;
                     log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
                     log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
+                    error_logger = if !configuration.observability.log_channels.is_empty() {
+                      ErrorLogger::new_multiple(configuration.observability.log_channels.clone())
+                    } else {
+                      ErrorLogger::without_logger()
+                    };
+                    metrics_enabled = !configuration.observability.metric_channels.is_empty();
+                    metrics_sender = if metrics_enabled {
+                      MetricsMultiSender::new_multiple(configuration.observability.metric_channels.clone())
+                    } else {
+                      MetricsMultiSender::without_sender()
+                    };
+                    traces_enabled = !configuration.observability.trace_channels.is_empty();
+                    traces_senders = if traces_enabled {
+                      let mut traces_senders = Vec::with_capacity(configuration.observability.trace_channels.len());
+                      for channel in &configuration.observability.trace_channels {
+                        channel.0.send(()).await.unwrap_or_default();
+                        if let Ok(channel2) = channel.1.recv().await {
+                          traces_senders.push(channel2);
+                        }
+                      }
+                      traces_senders
+                    } else {
+                      vec![]
+                    };
                     continue;
                   }
                 }
@@ -1413,33 +1585,34 @@ async fn request_handler_wrapped(
                 headers_to_add,
                 headers_to_replace,
                 headers_to_remove,
-                &logger,
-                error_log_enabled,
+                &configuration.observability.log_channels,
                 &log_request_parts,
                 &socket_data,
                 latest_auth_data.as_deref(),
                 log_date_format,
                 log_format,
+                metrics_sender,
+                metrics_enabled,
+                traces_senders,
+                traces_enabled,
+                timeout_instant,
+                timeout_duration,
               )
-              .await
+              .await?
               {
                 Ok(response) => {
-                  if log_enabled {
-                    if let Some(request_parts) = log_request_parts {
-                      if let Some(logger) = loggers.find_global_logger() {
-                        log_access(
-                          &logger,
-                          &request_parts,
-                          &socket_data,
-                          latest_auth_data.as_deref(),
-                          response.status().as_u16(),
-                          extract_content_length(&response),
-                          log_date_format,
-                          log_format,
-                        )
-                        .await;
-                      }
-                    }
+                  if let Some(request_parts) = log_request_parts {
+                    log_access(
+                      &configuration.observability.log_channels,
+                      &request_parts,
+                      &socket_data,
+                      latest_auth_data.as_deref(),
+                      response.status().as_u16(),
+                      extract_content_length(&response),
+                      log_date_format,
+                      log_format,
+                    )
+                    .await;
                   }
                   return Ok(response);
                 }
@@ -1463,16 +1636,14 @@ async fn request_handler_wrapped(
       Err(err) => {
         let response = generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &configuration, &None).await;
 
-        if error_log_enabled {
-          if let Some(logger) = &logger {
-            logger
-              .send(LogMessage::new(
-                format!("Unexpected error while serving a request: {err}"),
-                true,
-              ))
-              .await
-              .unwrap_or_default();
-          }
+        for logger in &configuration.observability.log_channels {
+          logger
+            .send(LogMessage::new(
+              format!("Unexpected error while serving a request: {err}"),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
         }
 
         let (mut response_parts, response_body) = response.into_parts();
@@ -1495,33 +1666,34 @@ async fn request_handler_wrapped(
           headers_to_add,
           headers_to_replace,
           headers_to_remove,
-          &logger,
-          error_log_enabled,
+          &configuration.observability.log_channels,
           &log_request_parts,
           &socket_data,
           latest_auth_data.as_deref(),
           log_date_format,
           log_format,
+          metrics_sender,
+          metrics_enabled,
+          traces_senders,
+          traces_enabled,
+          timeout_instant,
+          timeout_duration,
         )
-        .await
+        .await?
         {
           Ok(response) => {
-            if log_enabled {
-              if let Some(request_parts) = log_request_parts {
-                if let Some(logger) = loggers.find_global_logger() {
-                  log_access(
-                    &logger,
-                    &request_parts,
-                    &socket_data,
-                    latest_auth_data.as_deref(),
-                    response.status().as_u16(),
-                    extract_content_length(&response),
-                    log_date_format,
-                    log_format,
-                  )
-                  .await;
-                }
-              }
+            if let Some(request_parts) = log_request_parts {
+              log_access(
+                &configuration.observability.log_channels,
+                &request_parts,
+                &socket_data,
+                latest_auth_data.as_deref(),
+                response.status().as_u16(),
+                extract_content_length(&response),
+                log_date_format,
+                log_format,
+              )
+              .await;
             }
             return Ok(response);
           }
@@ -1555,78 +1727,37 @@ async fn request_handler_wrapped(
     headers_to_add,
     headers_to_replace,
     headers_to_remove,
-    &logger,
-    error_log_enabled,
+    &configuration.observability.log_channels,
     &log_request_parts,
     &socket_data,
     latest_auth_data.as_deref(),
     log_date_format,
     log_format,
+    metrics_sender,
+    metrics_enabled,
+    traces_senders,
+    traces_enabled,
+    timeout_instant,
+    timeout_duration,
   )
-  .await
+  .await?
   {
     Ok(response) => {
-      if log_enabled {
-        if let Some(request_parts) = log_request_parts {
-          if let Some(logger) = &logger {
-            log_access(
-              logger,
-              &request_parts,
-              &socket_data,
-              latest_auth_data.as_deref(),
-              response.status().as_u16(),
-              extract_content_length(&response),
-              log_date_format,
-              log_format,
-            )
-            .await;
-          }
-        }
+      if let Some(request_parts) = log_request_parts {
+        log_access(
+          &configuration.observability.log_channels,
+          &request_parts,
+          &socket_data,
+          latest_auth_data.as_deref(),
+          response.status().as_u16(),
+          extract_content_length(&response),
+          log_date_format,
+          log_format,
+        )
+        .await;
       }
       Ok(response)
     }
     Err(error_response) => Ok(error_response),
-  }
-}
-
-/// The HTTP request handler, with timeout
-#[allow(clippy::too_many_arguments)]
-pub async fn request_handler(
-  request: Request<BoxBody<Bytes, std::io::Error>>,
-  client_address: SocketAddr,
-  server_address: SocketAddr,
-  encrypted: bool,
-  configurations: Arc<ServerConfigurations>,
-  loggers: Loggers,
-  http3_alt_port: Option<u16>,
-  acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
-  proxy_protocol_client_address: Option<SocketAddr>,
-  proxy_protocol_server_address: Option<SocketAddr>,
-) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
-  let global_configuration = configurations.find_global_configuration();
-  let timeout_from_config = global_configuration
-    .as_deref()
-    .and_then(|c| get_entry!("timeout", c))
-    .and_then(|e| e.values.last());
-  let request_handler_future = request_handler_wrapped(
-    request,
-    client_address,
-    server_address,
-    encrypted,
-    configurations,
-    loggers,
-    http3_alt_port,
-    acme_http_01_resolvers,
-    proxy_protocol_client_address,
-    proxy_protocol_server_address,
-  );
-  if timeout_from_config.is_some_and(|v| v.is_null()) {
-    request_handler_future.await.map_err(|e| anyhow::anyhow!(e))
-  } else {
-    let timeout_millis = timeout_from_config.and_then(|v| v.as_i128()).unwrap_or(300000) as u64;
-    match timeout(Duration::from_millis(timeout_millis), request_handler_future).await {
-      Ok(response) => response.map_err(|e| anyhow::anyhow!(e)),
-      Err(_) => Err(anyhow::anyhow!("The client or server has timed out")),
-    }
   }
 }

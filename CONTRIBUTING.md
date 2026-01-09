@@ -1,3 +1,3 @@
 # Contribution guidelines
 
-_See [contribution page on Ferron's website](https://www.ferronweb.org/contribute)_
+_See [contribution page on Ferron's website](https://ferron.sh/contribute)_

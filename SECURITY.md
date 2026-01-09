@@ -35,6 +35,6 @@ In the event of a security breach or vulnerability:
 4. **Update users** - notify users via release notes and security mailing lists.
 
 ## Contact information
-For any security concerns, contact us at [security@ferron.sh](mailto:security@ferron.sh). Stay updated on security patches via [our website](https://www.ferronweb.org).
+For any security concerns, contact us at [security@ferron.sh](mailto:security@ferron.sh). Stay updated on security patches via [our website](https://ferron.sh).
 
 By following this policy, we ensure Ferron remains a secure and trustworthy web server for all users.

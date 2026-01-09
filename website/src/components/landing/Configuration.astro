@@ -3,7 +3,7 @@ import { Code } from "astro:components";
 import kdl from "../../../kdl.tmLanguage.json";
 ---
 
-<section id="configuration" class="py-20 bg-secondary/20">
+<section id="configuration" class="py-20">
   <div class="container mx-auto px-4">
     <div class="text-center mb-16">
       <h2 class="text-3xl md:text-4xl font-bold mb-4">Simple configuration</h2>
@@ -17,18 +17,21 @@ import kdl from "../../../kdl.tmLanguage.json";
         <button
           data-configuration-static-tab
           class="px-4 py-2 font-medium cursor-pointer transition-colors hover:text-accent"
-          >Static file serving</button
         >
+          Static file serving
+        </button>
         <button
           data-configuration-proxy-tab
           class="px-4 py-2 font-medium cursor-pointer transition-colors hover:text-accent"
-          >Reverse proxying</button
         >
+          Reverse proxying
+        </button>
         <button
           data-configuration-php-tab
           class="px-4 py-2 font-medium cursor-pointer transition-colors hover:text-accent"
-          >PHP hosting</button
         >
+          PHP hosting
+        </button>
       </div>
       <div data-configuration-static-content>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">

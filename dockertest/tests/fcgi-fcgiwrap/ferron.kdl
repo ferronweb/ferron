@@ -1,7 +1,0 @@
-:80 {
-  root "/var/www/html"
-  location "/cgi-bin" {
-    fcgi "tcp://fcgiwrap:9000/" pass=#false
-    fcgi_extension ".cgi"
-  }
-}

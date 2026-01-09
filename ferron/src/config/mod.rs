@@ -2,8 +2,9 @@ pub mod adapters;
 pub mod processing;
 
 pub use ferron_common::config::*;
+use ferron_common::util::parse_q_value_header;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -126,6 +127,34 @@ pub fn parse_conditional_data(
       rego_engine.add_policy("ferron.rego".to_string(), rego_policy.to_string())?;
       ConditionalData::IsRego(Arc::new(rego_engine))
     }
+    "set_constant" => ConditionalData::SetConstant(
+      value
+        .values
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(anyhow::anyhow!(
+          "Missing or invalid constant name in a \"set_constant\" subcondition"
+        ))?
+        .to_string(),
+      value
+        .values
+        .get(1)
+        .and_then(|v| v.as_str())
+        .ok_or(anyhow::anyhow!(
+          "Missing or invalid constant value in a \"set_constant\" subcondition"
+        ))?
+        .to_string(),
+    ),
+    "is_language" => ConditionalData::IsLanguage(
+      value
+        .values
+        .first()
+        .and_then(|v| v.as_str())
+        .ok_or(anyhow::anyhow!(
+          "Missing or invalid desired language in a \"is_language\" subcondition"
+        ))?
+        .to_string(),
+    ),
     _ => Err(anyhow::anyhow!("Unrecognized subcondition: {name}"))?,
   })
 }
@@ -143,8 +172,9 @@ fn match_conditions(
     if !(match cond {
       Conditional::If(data) => {
         let mut matches = true;
+        let mut constants = HashMap::new();
         for d in data {
-          if !match_condition(d, request, socket_data)? {
+          if !match_condition(d, request, socket_data, &mut constants)? {
             matches = false;
             break;
           }
@@ -153,8 +183,9 @@ fn match_conditions(
       }
       Conditional::IfNot(data) => {
         let mut matches = true;
+        let mut constants = HashMap::new();
         for d in data {
-          if !match_condition(d, request, socket_data)? {
+          if !match_condition(d, request, socket_data, &mut constants)? {
             matches = false;
             break;
           }
@@ -173,6 +204,7 @@ fn match_condition(
   condition: &ConditionalData,
   request: &hyper::http::request::Parts,
   socket_data: &SocketData,
+  constants: &mut HashMap<String, String>,
 ) -> Result<bool, Box<dyn Error + Send + Sync>> {
   match condition {
     ConditionalData::IsRemoteIp(list) => Ok(list.is_blocked(socket_data.remote_addr.ip())),
@@ -247,7 +279,8 @@ fn match_condition(
         },
       );
       rego_input_object.insert("uri".into(), request.uri.to_string().into());
-      let mut headers_hashmap_initial: HashMap<String, Vec<regorus::Value>> = HashMap::new();
+      let mut headers_hashmap_initial: HashMap<String, Vec<regorus::Value>> =
+        HashMap::with_capacity(request.headers.keys_len());
       for (key, value) in request.headers.iter() {
         let key_string = key.as_str().to_lowercase();
         if let Some(header_list) = headers_hashmap_initial.get_mut(&key_string) {
@@ -270,9 +303,55 @@ fn match_condition(
       socket_data_btreemap.insert("encrypted".into(), socket_data.encrypted.into());
       let socket_data_rego = regorus::Value::Object(Arc::new(socket_data_btreemap));
       rego_input_object.insert("socket_data".into(), socket_data_rego);
+      let mut constants_btreemap = BTreeMap::new();
+      for (key, value) in constants.iter_mut() {
+        constants_btreemap.insert(key.to_owned().into(), value.to_owned().into());
+      }
+      let constants_rego = regorus::Value::Object(Arc::new(constants_btreemap));
+      rego_input_object.insert("constants".into(), constants_rego);
       let rego_input = regorus::Value::Object(Arc::new(rego_input_object));
       cloned_engine.set_input(rego_input);
       Ok(*cloned_engine.eval_rule("data.ferron.pass".to_string())?.as_bool()?)
+    }
+    ConditionalData::SetConstant(name, value) => {
+      constants.insert(name.to_owned(), value.to_owned());
+      Ok(true)
+    }
+    ConditionalData::IsLanguage(language) => {
+      let accepted_languages = parse_q_value_header(
+        request
+          .headers
+          .get(hyper::header::ACCEPT_LANGUAGE)
+          .and_then(|v| v.to_str().ok())
+          .unwrap_or("*"),
+      );
+      let supported_languages = constants
+        .get("LANGUAGES")
+        .and_then(|v| {
+          let mut hash_set: HashSet<&str> = HashSet::new();
+          for lang in v.split(",") {
+            hash_set.insert(lang);
+            if let Some((lang2, _)) = lang.split_once('-') {
+              hash_set.insert(lang2);
+            }
+          }
+          if hash_set.is_empty() {
+            None
+          } else {
+            Some(hash_set)
+          }
+        })
+        .unwrap_or(HashSet::from_iter(vec![language.as_str()]));
+      Ok(
+        accepted_languages
+          .iter()
+          .find(|l| {
+            *l == "*"
+              || supported_languages.contains(l.as_str())
+              || l.split_once('-').is_some_and(|(v, _)| supported_languages.contains(v))
+          })
+          .is_some_and(|l| l == language || language.split_once('-').is_some_and(|(v, _)| v == l)),
+      )
     }
     _ => Ok(false),
   }
