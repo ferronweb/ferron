@@ -1251,14 +1251,17 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 }
                 for extension in extensions {
                   let mut joined_pathbuf_with_extension = joined_pathbuf.clone();
-                  joined_pathbuf_with_extension.set_extension(format!(
-                    "{}.{}",
-                    joined_pathbuf
-                      .extension()
-                      .map_or(OsStr::new(""), |ext| ext)
-                      .to_string_lossy(),
-                    extension
-                  ));
+                  joined_pathbuf_with_extension.set_extension(
+                    format!(
+                      "{}.{}",
+                      joined_pathbuf
+                        .extension()
+                        .map_or(OsStr::new(""), |ext| ext)
+                        .to_string_lossy(),
+                      extension
+                    )
+                    .trim_matches('.'),
+                  );
                   // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
                   #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
                   let metadata_obt = fs::metadata(&joined_pathbuf_with_extension).await;
