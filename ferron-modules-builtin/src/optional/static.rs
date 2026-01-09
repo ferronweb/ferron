@@ -367,29 +367,36 @@ fn parse_range_header(range_str: &str, default_end: u64) -> Option<(u64, u64)> {
 
 /// Extracts inner ETag
 #[inline]
-fn extract_etag_inner(input: &str, weak: bool) -> Option<String> {
+fn extract_etag_inner(input: &str, weak: bool) -> Option<(String, Option<String>, bool)> {
   // Remove the surrounding double quotes and preceding "W/"
-  let weak_might_removed = if weak {
+  let (is_weak, weak_might_removed) = if weak {
     match input.strip_prefix("W/") {
-      Some(stripped) => stripped,
-      None => input,
+      Some(stripped) => (true, stripped),
+      None => (false, input),
     }
   } else {
-    input
+    (false, input)
   };
   let trimmed = weak_might_removed.trim_matches('"');
 
-  // Split the string at the hyphen and take the first part
-  trimmed.split('-').next().map(ToOwned::to_owned)
+  // Split the string at the hyphen and take the first two parts
+  let mut trimmed_split = trimmed.split('-');
+  trimmed_split.next().map(|etag| {
+    (
+      etag.to_string(),
+      trimmed_split.next().map(|etag| etag.to_string()),
+      is_weak,
+    )
+  })
 }
 
-/// Converts strong ETag to weak one, if it's not a weak one
+/// Constructs an ETag
 #[inline]
-fn etag_strong_to_weak(input: &str) -> String {
-  if input.starts_with("W/") {
-    input.to_string()
+fn construct_etag(input: &str, weak: bool) -> String {
+  if weak {
+    format!("W/\"{input}\"")
   } else {
-    format!("W/{input}")
+    format!("\"{input}\"")
   }
 }
 
@@ -916,13 +923,25 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               if let Some(if_none_match_value) = request.headers().get(header::IF_NONE_MATCH) {
                 match if_none_match_value.to_str() {
                   Ok(if_none_match) => {
-                    if let Some(etag_extracted) = extract_etag_inner(if_none_match, true) {
+                    if let Some((etag_extracted, suffix_option, is_weak)) = extract_etag_inner(if_none_match, true) {
                       // Client's cached version matches our current version
                       if etag_extracted == etag {
-                        let etag_original = if_none_match.to_string();
+                        let mut etag_new_inner = String::new();
+                        etag_new_inner.push_str(&etag);
+                        if let Some(suffix) = suffix_option {
+                          match &*suffix {
+                            // These suffixes are supported by Ferron
+                            "gzip" | "deflate" | "br" | "zstd" => {
+                              etag_new_inner.push('-');
+                              etag_new_inner.push_str(&suffix);
+                            }
+                            _ => {}
+                          }
+                        }
+                        let constructed_etag = construct_etag(&etag_new_inner, is_weak);
                         let mut not_modified_response = Response::builder()
                           .status(StatusCode::NOT_MODIFIED)
-                          .header(header::ETAG, etag_strong_to_weak(&etag_original))
+                          .header(header::ETAG, &constructed_etag)
                           .header(header::VARY, HeaderValue::from_static(vary))
                           .body(Empty::new().map_err(|e| match e {}).boxed())?;
                         if let Some(cache_control) = cache_control {
@@ -961,7 +980,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   Ok(if_match) => {
                     // "*" means any version is acceptable
                     if if_match != "*" {
-                      if let Some(etag_extracted) = extract_etag_inner(if_match, true) {
+                      if let Some((etag_extracted, _, _)) = extract_etag_inner(if_match, true) {
                         // Client's version doesn't match our current version
                         if etag_extracted != etag {
                           let mut header_map = HeaderMap::new();
