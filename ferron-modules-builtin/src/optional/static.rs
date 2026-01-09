@@ -1159,7 +1159,10 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               } else {
                 let mut header_map = HeaderMap::new();
                 header_map.insert(header::VARY, HeaderValue::from_static(vary));
-
+                header_map.insert(
+                  header::CONTENT_RANGE,
+                  HeaderValue::from_str(&format!("bytes */{file_length}"))?,
+                );
                 return Ok(ResponseData {
                   request: Some(request),
                   response: None,
