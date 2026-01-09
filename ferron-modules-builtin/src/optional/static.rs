@@ -923,7 +923,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               if let Some(if_none_match_value) = request.headers().get(header::IF_NONE_MATCH) {
                 match if_none_match_value.to_str() {
                   Ok(if_none_match) => {
-                    if let Some((etag_extracted, suffix_option, is_weak)) = extract_etag_inner(if_none_match, true) {
+                    if let Some((etag_extracted, suffix_option, _)) = extract_etag_inner(if_none_match, true) {
                       // Client's cached version matches our current version
                       if etag_extracted == etag {
                         let mut etag_new_inner = String::new();
@@ -938,7 +938,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                             _ => {}
                           }
                         }
-                        let constructed_etag = construct_etag(&etag_new_inner, is_weak);
+                        let constructed_etag = construct_etag(&etag_new_inner, true);
                         let mut not_modified_response = Response::builder()
                           .status(StatusCode::NOT_MODIFIED)
                           .header(header::ETAG, &constructed_etag)
@@ -980,21 +980,18 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   Ok(if_match) => {
                     // "*" means any version is acceptable
                     if if_match != "*" {
-                      if let Some((etag_extracted, _, _)) = extract_etag_inner(if_match, true) {
-                        // Client's version doesn't match our current version
-                        if etag_extracted != etag {
-                          let mut header_map = HeaderMap::new();
-                          header_map.insert(header::ETAG, if_match_value.clone());
-                          header_map.insert(header::VARY, HeaderValue::from_static(vary));
-                          return Ok(ResponseData {
-                            request: Some(request),
-                            response: None,
-                            response_status: Some(StatusCode::PRECONDITION_FAILED),
-                            response_headers: Some(header_map),
-                            new_remote_address: None,
-                          });
-                        }
-                      }
+                      // Ferron only emits weak ETags, and comparing a strong ETag with it would not match
+                      // for strong comparsions, for more details see RFC 7232
+                      let mut header_map = HeaderMap::new();
+                      header_map.insert(header::ETAG, if_match_value.clone());
+                      header_map.insert(header::VARY, HeaderValue::from_static(vary));
+                      return Ok(ResponseData {
+                        request: Some(request),
+                        response: None,
+                        response_status: Some(StatusCode::PRECONDITION_FAILED),
+                        response_headers: Some(header_map),
+                        new_remote_address: None,
+                      });
                     }
                   }
                   Err(_) => {
