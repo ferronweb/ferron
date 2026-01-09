@@ -32,7 +32,7 @@ use tokio::{io::AsyncWriteExt, sync::RwLock, time::Instant};
 use x509_parser::prelude::{FromDer, X509Certificate};
 use xxhash_rust::xxh3::xxh3_128;
 
-use crate::tls_util::load_host_resolver;
+use crate::util::load_host_resolver;
 use ferron_common::dns::DnsProvider;
 use ferron_common::logging::ErrorLogger;
 

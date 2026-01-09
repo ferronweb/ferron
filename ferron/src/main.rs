@@ -5,7 +5,6 @@ mod listener_handler_communication;
 mod listeners;
 mod request_handler;
 mod runtime;
-mod tls_util;
 mod util;
 
 use std::collections::{HashMap, HashSet};
@@ -53,8 +52,10 @@ use crate::config::ServerConfigurations;
 use crate::handler::create_http_handler;
 use crate::listener_handler_communication::ConnectionData;
 use crate::listeners::{create_quic_listener, create_tcp_listener};
-use crate::tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
-use crate::util::{is_localhost, match_hostname, NoServerVerifier};
+use crate::util::{
+  is_localhost, load_certs, load_private_key, match_hostname, CustomSniResolver, NoServerVerifier,
+  OneCertifiedKeyResolver,
+};
 
 // Set the global allocator to use mimalloc for performance optimization
 #[global_allocator]
