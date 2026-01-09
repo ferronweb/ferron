@@ -341,8 +341,15 @@ fn parse_range_header(range_str: &str, default_end: u64) -> Option<(u64, u64)> {
     let parts: Vec<&str> = range_part.split('-').take(2).collect();
     if parts.len() == 2 {
       if parts[0].is_empty() {
-        if let Ok(end) = u64::from_str(parts[1]) {
-          return Some((default_end - end + 1, default_end));
+        if let Ok(n) = u64::from_str(parts[1]) {
+          if n == 0 {
+            return None;
+          }
+          let file_len = default_end + 1;
+          if n >= file_len {
+            return Some((0, default_end));
+          }
+          return Some((file_len - n, default_end));
         }
       } else if parts[1].is_empty() {
         if let Ok(start) = u64::from_str(parts[0]) {
