@@ -938,6 +938,9 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                             _ => {}
                           }
                         }
+                        // Ferron's static file serving functionality would also emit weak ETags,
+                        // so for RFC 7232 compliance, weak ETags are sent in 304 responses as well.
+                        // Therefore, we construct a weak ETag here.
                         let constructed_etag = construct_etag(&etag_new_inner, true);
                         let mut not_modified_response = Response::builder()
                           .status(StatusCode::NOT_MODIFIED)
