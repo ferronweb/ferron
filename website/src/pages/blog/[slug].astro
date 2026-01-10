@@ -79,8 +79,7 @@ const { Content } = await render(Astro.props.post);
         <p
           class="mb-6 text-base md:text-lg text-muted-foreground print:mb-4 flex flex-wrap gap-4"
         >
-          {
-            data.date !== undefined ? (
+          {data.date !== undefined ? (
               <span class="whitespace-nowrap">
                 <FontAwesomeIcon
                   icon={faCalendar}
@@ -93,10 +92,8 @@ const { Content } = await render(Astro.props.post);
                   </>
                 </span>
               </span>
-            ) : null
-          }
-          {
-            data.author !== undefined ? (
+            ) : null}
+          {data.author !== undefined ? (
               <span class="whitespace-nowrap">
                 <FontAwesomeIcon
                   icon={faUser}
@@ -109,8 +106,7 @@ const { Content } = await render(Astro.props.post);
                   </>
                 </span>
               </span>
-            ) : null
-          }
+            ) : null}
         </p>
         <Image
           src={data.cover || blogMissing}
@@ -124,7 +120,7 @@ const { Content } = await render(Astro.props.post);
     <article
       class="prose w-full max-w-full md:prose-lg print:prose-pre:whitespace-pre-wrap! print:prose-pre:overflow-x-visible!"
     >
-      <Content/>
+      <Content />
     </article>
     <div class="mt-6 pt-6 border-t-2 w-full text-lg print:hidden">
       <div
@@ -183,8 +179,7 @@ const { Content } = await render(Astro.props.post);
     </div>
     <div class="mt-6 pt-6 w-full text-lg print:hidden">
       <div class="flex flex-col md:flex-row md:text-lg">
-        {
-          Astro.props.previousPost ? (
+        {Astro.props.previousPost ? (
             <a
               href={`/blog/${Astro.props.previousPost.id}`}
               class="group transition-all flex mx-0 pb-1 md:pb-0 md:pe-1 w-full md:w-1/2 justify-start text-start"
@@ -208,10 +203,8 @@ const { Content } = await render(Astro.props.post);
             </a>
           ) : (
             <div class="w-1/2" />
-          )
-        }
-        {
-          Astro.props.nextPost ? (
+          )}
+        {Astro.props.nextPost ? (
             <a
               href={`/blog/${Astro.props.nextPost.id}`}
               class="group transition-all flex mx-0 pb-1 md:pb-0 md:ps-1 w-full md:w-1/2 justify-end text-end"
@@ -235,8 +228,7 @@ const { Content } = await render(Astro.props.post);
             </a>
           ) : (
             <div class="w-1/2" />
-          )
-        }
+          )}
       </div>
     </div>
   </main>
