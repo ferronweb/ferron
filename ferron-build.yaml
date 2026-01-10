@@ -33,6 +33,9 @@ modules:
     cargo_feature: replace
     loader: ReplaceModuleLoader
   - builtin: true
+    cargo_feature: grpcweb
+    loader: GrpcWebModuleLoader
+  - builtin: true
     cargo_feature: rproxy
     loader: ReverseProxyModuleLoader
   # - git: https://github.com/ferronweb/ferron-module-example.git
