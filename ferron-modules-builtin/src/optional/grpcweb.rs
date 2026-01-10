@@ -31,10 +31,12 @@ impl Service<Request<tonic::body::Body>> for InnerWaitService {
   type Error = anyhow::Error;
   type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + Sync>>;
 
+  #[inline]
   fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
     std::task::Poll::Ready(Ok(()))
   }
 
+  #[inline]
   fn call(&mut self, request: Request<tonic::body::Body>) -> Self::Future {
     if let Some(tx) = self.tx.take() {
       let _ = tx.send(request);
@@ -60,6 +62,7 @@ impl SyncTonicBody {
   ///
   /// ## Safety
   /// This function is unsafe because it does not check if the inner body is `Sync`.
+  #[inline]
   unsafe fn new(body: tonic::body::Body) -> Self {
     Self { body: Box::pin(body) }
   }
@@ -69,6 +72,7 @@ impl hyper::body::Body for SyncTonicBody {
   type Data = <tonic::body::Body as hyper::body::Body>::Data;
   type Error = <tonic::body::Body as hyper::body::Body>::Error;
 
+  #[inline]
   fn poll_frame(
     mut self: Pin<&mut Self>,
     cx: &mut std::task::Context<'_>,
@@ -76,10 +80,12 @@ impl hyper::body::Body for SyncTonicBody {
     Pin::new(&mut self.body).poll_frame(cx)
   }
 
+  #[inline]
   fn is_end_stream(&self) -> bool {
     self.body.is_end_stream()
   }
 
+  #[inline]
   fn size_hint(&self) -> hyper::body::SizeHint {
     // Use default size hint, to avoid conflicts with gRPC
     hyper::body::SizeHint::default()
