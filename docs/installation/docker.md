@@ -148,7 +148,7 @@ docker-compose up -d
 
 ## Ferron image tags
 
-Ferron provides the following tags for the Ferron image (for Ferron 2.x):
+Ferron provides the following tags for the Ferron image (for Ferron 2):
 
 - `2` - Based on Distroless, statically-linked binaries
 - `2-alpine` - Based on Alpine Linux, statically-linked binaries
