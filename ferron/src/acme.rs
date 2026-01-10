@@ -199,13 +199,16 @@ fn get_account_cache_key(config: &AcmeConfig) -> String {
 
 /// Determines the certificate cache key
 fn get_certificate_cache_key(config: &AcmeConfig) -> String {
+  let mut domains = config.domains.clone();
+  domains.sort_unstable();
+  let domains_joined = domains.join(",");
   format!(
     "certificate_{}",
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
       xxh3_128(
         format!(
           "{}{}",
-          config.domains.join(","),
+          domains_joined,
           config.profile.as_ref().map_or("".to_string(), |p| format!(";{p}"))
         )
         .as_bytes()
