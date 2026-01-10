@@ -107,6 +107,7 @@ default = [
     "fauth",
     "fcgi",
     "fproxy",
+    "fproxyauth",
     "limit",
     "replace",
     "rproxy",
@@ -121,6 +122,7 @@ default-tokio = [
     "fauth",
     "fcgi",
     "fproxy",
+    "fproxyauth",
     "limit",
     "replace",
     "rproxy",
@@ -134,6 +136,7 @@ dcompress = ["async-compression"]
 fauth = ["rand", "kanal", "arc-swap"]
 fcgi = ["tokio-util/codec", "httparse", "memchr"]
 fproxy = []
+fproxyauth = []
 limit = ["tokenbucket"]
 replace = ["memchr"]
 rproxy = ["rand", "ppp", "connpool"]

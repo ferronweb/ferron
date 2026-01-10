@@ -12,6 +12,7 @@ ferron-modules-builtin = { workspace = true, features = [
     "fauth",
     "fcgi",
     "fproxy",
+    "fproxyauth",
     "limit",
     "replace",
     "rproxy",

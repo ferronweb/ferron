@@ -8,6 +8,9 @@ modules:
     cargo_feature: limit
     loader: LimitModuleLoader
   - builtin: true
+    cargo_feature: fproxyauth
+    loader: ForwardProxyAuthenticationModuleLoader
+  - builtin: true
     cargo_feature: fproxy
     loader: ForwardProxyModuleLoader
   - builtin: true
