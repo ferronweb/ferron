@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use base64::{engine::general_purpose, Engine};
 use bytes::Bytes;
 use fancy_regex::{Regex, RegexBuilder};
 use http_body_util::combinators::BoxBody;
@@ -19,6 +18,8 @@ use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 use ferron_common::{get_entries, get_entries_for_validation};
 
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
+
+use crate::util::parse_basic_auth;
 
 /// A non-standard status code configuration
 struct NonStandardCode {
@@ -241,21 +242,6 @@ impl Module for StatusCodesModule {
       brute_force_db: self.brute_force_db.clone(),
     })
   }
-}
-
-// Parses the HTTP "WWW-Authenticate" header for HTTP Basic authentication
-fn parse_basic_auth(auth_str: &str) -> Option<(String, String)> {
-  if let Some(base64_credentials) = auth_str.strip_prefix("Basic ") {
-    if let Ok(decoded) = general_purpose::STANDARD.decode(base64_credentials) {
-      if let Ok(decoded_str) = std::str::from_utf8(&decoded) {
-        let parts: Vec<&str> = decoded_str.splitn(2, ':').collect();
-        if parts.len() == 2 {
-          return Some((parts[0].to_string(), parts[1].to_string()));
-        }
-      }
-    }
-  }
-  None
 }
 
 /// Handlers for the status codes module
