@@ -20,13 +20,13 @@ use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
 use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 
-/// A Tower service that errors out with an original request
-struct ReturnRequestService {
+/// A Tower service that sends the request and waits for a response
+struct InnerWaitService {
   tx: Option<tokio::sync::oneshot::Sender<Request<tonic::body::Body>>>,
   rx: Option<tokio::sync::oneshot::Receiver<Response<BoxBody<Bytes, std::io::Error>>>>,
 }
 
-impl Service<Request<tonic::body::Body>> for ReturnRequestService {
+impl Service<Request<tonic::body::Body>> for InnerWaitService {
   type Response = Response<BoxBody<Bytes, std::io::Error>>;
   type Error = anyhow::Error;
   type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + Sync>>;
@@ -187,7 +187,7 @@ impl ModuleHandlers for GrpcWebModuleHandlers {
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     let (request_tx, request_rx) = tokio::sync::oneshot::channel();
-    let mut service = self.layer.layer(ReturnRequestService {
+    let mut service = self.layer.layer(InnerWaitService {
       tx: Some(request_tx),
       rx: Some(rx),
     });
