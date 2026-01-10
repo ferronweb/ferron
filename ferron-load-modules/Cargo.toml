@@ -19,8 +19,11 @@ ferron-modules-builtin = { workspace = true, features = [
     "static",
 ] }
 ferron-dns-builtin = { workspace = true, features = [
+    "bunny",
     "cloudflare",
     "desec",
+    "digitalocean",
+    "ovh",
     "porkbun",
     "rfc2136",
     "route53",
