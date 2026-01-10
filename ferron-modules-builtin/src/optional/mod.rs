@@ -10,6 +10,8 @@ mod fauth;
 mod fcgi;
 #[cfg(feature = "fproxy")]
 mod fproxy;
+#[cfg(feature = "fproxyauth")]
+mod fproxyauth;
 #[cfg(feature = "grpcweb")]
 mod grpcweb;
 #[cfg(feature = "limit")]
@@ -35,6 +37,8 @@ pub use fauth::*;
 pub use fcgi::*;
 #[cfg(feature = "fproxy")]
 pub use fproxy::*;
+#[cfg(feature = "fproxyauth")]
+pub use fproxyauth::*;
 #[cfg(feature = "grpcweb")]
 pub use grpcweb::*;
 #[cfg(feature = "limit")]

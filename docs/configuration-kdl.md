@@ -558,6 +558,8 @@ api.example.com {
 
 - `forward_proxy [enable_forward_proxy: bool]` (_fproxy_ module)
   - This directive specifies whether the forward proxy functionality is enabled. Default: `forward_proxy #false`
+- `forward_proxy_auth [enable_forward_proxy_auth: bool] [realm=<realm: string>] [brute_protection=<enable_brute_protection: bool>] [users=<users: string>]` (_fproxyauth_ module; Ferron UNRELEASED or newer)
+  - This directive specifies whether the forward proxy authentication (HTTP Basic authentication) is enabled. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whether the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. Default: `forward_proxy #false`
 
 **Configuration example:**
 
