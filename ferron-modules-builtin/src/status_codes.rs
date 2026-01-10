@@ -205,6 +205,10 @@ impl ModuleLoader for StatusCodesModuleLoader {
           Err(anyhow::anyhow!(
             "The custom status code HTTP authentication allowed IPs and CIDR ranges list must be a string"
           ))?
+        } else if !entry.props.get("not_allowed").is_none_or(|v| v.is_string()) {
+          Err(anyhow::anyhow!(
+            "The custom status code HTTP authentication not allowed IPs and CIDR ranges list must be a string"
+          ))?
         } else if !entry.props.get("brute_protection").is_none_or(|v| v.is_string()) {
           Err(anyhow::anyhow!(
             "The custom status code allowed clients list must be a string"
