@@ -527,14 +527,25 @@ pub async fn provision_certificate(
   let result = finalize_closure.await;
 
   // Cleanup
-  if let Some(dns_provider) = &config.dns_provider {
-    for identifier in dns_01_identifiers {
-      dns_provider
-        .remove_acme_txt_record(&identifier)
-        .await
-        .unwrap_or_default();
+  match config.challenge_type {
+    ChallengeType::TlsAlpn01 => {
+      *config.tls_alpn_01_data_lock.write().await = None;
     }
-  }
+    ChallengeType::Http01 => {
+      *config.http_01_data_lock.write().await = None;
+    }
+    ChallengeType::Dns01 => {
+      if let Some(dns_provider) = &config.dns_provider {
+        for identifier in dns_01_identifiers {
+          dns_provider
+            .remove_acme_txt_record(&identifier)
+            .await
+            .unwrap_or_default();
+        }
+      }
+    }
+    _ => {}
+  };
 
   result?;
 
