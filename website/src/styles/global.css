@@ -206,7 +206,7 @@
 
 /* Hide the filter panel */
 .pagefind-ui .pagefind-ui__filter-panel {
-  display: none;
+  display: none !important;
 }
 
 /* Ferron code syntax highlighting theme, based on Catpuccin Mocha and Catpuccin Latte themes */
