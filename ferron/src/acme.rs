@@ -281,7 +281,7 @@ pub async fn check_certificate_validity_or_install_cached(
               if let Ok(certificate_id) = CertificateIdentifier::try_from(certificate) {
                 if let Ok(renewal_info) = acme_account.renewal_info(&certificate_id).await {
                   let mut renewal_instant = Instant::now();
-                  renewal_instant -= renewal_info.1;
+                  renewal_instant += renewal_info.1;
                   config.renewal_info = Some((renewal_info.0, renewal_instant));
                 }
               }
