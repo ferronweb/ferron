@@ -26,7 +26,7 @@ fn kdl_node_to_configuration_entry(
   for kdl_entry in kdl_node.iter() {
     let value = match kdl_entry.value().to_owned() {
       KdlValue::String(value) => {
-        let resolved_value = if value.starts_with("{env:") {
+        let resolved_value = if value.contains("{env:") {
           lookup_env_value(value).map_err(|err| -> Box<dyn Error + Send + Sync> { err.into() })?
         } else {
           value
