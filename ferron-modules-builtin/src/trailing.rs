@@ -16,7 +16,7 @@ use ferron_common::util::TtlCache;
 use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value};
 
-use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
+use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 
 /// A trailing slash redirection module loader
 pub struct TrailingSlashRedirectsModuleLoader {
@@ -155,13 +155,19 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
               request_path
             );
 
+            let original_request_path = request
+              .extensions()
+              .get::<RequestData>()
+              .and_then(|d| d.original_url.as_ref())
+              .map_or(request_path, |u| u.path());
+
             let read_rwlock = self.cache.read().await;
             if let Some(is_directory) = read_rwlock.get(&cache_key) {
               drop(read_rwlock);
               if is_directory {
                 let new_request_uri = format!(
                   "{}/{}",
-                  request_path,
+                  original_request_path,
                   match request_query {
                     Some(query) => format!("?{query}"),
                     None => String::from(""),
@@ -234,7 +240,7 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
                   if is_directory {
                     let new_request_uri = format!(
                       "{}/{}",
-                      request_path,
+                      original_request_path,
                       match request_query {
                         Some(query) => format!("?{query}"),
                         None => String::from(""),
