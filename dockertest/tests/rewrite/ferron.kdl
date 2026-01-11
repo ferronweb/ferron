@@ -1,5 +1,13 @@
 :80 {
-  root "/var/www/ferron"
-  rewrite "^/($|[?#].*)" "/basic.txt$1" last=#true
-  rewrite "^/([^?#]*)($|[?#].*)" "/$1.txt$2" file=#false
+  // With trailing slash redirects
+  location "/trailing" remove_base=#true {
+    root "/var/www/ferron/trailing"
+    rewrite "^/slash/?($|[?#].*)" "/slash/basic.txt$1" last=#true
+  }
+
+  location "/" {
+    root "/var/www/ferron"
+    rewrite "^/($|[?#].*)" "/basic.txt$1" last=#true
+    rewrite "^/([^?#]*)($|[?#].*)" "/$1.txt$2" file=#false
+  }
 }
