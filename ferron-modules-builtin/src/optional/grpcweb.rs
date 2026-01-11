@@ -3,12 +3,10 @@ use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll, Waker};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_common::get_entries_for_validation;
-use futures_util::FutureExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::{Request, Response};
@@ -202,8 +200,10 @@ impl ModuleHandlers for GrpcWebModuleHandlers {
     })
     .await?;
     let mut call_future = service.call(request);
-    match call_future.poll_unpin(&mut Context::from_waker(Waker::noop())) {
-      Poll::Ready(response) => {
+    ferron_common::runtime::select! {
+      biased;
+
+      response = &mut call_future => {
         let (response_parts, _) = response?.into_parts();
         Ok(ResponseData {
           request: None,
@@ -213,8 +213,9 @@ impl ModuleHandlers for GrpcWebModuleHandlers {
           new_remote_address: None,
         })
       }
-      Poll::Pending => {
-        let request = request_rx.await?;
+      request = request_rx => {
+        let request = request
+          .map_err(|_| anyhow::anyhow!("Failed to obtain the translated gRPC request"))?;
         let mut request = request.map(|b| {
           // Safety: the tonic::body::Body (which SyncTonicBody wraps) is wrapped around a BoxedBody,
           // which is Send + Sync.
@@ -235,7 +236,7 @@ impl ModuleHandlers for GrpcWebModuleHandlers {
           response_headers: None,
           new_remote_address: None,
         })
-      }
+      },
     }
   }
 
