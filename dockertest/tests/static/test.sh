@@ -308,6 +308,19 @@ else
     TEST_FAILED=1
 fi
 
+TEST_RESULTS="$(curl -fsL -o /dev/null -w %{http_code} http://ferron/dirlisting/ || true)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="200"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "Directory listing (with trailing slash) test passed!"
+else
+    echo "Directory listing (with trailing slash) test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
 TEST_RESULTS="$(curl -fsSL http://ferron/)"
 TEST_EXIT_CODE=$?
 TEST_EXPECTED="$(cat /var/www/ferron/basic.txt)"
