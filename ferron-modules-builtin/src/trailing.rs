@@ -119,6 +119,18 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
         .and_then(|v| v.as_str())
       {
         let request_path = request.uri().path();
+
+        let original_request_path = request
+          .extensions()
+          .get::<RequestData>()
+          .and_then(|d| d.original_url.as_ref())
+          .map_or(request_path, |u| u.path());
+        let original_request_query = request
+          .extensions()
+          .get::<RequestData>()
+          .and_then(|d| d.original_url.as_ref())
+          .map_or(request.uri().query(), |u| u.query());
+
         let mut request_path_bytes = request_path.bytes();
         if request_path_bytes.len() < 1 || request_path_bytes.nth(0) != Some(b'/') {
           return Ok(ResponseData {
@@ -151,19 +163,8 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
                 Some(domain) => format!("{domain}-"),
                 None => String::from(""),
               },
-              request_path
+              original_request_path
             );
-
-            let original_request_path = request
-              .extensions()
-              .get::<RequestData>()
-              .and_then(|d| d.original_url.as_ref())
-              .map_or(request_path, |u| u.path());
-            let original_request_query = request
-              .extensions()
-              .get::<RequestData>()
-              .and_then(|d| d.original_url.as_ref())
-              .map_or(request.uri().query(), |u| u.query());
 
             let read_rwlock = self.cache.read().await;
             if let Some(is_directory) = read_rwlock.get(&cache_key) {
