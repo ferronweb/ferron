@@ -1,15 +1,13 @@
 // @ts-check
 
 import sitemap from "@astrojs/sitemap";
-
+import svelte from "@astrojs/svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, fontProviders } from "astro/config";
 import pagefind from "astro-pagefind";
 import rehypeWrap from "rehype-wrap";
 import { visit } from "unist-util-visit";
 import kdl from "./kdl.tmLanguage.json";
-
-import svelte from "@astrojs/svelte";
 
 // https://astro.build/config
 export default defineConfig({
