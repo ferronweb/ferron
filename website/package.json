@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.6.1",
+    "@astrojs/svelte": "^7.2.5",
     "@csstools/postcss-oklab-function": "^4.0.12",
     "@fortawesome/fontawesome-svg-core": "^7.1.0",
     "@fortawesome/free-brands-svg-icons": "^7.1.0",
@@ -31,7 +32,9 @@
     "postcss-nesting": "^13.0.2",
     "postcss-value-parser": "^4.2.0",
     "rehype-wrap": "^1.1.0",
+    "svelte": "^5.46.1",
     "tailwindcss": "^4.1.14",
+    "typescript": "^5.9.3",
     "unist-util-visit": "^5.0.0"
   },
   "devDependencies": {

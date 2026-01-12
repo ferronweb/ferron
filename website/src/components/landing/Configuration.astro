@@ -1,6 +1,7 @@
 ---
 import { Code } from "astro:components";
 import kdl from "../../../kdl.tmLanguage.json";
+import TabSwitcher from "./TabSwitcher.svelte";
 ---
 
 <section id="configuration" class="py-20">
@@ -12,28 +13,16 @@ import kdl from "../../../kdl.tmLanguage.json";
         configurations of some popular web servers.
       </p>
     </div>
-    <div class="mx-auto max-w-screen-xl">
-      <div class="flex border-b mb-6 overflow-x-auto whitespace-nowrap">
-        <button
-          data-configuration-static-tab
-          class="px-4 py-2 font-medium cursor-pointer transition-colors hover:text-accent"
-        >
-          Static file serving
-        </button>
-        <button
-          data-configuration-proxy-tab
-          class="px-4 py-2 font-medium cursor-pointer transition-colors hover:text-accent"
-        >
-          Reverse proxying
-        </button>
-        <button
-          data-configuration-php-tab
-          class="px-4 py-2 font-medium cursor-pointer transition-colors hover:text-accent"
-        >
-          PHP hosting
-        </button>
-      </div>
-      <div data-configuration-static-content>
+    <TabSwitcher
+      client:load
+      tabs={[
+          { id: "static", label: "Static file serving" },
+          { id: "proxy", label: "Reverse proxying" },
+          { id: "php", label: "PHP hosting" }
+        ]}
+      defaultTab="static"
+    >
+      <div slot="static">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h3 class="text-lg font-semibold mb-3">
@@ -85,7 +74,7 @@ example.com {
           </div>
         </div>
       </div>
-      <div data-configuration-proxy-content>
+      <div slot="proxy">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h3 class="text-lg font-semibold mb-3">
@@ -144,7 +133,7 @@ example.com {
           </div>
         </div>
       </div>
-      <div data-configuration-php-content>
+      <div slot="php">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h3 class="text-lg font-semibold mb-3">
@@ -190,7 +179,7 @@ example.com {
             />
           </div>
           <div>
-            <h3 class="text-lg font-semibold mb-3">Ferron 2.x</h3>
+            <h3 class="text-lg font-semibold mb-3">Ferron 2</h3>
             <Code
               code={`// TLS certificate is obtained automatically by Ferron
 example.com {
@@ -209,113 +198,6 @@ example.com {
           </div>
         </div>
       </div>
-    </div>
+    </TabSwitcher>
   </div>
-
-  <script>
-    function initializeTabs() {
-      const staticTab = document.querySelector(
-        "[data-configuration-static-tab]"
-      );
-      const proxyTab = document.querySelector("[data-configuration-proxy-tab]");
-      const phpTab = document.querySelector("[data-configuration-php-tab]");
-      const staticContent = document.querySelector(
-        "[data-configuration-static-content]"
-      );
-      const proxyContent = document.querySelector(
-        "[data-configuration-proxy-content]"
-      );
-      const phpContent = document.querySelector(
-        "[data-configuration-php-content]"
-      );
-
-      if (staticTab) {
-        staticTab.addEventListener("click", () => {
-          staticTab.classList.add(
-            "text-primary",
-            "border-b-2",
-            "border-primary"
-          );
-          if (proxyTab)
-            proxyTab.classList.remove(
-              "text-primary",
-              "border-b-2",
-              "border-primary"
-            );
-          if (phpTab)
-            phpTab.classList.remove(
-              "text-primary",
-              "border-b-2",
-              "border-primary"
-            );
-          if (staticContent) staticContent.classList.remove("hidden");
-          if (proxyContent) proxyContent.classList.add("hidden");
-          if (phpContent) phpContent.classList.add("hidden");
-        });
-      }
-
-      if (proxyTab) {
-        proxyTab.addEventListener("click", () => {
-          proxyTab.classList.add(
-            "text-primary",
-            "border-b-2",
-            "border-primary"
-          );
-          if (staticTab)
-            staticTab.classList.remove(
-              "text-primary",
-              "border-b-2",
-              "border-primary"
-            );
-          if (phpTab)
-            phpTab.classList.remove(
-              "text-primary",
-              "border-b-2",
-              "border-primary"
-            );
-          if (proxyContent) proxyContent.classList.remove("hidden");
-          if (staticContent) staticContent.classList.add("hidden");
-          if (phpContent) phpContent.classList.add("hidden");
-        });
-      }
-
-      if (phpTab) {
-        phpTab.addEventListener("click", () => {
-          phpTab.classList.add("text-primary", "border-b-2", "border-primary");
-          if (staticTab)
-            staticTab.classList.remove(
-              "text-primary",
-              "border-b-2",
-              "border-primary"
-            );
-          if (proxyTab)
-            proxyTab.classList.remove(
-              "text-primary",
-              "border-b-2",
-              "border-primary"
-            );
-          if (phpContent) phpContent.classList.remove("hidden");
-          if (staticContent) staticContent.classList.add("hidden");
-          if (proxyContent) proxyContent.classList.add("hidden");
-        });
-      }
-
-      if (staticTab)
-        staticTab.classList.add("text-primary", "border-b-2", "border-primary");
-      if (proxyTab)
-        proxyTab.classList.remove(
-          "text-primary",
-          "border-b-2",
-          "border-primary"
-        );
-      if (phpTab)
-        phpTab.classList.remove("text-primary", "border-b-2", "border-primary");
-      if (staticContent) staticContent.classList.remove("hidden");
-      if (proxyContent) proxyContent.classList.add("hidden");
-      if (phpContent) phpContent.classList.add("hidden");
-    }
-
-    initializeTabs();
-    document.addEventListener("astro:after-swap", initializeTabs);
-  </script>
 </section>

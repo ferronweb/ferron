@@ -9,6 +9,8 @@ import rehypeWrap from "rehype-wrap";
 import { visit } from "unist-util-visit";
 import kdl from "./kdl.tmLanguage.json";
 
+import svelte from "@astrojs/svelte";
+
 // https://astro.build/config
 export default defineConfig({
   site: "https://ferron.sh",
@@ -21,6 +23,7 @@ export default defineConfig({
     }
   },
   integrations: [
+    svelte(),
     sitemap(),
     pagefind(),
     (await import("astro-compress")).default({

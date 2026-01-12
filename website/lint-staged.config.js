@@ -5,5 +5,6 @@ export default {
   //"src/**/*.md": ["biome check --write"],
   "src/**/*.js": ["biome check --write"],
   "src/**/*.ts": ["biome check --write"],
-  "src/**/*.astro": ["biome check --write"]
+  "src/**/*.astro": ["biome check --write"],
+  "src/**/*.svelte": ["biome check --write"]
 };
