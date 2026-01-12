@@ -19,7 +19,7 @@
   let activeTab = $derived(defaultTab);
 </script>
 
-<div class="border-b flex overflow-x-auto">
+<div class="border-b flex overflow-x-auto whitespace-nowrap">
   {#each tabs as tab}
     <button
       class="px-4 py-2 font-medium cursor-pointer transition-colors hover:text-accent"
