@@ -22,7 +22,7 @@
     "apexcharts": "^5.3.5",
     "asciinema-player": "^3.14.0",
     "astro": "^5.16.7",
-    "astro-seo": "^0.8.4",
+    "astro-seo": "^1.1.0",
     "autoprefixer": "^10.4.21",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.562.0",
