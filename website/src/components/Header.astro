@@ -12,8 +12,44 @@ import Search from "astro-pagefind/components/Search";
 import FontAwesomeIcon from "./FontAwesomeIcon.astro";
 import Logo from "./Logo.astro";
 
-const githubLink = "https://github.com/ferronweb/ferron";
-const chatLink = "https://matrix.to/#/#ferronweb:matrix.org";
+const headerLinks = [
+  {
+    href: "/#features",
+    name: "Features"
+  },
+  {
+    href: "/#install",
+    name: "Install"
+  },
+  {
+    href: "/docs",
+    name: "Docs",
+    icon: faBook
+  },
+  {
+    href: "/blog",
+    name: "Blog",
+    icon: faFileText
+  },
+  {
+    href: "/support",
+    name: "Support",
+    icon: faHeadset
+  }
+];
+const headerIcons = [
+  {
+    icon: faGithub,
+    name: "GitHub",
+    href: "https://github.com/ferronweb/ferron"
+  },
+  {
+    icon: faComments,
+    name: "Chat",
+    href: "https://matrix.to/#/#ferronweb:matrix.org"
+  }
+];
+
 const docLinks = Astro.props.docLinks;
 ---
 
@@ -51,39 +87,17 @@ const docLinks = Astro.props.docLinks;
       </div>
       <div class="items-center justify-end hidden md:flex">
         <nav class="flex items-center space-x-1">
-          <a
-            href="/#features"
-            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2"
-          >
-            Features
-          </a>
-          <a
-            href="/#install"
-            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2"
-          >
-            Install
-          </a>
-          <a
-            href="/docs"
-            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2 flex items-center gap-1"
-          >
-            <FontAwesomeIcon icon={faBook} class="size-4!" />
-            Docs
-          </a>
-          <a
-            href="/blog"
-            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2 flex items-center gap-1"
-          >
-            <FontAwesomeIcon icon={faFileText} class="size-4!" />
-            Blog
-          </a>
-          <a
-            href="/support"
-            class="text-sm font-medium transition-colors hover:text-primary px-2 py-2 flex items-center gap-1"
-          >
-            <FontAwesomeIcon icon={faHeadset} class="size-4!" />
-            Support
-          </a>
+          {headerLinks.map((link) =>
+            (
+            <a
+              href={link.href}
+              class={`text-sm font-medium transition-colors hover:text-primary px-2 py-2 ${link.icon ? "flex items-center gap-1" : ""}`}
+            >
+              {link.icon ? <FontAwesomeIcon icon={link.icon} class="size-4!" /> : null}
+              {link.name}
+            </a>
+            )
+          )}
           <div class="ml-2 flex items-center gap-1">
             {docLinks ? (
                 <button
@@ -98,24 +112,19 @@ const docLinks = Astro.props.docLinks;
               ) : (
                 ""
               )}
-            <a
-              href={githubLink}
-              target="_blank"
-              rel="noreferrer"
-              class="btn p-0 size-9 cursor-pointer hover:bg-accent hover:text-accent-foreground shadow-none"
-              aria-label="GitHub"
-            >
-              <FontAwesomeIcon icon={faGithub} class="size-5!" />
-            </a>
-            <a
-              href={chatLink}
-              target="_blank"
-              rel="noreferrer"
-              class="btn p-0 size-9 cursor-pointer hover:bg-accent hover:text-accent-foreground shadow-none"
-              aria-label="Chat"
-            >
-              <FontAwesomeIcon icon={faComments} class="size-5!" />
-            </a>
+            {headerIcons.map((icon) =>
+                (
+                <a
+                  href={icon.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="btn p-0 size-9 cursor-pointer hover:bg-accent hover:text-accent-foreground shadow-none"
+                  aria-label={icon.name}
+                >
+                  <FontAwesomeIcon icon={icon.icon} class="size-5!" />
+                </a>
+                )
+              )}
           </div>
         </nav>
       </div>
@@ -183,55 +192,30 @@ const docLinks = Astro.props.docLinks;
       <div
         class={`${docLinks ? "whitespace-nowrap overflow-x-auto flex items-center pb-1" : "space-y-1 px-2 pt-2 pb-1"}`}
       >
-        <a
-          href="/#features"
-          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
-        >
-          Features
-        </a>
-        <a
-          href="/#install"
-          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
-        >
-          Install
-        </a>
-        <a
-          href="/docs"
-          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
-        >
-          Docs
-        </a>
-        <a
-          href="/blog"
-          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
-        >
-          Blog
-        </a>
-        <a
-          href="/support"
-          class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
-        >
-          Support
-        </a>
+        {headerLinks.map((link) =>
+          (
+            <a
+              href={link.href}
+              class={`${docLinks ? "inline-block py-1" : "block py-2"} px-3 text-base font-medium hover:bg-accent hover:text-accent-foreground rounded-md`}
+            >
+              {link.name}
+            </a>
+          )
+        )}
         <div class={`${docLinks ? "inline-flex" : "flex mt-4"} space-x-2 px-3`}>
-          <a
-            href={githubLink}
-            target="_blank"
-            rel="noreferrer"
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground hover:bg-accent hover:text-accent-foreground size-9"
-            aria-label="GitHub"
-          >
-            <FontAwesomeIcon icon={faGithub} class="size-5!" />
-          </a>
-          <a
-            href={chatLink}
-            target="_blank"
-            rel="noreferrer"
-            class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground hover:bg-accent hover:text-accent-foreground size-9"
-            aria-label="Chat"
-          >
-            <FontAwesomeIcon icon={faComments} class="size-5!" />
-          </a>
+          {headerIcons.map((icon) =>
+                (
+                <a
+                  href={icon.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground hover:bg-accent hover:text-accent-foreground size-9"
+                  aria-label={icon.name}
+                >
+                  <FontAwesomeIcon icon={icon.icon} class="size-5!" />
+                </a>
+                )
+              )}
         </div>
       </div>
     </nav>
