@@ -7,7 +7,7 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -47,6 +47,7 @@ use ferron_common::{
 };
 use ferron_common::{get_entries, get_entries_for_validation, get_value};
 
+use crate::util::http_proxy::{SendRequest, SendRequestWrapper};
 #[cfg(feature = "runtime-monoio")]
 use crate::util::{SendTcpStreamPoll, SendTcpStreamPollDropGuard};
 #[cfg(all(feature = "runtime-monoio", unix))]
@@ -61,97 +62,6 @@ enum LoadBalancerAlgorithm {
   RoundRobin(Arc<AtomicUsize>),
   LeastConnections(Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>),
   TwoRandomChoices(Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>),
-}
-
-enum SendRequest {
-  Http1(hyper::client::conn::http1::SendRequest<BoxBody<Bytes, std::io::Error>>),
-  Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
-}
-
-impl SendRequest {
-  #[inline]
-  fn is_closed(&self) -> bool {
-    match self {
-      SendRequest::Http1(sender) => sender.is_closed(),
-      SendRequest::Http2(sender) => sender.is_closed(),
-    }
-  }
-
-  #[inline]
-  async fn ready(&mut self) -> bool {
-    match self {
-      SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-      SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-    }
-  }
-
-  #[inline]
-  fn is_ready(&self) -> bool {
-    match self {
-      SendRequest::Http1(sender) => sender.is_ready() && !sender.is_closed(),
-      SendRequest::Http2(sender) => sender.is_ready() && !sender.is_closed(),
-    }
-  }
-
-  #[inline]
-  async fn send_request(
-    &mut self,
-    request: Request<BoxBody<Bytes, std::io::Error>>,
-  ) -> Result<Response<hyper::body::Incoming>, hyper::Error> {
-    match self {
-      SendRequest::Http1(sender) => sender.send_request(request).await,
-      SendRequest::Http2(sender) => sender.send_request(request).await,
-    }
-  }
-}
-
-struct SendRequestWrapper {
-  inner: Option<SendRequest>,
-  instant: Instant,
-}
-
-impl SendRequestWrapper {
-  #[inline]
-  fn new(inner: SendRequest) -> Self {
-    Self {
-      inner: Some(inner),
-      instant: Instant::now(),
-    }
-  }
-
-  #[inline]
-  fn get(&mut self, timeout: Option<Duration>) -> (Option<SendRequest>, bool) {
-    let inner_mut = if let Some(inner) = self.inner.as_mut() {
-      inner
-    } else {
-      return (None, false);
-    };
-    if inner_mut.is_closed() || (inner_mut.is_ready() && timeout.is_some_and(|t| self.instant.elapsed() > t)) {
-      return (None, false);
-    }
-    (
-      if inner_mut.is_ready() {
-        self.inner.take()
-      } else {
-        self.instant = Instant::now();
-        None
-      },
-      true,
-    )
-  }
-
-  #[inline]
-  async fn wait_ready(&mut self, timeout: Option<Duration>) -> bool {
-    match self.inner.as_mut() {
-      None => false,
-      Some(inner) => {
-        if inner.is_ready() && timeout.is_some_and(|t| self.instant.elapsed() > t) {
-          return false;
-        }
-        inner.ready().await
-      }
-    }
-  }
 }
 
 type ProxyToVectorContentsBorrowed<'a> = (&'a str, Option<&'a str>, Option<usize>, Option<Duration>);

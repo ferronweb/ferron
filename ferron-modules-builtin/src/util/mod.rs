@@ -7,6 +7,8 @@ pub mod cgi;
 mod copy_move;
 #[cfg(feature = "fcgi")]
 pub mod fcgi;
+#[cfg(feature = "rproxy")]
+pub mod http_proxy;
 #[cfg(feature = "fauth")]
 mod pending_connection_guard;
 #[cfg(feature = "fcgi")]
