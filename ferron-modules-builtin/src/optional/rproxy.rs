@@ -183,6 +183,7 @@ where
   type Data = B::Data;
   type Error = B::Error;
 
+  #[inline]
   fn poll_frame(
     mut self: Pin<&mut Self>,
     cx: &mut Context<'_>,
@@ -190,10 +191,12 @@ where
     Pin::new(&mut self.inner).poll_frame(cx)
   }
 
+  #[inline]
   fn is_end_stream(&self) -> bool {
     self.inner.is_end_stream()
   }
 
+  #[inline]
   fn size_hint(&self) -> hyper::body::SizeHint {
     self.inner.size_hint()
   }
@@ -421,11 +424,13 @@ impl ModuleLoader for ReverseProxyModuleLoader {
           Err(anyhow::anyhow!("Invalid proxy backend server"))?
         } else if !entry.props.get("unix").is_none_or(|v| v.is_string()) {
           Err(anyhow::anyhow!("Invalid proxy Unix socket path"))?
-        } else if let Some(prop) = entry.props.get("limit") {
+        }
+        if let Some(prop) = entry.props.get("limit") {
           if !prop.is_null() && prop.as_i128().unwrap_or(0) < 1 {
             Err(anyhow::anyhow!("Invalid proxy connection limit for a backend server"))?
           }
-        } else if let Some(prop) = entry.props.get("idle_timeout") {
+        }
+        if let Some(prop) = entry.props.get("idle_timeout") {
           if !prop.is_null() && prop.as_i128().unwrap_or(0) < 1 {
             Err(anyhow::anyhow!(
               "Invalid proxy idle keep-alive connection timeout for a backend server"
@@ -589,7 +594,9 @@ impl ModuleLoader for ReverseProxyModuleLoader {
         } else if (!entry.values[0].is_integer() && !entry.values[0].is_null())
           || entry.values[0].as_i128().is_some_and(|v| v < 0)
         {
-          return Err(anyhow::anyhow!("Invalid global maximum concurrent connections configuration").into());
+          return Err(
+            anyhow::anyhow!("Invalid global maximum concurrent connections for reverse proxy configuration").into(),
+          );
         }
       }
     }
