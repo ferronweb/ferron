@@ -279,7 +279,20 @@ This configuration reference organizes directives by both **scope** (where they 
 
 ```kdl
 * {
-    proxy_concurrent_new_conns 16384
+    proxy_concurrent_conns 16384
+}
+```
+
+### Authentication forwarding
+
+- `auth_to_concurrent_conns <auth_to_concurrent_conns: integer|null>` (_fauth_ module; Ferron UNRELEASED or newer)
+  - This directive specifies the limit of TCP connections being established to backend servers (for forwarded authentication), to prevent exhaustion of network resources. If set as `auth_to_concurrent_conns #null`, the reverse proxy can theoretically establish an unlimited number of connections. Default: `auth_to_concurrent_conns 16384`
+  
+**Configuration example:**
+
+```kdl
+* {
+    auth_to_concurrent_conns 16384
 }
 ```
 
@@ -569,8 +582,8 @@ api.example.com {
 
 ### Authentication forwarding
 
-- `auth_to <auth_to: string|null>` (_fauth_ module)
-  - This directive specifies the URL to which the web server should send requests for forwarded authentication. Default: none
+- `auth_to <auth_to: string|null> [limit=<conn_limit: integer|null>] [idle_timeout=<idle_timeout: integer|null>]` (_fauth_ module)
+  - This directive specifies the URL to which the web server should send requests for forwarded authentication. Established connections can be limited by the `limit` prop (Ferron UNRELEASED and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron UNRELEASED and newer); by default it is set to `60000` (60 seconds). Default: none
 - `auth_to_no_verification [auth_to_no_verification: bool]` (_fauth_ module)
   - This directive specifies whether the server should not verify the TLS certificate of the backend authentication server. Default: `auth_to_no_verification #false`
 - `auth_to_copy <request_header_to_copy: string> [<request_header_to_copy: string> ...]` (_fauth_ module)

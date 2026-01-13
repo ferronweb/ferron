@@ -7,10 +7,8 @@ pub mod cgi;
 mod copy_move;
 #[cfg(feature = "fcgi")]
 pub mod fcgi;
-#[cfg(feature = "rproxy")]
+#[cfg(any(feature = "rproxy", feature = "fauth"))]
 pub mod http_proxy;
-#[cfg(feature = "fauth")]
-mod pending_connection_guard;
 #[cfg(feature = "fcgi")]
 mod read_to_end_move;
 #[cfg(all(feature = "runtime-monoio", any(feature = "rproxy", feature = "fauth")))]
@@ -23,8 +21,6 @@ pub use basic_auth::*;
 pub use body_replacer::*;
 #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
 pub use copy_move::*;
-#[cfg(feature = "fauth")]
-pub use pending_connection_guard::*;
 #[cfg(feature = "fcgi")]
 pub use read_to_end_move::*;
 #[cfg(all(feature = "runtime-monoio", any(feature = "rproxy", feature = "fauth")))]

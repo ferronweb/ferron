@@ -1,18 +1,22 @@
+use std::cell::UnsafeCell;
 use std::error::Error;
+use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use std::task::{Context, Poll, Waker};
+use std::time::Duration;
 
-use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use bytes::Bytes;
+use connpool::{Item, Pool};
+use futures_util::FutureExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty};
+use hyper::body::Body;
 use hyper::header::{self, HeaderName};
 use hyper::{Method, Request, StatusCode, Uri, Version};
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use kanal::{AsyncReceiver, AsyncSender};
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
 #[cfg(feature = "runtime-monoio")]
@@ -30,26 +34,68 @@ use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData,
 use ferron_common::util::NoServerVerifier;
 use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value, get_values};
-use tokio_util::sync::CancellationToken;
 
-use crate::util::PendingConnectionGuard;
+use crate::util::http_proxy::{SendRequest, SendRequestWrapper};
 #[cfg(feature = "runtime-monoio")]
 use crate::util::SendTcpStreamPoll;
 
-const DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST: usize = 32;
+const DEFAULT_CONCURRENT_CONNECTIONS: usize = 16384;
+const DEFAULT_KEEPALIVE_IDLE_TIMEOUT: u64 = 60000;
 
-enum SendRequest {
-  Http1(hyper::client::conn::http1::SendRequest<BoxBody<Bytes, std::io::Error>>),
-  Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
+type ConnectionPool = Arc<Pool<Arc<String>, SendRequestWrapper>>;
+type ConnectionPoolItem = Item<Arc<String>, SendRequestWrapper>;
+
+/// A tracked response body
+struct TrackedBody<B> {
+  inner: B,
+  _tracker_pool: Option<Arc<UnsafeCell<ConnectionPoolItem>>>,
 }
 
-type ConnectionsInner = Arc<(AsyncSender<SendRequest>, AsyncReceiver<SendRequest>)>;
-type Connections = (ConnectionsInner, Arc<AtomicUsize>, Arc<ArcSwap<CancellationToken>>);
+impl<B> TrackedBody<B> {
+  fn new(inner: B, tracker_pool: Option<Arc<UnsafeCell<ConnectionPoolItem>>>) -> Self {
+    Self {
+      inner,
+      _tracker_pool: tracker_pool,
+    }
+  }
+}
+
+impl<B> Body for TrackedBody<B>
+where
+  B: Body + Unpin,
+{
+  type Data = B::Data;
+  type Error = B::Error;
+
+  #[inline]
+  fn poll_frame(
+    mut self: Pin<&mut Self>,
+    cx: &mut Context<'_>,
+  ) -> Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
+    Pin::new(&mut self.inner).poll_frame(cx)
+  }
+
+  #[inline]
+  fn is_end_stream(&self) -> bool {
+    self.inner.is_end_stream()
+  }
+
+  #[inline]
+  fn size_hint(&self) -> hyper::body::SizeHint {
+    self.inner.size_hint()
+  }
+}
+
+// Safety: after construction, the value inside `UnsafeCell` is never mutated.
+// All accesses after sharing are read-only, so sharing across threads is safe.
+unsafe impl<B> Send for TrackedBody<B> where B: Send {}
+unsafe impl<B> Sync for TrackedBody<B> where B: Sync {}
 
 /// A forwarded authentication module loader
 #[allow(clippy::type_complexity)]
 pub struct ForwardedAuthenticationModuleLoader {
   cache: ModuleCache<ForwardedAuthenticationModule>,
+  connections: Option<ConnectionPool>,
 }
 
 impl Default for ForwardedAuthenticationModuleLoader {
@@ -63,6 +109,7 @@ impl ForwardedAuthenticationModuleLoader {
   pub fn new() -> Self {
     Self {
       cache: ModuleCache::new(vec!["auth_to"]),
+      connections: None,
     }
   }
 }
@@ -71,23 +118,57 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
   fn load_module(
     &mut self,
     config: &ServerConfiguration,
-    _global_config: Option<&ServerConfiguration>,
+    global_config: Option<&ServerConfiguration>,
     _secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
+    let concurrency_limit = global_config
+      .and_then(|c| get_value!("auth_to_concurrent_conns", c))
+      .map_or(Some(DEFAULT_CONCURRENT_CONNECTIONS), |v| {
+        if v.is_null() {
+          None
+        } else {
+          Some(
+            v.as_i128()
+              .map(|v| v as usize)
+              .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS),
+          )
+        }
+      });
+    let connections = self
+      .connections
+      .get_or_insert(Arc::new(if let Some(limit) = concurrency_limit {
+        Pool::new(limit)
+      } else {
+        Pool::new_unbounded()
+      }))
+      .clone();
     Ok(
       self
         .cache
         .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |config| {
+          let auth_to_entry = get_entry!("auth_to", config);
+
           Ok(Arc::new(ForwardedAuthenticationModule {
-            auth_to: get_entry!("auth_to", config)
+            auth_to: auth_to_entry
               .and_then(|e| e.values.first())
               .and_then(|v| v.as_str())
               .map(|v| Arc::new(v.to_owned())),
-            connections: (
-              Arc::new(kanal::bounded_async(DEFAULT_CONCURRENT_CONNECTIONS_PER_HOST)),
-              Arc::new(AtomicUsize::new(0)),
-              Arc::new(ArcSwap::new(Arc::new(CancellationToken::new()))),
-            ),
+            local_limit_index: auth_to_entry
+              .and_then(|e| e.props.get("limit"))
+              .and_then(|v| v.as_i128())
+              .map(|v| v as usize)
+              .map(|l| connections.set_local_limit(l)),
+            idle_timeout: auth_to_entry
+              .and_then(|e| e.props.get("idle_timeout"))
+              .map_or(Some(DEFAULT_KEEPALIVE_IDLE_TIMEOUT), |v| {
+                if v.is_null() {
+                  None
+                } else {
+                  Some(v.as_i128().map(|v| v as u64).unwrap_or(DEFAULT_KEEPALIVE_IDLE_TIMEOUT))
+                }
+              })
+              .map(Duration::from_millis),
+            connections,
           }))
         })?,
     )
@@ -110,6 +191,20 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
           ))?
         } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
           Err(anyhow::anyhow!("Invalid forwarded authentication backend server"))?
+        }
+        if let Some(prop) = entry.props.get("limit") {
+          if !prop.is_null() && prop.as_i128().unwrap_or(0) < 1 {
+            Err(anyhow::anyhow!(
+              "Invalid forwarded authentication connection limit for a backend server"
+            ))?
+          }
+        }
+        if let Some(prop) = entry.props.get("idle_timeout") {
+          if !prop.is_null() && prop.as_i128().unwrap_or(0) < 1 {
+            Err(anyhow::anyhow!(
+              "Invalid forwarded authentication idle keep-alive connection timeout for a backend server"
+            ))?
+          }
         }
       }
     };
@@ -140,6 +235,23 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
       }
     }
 
+    if let Some(entries) = get_entries_for_validation!("auth_to_concurrent_conns", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          return Err(
+            anyhow::anyhow!("The `auth_to_concurrent_conns` configuration property must have exactly one value").into(),
+          );
+        } else if (!entry.values[0].is_integer() && !entry.values[0].is_null())
+          || entry.values[0].as_i128().is_some_and(|v| v < 0)
+        {
+          return Err(
+            anyhow::anyhow!("Invalid global maximum concurrent connections for forwarded authentication configuration")
+              .into(),
+          );
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -148,13 +260,17 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
 #[allow(clippy::type_complexity)]
 struct ForwardedAuthenticationModule {
   auth_to: Option<Arc<String>>,
-  connections: Connections,
+  local_limit_index: Option<usize>,
+  idle_timeout: Option<Duration>,
+  connections: ConnectionPool,
 }
 
 impl Module for ForwardedAuthenticationModule {
   fn get_module_handlers(&self) -> Box<dyn ModuleHandlers> {
     Box::new(ForwardedAuthenticationModuleHandlers {
       auth_to: self.auth_to.clone(),
+      local_limit_index: self.local_limit_index,
+      idle_timeout: self.idle_timeout,
       connections: self.connections.clone(),
     })
   }
@@ -164,7 +280,9 @@ impl Module for ForwardedAuthenticationModule {
 #[allow(clippy::type_complexity)]
 struct ForwardedAuthenticationModuleHandlers {
   auth_to: Option<Arc<String>>,
-  connections: Connections,
+  local_limit_index: Option<usize>,
+  idle_timeout: Option<Duration>,
+  connections: ConnectionPool,
 }
 
 #[async_trait(?Send)]
@@ -183,7 +301,8 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
       .into_iter()
       .filter_map(|v| v.as_str().map(|v| v.to_string()))
       .collect::<Vec<_>>();
-    if let Some(auth_to) = self.auth_to.as_deref() {
+    if let Some(auth_to_arc) = self.auth_to.clone() {
+      let auth_to = &*auth_to_arc;
       let (request_parts, request_body) = request.into_parts();
 
       let auth_request_url = auth_to.parse::<hyper::Uri>()?;
@@ -292,33 +411,92 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
       let original_request = Request::from_parts(request_parts, request_body);
 
-      let (connections, pending_connections) = {
-        let (sender, receiver) = &*self.connections.0;
-        let pending_connections = PendingConnectionGuard::new(self.connections.1.clone(), self.connections.2.clone());
+      let connection_pool_item = {
+        let connections = &self.connections;
+        let sender;
+        let mut send_request_items = Vec::new();
         loop {
-          if let Ok(Some(mut send_request)) = receiver.try_recv() {
-            if match &mut send_request {
-              SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-              SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-            } {
-              let result = http_forwarded_auth_kept_alive(
-                send_request,
-                auth_request,
-                error_logger,
-                original_request,
-                forwarded_auth_copy_headers,
-                sender,
-                pending_connections,
-              )
-              .await;
-              return result;
-            } else {
-              continue;
+          let mut send_request_item = if send_request_items.is_empty() {
+            connections
+              .pull_with_wait_local_limit(auth_to_arc.clone(), self.local_limit_index)
+              .await
+          } else if let Poll::Ready(send_request_item_option) = connections
+            .pull_with_wait_local_limit(auth_to_arc.clone(), self.local_limit_index)
+            .boxed_local()
+            .poll_unpin(&mut Context::from_waker(Waker::noop()))
+          {
+            send_request_item_option
+          } else {
+            let send_request_items_taken = send_request_items;
+            send_request_items = Vec::new();
+            let fetch_nonready_send_request_fut = async {
+              let result = futures_util::future::select_ok(send_request_items_taken).await;
+              if let Ok((item, send_request_items_smaller)) = result {
+                send_request_items = send_request_items_smaller;
+                item
+              } else {
+                futures_util::future::pending().await
+              }
+            };
+            ferron_common::runtime::select! {
+              item = connections
+                .pull_with_wait_local_limit(auth_to_arc.clone(), self.local_limit_index)
+              => {
+                item
+              },
+              item = fetch_nonready_send_request_fut => {
+                item
+              }
+            }
+          };
+          if let Some(send_request) = send_request_item.inner_mut() {
+            match send_request.get(self.idle_timeout) {
+              (Some(send_request), true) => {
+                // Connection ready, send a request to it
+                send_request_items.clear();
+                let _ = send_request_item.inner_mut().take();
+                let result = http_forwarded_auth_kept_alive(
+                  send_request,
+                  send_request_item,
+                  auth_request,
+                  error_logger,
+                  original_request,
+                  forwarded_auth_copy_headers,
+                )
+                .await;
+                return result;
+              }
+              (None, true) => {
+                // Connection not ready
+                let idle_timeout = self.idle_timeout;
+                send_request_items.push(Box::pin(async move {
+                  let inner_item = send_request_item.inner_mut();
+                  if let Some(inner_item_2) = inner_item {
+                    if !inner_item_2.wait_ready(idle_timeout).await {
+                      // Connection closed or timed out
+                      inner_item.take();
+                      return Err(());
+                    }
+                    let _ = inner_item;
+                    Ok(send_request_item)
+                  } else {
+                    Err(())
+                  }
+                }));
+                continue;
+              }
+              (_, false) => {
+                // Connection closed
+                let _ = send_request_item.inner_mut().take();
+                continue;
+              }
             }
           }
+          send_request_items.clear();
+          sender = send_request_item;
           break;
         }
-        (sender, pending_connections)
+        sender
       };
 
       let stream = match TcpStream::connect(&addr).await {
@@ -392,14 +570,13 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
       if !encrypted {
         http_forwarded_auth(
-          connections,
+          connection_pool_item,
           stream,
           auth_request,
           error_logger,
           original_request,
           forwarded_auth_copy_headers,
           false,
-          pending_connections,
         )
         .await
       } else {
@@ -440,14 +617,13 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
         let enable_http2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
 
         http_forwarded_auth(
-          connections,
+          connection_pool_item,
           tls_stream,
           auth_request,
           error_logger,
           original_request,
           forwarded_auth_copy_headers,
           enable_http2,
-          pending_connections,
         )
         .await
       }
@@ -465,14 +641,13 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
 
 #[allow(clippy::too_many_arguments)]
 async fn http_forwarded_auth(
-  connections: &AsyncSender<SendRequest>,
+  connection_pool_item: ConnectionPoolItem,
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   mut original_request: Request<BoxBody<Bytes, std::io::Error>>,
   forwarded_auth_copy_headers: Vec<String>,
   use_http2: bool,
-  pending_connections: PendingConnectionGuard,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   #[cfg(feature = "runtime-monoio")]
   let io = MonoioIo::new(stream);
@@ -526,10 +701,9 @@ async fn http_forwarded_auth(
     SendRequest::Http1(sender)
   };
 
-  let send_request_result = match &mut sender {
-    SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
-    SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
-  };
+  let send_request_result = sender.send_request(proxy_request).await;
+  #[allow(clippy::arc_with_non_send_sync)]
+  let connection_pool_item = Arc::new(UnsafeCell::new(connection_pool_item));
 
   let proxy_response = match send_request_result {
     Ok(response) => response,
@@ -569,38 +743,51 @@ async fn http_forwarded_auth(
   } else {
     ResponseData {
       request: None,
-      response: Some(proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed())),
+      response: Some(proxy_response.map(|b| {
+        TrackedBody::new(
+          b.map_err(|e| std::io::Error::other(e.to_string())),
+          if !sender.is_closed() {
+            None
+          } else {
+            // Safety: this should be not modified, see the "unsafe" block below
+            Some(connection_pool_item.clone())
+          },
+        )
+        .boxed()
+      })),
       response_status: None,
       response_headers: None,
       new_remote_address: None,
     }
   };
 
-  drop(pending_connections);
-
-  if !(match &sender {
-    SendRequest::Http1(sender) => sender.is_closed(),
-    SendRequest::Http2(sender) => sender.is_closed(),
-  }) {
-    connections.try_send(sender).unwrap_or_default();
+  // Store the HTTP connection in the connection pool for future reuse if it's still open
+  if !sender.is_closed() {
+    // Safety: this Arc is cloned twice (when there's HTTP upgrade and when keepalive is disabled),
+    // but the clones' inner value isn't modified, so no race condition.
+    // We could wrap this value in a Mutex, but it's not really necessary in this case.
+    let connection_pool_item = unsafe { &mut *connection_pool_item.get() };
+    connection_pool_item
+      .inner_mut()
+      .replace(SendRequestWrapper::new(sender));
   }
+
+  drop(connection_pool_item);
 
   Ok(response)
 }
 
 async fn http_forwarded_auth_kept_alive(
   mut sender: SendRequest,
+  connection_pool_item: ConnectionPoolItem,
   proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   mut original_request: Request<BoxBody<Bytes, std::io::Error>>,
   forwarded_auth_copy_headers: Vec<String>,
-  connections_tx: &AsyncSender<SendRequest>,
-  pending_connections: PendingConnectionGuard,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  let send_request_result = match &mut sender {
-    SendRequest::Http1(sender) => sender.send_request(proxy_request).await,
-    SendRequest::Http2(sender) => sender.send_request(proxy_request).await,
-  };
+  let send_request_result = sender.send_request(proxy_request).await;
+  #[allow(clippy::arc_with_non_send_sync)]
+  let connection_pool_item = Arc::new(UnsafeCell::new(connection_pool_item));
 
   let proxy_response = match send_request_result {
     Ok(response) => response,
@@ -640,28 +827,35 @@ async fn http_forwarded_auth_kept_alive(
   } else {
     ResponseData {
       request: None,
-      response: Some(proxy_response.map(|b| b.map_err(|e| std::io::Error::other(e.to_string())).boxed())),
+      response: Some(proxy_response.map(|b| {
+        TrackedBody::new(
+          b.map_err(|e| std::io::Error::other(e.to_string())),
+          if !sender.is_closed() {
+            None
+          } else {
+            // Safety: this should be not modified, see the "unsafe" block below
+            Some(connection_pool_item.clone())
+          },
+        )
+        .boxed()
+      })),
       response_status: None,
       response_headers: None,
       new_remote_address: None,
     }
   };
 
-  let cancel_token_arcswap = pending_connections.cancel_token();
-  let cancel_token = cancel_token_arcswap.load();
-  drop(pending_connections);
-
-  if !(match &sender {
-    SendRequest::Http1(sender) => sender.is_closed(),
-    SendRequest::Http2(sender) => sender.is_closed(),
-  }) {
-    ferron_common::runtime::select! {
-      biased;
-
-      _ = connections_tx.send(sender) => {},
-      _ = cancel_token.cancelled() => {}
-    }
+  if !sender.is_closed() {
+    // Safety: this Arc is cloned twice (when there's HTTP upgrade and when keepalive is disabled),
+    // but the clones' inner value isn't modified, so no race condition.
+    // We could wrap this value in a Mutex, but it's not really necessary in this case.
+    let connection_pool_item = unsafe { &mut *connection_pool_item.get() };
+    connection_pool_item
+      .inner_mut()
+      .replace(SendRequestWrapper::new(sender));
   }
+
+  drop(connection_pool_item);
 
   Ok(response)
 }

@@ -1431,7 +1431,6 @@ name = "ferron-modules-builtin"
 version = "2.3.2"
 dependencies = [
  "anyhow",
- "arc-swap",
  "async-compression",
  "async-process",
  "async-trait",
@@ -1449,7 +1448,6 @@ dependencies = [
  "httparse",
  "hyper",
  "hyper-util",
- "kanal",
  "memchr",
  "monoio",
  "monoio-compat",
@@ -2388,16 +2386,6 @@ checksum = "464a3709c7f55f1f721e5389aa6ea4e3bc6aba669353300af094b29ffbdde1d8"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "kanal"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e3953adf0cd667798b396c2fa13552d6d9b3269d7dd1154c4c416442d1ff574"
-dependencies = [
- "futures-core",
- "lock_api",
 ]
 
 [[package]]
