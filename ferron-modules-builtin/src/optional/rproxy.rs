@@ -167,10 +167,10 @@ struct TrackedBody<B> {
 }
 
 impl<B> TrackedBody<B> {
-  fn new(inner: B, tracker: Arc<()>, tracker_pool: Option<Arc<UnsafeCell<ConnectionPoolItem>>>) -> Self {
+  fn new(inner: B, tracker: Option<Arc<()>>, tracker_pool: Option<Arc<UnsafeCell<ConnectionPoolItem>>>) -> Self {
     Self {
       inner,
-      _tracker: Some(tracker),
+      _tracker: tracker,
       _tracker_pool: tracker_pool,
     }
   }
@@ -1852,20 +1852,17 @@ async fn http_proxy(
     }
   } else {
     let (response_parts, response_body) = proxy_response.into_parts();
-    let mut boxed_body = response_body.map_err(|e| std::io::Error::other(e.to_string())).boxed();
-    if let Some(tracked_connection) = tracked_connection {
-      boxed_body = TrackedBody::new(
-        boxed_body,
-        tracked_connection,
-        if enable_keepalive && !sender.is_closed() {
-          None
-        } else {
-          // Safety: this should be not modified, see the "unsafe" block below
-          Some(connection_pool_item.clone())
-        },
-      )
-      .boxed();
-    }
+    let boxed_body = TrackedBody::new(
+      response_body.map_err(|e| std::io::Error::other(e.to_string())),
+      tracked_connection,
+      if enable_keepalive && !sender.is_closed() {
+        None
+      } else {
+        // Safety: this should be not modified, see the "unsafe" block below
+        Some(connection_pool_item.clone())
+      },
+    )
+    .boxed();
     ResponseData {
       request: None,
       response: Some(Response::from_parts(response_parts, boxed_body)),
@@ -2010,20 +2007,17 @@ async fn http_proxy_kept_alive(
   } else {
     // For successful responses or when not intercepting errors, pass the backend response directly
     let (response_parts, response_body) = proxy_response.into_parts();
-    let mut boxed_body = response_body.map_err(|e| std::io::Error::other(e.to_string())).boxed();
-    if let Some(tracked_connection) = tracked_connection {
-      boxed_body = TrackedBody::new(
-        boxed_body,
-        tracked_connection,
-        if !sender.is_closed() {
-          None
-        } else {
-          // Safety: this should be not modified, see the "unsafe" block below
-          Some(connection_pool_item.clone())
-        },
-      )
-      .boxed();
-    }
+    let boxed_body = TrackedBody::new(
+      response_body.map_err(|e| std::io::Error::other(e.to_string())),
+      tracked_connection,
+      if !sender.is_closed() {
+        None
+      } else {
+        // Safety: this should be not modified, see the "unsafe" block below
+        Some(connection_pool_item.clone())
+      },
+    )
+    .boxed();
     ResponseData {
       request: None,
       response: Some(Response::from_parts(response_parts, boxed_body)),
