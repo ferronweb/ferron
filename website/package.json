@@ -13,7 +13,7 @@
   "dependencies": {
     "@astrojs/sitemap": "^3.6.1",
     "@astrojs/svelte": "^7.2.5",
-    "@csstools/postcss-oklab-function": "^4.0.12",
+    "@csstools/postcss-oklab-function": "^5.0.0",
     "@fortawesome/fontawesome-svg-core": "^7.1.0",
     "@fortawesome/free-brands-svg-icons": "^7.1.0",
     "@fortawesome/free-solid-svg-icons": "^7.1.0",
