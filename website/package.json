@@ -30,7 +30,7 @@
     "chart.js": "^4.5.1",
     "date-fns": "^4.1.0",
     "postcss-media-minmax": "^5.0.0",
-    "postcss-nesting": "^13.0.2",
+    "postcss-nesting": "^14.0.0",
     "postcss-value-parser": "^4.2.0",
     "rehype-wrap": "^1.1.0",
     "svelte": "^5.46.3",
