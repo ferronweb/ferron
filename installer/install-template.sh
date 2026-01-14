@@ -360,10 +360,10 @@ FERRON_CONFIGURATION_END_OF_FILE
 
 create_ferron_user() {
     if type useradd &>/dev/null; then
-        useradd -d /var/lib/ferron -m -s /usr/sbin/nologin ferron || return 1
+        useradd -d /var/lib/ferron -m -s /usr/sbin/nologin -r ferron || return 1
     else
         # useradd is not available for instance on Alpine Linux
-        adduser --home /var/lib/ferron --shell /usr/sbin/nologin --disabled-password ferron || return 1
+        adduser --home /var/lib/ferron --shell /usr/sbin/nologin --system --disabled-password ferron || return 1
     fi
     chown -hR ferron:ferron /var/log/ferron || return 1
     chown -hR ferron:ferron /var/lib/ferron || return 1
