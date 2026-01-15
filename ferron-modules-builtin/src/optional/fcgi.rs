@@ -1027,9 +1027,10 @@ async fn execute_fastcgi(
       stderr_vec_result = stderr_read_future_pinned => {
         let stderr_vec = stderr_vec_result.unwrap_or(vec![]);
         let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
-        if !stderr_string.is_empty() {
+        let stderr_string_trimmed = stderr_string.trim();
+        if !stderr_string_trimmed.is_empty() {
           error_logger_clone
-            .log(&format!("There were FastCGI errors: {stderr_string}"))
+            .log(&format!("There were FastCGI errors: {stderr_string_trimmed}"))
             .await;
         }
       }
