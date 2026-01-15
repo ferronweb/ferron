@@ -41,7 +41,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::listener_handler_communication::{Connection, ConnectionData};
 
-/// A runtime for Quinn that utilizes Monoio and async_io
+/// A runtime for Quinn that utilizes Tokio, if under Tokio runtime, and otherwise Monoio with async_io.
 #[derive(Debug)]
 #[cfg(feature = "runtime-monoio")]
 struct EnterTokioRuntime;
