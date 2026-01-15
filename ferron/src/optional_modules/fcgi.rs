@@ -792,13 +792,13 @@ async fn execute_fastcgi(
       },
       result = &mut stderr_read_future_pinned => {
         let stderr_vec = result?;
-          let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
-          let stderr_string_trimmed = stderr_string.trim();
-          if !stderr_string_trimmed.is_empty() {
-            error_logger
-              .log(&format!("There were FastCGI errors: {stderr_string_trimmed}"))
-              .await;
-          }
+        let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
+        let stderr_string_trimmed = stderr_string.trim();
+        if !stderr_string_trimmed.is_empty() {
+          error_logger
+            .log(&format!("There were FastCGI errors: {stderr_string_trimmed}"))
+            .await;
+        }
         return Ok(
           ResponseData::builder_without_request()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -814,12 +814,13 @@ async fn execute_fastcgi(
 
         result = &mut stderr_read_future_pinned => {
           let stderr_vec = result?;
-            let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
-            if !stderr_string.is_empty() {
-              error_logger
-                .log(&format!("There were FastCGI errors: {stderr_string}"))
-                .await;
-            }
+          let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
+          let stderr_string_trimmed = stderr_string.trim();
+          if !stderr_string_trimmed.is_empty() {
+            error_logger
+              .log(&format!("There were FastCGI errors: {stderr_string_trimmed}"))
+              .await;
+          }
           return Ok(
             ResponseData::builder_without_request()
               .status(StatusCode::INTERNAL_SERVER_ERROR)
