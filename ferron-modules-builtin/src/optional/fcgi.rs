@@ -966,7 +966,13 @@ async fn execute_fastcgi(
                 .await;
             }
             return Ok(
-              ResponseData { request: None, response: None, response_status: Some(StatusCode::INTERNAL_SERVER_ERROR), response_headers: None, new_remote_address: None }
+              ResponseData {
+                request: None,
+                response: None,
+                response_status: Some(StatusCode::INTERNAL_SERVER_ERROR),
+                response_headers: None,
+                new_remote_address: None
+              }
             );
         },
     }
