@@ -14,7 +14,7 @@
 
 use std::error::Error;
 #[cfg(feature = "runtime-monoio")]
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 #[cfg(feature = "runtime-monoio")]
 use std::future::Future;
 #[cfg(feature = "runtime-monoio")]
@@ -32,14 +32,34 @@ use std::time::Instant;
 use async_channel::{Receiver, Sender};
 use ferron_common::logging::LogMessage;
 #[cfg(feature = "runtime-monoio")]
-use pin_project_lite::pin_project;
+use monoio::time::Sleep;
 use quinn::crypto::rustls::QuicServerConfig;
 #[cfg(feature = "runtime-monoio")]
 use quinn::{AsyncTimer, AsyncUdpSocket, Runtime};
 use rustls::ServerConfig;
+#[cfg(feature = "runtime-monoio")]
+use send_wrapper::SendWrapper;
 use tokio_util::sync::CancellationToken;
 
 use crate::listener_handler_communication::{Connection, ConnectionData};
+
+/// A timer for Quinn that utilizes Monoio's timer.
+#[cfg(feature = "runtime-monoio")]
+#[derive(Debug)]
+struct MonoioTimer {
+  inner: SendWrapper<Pin<Box<Sleep>>>,
+}
+
+#[cfg(feature = "runtime-monoio")]
+impl AsyncTimer for MonoioTimer {
+  fn reset(mut self: Pin<&mut Self>, t: Instant) {
+    (*self.inner).as_mut().reset(t.into())
+  }
+
+  fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<()> {
+    (*self.inner).as_mut().poll(cx)
+  }
+}
 
 /// A runtime for Quinn that utilizes Tokio, if under Tokio runtime, and otherwise Monoio with async_io.
 #[derive(Debug)]
@@ -52,8 +72,8 @@ impl Runtime for EnterTokioRuntime {
     if tokio::runtime::Handle::try_current().is_ok() {
       Box::pin(tokio::time::sleep_until(t.into()))
     } else {
-      Box::pin(Timer {
-        inner: async_io::Timer::at(t),
+      Box::pin(MonoioTimer {
+        inner: SendWrapper::new(Box::pin(monoio::time::sleep_until(t.into()))),
       })
     }
   }
@@ -68,32 +88,6 @@ impl Runtime for EnterTokioRuntime {
 
   fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
     quinn::TokioRuntime::wrap_udp_socket(&quinn::TokioRuntime, sock)
-  }
-}
-
-#[cfg(feature = "runtime-monoio")]
-pin_project! {
-    struct Timer {
-        #[pin]
-        inner: async_io::Timer
-    }
-}
-
-#[cfg(feature = "runtime-monoio")]
-impl AsyncTimer for Timer {
-  fn reset(mut self: Pin<&mut Self>, t: Instant) {
-    self.inner.set_at(t)
-  }
-
-  fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<()> {
-    Future::poll(self.project().inner, cx).map(|_| ())
-  }
-}
-
-#[cfg(feature = "runtime-monoio")]
-impl Debug for Timer {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    self.inner.fmt(f)
   }
 }
 

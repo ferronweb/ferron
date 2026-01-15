@@ -1317,7 +1317,6 @@ version = "2.3.2"
 dependencies = [
  "anyhow",
  "async-channel",
- "async-io",
  "base64",
  "blocking",
  "bytes",
@@ -1346,7 +1345,6 @@ dependencies = [
  "monoio",
  "monoio-compat",
  "ocsp-stapler",
- "pin-project-lite",
  "ppp",
  "procfs",
  "quinn",
@@ -1356,6 +1354,7 @@ dependencies = [
  "rustls-native-certs",
  "rustls-pki-types",
  "rustls-platform-verifier",
+ "send_wrapper",
  "serde",
  "serde_json",
  "shadow-rs",

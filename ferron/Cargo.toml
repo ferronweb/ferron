@@ -10,6 +10,7 @@ ferron-load-modules = { workspace = true }
 
 # Error Handling & Utilities
 anyhow = "1.0.98"
+send_wrapper = { version = "0.6.0", optional = true, features = ["futures"] }
 human-panic = "2.0.2"
 chrono = "0.4.41"
 fancy-regex = "0.17.0"
@@ -90,9 +91,7 @@ monoio = { version = "0.2.4", optional = true, features = [
 ] }
 monoio-compat = { version = "0.2.2", optional = true, features = ["hyper"] }
 async-channel = "2.3.1"
-async-io = { version = "2.4.0", optional = true }
 futures-util = { version = "0.3.31", features = ["sink"] }
-pin-project-lite = "0.2.16"
 blocking = { version = "1.6.1", optional = true }
 tokio-util = "0.7.15"
 futures-executor = { version = "0.3.31", optional = true }
@@ -157,7 +156,7 @@ runtime-monoio = [
     "monoio",
     "monoio-compat",
     "blocking",
-    "async-io",
+    "send_wrapper",
     "ferron-common/runtime-monoio",
     "ferron-load-modules/runtime-monoio",
 ]
