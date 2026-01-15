@@ -32,7 +32,7 @@ use crate::util::fcgi::{
   construct_fastcgi_name_value_pair, construct_fastcgi_record, FcgiDecodedData, FcgiDecoder, FcgiEncoder,
   FcgiProcessedStream,
 };
-use crate::util::{Copier, ReadToEndFuture, SplitStreamByMapExt};
+use crate::util::{ReadToEndFuture, SplitStreamByMapExt};
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
@@ -925,7 +925,14 @@ async fn execute_fastcgi(
 
   let mut cgi_response = CgiResponse::new(stdout);
 
-  ferron_common::runtime::spawn(Copier::with_zero_packet_writing(cgi_stdin_reader, stdin).copy());
+  ferron_common::runtime::spawn(async move {
+    let (mut cgi_stdin_reader, mut stdin) = (cgi_stdin_reader, stdin);
+    let _ = tokio::io::copy(&mut cgi_stdin_reader, &mut stdin).await;
+
+    // Send terminating STDIN packet
+    let _ = stdin.write(&[]).await;
+    let _ = stdin.flush().await;
+  });
 
   let stderr_read_future = ReadToEndFuture::new(stderr);
   let mut stderr_read_future_pinned = Box::pin(stderr_read_future);
