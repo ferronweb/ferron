@@ -19,7 +19,7 @@ use hyper::{header, Request, Response, StatusCode};
 use monoio::io::IntoPollIo;
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
 use tokio::sync::RwLock;
@@ -32,7 +32,7 @@ use crate::util::fcgi::{
   construct_fastcgi_name_value_pair, construct_fastcgi_record, FcgiDecodedData, FcgiDecoder, FcgiEncoder,
   FcgiProcessedStream,
 };
-use crate::util::{ReadToEndFuture, SplitStreamByMapExt};
+use crate::util::SplitStreamByMapExt;
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
@@ -934,7 +934,11 @@ async fn execute_fastcgi(
     let _ = stdin.flush().await;
   });
 
-  let stderr_read_future = ReadToEndFuture::new(stderr);
+  let stderr_read_future = async move {
+    let mut stderr = stderr;
+    let mut buf = Vec::new();
+    stderr.read_to_end(&mut buf).await.map(|_| buf)
+  };
   let mut stderr_read_future_pinned = Box::pin(stderr_read_future);
 
   let mut headers = [EMPTY_HEADER; 128];
