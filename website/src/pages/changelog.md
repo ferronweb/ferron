@@ -4,6 +4,53 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.3.2
+
+**Released in January 6, 2026**
+
+- The server now gracefully handles canceled I/O operations that could previously cause 502 Bad Gateway errors (when io_uring is disabled).
+- The server now gracefully handles canceled I/O operations that could previously cause a crash under rare conditions (when io_uring is enabled).
+
+## Ferron 2.3.1
+
+**Released in January 6, 2026**
+
+- The server now gracefully handles canceled I/O operations that could previously cause a crash under rare conditions (when io_uring is disabled).
+
+## Ferron 2.3.0
+
+**Released in January 6, 2026**
+
+- Added a metric for reverse proxy connections (grouped by whether the connection is reused)
+- Added option to disable the URL sanitizer (to allow passing request path as-is to proxy backend servers without the sanitizer rewriting the URL).
+- Added support for canonicalized IP address placeholders.
+- Added support for global and local reverse proxy TCP connection concurrency limits.
+- Added support for timeouts for idle kept-alive connections in a reverse proxy.
+- Fixed a CGI, SCGI and FastCGI interoperability issue caused by the wrong value of the "HTTPS" variable.
+- Fixed an XSS bug through server administrator's email address specified in the server configuration.
+- Fixed errors when using URL-safe Base64-encoded ACME EAB key HMACs with "=" at the end.
+- Fixed explicit TLS version configuration being incorrectly applied.
+- Improved error reporting for invalid URLs for SCGI and FastCGI.
+- Optimized the performance of overall network I/O.
+- Optimized the QUIC and HTTP/3 performance.
+- Removed a configuration directive for specifying maximum idle kept-alive connection pool in a reverse proxy.
+- Replaced mimalloc v2 with mimalloc v3 (and also dropped support for very early 64-bit x86 CPUs).
+- Slightly optimized ETag generation for static file serving.
+- The H3_NO_ERROR errors are no longer logged into the error log.
+- The reverse proxy now no longer waits for non-ready connections to be ready (it now just pulls another connection from the pool).
+- The reverse proxy now uses an unlimited idle kept-alive connection pool.
+- The server is now accessible via IPv4 by default on Windows (IPv6 is enabled by default).
+- The server now no longer fails automatic TLS certificate management tasks, when the ACME cache is inaccessible or corrupted.
+- The server now removes some response headers that are invalid in HTTP/3, if the client is connected to the server via HTTP/3
+- The server now uses a faster asynchronous Rust runtime (Monoio) on Windows (like it is on other platforms) instead of Tokio only.
+
+## Ferron 1.3.7
+
+**Released in December 23, 2025**
+
+- Added support for accepting CIDR ranges for IP blocklists (backported from Ferron 2).
+- Fixed a panic when the global web server configuration is not present in the configuration file.
+
 ## Ferron 2.2.1
 
 **Released in December 5, 2025**

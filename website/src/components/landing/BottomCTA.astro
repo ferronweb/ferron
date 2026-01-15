@@ -6,17 +6,15 @@ import FontAwesomeIcon from "../FontAwesomeIcon.astro";
 <section class="py-20">
   <div class="container">
     <div
-      class="bg-gradient-to-r from-primary/10 to-accent/10 rounded-xl p-8 md:p-12 relative overflow-hidden border border-primary/20"
+      class="bg-linear-to-r from-primary/10 to-accent/10 rounded-xl p-8 md:p-12 relative overflow-hidden border border-primary/20"
     >
       <!-- Decorative elements -->
       <div
-        class="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 filter blur-3xl blur-fix-performance"
-      >
-      </div>
+        class="absolute top-0 right-0 size-64 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 filter blur-3xl blur-fix-performance"
+      ></div>
       <div
-        class="absolute bottom-0 left-0 w-64 h-64 bg-accent/10 rounded-full translate-y-1/2 -translate-x-1/2 filter blur-3xl blur-fix-performance"
-      >
-      </div>
+        class="absolute bottom-0 left-0 size-64 bg-accent/10 rounded-full translate-y-1/2 -translate-x-1/2 filter blur-3xl blur-fix-performance"
+      ></div>
       <div
         class="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-8"
       >
@@ -31,7 +29,7 @@ import FontAwesomeIcon from "../FontAwesomeIcon.astro";
         </div>
         <div class="flex flex-col sm:flex-row gap-4">
           <a href="#install" class="btn btn-primary">
-            <FontAwesomeIcon icon={faDownload} class="mr-2 h-5 w-5" />
+            <FontAwesomeIcon icon={faDownload} class="mr-2 size-5!"/>
             Start installation
           </a>
           <a href="/docs" class="btn btn-secondary"> Read documentation </a>

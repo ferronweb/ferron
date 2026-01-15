@@ -1,6 +1,6 @@
 [package]
 name = "ferron-common"
-version = "2.2.1"
+version = "2.3.2"
 edition = "2021"
 
 [dependencies]
@@ -19,11 +19,12 @@ hickory-resolver = "0.25.2"
 tokio-util = "0.7.15"
 futures-util = { version = "0.3.31", features = ["sink"] }
 regorus = { version = "0.5.0", default-features = false, features = ["arc"] }
+send_wrapper = { version = "0.6.0", optional = true, features = ["futures"] }
 
 [dev-dependencies]
 shiba = { workspace = true }
 
 [features]
 default = ["runtime-monoio"]
-runtime-monoio = ["monoio"]
+runtime-monoio = ["monoio", "send_wrapper"]
 runtime-tokio = []

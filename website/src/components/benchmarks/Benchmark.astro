@@ -5,22 +5,23 @@ interface Props {
   data: object[];
   command: string;
   unit: string;
-  competitor1: string;
-  competitor2: string;
-  competitor3: string;
+  competitors: string[];
   description: string;
   title: string;
   date: Date;
   higherIsBetter: boolean;
   system: string;
+  class?: string;
+  note?: string;
+  linuxVersion?: string;
 }
 
-const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
+const { data, unit, competitors } = Astro.props;
 ---
 
 <div
   data-slot="card"
-  class="card px-0 rounded-xl flex flex-col overflow-hidden"
+  class={`card px-0 rounded-xl flex flex-col overflow-hidden ${Astro.props.class || ''}`}
 >
   <div
     data-slot="card-header"
@@ -38,29 +39,35 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
       data-props={JSON.stringify({
         data,
         unit,
-        competitor1,
-        competitor2,
-        competitor3
+        competitors
       })}
       class="min-h-80 grow"
     >
       <!-- Had to use <div> elements for the chart to resize properly -->
-      <div class="relative min-h-80 h-full w-full">
+      <div class="relative min-h-80 size-full">
         <canvas></canvas>
       </div>
     </benchmark-chart>
     <div
-      class="mt-4 text-center max-w-full prose prose-sm text-muted-foreground"
+      class="mt-4 text-center max-w-full prose prose-sm text-muted-foreground prose-p:leading-snug"
     >
       <p>
-        {Astro.props.higherIsBetter ? "Higher is better" : "Lower is better"} | Benchmarks
-        run on {Astro.props.system}, with the{" "}
-        <code>{Astro.props.command}</code> command{
+        {Astro.props.higherIsBetter ? "Higher is better" : "Lower is better"}
+        {" "}| Benchmarks run on {Astro.props.system}, with the{" "}
+        <code>{Astro.props.command}</code>
+        {" "}command
+        {
+          Astro.props.linuxVersion ? ` | Linux kernel version ${Astro.props.linuxVersion}` : ""
+        }
+        {
           Astro.props.date
             ? ` | Benchmarks performed on ${format(Astro.props.date, "MMMM d, yyyy")}`
             : ""
         }
       </p>
+      {Astro.props.note && (
+        <p><strong>Note:</strong> {Astro.props.note}</p>
+      )}
     </div>
   </div>
 </div>
@@ -69,20 +76,18 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
   import {
     BarController,
     BarElement,
-    Chart,
     CategoryScale,
-    LinearScale,
+    Chart,
+    type ChartItem,
     Legend,
-    Tooltip,
-    type ChartItem
+    LinearScale,
+    Tooltip
   } from "chart.js";
 
   interface BenchmarkData {
     name: string;
     ferron: string | number;
-    competitor1: string | number;
-    competitor2: string | number;
-    competitor3: string | number;
+    competitors: (string | number)[];
   }
 
   Chart.register([
@@ -98,9 +103,13 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
   const mutedForegroundColor = style.getPropertyValue("--muted-foreground");
   const borderColor = style.getPropertyValue("--border");
   const primaryColor = style.getPropertyValue("--primary");
-  const chart1 = style.getPropertyValue("--chart-1");
-  const chart2 = style.getPropertyValue("--chart-2");
-  const chart3 = style.getPropertyValue("--chart-3");
+  const chartColors = [
+    style.getPropertyValue("--chart-1"),
+    style.getPropertyValue("--chart-2"),
+    style.getPropertyValue("--chart-3"),
+    style.getPropertyValue("--chart-4"),
+    style.getPropertyValue("--chart-5")
+  ];
   const fontFamily = style.getPropertyValue("--font-funnel-sans");
 
   class BenchmarkChart extends HTMLElement {
@@ -121,21 +130,13 @@ const { data, unit, competitor1, competitor2, competitor3 } = Astro.props;
               data: props.data.map((item: BenchmarkData) => item.ferron),
               backgroundColor: `hsla(${primaryColor}, 1)`
             },
-            {
-              label: props.competitor1,
-              data: props.data.map((item: BenchmarkData) => item.competitor1),
-              backgroundColor: `hsla(${chart1}, 1)`
-            },
-            {
-              label: props.competitor2,
-              data: props.data.map((item: BenchmarkData) => item.competitor2),
-              backgroundColor: `hsla(${chart2}, 1)`
-            },
-            {
-              label: props.competitor3,
-              data: props.data.map((item: BenchmarkData) => item.competitor3),
-              backgroundColor: `hsla(${chart3}, 1)`
-            }
+            ...props.competitors.map((competitor: string, index: number) => ({
+              label: competitor,
+              data: props.data.map(
+                (item: BenchmarkData) => item.competitors[index]
+              ),
+              backgroundColor: `hsla(${chartColors[index]}, 1)`
+            }))
           ]
         },
         options: {

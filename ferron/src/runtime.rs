@@ -10,25 +10,25 @@ compile_error!("Can't compile Ferron with no main runtimes enabled");
 /// Creates a new asynchronous runtime using Monoio
 #[cfg(feature = "runtime-monoio")]
 pub fn new_runtime(future: impl Future, enable_uring: bool) -> Result<(), Box<dyn Error + Send + Sync>> {
+  #[cfg(target_os = "linux")]
   if enable_uring && monoio::utils::detect_uring() {
-    #[cfg(target_os = "linux")]
     let mut rt = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
       .enable_all()
       .attach_thread_pool(Box::new(BlockingThreadPool))
       .build()?;
-    #[cfg(not(target_os = "linux"))]
-    let mut rt = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
-      .enable_all()
-      .attach_thread_pool(Box::new(BlockingThreadPool))
-      .build()?;
     rt.block_on(future);
-  } else {
-    let mut rt = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
-      .enable_all()
-      .attach_thread_pool(Box::new(BlockingThreadPool))
-      .build()?;
-    rt.block_on(future);
+    return Ok(());
   }
+  #[cfg(not(target_os = "linux"))]
+  let _ = enable_uring;
+
+  // `io_uring` is either disabled or not supported
+  let mut rt = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+    .enable_all()
+    .attach_thread_pool(Box::new(BlockingThreadPool))
+    .build()?;
+  rt.block_on(future);
+
   Ok(())
 }
 

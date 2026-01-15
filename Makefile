@@ -29,7 +29,7 @@ ifndef CARGO_FINAL
 	CARGO_FINAL = cargo
 endif
 
-.PHONY: build
+all: build
 
 smoketest-dev: build-dev
 	FERRON="$(PWD)/$(CARGO_TARGET_ROOT)/debug/ferron" smoketest/smoketest.sh

@@ -966,6 +966,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "connpool"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08570dddcc35bf42d1e7d239ec3f6bcedd9e8468701d299f3e0aea0722bca1b9"
+dependencies = [
+ "ahash",
+ "quick_cache",
+ "slab",
+ "tokio",
+]
+
+[[package]]
 name = "const-hex"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1141,20 +1153,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "desec_api"
-version = "0.4.0"
-source = "git+https://github.com/DorianNiemiecSVRJS/desec_api.git#29484b85e1680f6aca13835d09ab20113ab5962b"
-dependencies = [
- "const_format",
- "log",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tokio",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1199,14 +1197,15 @@ dependencies = [
 
 [[package]]
 name = "dns-update"
-version = "0.1.2"
-source = "git+https://github.com/DorianNiemiecSVRJS/dns-update.git#329db6f1d9877ecc0bc744fb3f59a38c0f59daa2"
+version = "0.1.6"
+source = "git+https://github.com/DorianNiemiecSVRJS/dns-update.git#cd20df5d7e83990784a47435cbae951efd4068a4"
 dependencies = [
  "hickory-client",
  "reqwest",
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "sha1",
  "tokio",
 ]
 
@@ -1305,11 +1304,10 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "ferron"
-version = "2.2.1"
+version = "2.3.2"
 dependencies = [
  "anyhow",
  "async-channel",
- "async-io",
  "base64",
  "blocking",
  "bytes",
@@ -1337,7 +1335,6 @@ dependencies = [
  "monoio",
  "monoio-compat",
  "ocsp-stapler",
- "pin-project-lite",
  "ppp",
  "procfs",
  "quinn",
@@ -1347,6 +1344,7 @@ dependencies = [
  "rustls-native-certs",
  "rustls-pki-types",
  "rustls-platform-verifier",
+ "send_wrapper",
  "serde",
  "serde_json",
  "shadow-rs",
@@ -1366,7 +1364,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-common"
-version = "2.2.1"
+version = "2.3.2"
 dependencies = [
  "async-channel",
  "async-trait",
@@ -1381,6 +1379,7 @@ dependencies = [
  "regorus",
  "rustls",
  "rustls-pki-types",
+ "send_wrapper",
  "shiba",
  "tokio",
  "tokio-util",
@@ -1388,7 +1387,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-dns-builtin"
-version = "2.2.1"
+version = "2.3.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1396,7 +1395,6 @@ dependencies = [
  "aws-credential-types",
  "aws-sdk-route53",
  "base64",
- "desec_api",
  "dns-update",
  "ferron-common",
  "hyper",
@@ -1406,7 +1404,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-load-modules"
-version = "2.2.1"
+version = "2.3.2"
 dependencies = [
  "anyhow",
  "ferron-common",
@@ -1420,10 +1418,9 @@ dependencies = [
 
 [[package]]
 name = "ferron-modules-builtin"
-version = "2.2.1"
+version = "2.3.2"
 dependencies = [
  "anyhow",
- "async-channel",
  "async-compression",
  "async-process",
  "async-trait",
@@ -1432,6 +1429,7 @@ dependencies = [
  "cache_control",
  "chrono",
  "cidr",
+ "connpool",
  "fancy-regex",
  "ferron-common",
  "futures-util",
@@ -1452,7 +1450,7 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
- "sha2",
+ "send_wrapper",
  "shiba",
  "smallvec",
  "tokenbucket",
@@ -1466,7 +1464,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-builtin"
-version = "2.2.1"
+version = "2.3.2"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1488,7 +1486,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-passwd"
-version = "2.2.1"
+version = "2.3.2"
 dependencies = [
  "clap",
  "mimalloc",
@@ -1500,7 +1498,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-precompress"
-version = "2.2.1"
+version = "2.3.2"
 dependencies = [
  "brotli",
  "clap",
@@ -1514,7 +1512,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-yaml2kdl"
-version = "2.2.1"
+version = "2.3.2"
 dependencies = [
  "clap",
  "ferron-yaml2kdl-core",
@@ -1525,7 +1523,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-yaml2kdl-core"
-version = "2.2.1"
+version = "2.3.2"
 dependencies = [
  "anyhow",
  "glob",
@@ -2689,8 +2687,9 @@ dependencies = [
 
 [[package]]
 name = "ocsp-stapler"
-version = "0.4.7"
-source = "git+https://github.com/DorianNiemiecSVRJS/ocsp-stapler.git#6a2e97aa0abfd4d38a54523dad224e92849a0c1c"
+version = "0.4.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fa83d5137495eedb77e752dfca24dc33882cbf872a013ae62943dcf665d51fa"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -3744,6 +3743,15 @@ name = "semver"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d767eb0aabc880b29956c35734170f26ed551a859dbd361d140cdbeca61ab1e2"
+
+[[package]]
+name = "send_wrapper"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
+dependencies = [
+ "futures-core",
+]
 
 [[package]]
 name = "serde"

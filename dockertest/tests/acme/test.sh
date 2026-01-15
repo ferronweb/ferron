@@ -40,6 +40,25 @@ else
     TEST_FAILED=1
 fi
 
+# Wait for the TLS certificate to be issued
+for i in $(seq 1 60)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    curl -fsLk -o /dev/null https://ferron-brokencache/ && break || true
+done
+
+TEST_RESULTS="$(curl -fsSLk -o /dev/null https://ferron-brokencache/)"
+TEST_EXIT_CODE=$?
+if [ "$TEST_EXIT_CODE" -eq 0 ]; then
+    echo "Automatic TLS with broken cache connection test passed!"
+else
+    echo "Automatic TLS with broken cache connection test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    TEST_FAILED=1
+fi
+
 # Request on-demand TLS certificate
 curl -fsLk -o /dev/null https://ferron-ondemand || true
 

@@ -1,7 +1,6 @@
 use std::collections::{BTreeSet, HashSet};
 use std::error::Error;
 use std::ffi::OsStr;
-use std::fmt::Write;
 #[cfg(feature = "runtime-monoio")]
 use std::fs::ReadDir;
 #[cfg(feature = "runtime-tokio")]
@@ -9,7 +8,7 @@ use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use async_compression::brotli::EncoderParams;
 use async_compression::tokio::bufread::{BrotliEncoder, DeflateEncoder, GzipEncoder, ZstdEncoder};
@@ -26,7 +25,6 @@ use hyper::header::{self, HeaderValue};
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
 #[cfg(feature = "runtime-monoio")]
 use monoio::fs;
-use sha2::{Digest, Sha256};
 #[cfg(feature = "runtime-tokio")]
 use tokio::fs::{self, ReadDir};
 #[cfg(feature = "runtime-tokio")]
@@ -38,7 +36,7 @@ use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 #[cfg(feature = "runtime-monoio")]
-use ferron_common::util::MonoioFileStream;
+use ferron_common::util::MonoioFileStreamNoSpawn;
 use ferron_common::util::{anti_xss, sizify, ModuleCache, TtlCache};
 use ferron_common::{format_page, get_entries, get_entries_for_validation, get_entry, get_value};
 
@@ -174,6 +172,7 @@ static NON_COMPRESSIBLE_FILE_EXTENSIONS: LazyLock<BTreeSet<&'static str>> = Lazy
 });
 
 /// Generates a directory listing
+#[inline]
 pub async fn generate_directory_listing(
   directory: ReadDir,
   request_path: &str,
@@ -266,7 +265,8 @@ pub async fn generate_directory_listing(
         );
 
         let row = format!(
-          "<tr><td class=\"directory-filename\">{}</td><td class=\"directory-size\">{}</td><td class=\"directory-date\">{}</td></tr>",
+          "<tr><td class=\"directory-filename\">{}</td>\
+          <td class=\"directory-size\">{}</td><td class=\"directory-date\">{}</td></tr>",
           filename_link,
           match metadata.is_file() {
             true => anti_xss(&sizify(metadata.len(), false)),
@@ -292,7 +292,8 @@ pub async fn generate_directory_listing(
           anti_xss(&filename)
         );
         let row = format!(
-          "<tr><td class=\"directory-filename\">{filename_link}</td><td class=\"directory-size\">-</td><td class=\"directory-date\">-</td></tr>"
+          "<tr><td class=\"directory-filename\">{filename_link}</td>\
+          <td class=\"directory-size\">-</td><td class=\"directory-date\">-</td></tr>"
         );
         table_rows.push(row);
       }
@@ -300,20 +301,28 @@ pub async fn generate_directory_listing(
   }
 
   if table_rows.len() <= min_table_rows_length {
-    table_rows.push("<tr><td class=\"directory-filename\">🤷 No files found</td><td class=\"directory-size\"></td><td class=\"directory-date\"></td></tr>".to_string());
+    table_rows.push(
+      "<tr><td class=\"directory-filename\">🤷 No files found</td>\
+        <td class=\"directory-size\"></td><td class=\"directory-date\"></td></tr>"
+        .to_string(),
+    );
   }
 
   Ok(format_page!(
     format!(
       "<h1>Directory: {}</h1>
       <table>
-      <tr><th class=\"directory-filename\">Filename</th><th class=\"directory-size\">Size</th><th class=\"directory-date\">Date</th></tr>
+      <tr><th class=\"directory-filename\">Filename</th><th class=\"directory-size\">Size</th>\
+      <th class=\"directory-date\">Date</th></tr>
       {}
     </table>{}",
       anti_xss(request_path),
       table_rows.join(""),
       match description {
-        Some(description) => format!("<hr><pre class=\"directory-description\">{}</pre>", anti_xss(&description)),
+        Some(description) => format!(
+          "<hr><pre class=\"directory-description\">{}</pre>",
+          anti_xss(&description)
+        ),
         None => "".to_string(),
       }
     ),
@@ -326,13 +335,21 @@ pub async fn generate_directory_listing(
 }
 
 /// Parses the HTTP "Range" header value
+#[inline]
 fn parse_range_header(range_str: &str, default_end: u64) -> Option<(u64, u64)> {
   if let Some(range_part) = range_str.strip_prefix("bytes=") {
     let parts: Vec<&str> = range_part.split('-').take(2).collect();
     if parts.len() == 2 {
       if parts[0].is_empty() {
-        if let Ok(end) = u64::from_str(parts[1]) {
-          return Some((default_end - end + 1, default_end));
+        if let Ok(n) = u64::from_str(parts[1]) {
+          if n == 0 {
+            return None;
+          }
+          let file_len = default_end + 1;
+          if n >= file_len {
+            return Some((0, default_end));
+          }
+          return Some((file_len - n, default_end));
         }
       } else if parts[1].is_empty() {
         if let Ok(start) = u64::from_str(parts[0]) {
@@ -349,28 +366,37 @@ fn parse_range_header(range_str: &str, default_end: u64) -> Option<(u64, u64)> {
 }
 
 /// Extracts inner ETag
-fn extract_etag_inner(input: &str, weak: bool) -> Option<String> {
+#[inline]
+fn extract_etag_inner(input: &str, weak: bool) -> Option<(String, Option<String>, bool)> {
   // Remove the surrounding double quotes and preceding "W/"
-  let weak_might_removed = if weak {
+  let (is_weak, weak_might_removed) = if weak {
     match input.strip_prefix("W/") {
-      Some(stripped) => stripped,
-      None => input,
+      Some(stripped) => (true, stripped),
+      None => (false, input),
     }
   } else {
-    input
+    (false, input)
   };
   let trimmed = weak_might_removed.trim_matches('"');
 
-  // Split the string at the hyphen and take the first part
-  trimmed.split('-').next().map(ToOwned::to_owned)
+  // Split the string at the hyphen and take the first two parts
+  let mut trimmed_split = trimmed.split('-');
+  trimmed_split.next().map(|etag| {
+    (
+      etag.to_string(),
+      trimmed_split.next().map(|etag| etag.to_string()),
+      is_weak,
+    )
+  })
 }
 
-/// Converts strong ETag to weak one, if it's not a weak one
-fn etag_strong_to_weak(input: &str) -> String {
-  if input.starts_with("W/") {
-    input.to_string()
+/// Constructs an ETag
+#[inline]
+fn construct_etag(input: &str, weak: bool) -> String {
+  if weak {
+    format!("W/\"{input}\"")
   } else {
-    format!("W/{input}")
+    format!("\"{input}\"")
   }
 }
 
@@ -378,6 +404,7 @@ fn etag_strong_to_weak(input: &str) -> String {
 pub struct StaticFileServingModuleLoader {
   cache: ModuleCache<StaticFileServingModule>,
   pathbuf_cache: Arc<RwLock<TtlCache<String, PathBuf>>>,
+  path_traversal_check_cache: Arc<RwLock<TtlCache<PathBuf, bool>>>,
   etag_cache: Arc<RwLock<LruCache<String, String>>>,
 }
 
@@ -393,6 +420,7 @@ impl StaticFileServingModuleLoader {
     Self {
       cache: ModuleCache::new(vec![]),
       pathbuf_cache: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(100)))),
+      path_traversal_check_cache: Arc::new(RwLock::new(TtlCache::new(Duration::from_millis(100)))),
       etag_cache: Arc::new(RwLock::new(LruCache::new(1000))),
     }
   }
@@ -411,6 +439,7 @@ impl ModuleLoader for StaticFileServingModuleLoader {
         .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |_| {
           Ok(Arc::new(StaticFileServingModule {
             pathbuf_cache: self.pathbuf_cache.clone(),
+            path_traversal_check_cache: self.path_traversal_check_cache.clone(),
             etag_cache: self.etag_cache.clone(),
           }))
         })?,
@@ -515,6 +544,7 @@ impl ModuleLoader for StaticFileServingModuleLoader {
 /// A static file serving module
 struct StaticFileServingModule {
   pathbuf_cache: Arc<RwLock<TtlCache<String, PathBuf>>>,
+  path_traversal_check_cache: Arc<RwLock<TtlCache<PathBuf, bool>>>,
   etag_cache: Arc<RwLock<LruCache<String, String>>>,
 }
 
@@ -522,6 +552,7 @@ impl Module for StaticFileServingModule {
   fn get_module_handlers(&self) -> Box<dyn ModuleHandlers> {
     Box::new(StaticFileServingModuleHandlers {
       pathbuf_cache: self.pathbuf_cache.clone(),
+      path_traversal_check_cache: self.path_traversal_check_cache.clone(),
       etag_cache: self.etag_cache.clone(),
     })
   }
@@ -530,6 +561,7 @@ impl Module for StaticFileServingModule {
 /// Handlers for the static file serving module
 struct StaticFileServingModuleHandlers {
   pathbuf_cache: Arc<RwLock<TtlCache<String, PathBuf>>>,
+  path_traversal_check_cache: Arc<RwLock<TtlCache<PathBuf, bool>>>,
   etag_cache: Arc<RwLock<LruCache<String, String>>>,
 }
 
@@ -672,44 +704,60 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
       {
-        // Canonicalize the file path
-        #[cfg(feature = "runtime-monoio")]
-        let canonicalize_result = {
-          let joined_pathbuf = joined_pathbuf.clone();
-          monoio::spawn_blocking(move || std::fs::canonicalize(joined_pathbuf))
-            .await
-            .unwrap_or(Err(std::io::Error::other(
-              "Can't spawn a blocking task to obtain the canonical file path",
-            )))
-        };
-        #[cfg(feature = "runtime-tokio")]
-        let canonicalize_result = fs::canonicalize(&joined_pathbuf).await;
+        let rwlock_read = self.path_traversal_check_cache.read().await;
+        let allowed_option = rwlock_read.get(&joined_pathbuf);
+        drop(rwlock_read);
+        let allowed = match allowed_option {
+          Some(allowed) => allowed,
+          None => {
+            // Canonicalize the file path
+            #[cfg(feature = "runtime-monoio")]
+            let canonicalize_result = {
+              let joined_pathbuf = joined_pathbuf.clone();
+              monoio::spawn_blocking(move || std::fs::canonicalize(joined_pathbuf))
+                .await
+                .unwrap_or(Err(std::io::Error::other(
+                  "Can't spawn a blocking task to obtain the canonical file path",
+                )))
+            };
+            #[cfg(feature = "runtime-tokio")]
+            let canonicalize_result = fs::canonicalize(&joined_pathbuf).await;
 
-        let canonical_joined_pathbuf = match canonicalize_result {
-          Ok(pathbuf) => pathbuf,
-          Err(_) => joined_pathbuf.clone(),
-        };
+            let canonical_joined_pathbuf = match canonicalize_result {
+              Ok(pathbuf) => pathbuf,
+              Err(_) => joined_pathbuf.clone(),
+            };
 
-        // Canonicalize the webroot
-        #[cfg(feature = "runtime-monoio")]
-        let canonicalize_result = {
-          let wwwroot = wwwroot.to_owned();
-          monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot))
-            .await
-            .unwrap_or(Err(std::io::Error::other(
-              "Can't spawn a blocking task to obtain the canonical file path",
-            )))
-        };
-        #[cfg(feature = "runtime-tokio")]
-        let canonicalize_result = fs::canonicalize(wwwroot).await;
+            // Canonicalize the webroot
+            #[cfg(feature = "runtime-monoio")]
+            let canonicalize_result = {
+              let wwwroot = wwwroot.to_owned();
+              monoio::spawn_blocking(move || std::fs::canonicalize(wwwroot))
+                .await
+                .unwrap_or(Err(std::io::Error::other(
+                  "Can't spawn a blocking task to obtain the canonical file path",
+                )))
+            };
+            #[cfg(feature = "runtime-tokio")]
+            let canonicalize_result = fs::canonicalize(wwwroot).await;
 
-        let canonical_wwwroot = match canonicalize_result {
-          Ok(pathbuf) => pathbuf,
-          Err(_) => PathBuf::from_str(wwwroot)?,
+            let canonical_wwwroot = match canonicalize_result {
+              Ok(pathbuf) => pathbuf,
+              Err(_) => PathBuf::from_str(wwwroot)?,
+            };
+
+            let allowed = canonical_joined_pathbuf.starts_with(&canonical_wwwroot);
+
+            let mut rwlock_write = self.path_traversal_check_cache.write().await;
+            rwlock_write.insert(joined_pathbuf.clone(), allowed);
+            drop(rwlock_write);
+
+            allowed
+          }
         };
 
         // Return 403 Forbidden if the path is outside the webroot
-        if !canonical_joined_pathbuf.starts_with(&canonical_wwwroot) {
+        if !allowed {
           return Ok(ResponseData {
             request: Some(request),
             response: None,
@@ -836,8 +884,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 metadata.len(),
                 match metadata.modified() {
                   Ok(mtime) => {
-                    let datetime: DateTime<Local> = mtime.into();
-                    datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+                    (match mtime.duration_since(SystemTime::UNIX_EPOCH) {
+                      Ok(duration) => duration.as_secs() as i128,
+                      Err(error) => -(error.duration().as_secs() as i128),
+                    })
+                    .to_string()
                   }
                   Err(_) => String::from(""),
                 }
@@ -849,17 +900,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               let etag = match etag_locked_option {
                 Some(etag) => etag,
                 None => {
-                  let etag_cache_key_clone = etag_cache_key.clone();
-                  let etag = ferron_common::runtime::spawn_blocking(move || {
-                    let mut hasher = Sha256::new();
-                    hasher.update(etag_cache_key_clone);
-                    hasher.finalize().iter().fold(String::new(), |mut output, b| {
-                      let _ = write!(output, "{b:02x}");
-                      output
-                    })
-                  })
-                  .await
-                  .map_err(|_| anyhow::anyhow!("Can't spawn a blocking task to hash an ETag"))?;
+                  let etag = format!("{:016x}", xxhash_rust::xxh3::xxh3_64(etag_cache_key.as_bytes()));
 
                   let mut rwlock_write = self.etag_cache.write().await;
                   rwlock_write.insert(etag_cache_key, etag.clone());
@@ -882,13 +923,28 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               if let Some(if_none_match_value) = request.headers().get(header::IF_NONE_MATCH) {
                 match if_none_match_value.to_str() {
                   Ok(if_none_match) => {
-                    if let Some(etag_extracted) = extract_etag_inner(if_none_match, true) {
+                    if let Some((etag_extracted, suffix_option, _)) = extract_etag_inner(if_none_match, true) {
                       // Client's cached version matches our current version
                       if etag_extracted == etag {
-                        let etag_original = if_none_match.to_string();
+                        let mut etag_new_inner = String::new();
+                        etag_new_inner.push_str(&etag);
+                        if let Some(suffix) = suffix_option {
+                          match &*suffix {
+                            // These suffixes are supported by Ferron
+                            "gzip" | "deflate" | "br" | "zstd" => {
+                              etag_new_inner.push('-');
+                              etag_new_inner.push_str(&suffix);
+                            }
+                            _ => {}
+                          }
+                        }
+                        // Ferron's static file serving functionality would also emit weak ETags,
+                        // so for RFC 7232 compliance, weak ETags are sent in 304 responses as well.
+                        // Therefore, we construct a weak ETag here.
+                        let constructed_etag = construct_etag(&etag_new_inner, true);
                         let mut not_modified_response = Response::builder()
                           .status(StatusCode::NOT_MODIFIED)
-                          .header(header::ETAG, etag_strong_to_weak(&etag_original))
+                          .header(header::ETAG, &constructed_etag)
                           .header(header::VARY, HeaderValue::from_static(vary))
                           .body(Empty::new().map_err(|e| match e {}).boxed())?;
                         if let Some(cache_control) = cache_control {
@@ -927,21 +983,18 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   Ok(if_match) => {
                     // "*" means any version is acceptable
                     if if_match != "*" {
-                      if let Some(etag_extracted) = extract_etag_inner(if_match, true) {
-                        // Client's version doesn't match our current version
-                        if etag_extracted != etag {
-                          let mut header_map = HeaderMap::new();
-                          header_map.insert(header::ETAG, if_match_value.clone());
-                          header_map.insert(header::VARY, HeaderValue::from_static(vary));
-                          return Ok(ResponseData {
-                            request: Some(request),
-                            response: None,
-                            response_status: Some(StatusCode::PRECONDITION_FAILED),
-                            response_headers: Some(header_map),
-                            new_remote_address: None,
-                          });
-                        }
-                      }
+                      // Ferron only emits weak ETags, and comparing a strong ETag with it would not match
+                      // for strong comparsions, for more details see RFC 7232
+                      let mut header_map = HeaderMap::new();
+                      header_map.insert(header::ETAG, if_match_value.clone());
+                      header_map.insert(header::VARY, HeaderValue::from_static(vary));
+                      return Ok(ResponseData {
+                        request: Some(request),
+                        response: None,
+                        response_status: Some(StatusCode::PRECONDITION_FAILED),
+                        response_headers: Some(header_map),
+                        new_remote_address: None,
+                      });
                     }
                   }
                   Err(_) => {
@@ -1100,7 +1153,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
                     // Construct a boxed body
                     #[cfg(feature = "runtime-monoio")]
-                    let file_stream = MonoioFileStream::new(file, Some(range_begin), Some(range_end + 1));
+                    let file_stream = MonoioFileStreamNoSpawn::new(file, Some(range_begin), Some(range_end + 1));
                     #[cfg(feature = "runtime-tokio")]
                     let file_stream = {
                       let mut file = file;
@@ -1132,7 +1185,10 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               } else {
                 let mut header_map = HeaderMap::new();
                 header_map.insert(header::VARY, HeaderValue::from_static(vary));
-
+                header_map.insert(
+                  header::CONTENT_RANGE,
+                  HeaderValue::from_str(&format!("bytes */{file_length}"))?,
+                );
                 return Ok(ResponseData {
                   request: Some(request),
                   response: None,
@@ -1224,14 +1280,17 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 }
                 for extension in extensions {
                   let mut joined_pathbuf_with_extension = joined_pathbuf.clone();
-                  joined_pathbuf_with_extension.set_extension(format!(
-                    "{}.{}",
-                    joined_pathbuf
-                      .extension()
-                      .map_or(OsStr::new(""), |ext| ext)
-                      .to_string_lossy(),
-                    extension
-                  ));
+                  joined_pathbuf_with_extension.set_extension(
+                    format!(
+                      "{}.{}",
+                      joined_pathbuf
+                        .extension()
+                        .map_or(OsStr::new(""), |ext| ext)
+                        .to_string_lossy(),
+                      extension
+                    )
+                    .trim_matches('.'),
+                  );
                   // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
                   #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
                   let metadata_obt = fs::metadata(&joined_pathbuf_with_extension).await;
@@ -1354,7 +1413,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
                   // Create a file stream.
                   #[cfg(feature = "runtime-monoio")]
-                  let file_stream = MonoioFileStream::new(file, None, Some(content_length));
+                  let file_stream = MonoioFileStreamNoSpawn::new(file, None, Some(content_length));
                   #[cfg(feature = "runtime-tokio")]
                   let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
@@ -1503,6 +1562,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 new_remote_address: None,
               });
             } else {
+              // Directory listing is disabled
               return Ok(ResponseData {
                 request: Some(request),
                 response: None,
@@ -1512,6 +1572,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               });
             }
           } else {
+            // Static file serving can't be used on anything that's not a file or directory in Ferron
             return Ok(ResponseData {
               request: Some(request),
               response: None,

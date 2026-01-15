@@ -12,7 +12,7 @@ To install Ferron web server, run the following command:
 sudo bash -c "$(curl -fsSL https://get.ferron.sh/v2)"
 ```
 
-You will be prompted to choose the installation type, and possibly whenever to install packages containing `unzip` and `setcap`.
+You will be prompted to choose the installation type, and possibly whether to install packages containing `unzip` and `setcap`.
 
 ### 2. Access the web server
 

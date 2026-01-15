@@ -1,6 +1,6 @@
 [package]
 name = "ferron-yaml2kdl"
-version = "2.2.1"
+version = "2.3.2"
 edition = "2021"
 
 [package.metadata.winresource]
@@ -8,8 +8,13 @@ ProductName = "Ferron YAML to KDL configuration converter"
 
 [dependencies]
 clap = { version = "4.5.38", features = ["cargo"] }
-mimalloc = { workspace = true }
 ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core" }
+
+[target.'cfg(target_arch = "x86")'.dependencies]
+mimalloc = { workspace = true } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
+
+[target.'cfg(not(target_arch = "x86"))'.dependencies]
+mimalloc = { workspace = true, features = ["v3"] }
 
 [dev-dependencies]
 shiba = { workspace = true }

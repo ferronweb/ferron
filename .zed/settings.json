@@ -1,13 +1,29 @@
 {
-  "lsp": {
-    "rust-analyzer": {
-      "initialization_options": {
-        "linkedProjects": [
-          "./Cargo.toml",
-          "./build-prepare/Cargo.toml",
-          "./build-installer/Cargo.toml"
-        ]
-      }
+    "lsp": {
+        "biome": {
+            "settings": {
+                "config_path": "website/biome.json"
+            }
+        },
+        "rust-analyzer": {
+            "initialization_options": {
+                "linkedProjects": [
+                    "./Cargo.toml",
+                    "./build-prepare/Cargo.toml",
+                    "./build-installer/Cargo.toml"
+                ]
+            }
+        }
+    },
+    "languages": {
+        "JavaScript": {
+            "formatter": { "language_server": { "name": "biome" } }
+        },
+        "TypeScript": {
+            "formatter": { "language_server": { "name": "biome" } }
+        },
+        "Astro": { "formatter": { "language_server": { "name": "biome" } } },
+        "JSON": { "formatter": { "language_server": { "name": "biome" } } },
+        "CSS": { "formatter": { "language_server": { "name": "biome" } } }
     }
-  }
 }

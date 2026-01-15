@@ -38,7 +38,15 @@ use crate::util::read_proxy_header;
 #[cfg(feature = "runtime-monoio")]
 use crate::util::SendAsyncIo;
 
-// Tokio local executor
+static HTTP3_INVALID_HEADERS: [hyper::header::HeaderName; 5] = [
+  hyper::header::HeaderName::from_static("keep-alive"),
+  hyper::header::HeaderName::from_static("proxy-connection"),
+  hyper::header::TRANSFER_ENCODING,
+  hyper::header::TE,
+  hyper::header::UPGRADE,
+];
+
+/// Tokio local executor
 #[cfg(feature = "runtime-tokio")]
 #[derive(Clone, Copy, Debug)]
 pub struct TokioLocalExecutor;
@@ -105,6 +113,7 @@ pub fn create_http_handler(
 }
 
 /// HTTP handler function
+#[inline]
 #[allow(clippy::too_many_arguments)]
 async fn http_handler_fn(
   configurations: Arc<ServerConfigurations>,
@@ -217,10 +226,10 @@ async fn http_handler_fn(
 #[cfg(feature = "runtime-monoio")]
 enum MaybeTlsStream {
   /// TLS stream
-  Tls(TlsStream<TcpStreamPoll>),
+  Tls(TlsStream<SendAsyncIo<TcpStreamPoll>>),
 
   /// Plain TCP stream
-  Plain(TcpStreamPoll),
+  Plain(SendAsyncIo<TcpStreamPoll>),
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -251,7 +260,7 @@ async fn http_tcp_handler_fn(
   let _connection_reference = Arc::downgrade(&connection_reference);
   #[cfg(feature = "runtime-monoio")]
   let tcp_stream = match tcp_stream.into_poll_io() {
-    Ok(stream) => stream,
+    Ok(stream) => SendAsyncIo::new(stream),
     Err(err) => {
       for logging_tx in configurations
         .find_global_configuration()
@@ -483,7 +492,7 @@ async fn http_tcp_handler_fn(
       }
     } else {
       #[cfg(feature = "runtime-monoio")]
-      let io = MonoioIo::new(SendAsyncIo::new(tls_stream));
+      let io = MonoioIo::new(tls_stream);
 
       #[cfg(feature = "runtime-monoio")]
       let http1_builder = {
@@ -564,7 +573,7 @@ async fn http_tcp_handler_fn(
     }
   } else if let MaybeTlsStream::Plain(stream) = maybe_tls_stream {
     #[cfg(feature = "runtime-monoio")]
-    let io = MonoioIo::new(SendAsyncIo::new(stream));
+    let io = MonoioIo::new(stream);
     #[cfg(feature = "runtime-tokio")]
     let io = TokioIo::new(stream);
 
@@ -648,6 +657,7 @@ async fn http_tcp_handler_fn(
 }
 
 /// HTTP/3 handler function
+#[inline]
 #[allow(clippy::too_many_arguments)]
 async fn http_quic_handler_fn(
   connection_attempt: quinn::Incoming,
@@ -659,7 +669,7 @@ async fn http_quic_handler_fn(
 ) {
   match connection_attempt.await {
     Ok(connection) => {
-      let _connection_reference = Arc::downgrade(&connection_reference);
+      let connection_reference = Arc::downgrade(&connection_reference);
       let mut h3_conn: h3::server::Connection<h3_quinn::Connection, Bytes> =
         match h3::server::Connection::new(h3_quinn::Connection::new(connection)).await {
           Ok(h3_conn) => h3_conn,
@@ -679,22 +689,36 @@ async fn http_quic_handler_fn(
         };
 
       loop {
-        match h3_conn.accept().await {
+        match crate::runtime::select! {
+            biased;
+
+            _ = shutdown_rx.cancelled() => {
+              h3_conn.shutdown(0).await.unwrap_or_default();
+              return;
+            }
+            result = h3_conn.accept() => {
+              result
+            }
+        } {
           Ok(Some(resolver)) => {
             let configurations = configurations.clone();
+            let connection_reference = connection_reference.clone();
             crate::runtime::spawn(async move {
+              let _connection_reference = connection_reference;
               let (request, stream) = match resolver.resolve_request().await {
                 Ok(resolved) => resolved,
                 Err(err) => {
-                  for logging_tx in configurations
-                    .find_global_configuration()
-                    .as_ref()
-                    .map_or(&vec![], |c| &c.observability.log_channels)
-                  {
-                    logging_tx
-                      .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                      .await
-                      .unwrap_or_default();
+                  if !err.is_h3_no_error() {
+                    for logging_tx in configurations
+                      .find_global_configuration()
+                      .as_ref()
+                      .map_or(&vec![], |c| &c.observability.log_channels)
+                    {
+                      logging_tx
+                        .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+                        .await
+                        .unwrap_or_default();
+                    }
                   }
                   return;
                 }
@@ -753,20 +777,35 @@ async fn http_quic_handler_fn(
                   return;
                 }
               };
+              let response_headers = response.headers_mut();
               if let Ok(http_date) = httpdate::fmt_http_date(SystemTime::now()).try_into() {
-                response.headers_mut().entry(hyper::header::DATE).or_insert(http_date);
+                response_headers.entry(hyper::header::DATE).or_insert(http_date);
+              }
+              for header in &HTTP3_INVALID_HEADERS {
+                response_headers.remove(header);
+              }
+              if let Some(connection_header) = response_headers
+                .remove(hyper::header::CONNECTION)
+                .as_ref()
+                .and_then(|v| v.to_str().ok())
+              {
+                for name in connection_header.split(',') {
+                  response_headers.remove(name.trim());
+                }
               }
               let (response_parts, mut response_body) = response.into_parts();
               if let Err(err) = send.send_response(Response::from_parts(response_parts, ())).await {
-                for logging_tx in configurations
-                  .find_global_configuration()
-                  .as_ref()
-                  .map_or(&vec![], |c| &c.observability.log_channels)
-                {
-                  logging_tx
-                    .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                    .await
-                    .unwrap_or_default();
+                if !err.is_h3_no_error() {
+                  for logging_tx in configurations
+                    .find_global_configuration()
+                    .as_ref()
+                    .map_or(&vec![], |c| &c.observability.log_channels)
+                  {
+                    logging_tx
+                      .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+                      .await
+                      .unwrap_or_default();
+                  }
                 }
                 return;
               }
@@ -778,15 +817,17 @@ async fn http_quic_handler_fn(
                       match frame.into_data() {
                         Ok(data) => {
                           if let Err(err) = send.send_data(data).await {
-                            for logging_tx in configurations
-                              .find_global_configuration()
-                              .as_ref()
-                              .map_or(&vec![], |c| &c.observability.log_channels)
-                            {
-                              logging_tx
-                                .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                                .await
-                                .unwrap_or_default();
+                            if !err.is_h3_no_error() {
+                              for logging_tx in configurations
+                                .find_global_configuration()
+                                .as_ref()
+                                .map_or(&vec![], |c| &c.observability.log_channels)
+                              {
+                                logging_tx
+                                  .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+                                  .await
+                                  .unwrap_or_default();
+                              }
                             }
                             return;
                           }
@@ -813,15 +854,17 @@ async fn http_quic_handler_fn(
                         Ok(trailers) => {
                           had_trailers = true;
                           if let Err(err) = send.send_trailers(trailers).await {
-                            for logging_tx in configurations
-                              .find_global_configuration()
-                              .as_ref()
-                              .map_or(&vec![], |c| &c.observability.log_channels)
-                            {
-                              logging_tx
-                                .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                                .await
-                                .unwrap_or_default();
+                            if !err.is_h3_no_error() {
+                              for logging_tx in configurations
+                                .find_global_configuration()
+                                .as_ref()
+                                .map_or(&vec![], |c| &c.observability.log_channels)
+                              {
+                                logging_tx
+                                  .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+                                  .await
+                                  .unwrap_or_default();
+                              }
                             }
                             return;
                           }
@@ -856,21 +899,24 @@ async fn http_quic_handler_fn(
                         .await
                         .unwrap_or_default();
                     }
+
                     return;
                   }
                 }
               }
               if !had_trailers {
                 if let Err(err) = send.finish().await {
-                  for logging_tx in configurations
-                    .find_global_configuration()
-                    .as_ref()
-                    .map_or(&vec![], |c| &c.observability.log_channels)
-                  {
-                    logging_tx
-                      .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                      .await
-                      .unwrap_or_default();
+                  if !err.is_h3_no_error() {
+                    for logging_tx in configurations
+                      .find_global_configuration()
+                      .as_ref()
+                      .map_or(&vec![], |c| &c.observability.log_channels)
+                    {
+                      logging_tx
+                        .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+                        .await
+                        .unwrap_or_default();
+                    }
                   }
                 }
               }
@@ -878,21 +924,20 @@ async fn http_quic_handler_fn(
           }
           Ok(None) => break,
           Err(err) => {
-            for logging_tx in configurations
-              .find_global_configuration()
-              .as_ref()
-              .map_or(&vec![], |c| &c.observability.log_channels)
-            {
-              logging_tx
-                .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                .await
-                .unwrap_or_default();
+            if !err.is_h3_no_error() {
+              for logging_tx in configurations
+                .find_global_configuration()
+                .as_ref()
+                .map_or(&vec![], |c| &c.observability.log_channels)
+              {
+                logging_tx
+                  .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+                  .await
+                  .unwrap_or_default();
+              }
             }
             return;
           }
-        }
-        if shutdown_rx.is_cancelled() {
-          h3_conn.shutdown(0).await.unwrap_or_default();
         }
       }
     }

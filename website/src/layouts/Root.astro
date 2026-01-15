@@ -1,18 +1,18 @@
 ---
 import "../styles/global.css";
-import { SEO } from "astro-seo";
 import { Font } from "astro:assets";
 import { ClientRouter } from "astro:transitions";
+import { SEO } from "astro-seo";
 ---
 
 <!doctype html>
 <html lang="en" transition:animate="none">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width" />
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <Font cssVariable="--font-funnel-sans" />
-    <Font cssVariable="--font-jetbrains-mono" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <Font cssVariable="--font-funnel-sans"/>
+    <Font cssVariable="--font-jetbrains-mono"/>
     <SEO
       title={Astro.props.title
         ? `${Astro.props.title} - Ferron`
@@ -41,10 +41,10 @@ import { ClientRouter } from "astro:transitions";
         description: Astro.props.description
       }}
     />
-    <ClientRouter />
+    <ClientRouter/>
   </head>
   <body>
-    <slot />
+    <slot/>
   </body>
 </html>
 

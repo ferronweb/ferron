@@ -8,7 +8,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::future::Either;
-use futures_util::stream::{StreamExt, TryStreamExt};
+use futures_util::stream::TryStreamExt;
 use hashlink::LinkedHashMap;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, StreamBody};
@@ -19,7 +19,7 @@ use hyper::{header, Request, Response, StatusCode};
 use monoio::io::IntoPollIo;
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
 use tokio::sync::RwLock;
@@ -30,15 +30,14 @@ use tokio_util::sync::CancellationToken;
 use crate::util::cgi::CgiResponse;
 use crate::util::fcgi::{
   construct_fastcgi_name_value_pair, construct_fastcgi_record, FcgiDecodedData, FcgiDecoder, FcgiEncoder,
+  FcgiProcessedStream,
 };
-use crate::util::{Copier, ReadToEndFuture, SplitStreamByMapExt};
+use crate::util::SplitStreamByMapExt;
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use ferron_common::util::{ModuleCache, TtlCache, SERVER_SOFTWARE};
 use ferron_common::{get_entries, get_entries_for_validation, get_entry, get_value};
-
-const MAX_RESPONSE_CHANNEL_CAPACITY: usize = 2;
 
 /// A FastCGI module loader
 #[allow(clippy::type_complexity)]
@@ -744,7 +743,7 @@ async fn execute_fastcgi_with_environment_variables(
   }
 
   if socket_data.encrypted {
-    environment_variables.insert("HTTPS".to_string(), "ON".to_string());
+    environment_variables.insert("HTTPS".to_string(), "on".to_string());
   }
 
   for (header_name, header_value) in request.headers().iter() {
@@ -879,7 +878,7 @@ async fn execute_fastcgi(
         },
       }
     }
-    _ => Err(anyhow::anyhow!("Only HTTP and HTTPS reverse proxy URLs are supported."))?,
+    _ => Err(anyhow::anyhow!("Only TCP and Unix socket URLs are supported."))?,
   };
 
   // Construct and send BEGIN_REQUEST record
@@ -926,9 +925,20 @@ async fn execute_fastcgi(
 
   let mut cgi_response = CgiResponse::new(stdout);
 
-  ferron_common::runtime::spawn(Copier::with_zero_packet_writing(cgi_stdin_reader, stdin).copy());
+  ferron_common::runtime::spawn(async move {
+    let (mut cgi_stdin_reader, mut stdin) = (cgi_stdin_reader, stdin);
+    let _ = tokio::io::copy(&mut cgi_stdin_reader, &mut stdin).await;
 
-  let stderr_read_future = ReadToEndFuture::new(stderr);
+    // Send terminating STDIN packet
+    let _ = stdin.write(&[]).await;
+    let _ = stdin.flush().await;
+  });
+
+  let stderr_read_future = async move {
+    let mut stderr = stderr;
+    let mut buf = Vec::new();
+    stderr.read_to_end(&mut buf).await.map(|_| buf)
+  };
   let mut stderr_read_future_pinned = Box::pin(stderr_read_future);
 
   let mut headers = [EMPTY_HEADER; 128];
@@ -956,7 +966,13 @@ async fn execute_fastcgi(
                 .await;
             }
             return Ok(
-              ResponseData { request: None, response: None, response_status: Some(StatusCode::INTERNAL_SERVER_ERROR), response_headers: None, new_remote_address: None }
+              ResponseData {
+                request: None,
+                response: None,
+                response_status: Some(StatusCode::INTERNAL_SERVER_ERROR),
+                response_headers: None,
+                new_remote_address: None
+              }
             );
         },
     }
@@ -1002,25 +1018,9 @@ async fn execute_fastcgi(
 
   response_builder = response_builder.status(status_code);
 
-  let mut reader_stream = ReaderStream::new(cgi_response);
-  let (reader_stream_tx, reader_stream_rx) = async_channel::bounded(MAX_RESPONSE_CHANNEL_CAPACITY);
+  let reader_stream = ReaderStream::new(cgi_response);
   let stderr_cancel = CancellationToken::new();
-  let stderr_cancel_clone = stderr_cancel.clone();
-  ferron_common::runtime::spawn(async move {
-    while let Some(chunk) = reader_stream.next().await {
-      if chunk.as_ref().is_ok_and(|c| c.is_empty()) {
-        // Received empty STDOUT chunk, likely indicating end of output
-        break;
-      }
-      if reader_stream_tx.send(chunk).await.is_err() {
-        // Pipe is probably closed, stop sending data
-        stderr_cancel_clone.cancel();
-        break;
-      }
-    }
-    reader_stream_tx.close();
-  });
-  let stream_body = StreamBody::new(reader_stream_rx.map_ok(Frame::data));
+  let stream_body = StreamBody::new(FcgiProcessedStream::new(reader_stream, stderr_cancel.clone()).map_ok(Frame::data));
   let boxed_body = BodyExt::boxed(stream_body);
 
   let response = response_builder.body(boxed_body)?;
@@ -1033,9 +1033,10 @@ async fn execute_fastcgi(
       stderr_vec_result = stderr_read_future_pinned => {
         let stderr_vec = stderr_vec_result.unwrap_or(vec![]);
         let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
-        if !stderr_string.is_empty() {
+        let stderr_string_trimmed = stderr_string.trim();
+        if !stderr_string_trimmed.is_empty() {
           error_logger_clone
-            .log(&format!("There were FastCGI errors: {stderr_string}"))
+            .log(&format!("There were FastCGI errors: {stderr_string_trimmed}"))
             .await;
         }
       }
