@@ -1460,6 +1460,7 @@ dependencies = [
  "tokio-util",
  "urlencoding",
  "webpki-roots 1.0.5",
+ "xxhash-rust",
 ]
 
 [[package]]
