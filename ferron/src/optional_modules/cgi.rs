@@ -28,7 +28,6 @@ use tokio_util::io::{ReaderStream, StreamReader};
 
 use crate::ferron_res::server_software::SERVER_SOFTWARE;
 use crate::ferron_util::cgi_response::CgiResponse;
-use crate::ferron_util::copy_move::Copier;
 use crate::ferron_util::ttl_cache::TtlCache;
 
 pub fn server_module_init(
@@ -657,7 +656,12 @@ async fn execute_cgi(
 
   let mut cgi_response = CgiResponse::new(stdout);
 
-  let stdin_copy_future = Copier::new(cgi_stdin_reader, stdin).copy();
+  let stdin_copy_future = async move {
+    let (mut cgi_stdin_reader, mut stdin) = (cgi_stdin_reader, stdin);
+    tokio::io::copy(&mut cgi_stdin_reader, &mut stdin)
+      .await
+      .map(|_| ())
+  };
   let mut stdin_copy_future_pinned = Box::pin(stdin_copy_future);
 
   let mut headers = [EMPTY_HEADER; 128];

@@ -21,7 +21,7 @@ use hyper::body::{Bytes, Frame};
 use hyper::{header, Response, StatusCode};
 use hyper_tungstenite::HyperWebsocket;
 use tokio::fs;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::runtime::Handle;
 use tokio::sync::RwLock;
@@ -30,12 +30,10 @@ use tokio_util::io::{ReaderStream, SinkWriter, StreamReader};
 
 use crate::ferron_res::server_software::SERVER_SOFTWARE;
 use crate::ferron_util::cgi_response::CgiResponse;
-use crate::ferron_util::copy_move::Copier;
 use crate::ferron_util::fcgi_decoder::{FcgiDecodedData, FcgiDecoder};
 use crate::ferron_util::fcgi_encoder::FcgiEncoder;
 use crate::ferron_util::fcgi_name_value_pair::construct_fastcgi_name_value_pair;
 use crate::ferron_util::fcgi_record::construct_fastcgi_record;
-use crate::ferron_util::read_to_end_move::ReadToEndFuture;
 use crate::ferron_util::split_stream_by_map::SplitStreamByMapExt;
 use crate::ferron_util::ttl_cache::TtlCache;
 
@@ -746,10 +744,25 @@ async fn execute_fastcgi(
 
   let mut cgi_response = CgiResponse::new(stdout);
 
-  let stdin_copy_future = Copier::with_zero_packet_writing(cgi_stdin_reader, stdin).copy();
+  let stdin_copy_future = async move {
+    let (mut cgi_stdin_reader, mut stdin) = (cgi_stdin_reader, stdin);
+    let result1 = tokio::io::copy(&mut cgi_stdin_reader, &mut stdin)
+      .await
+      .map(|_| ());
+
+    // Send terminating STDIN packet
+    let result2 = stdin.write(&[]).await.map(|_| ());
+    let result3 = stdin.flush().await.map(|_| ());
+
+    result1.and(result2).and(result3)
+  };
   let mut stdin_copy_future_pinned = Box::pin(stdin_copy_future);
 
-  let stderr_read_future = ReadToEndFuture::new(stderr);
+  let stderr_read_future = async move {
+    let mut stderr = stderr;
+    let mut buf = Vec::new();
+    stderr.read_to_end(&mut buf).await.map(|_| buf)
+  };
   let mut stderr_read_future_pinned = Box::pin(stderr_read_future);
 
   let mut headers = [EMPTY_HEADER; 128];
