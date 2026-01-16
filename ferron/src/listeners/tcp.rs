@@ -16,7 +16,7 @@ pub fn create_tcp_listener(
   address: SocketAddr,
   encrypted: bool,
   tx: Sender<ConnectionData>,
-  enable_uring: bool,
+  enable_uring: Option<bool>,
   logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
   tcp_buffer_sizes: (Option<usize>, Option<usize>),

@@ -68,7 +68,7 @@ where
 pub fn create_http_handler(
   configurations: Arc<ServerConfigurations>,
   rx: Receiver<ConnectionData>,
-  enable_uring: bool,
+  enable_uring: Option<bool>,
   tls_configs: HashMap<u16, Arc<ServerConfig>>,
   http3_enabled: bool,
   acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,

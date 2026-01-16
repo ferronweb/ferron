@@ -9,9 +9,9 @@ compile_error!("Can't compile Ferron with no main runtimes enabled");
 
 /// Creates a new asynchronous runtime using Monoio
 #[cfg(feature = "runtime-monoio")]
-pub fn new_runtime(future: impl Future, enable_uring: bool) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub fn new_runtime(future: impl Future, enable_uring: Option<bool>) -> Result<(), Box<dyn Error + Send + Sync>> {
   #[cfg(target_os = "linux")]
-  if enable_uring && monoio::utils::detect_uring() {
+  if enable_uring.is_none_or(|x| x) && monoio::utils::detect_uring() {
     let mut rt = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
       .enable_all()
       .attach_thread_pool(Box::new(BlockingThreadPool))
@@ -34,7 +34,7 @@ pub fn new_runtime(future: impl Future, enable_uring: bool) -> Result<(), Box<dy
 
 /// Creates a new asynchronous runtime using Tokio
 #[cfg(feature = "runtime-tokio")]
-pub fn new_runtime(future: impl Future, _enable_uring: bool) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub fn new_runtime(future: impl Future, _enable_uring: Option<bool>) -> Result<(), Box<dyn Error + Send + Sync>> {
   let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
   rt.block_on(async move {
     let local_set = tokio::task::LocalSet::new();

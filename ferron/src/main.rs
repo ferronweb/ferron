@@ -71,7 +71,7 @@ static TCP_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, CancellationToken>>
 #[allow(clippy::type_complexity)]
 static QUIC_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, (CancellationToken, Sender<Arc<ServerConfig>>)>>>> =
   LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
-static URING_ENABLED: LazyLock<Arc<Mutex<bool>>> = LazyLock::new(|| Arc::new(Mutex::new(true)));
+static URING_ENABLED: LazyLock<Arc<Mutex<Option<bool>>>> = LazyLock::new(|| Arc::new(Mutex::new(None)));
 static LISTENER_LOGGING_CHANNEL: LazyLock<Arc<(Sender<LogMessage>, Receiver<LogMessage>)>> =
   LazyLock::new(|| Arc::new(async_channel::unbounded()));
 
@@ -1351,8 +1351,7 @@ fn before_starting_server(
       let enable_uring = global_configuration
         .as_deref()
         .and_then(|c| get_value!("io_uring", c))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
+        .and_then(|v| v.as_bool());
       let mut uring_enabled_locked = URING_ENABLED
         .lock()
         .map_err(|_| anyhow::anyhow!("Can't access the enabled `io_uring` option"))?;
