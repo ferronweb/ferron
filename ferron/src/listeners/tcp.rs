@@ -12,6 +12,7 @@ use tokio_util::sync::CancellationToken;
 use crate::listener_handler_communication::{Connection, ConnectionData};
 
 /// Creates a TCP listener
+#[allow(clippy::too_many_arguments)]
 pub fn create_tcp_listener(
   address: SocketAddr,
   encrypted: bool,
@@ -20,6 +21,7 @@ pub fn create_tcp_listener(
   logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
   tcp_buffer_sizes: (Option<usize>, Option<usize>),
+  io_uring_disabled: Sender<Option<std::io::Error>>,
 ) -> Result<CancellationToken, Box<dyn Error + Send + Sync>> {
   let shutdown_tx = CancellationToken::new();
   let shutdown_rx = shutdown_tx.clone();
@@ -38,6 +40,9 @@ pub fn create_tcp_listener(
           return;
         }
       };
+      io_uring_disabled
+        .send_blocking(rt.return_io_uring_error())
+        .unwrap_or_default();
       rt.run(async move {
         let tcp_listener_future = tcp_listener_fn(
           address,

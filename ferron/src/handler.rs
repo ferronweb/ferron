@@ -74,6 +74,7 @@ pub fn create_http_handler(
   acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
   acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   enable_proxy_protocol: bool,
+  io_uring_disabled: Sender<Option<std::io::Error>>,
 ) -> Result<CancellationToken, Box<dyn Error + Send + Sync>> {
   let shutdown_tx = CancellationToken::new();
   let shutdown_rx = shutdown_tx.clone();
@@ -92,6 +93,9 @@ pub fn create_http_handler(
           return;
         }
       };
+      io_uring_disabled
+        .send_blocking(rt.return_io_uring_error())
+        .unwrap_or_default();
       rt.run(async move {
         if let Some(error) = http_handler_fn(
           configurations,

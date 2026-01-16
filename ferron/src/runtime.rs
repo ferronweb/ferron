@@ -30,14 +30,25 @@ impl Runtime {
 
     #[cfg(all(feature = "runtime-monoio", target_os = "linux"))]
     if enable_uring.is_none_or(|x| x) && monoio::utils::detect_uring() {
-      let rt = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+      match monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
         .enable_all()
         .attach_thread_pool(Box::new(BlockingThreadPool))
-        .build()?;
-      return Ok(Self {
-        inner: RuntimeInner::MonoioIouring(rt),
-        io_uring_enable_configured: None,
-      });
+        .build()
+      {
+        Ok(rt) => {
+          return Ok(Self {
+            inner: RuntimeInner::MonoioIouring(rt),
+            io_uring_enable_configured,
+          });
+        }
+        Err(e) => {
+          if enable_uring.is_some() {
+            Err(e)?;
+          } else {
+            io_uring_enable_configured = e.raw_os_error();
+          }
+        }
+      }
     }
     #[cfg(not(all(feature = "runtime-monoio", target_os = "linux")))]
     let _ = enable_uring;
@@ -68,7 +79,6 @@ impl Runtime {
   }
 
   /// Return the OS error if `io_uring` couldn't be configured
-  #[allow(dead_code)]
   pub fn return_io_uring_error(&self) -> Option<std::io::Error> {
     self.io_uring_enable_configured.map(std::io::Error::from_raw_os_error)
   }

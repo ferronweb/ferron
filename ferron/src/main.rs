@@ -1419,6 +1419,29 @@ fn before_starting_server(
         Some(global_logging_tx.clone())
       };
 
+      let (io_uring_disabled_tx, io_uring_disabled_rx) = async_channel::unbounded();
+      if let Some(global_logger) = &global_logger {
+        let global_logger = global_logger.clone();
+        secondary_runtime_ref.spawn(async move {
+          while let Ok(err) = io_uring_disabled_rx.recv().await {
+            if let Some(err) = err {
+              global_logger
+                .send(LogMessage::new(
+                  format!("Can't configure io_uring: {err}. Ferron will run with io_uring disabled."),
+                  true,
+                ))
+                .await
+                .unwrap_or_default();
+              break;
+            }
+          }
+
+          io_uring_disabled_rx.close();
+        });
+      } else {
+        io_uring_disabled_rx.close();
+      }
+
       // Spawn request handler threads
       let mut handler_shutdown_channels = Vec::new();
       for _ in 0..available_parallelism {
@@ -1431,6 +1454,7 @@ fn before_starting_server(
           acme_tls_alpn_01_configs.clone(),
           acme_http_01_resolvers.clone(),
           enable_proxy_protocol,
+          io_uring_disabled_tx.clone(),
         )?);
       }
 
@@ -1460,6 +1484,7 @@ fn before_starting_server(
             global_logger.clone(),
             first_startup,
             (tcp_send_buffer_size, tcp_recv_buffer_size),
+            io_uring_disabled_tx.clone(),
           )?);
         }
       }

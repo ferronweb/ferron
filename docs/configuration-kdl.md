@@ -252,8 +252,8 @@ This configuration reference organizes directives by both **scope** (where they 
 
 - `listen_ip <listen_ip: string>`
   - This directive specifies the IP address to listen. Default: `listen_ip "::1"`
-- `io_uring [enable_io_uring: bool]`
-  - This directive specifies whether `io_uring` is enabled. This directive has no effect for systems that don't support `io_uring` and for web server builds that use Tokio instead of Monoio. Default: `io_uring #true`
+- `io_uring [enable_io_uring: bool|null]`
+  - This directive specifies whether `io_uring` is enabled. If set as `io_uring #null`, `io_uring` is enabled with fallback with `io_uring` disabled. This directive has no effect for systems that don't support `io_uring` and for web server builds that use Tokio instead of Monoio. Default: `io_uring #null`
 - `tcp_send_buffer <tcp_send_buffer: integer>`
   - This directive specifies the send buffer size in bytes for TCP listeners. Default: none
 - `tcp_recv_buffer <tcp_recv_buffer: integer>`
