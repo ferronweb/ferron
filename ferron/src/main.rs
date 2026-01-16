@@ -1427,7 +1427,7 @@ fn before_starting_server(
             if let Some(err) = err {
               global_logger
                 .send(LogMessage::new(
-                  format!("Can't configure io_uring: {err}. Ferron will run with io_uring disabled."),
+                  format!("Can't configure io_uring: {err}. Ferron may run with io_uring disabled."),
                   true,
                 ))
                 .await
