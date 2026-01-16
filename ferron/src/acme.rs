@@ -139,7 +139,7 @@ async fn set_in_cache(cache: &AcmeCache, key: &str, value: Vec<u8>) -> Result<()
     AcmeCache::File(path) => {
       tokio::fs::create_dir_all(path).await.unwrap_or_default();
       let mut open_options = tokio::fs::OpenOptions::new();
-      open_options.write(true).create(true);
+      open_options.write(true).create(true).truncate(true);
 
       #[cfg(unix)]
       open_options.mode(0o600); // Don't allow others to read or write
