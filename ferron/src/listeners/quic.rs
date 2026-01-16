@@ -107,11 +107,18 @@ pub fn create_quic_listener(
   std::thread::Builder::new()
     .name(format!("QUIC listener for {address}"))
     .spawn(move || {
-      let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("failed to build Tokio runtime");
-      rt.block_on(async move {
+      let mut rt = match crate::runtime::Runtime::new_runtime_tokio_only() {
+        Ok(rt) => rt,
+        Err(error) => {
+          listen_error_tx
+            .send_blocking(Some(
+              anyhow::anyhow!("Can't create async runtime: {error}").into_boxed_dyn_error(),
+            ))
+            .unwrap_or_default();
+          return;
+        }
+      };
+      rt.run(async move {
         if let Err(error) = quic_listener_fn(
           address,
           tls_config,

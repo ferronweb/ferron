@@ -81,28 +81,35 @@ pub fn create_http_handler(
   std::thread::Builder::new()
     .name("Request handler".to_string())
     .spawn(move || {
-      crate::runtime::new_runtime(
-        async move {
-          if let Some(error) = http_handler_fn(
-            configurations,
-            rx,
-            &handler_init_tx,
-            shutdown_rx,
-            tls_configs,
-            http3_enabled,
-            acme_tls_alpn_01_configs,
-            acme_http_01_resolvers,
-            enable_proxy_protocol,
-          )
-          .await
-          .err()
-          {
-            handler_init_tx.send(Some(error)).await.unwrap_or_default();
-          }
-        },
-        enable_uring,
-      )
-      .unwrap();
+      let mut rt = match crate::runtime::Runtime::new_runtime(enable_uring) {
+        Ok(rt) => rt,
+        Err(error) => {
+          handler_init_tx
+            .send_blocking(Some(
+              anyhow::anyhow!("Can't create async runtime: {error}").into_boxed_dyn_error(),
+            ))
+            .unwrap_or_default();
+          return;
+        }
+      };
+      rt.run(async move {
+        if let Some(error) = http_handler_fn(
+          configurations,
+          rx,
+          &handler_init_tx,
+          shutdown_rx,
+          tls_configs,
+          http3_enabled,
+          acme_tls_alpn_01_configs,
+          acme_http_01_resolvers,
+          enable_proxy_protocol,
+        )
+        .await
+        .err()
+        {
+          handler_init_tx.send(Some(error)).await.unwrap_or_default();
+        }
+      });
     })?;
 
   if let Some(error) = listen_error_rx.recv_blocking()? {
