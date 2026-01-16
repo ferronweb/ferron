@@ -177,6 +177,11 @@ async fn http_handler_fn(
     crate::runtime::spawn(async move {
       match conn_data.connection {
         crate::listener_handler_communication::Connection::Tcp(tcp_stream) => {
+          // Toggle O_NONBLOCK for TCP stream, when using Monoio.
+          // Unset it when io_uring is enabled, and set it otherwise.
+          #[cfg(feature = "runtime-monoio")]
+          let _ = tcp_stream.set_nonblocking(monoio::utils::is_legacy());
+
           #[cfg(feature = "runtime-monoio")]
           let tcp_stream = match TcpStream::from_std(tcp_stream) {
             Ok(stream) => stream,
