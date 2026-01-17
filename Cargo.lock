@@ -376,9 +376,9 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.5.17"
+version = "1.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d81b5b2898f6798ad58f484856768bca817e3cd9de0974c24ae0f1113fe88f1b"
+checksum = "959dab27ce613e6c9658eb3621064d0e2027e5f2acb65bc526a43577facea557"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -400,15 +400,16 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-route53"
-version = "1.104.0"
+version = "1.105.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "279e5f5ba8fbb9af59e8fddf2dc589196cdc8c62db0c258ffe8f1ca49d14f489"
+checksum = "ce7356586fdbdaf03005c7b6ecdb678f1f24be60531531f5262b0b636324dbac"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
  "aws-smithy-http",
  "aws-smithy-json",
+ "aws-smithy-observability",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -422,15 +423,16 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sts"
-version = "1.95.0"
+version = "1.96.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55542378e419558e6b1f398ca70adb0b2088077e79ad9f14eb09441f2f7b2164"
+checksum = "357e9a029c7524db6a0099cd77fbd5da165540339e7296cca603531bc783b56c"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-smithy-async",
  "aws-smithy-http",
  "aws-smithy-json",
+ "aws-smithy-observability",
  "aws-smithy-query",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
@@ -825,9 +827,9 @@ source = "git+https://github.com/DorianNiemiecSVRJS/rust-cache-control.git#2229d
 
 [[package]]
 name = "cc"
-version = "1.2.52"
+version = "1.2.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd4932aefd12402b36c60956a4fe0035421f544799057659ff86f923657aada3"
+checksum = "755d2fce177175ffca841e9a06afdb2c4ab0f593d53b4dee48147dfaade85932"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1313,7 +1315,7 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "ferron"
-version = "2.3.2"
+version = "2.4.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1373,7 +1375,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-common"
-version = "2.3.2"
+version = "2.4.0"
 dependencies = [
  "async-channel",
  "async-trait",
@@ -1396,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-dns-builtin"
-version = "2.3.2"
+version = "2.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1413,7 +1415,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-load-modules"
-version = "2.3.2"
+version = "2.4.0"
 dependencies = [
  "anyhow",
  "ferron-common",
@@ -1427,7 +1429,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-modules-builtin"
-version = "2.3.2"
+version = "2.4.0"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -1474,7 +1476,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-builtin"
-version = "2.3.2"
+version = "2.4.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1496,7 +1498,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-passwd"
-version = "2.3.2"
+version = "2.4.0"
 dependencies = [
  "clap",
  "mimalloc",
@@ -1508,7 +1510,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-precompress"
-version = "2.3.2"
+version = "2.4.0"
 dependencies = [
  "brotli",
  "clap",
@@ -1522,7 +1524,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-yaml2kdl"
-version = "2.3.2"
+version = "2.4.0"
 dependencies = [
  "clap",
  "ferron-yaml2kdl-core",
@@ -1533,7 +1535,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-yaml2kdl-core"
-version = "2.3.2"
+version = "2.4.0"
 dependencies = [
  "anyhow",
  "glob",
@@ -1544,9 +1546,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f449e6c6c08c865631d4890cfacf252b3d396c9bcc83adb6623cdb02a8336c41"
+checksum = "8591b0bcc8a98a64310a2fae1bb3e9b8564dd10e381e6e28010fde8e8e8568db"
 
 [[package]]
 name = "flate2"
@@ -3623,9 +3625,9 @@ dependencies = [
 
 [[package]]
 name = "rustc-demangle"
-version = "0.1.26"
+version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56f7d92ca342cea22a06f2121d944b4fd82af56988c270852495420f961d4ace"
+checksum = "b50b8869d9fc858ce7266cce0194bd74df58b9d0e3f6df3a9fc8eb470d95c09d"
 
 [[package]]
 name = "rustc-hash"
@@ -3693,9 +3695,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pki-types"
-version = "1.13.2"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21e6f2ab2928ca4291b86736a8bd920a277a399bba1589409d72154ff87c1282"
+checksum = "be040f8b0a225e40375822a563fa9524378b9d63112f53e19ffff34df5d33fdd"
 dependencies = [
  "web-time",
  "zeroize",
@@ -3730,9 +3732,9 @@ checksum = "f87165f0995f63a9fbeea62b64d10b4d9d8e78ec6d7d51fb2125fda7bb36788f"
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.8"
+version = "0.103.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ffdfa2f5286e2247234e03f680868ac2815974dc39e00ea15adc445d0aafe52"
+checksum = "d7df23109aa6c1567d1c575b9952556388da57401e4ace1d15f79eedad0d8f53"
 dependencies = [
  "aws-lc-rs",
  "ring",
@@ -4690,9 +4692,9 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "wasip2"
-version = "1.0.1+wasi-0.2.4"
+version = "1.0.2+wasi-0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0562428422c63773dad2c345a1882263bbf4d65cf3f42e90921f787ef5ad58e7"
+checksum = "9517f9239f02c069db75e65f174b3da828fe5f5b945c4dd26bd25d89c03ebcf5"
 dependencies = [
  "wit-bindgen",
 ]
@@ -5333,9 +5335,9 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen"
-version = "0.46.0"
+version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
+checksum = "d7249219f66ced02969388cf2bb044a09756a083d0fab1e566056b04d9fbcaa5"
 
 [[package]]
 name = "writeable"
