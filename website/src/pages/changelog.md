@@ -4,6 +4,12 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.4.1
+
+**Released in January 17, 2026**
+
+- Fixed a rarely occurring crash when upgrading backend server's HTTP connection as a reverse proxy.
+
 ## Ferron 2.4.0
 
 **Released in January 17, 2026**
