@@ -7,7 +7,7 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -47,6 +47,7 @@ use ferron_common::{
 };
 use ferron_common::{get_entries, get_entries_for_validation, get_value};
 
+use crate::util::http_proxy::{SendRequest, SendRequestWrapper};
 #[cfg(feature = "runtime-monoio")]
 use crate::util::{SendTcpStreamPoll, SendTcpStreamPollDropGuard};
 #[cfg(all(feature = "runtime-monoio", unix))]
@@ -61,97 +62,6 @@ enum LoadBalancerAlgorithm {
   RoundRobin(Arc<AtomicUsize>),
   LeastConnections(Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>),
   TwoRandomChoices(Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>),
-}
-
-enum SendRequest {
-  Http1(hyper::client::conn::http1::SendRequest<BoxBody<Bytes, std::io::Error>>),
-  Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, std::io::Error>>),
-}
-
-impl SendRequest {
-  #[inline]
-  fn is_closed(&self) -> bool {
-    match self {
-      SendRequest::Http1(sender) => sender.is_closed(),
-      SendRequest::Http2(sender) => sender.is_closed(),
-    }
-  }
-
-  #[inline]
-  async fn ready(&mut self) -> bool {
-    match self {
-      SendRequest::Http1(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-      SendRequest::Http2(sender) => !sender.is_closed() && sender.ready().await.is_ok(),
-    }
-  }
-
-  #[inline]
-  fn is_ready(&self) -> bool {
-    match self {
-      SendRequest::Http1(sender) => sender.is_ready() && !sender.is_closed(),
-      SendRequest::Http2(sender) => sender.is_ready() && !sender.is_closed(),
-    }
-  }
-
-  #[inline]
-  async fn send_request(
-    &mut self,
-    request: Request<BoxBody<Bytes, std::io::Error>>,
-  ) -> Result<Response<hyper::body::Incoming>, hyper::Error> {
-    match self {
-      SendRequest::Http1(sender) => sender.send_request(request).await,
-      SendRequest::Http2(sender) => sender.send_request(request).await,
-    }
-  }
-}
-
-struct SendRequestWrapper {
-  inner: Option<SendRequest>,
-  instant: Instant,
-}
-
-impl SendRequestWrapper {
-  #[inline]
-  fn new(inner: SendRequest) -> Self {
-    Self {
-      inner: Some(inner),
-      instant: Instant::now(),
-    }
-  }
-
-  #[inline]
-  fn get(&mut self, timeout: Option<Duration>) -> (Option<SendRequest>, bool) {
-    let inner_mut = if let Some(inner) = self.inner.as_mut() {
-      inner
-    } else {
-      return (None, false);
-    };
-    if inner_mut.is_closed() || (inner_mut.is_ready() && timeout.is_some_and(|t| self.instant.elapsed() > t)) {
-      return (None, false);
-    }
-    (
-      if inner_mut.is_ready() {
-        self.inner.take()
-      } else {
-        self.instant = Instant::now();
-        None
-      },
-      true,
-    )
-  }
-
-  #[inline]
-  async fn wait_ready(&mut self, timeout: Option<Duration>) -> bool {
-    match self.inner.as_mut() {
-      None => false,
-      Some(inner) => {
-        if inner.is_ready() && timeout.is_some_and(|t| self.instant.elapsed() > t) {
-          return false;
-        }
-        inner.ready().await
-      }
-    }
-  }
 }
 
 type ProxyToVectorContentsBorrowed<'a> = (&'a str, Option<&'a str>, Option<usize>, Option<Duration>);
@@ -257,10 +167,10 @@ struct TrackedBody<B> {
 }
 
 impl<B> TrackedBody<B> {
-  fn new(inner: B, tracker: Arc<()>, tracker_pool: Option<Arc<UnsafeCell<ConnectionPoolItem>>>) -> Self {
+  fn new(inner: B, tracker: Option<Arc<()>>, tracker_pool: Option<Arc<UnsafeCell<ConnectionPoolItem>>>) -> Self {
     Self {
       inner,
-      _tracker: Some(tracker),
+      _tracker: tracker,
       _tracker_pool: tracker_pool,
     }
   }
@@ -273,6 +183,7 @@ where
   type Data = B::Data;
   type Error = B::Error;
 
+  #[inline]
   fn poll_frame(
     mut self: Pin<&mut Self>,
     cx: &mut Context<'_>,
@@ -280,10 +191,12 @@ where
     Pin::new(&mut self.inner).poll_frame(cx)
   }
 
+  #[inline]
   fn is_end_stream(&self) -> bool {
     self.inner.is_end_stream()
   }
 
+  #[inline]
   fn size_hint(&self) -> hyper::body::SizeHint {
     self.inner.size_hint()
   }
@@ -511,11 +424,13 @@ impl ModuleLoader for ReverseProxyModuleLoader {
           Err(anyhow::anyhow!("Invalid proxy backend server"))?
         } else if !entry.props.get("unix").is_none_or(|v| v.is_string()) {
           Err(anyhow::anyhow!("Invalid proxy Unix socket path"))?
-        } else if let Some(prop) = entry.props.get("limit") {
+        }
+        if let Some(prop) = entry.props.get("limit") {
           if !prop.is_null() && prop.as_i128().unwrap_or(0) < 1 {
             Err(anyhow::anyhow!("Invalid proxy connection limit for a backend server"))?
           }
-        } else if let Some(prop) = entry.props.get("idle_timeout") {
+        }
+        if let Some(prop) = entry.props.get("idle_timeout") {
           if !prop.is_null() && prop.as_i128().unwrap_or(0) < 1 {
             Err(anyhow::anyhow!(
               "Invalid proxy idle keep-alive connection timeout for a backend server"
@@ -679,7 +594,9 @@ impl ModuleLoader for ReverseProxyModuleLoader {
         } else if (!entry.values[0].is_integer() && !entry.values[0].is_null())
           || entry.values[0].as_i128().is_some_and(|v| v < 0)
         {
-          return Err(anyhow::anyhow!("Invalid global maximum concurrent connections configuration").into());
+          return Err(
+            anyhow::anyhow!("Invalid global maximum concurrent connections for reverse proxy configuration").into(),
+          );
         }
       }
     }
@@ -1935,20 +1852,17 @@ async fn http_proxy(
     }
   } else {
     let (response_parts, response_body) = proxy_response.into_parts();
-    let mut boxed_body = response_body.map_err(|e| std::io::Error::other(e.to_string())).boxed();
-    if let Some(tracked_connection) = tracked_connection {
-      boxed_body = TrackedBody::new(
-        boxed_body,
-        tracked_connection,
-        if enable_keepalive && !sender.is_closed() {
-          None
-        } else {
-          // Safety: this should be not modified, see the "unsafe" block below
-          Some(connection_pool_item.clone())
-        },
-      )
-      .boxed();
-    }
+    let boxed_body = TrackedBody::new(
+      response_body.map_err(|e| std::io::Error::other(e.to_string())),
+      tracked_connection,
+      if enable_keepalive && !sender.is_closed() {
+        None
+      } else {
+        // Safety: this should be not modified, see the "unsafe" block below
+        Some(connection_pool_item.clone())
+      },
+    )
+    .boxed();
     ResponseData {
       request: None,
       response: Some(Response::from_parts(response_parts, boxed_body)),
@@ -2093,20 +2007,17 @@ async fn http_proxy_kept_alive(
   } else {
     // For successful responses or when not intercepting errors, pass the backend response directly
     let (response_parts, response_body) = proxy_response.into_parts();
-    let mut boxed_body = response_body.map_err(|e| std::io::Error::other(e.to_string())).boxed();
-    if let Some(tracked_connection) = tracked_connection {
-      boxed_body = TrackedBody::new(
-        boxed_body,
-        tracked_connection,
-        if !sender.is_closed() {
-          None
-        } else {
-          // Safety: this should be not modified, see the "unsafe" block below
-          Some(connection_pool_item.clone())
-        },
-      )
-      .boxed();
-    }
+    let boxed_body = TrackedBody::new(
+      response_body.map_err(|e| std::io::Error::other(e.to_string())),
+      tracked_connection,
+      if !sender.is_closed() {
+        None
+      } else {
+        // Safety: this should be not modified, see the "unsafe" block below
+        Some(connection_pool_item.clone())
+      },
+    )
+    .boxed();
     ResponseData {
       request: None,
       response: Some(Response::from_parts(response_parts, boxed_body)),

@@ -75,8 +75,7 @@ if (begPage < 1) {
     <section
       class="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto"
     >
-      {
-        data.map((post, index) => {
+      {data.map((post, index) => {
           const truncatedDescription =
             post.data.description === undefined
               ? ""
@@ -155,11 +154,9 @@ if (begPage < 1) {
               </a>
             </div>
           );
-        })
-      }
+        })}
     </section>
-    {
-      (
+    {(
         <div class="flex-center mt-12">
           {lastPage > 1 && (
             <nav class="mx-auto flex w-full justify-center">
@@ -210,7 +207,6 @@ if (begPage < 1) {
             </nav>
           )}
         </div>
-      )
-    }
+      )}
   </main>
 </MainLayout>

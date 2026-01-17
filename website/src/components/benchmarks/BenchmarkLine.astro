@@ -56,14 +56,10 @@ const { data, unit, competitors } = Astro.props;
         {" "}| Benchmarks run on {Astro.props.system}, with the{" "}
         <code>{Astro.props.command}</code>
         {" "}command
-        {
-          Astro.props.linuxVersion ? ` | Linux kernel version ${Astro.props.linuxVersion}` : ""
-        }
-        {
-          Astro.props.date
+        {Astro.props.linuxVersion ? ` | Linux kernel version ${Astro.props.linuxVersion}` : ""}
+        {Astro.props.date
             ? ` | Benchmarks performed on ${format(Astro.props.date, "MMMM d, yyyy")}`
-            : ""
-        }
+            : ""}
       </p>
       {Astro.props.note && (
         <p><strong>Note:</strong> {Astro.props.note}</p>

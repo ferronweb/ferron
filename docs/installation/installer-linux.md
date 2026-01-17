@@ -34,7 +34,7 @@ Ferron installed via the installer for GNU/Linux has following file structure:
 
 You can update Ferron to the latest version using the `ferron-updater` command.
 
-## Upgrading from Ferron 1.x to Ferron 2.x
+## Upgrading from Ferron 1.x to Ferron 2
 
 To upgrade Ferron from 1.x to 2.x, run the following command:
 

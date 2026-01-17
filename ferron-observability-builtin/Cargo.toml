@@ -1,6 +1,6 @@
 [package]
 name = "ferron-observability-builtin"
-version = "2.3.2"
+version = "2.4.1"
 edition = "2021"
 
 [dependencies]
@@ -9,7 +9,7 @@ ferron-common = { workspace = true }
 
 # Error Handling & Utilities
 anyhow = "1.0.98"
-chrono = "0.4.41"
+chrono = { version = "0.4.41", optional = true }
 
 # Async Runtime & Concurrency
 tokio = { version = "1.45.0", features = [
@@ -75,7 +75,7 @@ hashlink = { version = "0.11.0", optional = true }
 
 [features]
 default = ["logfile", "otlp"]
-logfile = []
+logfile = ["chrono"]
 otlp = [
   "opentelemetry-otlp",
   "opentelemetry-http",

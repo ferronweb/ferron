@@ -11,8 +11,8 @@ import { SEO } from "astro-seo";
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width">
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <Font cssVariable="--font-funnel-sans"/>
-    <Font cssVariable="--font-jetbrains-mono"/>
+    <Font cssVariable="--font-funnel-sans" />
+    <Font cssVariable="--font-jetbrains-mono" />
     <SEO
       title={Astro.props.title
         ? `${Astro.props.title} - Ferron`
@@ -41,10 +41,10 @@ import { SEO } from "astro-seo";
         description: Astro.props.description
       }}
     />
-    <ClientRouter/>
+    <ClientRouter />
   </head>
   <body>
-    <slot/>
+    <slot />
   </body>
 </html>
 

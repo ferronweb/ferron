@@ -317,13 +317,15 @@ impl ModuleHandlers for RewriteModuleHandlers {
           .log(&format!("URL rewritten from \"{original_url}\" to \"{rewritten_url}\""))
           .await;
       }
+      let original_request_uri = request.uri().to_owned();
       let request_data = request.extensions_mut().get_mut::<RequestData>();
       if let Some(request_data) = request_data {
         if request_data.original_url.is_none() {
-          let mut url_parts = request.uri().to_owned().into_parts();
-          url_parts.path_and_query = Some(rewritten_url.parse()?);
-          *request.uri_mut() = hyper::Uri::from_parts(url_parts)?;
+          request_data.original_url = Some(original_request_uri.clone());
         }
+        let mut url_parts = original_request_uri.into_parts();
+        url_parts.path_and_query = Some(rewritten_url.parse()?);
+        *request.uri_mut() = hyper::Uri::from_parts(url_parts)?;
       }
     }
 

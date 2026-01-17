@@ -71,7 +71,7 @@ impl SendUnixStreamPoll {
   #[inline]
   fn populate_if_different_thread_or_marked_dropped(&mut self, dropped: bool) {
     let current_thread_id = std::thread::current().id();
-    let marked_dropped = !dropped && self.marked_dropped.swap(false, Ordering::Relaxed);
+    let marked_dropped = !dropped && self.marked_dropped.swap(false, Ordering::Relaxed) && self.prev_inner.is_none();
     if marked_dropped || current_thread_id != self.thread_id {
       if !self.obtained_dropped {
         panic!("the UnixStreamPoll can be used only once if drop guard is not obtained")
@@ -81,6 +81,7 @@ impl SendUnixStreamPoll {
       }
       // Safety: The inner UnixStreamPoll is manually dropped, so it's safe to use the raw fd/socket
       let std_unix_stream = unsafe { std::os::unix::net::UnixStream::from_raw_fd(self.inner_fd) };
+      let _ = std_unix_stream.set_nonblocking(monoio::utils::is_legacy());
       let unix_stream_poll = UnixStream::from_std(std_unix_stream)
         .expect("failed to create UnixStream")
         .try_into_poll_io()

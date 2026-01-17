@@ -1,7 +1,7 @@
 // @ts-check
 
 import sitemap from "@astrojs/sitemap";
-
+import svelte from "@astrojs/svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, fontProviders } from "astro/config";
 import pagefind from "astro-pagefind";
@@ -21,6 +21,7 @@ export default defineConfig({
     }
   },
   integrations: [
+    svelte(),
     sitemap(),
     pagefind(),
     (await import("astro-compress")).default({

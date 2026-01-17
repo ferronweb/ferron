@@ -29,7 +29,6 @@ use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 use tokio_util::io::{ReaderStream, StreamReader};
 
 use crate::util::cgi::CgiResponse;
-use crate::util::Copier;
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
@@ -830,7 +829,10 @@ async fn execute_cgi(
 
   let mut cgi_response = CgiResponse::new(stdout);
 
-  ferron_common::runtime::spawn(Copier::new(cgi_stdin_reader, stdin).copy());
+  ferron_common::runtime::spawn(async move {
+    let (mut cgi_stdin_reader, mut stdin) = (cgi_stdin_reader, stdin);
+    let _ = tokio::io::copy(&mut cgi_stdin_reader, &mut stdin).await;
+  });
 
   let mut headers = [EMPTY_HEADER; 128];
 

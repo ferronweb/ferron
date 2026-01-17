@@ -1,6 +1,6 @@
 [package]
 name = "ferron-load-modules"
-version = "2.3.2"
+version = "2.4.1"
 edition = "2021"
 
 [dependencies]
@@ -12,6 +12,7 @@ ferron-modules-builtin = { workspace = true, features = [
     "fauth",
     "fcgi",
     "fproxy",
+    "fproxyauth",
     "limit",
     "replace",
     "rproxy",
@@ -19,8 +20,11 @@ ferron-modules-builtin = { workspace = true, features = [
     "static",
 ] }
 ferron-dns-builtin = { workspace = true, features = [
+    "bunny",
     "cloudflare",
     "desec",
+    "digitalocean",
+    "ovh",
     "porkbun",
     "rfc2136",
     "route53",

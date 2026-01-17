@@ -106,7 +106,7 @@ impl SendTcpStreamPoll {
   #[inline]
   fn populate_if_different_thread_or_marked_dropped(&mut self, dropped: bool) {
     let current_thread_id = std::thread::current().id();
-    let marked_dropped = !dropped && self.marked_dropped.swap(false, Ordering::Relaxed);
+    let marked_dropped = !dropped && self.marked_dropped.swap(false, Ordering::Relaxed) && self.prev_inner.is_none();
     if marked_dropped || current_thread_id != self.thread_id {
       if !self.obtained_dropped {
         panic!("the TcpStreamPoll can be used only once if drop guard is not obtained")
@@ -119,6 +119,7 @@ impl SendTcpStreamPoll {
       let std_tcp_stream = unsafe { std::net::TcpStream::from_raw_fd(self.inner_fd) };
       #[cfg(windows)]
       let std_tcp_stream = unsafe { std::net::TcpStream::from_raw_socket(self.inner_socket) };
+      let _ = std_tcp_stream.set_nonblocking(monoio::utils::is_legacy());
       let tcp_stream_poll = TcpStream::from_std(std_tcp_stream)
         .expect("failed to create TcpStream")
         .try_into_poll_io()
