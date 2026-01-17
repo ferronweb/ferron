@@ -81,6 +81,7 @@ impl SendUnixStreamPoll {
       }
       // Safety: The inner UnixStreamPoll is manually dropped, so it's safe to use the raw fd/socket
       let std_unix_stream = unsafe { std::os::unix::net::UnixStream::from_raw_fd(self.inner_fd) };
+      let _ = std_unix_stream.set_nonblocking(monoio::utils::is_legacy());
       let unix_stream_poll = UnixStream::from_std(std_unix_stream)
         .expect("failed to create UnixStream")
         .try_into_poll_io()

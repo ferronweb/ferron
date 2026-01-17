@@ -5,7 +5,6 @@ mod listener_handler_communication;
 mod listeners;
 mod request_handler;
 mod runtime;
-mod tls_util;
 mod util;
 
 use std::collections::{HashMap, HashSet};
@@ -53,8 +52,10 @@ use crate::config::ServerConfigurations;
 use crate::handler::create_http_handler;
 use crate::listener_handler_communication::ConnectionData;
 use crate::listeners::{create_quic_listener, create_tcp_listener};
-use crate::tls_util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
-use crate::util::{is_localhost, match_hostname, NoServerVerifier};
+use crate::util::{
+  is_localhost, load_certs, load_private_key, match_hostname, CustomSniResolver, NoServerVerifier,
+  OneCertifiedKeyResolver,
+};
 
 // Set the global allocator to use mimalloc for performance optimization
 #[global_allocator]
@@ -70,7 +71,7 @@ static TCP_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, CancellationToken>>
 #[allow(clippy::type_complexity)]
 static QUIC_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, (CancellationToken, Sender<Arc<ServerConfig>>)>>>> =
   LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
-static URING_ENABLED: LazyLock<Arc<Mutex<bool>>> = LazyLock::new(|| Arc::new(Mutex::new(true)));
+static URING_ENABLED: LazyLock<Arc<Mutex<Option<bool>>>> = LazyLock::new(|| Arc::new(Mutex::new(None)));
 static LISTENER_LOGGING_CHANNEL: LazyLock<Arc<(Sender<LogMessage>, Receiver<LogMessage>)>> =
   LazyLock::new(|| Arc::new(async_channel::unbounded()));
 
@@ -1350,8 +1351,7 @@ fn before_starting_server(
       let enable_uring = global_configuration
         .as_deref()
         .and_then(|c| get_value!("io_uring", c))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
+        .and_then(|v| v.as_bool());
       let mut uring_enabled_locked = URING_ENABLED
         .lock()
         .map_err(|_| anyhow::anyhow!("Can't access the enabled `io_uring` option"))?;
@@ -1419,6 +1419,29 @@ fn before_starting_server(
         Some(global_logging_tx.clone())
       };
 
+      let (io_uring_disabled_tx, io_uring_disabled_rx) = async_channel::unbounded();
+      if let Some(global_logger) = &global_logger {
+        let global_logger = global_logger.clone();
+        secondary_runtime_ref.spawn(async move {
+          while let Ok(err) = io_uring_disabled_rx.recv().await {
+            if let Some(err) = err {
+              global_logger
+                .send(LogMessage::new(
+                  format!("Can't configure io_uring: {err}. Ferron may run with io_uring disabled."),
+                  true,
+                ))
+                .await
+                .unwrap_or_default();
+              break;
+            }
+          }
+
+          io_uring_disabled_rx.close();
+        });
+      } else {
+        io_uring_disabled_rx.close();
+      }
+
       // Spawn request handler threads
       let mut handler_shutdown_channels = Vec::new();
       for _ in 0..available_parallelism {
@@ -1431,6 +1454,7 @@ fn before_starting_server(
           acme_tls_alpn_01_configs.clone(),
           acme_http_01_resolvers.clone(),
           enable_proxy_protocol,
+          io_uring_disabled_tx.clone(),
         )?);
       }
 
@@ -1460,6 +1484,7 @@ fn before_starting_server(
             global_logger.clone(),
             first_startup,
             (tcp_send_buffer_size, tcp_recv_buffer_size),
+            io_uring_disabled_tx.clone(),
           )?);
         }
       }

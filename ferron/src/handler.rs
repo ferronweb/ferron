@@ -68,12 +68,13 @@ where
 pub fn create_http_handler(
   configurations: Arc<ServerConfigurations>,
   rx: Receiver<ConnectionData>,
-  enable_uring: bool,
+  enable_uring: Option<bool>,
   tls_configs: HashMap<u16, Arc<ServerConfig>>,
   http3_enabled: bool,
   acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
   acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   enable_proxy_protocol: bool,
+  io_uring_disabled: Sender<Option<std::io::Error>>,
 ) -> Result<CancellationToken, Box<dyn Error + Send + Sync>> {
   let shutdown_tx = CancellationToken::new();
   let shutdown_rx = shutdown_tx.clone();
@@ -81,28 +82,38 @@ pub fn create_http_handler(
   std::thread::Builder::new()
     .name("Request handler".to_string())
     .spawn(move || {
-      crate::runtime::new_runtime(
-        async move {
-          if let Some(error) = http_handler_fn(
-            configurations,
-            rx,
-            &handler_init_tx,
-            shutdown_rx,
-            tls_configs,
-            http3_enabled,
-            acme_tls_alpn_01_configs,
-            acme_http_01_resolvers,
-            enable_proxy_protocol,
-          )
-          .await
-          .err()
-          {
-            handler_init_tx.send(Some(error)).await.unwrap_or_default();
-          }
-        },
-        enable_uring,
-      )
-      .unwrap();
+      let mut rt = match crate::runtime::Runtime::new_runtime(enable_uring) {
+        Ok(rt) => rt,
+        Err(error) => {
+          handler_init_tx
+            .send_blocking(Some(
+              anyhow::anyhow!("Can't create async runtime: {error}").into_boxed_dyn_error(),
+            ))
+            .unwrap_or_default();
+          return;
+        }
+      };
+      io_uring_disabled
+        .send_blocking(rt.return_io_uring_error())
+        .unwrap_or_default();
+      rt.run(async move {
+        if let Some(error) = http_handler_fn(
+          configurations,
+          rx,
+          &handler_init_tx,
+          shutdown_rx,
+          tls_configs,
+          http3_enabled,
+          acme_tls_alpn_01_configs,
+          acme_http_01_resolvers,
+          enable_proxy_protocol,
+        )
+        .await
+        .err()
+        {
+          handler_init_tx.send(Some(error)).await.unwrap_or_default();
+        }
+      });
     })?;
 
   if let Some(error) = listen_error_rx.recv_blocking()? {
@@ -166,6 +177,11 @@ async fn http_handler_fn(
     crate::runtime::spawn(async move {
       match conn_data.connection {
         crate::listener_handler_communication::Connection::Tcp(tcp_stream) => {
+          // Toggle O_NONBLOCK for TCP stream, when using Monoio.
+          // Unset it when io_uring is enabled, and set it otherwise.
+          #[cfg(feature = "runtime-monoio")]
+          let _ = tcp_stream.set_nonblocking(monoio::utils::is_legacy());
+
           #[cfg(feature = "runtime-monoio")]
           let tcp_stream = match TcpStream::from_std(tcp_stream) {
             Ok(stream) => stream,
@@ -669,7 +685,7 @@ async fn http_quic_handler_fn(
 ) {
   match connection_attempt.await {
     Ok(connection) => {
-      let _connection_reference = Arc::downgrade(&connection_reference);
+      let connection_reference = Arc::downgrade(&connection_reference);
       let mut h3_conn: h3::server::Connection<h3_quinn::Connection, Bytes> =
         match h3::server::Connection::new(h3_quinn::Connection::new(connection)).await {
           Ok(h3_conn) => h3_conn,
@@ -689,10 +705,22 @@ async fn http_quic_handler_fn(
         };
 
       loop {
-        match h3_conn.accept().await {
+        match crate::runtime::select! {
+            biased;
+
+            _ = shutdown_rx.cancelled() => {
+              h3_conn.shutdown(0).await.unwrap_or_default();
+              return;
+            }
+            result = h3_conn.accept() => {
+              result
+            }
+        } {
           Ok(Some(resolver)) => {
             let configurations = configurations.clone();
+            let connection_reference = connection_reference.clone();
             crate::runtime::spawn(async move {
+              let _connection_reference = connection_reference;
               let (request, stream) = match resolver.resolve_request().await {
                 Ok(resolved) => resolved,
                 Err(err) => {
@@ -926,9 +954,6 @@ async fn http_quic_handler_fn(
             }
             return;
           }
-        }
-        if shutdown_rx.is_cancelled() {
-          h3_conn.shutdown(0).await.unwrap_or_default();
         }
       }
     }

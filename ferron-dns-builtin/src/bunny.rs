@@ -5,30 +5,30 @@ use dns_update::DnsUpdater;
 
 use ferron_common::dns::{separate_subdomain_from_domain_name, DnsProvider};
 
-/// deSEC DNS provider
-pub struct DesecDnsProvider {
+/// bunny.net DNS provider
+pub struct BunnyDnsProvider {
   client: DnsUpdater,
 }
 
-impl DesecDnsProvider {
-  /// Create a new deSEC DNS provider
-  fn new(api_token: &str) -> dns_update::Result<Self> {
+impl BunnyDnsProvider {
+  /// Create a new bunny.net DNS provider
+  fn new(api_key: &str) -> dns_update::Result<Self> {
     Ok(Self {
-      client: DnsUpdater::new_desec(api_token, None)?,
+      client: DnsUpdater::new_bunny(api_key, None)?,
     })
   }
 
-  /// Load a deSEC DNS provider from ACME challenge parameters
+  /// Load a bunny.net DNS provider from ACME challenge parameters
   pub fn from_parameters(challenge_params: &HashMap<String, String>) -> Result<Self, Box<dyn Error + Send + Sync>> {
-    let api_token = challenge_params
-      .get("api_token")
-      .ok_or_else(|| anyhow::anyhow!("Missing deSEC API token"))?;
-    Ok(Self::new(api_token).map_err(|e| anyhow::anyhow!("Failed to initalize deSEC DNS provider: {}", e))?)
+    let api_key = challenge_params
+      .get("api_key")
+      .ok_or_else(|| anyhow::anyhow!("Missing bunny.net API key"))?;
+    Ok(Self::new(api_key).map_err(|e| anyhow::anyhow!("Failed to initalize bunny.net DNS provider: {}", e))?)
   }
 }
 
 #[async_trait]
-impl DnsProvider for DesecDnsProvider {
+impl DnsProvider for BunnyDnsProvider {
   async fn set_acme_txt_record(
     &self,
     acme_challenge_identifier: &str,
@@ -48,7 +48,7 @@ impl DnsProvider for DesecDnsProvider {
         dns_update::DnsRecord::TXT {
           content: dns_value.to_string(),
         },
-        3600,
+        300,
         domain_name,
       )
       .await

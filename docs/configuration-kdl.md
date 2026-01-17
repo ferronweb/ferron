@@ -252,8 +252,8 @@ This configuration reference organizes directives by both **scope** (where they 
 
 - `listen_ip <listen_ip: string>`
   - This directive specifies the IP address to listen. Default: `listen_ip "::1"`
-- `io_uring [enable_io_uring: bool]`
-  - This directive specifies whether `io_uring` is enabled. This directive has no effect for systems that don't support `io_uring` and for web server builds that use Tokio instead of Monoio. Default: `io_uring #true`
+- `io_uring [enable_io_uring: bool|null]`
+  - This directive specifies whether `io_uring` is enabled. If set as `io_uring #null` (supported on Ferron 2.4.0 and newer), `io_uring` is enabled with fallback with `io_uring` disabled. This directive has no effect for systems that don't support `io_uring` and for web server builds that use Tokio instead of Monoio. Default: `io_uring #null` (Ferron 2.4.0 or newer), `io_uring #true` (Ferron 2.3.2 and older)
 - `tcp_send_buffer <tcp_send_buffer: integer>`
   - This directive specifies the send buffer size in bytes for TCP listeners. Default: none
 - `tcp_recv_buffer <tcp_recv_buffer: integer>`
@@ -279,7 +279,20 @@ This configuration reference organizes directives by both **scope** (where they 
 
 ```kdl
 * {
-    proxy_concurrent_new_conns 16384
+    proxy_concurrent_conns 16384
+}
+```
+
+### Authentication forwarding
+
+- `auth_to_concurrent_conns <auth_to_concurrent_conns: integer|null>` (_fauth_ module; Ferron 2.4.0 or newer)
+  - This directive specifies the limit of TCP connections being established to backend servers (for forwarded authentication), to prevent exhaustion of network resources. If set as `auth_to_concurrent_conns #null`, the reverse proxy can theoretically establish an unlimited number of connections. Default: `auth_to_concurrent_conns 16384`
+  
+**Configuration example:**
+
+```kdl
+* {
+    auth_to_concurrent_conns 16384
 }
 ```
 
@@ -556,6 +569,8 @@ api.example.com {
 
 - `forward_proxy [enable_forward_proxy: bool]` (_fproxy_ module)
   - This directive specifies whether the forward proxy functionality is enabled. Default: `forward_proxy #false`
+- `forward_proxy_auth [enable_forward_proxy_auth: bool] [realm=<realm: string>] [brute_protection=<enable_brute_protection: bool>] [users=<users: string>]` (_fproxyauth_ module; Ferron 2.4.0 or newer)
+  - This directive specifies whether the forward proxy authentication (HTTP Basic authentication) is enabled. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whether the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. Default: `forward_proxy #false`
 
 **Configuration example:**
 
@@ -567,8 +582,8 @@ api.example.com {
 
 ### Authentication forwarding
 
-- `auth_to <auth_to: string|null>` (_fauth_ module)
-  - This directive specifies the URL to which the web server should send requests for forwarded authentication. Default: none
+- `auth_to <auth_to: string|null> [limit=<conn_limit: integer|null>] [idle_timeout=<idle_timeout: integer|null>]` (_fauth_ module)
+  - This directive specifies the URL to which the web server should send requests for forwarded authentication. Established connections can be limited by the `limit` prop (Ferron 2.4.0 and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron 2.4.0 and newer); by default it is set to `60000` (60 seconds). Default: none
 - `auth_to_no_verification [auth_to_no_verification: bool]` (_fauth_ module)
   - This directive specifies whether the server should not verify the TLS certificate of the backend authentication server. Default: `auth_to_no_verification #false`
 - `auth_to_copy <request_header_to_copy: string> [<request_header_to_copy: string> ...]` (_fauth_ module)

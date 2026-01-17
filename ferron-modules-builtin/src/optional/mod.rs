@@ -10,6 +10,8 @@ mod fauth;
 mod fcgi;
 #[cfg(feature = "fproxy")]
 mod fproxy;
+#[cfg(feature = "fproxyauth")]
+mod fproxyauth;
 #[cfg(feature = "limit")]
 mod limit;
 #[cfg(feature = "replace")]
@@ -33,6 +35,8 @@ pub use fauth::*;
 pub use fcgi::*;
 #[cfg(feature = "fproxy")]
 pub use fproxy::*;
+#[cfg(feature = "fproxyauth")]
+pub use fproxyauth::*;
 #[cfg(feature = "limit")]
 pub use limit::*;
 #[cfg(feature = "static")]

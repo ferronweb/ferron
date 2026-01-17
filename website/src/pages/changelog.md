@@ -4,6 +4,27 @@ title: Ferron change log
 description: Stay updated on Ferron web server improvements with a change log, featuring bug fixes, new features, and enhancements for each release.
 ---
 
+## Ferron 2.4.0
+
+**Released in January 17, 2026**
+
+- Added bunny.net, DigitalOcean and OVH DNS providers for DNS-01 ACME challenge.
+- Added support for HTTP Basic authentication for forward proxying.
+- Fixed ACME cache file handling during certificate renewals. Cache files are now correctly truncated when rewritten, preventing stale data from causing parse failures.
+- Fixed brute-force protection not being able to be disabled due to wrong configuration validation check.
+- Fixed `Connection` header setting for reverse proxying being set to `keep-alive, keep-alive`.
+- Fixed graceful shutdown (during configuration reloading) for the HTTP/3 server.
+- Fixed precompressed files not being picked up when the original filename doesn't have a file extension.
+- Fixed the original request URL not preserved when the server is configured to rewrite URLs using `rewrite` directive.
+- Fixed trailing slash redirects leading to an URL without base when `remove_base` prop of a location block is set to `#true`.
+- Fixed URL rewrites not applied when `remove_base` prop of a location block is set to `#true`.
+- Improved compliance of static file serving functionality with RFC 7232 (conditional requests) and RFC 7233 (range requests).
+- The forwarded authentication module now uses an unlimited idle kept-alive connection pool, just like the reverse proxy module.
+- The server now falls back with `io_uring` disabled when `io_uring` couldn't be initialized and `io_uring` is implicitly enabled.
+- The server now logs a warning if `status 200` directive is used without specifying a response body.
+- The server now performs cleanup of TLS-ALPN-01 and HTTP-01 challenges after obtaining the TLS certificates.
+- The server now reuses connections that aren't ready after waiting for readiness when the concurrent limit is reached, instead of establishing a new connection.
+
 ## Ferron 2.3.2
 
 **Released in January 6, 2026**

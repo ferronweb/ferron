@@ -1,34 +1,60 @@
 use std::{collections::HashMap, error::Error};
 
 use async_trait::async_trait;
-use dns_update::DnsUpdater;
+use dns_update::{providers::ovh::OvhEndpoint, DnsUpdater};
 
 use ferron_common::dns::{separate_subdomain_from_domain_name, DnsProvider};
 
-/// deSEC DNS provider
-pub struct DesecDnsProvider {
+/// OVH DNS provider
+pub struct OvhDnsProvider {
   client: DnsUpdater,
 }
 
-impl DesecDnsProvider {
-  /// Create a new deSEC DNS provider
-  fn new(api_token: &str) -> dns_update::Result<Self> {
+impl OvhDnsProvider {
+  /// Create a new OVH DNS provider
+  fn new(
+    application_key: &str,
+    application_secret: &str,
+    consumer_key: &str,
+    endpoint: OvhEndpoint,
+  ) -> dns_update::Result<Self> {
     Ok(Self {
-      client: DnsUpdater::new_desec(api_token, None)?,
+      client: DnsUpdater::new_ovh(application_key, application_secret, consumer_key, endpoint, None)?,
     })
   }
 
-  /// Load a deSEC DNS provider from ACME challenge parameters
+  /// Load an OVH DNS provider from ACME challenge parameters
   pub fn from_parameters(challenge_params: &HashMap<String, String>) -> Result<Self, Box<dyn Error + Send + Sync>> {
-    let api_token = challenge_params
-      .get("api_token")
-      .ok_or_else(|| anyhow::anyhow!("Missing deSEC API token"))?;
-    Ok(Self::new(api_token).map_err(|e| anyhow::anyhow!("Failed to initalize deSEC DNS provider: {}", e))?)
+    let application_key = challenge_params
+      .get("application_key")
+      .ok_or_else(|| anyhow::anyhow!("Missing OVH application key"))?;
+    let application_secret = challenge_params
+      .get("application_secret")
+      .ok_or_else(|| anyhow::anyhow!("Missing OVH application secret"))?;
+    let consumer_key = challenge_params
+      .get("consumer_key")
+      .ok_or_else(|| anyhow::anyhow!("Missing OVH consumer key"))?;
+    let endpoint = challenge_params
+      .get("endpoint")
+      .ok_or_else(|| anyhow::anyhow!("Missing OVH endpoint name"))?;
+    let endpoint = match endpoint.as_str() {
+      "ovh-eu" => OvhEndpoint::OvhEu,
+      "ovh-ca" => OvhEndpoint::OvhCa,
+      "kimsufi-eu" => OvhEndpoint::KimsufiEu,
+      "kimsufi-ca" => OvhEndpoint::KimsufiCa,
+      "soyoustart-eu" => OvhEndpoint::SoyoustartCa,
+      "soyoustart-ca" => OvhEndpoint::SoyoustartEu,
+      _ => Err(anyhow::anyhow!("Invalid OVH endpoint name"))?,
+    };
+    Ok(
+      Self::new(application_key, application_secret, consumer_key, endpoint)
+        .map_err(|e| anyhow::anyhow!("Failed to initalize OVH DNS provider: {}", e))?,
+    )
   }
 }
 
 #[async_trait]
-impl DnsProvider for DesecDnsProvider {
+impl DnsProvider for OvhDnsProvider {
   async fn set_acme_txt_record(
     &self,
     acme_challenge_identifier: &str,
@@ -48,7 +74,7 @@ impl DnsProvider for DesecDnsProvider {
         dns_update::DnsRecord::TXT {
           content: dns_value.to_string(),
         },
-        3600,
+        300,
         domain_name,
       )
       .await

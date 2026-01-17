@@ -32,7 +32,7 @@ use tokio::{io::AsyncWriteExt, sync::RwLock, time::Instant};
 use x509_parser::prelude::{FromDer, X509Certificate};
 use xxhash_rust::xxh3::xxh3_128;
 
-use crate::tls_util::load_host_resolver;
+use crate::util::load_host_resolver;
 use ferron_common::dns::DnsProvider;
 use ferron_common::logging::ErrorLogger;
 
@@ -139,7 +139,7 @@ async fn set_in_cache(cache: &AcmeCache, key: &str, value: Vec<u8>) -> Result<()
     AcmeCache::File(path) => {
       tokio::fs::create_dir_all(path).await.unwrap_or_default();
       let mut open_options = tokio::fs::OpenOptions::new();
-      open_options.write(true).create(true);
+      open_options.write(true).create(true).truncate(true);
 
       #[cfg(unix)]
       open_options.mode(0o600); // Don't allow others to read or write
@@ -199,13 +199,16 @@ fn get_account_cache_key(config: &AcmeConfig) -> String {
 
 /// Determines the certificate cache key
 fn get_certificate_cache_key(config: &AcmeConfig) -> String {
+  let mut domains = config.domains.clone();
+  domains.sort_unstable();
+  let domains_joined = domains.join(",");
   format!(
     "certificate_{}",
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
       xxh3_128(
         format!(
           "{}{}",
-          config.domains.join(","),
+          domains_joined,
           config.profile.as_ref().map_or("".to_string(), |p| format!(";{p}"))
         )
         .as_bytes()
@@ -281,7 +284,7 @@ pub async fn check_certificate_validity_or_install_cached(
               if let Ok(certificate_id) = CertificateIdentifier::try_from(certificate) {
                 if let Ok(renewal_info) = acme_account.renewal_info(&certificate_id).await {
                   let mut renewal_instant = Instant::now();
-                  renewal_instant -= renewal_info.1;
+                  renewal_instant += renewal_info.1;
                   config.renewal_info = Some((renewal_info.0, renewal_instant));
                 }
               }
@@ -527,14 +530,25 @@ pub async fn provision_certificate(
   let result = finalize_closure.await;
 
   // Cleanup
-  if let Some(dns_provider) = &config.dns_provider {
-    for identifier in dns_01_identifiers {
-      dns_provider
-        .remove_acme_txt_record(&identifier)
-        .await
-        .unwrap_or_default();
+  match config.challenge_type {
+    ChallengeType::TlsAlpn01 => {
+      *config.tls_alpn_01_data_lock.write().await = None;
     }
-  }
+    ChallengeType::Http01 => {
+      *config.http_01_data_lock.write().await = None;
+    }
+    ChallengeType::Dns01 => {
+      if let Some(dns_provider) = &config.dns_provider {
+        for identifier in dns_01_identifiers {
+          dns_provider
+            .remove_acme_txt_record(&identifier)
+            .await
+            .unwrap_or_default();
+        }
+      }
+    }
+    _ => {}
+  };
 
   result?;
 

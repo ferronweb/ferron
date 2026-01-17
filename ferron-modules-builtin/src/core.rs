@@ -403,7 +403,7 @@ impl ModuleLoader for CoreModuleLoader {
           Err(anyhow::anyhow!(
             "The `io_uring` configuration property must have exactly one value"
           ))?
-        } else if !entry.values[0].is_bool() {
+        } else if !entry.values[0].is_bool() && !entry.values[0].is_null() {
           Err(anyhow::anyhow!("Invalid io_uring enabling option"))?
         }
       }

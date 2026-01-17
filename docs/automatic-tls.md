@@ -88,6 +88,20 @@ auto_tls_challenge "dns-01" provider="route53" access_key_id="your_key_id" secre
 - `profile_name` - AWS profile name (optional)
 - `hosted_zone_id` - Amazon Route 53 hosted zone ID (optional)
 
+### bunny.net (`bunny`)
+
+This DNS provider uses [bunny.net API](https://docs.bunny.net/reference) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.4.0.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="bunny" api_key="your_api_key"
+```
+
+#### Additional props
+
+- `api_key` - bunny.net API key (required)
+
 ### Cloudflare (`cloudflare`)
 
 This DNS provider uses [Cloudflare API](https://developers.cloudflare.com/api/resources/dns/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.0.0.
@@ -116,6 +130,37 @@ auto_tls_challenge "dns-01" provider="desec" api_token="your_api_token"
 #### Additional props
 
 - `api_token` - deSEC API token (required)
+
+### DigitalOcean (`digitalocean`)
+
+This DNS provider uses [DigitalOcean API](https://docs.digitalocean.com/reference/api/digitalocean/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.4.0.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="digitalocean" oauth_token="your_token"
+```
+
+#### Additional props
+
+- `token` - DigitalOcean OAuth token (required)
+
+### OVH (`ovh`)
+
+This DNS provider uses [OVH API](https://api.ovh.com/console/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.4.0.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="ovh" application_key="your_application_key" application_secret="your_application_secret" consumer_key="your_consumer_key" endpoint="ovh-eu"
+```
+
+#### Additional props
+
+- `application_key` - OVH application key (required)
+- `application_secret` - OVH application secret (required)
+- `consumer_key` - OVH consumer key (required)
+- `endpoint` - OVH endpoint. Supported values are `ovh-eu`, `ovh-ca`, `kimsufi-eu`, `kimsufi-ca`, `soyoustart-eu` and `soyoustart-ca` (required)
 
 ### Porkbun (`porkbun`)
 

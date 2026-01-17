@@ -1,6 +1,6 @@
 [package]
 name = "ferron-precompress"
-version = "2.3.2"
+version = "2.4.0"
 edition = "2021"
 
 [package.metadata.winresource]

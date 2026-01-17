@@ -19,7 +19,7 @@ use hyper::{header, Request, Response, StatusCode};
 use monoio::io::IntoPollIo;
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
 use tokio::sync::RwLock;
@@ -32,7 +32,7 @@ use crate::util::fcgi::{
   construct_fastcgi_name_value_pair, construct_fastcgi_record, FcgiDecodedData, FcgiDecoder, FcgiEncoder,
   FcgiProcessedStream,
 };
-use crate::util::{Copier, ReadToEndFuture, SplitStreamByMapExt};
+use crate::util::SplitStreamByMapExt;
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
@@ -925,9 +925,20 @@ async fn execute_fastcgi(
 
   let mut cgi_response = CgiResponse::new(stdout);
 
-  ferron_common::runtime::spawn(Copier::with_zero_packet_writing(cgi_stdin_reader, stdin).copy());
+  ferron_common::runtime::spawn(async move {
+    let (mut cgi_stdin_reader, mut stdin) = (cgi_stdin_reader, stdin);
+    let _ = tokio::io::copy(&mut cgi_stdin_reader, &mut stdin).await;
 
-  let stderr_read_future = ReadToEndFuture::new(stderr);
+    // Send terminating STDIN packet
+    let _ = stdin.write(&[]).await;
+    let _ = stdin.flush().await;
+  });
+
+  let stderr_read_future = async move {
+    let mut stderr = stderr;
+    let mut buf = Vec::new();
+    stderr.read_to_end(&mut buf).await.map(|_| buf)
+  };
   let mut stderr_read_future_pinned = Box::pin(stderr_read_future);
 
   let mut headers = [EMPTY_HEADER; 128];
@@ -955,7 +966,13 @@ async fn execute_fastcgi(
                 .await;
             }
             return Ok(
-              ResponseData { request: None, response: None, response_status: Some(StatusCode::INTERNAL_SERVER_ERROR), response_headers: None, new_remote_address: None }
+              ResponseData {
+                request: None,
+                response: None,
+                response_status: Some(StatusCode::INTERNAL_SERVER_ERROR),
+                response_headers: None,
+                new_remote_address: None
+              }
             );
         },
     }
@@ -1016,9 +1033,10 @@ async fn execute_fastcgi(
       stderr_vec_result = stderr_read_future_pinned => {
         let stderr_vec = stderr_vec_result.unwrap_or(vec![]);
         let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
-        if !stderr_string.is_empty() {
+        let stderr_string_trimmed = stderr_string.trim();
+        if !stderr_string_trimmed.is_empty() {
           error_logger_clone
-            .log(&format!("There were FastCGI errors: {stderr_string}"))
+            .log(&format!("There were FastCGI errors: {stderr_string_trimmed}"))
             .await;
         }
       }
