@@ -13,7 +13,7 @@
   "dependencies": {
     "@astrojs/react": "^4.4.0",
     "@astrojs/sitemap": "^3.6.0",
-    "@csstools/postcss-oklab-function": "^4.0.12",
+    "@csstools/postcss-oklab-function": "^5.0.0",
     "@lucide/astro": "^0.562.0",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.14",
