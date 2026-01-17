@@ -535,7 +535,9 @@ example.com {
   - This directive specifies whether the reverse proxy uses HTTP/2 protocol (without HTTP/1.1 fallback) when connecting to backend servers. When the backend server is connected via HTTPS, the reverse proxy negotiates HTTP/2 during the TLS handshake. When the backend server is connected via HTTP, the reverse proxy uses HTTP/2 with prior knowledge. This directive can be used when proxying gRPC requests. Default: `proxy_http2_only #false`
 - `proxy_proxy_header <proxy_version_version: string|null>` (_rproxy_ module; Ferron 2.1.0 or newer)
   - This directive specifies the version of the PROXY protocol header to be sent to backend servers when acting as a reverse proxy. Supported versions are `"v1"` (PROXY protocol version 1) and `"v2"` (PROXY protocol version 2). If specified with `#null` value, no PROXY protocol header is sent. Default: `proxy_proxy_header #null`
-
+- `grpcweb [enable_grpcweb: bool]` (_grpcweb_ module; Ferron UNRELEASED or newer)
+  - This directive specifies whether to translate gRPC-Web requests into gRPC ones. Default: `grpcweb #false`
+  
 **Configuration example:**
 
 ```kdl

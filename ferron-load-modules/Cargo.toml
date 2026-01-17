@@ -13,6 +13,7 @@ ferron-modules-builtin = { workspace = true, features = [
     "fcgi",
     "fproxy",
     "fproxyauth",
+    "grpcweb",
     "limit",
     "replace",
     "rproxy",
