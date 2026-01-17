@@ -12,7 +12,7 @@ The following modules are built into Ferron and are enabled by default:
 - _fauth_ - this module enables authentication forwarded to the authentication server.
 - _fcgi_ - this module enables the support for connecting to FastCGI servers.
 - _fproxy_ - this module enables forward proxy functionality.
-- _fproxyauth_ (Ferron UNRELEASED and newer) - this module enables forward proxy authentication via HTTP Basic authentication.
+- _fproxyauth_ (Ferron 2.4.0 and newer) - this module enables forward proxy authentication via HTTP Basic authentication.
 - _grpcweb_ (Ferron UNRELEASED and newer) - this module enables support for translation of gRPC-Web data into gRPC.
 - _limit_ (Ferron 2.0.0 and newer) - this module enables rate limits.
 - _replace_ (Ferron 2.0.0 and newer) - this module enables replacement of strings in response bodies.

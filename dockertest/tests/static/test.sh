@@ -116,6 +116,45 @@ else
     TEST_FAILED=1
 fi
 
+TEST_RESULTS="$(curl -fsSL -H 'Range: bytes=-999' http://ferron/basic.txt)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="$(cat /var/www/ferron/basic.txt)"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "Partial static file serving (with end larger than content length; RFC 7233 compliance test) test passed!"
+else
+    echo "Partial static file serving (with end larger than content length; RFC 7233 compliance test) test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
+TEST_RESULTS="$(curl -fsL -w %{http_code} -H 'Range: bytes=999-' http://ferron/basic.txt || true)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="416"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "Partial static file serving (with start larger than content length; RFC 7233 compliance test) test passed!"
+else
+    echo "Partial static file serving (with start larger than content length; RFC 7233 compliance test) test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
+TEST_RESULTS="$(curl -fsL -w %{http_code} -H 'Range: malformed' http://ferron/basic.txt || true)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="416"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "Partial static file serving (with malformed range header) test passed!"
+else
+    echo "Partial static file serving (with malformed range header) test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
 TEST_RESULTS="$(curl -fsSL -w %{http_code} -H "If-None-Match: $(curl -fsSLI http://ferron/basic.txt | grep -i 'etag:' | cut -d ':' -f 2 | tr -d '[:space:]')" http://ferron/basic.txt)"
 TEST_EXIT_CODE=$?
 TEST_EXPECTED="304"
@@ -138,6 +177,32 @@ else
     echo "ETag with gzip compression test failed!" >&2
     echo "  Exit code: $TEST_EXIT_CODE" >&2
     echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
+TEST_RESULTS="$(curl -fsL -w %{http_code} -H "If-Match: $(curl -fsSLI http://ferron/basic.txt | grep -i 'etag:' | cut -d ':' -f 2 | tr -d '[:space:]')" http://ferron/basic.txt || true)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="412"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "If-Match ETag (weak ETag; RFC 7232 compliance test) test passed!"
+else
+    echo "If-Match ETag (weak ETag; RFC 7232 compliance test) test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
+TEST_RESULTS="$(curl -fsL -w %{http_code} -H "If-Match: *" http://ferron/basic.txt || true)"
+TEST_EXIT_CODE=$?
+TEST_UNEXPECTED="412"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" != "$TEST_UNEXPECTED" ]; then
+    echo "If-Match catch-all test passed!"
+else
+    echo "If-Match catch-all test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Unexpected: $TEST_UNEXPECTED" >&2
     echo "  Received: $TEST_RESULTS" >&2
     TEST_FAILED=1
 fi
@@ -237,6 +302,19 @@ if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
     echo "Directory listing forbidden test passed!"
 else
     echo "Directory listing forbidden test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
+TEST_RESULTS="$(curl -fsL -o /dev/null -w %{http_code} http://ferron/dirlisting/ || true)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="200"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "Directory listing (with trailing slash) test passed!"
+else
+    echo "Directory listing (with trailing slash) test failed!" >&2
     echo "  Exit code: $TEST_EXIT_CODE" >&2
     echo "  Expected: $TEST_EXPECTED" >&2
     echo "  Received: $TEST_RESULTS" >&2

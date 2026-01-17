@@ -14,15 +14,13 @@ import FontAwesomeIcon from "../FontAwesomeIcon.astro";
       <div class="flex flex-row">
         <div class="grow">
           <p class="font-semibold">{Astro.props.name}</p>
-          {
-            Astro.props.description ? (
+          {Astro.props.description ? (
               <p class="text-sm text-muted-foreground">
                 {Astro.props.description}
               </p>
             ) : (
               ""
-            )
-          }
+            )}
         </div>
         <div>
           <a href={Astro.props.sourceLink} target="_blank" aria-label="Source">

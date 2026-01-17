@@ -2,7 +2,7 @@
 import "../../styles/asciinema-player.css";
 import { faArrowRight, faDownload } from "@fortawesome/free-solid-svg-icons";
 import FontAwesomeIcon from "../FontAwesomeIcon.astro";
-import InstallCommand from "./InstallCommand.astro";
+import InstallCommand from "./InstallCommand.svelte";
 ---
 
 <section class="relative overflow-hidden">
@@ -50,7 +50,7 @@ import InstallCommand from "./InstallCommand.astro";
         </p>
         <div class="flex flex-col sm:flex-row gap-4 max-w-md w-full xl:w-auto">
           <a href="#install" class="btn btn-primary group">
-            <FontAwesomeIcon icon={faDownload} class="mr-2 size-5!"/>
+            <FontAwesomeIcon icon={faDownload} class="mr-2 size-5!" />
             Start installation
             <FontAwesomeIcon
               icon={faArrowRight}
@@ -60,7 +60,7 @@ import InstallCommand from "./InstallCommand.astro";
           <a href="/docs" class="btn btn-secondary"> Documentation </a>
         </div>
         <div class="mt-12 w-full xl:w-37/40 2xl:w-9/10">
-          <InstallCommand/>
+          <InstallCommand client:load />
         </div>
       </div>
       <div

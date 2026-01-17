@@ -12,14 +12,16 @@ use tokio_util::sync::CancellationToken;
 use crate::listener_handler_communication::{Connection, ConnectionData};
 
 /// Creates a TCP listener
+#[allow(clippy::too_many_arguments)]
 pub fn create_tcp_listener(
   address: SocketAddr,
   encrypted: bool,
   tx: Sender<ConnectionData>,
-  enable_uring: bool,
+  enable_uring: Option<bool>,
   logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
   tcp_buffer_sizes: (Option<usize>, Option<usize>),
+  io_uring_disabled: Sender<Option<std::io::Error>>,
 ) -> Result<CancellationToken, Box<dyn Error + Send + Sync>> {
   let shutdown_tx = CancellationToken::new();
   let shutdown_rx = shutdown_tx.clone();
@@ -27,31 +29,41 @@ pub fn create_tcp_listener(
   std::thread::Builder::new()
     .name(format!("TCP listener for {address}"))
     .spawn(move || {
-      crate::runtime::new_runtime(
-        async move {
-          let tcp_listener_future = tcp_listener_fn(
-            address,
-            encrypted,
-            tx,
-            &listen_error_tx,
-            logging_tx,
-            first_startup,
-            tcp_buffer_sizes,
-          );
-          crate::runtime::select! {
-            result = tcp_listener_future => {
-              if let Some(error) = result.err() {
-                  listen_error_tx.send(Some(error)).await.unwrap_or_default();
-              }
-            }
-            _ = shutdown_rx.cancelled() => {
-
+      let mut rt = match crate::runtime::Runtime::new_runtime(enable_uring) {
+        Ok(rt) => rt,
+        Err(error) => {
+          listen_error_tx
+            .send_blocking(Some(
+              anyhow::anyhow!("Can't create async runtime: {error}").into_boxed_dyn_error(),
+            ))
+            .unwrap_or_default();
+          return;
+        }
+      };
+      io_uring_disabled
+        .send_blocking(rt.return_io_uring_error())
+        .unwrap_or_default();
+      rt.run(async move {
+        let tcp_listener_future = tcp_listener_fn(
+          address,
+          encrypted,
+          tx,
+          &listen_error_tx,
+          logging_tx,
+          first_startup,
+          tcp_buffer_sizes,
+        );
+        crate::runtime::select! {
+          result = tcp_listener_future => {
+            if let Some(error) = result.err() {
+                listen_error_tx.send(Some(error)).await.unwrap_or_default();
             }
           }
-        },
-        enable_uring,
-      )
-      .unwrap();
+          _ = shutdown_rx.cancelled() => {
+
+          }
+        }
+      });
     })?;
 
   if let Some(error) = listen_error_rx.recv_blocking()? {

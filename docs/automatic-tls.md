@@ -90,7 +90,7 @@ auto_tls_challenge "dns-01" provider="route53" access_key_id="your_key_id" secre
 
 ### bunny.net (`bunny`)
 
-This DNS provider uses [bunny.net API](https://docs.bunny.net/reference) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron UNRELEASED.
+This DNS provider uses [bunny.net API](https://docs.bunny.net/reference) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.4.0.
 
 #### Example directive specification
 
@@ -133,7 +133,7 @@ auto_tls_challenge "dns-01" provider="desec" api_token="your_api_token"
 
 ### DigitalOcean (`digitalocean`)
 
-This DNS provider uses [DigitalOcean API](https://docs.digitalocean.com/reference/api/digitalocean/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron UNRELEASED.
+This DNS provider uses [DigitalOcean API](https://docs.digitalocean.com/reference/api/digitalocean/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.4.0.
 
 #### Example directive specification
 
@@ -147,7 +147,7 @@ auto_tls_challenge "dns-01" provider="digitalocean" oauth_token="your_token"
 
 ### OVH (`ovh`)
 
-This DNS provider uses [OVH API](https://api.ovh.com/console/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron UNRELEASED.
+This DNS provider uses [OVH API](https://api.ovh.com/console/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.4.0.
 
 #### Example directive specification
 

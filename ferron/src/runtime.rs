@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::future::Future;
 
 // Compilation errors
@@ -7,40 +6,98 @@ compile_error!("Can't compile Ferron with both main runtimes enabled");
 #[cfg(not(any(feature = "runtime-monoio", feature = "runtime-tokio")))]
 compile_error!("Can't compile Ferron with no main runtimes enabled");
 
-/// Creates a new asynchronous runtime using Monoio
-#[cfg(feature = "runtime-monoio")]
-pub fn new_runtime(future: impl Future, enable_uring: bool) -> Result<(), Box<dyn Error + Send + Sync>> {
-  #[cfg(target_os = "linux")]
-  if enable_uring && monoio::utils::detect_uring() {
-    let mut rt = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
-      .enable_all()
-      .attach_thread_pool(Box::new(BlockingThreadPool))
-      .build()?;
-    rt.block_on(future);
-    return Ok(());
-  }
-  #[cfg(not(target_os = "linux"))]
-  let _ = enable_uring;
-
-  // `io_uring` is either disabled or not supported
-  let mut rt = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
-    .enable_all()
-    .attach_thread_pool(Box::new(BlockingThreadPool))
-    .build()?;
-  rt.block_on(future);
-
-  Ok(())
+/// A representation of an asynchronous runtime
+pub struct Runtime {
+  inner: RuntimeInner,
+  io_uring_enable_configured: Option<i32>,
 }
 
-/// Creates a new asynchronous runtime using Tokio
-#[cfg(feature = "runtime-tokio")]
-pub fn new_runtime(future: impl Future, _enable_uring: bool) -> Result<(), Box<dyn Error + Send + Sync>> {
-  let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
-  rt.block_on(async move {
-    let local_set = tokio::task::LocalSet::new();
-    local_set.run_until(future).await;
-  });
-  Ok(())
+enum RuntimeInner {
+  #[cfg(all(feature = "runtime-monoio", target_os = "linux"))]
+  MonoioIouring(monoio::Runtime<monoio::time::TimeDriver<monoio::IoUringDriver>>),
+  #[cfg(feature = "runtime-monoio")]
+  MonoioLegacy(monoio::Runtime<monoio::time::TimeDriver<monoio::LegacyDriver>>),
+  #[cfg(feature = "runtime-tokio")]
+  Tokio(tokio::runtime::Runtime),
+  TokioOnly(tokio::runtime::Runtime),
+}
+
+impl Runtime {
+  /// Creates a new asynchronous runtime
+  pub fn new_runtime(enable_uring: Option<bool>) -> Result<Self, std::io::Error> {
+    #[allow(unused_mut)]
+    let mut io_uring_enable_configured = None;
+
+    #[cfg(all(feature = "runtime-monoio", target_os = "linux"))]
+    if enable_uring.is_none_or(|x| x) && monoio::utils::detect_uring() {
+      match monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+        .enable_all()
+        .attach_thread_pool(Box::new(BlockingThreadPool))
+        .build()
+      {
+        Ok(rt) => {
+          return Ok(Self {
+            inner: RuntimeInner::MonoioIouring(rt),
+            io_uring_enable_configured,
+          });
+        }
+        Err(e) => {
+          if enable_uring.is_some() {
+            Err(e)?;
+          } else {
+            io_uring_enable_configured = e.raw_os_error();
+          }
+        }
+      }
+    }
+    #[cfg(not(all(feature = "runtime-monoio", target_os = "linux")))]
+    let _ = enable_uring;
+
+    // `io_uring` is either disabled or not supported
+    #[cfg(feature = "runtime-monoio")]
+    let rt_inner = RuntimeInner::MonoioLegacy(
+      monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+        .enable_all()
+        .attach_thread_pool(Box::new(BlockingThreadPool))
+        .build()?,
+    );
+    #[cfg(feature = "runtime-tokio")]
+    let rt_inner = RuntimeInner::Tokio(tokio::runtime::Builder::new_current_thread().enable_all().build()?);
+
+    Ok(Self {
+      inner: rt_inner,
+      io_uring_enable_configured,
+    })
+  }
+
+  /// Creates a new asynchronous runtime using only Tokio
+  pub fn new_runtime_tokio_only() -> Result<Self, std::io::Error> {
+    Ok(Self {
+      inner: RuntimeInner::TokioOnly(tokio::runtime::Builder::new_current_thread().enable_all().build()?),
+      io_uring_enable_configured: None,
+    })
+  }
+
+  /// Return the OS error if `io_uring` couldn't be configured
+  pub fn return_io_uring_error(&self) -> Option<std::io::Error> {
+    self.io_uring_enable_configured.map(std::io::Error::from_raw_os_error)
+  }
+
+  /// Run a future on the runtime
+  pub fn run(&mut self, fut: impl Future) {
+    match self.inner {
+      #[cfg(all(feature = "runtime-monoio", target_os = "linux"))]
+      RuntimeInner::MonoioIouring(ref mut rt) => rt.block_on(fut),
+      #[cfg(feature = "runtime-monoio")]
+      RuntimeInner::MonoioLegacy(ref mut rt) => rt.block_on(fut),
+      #[cfg(feature = "runtime-tokio")]
+      RuntimeInner::Tokio(ref mut rt) => rt.block_on(async move {
+        let local_set = tokio::task::LocalSet::new();
+        local_set.run_until(future).await;
+      }),
+      RuntimeInner::TokioOnly(ref mut rt) => rt.block_on(fut),
+    };
+  }
 }
 
 pub use ferron_common::runtime::*;

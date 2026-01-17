@@ -16,7 +16,7 @@ use ferron_common::util::TtlCache;
 use ferron_common::{config::ServerConfiguration, util::ModuleCache};
 use ferron_common::{get_entries_for_validation, get_entry, get_value};
 
-use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
+use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 
 /// A trailing slash redirection module loader
 pub struct TrailingSlashRedirectsModuleLoader {
@@ -119,7 +119,18 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
         .and_then(|v| v.as_str())
       {
         let request_path = request.uri().path();
-        let request_query = request.uri().query();
+
+        let original_request_path = request
+          .extensions()
+          .get::<RequestData>()
+          .and_then(|d| d.original_url.as_ref())
+          .map_or(request_path, |u| u.path());
+        let original_request_query = request
+          .extensions()
+          .get::<RequestData>()
+          .and_then(|d| d.original_url.as_ref())
+          .map_or(request.uri().query(), |u| u.query());
+
         let mut request_path_bytes = request_path.bytes();
         if request_path_bytes.len() < 1 || request_path_bytes.nth(0) != Some(b'/') {
           return Ok(ResponseData {
@@ -152,7 +163,7 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
                 Some(domain) => format!("{domain}-"),
                 None => String::from(""),
               },
-              request_path
+              original_request_path
             );
 
             let read_rwlock = self.cache.read().await;
@@ -161,8 +172,8 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
               if is_directory {
                 let new_request_uri = format!(
                   "{}/{}",
-                  request_path,
-                  match request_query {
+                  original_request_path,
+                  match original_request_query {
                     Some(query) => format!("?{query}"),
                     None => String::from(""),
                   }
@@ -234,8 +245,8 @@ impl ModuleHandlers for TrailingSlashRedirectsModuleHandlers {
                   if is_directory {
                     let new_request_uri = format!(
                       "{}/{}",
-                      request_path,
-                      match request_query {
+                      original_request_path,
+                      match original_request_query {
                         Some(query) => format!("?{query}"),
                         None => String::from(""),
                       }
