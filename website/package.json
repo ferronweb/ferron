@@ -33,7 +33,7 @@
     "postcss-nesting": "^14.0.0",
     "postcss-value-parser": "^4.2.0",
     "rehype-wrap": "^1.1.0",
-    "svelte": "^5.46.3",
+    "svelte": "^5.46.4",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
     "unist-util-visit": "^5.0.0"
