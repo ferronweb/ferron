@@ -71,7 +71,7 @@ impl SendUnixStreamPoll {
   #[inline]
   fn populate_if_different_thread_or_marked_dropped(&mut self, dropped: bool) {
     let current_thread_id = std::thread::current().id();
-    let marked_dropped = !dropped && self.marked_dropped.swap(false, Ordering::Relaxed);
+    let marked_dropped = !dropped && self.marked_dropped.swap(false, Ordering::Relaxed) && self.prev_inner.is_none();
     if marked_dropped || current_thread_id != self.thread_id {
       if !self.obtained_dropped {
         panic!("the UnixStreamPoll can be used only once if drop guard is not obtained")
