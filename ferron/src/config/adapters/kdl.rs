@@ -18,19 +18,13 @@ use crate::config::{
 
 use super::ConfigurationAdapter;
 
-fn kdl_node_to_configuration_entry(
-  kdl_node: &KdlNode,
-) -> Result<ServerConfigurationEntry, Box<dyn Error + Send + Sync>> {
+fn kdl_node_to_configuration_entry(kdl_node: &KdlNode) -> ServerConfigurationEntry {
   let mut values = Vec::new();
   let mut props = HashMap::new();
   for kdl_entry in kdl_node.iter() {
     let value = match kdl_entry.value().to_owned() {
       KdlValue::String(value) => {
-        let resolved_value = if value.contains("{env:") {
-          lookup_env_value(value).map_err(|err| -> Box<dyn Error + Send + Sync> { err.into() })?
-        } else {
-          value
-        };
+        let resolved_value = lookup_env_value(value).expect("Failed to resolve environment variable in configuration");
         ServerConfigurationValue::String(resolved_value)
       }
       KdlValue::Integer(value) => ServerConfigurationValue::Integer(value),
@@ -48,7 +42,7 @@ fn kdl_node_to_configuration_entry(
     // If KDL node doesn't have any arguments, add the "#true" KDL value
     values.push(ServerConfigurationValue::Bool(true));
   }
-  Ok(ServerConfigurationEntry { values, props })
+  ServerConfigurationEntry { values, props }
 }
 
 fn load_configuration_inner(
@@ -324,7 +318,7 @@ fn load_configuration_inner(
                           Err(anyhow::anyhow!("Invalid `use` statement"))?;
                         }
                       }
-                      let value = kdl_node_to_configuration_entry(kdl_node)?;
+                      let value = kdl_node_to_configuration_entry(kdl_node);
                       conditions_data.push(match parse_conditional_data(name, value) {
                         Ok(d) => d,
                         Err(err) => Err(anyhow::anyhow!(
@@ -542,7 +536,7 @@ fn load_configuration_inner(
                 } else {
                   for kdl_node in children.nodes() {
                     let kdl_node_name = kdl_node.name().value();
-                    let value = kdl_node_to_configuration_entry(kdl_node)?;
+                    let value = kdl_node_to_configuration_entry(kdl_node);
                     if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
                       entries.inner.push(value);
                     } else {
@@ -575,7 +569,7 @@ fn load_configuration_inner(
                 ))?
               }
             } else {
-              let value = kdl_node_to_configuration_entry(kdl_node)?;
+              let value = kdl_node_to_configuration_entry(kdl_node);
               if let Some(entries) = configuration_entries.get_mut(kdl_node_name) {
                 entries.inner.push(value);
               } else {
