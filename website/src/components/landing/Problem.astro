@@ -5,36 +5,29 @@ import {
   faWrench
 } from "@fortawesome/free-solid-svg-icons";
 import ProblemPoint from "./ProblemPoint.astro";
+import Section from "./Section.astro";
 ---
 
-<section id="problem" class="py-20 relative">
-  <div class="container">
-    <div class="text-center mb-16">
-      <h2 class="text-3xl md:text-4xl font-bold mb-4">
-        The problem with popular web servers
-      </h2>
-      <p class="text-muted-foreground text-lg max-w-2xl mx-auto">
-        Despite powering much of the internet, popular web servers (such as
-        Apache and NGINX) weren't designed for ease of use, security, or modern
-        developer experience.
-      </p>
-    </div>
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <ProblemPoint
-        icon={faWrench}
-        title="Complex configurations"
-        description="Have you spent hours configuring a web server just to set up a website? NGINX configs can become verbose, even for something as common as a high-performance reverse proxy. Apache's directives can be hard to navigate too, with many options that can make simple tasks needlessly hard."
-      />
-      <ProblemPoint
-        icon={faShieldVirus}
-        title="Security concerns"
-        description="Many popular web servers (such as Apache and NGINX) are written in memory-unsafe languages (like C) and rely on low-level libraries. While mature and widely audited, this class of software has historically been more vulnerable to memory-safety bugs, such as Heartbleed in OpenSSL, increasing the potential impact of defects."
-      />
-      <ProblemPoint
-        icon={faTrafficLight}
-        title="Performance bottlenecks"
-        description="Apache's traditional process- and thread-based architectures can be less efficient under high concurrency and modern workloads, often needing more resources to achieve the same throughput as newer, event-driven servers."
-      />
-    </div>
+<Section
+  id="problem"
+  title="The problem with popular web servers"
+  description="Despite powering much of the internet, popular web servers (such as Apache and NGINX) weren't designed for ease of use, security, or modern developer experience."
+>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <ProblemPoint
+      icon={faWrench}
+      title="Complex configurations"
+      description="Have you spent hours configuring a web server just to set up a website? NGINX configs can become verbose, even for something as common as a high-performance reverse proxy. Apache's directives can be hard to navigate too, with many options that can make simple tasks needlessly hard."
+    />
+    <ProblemPoint
+      icon={faShieldVirus}
+      title="Security concerns"
+      description="Many popular web servers (such as Apache and NGINX) are written in memory-unsafe languages (like C) and rely on low-level libraries. While mature and widely audited, this class of software has historically been more vulnerable to memory-safety bugs, such as Heartbleed in OpenSSL, increasing the potential impact of defects."
+    />
+    <ProblemPoint
+      icon={faTrafficLight}
+      title="Performance bottlenecks"
+      description="Apache's traditional process- and thread-based architectures can be less efficient under high concurrency and modern workloads, often needing more resources to achieve the same throughput as newer, event-driven servers."
+    />
   </div>
-</section>
+</Section>

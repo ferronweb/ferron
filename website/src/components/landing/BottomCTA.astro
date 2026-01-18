@@ -1,40 +1,39 @@
 ---
 import { faDownload } from "@fortawesome/free-solid-svg-icons";
 import FontAwesomeIcon from "../FontAwesomeIcon.astro";
+import Section from "./Section.astro";
 ---
 
-<section class="py-20">
-  <div class="container">
+<Section>
+  <div
+    class="bg-linear-to-r from-primary/10 to-accent/10 rounded-xl p-8 md:p-12 relative overflow-hidden border border-primary/20"
+  >
+    <!-- Decorative elements -->
     <div
-      class="bg-linear-to-r from-primary/10 to-accent/10 rounded-xl p-8 md:p-12 relative overflow-hidden border border-primary/20"
+      class="absolute top-0 right-0 size-64 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 filter blur-3xl blur-fix-performance"
+    ></div>
+    <div
+      class="absolute bottom-0 left-0 size-64 bg-accent/10 rounded-full translate-y-1/2 -translate-x-1/2 filter blur-3xl blur-fix-performance"
+    ></div>
+    <div
+      class="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-8"
     >
-      <!-- Decorative elements -->
-      <div
-        class="absolute top-0 right-0 size-64 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 filter blur-3xl blur-fix-performance"
-      ></div>
-      <div
-        class="absolute bottom-0 left-0 size-64 bg-accent/10 rounded-full translate-y-1/2 -translate-x-1/2 filter blur-3xl blur-fix-performance"
-      ></div>
-      <div
-        class="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-8"
-      >
-        <div>
-          <h2 class="text-2xl md:text-3xl font-bold mb-4">
-            Ready to elevate your web infrastructure?
-          </h2>
-          <p class="text-muted-foreground max-w-2xl mb-0">
-            Join many sysadmins and developers using Ferron to serve websites
-            faster, more securely, and with less overhead.
-          </p>
-        </div>
-        <div class="flex flex-col sm:flex-row gap-4">
-          <a href="#install" class="btn btn-primary">
-            <FontAwesomeIcon icon={faDownload} class="mr-2 size-5!" />
-            Start installation
-          </a>
-          <a href="/docs" class="btn btn-secondary"> Read documentation </a>
-        </div>
+      <div>
+        <h2 class="text-2xl md:text-3xl font-bold mb-4">
+          Ready to elevate your web infrastructure?
+        </h2>
+        <p class="text-muted-foreground max-w-2xl mb-0">
+          Join many sysadmins and developers using Ferron to serve websites
+          faster, more securely, and with less overhead.
+        </p>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-4">
+        <a href="#install" class="btn btn-primary">
+          <FontAwesomeIcon icon={faDownload} class="mr-2 size-5!" />
+          Start installation
+        </a>
+        <a href="/docs" class="btn btn-secondary"> Read documentation </a>
       </div>
     </div>
   </div>
-</section>
+</Section>

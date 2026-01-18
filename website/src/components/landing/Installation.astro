@@ -6,66 +6,59 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import FontAwesomeIcon from "../FontAwesomeIcon.astro";
 import InstallCommand from "./InstallCommand.svelte";
+import Section from "./Section.astro";
 ---
 
-<section id="install" class="py-20 bg-secondary/20">
-  <div class="container">
-    <div class="text-center mb-16">
-      <h2 class="text-3xl md:text-4xl font-bold mb-4">Quick installation</h2>
-      <p class="text-muted-foreground text-lg max-w-2xl mx-auto">
-        Get started with Ferron in minutes. Choose your preferred platform and
-        installation method.
-      </p>
-    </div>
-    <div class="max-w-3xl mx-auto">
-      <InstallCommand client:load />
-      <div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="card">
-          <div class="icon-badge icon-badge-large mb-4">
-            <FontAwesomeIcon icon={faCloudDownload} />
-          </div>
-          <h3 class="text-lg font-semibold mb-2">Manual download</h3>
-          <p class="text-muted-foreground mb-4">
-            Download the binary directly from our releases page.
-          </p>
-          <a
-            href="/download"
-            class="btn btn-secondary shadow-sm h-8 px-3 w-full"
-          >
-            Download releases
-          </a>
+<Section
+  id="install"
+  title="Quick installation"
+  description="Get started with Ferron in minutes. Choose your preferred platform and installation method."
+>
+  <div class="max-w-3xl mx-auto">
+    <InstallCommand client:load />
+    <div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="card">
+        <div class="icon-badge icon-badge-large mb-4">
+          <FontAwesomeIcon icon={faCloudDownload} />
         </div>
-        <div class="card">
-          <div class="icon-badge icon-badge-large mb-4">
-            <FontAwesomeIcon icon={faHammer} />
-          </div>
-          <h3 class="text-lg font-semibold mb-2">Build from source</h3>
-          <p class="text-muted-foreground mb-4">
-            Compile Ferron from source for maximum customization.
-          </p>
-          <a
-            href="https://github.com/ferronweb/ferron?tab=readme-ov-file#building-ferron-from-source"
-            class="btn btn-secondary shadow-sm h-8 px-3 w-full"
-          >
-            Build instructions
-          </a>
+        <h3 class="text-lg font-semibold mb-2">Manual download</h3>
+        <p class="text-muted-foreground mb-4">
+          Download the binary directly from our releases page.
+        </p>
+        <a href="/download" class="btn btn-secondary shadow-sm h-8 px-3 w-full">
+          Download releases
+        </a>
+      </div>
+      <div class="card">
+        <div class="icon-badge icon-badge-large mb-4">
+          <FontAwesomeIcon icon={faHammer} />
         </div>
-        <div class="card">
-          <div class="icon-badge icon-badge-large mb-4">
-            <FontAwesomeIcon icon={faBox} />
-          </div>
-          <h3 class="text-lg font-semibold mb-2">Package managers</h3>
-          <p class="text-muted-foreground mb-4">
-            Install via popular package managers on any platform.
-          </p>
-          <a
-            href="/docs/installation/package-managers"
-            class="btn btn-secondary shadow-sm h-8 px-3 w-full"
-          >
-            View instructions
-          </a>
+        <h3 class="text-lg font-semibold mb-2">Build from source</h3>
+        <p class="text-muted-foreground mb-4">
+          Compile Ferron from source for maximum customization.
+        </p>
+        <a
+          href="https://github.com/ferronweb/ferron?tab=readme-ov-file#building-ferron-from-source"
+          class="btn btn-secondary shadow-sm h-8 px-3 w-full"
+        >
+          Build instructions
+        </a>
+      </div>
+      <div class="card">
+        <div class="icon-badge icon-badge-large mb-4">
+          <FontAwesomeIcon icon={faBox} />
         </div>
+        <h3 class="text-lg font-semibold mb-2">Package managers</h3>
+        <p class="text-muted-foreground mb-4">
+          Install via popular package managers on any platform.
+        </p>
+        <a
+          href="/docs/installation/package-managers"
+          class="btn btn-secondary shadow-sm h-8 px-3 w-full"
+        >
+          View instructions
+        </a>
       </div>
     </div>
   </div>
-</section>
+</Section>

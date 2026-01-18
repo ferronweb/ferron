@@ -1,35 +1,32 @@
 ---
 import { Code } from "astro:components";
 import kdl from "../../../kdl.tmLanguage.json";
+import Section from "./Section.astro";
 import TabSwitcher from "./TabSwitcher.svelte";
 ---
 
-<section id="configuration" class="py-20">
-  <div class="container mx-auto px-4">
-    <div class="text-center mb-16">
-      <h2 class="text-3xl md:text-4xl font-bold mb-4">Simple configuration</h2>
-      <p class="text-muted-foreground text-lg max-w-2xl mx-auto">
-        Ferron has simple, intuitive configuration, compared to more complex
-        configurations of some popular web servers.
-      </p>
-    </div>
-    <TabSwitcher
-      client:load
-      tabs={[
+<Section
+  id="configuration"
+  title="Simple configuration"
+  description="Ferron has simple, intuitive configuration, compared to more complex configurations of some popular web servers."
+>
+  <TabSwitcher
+    client:load
+    tabs={[
           { id: "static", label: "Static file serving" },
           { id: "proxy", label: "Reverse proxying" },
           { id: "php", label: "PHP hosting" }
         ]}
-      defaultTab="static"
-    >
-      <div slot="static">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 class="text-lg font-semibold mb-3">
-              Popular web server (NGINX host configuration)
-            </h3>
-            <Code
-              code={`server {
+    defaultTab="static"
+  >
+    <div slot="static">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <h3 class="text-lg font-semibold mb-3">
+            Popular web server (NGINX host configuration)
+          </h3>
+          <Code
+            code={`server {
     listen 80;
     listen 443 ssl http2;
 
@@ -47,41 +44,41 @@ import TabSwitcher from "./TabSwitcher.svelte";
         try_files $uri $uri/ =404;
     }
 }`}
-              lang="nginx"
-              themes={{
+            lang="nginx"
+            themes={{
                 light: "catppuccin-latte",
                 dark: "catppuccin-mocha"
               }}
-              defaultColor={false}
-              class="p-4 rounded-lg text-sm md:text-base"
-            />
-          </div>
-          <div>
-            <h3 class="text-lg font-semibold mb-3">Ferron 2</h3>
-            <Code
-              code={`// TLS certificate is obtained automatically by Ferron
+            defaultColor={false}
+            class="p-4 rounded-lg text-sm md:text-base"
+          />
+        </div>
+        <div>
+          <h3 class="text-lg font-semibold mb-3">Ferron 2</h3>
+          <Code
+            code={`// TLS certificate is obtained automatically by Ferron
 example.com {
     root "/var/www/html"
 }`}
-              lang={kdl}
-              themes={{
+            lang={kdl}
+            themes={{
                 light: "catppuccin-latte",
                 dark: "catppuccin-mocha"
               }}
-              defaultColor={false}
-              class="p-4 rounded-lg text-sm md:text-base"
-            />
-          </div>
+            defaultColor={false}
+            class="p-4 rounded-lg text-sm md:text-base"
+          />
         </div>
       </div>
-      <div slot="proxy">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 class="text-lg font-semibold mb-3">
-              Popular web server (NGINX host configuration)
-            </h3>
-            <Code
-              code={`upstream backend {
+    </div>
+    <div slot="proxy">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <h3 class="text-lg font-semibold mb-3">
+            Popular web server (NGINX host configuration)
+          </h3>
+          <Code
+            code={`upstream backend {
     server localhost:3000;
     keepalive 32;
 }
@@ -106,41 +103,41 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 }`}
-              lang="nginx"
-              themes={{
+            lang="nginx"
+            themes={{
                 light: "catppuccin-latte",
                 dark: "catppuccin-mocha"
               }}
-              defaultColor={false}
-              class="p-4 rounded-lg text-sm md:text-base"
-            />
-          </div>
-          <div>
-            <h3 class="text-lg font-semibold mb-3">Ferron 2</h3>
-            <Code
-              code={`// TLS certificate is obtained automatically by Ferron
+            defaultColor={false}
+            class="p-4 rounded-lg text-sm md:text-base"
+          />
+        </div>
+        <div>
+          <h3 class="text-lg font-semibold mb-3">Ferron 2</h3>
+          <Code
+            code={`// TLS certificate is obtained automatically by Ferron
 example.com {
     proxy "http://localhost:3000"
 }`}
-              lang={kdl}
-              themes={{
+            lang={kdl}
+            themes={{
                 light: "catppuccin-latte",
                 dark: "catppuccin-mocha"
               }}
-              defaultColor={false}
-              class="p-4 rounded-lg text-sm md:text-base"
-            />
-          </div>
+            defaultColor={false}
+            class="p-4 rounded-lg text-sm md:text-base"
+          />
         </div>
       </div>
-      <div slot="php">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 class="text-lg font-semibold mb-3">
-              Popular web server (NGINX host configuration)
-            </h3>
-            <Code
-              code={`server {
+    </div>
+    <div slot="php">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <h3 class="text-lg font-semibold mb-3">
+            Popular web server (NGINX host configuration)
+          </h3>
+          <Code
+            code={`server {
     listen 80;
     listen 443 ssl http2;
 
@@ -169,35 +166,34 @@ example.com {
         include fastcgi.conf;
     }
 }`}
-              lang="nginx"
-              themes={{
+            lang="nginx"
+            themes={{
                 light: "catppuccin-latte",
                 dark: "catppuccin-mocha"
               }}
-              defaultColor={false}
-              class="p-4 rounded-lg text-sm md:text-base"
-            />
-          </div>
-          <div>
-            <h3 class="text-lg font-semibold mb-3">Ferron 2</h3>
-            <Code
-              code={`// TLS certificate is obtained automatically by Ferron
+            defaultColor={false}
+            class="p-4 rounded-lg text-sm md:text-base"
+          />
+        </div>
+        <div>
+          <h3 class="text-lg font-semibold mb-3">Ferron 2</h3>
+          <Code
+            code={`// TLS certificate is obtained automatically by Ferron
 example.com {
     root "/var/www/html"
     // Check if the PHP-FPM socket file is accessible by the web server user, often "ferron"
     fcgi_php "unix:///var/run/php/php-fpm.sock"
 }`}
-              lang={kdl}
-              themes={{
+            lang={kdl}
+            themes={{
                 light: "catppuccin-latte",
                 dark: "catppuccin-mocha"
               }}
-              defaultColor={false}
-              class="p-4 rounded-lg text-sm md:text-base"
-            />
-          </div>
+            defaultColor={false}
+            class="p-4 rounded-lg text-sm md:text-base"
+          />
         </div>
       </div>
-    </TabSwitcher>
-  </div>
-</section>
+    </div>
+  </TabSwitcher>
+</Section>
