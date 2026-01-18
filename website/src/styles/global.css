@@ -49,7 +49,7 @@
   }
 }
 
-@theme {
+@theme static {
   --font-sans: var(--font-funnel-sans);
   --font-mono: var(--font-jetbrains-mono);
 
@@ -72,9 +72,8 @@
   --color-border: hsl(220 15% 20%);
   --color-input: hsl(220 15% 20%);
   --color-ring: hsl(0 0% 95%);
-}
 
-@theme static {
+  /* For charts (it must be in @theme static block) */
   --color-chart-1: hsl(216 100% 57%);
   --color-chart-2: hsl(0 100% 57%);
   --color-chart-3: hsl(174 100% 37%);
