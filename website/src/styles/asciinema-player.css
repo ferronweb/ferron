@@ -41,8 +41,8 @@
   --term-color-foreground: #cdd6f4;
   --term-color-background: color-mix(
     in hsl,
-    hsla(var(--secondary), 1),
-    hsla(var(--background), 1) 50%
+    var(--color-secondary),
+    var(--color-background) 50%
   );
   /*--term-color-background: #1e1e2e;*/
 

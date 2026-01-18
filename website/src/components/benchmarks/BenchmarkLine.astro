@@ -99,15 +99,17 @@ const { data, unit, competitors } = Astro.props;
   ]);
 
   const style = getComputedStyle(document.body);
-  const mutedForegroundColor = style.getPropertyValue("--muted-foreground");
-  const borderColor = style.getPropertyValue("--border");
-  const primaryColor = style.getPropertyValue("--primary");
+  const mutedForegroundColor = style.getPropertyValue(
+    "--color-muted-foreground"
+  );
+  const borderColor = style.getPropertyValue("--color-border");
+  const primaryColor = style.getPropertyValue("--color-primary");
   const chartColors = [
-    style.getPropertyValue("--chart-1"),
-    style.getPropertyValue("--chart-2"),
-    style.getPropertyValue("--chart-3"),
-    style.getPropertyValue("--chart-4"),
-    style.getPropertyValue("--chart-5")
+    style.getPropertyValue("--color-chart-1"),
+    style.getPropertyValue("--color-chart-2"),
+    style.getPropertyValue("--color-chart-3"),
+    style.getPropertyValue("--color-chart-4"),
+    style.getPropertyValue("--color-chart-5")
   ];
   const fontFamily = style.getPropertyValue("--font-funnel-sans");
 
@@ -117,8 +119,8 @@ const { data, unit, competitors } = Astro.props;
       const canvas = this.querySelector("canvas");
       Chart.defaults.font.family = fontFamily;
       Chart.defaults.font.size = 14;
-      Chart.defaults.color = `hsla(${mutedForegroundColor}, 1)`;
-      Chart.defaults.borderColor = `hsla(${borderColor}, 1)`;
+      Chart.defaults.color = mutedForegroundColor;
+      Chart.defaults.borderColor = borderColor;
       new Chart(canvas as ChartItem, {
         type: "line",
         data: {
@@ -127,8 +129,8 @@ const { data, unit, competitors } = Astro.props;
             {
               label: "Ferron",
               data: props.data.map((item: BenchmarkData) => item.ferron),
-              borderColor: `hsla(${primaryColor}, 1)`,
-              backgroundColor: `hsla(${primaryColor}, 1)`,
+              borderColor: primaryColor,
+              backgroundColor: primaryColor,
               pointStyle: false
             },
             ...props.competitors.map((competitor: string, index: number) => ({
@@ -136,8 +138,8 @@ const { data, unit, competitors } = Astro.props;
               data: props.data.map(
                 (item: BenchmarkData) => item.competitors[index]
               ),
-              borderColor: `hsla(${chartColors[index]}, 1)`,
-              backgroundColor: `hsla(${chartColors[index]}, 1)`,
+              borderColor: chartColors[index],
+              backgroundColor: chartColors[index],
               pointStyle: false
             }))
           ]

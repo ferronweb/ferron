@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
-@config "../../tailwind.config.js";
 
 @layer base {
   html {
@@ -11,18 +10,12 @@
   body {
     margin: 0;
     width: 100%;
-    font-family: var(--font-funnel-sans);
-    background-color: hsla(var(--background), 1);
-    color: hsla(var(--foreground), 1);
+    background-color: var(--color-background);
+    color: var(--color-foreground);
   }
 
   body {
     @apply flex flex-col min-h-screen;
-  }
-
-  code,
-  pre {
-    font-family: var(--font-jetbrains-mono);
   }
 
   * {
@@ -56,55 +49,62 @@
   }
 }
 
-:root {
-  --background: 220, 20%, 10%;
-  --foreground: 0, 0%, 95%;
-  --card: 220, 20%, 13%;
-  --card-foreground: 0, 0%, 95%;
-  --popover: 220, 20%, 13%;
-  --popover-foreground: 0, 0%, 95%;
-  --primary: 24, 90%, 55%;
-  --primary-foreground: 0, 0%, 98%;
-  --secondary: 220, 15%, 16%;
-  --secondary-foreground: 0, 0%, 98%;
-  --muted: 220, 20%, 18%;
-  --muted-foreground: 0, 0%, 75%;
-  --accent: 24, 90%, 45%;
-  --accent-foreground: 0, 0%, 98%;
-  --destructive: 0, 84.2%, 60.2%;
-  --destructive-foreground: 0, 0%, 98%;
-  --border: 220, 15%, 20%;
-  --input: 220, 15%, 20%;
-  --ring: 0, 0%, 95%;
-  --radius: 0.5rem;
-  --chart-1: 216, 100%, 57%;
-  --chart-2: 0, 100%, 57%;
-  --chart-3: 174, 100%, 37%;
-  --chart-4: 44, 100%, 47%;
-  --chart-5: 144, 100%, 37%;
+@theme {
+  --font-sans: var(--font-funnel-sans);
+  --font-mono: var(--font-jetbrains-mono);
+
+  --color-background: hsl(220 20% 10%);
+  --color-foreground: hsl(0 0% 95%);
+  --color-card: hsl(220 20% 13%);
+  --color-card-foreground: hsl(0 0% 95%);
+  --color-popover: hsl(220 20% 13%);
+  --color-popover-foreground: hsl(0 0% 95%);
+  --color-primary: hsl(24 90% 55%);
+  --color-primary-foreground: hsl(0 0% 98%);
+  --color-secondary: hsl(220 15% 16%);
+  --color-secondary-foreground: hsl(0 0% 98%);
+  --color-muted: hsl(220 20% 18%);
+  --color-muted-foreground: hsl(0 0% 75%);
+  --color-accent: hsl(24 90% 45%);
+  --color-accent-foreground: hsl(0 0% 98%);
+  --color-destructive: hsl(0 84.2% 60.2%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-border: hsl(220 15% 20%);
+  --color-input: hsl(220 15% 20%);
+  --color-ring: hsl(0 0% 95%);
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --background: 0, 0%, 100%;
-    --foreground: 220, 47%, 11%;
-    --card: 0, 0%, 97%;
-    --card-foreground: 220, 47%, 11%;
-    --popover: 220, 20%, 13%;
-    --popover-foreground: 0, 0%, 95%;
-    --primary: 24, 90%, 55%;
-    --primary-foreground: 0, 0%, 98%;
-    --secondary: 0, 0%, 92%;
-    --secondary-foreground: 220, 47%, 11%;
-    --muted: 0, 0%, 88%;
-    --muted-foreground: 220, 20%, 45%;
-    --accent: 24, 90%, 45%;
-    --accent-foreground: 0, 0%, 98%;
-    --destructive: 0, 84.2%, 60.2%;
-    --destructive-foreground: 0, 0%, 98%;
-    --border: 0, 0%, 85%;
-    --input: 0, 0%, 85%;
-    --ring: 220, 47%, 11%;
+@theme static {
+  --color-chart-1: hsl(216 100% 57%);
+  --color-chart-2: hsl(0 100% 57%);
+  --color-chart-3: hsl(174 100% 37%);
+  --color-chart-4: hsl(44 100% 47%);
+  --color-chart-5: hsl(144 100% 37%);
+}
+
+@layer theme {
+  @media (prefers-color-scheme: light) {
+    :root {
+      --color-background: hsl(0 0% 100%);
+      --color-foreground: hsl(220 47% 11%);
+      --color-card: hsl(0 0% 97%);
+      --color-card-foreground: hsl(220 47% 11%);
+      --color-popover: hsl(220 20% 13%);
+      --color-popover-foreground: hsl(0 0% 95%);
+      --color-primary: hsl(24 90% 55%);
+      --color-primary-foreground: hsl(0 0% 98%);
+      --color-secondary: hsl(0 0% 92%);
+      --color-secondary-foreground: hsl(220 47% 11%);
+      --color-muted: hsl(0 0% 88%);
+      --color-muted-foreground: hsl(220 20% 45%);
+      --color-accent: hsl(24 90% 45%);
+      --color-accent-foreground: hsl(0 0% 98%);
+      --color-destructive: hsl(0 84.2% 60.2%);
+      --color-destructive-foreground: hsl(0 0% 98%);
+      --color-border: hsl(0 0% 85%);
+      --color-input: hsl(0 0% 85%);
+      --color-ring: hsl(220 47% 11%);
+    }
   }
 }
 
@@ -166,10 +166,10 @@
 
 .pagefind-ui {
   --pagefind-ui-scale: 0.8;
-  --pagefind-ui-primary: hsla(var(--primary), 1);
-  --pagefind-ui-text: hsla(var(--foreground), 1);
-  --pagefind-ui-background: hsla(var(--background), 1);
-  --pagefind-ui-border: hsla(var(--border), 1);
+  --pagefind-ui-primary: var(--color-primary);
+  --pagefind-ui-text: var(--color-foreground);
+  --pagefind-ui-background: var(--color-background);
+  --pagefind-ui-border: var(--color-border);
   --pagefind-ui-border-width: 1px;
   --pagefind-ui-border-radius: 0.25rem;
   --pagefind-ui-font: var(--font-funnel-sans);
@@ -216,8 +216,8 @@
   /* Don't use theme's background ("var(--shiki-dark-bg)") */
   background-color: color-mix(
     in hsl,
-    hsla(var(--secondary), 1),
-    hsla(var(--background), 1) 50%
+    var(--color-secondary),
+    var(--color-background) 50%
   ) !important;
   font-style: var(--shiki-dark-font-style) !important;
   font-weight: var(--shiki-dark-font-weight) !important;
@@ -231,8 +231,8 @@
     /* Don't use theme's background ("var(--shiki-light-bg)") */
     background-color: color-mix(
       in hsl,
-      hsla(var(--secondary), 1),
-      hsla(var(--background), 1) 50%
+      var(--color-secondary),
+      var(--color-background) 50%
     ) !important;
     font-style: var(--shiki-light-font-style) !important;
     font-weight: var(--shiki-light-font-weight) !important;
@@ -248,19 +248,19 @@
   --tw-prose-body: inherit;
   --tw-prose-headings: inherit;
   --tw-prose-lead: inherit;
-  --tw-prose-links: hsla(var(--primary), 1);
+  --tw-prose-links: var(--color-primary);
   --tw-prose-bold: inherit;
-  --tw-prose-counters: hsla(var(--muted-foreground), 1);
-  --tw-prose-bullets: hsla(var(--muted-foreground), 1);
+  --tw-prose-counters: var(--color-muted-foreground);
+  --tw-prose-bullets: var(--color-muted-foreground);
   --tw-prose-hr: inherit;
   --tw-prose-quotes: inherit;
-  --tw-prose-quote-borders: hsla(var(--border), 1);
+  --tw-prose-quote-borders: var(--color-border);
   --tw-prose-captions: inherit;
   --tw-prose-code: inherit;
   --tw-prose-pre: inherit;
   --tw-prose-pre-code: inherit;
-  --tw-prose-th-borders: hsla(var(--foreground), 1);
-  --tw-prose-td-borders: hsla(var(--border), 1);
+  --tw-prose-th-borders: var(--color-foreground);
+  --tw-prose-td-borders: var(--color-border);
   --tw-prose-invert-body: inherit;
   --tw-prose-invert-headings: inherit;
   --tw-prose-invert-lead: inherit;
