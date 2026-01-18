@@ -1,16 +1,11 @@
 ---
 import AnalyticsOptOut from "../components/AnalyticsOptOut.astro";
-import MainLayout from "../layouts/MainLayout.astro";
+import TitleLayout from "../layouts/TitleLayout.astro";
 ---
 
-<MainLayout
+<TitleLayout
   title="Opt-out from analytics"
   description="You can opt out from analytics using the form on this page."
 >
-  <main class="max-w-screen-xl mx-auto px-4 py-6 md:py-24 gap-2 flex flex-col">
-    <h1 class="text-3xl md:text-5xl pb-1 md:pb-2 mb-2 font-bold">
-      Opt-out from analytics
-    </h1>
-    <AnalyticsOptOut />
-  </main>
-</MainLayout>
+  <AnalyticsOptOut />
+</TitleLayout>

@@ -1,62 +1,52 @@
 ---
-import MainLayout from "../layouts/MainLayout.astro";
+import CenteredTitleLayout from "../layouts/CenteredTitleLayout.astro";
 ---
 
-<MainLayout
+<CenteredTitleLayout
+  id="support"
   title="Support"
-  description="Questions about Ferron? Visit our Support page for email, and other support channel options to reach our team."
+  metaDescription="Questions about Ferron? Visit our Support page for email, and other support channel options to reach our team."
+  description="If you have any questions about Ferron, or just want to get in touch with us, you can email us or visit our community."
 >
-  <main
-    id="support"
-    class="max-w-screen-xl mx-auto px-4! py-6 md:py-28 flex items-center justify-center flex-col"
+  <div
+    class="max-w-screen-lg w-full mx-auto grid grid-cols-1 md:grid-cols-2 gap-6"
   >
-    <h1 class="text-4xl md:text-6xl pb-1 md:pb-2 font-bold">Support</h1>
-    <p
-      class="max-w-xl text-center text-muted-foreground flex items-center justify-center mt-2 mb-6 md:mb-8 md:text-lg"
-    >
-      If you have any questions about Ferron, or just want to get in touch with
-      us, you can email us or visit our community.
-    </p>
-    <div
-      class="max-w-screen-lg w-full mx-auto grid grid-cols-1 md:grid-cols-2 gap-6"
-    >
-      <div class="card flex flex-col">
-        <h2 class="font-bold text-2xl mb-4">Community support</h2>
-        <div class="grow">
-          <p class="my-2">
-            Take part in our community on Matrix; you can get help from our
-            community there for free.
-          </p>
-          <p class="my-2">
-            We welcome your contributions and look forward to hearing from you!
-          </p>
-        </div>
-        <div
-          class="mt-4 mx-auto flex flex-col sm:flex-row gap-4 max-w-md w-full xl:w-auto sm:items-center sm:justify-center"
-        >
-          <a
-            href="https://matrix.to/#/#ferronweb:matrix.org"
-            class="btn btn-secondary"
-          >
-            Join Matrix community
-          </a>
-        </div>
+    <div class="card flex flex-col">
+      <h2 class="font-bold text-2xl mb-4">Community support</h2>
+      <div class="grow">
+        <p class="my-2">
+          Take part in our community on Matrix; you can get help from our
+          community there for free.
+        </p>
+        <p class="my-2">
+          We welcome your contributions and look forward to hearing from you!
+        </p>
       </div>
-      <div class="card flex flex-col">
-        <h2 class="font-bold text-2xl mb-4">Official email support</h2>
-        <div class="grow">
-          <p class="my-2">
-            If you like to get help with Ferron, know more about it, or just
-            want to get in touch with us, you can email us at
-            <a class="underline text-primary" href="mailto:hello@ferron.sh"
-              >hello@ferron.sh</a
-            >.
-          </p>
-          <p class="my-2">
-            We would like to hear your feedback and suggestions too!
-          </p>
-        </div>
+      <div
+        class="mt-4 mx-auto flex flex-col sm:flex-row gap-4 max-w-md w-full xl:w-auto sm:items-center sm:justify-center"
+      >
+        <a
+          href="https://matrix.to/#/#ferronweb:matrix.org"
+          class="btn btn-secondary"
+        >
+          Join Matrix community
+        </a>
       </div>
     </div>
-  </main>
-</MainLayout>
+    <div class="card flex flex-col">
+      <h2 class="font-bold text-2xl mb-4">Official email support</h2>
+      <div class="grow">
+        <p class="my-2">
+          If you like to get help with Ferron, know more about it, or just want
+          to get in touch with us, you can email us at
+          <a class="underline text-primary" href="mailto:hello@ferron.sh"
+            >hello@ferron.sh</a
+          >.
+        </p>
+        <p class="my-2">
+          We would like to hear your feedback and suggestions too!
+        </p>
+      </div>
+    </div>
+  </div>
+</CenteredTitleLayout>

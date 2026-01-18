@@ -11,7 +11,7 @@ import {
 import { format } from "date-fns";
 import blogMissing from "../../assets/blog-missing.png";
 import FontAwesomeIcon from "../../components/FontAwesomeIcon.astro";
-import MainLayout from "../../layouts/MainLayout.astro";
+import CenteredTitleLayout from "../../layouts/CenteredTitleLayout.astro";
 
 // prettier-ignore
 export async function getStaticPaths() {
@@ -58,24 +58,17 @@ if (begPage < 1) {
 }
 ---
 
-<MainLayout
-  title="Blog"
-  description="Welcome to the Ferron Blog! Stay tuned for the latest Ferron updates."
+<CenteredTitleLayout
+  id="blog"
+  title="Ferron Blog"
+  description="Stay tuned for the latest Ferron updates."
+  metaTitle="Blog"
+  metaDescription="Welcome to the Ferron Blog! Stay tuned for the latest Ferron updates."
 >
-  <main
-    id="blog"
-    class="max-w-screen-xl mx-auto px-4! py-6 md:py-28 flex items-center justify-center flex-col"
+  <section
+    class="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto"
   >
-    <h1 class="text-4xl md:text-6xl pb-1 md:pb-2 font-bold">Ferron Blog</h1>
-    <p
-      class="max-w-xl text-center text-muted-foreground flex items-center justify-center mt-2 mb-6 md:mb-8 md:text-lg"
-    >
-      Stay tuned for the latest Ferron updates.
-    </p>
-    <section
-      class="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto"
-    >
-      {data.map((post, index) => {
+    {data.map((post, index) => {
           const truncatedDescription =
             post.data.description === undefined
               ? ""
@@ -155,8 +148,8 @@ if (begPage < 1) {
             </div>
           );
         })}
-    </section>
-    {(
+  </section>
+  {(
         <div class="flex-center mt-12">
           {lastPage > 1 && (
             <nav class="mx-auto flex w-full justify-center">
@@ -208,5 +201,4 @@ if (begPage < 1) {
           )}
         </div>
       )}
-  </main>
-</MainLayout>
+</CenteredTitleLayout>
