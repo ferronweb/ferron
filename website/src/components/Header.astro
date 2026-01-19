@@ -295,7 +295,6 @@ const docLinks = Astro.props.docLinks;
   function hideSearchOnEsc(search: Element) {
     const listener = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        const searchMenu = document.querySelector("[data-search-menu]");
         search.classList.add("hidden");
         document.documentElement.classList.remove("max-md:overflow-hidden");
         document.removeEventListener("keydown", listener);
