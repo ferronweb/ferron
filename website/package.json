@@ -23,7 +23,7 @@
     "@tailwindcss/vite": "^4.1.18",
     "asciinema-player": "^3.14.0",
     "astro": "^5.16.9",
-    "astro-compress": "^2.3.9",
+    "astro-minify-html-swc": "^0.1.10",
     "astro-pagefind": "^1.8.5",
     "astro-seo": "^1.1.0",
     "autoprefixer": "^10.4.23",
