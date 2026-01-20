@@ -97,3 +97,5 @@ clean:
 	rm -rf build-workspace build-release dist packaging/deb/ferron_* packaging/deb/md5sums.tmp packaging/rpm/data packaging/rpm/ferron.spec packaging/rpm/rpm
 	cargo clean
 	cd build-prepare && cargo clean
+
+.PHONY: smoketest installer
