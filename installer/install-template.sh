@@ -363,7 +363,8 @@ create_ferron_user() {
         useradd -d /var/lib/ferron -m -s /usr/sbin/nologin -r ferron || return 1
     else
         # useradd is not available for instance on Alpine Linux
-        adduser --home /var/lib/ferron --shell /usr/sbin/nologin --system --disabled-password ferron || return 1
+        addgroup --system ferron || true
+        adduser --home /var/lib/ferron --shell /usr/sbin/nologin --system --disabled-password --ingroup ferron ferron || return 1
     fi
     chown -hR ferron:ferron /var/log/ferron || return 1
     chown -hR ferron:ferron /var/lib/ferron || return 1
