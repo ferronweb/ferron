@@ -452,49 +452,63 @@ echo_warning() {
     echo -n "warning"
 }
 
+is_busybox_ps() {
+    ps --help 2>&1 | grep -qi busybox
+}
+
+get_pids() {
+    if type ps > /dev/null 2>&1; then
+        if is_busybox_ps; then
+            # BusyBox ps: PID is column 1
+            ps | grep "$server $serverargs" | grep -v grep | awk '{print $1}'
+        else
+            # procps ps
+            ps -aef | grep "$server $serverargs" | grep -v grep | awk '{print $2}'
+        fi
+    else
+        pidof $server
+    fi
+}
+
 do_stop()
 {
     echo -n $"Stopping $servicename: "
-    if type ps > /dev/null 2>&1; then
-      pid=`ps -aef | grep "$server $serverargs" | grep -v " grep " | awk '{print $2}' | xargs`
-    else
-      pid=`pidof $server | xargs`
-    fi
-    kill -9 $pid > /dev/null 2>&1 && echo_success || echo_failure
-    RETVAL=$?
-    echo
-    [ $RETVAL -eq 0 ] && rm -f "$lockfile"
+    pid="$(get_pids | xargs)"
 
-    if [ "$pid" = "" -a -f "$lockfile" ]; then
-        rm -f "$lockfile"
-        echo "Removed lockfile ( $lockfile )"
+    if [ -n "$pid" ]; then
+        kill -9 $pid >/dev/null 2>&1 \
+            && echo_success || echo_failure
+        RETVAL=$?
+    else
+        echo_warning
+        RETVAL=0
     fi
+
+    echo
+    rm -f "$lockfile"
 }
 
 do_reload()
 {
-    echo -n $"Reloading $servicename: "
-    if type ps > /dev/null 2>&1; then
-      pid=`ps -aef | grep "$server $serverargs" | grep -v " grep " | awk '{print $2}' | xargs`
+    echo -n "Reloading $servicename: "
+    pid="$(get_pids | xargs)"
+
+    if [ -n "$pid" ]; then
+        kill -HUP $pid >/dev/null 2>&1 && echo_success || echo_failure
     else
-      pid=`pidof $server | xargs`
+        echo_failure
     fi
-    kill -1 $pid > /dev/null 2>&1 && echo_success || echo_failure
     echo
 }
 
-do_status()
-{
-   if type ps > /dev/null 2>&1; then
-     pid=`ps -aef | grep "$server $serverargs" | grep -v " grep " | awk '{print $2}' | head -n 1`
-   else
-     pid=`pidof -s $server`
-   fi
-   if [ "$pid" != "" ]; then
-     echo "$servicename (pid $pid) is running..."
-   else
-     echo "$servicename is stopped"
-   fi
+do_status() {
+    pid="$(get_pids | head -n 1)"
+
+    if [ -n "$pid" ]; then
+        echo "$servicename (pid $pid) is running..."
+    else
+        echo "$servicename is stopped"
+    fi
 }
 
 case "$1" in
