@@ -1574,7 +1574,10 @@ fn before_starting_server(
         Err(err)?
       }
     }
+
+    drop(module_loaders);
   }
+
   Ok(())
 }
 
