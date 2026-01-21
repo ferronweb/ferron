@@ -1457,18 +1457,22 @@ fn before_starting_server(
         io_uring_disabled_rx.close();
       }
 
-      let reloadable_handler_data = SERVER_CONFIG_ARCSWAP.get().cloned().unwrap_or_else(|| {
-        let reloadable_handler_data = Arc::new(ArcSwap::new(Arc::new(ReloadableHandlerData {
-          configurations: server_configurations,
-          tls_configs: Arc::new(tls_configs),
-          http3_enabled: !quic_listened_socket_addresses.is_empty(),
-          acme_tls_alpn_01_configs: Arc::new(acme_tls_alpn_01_configs),
-          acme_http_01_resolvers,
-          enable_proxy_protocol,
-        })));
+      let inner_handler_data = ReloadableHandlerData {
+        configurations: server_configurations,
+        tls_configs: Arc::new(tls_configs),
+        http3_enabled: !quic_listened_socket_addresses.is_empty(),
+        acme_tls_alpn_01_configs: Arc::new(acme_tls_alpn_01_configs),
+        acme_http_01_resolvers,
+        enable_proxy_protocol,
+      };
+      let reloadable_handler_data = if let Some(data) = SERVER_CONFIG_ARCSWAP.get().cloned() {
+        data.swap(Arc::new(inner_handler_data));
+        data
+      } else {
+        let reloadable_handler_data = Arc::new(ArcSwap::from_pointee(inner_handler_data));
         let _ = SERVER_CONFIG_ARCSWAP.set(reloadable_handler_data.clone());
         reloadable_handler_data
-      });
+      };
 
       // Spawn request handler threads
       if start_new_handlers {
