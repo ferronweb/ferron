@@ -5,6 +5,7 @@ mod listener_handler_communication;
 mod listeners;
 mod request_handler;
 mod runtime;
+mod tls_setup;
 mod util;
 
 use std::collections::{HashMap, HashSet};
@@ -18,32 +19,27 @@ use std::time::Duration;
 
 use arc_swap::ArcSwap;
 use async_channel::{Receiver, Sender};
-use base64::Engine;
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use ferron_common::logging::{ErrorLogger, LogMessage};
 use ferron_common::{get_entry, get_value, get_values};
-use ferron_load_modules::{get_dns_provider, obtain_module_loaders, obtain_observability_backend_loaders};
+use ferron_load_modules::{obtain_module_loaders, obtain_observability_backend_loaders};
 use human_panic::{setup_panic, Metadata};
-use instant_acme::{ChallengeType, ExternalAccountKey, LetsEncrypt};
 use mimalloc::MiMalloc;
 use rustls::client::WebPkiServerVerifier;
 use rustls::crypto::aws_lc_rs::cipher_suite::*;
 use rustls::crypto::aws_lc_rs::default_provider;
 use rustls::crypto::aws_lc_rs::kx_group::*;
 use rustls::server::{ResolvesServerCert, WebPkiClientVerifier};
-use rustls::sign::CertifiedKey;
 use rustls::version::{TLS12, TLS13};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use rustls_native_certs::load_native_certs;
 use rustls_platform_verifier::BuilderVerifierExt;
 use shadow_rs::shadow;
 use tokio_util::sync::CancellationToken;
-use xxhash_rust::xxh3::xxh3_128;
 
 use crate::acme::{
   add_domain_to_cache, check_certificate_validity_or_install_cached, convert_on_demand_config, get_cached_domains,
-  provision_certificate, AcmeCache, AcmeConfig, AcmeOnDemandConfig, AcmeResolver, TlsAlpn01Resolver,
-  ACME_TLS_ALPN_NAME,
+  provision_certificate, ACME_TLS_ALPN_NAME,
 };
 use crate::config::adapters::ConfigurationAdapter;
 use crate::config::processing::{
@@ -53,10 +49,11 @@ use crate::config::ServerConfigurations;
 use crate::handler::{create_http_handler, ReloadableHandlerData};
 use crate::listener_handler_communication::ConnectionData;
 use crate::listeners::{create_quic_listener, create_tcp_listener};
-use crate::util::{
-  is_localhost, load_certs, load_private_key, match_hostname, CustomSniResolver, NoServerVerifier,
-  OneCertifiedKeyResolver,
+use crate::tls_setup::{
+  handle_automatic_tls, handle_manual_tls, handle_nonencrypted_ports, manual_tls_entry, read_default_port,
+  resolve_sni_hostname, should_skip_server, TlsBuildContext,
 };
+use crate::util::{load_certs, match_hostname, NoServerVerifier};
 
 // Set the global allocator to use mimalloc for performance optimization
 #[global_allocator]
@@ -375,519 +372,65 @@ fn before_starting_server(
         Err(anyhow::anyhow!("PROXY protocol isn't supported with HTTP/3"))?
       }
 
-      let default_http_port = global_configuration
-        .as_deref()
-        .and_then(|c| get_entry!("default_http_port", c))
-        .and_then(|e| e.values.first())
-        .map_or(Some(80), |v| {
-          if v.is_null() {
-            None
-          } else {
-            Some(v.as_i128().unwrap_or(80) as u16)
-          }
-        });
-      let default_https_port = global_configuration
-        .as_deref()
-        .and_then(|c| get_entry!("default_https_port", c))
-        .and_then(|e| e.values.first())
-        .map_or(Some(443), |v| {
-          if v.is_null() {
-            None
-          } else {
-            Some(v.as_i128().unwrap_or(443) as u16)
-          }
-        });
+      let default_http_port = read_default_port(global_configuration.as_deref(), false);
+      let default_https_port = read_default_port(global_configuration.as_deref(), true);
 
-      let mut tls_ports: HashMap<u16, CustomSniResolver> = HashMap::new();
-      #[allow(clippy::type_complexity)]
-      let mut tls_port_locks: HashMap<u16, Arc<tokio::sync::RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>> =
-        HashMap::new();
-      let mut nonencrypted_ports = HashSet::new();
-      let mut certified_keys_to_preload: HashMap<u16, Vec<Arc<CertifiedKey>>> = HashMap::new();
-      let mut used_sni_hostnames = HashSet::new();
-      let mut automatic_tls_used_sni_hostnames = HashSet::new();
-      let mut acme_tls_alpn_01_resolvers: HashMap<u16, TlsAlpn01Resolver> = HashMap::new();
-      let mut acme_tls_alpn_01_resolver_locks: HashMap<
-        u16,
-        Arc<tokio::sync::RwLock<Vec<crate::acme::TlsAlpn01DataLock>>>,
-      > = HashMap::new();
-      let acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>> =
-        Arc::new(tokio::sync::RwLock::new(Vec::new()));
-      let acme_default_directory = dirs::data_local_dir().and_then(|mut p| {
-        p.push("ferron-acme");
-        p.into_os_string().into_string().ok()
-      });
-      let memory_acme_account_cache_data = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
-      let mut acme_configs = Vec::new();
-      let mut acme_on_demand_configs = Vec::new();
-      let (acme_on_demand_tx, acme_on_demand_rx) = async_channel::unbounded();
-      let on_demand_tls_ask_endpoint = match global_configuration
-        .as_ref()
-        .and_then(|c| get_value!("auto_tls_on_demand_ask", c))
-        .and_then(|v| v.as_str())
-        .map(|u| u.parse::<hyper::Uri>())
-      {
-        Some(Ok(uri)) => Some(uri),
-        Some(Err(err)) => Err(anyhow::anyhow!(
-          "Failed to parse automatic TLS on demand asking endpoint URI: {}",
-          err
-        ))?,
-        None => None,
-      };
-      let on_demand_tls_ask_endpoint_verify = !global_configuration
-        .as_ref()
-        .and_then(|c| get_value!("auto_tls_on_demand_ask_no_verification", c))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+      let mut tls_build_ctx = TlsBuildContext::default();
+      let memory_acme_account_cache_data: Arc<tokio::sync::RwLock<HashMap<String, Vec<u8>>>> = Default::default();
 
       // Iterate server configurations (TLS configuration)
-      for server_configuration in &server_configurations.inner {
-        if server_configuration.filters.is_global_non_host()
-          || (server_configuration.filters.is_global() && server_configuration.entries.is_empty())
-        {
-          // Don't add listeners from an empty global configuration or non-host global configuration
+      for server in &server_configurations.inner {
+        if should_skip_server(server) {
           continue;
         }
 
-        let on_demand_tls = get_value!("auto_tls_on_demand", server_configuration)
-          .and_then(|v| v.as_bool())
-          .unwrap_or(false);
+        let sni_hostname = resolve_sni_hostname(&server.filters);
+        let https_port = server.filters.port.or(default_https_port);
 
-        let https_port = server_configuration.filters.port.or(default_https_port);
+        handle_nonencrypted_ports(&mut tls_build_ctx, server, default_http_port);
 
-        let sni_hostname = server_configuration.filters.hostname.clone().or_else(|| {
-          // !!! UNTESTED, many clients don't send SNI hostname when accessing via IP address anyway
-          match server_configuration.filters.ip {
-            Some(IpAddr::V4(address)) => Some(address.to_string()),
-            Some(IpAddr::V6(address)) => Some(format!("[{address}]")),
-            _ => None,
-          }
-        });
-
-        let is_sni_hostname_used = !https_port.is_none_or(|p| {
-          !used_sni_hostnames.contains(&(p, sni_hostname.clone()))
-            && !automatic_tls_used_sni_hostnames.contains(&(p, sni_hostname.clone()))
-        });
-        let is_auto_tls_sni_hostname_used =
-          https_port.is_some_and(|p| automatic_tls_used_sni_hostnames.contains(&(p, sni_hostname.clone())));
-
-        let mut automatic_tls_port = None;
-        if server_configuration.filters.port.is_none() {
-          if get_value!("auto_tls", server_configuration)
-            .and_then(|v| v.as_bool())
-            .unwrap_or(!is_localhost(
-              server_configuration.filters.ip.as_ref(),
-              server_configuration.filters.hostname.as_deref(),
-            ))
-          {
-            automatic_tls_port = default_https_port;
-          }
-          if let Some(http_port) = default_http_port {
-            nonencrypted_ports.insert(http_port);
-          }
-        }
-
-        if get_value!("auto_tls", server_configuration)
-          .and_then(|v| v.as_bool())
-          .unwrap_or(false)
-        {
-          automatic_tls_port = https_port;
-        } else if let Some(tls_entry) = get_entry!("tls", server_configuration) {
-          if let Some(https_port) = https_port {
-            if tls_entry.values.len() == 2 {
-              if let Some(cert_path) = tls_entry.values[0].as_str() {
-                if let Some(key_path) = tls_entry.values[1].as_str() {
-                  automatic_tls_port = None;
-
-                  if !is_sni_hostname_used {
-                    let certs = match load_certs(cert_path) {
-                      Ok(certs) => certs,
-                      Err(err) => Err(anyhow::anyhow!(
-                        "Cannot load the \"{}\" TLS certificate: {}",
-                        cert_path,
-                        err
-                      ))?,
-                    };
-                    let key = match load_private_key(key_path) {
-                      Ok(key) => key,
-                      Err(err) => Err(anyhow::anyhow!("Cannot load the \"{}\" private key: {}", key_path, err))?,
-                    };
-                    let signing_key = match crypto_provider.key_provider.load_private_key(key) {
-                      Ok(key) => key,
-                      Err(err) => Err(anyhow::anyhow!("Cannot load the \"{}\" private key: {}", key_path, err))?,
-                    };
-                    let certified_key = Arc::new(CertifiedKey::new(certs, signing_key));
-                    if let Some(certified_keys) = certified_keys_to_preload.get_mut(&https_port) {
-                      certified_keys.push(certified_key.clone());
-                    } else {
-                      certified_keys_to_preload.insert(https_port, vec![certified_key.clone()]);
-                    }
-                    let resolver = Arc::new(OneCertifiedKeyResolver::new(certified_key));
-                    if let Some(sni_resolver) = tls_ports.get_mut(&https_port) {
-                      if let Some(sni_hostname) = &sni_hostname {
-                        sni_resolver.load_host_resolver(sni_hostname, resolver);
-                      } else {
-                        sni_resolver.load_fallback_resolver(resolver);
-                      }
-                    } else {
-                      let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-                      tls_port_locks.insert(https_port, sni_resolver_list.clone());
-                      let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
-                      if let Some(sni_hostname) = &sni_hostname {
-                        sni_resolver.load_host_resolver(sni_hostname, resolver);
-                      } else {
-                        sni_resolver.load_fallback_resolver(resolver);
-                      }
-                      tls_ports.insert(https_port, sni_resolver);
-                    }
-                    used_sni_hostnames.insert((https_port, sni_hostname.clone()));
-                  }
-                }
-              }
-            }
-          }
-        } else if let Some(http_port) = server_configuration.filters.port.or(default_http_port) {
-          nonencrypted_ports.insert(http_port);
-        }
-        if let Some(automatic_tls_port) = automatic_tls_port {
-          if !is_auto_tls_sni_hostname_used {
-            if sni_hostname.is_some() || on_demand_tls {
-              let is_wildcard_domain = sni_hostname.as_ref().is_some_and(|s| s.starts_with("*."));
-              let challenge_type_entry = get_entry!("auto_tls_challenge", server_configuration);
-              let challenge_type_str = challenge_type_entry
-                .and_then(|e| e.values.first())
-                .and_then(|v| v.as_str())
-                .unwrap_or("tls-alpn-01");
-              let challenge_params = challenge_type_entry
-                .and_then(|e| {
-                  let mut props_str = HashMap::new();
-                  for (prop_name, prop_value) in e.props.iter() {
-                    if let Some(prop_value) = prop_value.as_str() {
-                      props_str.insert(prop_name.to_string(), prop_value.to_string());
-                    }
-                  }
-                  if props_str.is_empty() {
-                    None
-                  } else {
-                    Some(props_str)
-                  }
-                })
-                .unwrap_or(HashMap::new());
-              if let Some(sni_hostname) = &sni_hostname {
-                if sni_hostname.parse::<IpAddr>().is_ok() {
-                  for logging_tx in global_configuration
-                    .as_ref()
-                    .map_or(&vec![], |c| &c.observability.log_channels)
-                  {
-                    logging_tx
-                    .send_blocking(LogMessage::new(
-                      format!("Ferron's automatic TLS functionality doesn't support IP address-based identifiers, skipping SNI host \"{sni_hostname}\"..."),
-                      true,
-                    ))
-                    .unwrap_or_default();
-                  }
-                  continue;
-                }
-              }
-              let challenge_type = match &*challenge_type_str.to_uppercase() {
-                "HTTP-01" => {
-                  if let Some(sni_hostname) = &sni_hostname {
-                    if is_wildcard_domain && !on_demand_tls {
-                      for logging_tx in global_configuration
-                        .as_ref()
-                        .map_or(&vec![], |c| &c.observability.log_channels)
-                      {
-                        logging_tx
-                        .send_blocking(LogMessage::new(
-                          format!("HTTP-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."),
-                          true,
-                        ))
-                        .unwrap_or_default();
-                      }
-                      continue;
-                    }
-                  }
-                  ChallengeType::Http01
-                }
-                "TLS-ALPN-01" => {
-                  if let Some(sni_hostname) = &sni_hostname {
-                    if is_wildcard_domain && !on_demand_tls {
-                      for logging_tx in global_configuration
-                        .as_ref()
-                        .map_or(&vec![], |c| &c.observability.log_channels)
-                      {
-                        logging_tx
-                        .send_blocking(LogMessage::new(
-                          format!("TLS-ALPN-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."),
-                          true,
-                        ))
-                        .unwrap_or_default();
-                      }
-                      continue;
-                    }
-                  }
-                  ChallengeType::TlsAlpn01
-                }
-                "DNS-01" => ChallengeType::Dns01,
-                unsupported => Err(anyhow::anyhow!("Unsupported ACME challenge type: {}", unsupported))?,
-              };
-              let dns_provider: Option<Arc<dyn ferron_common::dns::DnsProvider + Send + Sync>> =
-                if &*challenge_type_str.to_uppercase() != "DNS-01" {
-                  None
-                } else {
-                  let provider_name = challenge_params
-                    .get("provider")
-                    .ok_or(anyhow::anyhow!("No DNS provider specified"))?;
-                  Some(get_dns_provider(provider_name, &challenge_params)?)
-                };
-              let acme_cache_path_option = get_value!("auto_tls_cache", server_configuration)
-                .map_or(acme_default_directory.as_deref(), |v| {
-                  if v.is_null() {
-                    None
-                  } else if let Some(v) = v.as_str() {
-                    Some(v)
-                  } else {
-                    acme_default_directory.as_deref()
-                  }
-                })
-                .map(|path| path.to_owned());
-              let rustls_client_config = (if get_value!("auto_tls_no_verification", server_configuration)
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-              {
-                ClientConfig::builder_with_provider(crypto_provider.clone())
-                  .with_safe_default_protocol_versions()?
-                  .dangerous()
-                  .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
-              } else if let Ok(client_config) = BuilderVerifierExt::with_platform_verifier(
-                ClientConfig::builder_with_provider(crypto_provider.clone()).with_safe_default_protocol_versions()?,
-              ) {
-                client_config
-              } else {
-                ClientConfig::builder_with_provider(crypto_provider.clone())
-                  .with_safe_default_protocol_versions()?
-                  .with_webpki_verifier(
-                    WebPkiServerVerifier::builder(Arc::new(rustls::RootCertStore {
-                      roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-                    }))
-                    .build()?,
-                  )
-              })
-              .with_no_client_auth();
-              if on_demand_tls {
-                if &*challenge_type_str.to_uppercase() == "TLS-ALPN-01" {
-                  // Add TLS-ALPN-01 resolver
-                  let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-                  acme_tls_alpn_01_resolver_locks.insert(automatic_tls_port, sni_resolver_list.clone());
-                  let sni_resolver = TlsAlpn01Resolver::with_resolvers(sni_resolver_list);
-                  acme_tls_alpn_01_resolvers.insert(automatic_tls_port, sni_resolver);
-                }
-
-                if let Some(sni_resolver) = tls_ports.get_mut(&automatic_tls_port) {
-                  sni_resolver.load_fallback_sender(acme_on_demand_tx.clone(), automatic_tls_port);
-                } else {
-                  let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-                  tls_port_locks.insert(automatic_tls_port, sni_resolver_list.clone());
-                  let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
-                  sni_resolver.load_fallback_sender(acme_on_demand_tx.clone(), automatic_tls_port);
-                  tls_ports.insert(automatic_tls_port, sni_resolver);
-                }
-
-                let acme_on_demand_config = AcmeOnDemandConfig {
-                  rustls_client_config,
-                  challenge_type,
-                  contact: if let Some(contact) =
-                    get_value!("auto_tls_contact", server_configuration).and_then(|v| v.as_str())
-                  {
-                    vec![format!("mailto:{}", contact.to_string())]
-                  } else {
-                    vec![]
-                  },
-                  directory: if let Some(directory) =
-                    get_value!("auto_tls_directory", server_configuration).and_then(|v| v.as_str())
-                  {
-                    directory.to_string()
-                  } else if get_value!("auto_tls_letsencrypt_production", server_configuration)
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(true)
-                  {
-                    LetsEncrypt::Production.url().to_string()
-                  } else {
-                    LetsEncrypt::Staging.url().to_string()
-                  },
-                  eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab", server_configuration) {
-                    if let Some(eab_key_id) = eab_key_entry.values.first().and_then(|v| v.as_str()) {
-                      if let Some(eab_key_hmac) = eab_key_entry.values.get(1).and_then(|v| v.as_str()) {
-                        match base64::engine::general_purpose::URL_SAFE_NO_PAD
-                          .decode(eab_key_hmac.trim_end_matches('='))
-                        {
-                          Ok(decoded_key) => {
-                            Some(Arc::new(ExternalAccountKey::new(eab_key_id.to_string(), &decoded_key)))
-                          }
-                          Err(err) => Err(anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
-                        }
-                      } else {
-                        None
-                      }
-                    } else {
-                      None
-                    }
-                  } else {
-                    None
-                  },
-                  profile: get_value!("auto_tls_profile", server_configuration)
-                    .and_then(|v| v.as_str().map(|s| s.to_string())),
-                  cache_path: if let Some(acme_cache_path) = acme_cache_path_option.as_ref() {
-                    Some(PathBuf::from_str(acme_cache_path).map_err(|_| anyhow::anyhow!("Invalid ACME cache path"))?)
-                  } else {
-                    None
-                  },
-                  sni_resolver_lock: tls_port_locks
-                    .get(&automatic_tls_port)
-                    .cloned()
-                    .unwrap_or(Arc::new(tokio::sync::RwLock::new(Vec::new()))),
-                  tls_alpn_01_resolver_lock: acme_tls_alpn_01_resolver_locks
-                    .get(&automatic_tls_port)
-                    .cloned()
-                    .unwrap_or(Arc::new(tokio::sync::RwLock::new(Vec::new()))),
-                  http_01_resolver_lock: acme_http_01_resolvers.clone(),
-                  dns_provider,
-                  sni_hostname: sni_hostname.clone(),
-                  port: automatic_tls_port,
-                };
-                acme_on_demand_configs.push(acme_on_demand_config);
-                automatic_tls_used_sni_hostnames.insert((automatic_tls_port, sni_hostname));
-              } else if let Some(sni_hostname) = sni_hostname {
-                let (account_cache_path, cert_cache_path) =
-                  if let Some(acme_cache_path) = acme_cache_path_option.as_deref() {
-                    let mut pathbuf =
-                      PathBuf::from_str(acme_cache_path).map_err(|_| anyhow::anyhow!("Invalid ACME cache path"))?;
-                    let base_pathbuf = pathbuf.clone();
-                    let append_hash = base64::engine::general_purpose::URL_SAFE_NO_PAD
-                      .encode(xxh3_128(format!("{automatic_tls_port}-{sni_hostname}").as_bytes()).to_be_bytes());
-                    pathbuf.push(append_hash);
-                    (Some(base_pathbuf), Some(pathbuf))
-                  } else {
-                    (None, None)
-                  };
-                let certified_key_lock = Arc::new(tokio::sync::RwLock::new(None));
-                let tls_alpn_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
-                let http_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
-                let acme_config = AcmeConfig {
-                  rustls_client_config,
-                  domains: vec![sni_hostname.clone()],
-                  challenge_type,
-                  contact: if let Some(contact) =
-                    get_value!("auto_tls_contact", server_configuration).and_then(|v| v.as_str())
-                  {
-                    vec![format!("mailto:{}", contact.to_string())]
-                  } else {
-                    vec![]
-                  },
-                  directory: if let Some(directory) =
-                    get_value!("auto_tls_directory", server_configuration).and_then(|v| v.as_str())
-                  {
-                    directory.to_string()
-                  } else if get_value!("auto_tls_letsencrypt_production", server_configuration)
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(true)
-                  {
-                    LetsEncrypt::Production.url().to_string()
-                  } else {
-                    LetsEncrypt::Staging.url().to_string()
-                  },
-                  eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab", server_configuration) {
-                    if let Some(eab_key_id) = eab_key_entry.values.first().and_then(|v| v.as_str()) {
-                      if let Some(eab_key_hmac) = eab_key_entry.values.get(1).and_then(|v| v.as_str()) {
-                        Some(Arc::new(ExternalAccountKey::new(
-                          eab_key_id.to_string(),
-                          &base64::engine::general_purpose::URL_SAFE_NO_PAD
-                            .decode(eab_key_hmac.trim_end_matches('='))
-                            .map_err(|err| anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
-                        )))
-                      } else {
-                        None
-                      }
-                    } else {
-                      None
-                    }
-                  } else {
-                    None
-                  },
-                  profile: get_value!("auto_tls_profile", server_configuration)
-                    .and_then(|v| v.as_str().map(|s| s.to_string())),
-                  account_cache: if let Some(account_cache_path) = account_cache_path {
-                    AcmeCache::File(account_cache_path)
-                  } else {
-                    AcmeCache::Memory(memory_acme_account_cache_data.clone())
-                  },
-                  certificate_cache: if let Some(cert_cache_path) = cert_cache_path {
-                    AcmeCache::File(cert_cache_path)
-                  } else {
-                    AcmeCache::Memory(Arc::new(tokio::sync::RwLock::new(HashMap::new())))
-                  },
-                  certified_key_lock: certified_key_lock.clone(),
-                  tls_alpn_01_data_lock: tls_alpn_01_data_lock.clone(),
-                  http_01_data_lock: http_01_data_lock.clone(),
-                  dns_provider,
-                  renewal_info: None,
-                  account: None,
-                };
-                let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock));
-                acme_configs.push(acme_config);
-                match &*challenge_type_str.to_uppercase() {
-                  "HTTP-01" => {
-                    acme_http_01_resolvers.blocking_write().push(http_01_data_lock);
-                  }
-                  "TLS-ALPN-01" => {
-                    if let Some(sni_resolver) = acme_tls_alpn_01_resolvers.get_mut(&automatic_tls_port) {
-                      sni_resolver.load_resolver(tls_alpn_01_data_lock);
-                    } else {
-                      let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-                      acme_tls_alpn_01_resolver_locks.insert(automatic_tls_port, sni_resolver_list.clone());
-                      let sni_resolver = TlsAlpn01Resolver::with_resolvers(sni_resolver_list);
-                      sni_resolver.load_resolver(tls_alpn_01_data_lock);
-                      acme_tls_alpn_01_resolvers.insert(automatic_tls_port, sni_resolver);
-                    }
-                  }
-                  _ => (),
-                }
-                if let Some(sni_resolver) = tls_ports.get_mut(&automatic_tls_port) {
-                  sni_resolver.load_host_resolver(&sni_hostname, acme_resolver);
-                } else {
-                  let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-                  tls_port_locks.insert(automatic_tls_port, sni_resolver_list.clone());
-                  let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
-                  sni_resolver.load_host_resolver(&sni_hostname, acme_resolver);
-                  tls_ports.insert(automatic_tls_port, sni_resolver);
-                }
-                automatic_tls_used_sni_hostnames.insert((automatic_tls_port, Some(sni_hostname)));
-              }
-            } else if !server_configuration.filters.is_global() && !server_configuration.filters.is_global_non_host() {
+        if let Some(https_port) = https_port {
+          let manual_tls_entry_option = manual_tls_entry(server);
+          if get_entry!("auto_tls", server).is_some() || manual_tls_entry_option.is_none() {
+            if let Some(error_log_message) = handle_automatic_tls(
+              &mut tls_build_ctx,
+              server,
+              https_port,
+              sni_hostname.clone(),
+              crypto_provider.clone(),
+              memory_acme_account_cache_data.clone(),
+            )? {
               for logging_tx in global_configuration
                 .as_ref()
                 .map_or(&vec![], |c| &c.observability.log_channels)
               {
-                logging_tx
-                  .send_blocking(LogMessage::new(
-                    "Skipping automatic TLS for a host without a SNI hostname...".to_string(),
-                    true,
-                  ))
-                  .unwrap_or_default();
+                logging_tx.send_blocking(error_log_message.clone()).unwrap_or_default();
               }
+            } else {
+              continue;
             }
+          }
+          if let Some((cert, key)) = manual_tls_entry(server) {
+            handle_manual_tls(
+              &mut tls_build_ctx,
+              &crypto_provider,
+              https_port,
+              sni_hostname,
+              cert,
+              key,
+            )?;
           }
         }
       }
 
       // If HTTP/1.1 isn't enabled, don't listen to non-encrypted ports
       if !protocols.contains(&"h1") {
-        nonencrypted_ports.clear();
+        tls_build_ctx.nonencrypted_ports.clear();
       }
 
-      for tls_port in tls_ports.keys() {
-        if nonencrypted_ports.contains(tls_port) {
-          nonencrypted_ports.remove(tls_port);
+      for tls_port in tls_build_ctx.tls_ports.keys() {
+        if tls_build_ctx.nonencrypted_ports.contains(tls_port) {
+          tls_build_ctx.nonencrypted_ports.remove(tls_port);
         }
       }
 
@@ -895,7 +438,8 @@ fn before_starting_server(
       let mut quic_tls_configs = HashMap::new();
       let mut tls_configs = HashMap::new();
       let mut acme_tls_alpn_01_configs = HashMap::new();
-      for (tls_port, sni_resolver) in tls_ports.into_iter() {
+      let certified_keys_to_preload = Arc::new(tls_build_ctx.certified_keys_to_preload);
+      for (tls_port, sni_resolver) in tls_build_ctx.tls_ports.into_iter() {
         let enable_ocsp_stapling = global_configuration
           .as_ref()
           .and_then(|c| get_value!("ocsp_stapling", c))
@@ -935,7 +479,7 @@ fn before_starting_server(
         }
         tls_configs.insert(tls_port, Arc::new(tls_config));
       }
-      for (tls_port, sni_resolver) in acme_tls_alpn_01_resolvers.into_iter() {
+      for (tls_port, sni_resolver) in tls_build_ctx.acme_tls_alpn_01_resolvers.into_iter() {
         let mut tls_config = tls_config_builder_wants_server_cert
           .clone()
           .with_cert_resolver(Arc::new(sni_resolver));
@@ -1083,7 +627,8 @@ fn before_starting_server(
         .and_then(|v| v.as_str())
         .map_or(Ok(IpAddr::V6(Ipv6Addr::UNSPECIFIED)), |a| a.parse())
         .map_err(|_| anyhow::anyhow!("Invalid IP address to listen to"))?;
-      for (tcp_port, encrypted) in nonencrypted_ports
+      for (tcp_port, encrypted) in tls_build_ctx
+        .nonencrypted_ports
         .iter()
         .map(|p| (*p, false))
         .chain(tls_configs.keys().map(|p| (*p, true)))
@@ -1191,6 +736,7 @@ fn before_starting_server(
         io_uring_disabled_rx.close();
       }
 
+      let mut acme_configs = tls_build_ctx.acme_configs;
       let mut acme_configs = secondary_runtime_ref.block_on(async move {
         for acme_config in &mut acme_configs {
           // Install the certificates from the cache if they're valid
@@ -1206,7 +752,7 @@ fn before_starting_server(
         tls_configs: Arc::new(tls_configs),
         http3_enabled: !quic_listened_socket_addresses.is_empty(),
         acme_tls_alpn_01_configs: Arc::new(acme_tls_alpn_01_configs),
-        acme_http_01_resolvers,
+        acme_http_01_resolvers: tls_build_ctx.acme_http_01_resolvers,
         enable_proxy_protocol,
       };
       let reloadable_handler_data = if let Some(data) = SERVER_CONFIG_ARCSWAP.get().cloned() {
@@ -1234,6 +780,27 @@ fn before_starting_server(
       if let Some(secondary_runtime) = old_runtime_ref.take() {
         drop(secondary_runtime);
       }
+
+      let mut acme_on_demand_configs = tls_build_ctx.acme_on_demand_configs;
+      let acme_on_demand_rx = tls_build_ctx.acme_on_demand_rx;
+      let on_demand_tls_ask_endpoint = match global_configuration
+        .as_ref()
+        .and_then(|c| get_value!("auto_tls_on_demand_ask", c))
+        .and_then(|v| v.as_str())
+        .map(|u| u.parse::<hyper::Uri>())
+      {
+        Some(Ok(uri)) => Some(uri),
+        Some(Err(err)) => Err(anyhow::anyhow!(
+          "Failed to parse automatic TLS on demand asking endpoint URI: {}",
+          err
+        ))?,
+        None => None,
+      };
+      let on_demand_tls_ask_endpoint_verify = !global_configuration
+        .as_ref()
+        .and_then(|c| get_value!("auto_tls_on_demand_ask_no_verification", c))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
       if !acme_configs.is_empty() || !acme_on_demand_configs.is_empty() {
         // Spawn a task to handle ACME certificate provisioning, one certificate at time

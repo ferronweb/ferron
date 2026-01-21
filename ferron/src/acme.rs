@@ -6,6 +6,7 @@ use std::{
   ops::{Deref, Sub},
   path::PathBuf,
   pin::Pin,
+  str::FromStr,
   sync::Arc,
   time::{Duration, SystemTime},
 };
@@ -17,24 +18,26 @@ use hyper_util::client::legacy::Client as HyperClient;
 use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
 use instant_acme::{
   Account, AccountCredentials, AuthorizationStatus, BodyWrapper, BytesResponse, CertificateIdentifier, ChallengeType,
-  ExternalAccountKey, HttpClient, Identifier, NewAccount, NewOrder, OrderStatus, RenewalInfo, RetryPolicy,
+  ExternalAccountKey, HttpClient, Identifier, LetsEncrypt, NewAccount, NewOrder, OrderStatus, RenewalInfo, RetryPolicy,
 };
 use rcgen::{CertificateParams, CustomExtension, KeyPair};
 use rustls::{
+  client::WebPkiServerVerifier,
   crypto::CryptoProvider,
   server::{ClientHello, ResolvesServerCert},
   sign::CertifiedKey,
   ClientConfig,
 };
 use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
+use rustls_platform_verifier::BuilderVerifierExt;
 use serde::{Deserialize, Serialize};
 use tokio::{io::AsyncWriteExt, sync::RwLock, time::Instant};
 use x509_parser::prelude::{FromDer, X509Certificate};
 use xxhash_rust::xxh3::xxh3_128;
 
 use crate::util::load_host_resolver;
-use ferron_common::dns::DnsProvider;
-use ferron_common::logging::ErrorLogger;
+use ferron_common::{dns::DnsProvider, get_entry, get_value};
+use ferron_common::{logging::ErrorLogger, util::NoServerVerifier};
 
 pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 const SECONDS_BEFORE_RENEWAL: u64 = 86400; // 1 day before expiration
@@ -755,4 +758,118 @@ impl ResolvesServerCert for TlsAlpn01Resolver {
     }
     None
   }
+}
+
+/// Builds a Rustls client configuration for ACME.
+pub fn build_rustls_client_config(
+  server_configuration: &ferron_common::config::ServerConfiguration,
+  crypto_provider: Arc<CryptoProvider>,
+) -> Result<ClientConfig, Box<dyn Error + Send + Sync>> {
+  Ok(
+    (if get_value!("auto_tls_no_verification", server_configuration)
+      .and_then(|v| v.as_bool())
+      .unwrap_or(false)
+    {
+      ClientConfig::builder_with_provider(crypto_provider.clone())
+        .with_safe_default_protocol_versions()?
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
+    } else if let Ok(client_config) = BuilderVerifierExt::with_platform_verifier(
+      ClientConfig::builder_with_provider(crypto_provider.clone()).with_safe_default_protocol_versions()?,
+    ) {
+      client_config
+    } else {
+      ClientConfig::builder_with_provider(crypto_provider.clone())
+        .with_safe_default_protocol_versions()?
+        .with_webpki_verifier(
+          WebPkiServerVerifier::builder(Arc::new(rustls::RootCertStore {
+            roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+          }))
+          .build()?,
+        )
+    })
+    .with_no_client_auth(),
+  )
+}
+
+/// Resolves the ACME directory URL based on the server configuration.
+pub fn resolve_acme_directory(server_configuration: &ferron_common::config::ServerConfiguration) -> String {
+  if let Some(directory) = get_value!("auto_tls_directory", server_configuration).and_then(|v| v.as_str()) {
+    directory.to_string()
+  } else if get_value!("auto_tls_letsencrypt_production", server_configuration)
+    .and_then(|v| v.as_bool())
+    .unwrap_or(true)
+  {
+    LetsEncrypt::Production.url().to_string()
+  } else {
+    LetsEncrypt::Staging.url().to_string()
+  }
+}
+
+/// Parses the External Account Binding (EAB) key and secret from the server configuration.
+pub fn parse_eab(
+  server_configuration: &ferron_common::config::ServerConfiguration,
+) -> Result<Option<Arc<ExternalAccountKey>>, anyhow::Error> {
+  Ok(
+    if let Some((Some(eab_key_id), Some(eab_key_hmac))) =
+      get_entry!("auto_tls_eab", server_configuration).map(|entry| {
+        (
+          entry.values.first().and_then(|v| v.as_str()),
+          entry.values.get(1).and_then(|v| v.as_str()),
+        )
+      })
+    {
+      match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(eab_key_hmac.trim_end_matches('=')) {
+        Ok(decoded_key) => Some(Arc::new(ExternalAccountKey::new(eab_key_id.to_string(), &decoded_key))),
+        Err(err) => Err(anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
+      }
+    } else {
+      None
+    },
+  )
+}
+
+pub fn resolve_acme_cache_path(
+  server_configuration: &ferron_common::config::ServerConfiguration,
+) -> Result<Option<PathBuf>, anyhow::Error> {
+  let acme_default_directory = dirs::data_local_dir().and_then(|mut p| {
+    p.push("ferron-acme");
+    p.into_os_string().into_string().ok()
+  });
+  Ok(
+    if let Some(acme_cache_path_str) =
+      get_value!("auto_tls_cache", server_configuration).map_or(acme_default_directory.as_deref(), |v| {
+        if v.is_null() {
+          None
+        } else if let Some(v) = v.as_str() {
+          Some(v)
+        } else {
+          acme_default_directory.as_deref()
+        }
+      })
+    {
+      Some(PathBuf::from_str(acme_cache_path_str).map_err(|_| anyhow::anyhow!("Invalid ACME cache path"))?)
+    } else {
+      None
+    },
+  )
+}
+
+/// Resolves the paths to account and certificate caches.
+pub fn resolve_cache_paths(
+  server_configuration: &ferron_common::config::ServerConfiguration,
+  port: u16,
+  sni_hostname: &str,
+) -> Result<(Option<PathBuf>, Option<PathBuf>), anyhow::Error> {
+  let acme_cache_path_option = resolve_acme_cache_path(server_configuration)?;
+  let (account_cache_path, cert_cache_path) = if let Some(mut pathbuf) = acme_cache_path_option {
+    let base_pathbuf = pathbuf.clone();
+    let append_hash = base64::engine::general_purpose::URL_SAFE_NO_PAD
+      .encode(xxh3_128(format!("{port}-{sni_hostname}").as_bytes()).to_be_bytes());
+    pathbuf.push(append_hash);
+    (Some(base_pathbuf), Some(pathbuf))
+  } else {
+    (None, None)
+  };
+  Ok((account_cache_path, cert_cache_path))
 }
