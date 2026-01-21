@@ -17,7 +17,7 @@
     "@lucide/astro": "^0.562.0",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.14",
-    "@types/react": "^19.2.2",
+    "@types/react": "^19.2.9",
     "@types/react-dom": "^19.2.1",
     "apexcharts": "^5.3.5",
     "asciinema-player": "^3.14.0",
