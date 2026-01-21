@@ -391,7 +391,11 @@ fn before_starting_server(
 
         if let Some(https_port) = https_port {
           let manual_tls_entry_option = manual_tls_entry(server);
-          if get_entry!("auto_tls", server).is_some() || manual_tls_entry_option.is_none() {
+          if get_entry!("auto_tls", server)
+            .and_then(|e| e.values.first())
+            .and_then(|v| v.as_bool())
+            .unwrap_or(server.filters.port.is_none() && manual_tls_entry_option.is_none())
+          {
             if let Some(error_log_message) = handle_automatic_tls(
               &mut tls_build_ctx,
               server,
