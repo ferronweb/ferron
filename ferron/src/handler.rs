@@ -146,11 +146,6 @@ async fn http_handler_fn(
   let graceful_shutdown_token = ArcSwap::from_pointee(CancellationToken::new());
 
   loop {
-    if graceful_rx.try_recv().is_ok() {
-      graceful_shutdown_token
-        .swap(Arc::new(CancellationToken::new()))
-        .cancel();
-    }
     let conn_data = crate::runtime::select! {
         result = rx.recv() => {
             if let Ok(recv_data) = result {
@@ -163,6 +158,11 @@ async fn http_handler_fn(
             break;
         }
     };
+    if graceful_rx.try_recv().is_ok() {
+      graceful_shutdown_token
+        .swap(Arc::new(CancellationToken::new()))
+        .cancel();
+    }
     let ReloadableHandlerData {
       configurations,
       tls_configs,

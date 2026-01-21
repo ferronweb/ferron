@@ -880,6 +880,222 @@ fn before_starting_server(
         }
       }
 
+      // If HTTP/1.1 isn't enabled, don't listen to non-encrypted ports
+      if !protocols.contains(&"h1") {
+        nonencrypted_ports.clear();
+      }
+
+      for tls_port in tls_ports.keys() {
+        if nonencrypted_ports.contains(tls_port) {
+          nonencrypted_ports.remove(tls_port);
+        }
+      }
+
+      // Create TLS server configurations
+      let mut quic_tls_configs = HashMap::new();
+      let mut tls_configs = HashMap::new();
+      let mut acme_tls_alpn_01_configs = HashMap::new();
+      for (tls_port, sni_resolver) in tls_ports.into_iter() {
+        let enable_ocsp_stapling = global_configuration
+          .as_ref()
+          .and_then(|c| get_value!("ocsp_stapling", c))
+          .and_then(|v| v.as_bool())
+          .unwrap_or(true);
+        let resolver: Arc<dyn ResolvesServerCert> = if enable_ocsp_stapling {
+          // The `ocsp_stapler` crate is dependent on Tokio, so we create a stapler in the Tokio runtime...
+          // If this wasn't wrapped in a Tokio runtime, creation of a OCSP stapler would just cause a panic.
+          let stapler =
+            secondary_runtime_ref.block_on(async move { ocsp_stapler::Stapler::new(Arc::new(sni_resolver)) });
+          if let Some(certified_keys_to_preload) = certified_keys_to_preload.get(&tls_port) {
+            for certified_key in certified_keys_to_preload {
+              stapler.preload(certified_key.clone());
+            }
+          }
+          Arc::new(stapler)
+        } else {
+          Arc::new(sni_resolver)
+        };
+        let mut tls_config = tls_config_builder_wants_server_cert
+          .clone()
+          .with_cert_resolver(resolver);
+        if protocols.contains(&"h3") {
+          // TLS configuration used for QUIC listener
+          let mut quic_tls_config = tls_config.clone();
+          quic_tls_config.max_early_data_size = u32::MAX;
+          quic_tls_config.alpn_protocols.insert(0, b"h3-29".to_vec());
+          quic_tls_config.alpn_protocols.insert(0, b"h3".to_vec());
+          quic_tls_configs.insert(tls_port, Arc::new(quic_tls_config));
+        }
+        if protocols.contains(&"h1") {
+          tls_config.alpn_protocols.insert(0, b"http/1.0".to_vec());
+          tls_config.alpn_protocols.insert(0, b"http/1.1".to_vec());
+        }
+        if protocols.contains(&"h2") {
+          tls_config.alpn_protocols.insert(0, b"h2".to_vec());
+        }
+        tls_configs.insert(tls_port, Arc::new(tls_config));
+      }
+      for (tls_port, sni_resolver) in acme_tls_alpn_01_resolvers.into_iter() {
+        let mut tls_config = tls_config_builder_wants_server_cert
+          .clone()
+          .with_cert_resolver(Arc::new(sni_resolver));
+        tls_config.alpn_protocols = vec![ACME_TLS_ALPN_NAME.to_vec()];
+        acme_tls_alpn_01_configs.insert(tls_port, Arc::new(tls_config));
+      }
+
+      // Process metrics initialization
+      #[cfg(any(target_os = "linux", target_os = "android"))]
+      if let Some(metrics_channels) = global_configuration
+        .as_ref()
+        .map(|c| &c.observability.metric_channels)
+        .cloned()
+      {
+        secondary_runtime_ref.spawn(async move {
+          use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue};
+
+          let mut previous_instant = std::time::Instant::now();
+          let mut previous_cpu_user_time = 0.0;
+          let mut previous_cpu_system_time = 0.0;
+          let mut previous_rss = 0;
+          let mut previous_vms = 0;
+          loop {
+            // Sleep for 1 second
+            tokio::time::sleep(Duration::from_secs(1)).await;
+
+            if let Ok(Ok(stat)) =
+              tokio::task::spawn_blocking(|| procfs::process::Process::myself().and_then(|p| p.stat())).await
+            {
+              let cpu_user_time = stat.utime as f64 / procfs::ticks_per_second() as f64;
+              let cpu_system_time = stat.stime as f64 / procfs::ticks_per_second() as f64;
+              let cpu_user_time_increase = cpu_user_time - previous_cpu_user_time;
+              let cpu_system_time_increase = cpu_system_time - previous_cpu_system_time;
+              previous_cpu_user_time = cpu_user_time;
+              previous_cpu_system_time = cpu_system_time;
+
+              let rss = stat.rss * procfs::page_size();
+              let rss_diff = rss as i64 - previous_rss as i64;
+              let vms_diff = stat.vsize as i64 - previous_vms as i64;
+              previous_rss = rss;
+              previous_vms = stat.vsize;
+
+              let elapsed = previous_instant.elapsed().as_secs_f64();
+              previous_instant = std::time::Instant::now();
+
+              let cpu_user_utilization = cpu_user_time_increase / (elapsed * available_parallelism as f64);
+              let cpu_system_utilization = cpu_system_time_increase / (elapsed * available_parallelism as f64);
+
+              for metrics_sender in &metrics_channels {
+                metrics_sender
+                  .send(Metric::new(
+                    "process.cpu.time",
+                    vec![("cpu.mode", MetricAttributeValue::String("user".to_string()))],
+                    MetricType::Counter,
+                    MetricValue::F64(cpu_user_time_increase),
+                    Some("s"),
+                    Some("Total CPU seconds broken down by different states."),
+                  ))
+                  .await
+                  .unwrap_or_default();
+
+                metrics_sender
+                  .send(Metric::new(
+                    "process.cpu.time",
+                    vec![("cpu.mode", MetricAttributeValue::String("system".to_string()))],
+                    MetricType::Counter,
+                    MetricValue::F64(cpu_system_time_increase),
+                    Some("s"),
+                    Some("Total CPU seconds broken down by different states."),
+                  ))
+                  .await
+                  .unwrap_or_default();
+
+                metrics_sender
+                  .send(Metric::new(
+                    "process.cpu.utilization",
+                    vec![("cpu.mode", MetricAttributeValue::String("user".to_string()))],
+                    MetricType::Gauge,
+                    MetricValue::F64(cpu_user_utilization),
+                    Some("1"),
+                    Some(
+                      "Difference in process.cpu.time since the last measurement, \
+                       divided by the elapsed time and number of CPUs available to the process.",
+                    ),
+                  ))
+                  .await
+                  .unwrap_or_default();
+
+                metrics_sender
+                  .send(Metric::new(
+                    "process.cpu.utilization",
+                    vec![("cpu.mode", MetricAttributeValue::String("system".to_string()))],
+                    MetricType::Gauge,
+                    MetricValue::F64(cpu_system_utilization),
+                    Some("1"),
+                    Some(
+                      "Difference in process.cpu.time since the last measurement, \
+                      divided by the elapsed time and number of CPUs available to the process.",
+                    ),
+                  ))
+                  .await
+                  .unwrap_or_default();
+
+                metrics_sender
+                  .send(Metric::new(
+                    "process.memory.usage",
+                    vec![],
+                    MetricType::UpDownCounter,
+                    MetricValue::I64(rss_diff),
+                    Some("By"),
+                    Some("The amount of physical memory in use."),
+                  ))
+                  .await
+                  .unwrap_or_default();
+
+                metrics_sender
+                  .send(Metric::new(
+                    "process.memory.virtual",
+                    vec![],
+                    MetricType::UpDownCounter,
+                    MetricValue::I64(vms_diff),
+                    Some("By"),
+                    Some("The amount of committed virtual memory."),
+                  ))
+                  .await
+                  .unwrap_or_default();
+              }
+            }
+          }
+        });
+      }
+
+      let (listener_handler_tx, listener_handler_rx) = &**LISTENER_HANDLER_CHANNEL;
+      let mut tcp_listeners = TCP_LISTENERS
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Can't access the TCP listeners"))?;
+      let mut quic_listeners = QUIC_LISTENERS
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Can't access the QUIC listeners"))?;
+      let mut listened_socket_addresses = Vec::new();
+      let mut quic_listened_socket_addresses = Vec::new();
+      let listen_ip_addr = global_configuration
+        .as_deref()
+        .and_then(|c| get_value!("listen_ip", c))
+        .and_then(|v| v.as_str())
+        .map_or(Ok(IpAddr::V6(Ipv6Addr::UNSPECIFIED)), |a| a.parse())
+        .map_err(|_| anyhow::anyhow!("Invalid IP address to listen to"))?;
+      for (tcp_port, encrypted) in nonencrypted_ports
+        .iter()
+        .map(|p| (*p, false))
+        .chain(tls_configs.keys().map(|p| (*p, true)))
+      {
+        let socket_address = SocketAddr::new(listen_ip_addr, tcp_port);
+        listened_socket_addresses.push((socket_address, encrypted));
+      }
+      for (quic_port, quic_tls_config) in quic_tls_configs.into_iter() {
+        let socket_address = SocketAddr::new(listen_ip_addr, quic_port);
+        quic_listened_socket_addresses.push((socket_address, quic_tls_config));
+      }
+
       let enable_uring = global_configuration
         .as_deref()
         .and_then(|c| get_value!("io_uring", c))
@@ -888,6 +1104,120 @@ fn before_starting_server(
         .lock()
         .map_err(|_| anyhow::anyhow!("Can't access the enabled `io_uring` option"))?;
       let shutdown_handlers = enable_uring != *uring_enabled_locked;
+      let mut tcp_listener_socketaddrs_to_remove = Vec::new();
+      let mut quic_listener_socketaddrs_to_remove = Vec::new();
+      for (key, value) in &*tcp_listeners {
+        if enable_uring != *uring_enabled_locked
+          || (!listened_socket_addresses.contains(&(*key, true)) && !listened_socket_addresses.contains(&(*key, false)))
+        {
+          // Shut down the TCP listener
+          value.cancel();
+
+          // Push the the TCP listener address to remove
+          tcp_listener_socketaddrs_to_remove.push(*key);
+        }
+      }
+      for (key, value) in &*quic_listeners {
+        let mut contains = false;
+        for key2 in &quic_listened_socket_addresses {
+          if key2.0 == *key {
+            contains = true;
+            break;
+          }
+        }
+        if !contains {
+          // Shut down the QUIC listener
+          value.0.cancel();
+
+          // Push the the QUIC listener address to remove
+          quic_listener_socketaddrs_to_remove.push(*key);
+        }
+      }
+      *uring_enabled_locked = enable_uring;
+      drop(uring_enabled_locked);
+
+      for key_to_remove in tcp_listener_socketaddrs_to_remove {
+        // Remove the TCP listener
+        tcp_listeners.remove(&key_to_remove);
+      }
+
+      for key_to_remove in quic_listener_socketaddrs_to_remove {
+        // Remove the QUIC listener
+        quic_listeners.remove(&key_to_remove);
+      }
+
+      // Get a global logger for listeners
+      let (global_logging_tx, global_logging_rx) = &**LISTENER_LOGGING_CHANNEL;
+      let global_logger = if global_configuration
+        .as_ref()
+        .is_none_or(|c| c.observability.log_channels.is_empty())
+      {
+        None
+      } else {
+        let global_configuration_clone = global_configuration.clone();
+        secondary_runtime_ref.spawn(async move {
+          while let Ok(log_message) = global_logging_rx.recv().await {
+            for logging_tx in global_configuration_clone
+              .as_ref()
+              .map_or(&vec![], |c| &c.observability.log_channels)
+            {
+              logging_tx.send(log_message.clone()).await.unwrap_or_default();
+            }
+          }
+        });
+        Some(global_logging_tx.clone())
+      };
+
+      let (io_uring_disabled_tx, io_uring_disabled_rx) = async_channel::unbounded();
+      if let Some(global_logger) = &global_logger {
+        let global_logger = global_logger.clone();
+        secondary_runtime_ref.spawn(async move {
+          while let Ok(err) = io_uring_disabled_rx.recv().await {
+            if let Some(err) = err {
+              global_logger
+                .send(LogMessage::new(
+                  format!("Can't configure io_uring: {err}. Ferron may run with io_uring disabled."),
+                  true,
+                ))
+                .await
+                .unwrap_or_default();
+              break;
+            }
+          }
+
+          io_uring_disabled_rx.close();
+        });
+      } else {
+        io_uring_disabled_rx.close();
+      }
+
+      let mut acme_configs = secondary_runtime_ref.block_on(async move {
+        for acme_config in &mut acme_configs {
+          // Install the certificates from the cache if they're valid
+          check_certificate_validity_or_install_cached(acme_config, None)
+            .await
+            .unwrap_or_default();
+        }
+        acme_configs
+      });
+
+      let inner_handler_data = ReloadableHandlerData {
+        configurations: server_configurations,
+        tls_configs: Arc::new(tls_configs),
+        http3_enabled: !quic_listened_socket_addresses.is_empty(),
+        acme_tls_alpn_01_configs: Arc::new(acme_tls_alpn_01_configs),
+        acme_http_01_resolvers,
+        enable_proxy_protocol,
+      };
+      let reloadable_handler_data = if let Some(data) = SERVER_CONFIG_ARCSWAP.get().cloned() {
+        data.swap(Arc::new(inner_handler_data));
+        data
+      } else {
+        let reloadable_handler_data = Arc::new(ArcSwap::from_pointee(inner_handler_data));
+        let _ = SERVER_CONFIG_ARCSWAP.set(reloadable_handler_data.clone());
+        reloadable_handler_data
+      };
+
       let mut start_new_handlers = true;
       if let Ok(mut handlers_locked) = HANDLERS.lock() {
         while let Some((cancel_token, graceful_shutdown)) = handlers_locked.pop() {
@@ -910,13 +1240,6 @@ fn before_starting_server(
 
         let global_configuration_clone = global_configuration.clone();
         secondary_runtime_ref.spawn(async move {
-          for acme_config in &mut acme_configs {
-            // Install the certificates from the cache if they're valid
-            check_certificate_validity_or_install_cached(acme_config, None)
-              .await
-              .unwrap_or_default();
-          }
-
           let mut existing_combinations = HashSet::new();
           for acme_on_demand_config in &mut acme_on_demand_configs {
             for cached_domain in get_cached_domains(acme_on_demand_config).await {
@@ -1153,326 +1476,6 @@ fn before_starting_server(
           }
         });
       }
-
-      // If HTTP/1.1 isn't enabled, don't listen to non-encrypted ports
-      if !protocols.contains(&"h1") {
-        nonencrypted_ports.clear();
-      }
-
-      for tls_port in tls_ports.keys() {
-        if nonencrypted_ports.contains(tls_port) {
-          nonencrypted_ports.remove(tls_port);
-        }
-      }
-
-      // Create TLS server configurations
-      let mut quic_tls_configs = HashMap::new();
-      let mut tls_configs = HashMap::new();
-      let mut acme_tls_alpn_01_configs = HashMap::new();
-      for (tls_port, sni_resolver) in tls_ports.into_iter() {
-        let enable_ocsp_stapling = global_configuration
-          .as_ref()
-          .and_then(|c| get_value!("ocsp_stapling", c))
-          .and_then(|v| v.as_bool())
-          .unwrap_or(true);
-        let resolver: Arc<dyn ResolvesServerCert> = if enable_ocsp_stapling {
-          // The `ocsp_stapler` crate is dependent on Tokio, so we create a stapler in the Tokio runtime...
-          // If this wasn't wrapped in a Tokio runtime, creation of a OCSP stapler would just cause a panic.
-          let stapler =
-            secondary_runtime_ref.block_on(async move { ocsp_stapler::Stapler::new(Arc::new(sni_resolver)) });
-          if let Some(certified_keys_to_preload) = certified_keys_to_preload.get(&tls_port) {
-            for certified_key in certified_keys_to_preload {
-              stapler.preload(certified_key.clone());
-            }
-          }
-          Arc::new(stapler)
-        } else {
-          Arc::new(sni_resolver)
-        };
-        let mut tls_config = tls_config_builder_wants_server_cert
-          .clone()
-          .with_cert_resolver(resolver);
-        if protocols.contains(&"h3") {
-          // TLS configuration used for QUIC listener
-          let mut quic_tls_config = tls_config.clone();
-          quic_tls_config.max_early_data_size = u32::MAX;
-          quic_tls_config.alpn_protocols.insert(0, b"h3-29".to_vec());
-          quic_tls_config.alpn_protocols.insert(0, b"h3".to_vec());
-          quic_tls_configs.insert(tls_port, Arc::new(quic_tls_config));
-        }
-        if protocols.contains(&"h1") {
-          tls_config.alpn_protocols.insert(0, b"http/1.0".to_vec());
-          tls_config.alpn_protocols.insert(0, b"http/1.1".to_vec());
-        }
-        if protocols.contains(&"h2") {
-          tls_config.alpn_protocols.insert(0, b"h2".to_vec());
-        }
-        tls_configs.insert(tls_port, Arc::new(tls_config));
-      }
-      for (tls_port, sni_resolver) in acme_tls_alpn_01_resolvers.into_iter() {
-        let mut tls_config = tls_config_builder_wants_server_cert
-          .clone()
-          .with_cert_resolver(Arc::new(sni_resolver));
-        tls_config.alpn_protocols = vec![ACME_TLS_ALPN_NAME.to_vec()];
-        acme_tls_alpn_01_configs.insert(tls_port, Arc::new(tls_config));
-      }
-
-      // Process metrics initialization
-      #[cfg(any(target_os = "linux", target_os = "android"))]
-      if let Some(metrics_channels) = global_configuration
-        .as_ref()
-        .map(|c| &c.observability.metric_channels)
-        .cloned()
-      {
-        secondary_runtime_ref.spawn(async move {
-          use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue};
-
-          let mut previous_instant = std::time::Instant::now();
-          let mut previous_cpu_user_time = 0.0;
-          let mut previous_cpu_system_time = 0.0;
-          let mut previous_rss = 0;
-          let mut previous_vms = 0;
-          loop {
-            // Sleep for 1 second
-            tokio::time::sleep(Duration::from_secs(1)).await;
-
-            if let Ok(Ok(stat)) =
-              tokio::task::spawn_blocking(|| procfs::process::Process::myself().and_then(|p| p.stat())).await
-            {
-              let cpu_user_time = stat.utime as f64 / procfs::ticks_per_second() as f64;
-              let cpu_system_time = stat.stime as f64 / procfs::ticks_per_second() as f64;
-              let cpu_user_time_increase = cpu_user_time - previous_cpu_user_time;
-              let cpu_system_time_increase = cpu_system_time - previous_cpu_system_time;
-              previous_cpu_user_time = cpu_user_time;
-              previous_cpu_system_time = cpu_system_time;
-
-              let rss = stat.rss * procfs::page_size();
-              let rss_diff = rss as i64 - previous_rss as i64;
-              let vms_diff = stat.vsize as i64 - previous_vms as i64;
-              previous_rss = rss;
-              previous_vms = stat.vsize;
-
-              let elapsed = previous_instant.elapsed().as_secs_f64();
-              previous_instant = std::time::Instant::now();
-
-              let cpu_user_utilization = cpu_user_time_increase / (elapsed * available_parallelism as f64);
-              let cpu_system_utilization = cpu_system_time_increase / (elapsed * available_parallelism as f64);
-
-              for metrics_sender in &metrics_channels {
-                metrics_sender
-                  .send(Metric::new(
-                    "process.cpu.time",
-                    vec![("cpu.mode", MetricAttributeValue::String("user".to_string()))],
-                    MetricType::Counter,
-                    MetricValue::F64(cpu_user_time_increase),
-                    Some("s"),
-                    Some("Total CPU seconds broken down by different states."),
-                  ))
-                  .await
-                  .unwrap_or_default();
-
-                metrics_sender
-                  .send(Metric::new(
-                    "process.cpu.time",
-                    vec![("cpu.mode", MetricAttributeValue::String("system".to_string()))],
-                    MetricType::Counter,
-                    MetricValue::F64(cpu_system_time_increase),
-                    Some("s"),
-                    Some("Total CPU seconds broken down by different states."),
-                  ))
-                  .await
-                  .unwrap_or_default();
-
-                metrics_sender
-                  .send(Metric::new(
-                    "process.cpu.utilization",
-                    vec![("cpu.mode", MetricAttributeValue::String("user".to_string()))],
-                    MetricType::Gauge,
-                    MetricValue::F64(cpu_user_utilization),
-                    Some("1"),
-                    Some(
-                      "Difference in process.cpu.time since the last measurement, \
-                       divided by the elapsed time and number of CPUs available to the process.",
-                    ),
-                  ))
-                  .await
-                  .unwrap_or_default();
-
-                metrics_sender
-                  .send(Metric::new(
-                    "process.cpu.utilization",
-                    vec![("cpu.mode", MetricAttributeValue::String("system".to_string()))],
-                    MetricType::Gauge,
-                    MetricValue::F64(cpu_system_utilization),
-                    Some("1"),
-                    Some(
-                      "Difference in process.cpu.time since the last measurement, \
-                      divided by the elapsed time and number of CPUs available to the process.",
-                    ),
-                  ))
-                  .await
-                  .unwrap_or_default();
-
-                metrics_sender
-                  .send(Metric::new(
-                    "process.memory.usage",
-                    vec![],
-                    MetricType::UpDownCounter,
-                    MetricValue::I64(rss_diff),
-                    Some("By"),
-                    Some("The amount of physical memory in use."),
-                  ))
-                  .await
-                  .unwrap_or_default();
-
-                metrics_sender
-                  .send(Metric::new(
-                    "process.memory.virtual",
-                    vec![],
-                    MetricType::UpDownCounter,
-                    MetricValue::I64(vms_diff),
-                    Some("By"),
-                    Some("The amount of committed virtual memory."),
-                  ))
-                  .await
-                  .unwrap_or_default();
-              }
-            }
-          }
-        });
-      }
-
-      let (listener_handler_tx, listener_handler_rx) = &**LISTENER_HANDLER_CHANNEL;
-      let mut tcp_listeners = TCP_LISTENERS
-        .lock()
-        .map_err(|_| anyhow::anyhow!("Can't access the TCP listeners"))?;
-      let mut quic_listeners = QUIC_LISTENERS
-        .lock()
-        .map_err(|_| anyhow::anyhow!("Can't access the QUIC listeners"))?;
-      let mut listened_socket_addresses = Vec::new();
-      let mut quic_listened_socket_addresses = Vec::new();
-      let listen_ip_addr = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("listen_ip", c))
-        .and_then(|v| v.as_str())
-        .map_or(Ok(IpAddr::V6(Ipv6Addr::UNSPECIFIED)), |a| a.parse())
-        .map_err(|_| anyhow::anyhow!("Invalid IP address to listen to"))?;
-      for (tcp_port, encrypted) in nonencrypted_ports
-        .iter()
-        .map(|p| (*p, false))
-        .chain(tls_configs.keys().map(|p| (*p, true)))
-      {
-        let socket_address = SocketAddr::new(listen_ip_addr, tcp_port);
-        listened_socket_addresses.push((socket_address, encrypted));
-      }
-      for (quic_port, quic_tls_config) in quic_tls_configs.into_iter() {
-        let socket_address = SocketAddr::new(listen_ip_addr, quic_port);
-        quic_listened_socket_addresses.push((socket_address, quic_tls_config));
-      }
-
-      let mut tcp_listener_socketaddrs_to_remove = Vec::new();
-      let mut quic_listener_socketaddrs_to_remove = Vec::new();
-      for (key, value) in &*tcp_listeners {
-        if enable_uring != *uring_enabled_locked
-          || (!listened_socket_addresses.contains(&(*key, true)) && !listened_socket_addresses.contains(&(*key, false)))
-        {
-          // Shut down the TCP listener
-          value.cancel();
-
-          // Push the the TCP listener address to remove
-          tcp_listener_socketaddrs_to_remove.push(*key);
-        }
-      }
-      for (key, value) in &*quic_listeners {
-        let mut contains = false;
-        for key2 in &quic_listened_socket_addresses {
-          if key2.0 == *key {
-            contains = true;
-            break;
-          }
-        }
-        if !contains {
-          // Shut down the QUIC listener
-          value.0.cancel();
-
-          // Push the the QUIC listener address to remove
-          quic_listener_socketaddrs_to_remove.push(*key);
-        }
-      }
-      *uring_enabled_locked = enable_uring;
-      drop(uring_enabled_locked);
-
-      for key_to_remove in tcp_listener_socketaddrs_to_remove {
-        // Remove the TCP listener
-        tcp_listeners.remove(&key_to_remove);
-      }
-
-      for key_to_remove in quic_listener_socketaddrs_to_remove {
-        // Remove the QUIC listener
-        quic_listeners.remove(&key_to_remove);
-      }
-
-      // Get a global logger for listeners
-      let (global_logging_tx, global_logging_rx) = &**LISTENER_LOGGING_CHANNEL;
-      let global_logger = if global_configuration
-        .as_ref()
-        .is_none_or(|c| c.observability.log_channels.is_empty())
-      {
-        None
-      } else {
-        let global_configuration_clone = global_configuration.clone();
-        secondary_runtime_ref.spawn(async move {
-          while let Ok(log_message) = global_logging_rx.recv().await {
-            for logging_tx in global_configuration_clone
-              .as_ref()
-              .map_or(&vec![], |c| &c.observability.log_channels)
-            {
-              logging_tx.send(log_message.clone()).await.unwrap_or_default();
-            }
-          }
-        });
-        Some(global_logging_tx.clone())
-      };
-
-      let (io_uring_disabled_tx, io_uring_disabled_rx) = async_channel::unbounded();
-      if let Some(global_logger) = &global_logger {
-        let global_logger = global_logger.clone();
-        secondary_runtime_ref.spawn(async move {
-          while let Ok(err) = io_uring_disabled_rx.recv().await {
-            if let Some(err) = err {
-              global_logger
-                .send(LogMessage::new(
-                  format!("Can't configure io_uring: {err}. Ferron may run with io_uring disabled."),
-                  true,
-                ))
-                .await
-                .unwrap_or_default();
-              break;
-            }
-          }
-
-          io_uring_disabled_rx.close();
-        });
-      } else {
-        io_uring_disabled_rx.close();
-      }
-
-      let inner_handler_data = ReloadableHandlerData {
-        configurations: server_configurations,
-        tls_configs: Arc::new(tls_configs),
-        http3_enabled: !quic_listened_socket_addresses.is_empty(),
-        acme_tls_alpn_01_configs: Arc::new(acme_tls_alpn_01_configs),
-        acme_http_01_resolvers,
-        enable_proxy_protocol,
-      };
-      let reloadable_handler_data = if let Some(data) = SERVER_CONFIG_ARCSWAP.get().cloned() {
-        data.swap(Arc::new(inner_handler_data));
-        data
-      } else {
-        let reloadable_handler_data = Arc::new(ArcSwap::from_pointee(inner_handler_data));
-        let _ = SERVER_CONFIG_ARCSWAP.set(reloadable_handler_data.clone());
-        reloadable_handler_data
-      };
 
       // Spawn request handler threads
       if start_new_handlers {
