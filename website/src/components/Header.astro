@@ -340,11 +340,34 @@ const docLinks = Astro.props.docLinks;
     }
   }
 
+  function hideSearchMenu(e: Event, search: Element | null) {
+    e.preventDefault();
+    if (search) {
+      addSearchTriggerListener(search);
+      while (searchEscListeners.length > 0) {
+        const listener = searchEscListeners.pop();
+        if (listener) {
+          document.removeEventListener("keydown", listener);
+        }
+      }
+      search.classList.add("hidden");
+      document.documentElement.classList.remove("max-md:overflow-hidden");
+    }
+  }
+
   function showMobileMenu(e: Event, menu: Element | null) {
     e.preventDefault();
     if (menu) {
       menu.classList.remove("hidden");
       document.documentElement.classList.add("max-md:overflow-hidden");
+    }
+  }
+
+  function hideMobileMenu(e: Event, menu: Element | null) {
+    e.preventDefault();
+    if (menu) {
+      menu.classList.add("hidden");
+      document.documentElement.classList.remove("max-md:overflow-hidden");
     }
   }
 
@@ -368,15 +391,10 @@ const docLinks = Astro.props.docLinks;
     if (menuButton)
       menuButton.addEventListener("click", (e) => showMobileMenu(e, menu));
     if (menuClose)
-      menuClose.addEventListener("click", (e) => showMobileMenu(e, menu));
+      menuClose.addEventListener("click", (e) => hideMobileMenu(e, menu));
     if (menuLinks)
       menuLinks.forEach((menuLink) => {
-        menuLink.addEventListener("click", () => {
-          if (menu) {
-            menu.classList.add("hidden");
-            document.documentElement.classList.remove("max-md:overflow-hidden");
-          }
-        });
+        menuLink.addEventListener("click", (e) => hideMobileMenu(e, menu));
       });
 
     const searchBar = document.querySelector("[data-search-bar]");
@@ -397,20 +415,7 @@ const docLinks = Astro.props.docLinks;
       );
 
     if (searchClose)
-      searchClose.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (search) {
-          addSearchTriggerListener(search);
-          while (searchEscListeners.length > 0) {
-            const listener = searchEscListeners.pop();
-            if (listener) {
-              document.removeEventListener("keydown", listener);
-            }
-          }
-          search.classList.add("hidden");
-          document.documentElement.classList.remove("max-md:overflow-hidden");
-        }
-      });
+      searchClose.addEventListener("click", (e) => hideSearchMenu(e, search));
 
     if (search) addSearchTriggerListener(search);
   }
