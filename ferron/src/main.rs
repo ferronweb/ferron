@@ -12,10 +12,11 @@ use std::error::Error;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
+use arc_swap::ArcSwap;
 use async_channel::{Receiver, Sender};
 use base64::Engine;
 use clap::{Arg, ArgAction, ArgMatches, Command};
@@ -49,7 +50,7 @@ use crate::config::processing::{
   load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration,
 };
 use crate::config::ServerConfigurations;
-use crate::handler::create_http_handler;
+use crate::handler::{create_http_handler, ReloadableHandlerData};
 use crate::listener_handler_communication::ConnectionData;
 use crate::listeners::{create_quic_listener, create_tcp_listener};
 use crate::util::{
@@ -71,6 +72,10 @@ static TCP_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, CancellationToken>>
 #[allow(clippy::type_complexity)]
 static QUIC_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, (CancellationToken, Sender<Arc<ServerConfig>>)>>>> =
   LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
+#[allow(clippy::type_complexity)]
+static HANDLERS: LazyLock<Arc<Mutex<Vec<(CancellationToken, Sender<()>)>>>> =
+  LazyLock::new(|| Arc::new(Mutex::new(Vec::new())));
+static SERVER_CONFIG_ARCSWAP: OnceLock<Arc<ArcSwap<ReloadableHandlerData>>> = OnceLock::new();
 static URING_ENABLED: LazyLock<Arc<Mutex<Option<bool>>>> = LazyLock::new(|| Arc::new(Mutex::new(None)));
 static LISTENER_LOGGING_CHANNEL: LazyLock<Arc<(Sender<LogMessage>, Receiver<LogMessage>)>> =
   LazyLock::new(|| Arc::new(async_channel::unbounded()));
@@ -132,7 +137,7 @@ fn before_starting_server(
     });
 
   // Old handler shutdown channels and secondary runtime
-  let mut old_runtime: Option<(Vec<CancellationToken>, tokio::runtime::Runtime)> = None;
+  let mut old_runtime: Option<tokio::runtime::Runtime> = None;
 
   // Obtain the configuration adapter
   let configuration_adapter = configuration_adapters
@@ -875,11 +880,28 @@ fn before_starting_server(
         }
       }
 
-      // Shut down request handler threads and secondary runtime
-      if let Some((handler_shutdown_channels, secondary_runtime)) = old_runtime_ref.take() {
-        for shutdown in handler_shutdown_channels {
-          shutdown.cancel();
+      let enable_uring = global_configuration
+        .as_deref()
+        .and_then(|c| get_value!("io_uring", c))
+        .and_then(|v| v.as_bool());
+      let mut uring_enabled_locked = URING_ENABLED
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Can't access the enabled `io_uring` option"))?;
+      let shutdown_handlers = enable_uring != *uring_enabled_locked;
+      let mut start_new_handlers = true;
+      if let Ok(mut handlers_locked) = HANDLERS.lock() {
+        while let Some((cancel_token, graceful_shutdown)) = handlers_locked.pop() {
+          if shutdown_handlers {
+            cancel_token.cancel();
+          } else {
+            start_new_handlers = false;
+            let _ = graceful_shutdown.send_blocking(());
+          }
         }
+      }
+
+      // Shut down secondary runtime
+      if let Some(secondary_runtime) = old_runtime_ref.take() {
         drop(secondary_runtime);
       }
 
@@ -1171,7 +1193,7 @@ fn before_starting_server(
           .clone()
           .with_cert_resolver(resolver);
         if protocols.contains(&"h3") {
-          // TLS configuration used for QUIC listene
+          // TLS configuration used for QUIC listener
           let mut quic_tls_config = tls_config.clone();
           quic_tls_config.max_early_data_size = u32::MAX;
           quic_tls_config.alpn_protocols.insert(0, b"h3-29".to_vec());
@@ -1348,13 +1370,6 @@ fn before_starting_server(
         quic_listened_socket_addresses.push((socket_address, quic_tls_config));
       }
 
-      let enable_uring = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("io_uring", c))
-        .and_then(|v| v.as_bool());
-      let mut uring_enabled_locked = URING_ENABLED
-        .lock()
-        .map_err(|_| anyhow::anyhow!("Can't access the enabled `io_uring` option"))?;
       let mut tcp_listener_socketaddrs_to_remove = Vec::new();
       let mut quic_listener_socketaddrs_to_remove = Vec::new();
       for (key, value) in &*tcp_listeners {
@@ -1442,20 +1457,30 @@ fn before_starting_server(
         io_uring_disabled_rx.close();
       }
 
-      // Spawn request handler threads
-      let mut handler_shutdown_channels = Vec::new();
-      for _ in 0..available_parallelism {
-        handler_shutdown_channels.push(create_http_handler(
-          server_configurations.clone(),
-          listener_handler_rx.clone(),
-          enable_uring,
-          tls_configs.clone(),
-          !quic_listened_socket_addresses.is_empty(),
-          acme_tls_alpn_01_configs.clone(),
-          acme_http_01_resolvers.clone(),
+      let reloadable_handler_data = SERVER_CONFIG_ARCSWAP.get().cloned().unwrap_or_else(|| {
+        let reloadable_handler_data = Arc::new(ArcSwap::new(Arc::new(ReloadableHandlerData {
+          configurations: server_configurations,
+          tls_configs: Arc::new(tls_configs),
+          http3_enabled: !quic_listened_socket_addresses.is_empty(),
+          acme_tls_alpn_01_configs: Arc::new(acme_tls_alpn_01_configs),
+          acme_http_01_resolvers,
           enable_proxy_protocol,
-          io_uring_disabled_tx.clone(),
-        )?);
+        })));
+        let _ = SERVER_CONFIG_ARCSWAP.set(reloadable_handler_data.clone());
+        reloadable_handler_data
+      });
+
+      // Spawn request handler threads
+      if start_new_handlers {
+        let mut handler_shutdown_channels = HANDLERS.lock().expect("Can't access the handler threads");
+        for _ in 0..available_parallelism {
+          handler_shutdown_channels.push(create_http_handler(
+            reloadable_handler_data.clone(),
+            listener_handler_rx.clone(),
+            enable_uring,
+            io_uring_disabled_tx.clone(),
+          )?);
+        }
       }
 
       // Error out, if server is configured to listen to no port
@@ -1517,18 +1542,20 @@ fn before_starting_server(
 
       let shutdown_result = handle_shutdown_signals(secondary_runtime_ref);
 
-      Ok::<_, Box<dyn Error + Send + Sync>>((shutdown_result, handler_shutdown_channels))
+      Ok::<_, Box<dyn Error + Send + Sync>>(shutdown_result)
     };
 
     match execute_rest() {
-      Ok((to_restart, handler_shutdown_channels)) => {
+      Ok(to_restart) => {
         if to_restart {
-          old_runtime = Some((handler_shutdown_channels, secondary_runtime));
+          old_runtime = Some(secondary_runtime);
           first_startup = false;
           println!("Reloading the server configuration...");
         } else {
-          for shutdown in handler_shutdown_channels {
-            shutdown.cancel();
+          if let Ok(mut handlers_locked) = HANDLERS.lock() {
+            while let Some((cancel_token, _)) = handlers_locked.pop() {
+              cancel_token.cancel();
+            }
           }
           drop(secondary_runtime);
           break;

@@ -1318,6 +1318,7 @@ name = "ferron"
 version = "2.4.1"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "async-channel",
  "base64",
  "blocking",
