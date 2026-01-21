@@ -363,8 +363,10 @@ const docLinks = Astro.props.docLinks;
     }
   }
 
-  function hideMobileMenu(e: Event, menu: Element | null) {
-    e.preventDefault();
+  function hideMobileMenu(e: Event, menu: Element | null, preventDefault: bool) {
+    if (preventDefault) {
+      e.preventDefault();
+    }
     if (menu) {
       menu.classList.add("hidden");
       document.documentElement.classList.remove("max-md:overflow-hidden");
@@ -391,10 +393,10 @@ const docLinks = Astro.props.docLinks;
     if (menuButton)
       menuButton.addEventListener("click", (e) => showMobileMenu(e, menu));
     if (menuClose)
-      menuClose.addEventListener("click", (e) => hideMobileMenu(e, menu));
+      menuClose.addEventListener("click", (e) => hideMobileMenu(e, menu, true));
     if (menuLinks)
       menuLinks.forEach((menuLink) => {
-        menuLink.addEventListener("click", (e) => hideMobileMenu(e, menu));
+        menuLink.addEventListener("click", (e) => hideMobileMenu(e, menu, false));
       });
 
     const searchBar = document.querySelector("[data-search-bar]");
