@@ -21,15 +21,11 @@ use arc_swap::ArcSwap;
 use async_channel::{Receiver, Sender};
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use ferron_common::logging::{ErrorLogger, LogMessage};
-use ferron_common::{get_entry, get_value, get_values};
+use ferron_common::{get_entry, get_value};
 use ferron_load_modules::{obtain_module_loaders, obtain_observability_backend_loaders};
 use human_panic::{setup_panic, Metadata};
 use mimalloc::MiMalloc;
-use rustls::crypto::aws_lc_rs::cipher_suite::*;
-use rustls::crypto::aws_lc_rs::default_provider;
-use rustls::crypto::aws_lc_rs::kx_group::*;
 use rustls::server::{ResolvesServerCert, WebPkiClientVerifier};
-use rustls::version::{TLS12, TLS13};
 use rustls::{RootCertStore, ServerConfig};
 use rustls_native_certs::load_native_certs;
 use shadow_rs::shadow;
@@ -48,8 +44,8 @@ use crate::handler::{create_http_handler, ReloadableHandlerData};
 use crate::listener_handler_communication::ConnectionData;
 use crate::listeners::{create_quic_listener, create_tcp_listener};
 use crate::setup::{
-  handle_automatic_tls, handle_manual_tls, handle_nonencrypted_ports, manual_tls_entry, read_default_port,
-  resolve_sni_hostname, should_skip_server, TlsBuildContext,
+  handle_automatic_tls, handle_manual_tls, handle_nonencrypted_ports, init_crypto_provider, manual_tls_entry,
+  read_default_port, resolve_sni_hostname, set_tls_version, should_skip_server, TlsBuildContext,
 };
 use crate::util::load_certs;
 
@@ -206,60 +202,7 @@ fn before_starting_server(
       }
 
       // Configure cryptography provider for Rustls
-      let mut crypto_provider = default_provider();
-
-      // Configure cipher suites
-      let cipher_suite: Vec<&config::ServerConfigurationValue> = global_configuration
-        .as_deref()
-        .map_or(vec![], |c| get_values!("tls_cipher_suite", c));
-      if !cipher_suite.is_empty() {
-        let mut cipher_suites = Vec::new();
-        let cipher_suite_iter = cipher_suite.iter();
-        for cipher_suite_config in cipher_suite_iter {
-          if let Some(cipher_suite) = cipher_suite_config.as_str() {
-            let cipher_suite_to_add = match cipher_suite {
-              "TLS_AES_128_GCM_SHA256" => TLS13_AES_128_GCM_SHA256,
-              "TLS_AES_256_GCM_SHA384" => TLS13_AES_256_GCM_SHA384,
-              "TLS_CHACHA20_POLY1305_SHA256" => TLS13_CHACHA20_POLY1305_SHA256,
-              "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256" => TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-              "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384" => TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-              "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256" => TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-              "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256" => TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-              "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384" => TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-              "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256" => TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-              _ => Err(anyhow::anyhow!(
-                "The \"{}\" cipher suite is not supported",
-                cipher_suite
-              ))?,
-            };
-            cipher_suites.push(cipher_suite_to_add);
-          }
-        }
-        crypto_provider.cipher_suites = cipher_suites;
-      }
-
-      // Configure ECDH curves
-      let ecdh_curves = global_configuration
-        .as_deref()
-        .map_or(vec![], |c| get_values!("tls_ecdh_curve", c));
-      if !ecdh_curves.is_empty() {
-        let mut kx_groups = Vec::new();
-        let ecdh_curves_iter = ecdh_curves.iter();
-        for ecdh_curve_config in ecdh_curves_iter {
-          if let Some(ecdh_curve) = ecdh_curve_config.as_str() {
-            let kx_group_to_add = match ecdh_curve {
-              "secp256r1" => SECP256R1,
-              "secp384r1" => SECP384R1,
-              "x25519" => X25519,
-              "x25519mklem768" => X25519MLKEM768,
-              "mklem768" => MLKEM768,
-              _ => Err(anyhow::anyhow!("The \"{}\" ECDH curve is not supported", ecdh_curve))?,
-            };
-            kx_groups.push(kx_group_to_add);
-          }
-        }
-        crypto_provider.kx_groups = kx_groups;
-      }
+      let crypto_provider = init_crypto_provider(global_configuration.as_deref())?;
 
       // Install a process-wide cryptography provider. If it fails, then error it out.
       if crypto_provider.clone().install_default().is_err() && first_startup {
@@ -270,38 +213,8 @@ fn before_starting_server(
 
       // Build TLS configuration
       let tls_config_builder_wants_versions = ServerConfig::builder_with_provider(crypto_provider.clone());
-
-      let min_tls_version_option = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("tls_min_version", c))
-        .and_then(|v| v.as_str());
-      let max_tls_version_option = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("tls_max_version", c))
-        .and_then(|v| v.as_str());
-
-      let tls_config_builder_wants_verifier = if min_tls_version_option.is_none() && max_tls_version_option.is_none() {
-        tls_config_builder_wants_versions.with_safe_default_protocol_versions()?
-      } else {
-        let tls_versions = [("TLSv1.2", &TLS12), ("TLSv1.3", &TLS13)];
-        let min_tls_version_index = min_tls_version_option
-          .map_or(Some(0), |v| tls_versions.iter().position(|p| p.0 == v))
-          .ok_or(anyhow::anyhow!("Invalid minimum TLS version"))?;
-        let max_tls_version_index = max_tls_version_option
-          .map_or(Some(tls_versions.len() - 1), |v| {
-            tls_versions.iter().position(|p| p.0 == v)
-          })
-          .ok_or(anyhow::anyhow!("Invalid maximum TLS version"))?;
-        if max_tls_version_index < min_tls_version_index {
-          Err(anyhow::anyhow!("Maximum TLS version is older than minimum TLS version"))?
-        }
-        tls_config_builder_wants_versions.with_protocol_versions(
-          &tls_versions[min_tls_version_index..=max_tls_version_index]
-            .iter()
-            .map(|p| p.1)
-            .collect::<Vec<_>>(),
-        )?
-      };
+      let tls_config_builder_wants_verifier =
+        set_tls_version(tls_config_builder_wants_versions, global_configuration.as_deref())?;
 
       let tls_config_builder_wants_server_cert = if let Some(client_cert_path) = global_configuration
         .as_deref()
