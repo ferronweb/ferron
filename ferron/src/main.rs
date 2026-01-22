@@ -835,7 +835,7 @@ fn before_starting_server(
           // Wrap ACME configurations in a mutex
           let acme_configs_mutex = Arc::new(tokio::sync::Mutex::new(acme_configs));
 
-          let prevent_file_race_conditions_mutex = Arc::new(tokio::sync::Mutex::new(()));
+          let prevent_file_race_conditions_sem = Arc::new(tokio::sync::Semaphore::new(1));
 
           if !acme_on_demand_configs.is_empty() {
             // On-demand TLS
@@ -1002,17 +1002,17 @@ fn before_starting_server(
                 let acme_configs_mutex = acme_configs_mutex.clone();
                 let acme_on_demand_configs = acme_on_demand_configs.clone();
                 let memory_acme_account_cache_data = memory_acme_account_cache_data.clone();
-                let prevent_file_race_conditions_mutex = prevent_file_race_conditions_mutex.clone();
+                let prevent_file_race_conditions_sem = prevent_file_race_conditions_sem.clone();
                 tokio::spawn(async move {
                   for acme_on_demand_config in acme_on_demand_configs.iter() {
                     if match_hostname(acme_on_demand_config.sni_hostname.as_deref(), Some(&sni_hostname))
                       && acme_on_demand_config.port == port
                     {
-                      let mutex_guard = prevent_file_race_conditions_mutex.lock().await;
+                      let sem_guard = prevent_file_race_conditions_sem.acquire().await;
                       add_domain_to_cache(acme_on_demand_config, &sni_hostname)
                         .await
                         .unwrap_or_default();
-                      drop(mutex_guard);
+                      drop(sem_guard);
 
                       acme_configs_mutex.lock().await.push(
                         convert_on_demand_config(
