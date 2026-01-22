@@ -363,7 +363,11 @@ const docLinks = Astro.props.docLinks;
     }
   }
 
-  function hideMobileMenu(e: Event, menu: Element | null, preventDefault: bool) {
+  function hideMobileMenu(
+    e: Event,
+    menu: Element | null,
+    preventDefault: boolean
+  ) {
     if (preventDefault) {
       e.preventDefault();
     }
@@ -396,7 +400,9 @@ const docLinks = Astro.props.docLinks;
       menuClose.addEventListener("click", (e) => hideMobileMenu(e, menu, true));
     if (menuLinks)
       menuLinks.forEach((menuLink) => {
-        menuLink.addEventListener("click", (e) => hideMobileMenu(e, menu, false));
+        menuLink.addEventListener("click", (e) =>
+          hideMobileMenu(e, menu, false)
+        );
       });
 
     const searchBar = document.querySelector("[data-search-bar]");
