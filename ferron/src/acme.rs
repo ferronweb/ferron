@@ -1,5 +1,5 @@
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
   error::Error,
   future::Future,
   net::IpAddr,
@@ -36,7 +36,7 @@ use x509_parser::prelude::{FromDer, X509Certificate};
 use xxhash_rust::xxh3::xxh3_128;
 
 use crate::util::load_host_resolver;
-use ferron_common::{dns::DnsProvider, get_entry, get_value};
+use ferron_common::{dns::DnsProvider, get_entry, get_value, util::match_hostname};
 use ferron_common::{logging::ErrorLogger, util::NoServerVerifier};
 
 pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
@@ -765,11 +765,21 @@ pub fn build_rustls_client_config(
   server_configuration: &ferron_common::config::ServerConfiguration,
   crypto_provider: Arc<CryptoProvider>,
 ) -> Result<ClientConfig, Box<dyn Error + Send + Sync>> {
-  Ok(
-    (if get_value!("auto_tls_no_verification", server_configuration)
+  build_raw_rustls_client_config(
+    get_value!("auto_tls_no_verification", server_configuration)
       .and_then(|v| v.as_bool())
-      .unwrap_or(false)
-    {
+      .unwrap_or(false),
+    crypto_provider,
+  )
+}
+
+/// Builds a raw Rustls client configuration for ACME.
+fn build_raw_rustls_client_config(
+  no_verification: bool,
+  crypto_provider: Arc<CryptoProvider>,
+) -> Result<ClientConfig, Box<dyn Error + Send + Sync>> {
+  Ok(
+    (if no_verification {
       ClientConfig::builder_with_provider(crypto_provider.clone())
         .with_safe_default_protocol_versions()?
         .dangerous()
@@ -872,4 +882,186 @@ pub fn resolve_cache_paths(
     (None, None)
   };
   Ok((account_cache_path, cert_cache_path))
+}
+
+/// Performs background automatic TLS tasks.
+#[allow(clippy::too_many_arguments)]
+pub async fn background_acme_task(
+  acme_configs: Vec<AcmeConfig>,
+  acme_on_demand_configs: Vec<AcmeOnDemandConfig>,
+  memory_acme_account_cache_data: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+  acme_on_demand_rx: async_channel::Receiver<(String, u16)>,
+  on_demand_tls_ask_endpoint: Option<hyper::Uri>,
+  on_demand_tls_ask_endpoint_verify: bool,
+  acme_logger: ErrorLogger,
+  crypto_provider: Arc<CryptoProvider>,
+  existing_combinations: HashSet<(String, u16)>,
+) {
+  let acme_logger = Arc::new(acme_logger);
+
+  // Wrap ACME configurations in a mutex
+  let acme_configs_mutex = Arc::new(tokio::sync::Mutex::new(acme_configs));
+
+  let prevent_file_race_conditions_sem = Arc::new(tokio::sync::Semaphore::new(1));
+
+  if !acme_on_demand_configs.is_empty() {
+    // On-demand TLS
+    tokio::spawn(background_on_demand_acme_task(
+      existing_combinations,
+      acme_on_demand_rx,
+      on_demand_tls_ask_endpoint,
+      on_demand_tls_ask_endpoint_verify,
+      acme_logger.clone(),
+      crypto_provider,
+      acme_configs_mutex.clone(),
+      acme_on_demand_configs,
+      memory_acme_account_cache_data,
+      prevent_file_race_conditions_sem,
+    ));
+  }
+
+  loop {
+    for acme_config in &mut *acme_configs_mutex.lock().await {
+      if let Err(acme_error) = provision_certificate(acme_config, &acme_logger).await {
+        acme_logger
+          .log(&format!("Error while obtaining a TLS certificate: {acme_error}"))
+          .await
+      }
+    }
+    tokio::time::sleep(Duration::from_secs(10)).await;
+  }
+}
+
+/// Performs background automatic TLS on demand tasks.
+#[allow(clippy::too_many_arguments)]
+#[inline]
+pub async fn background_on_demand_acme_task(
+  existing_combinations: HashSet<(String, u16)>,
+  acme_on_demand_rx: async_channel::Receiver<(String, u16)>,
+  on_demand_tls_ask_endpoint: Option<hyper::Uri>,
+  on_demand_tls_ask_endpoint_verify: bool,
+  acme_logger: Arc<ErrorLogger>,
+  crypto_provider: Arc<CryptoProvider>,
+  acme_configs_mutex: Arc<tokio::sync::Mutex<Vec<AcmeConfig>>>,
+  acme_on_demand_configs: Vec<AcmeOnDemandConfig>,
+  memory_acme_account_cache_data: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+  prevent_file_race_conditions_sem: Arc<tokio::sync::Semaphore>,
+) {
+  let acme_on_demand_configs = Arc::new(acme_on_demand_configs);
+  let mut existing_combinations = existing_combinations;
+  while let Ok(received_data) = acme_on_demand_rx.recv().await {
+    let on_demand_tls_ask_endpoint = on_demand_tls_ask_endpoint.clone();
+    if let Some(on_demand_tls_ask_endpoint) = on_demand_tls_ask_endpoint {
+      let mut url_parts = on_demand_tls_ask_endpoint.into_parts();
+      let path_and_query_str = if let Some(path_and_query) = url_parts.path_and_query {
+        let query = path_and_query.query();
+        let query = if let Some(query) = query {
+          format!("{}&domain={}", query, urlencoding::encode(&received_data.0))
+        } else {
+          format!("domain={}", urlencoding::encode(&received_data.0))
+        };
+        format!("{}?{}", path_and_query.path(), query)
+      } else {
+        format!("/?domain={}", urlencoding::encode(&received_data.0))
+      };
+      url_parts.path_and_query = Some(match path_and_query_str.parse() {
+        Ok(parsed) => parsed,
+        Err(err) => {
+          acme_logger
+            .log(&format!(
+              "Error while formatting the URL for on-demand TLS request: {err}"
+            ))
+            .await;
+          continue;
+        }
+      });
+      let endpoint_url = match hyper::Uri::from_parts(url_parts) {
+        Ok(parsed) => parsed,
+        Err(err) => {
+          acme_logger
+            .log(&format!(
+              "Error while formatting the URL for on-demand TLS request: {err}"
+            ))
+            .await;
+          continue;
+        }
+      };
+      let crypto_provider = crypto_provider.clone();
+      let ask_closure = async {
+        let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+          .build::<_, http_body_util::Empty<hyper::body::Bytes>>(
+          hyper_rustls::HttpsConnectorBuilder::new()
+            .with_tls_config(build_raw_rustls_client_config(
+              !on_demand_tls_ask_endpoint_verify,
+              crypto_provider,
+            )?)
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .build(),
+        );
+        let request = hyper::Request::builder()
+          .method(hyper::Method::GET)
+          .uri(endpoint_url)
+          .body(http_body_util::Empty::<hyper::body::Bytes>::new())?;
+        let response = client.request(request).await?;
+
+        Ok::<_, Box<dyn Error + Send + Sync>>(response.status().is_success())
+      };
+      match ask_closure.await {
+        Ok(true) => (),
+        Ok(false) => {
+          acme_logger
+            .log(&format!(
+              "The TLS certificate cannot be issued for \"{}\" hostname",
+              &received_data.0
+            ))
+            .await;
+          continue;
+        }
+        Err(err) => {
+          acme_logger
+            .log(&format!(
+              "Error while determining if the TLS certificate can be issued for \"{}\" hostname: {err}",
+              &received_data.0
+            ))
+            .await;
+          continue;
+        }
+      }
+    }
+    if existing_combinations.contains(&received_data) {
+      continue;
+    } else {
+      existing_combinations.insert(received_data.clone());
+    }
+    let (sni_hostname, port) = received_data;
+    let acme_configs_mutex = acme_configs_mutex.clone();
+    let acme_on_demand_configs = acme_on_demand_configs.clone();
+    let memory_acme_account_cache_data = memory_acme_account_cache_data.clone();
+    let prevent_file_race_conditions_sem = prevent_file_race_conditions_sem.clone();
+    tokio::spawn(async move {
+      for acme_on_demand_config in acme_on_demand_configs.iter() {
+        if match_hostname(acme_on_demand_config.sni_hostname.as_deref(), Some(&sni_hostname))
+          && acme_on_demand_config.port == port
+        {
+          let sem_guard = prevent_file_race_conditions_sem.acquire().await;
+          add_domain_to_cache(acme_on_demand_config, &sni_hostname)
+            .await
+            .unwrap_or_default();
+          drop(sem_guard);
+
+          acme_configs_mutex.lock().await.push(
+            convert_on_demand_config(
+              acme_on_demand_config,
+              sni_hostname.clone(),
+              memory_acme_account_cache_data,
+            )
+            .await,
+          );
+          break;
+        }
+      }
+    });
+  }
 }

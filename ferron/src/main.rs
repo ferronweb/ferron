@@ -25,21 +25,19 @@ use ferron_common::{get_entry, get_value, get_values};
 use ferron_load_modules::{obtain_module_loaders, obtain_observability_backend_loaders};
 use human_panic::{setup_panic, Metadata};
 use mimalloc::MiMalloc;
-use rustls::client::WebPkiServerVerifier;
 use rustls::crypto::aws_lc_rs::cipher_suite::*;
 use rustls::crypto::aws_lc_rs::default_provider;
 use rustls::crypto::aws_lc_rs::kx_group::*;
 use rustls::server::{ResolvesServerCert, WebPkiClientVerifier};
 use rustls::version::{TLS12, TLS13};
-use rustls::{ClientConfig, RootCertStore, ServerConfig};
+use rustls::{RootCertStore, ServerConfig};
 use rustls_native_certs::load_native_certs;
-use rustls_platform_verifier::BuilderVerifierExt;
 use shadow_rs::shadow;
 use tokio_util::sync::CancellationToken;
 
 use crate::acme::{
-  add_domain_to_cache, check_certificate_validity_or_install_cached, convert_on_demand_config, get_cached_domains,
-  provision_certificate, ACME_TLS_ALPN_NAME,
+  background_acme_task, check_certificate_validity_or_install_cached, convert_on_demand_config, get_cached_domains,
+  ACME_TLS_ALPN_NAME,
 };
 use crate::config::adapters::ConfigurationAdapter;
 use crate::config::processing::{
@@ -53,7 +51,7 @@ use crate::tls_setup::{
   handle_automatic_tls, handle_manual_tls, handle_nonencrypted_ports, manual_tls_entry, read_default_port,
   resolve_sni_hostname, should_skip_server, TlsBuildContext,
 };
-use crate::util::{load_certs, match_hostname, NoServerVerifier};
+use crate::util::load_certs;
 
 // Set the global allocator to use mimalloc for performance optimization
 #[global_allocator]
@@ -741,14 +739,41 @@ fn before_starting_server(
       }
 
       let mut acme_configs = tls_build_ctx.acme_configs;
-      let mut acme_configs = secondary_runtime_ref.block_on(async move {
+      let mut acme_on_demand_configs = tls_build_ctx.acme_on_demand_configs;
+      let memory_acme_account_cache_data_clone = memory_acme_account_cache_data.clone();
+
+      // Preload the cached certificates before spawning the background ACME task
+      let (acme_configs, acme_on_demand_configs, existing_combinations) = secondary_runtime_ref.block_on(async move {
+        let mut existing_combinations = HashSet::new();
+
         for acme_config in &mut acme_configs {
           // Install the certificates from the cache if they're valid
           check_certificate_validity_or_install_cached(acme_config, None)
             .await
             .unwrap_or_default();
         }
-        acme_configs
+
+        for acme_on_demand_config in &mut acme_on_demand_configs {
+          for cached_domain in get_cached_domains(acme_on_demand_config).await {
+            let mut acme_config = convert_on_demand_config(
+              acme_on_demand_config,
+              cached_domain.clone(),
+              memory_acme_account_cache_data_clone.clone(),
+            )
+            .await;
+
+            existing_combinations.insert((cached_domain, acme_on_demand_config.port));
+
+            // Install the certificates from the cache if they're valid
+            check_certificate_validity_or_install_cached(&mut acme_config, None)
+              .await
+              .unwrap_or_default();
+
+            acme_configs.push(acme_config);
+          }
+        }
+
+        (acme_configs, acme_on_demand_configs, existing_combinations)
       });
 
       let inner_handler_data = ReloadableHandlerData {
@@ -785,7 +810,6 @@ fn before_starting_server(
         drop(secondary_runtime);
       }
 
-      let mut acme_on_demand_configs = tls_build_ctx.acme_on_demand_configs;
       let acme_on_demand_rx = tls_build_ctx.acme_on_demand_rx;
       let on_demand_tls_ask_endpoint = match global_configuration
         .as_ref()
@@ -808,244 +832,22 @@ fn before_starting_server(
 
       if !acme_configs.is_empty() || !acme_on_demand_configs.is_empty() {
         // Spawn a task to handle ACME certificate provisioning, one certificate at time
-
-        let global_configuration_clone = global_configuration.clone();
-        secondary_runtime_ref.spawn(async move {
-          let mut existing_combinations = HashSet::new();
-          for acme_on_demand_config in &mut acme_on_demand_configs {
-            for cached_domain in get_cached_domains(acme_on_demand_config).await {
-              let mut acme_config = convert_on_demand_config(
-                acme_on_demand_config,
-                cached_domain.clone(),
-                memory_acme_account_cache_data.clone(),
-              )
-              .await;
-
-              existing_combinations.insert((cached_domain, acme_on_demand_config.port));
-
-              // Install the certificates from the cache if they're valid
-              check_certificate_validity_or_install_cached(&mut acme_config, None)
-                .await
-                .unwrap_or_default();
-
-              acme_configs.push(acme_config);
-            }
-          }
-
-          // Wrap ACME configurations in a mutex
-          let acme_configs_mutex = Arc::new(tokio::sync::Mutex::new(acme_configs));
-
-          let prevent_file_race_conditions_sem = Arc::new(tokio::sync::Semaphore::new(1));
-
-          if !acme_on_demand_configs.is_empty() {
-            // On-demand TLS
-            let acme_configs_mutex = acme_configs_mutex.clone();
-            let acme_on_demand_configs = Arc::new(acme_on_demand_configs);
-            let global_configuration_clone = global_configuration_clone.clone();
-            tokio::spawn(async move {
-              let mut existing_combinations = existing_combinations;
-              while let Ok(received_data) = acme_on_demand_rx.recv().await {
-                let on_demand_tls_ask_endpoint = on_demand_tls_ask_endpoint.clone();
-                if let Some(on_demand_tls_ask_endpoint) = on_demand_tls_ask_endpoint {
-                  let mut url_parts = on_demand_tls_ask_endpoint.into_parts();
-                  if let Some(path_and_query) = url_parts.path_and_query {
-                    let query = path_and_query.query();
-                    let query = if let Some(query) = query {
-                      format!("{}&domain={}", query, urlencoding::encode(&received_data.0))
-                    } else {
-                      format!("domain={}", urlencoding::encode(&received_data.0))
-                    };
-                    url_parts.path_and_query = Some(match format!("{}?{}", path_and_query.path(), query).parse() {
-                      Ok(parsed) => parsed,
-                      Err(err) => {
-                        for acme_logger in global_configuration_clone
-                          .as_ref()
-                          .map_or(&vec![], |c| &c.observability.log_channels)
-                        {
-                          acme_logger
-                            .send(LogMessage::new(
-                              format!("Error while formatting the URL for on-demand TLS request: {err}"),
-                              true,
-                            ))
-                            .await
-                            .unwrap_or_default();
-                        }
-                        continue;
-                      }
-                    });
-                  } else {
-                    url_parts.path_and_query = Some(
-                      match format!("/?domain={}", urlencoding::encode(&received_data.0)).parse() {
-                        Ok(parsed) => parsed,
-                        Err(err) => {
-                          for acme_logger in global_configuration_clone
-                            .as_ref()
-                            .map_or(&vec![], |c| &c.observability.log_channels)
-                          {
-                            acme_logger
-                              .send(LogMessage::new(
-                                format!("Error while formatting the URL for on-demand TLS request: {err}"),
-                                true,
-                              ))
-                              .await
-                              .unwrap_or_default();
-                          }
-                          continue;
-                        }
-                      },
-                    );
-                  }
-                  let endpoint_url = match hyper::Uri::from_parts(url_parts) {
-                    Ok(parsed) => parsed,
-                    Err(err) => {
-                      for acme_logger in global_configuration_clone
-                        .as_ref()
-                        .map_or(&vec![], |c| &c.observability.log_channels)
-                      {
-                        acme_logger
-                          .send(LogMessage::new(
-                            format!("Error while formatting the URL for on-demand TLS request: {err}"),
-                            true,
-                          ))
-                          .await
-                          .unwrap_or_default();
-                      }
-                      continue;
-                    }
-                  };
-                  let ask_closure = async {
-                    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-                      .build::<_, http_body_util::Empty<hyper::body::Bytes>>(
-                      hyper_rustls::HttpsConnectorBuilder::new()
-                        .with_tls_config(
-                          (if !on_demand_tls_ask_endpoint_verify {
-                            ClientConfig::builder_with_provider(crypto_provider.clone())
-                              .with_safe_default_protocol_versions()?
-                              .dangerous()
-                              .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
-                          } else if let Ok(client_config) = BuilderVerifierExt::with_platform_verifier(
-                            ClientConfig::builder_with_provider(crypto_provider.clone())
-                              .with_safe_default_protocol_versions()?,
-                          ) {
-                            client_config
-                          } else {
-                            ClientConfig::builder_with_provider(crypto_provider.clone())
-                              .with_safe_default_protocol_versions()?
-                              .with_webpki_verifier(
-                                WebPkiServerVerifier::builder(Arc::new(rustls::RootCertStore {
-                                  roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-                                }))
-                                .build()?,
-                              )
-                          })
-                          .with_no_client_auth(),
-                        )
-                        .https_or_http()
-                        .enable_http1()
-                        .enable_http2()
-                        .build(),
-                    );
-                    let request = hyper::Request::builder()
-                      .method(hyper::Method::GET)
-                      .uri(endpoint_url)
-                      .body(http_body_util::Empty::<hyper::body::Bytes>::new())?;
-                    let response = client.request(request).await?;
-
-                    Ok::<_, Box<dyn Error + Send + Sync>>(response.status().is_success())
-                  };
-                  match ask_closure.await {
-                    Ok(true) => (),
-                    Ok(false) => {
-                      for acme_logger in global_configuration_clone
-                        .as_ref()
-                        .map_or(&vec![], |c| &c.observability.log_channels)
-                      {
-                        acme_logger
-                          .send(LogMessage::new(
-                            format!(
-                              "The TLS certificate cannot be issued for \"{}\" hostname",
-                              &received_data.0
-                            ),
-                            true,
-                          ))
-                          .await
-                          .unwrap_or_default();
-                      }
-                      continue;
-                    }
-                    Err(err) => {
-                      for acme_logger in global_configuration_clone
-                        .as_ref()
-                        .map_or(&vec![], |c| &c.observability.log_channels)
-                      {
-                        acme_logger
-                          .send(LogMessage::new(
-                            format!(
-                              "Error while determining if the TLS certificate can be issued for \"{}\" hostname: {err}",
-                              &received_data.0
-                            ),
-                            true,
-                          ))
-                          .await
-                          .unwrap_or_default();
-                      }
-                      continue;
-                    }
-                  }
-                }
-                if existing_combinations.contains(&received_data) {
-                  continue;
-                } else {
-                  existing_combinations.insert(received_data.clone());
-                }
-                let (sni_hostname, port) = received_data;
-                let acme_configs_mutex = acme_configs_mutex.clone();
-                let acme_on_demand_configs = acme_on_demand_configs.clone();
-                let memory_acme_account_cache_data = memory_acme_account_cache_data.clone();
-                let prevent_file_race_conditions_sem = prevent_file_race_conditions_sem.clone();
-                tokio::spawn(async move {
-                  for acme_on_demand_config in acme_on_demand_configs.iter() {
-                    if match_hostname(acme_on_demand_config.sni_hostname.as_deref(), Some(&sni_hostname))
-                      && acme_on_demand_config.port == port
-                    {
-                      let sem_guard = prevent_file_race_conditions_sem.acquire().await;
-                      add_domain_to_cache(acme_on_demand_config, &sni_hostname)
-                        .await
-                        .unwrap_or_default();
-                      drop(sem_guard);
-
-                      acme_configs_mutex.lock().await.push(
-                        convert_on_demand_config(
-                          acme_on_demand_config,
-                          sni_hostname.clone(),
-                          memory_acme_account_cache_data,
-                        )
-                        .await,
-                      );
-                      break;
-                    }
-                  }
-                });
-              }
-            });
-          }
-
-          let error_logger = ErrorLogger::new_multiple(
-            global_configuration_clone
-              .as_ref()
-              .map_or(vec![], |c| c.observability.log_channels.clone()),
-          );
-          loop {
-            for acme_config in &mut *acme_configs_mutex.lock().await {
-              if let Err(acme_error) = provision_certificate(acme_config, &error_logger).await {
-                error_logger
-                  .log(&format!("Error while obtaining a TLS certificate: {acme_error}"))
-                  .await
-              }
-            }
-            tokio::time::sleep(Duration::from_secs(10)).await;
-          }
-        });
+        let acme_logger = ErrorLogger::new_multiple(
+          global_configuration
+            .as_ref()
+            .map_or(vec![], |c| c.observability.log_channels.clone()),
+        );
+        secondary_runtime_ref.spawn(background_acme_task(
+          acme_configs,
+          acme_on_demand_configs,
+          memory_acme_account_cache_data,
+          acme_on_demand_rx,
+          on_demand_tls_ask_endpoint,
+          on_demand_tls_ask_endpoint_verify,
+          acme_logger,
+          crypto_provider,
+          existing_combinations,
+        ));
       }
 
       // Spawn request handler threads
