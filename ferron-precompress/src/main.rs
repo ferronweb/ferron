@@ -311,9 +311,8 @@ fn main() {
   thread_pool.scope(move |scope| {
     for path in paths {
       println!("Compressing asset at {}...", path.display());
-      scope.spawn(move |_| match compress_asset(&path) {
-        Ok(_) => {}
-        Err(err) => {
+      scope.spawn(move |_| {
+        if let Err(err) = compress_asset(&path) {
           eprintln!("Error compressing asset at {}: {}", path.display(), err);
           std::process::exit(1);
         }

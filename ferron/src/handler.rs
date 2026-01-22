@@ -368,21 +368,18 @@ async fn http_tcp_handler_fn(
         .flatten()
         .eq([ACME_TLS_ALPN_NAME])
       {
-        match start_handshake.into_stream(acme_config).await {
-          Ok(_) => (),
-          Err(err) => {
-            for logging_tx in configurations
-              .find_global_configuration()
-              .as_ref()
-              .map_or(&vec![], |c| &c.observability.log_channels)
-            {
-              logging_tx
-                .send(LogMessage::new(format!("Error during TLS handshake: {err}"), true))
-                .await
-                .unwrap_or_default();
-            }
-            return;
+        if let Err(err) = start_handshake.into_stream(acme_config).await {
+          for logging_tx in configurations
+            .find_global_configuration()
+            .as_ref()
+            .map_or(&vec![], |c| &c.observability.log_channels)
+          {
+            logging_tx
+              .send(LogMessage::new(format!("Error during TLS handshake: {err}"), true))
+              .await
+              .unwrap_or_default();
           }
+          return;
         };
         return;
       }

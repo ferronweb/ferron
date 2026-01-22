@@ -1048,35 +1048,32 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             }
           };
 
-          match stream.set_nodelay(true) {
-            Ok(_) => (),
-            Err(err) => {
-              if enable_health_check {
-                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
-                if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
-                  unhealthy_backends_metrics.push(proxy_key.clone());
-                }
-                let mut failed_backends_write = self.failed_backends.write().await;
-                let failed_attempts = failed_backends_write.get(&proxy_key);
-                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+          if let Err(err) = stream.set_nodelay(true) {
+            if enable_health_check {
+              let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+              if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
+                unhealthy_backends_metrics.push(proxy_key.clone());
               }
-
-              if retry_connection && !proxy_to_vector.is_empty() {
-                error_logger
-                  .log(&format!("Failed to connect to backend, trying another backend: {err}"))
-                  .await;
-                continue;
-              }
-
-              error_logger.log(&format!("Bad gateway: {err}")).await;
-              return Ok(ResponseData {
-                request: None,
-                response: None,
-                response_status: Some(StatusCode::BAD_GATEWAY),
-                response_headers: None,
-                new_remote_address: None,
-              });
+              let mut failed_backends_write = self.failed_backends.write().await;
+              let failed_attempts = failed_backends_write.get(&proxy_key);
+              failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
             }
+
+            if retry_connection && !proxy_to_vector.is_empty() {
+              error_logger
+                .log(&format!("Failed to connect to backend, trying another backend: {err}"))
+                .await;
+              continue;
+            }
+
+            error_logger.log(&format!("Bad gateway: {err}")).await;
+            return Ok(ResponseData {
+              request: None,
+              response: None,
+              response_status: Some(StatusCode::BAD_GATEWAY),
+              response_headers: None,
+              new_remote_address: None,
+            });
           };
 
           #[cfg(feature = "runtime-monoio")]
@@ -1227,36 +1224,33 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         let mut stream = stream; // Make the stream a mutable variable (to be able to write PROXY protocol header to it).
 
         if let Some(proxy_header_to_write) = proxy_header_to_write {
-          match stream.write_all(&proxy_header_to_write).await {
-            Ok(_) => (),
-            Err(err) => {
-              if enable_health_check {
-                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
-                if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
-                  unhealthy_backends_metrics.push(proxy_key.clone());
-                }
-                let mut failed_backends_write = self.failed_backends.write().await;
-                let failed_attempts = failed_backends_write.get(&proxy_key);
-                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+          if let Err(err) = stream.write_all(&proxy_header_to_write).await {
+            if enable_health_check {
+              let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+              if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
+                unhealthy_backends_metrics.push(proxy_key.clone());
               }
-
-              if retry_connection && !proxy_to_vector.is_empty() {
-                error_logger
-                  .log(&format!("Failed to connect to backend, trying another backend: {err}"))
-                  .await;
-                continue;
-              }
-
-              error_logger.log(&format!("Bad gateway: {err}")).await;
-              return Ok(ResponseData {
-                request: None,
-                response: None,
-                response_status: Some(StatusCode::BAD_GATEWAY),
-                response_headers: None,
-                new_remote_address: None,
-              });
+              let mut failed_backends_write = self.failed_backends.write().await;
+              let failed_attempts = failed_backends_write.get(&proxy_key);
+              failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
             }
-          };
+
+            if retry_connection && !proxy_to_vector.is_empty() {
+              error_logger
+                .log(&format!("Failed to connect to backend, trying another backend: {err}"))
+                .await;
+              continue;
+            }
+
+            error_logger.log(&format!("Bad gateway: {err}")).await;
+            return Ok(ResponseData {
+              request: None,
+              response: None,
+              response_status: Some(StatusCode::BAD_GATEWAY),
+              response_headers: None,
+              new_remote_address: None,
+            });
+          }
         }
 
         // Safety: the drop guard is dropped when the connection future is completed,

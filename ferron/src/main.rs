@@ -962,11 +962,8 @@ fn main() {
   }
 
   // Start the server!
-  match before_starting_server(args, configuration_adapters) {
-    Ok(_) => (),
-    Err(err) => {
-      eprintln!("Error while running a server: {err}");
-      std::process::exit(1);
-    }
-  };
+  if let Err(err) = before_starting_server(args, configuration_adapters) {
+    eprintln!("Error while running a server: {err}");
+    std::process::exit(1);
+  }
 }

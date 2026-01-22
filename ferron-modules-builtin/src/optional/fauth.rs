@@ -539,18 +539,15 @@ impl ModuleHandlers for ForwardedAuthenticationModuleHandlers {
         }
       };
 
-      match stream.set_nodelay(true) {
-        Ok(_) => (),
-        Err(err) => {
-          error_logger.log(&format!("Bad gateway: {err}")).await;
-          return Ok(ResponseData {
-            request: None,
-            response: None,
-            response_status: Some(StatusCode::BAD_GATEWAY),
-            response_headers: None,
-            new_remote_address: None,
-          });
-        }
+      if let Err(err) = stream.set_nodelay(true) {
+        error_logger.log(&format!("Bad gateway: {err}")).await;
+        return Ok(ResponseData {
+          request: None,
+          response: None,
+          response_status: Some(StatusCode::BAD_GATEWAY),
+          response_headers: None,
+          new_remote_address: None,
+        });
       };
 
       #[cfg(feature = "runtime-monoio")]

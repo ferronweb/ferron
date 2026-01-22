@@ -364,17 +364,16 @@ pub fn load_modules(
         }
       }
       // Validate the configuration against this observability backend
-      match server_observability_backend.validate_configuration(&server_configuration, &mut used_properties) {
-        Ok(_) => (),
-        Err(error) => {
-          // Store the first error encountered
-          if first_server_module_error.is_none() {
-            first_server_module_error
-              .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
-          }
-          // Skip remaining observability backends for this configuration if validation fails
-          break;
+      if let Err(error) =
+        server_observability_backend.validate_configuration(&server_configuration, &mut used_properties)
+      {
+        // Store the first error encountered
+        if first_server_module_error.is_none() {
+          first_server_module_error
+            .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
         }
+        // Skip remaining observability backends for this configuration if validation fails
+        break;
       }
       // Only load observability backend if its requirements are met
       if requirements_met {
@@ -429,17 +428,14 @@ pub fn load_modules(
           }
         }
         // Validate the configuration against this module
-        match server_module.validate_configuration(&server_configuration, &mut used_properties) {
-          Ok(_) => (),
-          Err(error) => {
-            // Store the first error encountered
-            if first_server_module_error.is_none() {
-              first_server_module_error
-                .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
-            }
-            // Skip remaining modules for this configuration if validation fails
-            break;
+        if let Err(error) = server_module.validate_configuration(&server_configuration, &mut used_properties) {
+          // Store the first error encountered
+          if first_server_module_error.is_none() {
+            first_server_module_error
+              .replace(anyhow::anyhow!("{error} (at {})", server_configuration.filters).into_boxed_dyn_error());
           }
+          // Skip remaining modules for this configuration if validation fails
+          break;
         }
         // Only load module if its requirements are met
         if requirements_met {

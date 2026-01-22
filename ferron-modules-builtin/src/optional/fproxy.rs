@@ -132,16 +132,13 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
                   return;
                 }
               };
-              match stream.set_nodelay(true) {
-                Ok(_) => (),
-                Err(err) => {
-                  error_logger
-                    .log(&format!(
-                      "Cannot disable Nagle algorithm when connecting to the remote server: {err}"
-                    ))
-                    .await;
-                  return;
-                }
+              if let Err(err) = stream.set_nodelay(true) {
+                error_logger
+                  .log(&format!(
+                    "Cannot disable Nagle algorithm when connecting to the remote server: {err}"
+                  ))
+                  .await;
+                return;
               };
               #[cfg(feature = "runtime-monoio")]
               let mut stream = match stream.into_poll_io() {
@@ -266,18 +263,15 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
         }
       };
 
-      match stream.set_nodelay(true) {
-        Ok(_) => (),
-        Err(err) => {
-          error_logger.log(&format!("Bad gateway: {err}")).await;
-          return Ok(ResponseData {
-            request: None,
-            response: None,
-            response_status: Some(StatusCode::BAD_GATEWAY),
-            response_headers: None,
-            new_remote_address: None,
-          });
-        }
+      if let Err(err) = stream.set_nodelay(true) {
+        error_logger.log(&format!("Bad gateway: {err}")).await;
+        return Ok(ResponseData {
+          request: None,
+          response: None,
+          response_status: Some(StatusCode::BAD_GATEWAY),
+          response_headers: None,
+          new_remote_address: None,
+        });
       };
 
       #[cfg(feature = "runtime-monoio")]
