@@ -11,6 +11,8 @@ example.com {
 }
 ```
 
+The WebSocket protocol is supported out of the box in this configuration example - no additional configuration is required.
+
 ## Reverse proxy with static file serving support
 
 Ferron supports serving static files and reverse proxying at once. You can use this configuration for this use case:
