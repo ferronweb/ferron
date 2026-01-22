@@ -78,39 +78,31 @@ static LISTENER_LOGGING_CHANNEL: LazyLock<Arc<(Sender<LogMessage>, Receiver<LogM
 /// Handles shutdown signals (SIGHUP and CTRL+C) and returns whether to continue running
 fn handle_shutdown_signals(runtime: &tokio::runtime::Runtime) -> bool {
   runtime.block_on(async move {
-    let (continue_tx, continue_rx) = async_channel::unbounded::<bool>();
-    let cancel_token = tokio_util::sync::CancellationToken::new();
-
     #[cfg(unix)]
-    {
-      let cancel_token_clone = cancel_token.clone();
-      let continue_tx_clone = continue_tx.clone();
-      tokio::spawn(async move {
-        if let Ok(mut signal) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()) {
-          tokio::select! {
-            _ = signal.recv() => {
-              continue_tx_clone.send(true).await.unwrap_or_default();
-            }
-            _ = cancel_token_clone.cancelled() => {}
-          }
-        }
-      });
-    }
-
-    let cancel_token_clone = cancel_token.clone();
-    tokio::spawn(async move {
-      tokio::select! {
-        result = tokio::signal::ctrl_c() => {
-          if result.is_ok() {
-            continue_tx.send(false).await.unwrap_or_default();
-          }
-        }
-        _ = cancel_token_clone.cancelled() => {}
+    let configuration_reload_future = async {
+      if let Ok(mut signal) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()) {
+        signal.recv().await
+      } else {
+        futures_util::future::pending().await
       }
-    });
+    };
+    #[cfg(not(unix))]
+    let configuration_reload_future = async { futures_util::future::pending::<Option<()>>().await };
 
-    let continue_running = continue_rx.recv().await.unwrap_or(false);
-    cancel_token.cancel();
+    let shutdown_future = async {
+      if tokio::signal::ctrl_c().await.is_err() {
+        futures_util::future::pending().await
+      }
+    };
+
+    let continue_running = tokio::select! {
+      _ = shutdown_future => {
+        false
+      }
+      _ = configuration_reload_future => {
+        true
+      }
+    };
     continue_running
   })
 }
