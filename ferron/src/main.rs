@@ -43,10 +43,11 @@ use crate::config::ServerConfigurations;
 use crate::handler::{create_http_handler, ReloadableHandlerData};
 use crate::listener_handler_communication::ConnectionData;
 use crate::listeners::{create_quic_listener, create_tcp_listener};
-use crate::setup::{
-  handle_automatic_tls, handle_manual_tls, handle_nonencrypted_ports, init_crypto_provider, manual_tls_entry,
-  read_default_port, resolve_sni_hostname, set_tls_version, should_skip_server, TlsBuildContext,
+use crate::setup::tls::{
+  handle_automatic_tls, handle_manual_tls, handle_nonencrypted_ports, manual_tls_entry, read_default_port,
+  resolve_sni_hostname, should_skip_server, TlsBuildContext,
 };
+use crate::setup::tls_single::{init_crypto_provider, set_tls_version};
 use crate::util::load_certs;
 
 // Set the global allocator to use mimalloc for performance optimization
@@ -401,7 +402,7 @@ fn before_starting_server(
         .map(|c| &c.observability.metric_channels)
         .cloned()
       {
-        secondary_runtime_ref.spawn(crate::setup::background_metrics(
+        secondary_runtime_ref.spawn(crate::setup::metrics::background_metrics(
           metrics_channels,
           available_parallelism,
         ));
