@@ -20,16 +20,7 @@ do
     nc -z ferron 80 >/dev/null 2>&1 && break || true
 done
 
-# Wait for the test proxy server to start
-for i in $(seq 1 3)
-do
-    if [ "$i" -gt 1 ]; then
-        sleep 1
-    fi
-    nc -z grpcweb-test-proxy 8080 >/dev/null 2>&1 && break || true
-done
-
-TEST_RESULTS=$(curl -fsS -X POST -H "Content-Type: application/json" -d '{"name": "Ferron"}' http://grpcweb-test-proxy:8080 | jq .message)
+TEST_RESULTS="$(grpcweb-cli --data '{"name": "Ferron"}' --include /tmp --proto /tmp/hello.proto --url http://ferron/helloworld.Greeter/SayHello | jq .message)"
 TEST_EXPECTED='"Hello Ferron"'
 TEST_EXIT_CODE=$?
 if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then

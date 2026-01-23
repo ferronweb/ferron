@@ -30,6 +30,24 @@ RUN --mount=type=cache,sharing=private,target=/go/pkg/mod \
     # Build grpcurl
     CGO_ENABLED=0 go build -o /usr/local/bin/grpcurl ./cmd/grpcurl
 
+# Use Rust base image for building grpcweb-cli
+FROM rust:trixie AS builder-grpcweb-cli
+
+# Set the working directory for grpcweb-cli
+WORKDIR /usr/src/grpcweb-cli
+
+# Clone the grpcweb-cli Git repository
+RUN git clone https://github.com/DorianNiemiecSVRJS/grpcweb-cli.git /usr/src/grpcweb-cli
+
+# Build grpcweb-cli
+RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
+    --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
+    --mount=type=cache,sharing=private,target=/usr/src/grpcweb-cli/target \
+    # Build grpcweb-cli
+    cargo build --release && \
+    # Copy executables out of the cache
+    mkdir .dist && cp target/release/grpcweb-cli .dist
+
 # Use Debian base image
 FROM debian:trixie
 
@@ -47,3 +65,6 @@ COPY --from=builder-websocat /usr/src/websocat/.dist /usr/local/bin
 
 # Copy the built grpcurl
 COPY --from=builder-grpcurl /usr/local/bin/grpcurl /usr/local/bin
+
+# Copy the built grpcweb-cli
+COPY --from=builder-grpcweb-cli /usr/src/grpcweb-cli/.dist /usr/local/bin
