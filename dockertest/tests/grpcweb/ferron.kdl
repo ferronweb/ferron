@@ -1,0 +1,5 @@
+:80 {
+  grpcweb
+  proxy "http://backend:50051/"
+  proxy_http2_only
+}

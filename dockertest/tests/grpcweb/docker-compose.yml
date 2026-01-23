@@ -1,0 +1,21 @@
+services:
+  # The web server to test
+  ferron:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./ferron.kdl:/etc/ferron.kdl
+
+  # The backend server for testing
+  backend:
+    build:
+      context: ./backend
+
+  # A container to run tests
+  test-runner:
+    build:
+      context: ../../runner
+    command: "tail -f /dev/null"
+    volumes:
+      - ./hello.proto:/tmp/hello.proto

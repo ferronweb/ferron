@@ -12,6 +12,8 @@ mod fcgi;
 mod fproxy;
 #[cfg(feature = "fproxyauth")]
 mod fproxyauth;
+#[cfg(feature = "grpcweb")]
+mod grpcweb;
 #[cfg(feature = "limit")]
 mod limit;
 #[cfg(feature = "replace")]
@@ -37,6 +39,8 @@ pub use fcgi::*;
 pub use fproxy::*;
 #[cfg(feature = "fproxyauth")]
 pub use fproxyauth::*;
+#[cfg(feature = "grpcweb")]
+pub use grpcweb::*;
 #[cfg(feature = "limit")]
 pub use limit::*;
 #[cfg(feature = "static")]

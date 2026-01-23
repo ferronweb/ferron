@@ -146,6 +146,19 @@ grpc.example.com {
 }
 ```
 
+## gRPC-Web translation
+
+Ferron supports translation of gRPC-Web requests into gRPC ones. This can be useful when you want to expose a gRPC service over HTTP/2, but your clients only support gRPC-Web. To configure Ferron for gRPC-Web translation, you can use this configuration:
+
+```kdl
+// Example configuration with gRPC-Web translation. Replace "grpcweb.example.com" with your domain name.
+grpcweb.example.com {
+    grpcweb // Translate gRPC-Web requests into gRPC ones
+    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+    proxy_http2_only // Enables HTTP/2-only proxying to support gRPC proxying
+}
+```
+
 ## Example: Ferron multiplexing to several backend servers
 
 In this example, the `example.com` and `bar.example.com` domains point to a server running Ferron.

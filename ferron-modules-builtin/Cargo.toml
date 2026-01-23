@@ -93,6 +93,12 @@ smallvec = { version = "1.15.0", features = [
     "const_generics",
 ] }
 
+# gRPC
+tonic-web = { version = "0.14.2", optional = true }
+tonic = { version = "0.14.2", optional = true, default-features = false }
+tower-layer = { version = "0.3.3", optional = true }
+tower-service = { version = "0.3.3", optional = true }
+
 [dev-dependencies]
 tokio-test = "0.4.4"
 shiba = { workspace = true }
@@ -106,6 +112,7 @@ default = [
     "fcgi",
     "fproxy",
     "fproxyauth",
+    "grpcweb",
     "limit",
     "replace",
     "rproxy",
@@ -121,6 +128,7 @@ default-tokio = [
     "fcgi",
     "fproxy",
     "fproxyauth",
+    "grpcweb",
     "limit",
     "replace",
     "rproxy",
@@ -135,6 +143,7 @@ fauth = ["rand", "connpool"]
 fcgi = ["tokio-util/codec", "httparse", "memchr"]
 fproxy = []
 fproxyauth = []
+grpcweb = ["tonic-web", "tower-layer", "tower-service", "tonic"]
 limit = ["tokenbucket"]
 replace = ["memchr"]
 rproxy = ["rand", "ppp", "connpool"]
