@@ -2,8 +2,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::thread::ThreadId;
 
-use monoio_compat::{AsyncRead, AsyncWrite};
-use tokio::io::ReadBuf;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 /// SendAsyncIo is a wrapper around an AsyncRead or AsyncWrite that ensures that all operations are performed on the same thread.
 pub struct SendAsyncIo<T> {
@@ -81,3 +80,4 @@ impl<T> Drop for SendAsyncIo<T> {
 
 // Safety: SendAsyncIo would panic if used from a different thread, instead of having undefined behavior.
 unsafe impl<T> Send for SendAsyncIo<T> {}
+unsafe impl<T> Sync for SendAsyncIo<T> {}

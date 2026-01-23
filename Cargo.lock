@@ -838,6 +838,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "cegla"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48483a1fdbd3149844ff4c3ad065105b892f5164047e5cf72c40690d516e571b"
+dependencies = [
+ "bytes",
+ "futures-util",
+ "hashlink",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "httparse",
+ "memchr",
+ "smallvec",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "cesu8"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1439,6 +1458,7 @@ dependencies = [
  "base64",
  "bytes",
  "cache_control",
+ "cegla",
  "chrono",
  "cidr",
  "connpool",
@@ -1447,7 +1467,6 @@ dependencies = [
  "futures-util",
  "hashlink",
  "http-body-util",
- "httparse",
  "hyper",
  "hyper-util",
  "memchr",
@@ -1468,7 +1487,6 @@ dependencies = [
  "tokenbucket",
  "tokio",
  "tokio-rustls",
- "tokio-test",
  "tokio-util",
  "urlencoding",
  "webpki-roots 1.0.5",
@@ -4334,17 +4352,6 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
-]
-
-[[package]]
-name = "tokio-test"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f6d24790a10a7af737693a3e8f1d03faef7e6ca0cc99aae5066f533766de545"
-dependencies = [
- "futures-core",
- "tokio",
- "tokio-stream",
 ]
 
 [[package]]

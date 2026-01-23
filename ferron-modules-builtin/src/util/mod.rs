@@ -1,8 +1,6 @@
 mod basic_auth;
 #[cfg(feature = "replace")]
 mod body_replacer;
-#[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
-pub mod cgi;
 #[cfg(feature = "fcgi")]
 pub mod fcgi;
 #[cfg(any(feature = "rproxy", feature = "fauth"))]
