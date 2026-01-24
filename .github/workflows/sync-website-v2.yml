@@ -35,7 +35,7 @@ jobs:
         run: |
           rm -rf website/docs/index
           cp -r ferron/docs website/docs/index
-          cat << EOF > website/docs/README.md
+          cat << EOF > website/docs/index/README.md
           # Ferron documentation
 
           This Ferron documentation is automatically synchronized with https://github.com/ferronweb/ferron/tree/2.x.
