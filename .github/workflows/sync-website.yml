@@ -1,0 +1,56 @@
+name: Sync with Ferron website
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "docs/**"
+      - "CHANGELOG.md"
+      - ".github/workflows/sync-website.yml"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          path: ferron
+
+      - name: Checkout Ferron website
+        uses: actions/checkout@v6
+        with:
+          repository: ferronweb/ferron.sh
+          token: ${{ secrets.GIT_TOKEN }}
+          ref: main
+          path: website
+
+      - name: Sync website
+        run: |
+          rm -rf website/docs/v1
+          cp -r ferron/docs website/docs/v1
+          cat << EOF > website/docs/v1/README.md
+          # Ferron documentation
+
+          This Ferron documentation is automatically synchronized with https://github.com/ferronweb/ferron/tree/main.
+
+          If you want to contribute to the documentation, please open a pull request on the Ferron repository, not on the website repository.
+          EOF
+          cat << EOF > website/changelogs/v1.md
+          ---
+          subject: Ferron 1.x
+          ---
+          EOF
+          cat ferron/CHANGELOG.md | grep -vE '^# ' >> website/changelogs/v1.md
+          cd website
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m 'chore: sync from https://github.com/ferronweb/ferron/tree/main'
+          git push origin main
