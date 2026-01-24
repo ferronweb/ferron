@@ -295,10 +295,7 @@ const docLinks = Astro.props.docLinks;
   function hideSearchOnEsc(search: Element) {
     const listener = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        search.classList.add("hidden");
-        document.documentElement.classList.remove("max-md:overflow-hidden");
-        document.removeEventListener("keydown", listener);
-        addSearchTriggerListener(search);
+        hideSearchMenu(e, search);
       }
     };
     document.addEventListener("keydown", listener);
@@ -308,16 +305,7 @@ const docLinks = Astro.props.docLinks;
   function addSearchTriggerListener(search: Element) {
     const searchTriggerListenerToAdd = (e: KeyboardEvent) => {
       if (e.key === "/") {
-        e.preventDefault();
-        hideSearchOnEsc(search);
-        search.classList.remove("hidden");
-        document.documentElement.classList.add("max-md:overflow-hidden");
-        const searchInput = document.querySelector(
-          "[data-search-menu] input"
-        ) as HTMLElement | null;
-        if (searchInput) {
-          searchInput.focus();
-        }
+        showSearchMenu(e, search);
         document.removeEventListener("keydown", searchTriggerListenerToAdd);
       }
     };
