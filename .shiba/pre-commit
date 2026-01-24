@@ -1,10 +1,4 @@
 #!/bin/bash
-if [ -d website/node_modules ]; then
-  cd website
-  npx lint-staged || exit $?
-  cd ..
-fi
-
 cargo clippy --fix --all-targets --allow-staged --allow-dirty || exit $?
 cargo fmt || exit $?
 
