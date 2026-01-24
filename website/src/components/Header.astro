@@ -289,7 +289,7 @@ const docLinks = Astro.props.docLinks;
 </header>
 
 <script>
-  const searchEscListeners: EventListener[] = [];
+  let searchEscEvent: EventListener | undefined;
   let searchTriggerEvent: EventListener | undefined;
 
   function hideSearchOnEsc(search: Element) {
@@ -297,7 +297,7 @@ const docLinks = Astro.props.docLinks;
       if (e.key === "Escape") hideSearchMenu(e, search);
     };
     document.addEventListener("keydown", listener);
-    searchEscListeners.push(listener as EventListener);
+    searchEscEvent = listener as EventListener;
   }
 
   function addSearchTriggerListener(search: Element) {
@@ -326,10 +326,8 @@ const docLinks = Astro.props.docLinks;
   function hideSearchMenu(e: Event, search: Element | null) {
     e.preventDefault();
     if (search) {
-      while (searchEscListeners.length > 0) {
-        const listener = searchEscListeners.pop();
-        if (listener) document.removeEventListener("keydown", listener);
-      }
+      if (searchEscEvent)
+        document.removeEventListener("keydown", searchEscEvent);
       search.classList.add("hidden");
       document.documentElement.classList.remove("max-md:overflow-hidden");
       addSearchTriggerListener(search);
@@ -358,11 +356,9 @@ const docLinks = Astro.props.docLinks;
 
   function initializeHeader() {
     // Cleanup event listeners
-    while (searchEscListeners.length > 0) {
-      const listener = searchEscListeners.pop();
-      if (listener) {
-        document.removeEventListener("keydown", listener);
-      }
+    if (searchEscEvent) {
+      document.removeEventListener("keydown", searchEscEvent);
+      searchEscEvent = undefined;
     }
     if (searchTriggerEvent) {
       document.removeEventListener("keydown", searchTriggerEvent);
