@@ -1,10 +1,5 @@
 {
   "lsp": {
-    "biome": {
-      "settings": {
-        "config_path": "website/biome.json",
-      },
-    },
     "rust-analyzer": {
       "initialization_options": {
         "linkedProjects": [
@@ -14,17 +9,5 @@
         ],
       },
     },
-  },
-  "languages": {
-    "JavaScript": {
-      "formatter": { "language_server": { "name": "biome" } },
-    },
-    "TypeScript": {
-      "formatter": { "language_server": { "name": "biome" } },
-    },
-    "Astro": { "formatter": { "language_server": { "name": "biome" } } },
-    "JSON": { "formatter": { "language_server": { "name": "biome" } } },
-    "CSS": { "formatter": { "language_server": { "name": "biome" } } },
-    "Svelte": { "formatter": { "language_server": { "name": "biome" } } },
   },
 }
