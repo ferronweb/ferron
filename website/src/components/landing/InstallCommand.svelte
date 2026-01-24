@@ -93,7 +93,7 @@
         {:else}
           <FontAwesomeIcon icon={faCopy} class="size-4!" />
         {/if}
-        <span class="sr-only">Copy code</span>
+        <span class="sr-only">Copy the command</span>
       </button>
     </div>
   </div>
