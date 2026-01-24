@@ -41,6 +41,12 @@ jobs:
 
           If you want to contribute to the documentation, please open a pull request on the Ferron repository, not on the website repository.
           EOF
+          cat << EOF > website/changelogs/index.md
+          ---
+          subject: Ferron 2
+          ---
+          EOF
+          cat ferron/CHANGELOG.md | grep -vE '^# ' >> website/changelogs/index.md
           cd website
           git config --local user.name "github-actions[bot]"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
