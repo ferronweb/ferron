@@ -5,12 +5,9 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
-#[cfg(feature = "runtime-monoio")]
-use async_process::Command;
 use async_trait::async_trait;
 use bytes::Bytes;
-use cegla::client::{convert_to_http_response, CgiRequest};
-use cegla::CgiEnvironment;
+use cegla_cgi::CgiEnvironment;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::{header, Request, Response, StatusCode};
@@ -23,14 +20,79 @@ use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tokio::sync::RwLock;
 #[cfg(feature = "runtime-monoio")]
-use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
-use tokio_util::io::StreamReader;
+use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use ferron_common::util::{ModuleCache, TtlCache, SERVER_SOFTWARE};
 use ferron_common::{get_entries, get_entries_for_validation, get_entry, get_value};
+
+/// Custom runtime for `cegla-cgi`
+#[cfg(feature = "runtime-monoio")]
+pub struct CustomCgiRuntime;
+
+/// Custom child process for `cegla-cgi`
+#[cfg(feature = "runtime-monoio")]
+pub struct CustomCgiChild {
+  inner: async_process::Child,
+}
+
+#[cfg(feature = "runtime-monoio")]
+impl cegla_cgi::client::SendRuntime for CustomCgiRuntime {
+  type Child = CustomCgiChild;
+
+  fn spawn(&self, future: impl std::future::Future + Send + 'static) {
+    monoio::spawn(async move {
+      future.await;
+    });
+  }
+
+  fn start_child(
+    &self,
+    cmd: &std::ffi::OsStr,
+    args: &[&std::ffi::OsStr],
+    env: CgiEnvironment,
+    cwd: Option<PathBuf>,
+  ) -> Result<Self::Child, std::io::Error> {
+    let mut command = async_process::Command::new(cmd);
+    command
+      .stdin(Stdio::piped())
+      .stdout(Stdio::piped())
+      .stderr(Stdio::piped())
+      .envs(env)
+      .args(args);
+    if let Some(cwd) = cwd {
+      command.current_dir(cwd);
+    }
+    Ok(CustomCgiChild {
+      inner: command.spawn()?,
+    })
+  }
+}
+
+#[cfg(feature = "runtime-monoio")]
+impl cegla_cgi::client::SendChild for CustomCgiChild {
+  type Stdin = Compat<async_process::ChildStdin>;
+  type Stdout = Compat<async_process::ChildStdout>;
+  type Stderr = Compat<async_process::ChildStderr>;
+
+  fn stdin(&mut self) -> Option<Self::Stdin> {
+    self.inner.stdin.take().map(|io| io.compat_write())
+  }
+
+  fn stdout(&mut self) -> Option<Self::Stdout> {
+    self.inner.stdout.take().map(|io| io.compat())
+  }
+
+  fn stderr(&mut self) -> Option<Self::Stderr> {
+    self.inner.stderr.take().map(|io| io.compat())
+  }
+
+  fn try_status(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+    self.inner.try_status()
+  }
+}
 
 /// A CGI module loader
 #[allow(clippy::type_complexity)]
@@ -577,7 +639,7 @@ async fn execute_cgi_with_environment_variables(
     .as_ref()
     .and_then(|d| d.original_url.as_ref())
     .unwrap_or(request.uri());
-  let mut env_builder = cegla::client::CgiBuilder::new();
+  let mut env_builder = cegla_cgi::client::CgiBuilder::new();
 
   if let Some(auth_user) = request_data.as_ref().and_then(|u| u.auth_user.as_ref()) {
     let authorization_type = if let Some(authorization) = request.headers().get(header::AUTHORIZATION) {
@@ -616,24 +678,15 @@ async fn execute_cgi_with_environment_variables(
     env_builder = env_builder.var_noreplace(env_var_key, env_var_value);
   }
 
-  let (cgi_environment, cgi_request) = env_builder.build(request);
-
-  execute_cgi(
-    cgi_request,
-    error_logger,
-    execute_pathbuf,
-    cgi_interpreters,
-    cgi_environment,
-  )
-  .await
+  execute_cgi(request, error_logger, execute_pathbuf, cgi_interpreters, env_builder).await
 }
 
 async fn execute_cgi(
-  cgi_request: CgiRequest<BoxBody<Bytes, std::io::Error>>,
+  request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   execute_pathbuf: PathBuf,
   cgi_interpreters: HashMap<String, Vec<String>>,
-  cgi_environment: CgiEnvironment,
+  env_builder: cegla_cgi::client::CgiBuilder,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let executable_params = match get_executable(&execute_pathbuf).await {
     Ok(params) => params,
@@ -653,71 +706,26 @@ async fn execute_cgi(
     }
   };
 
-  let mut executable_params_iter = executable_params.iter();
+  let mut execute_dir_pathbuf = execute_pathbuf.clone();
+  execute_dir_pathbuf.pop();
 
-  let mut command = Command::new(match executable_params_iter.next() {
+  let mut executable_params_iter = executable_params.iter();
+  let cmd = std::ffi::OsStr::new(match executable_params_iter.next() {
     Some(executable_name) => executable_name,
     None => Err(anyhow::anyhow!("Cannot determine the executable"))?,
   });
-
-  // Set standard I/O to be piped
-  command.stdin(Stdio::piped());
-  command.stdout(Stdio::piped());
-  command.stderr(Stdio::piped());
-
-  for param in executable_params_iter {
-    command.arg(param);
-  }
-
-  command.envs(cgi_environment);
-
-  let mut execute_dir_pathbuf = execute_pathbuf.clone();
-  execute_dir_pathbuf.pop();
-  command.current_dir(execute_dir_pathbuf);
-
-  let mut child = command.spawn()?;
-
-  let cgi_stdin_reader = StreamReader::new(cgi_request);
-
-  #[cfg(feature = "runtime-monoio")]
-  let stdin = match child.stdin.take() {
-    Some(stdin) => stdin.compat_write(),
-    None => Err(anyhow::anyhow!("The CGI process doesn't have standard input"))?,
-  };
-  #[cfg(feature = "runtime-monoio")]
-  let stdout = match child.stdout.take() {
-    Some(stdout) => stdout.compat(),
-    None => Err(anyhow::anyhow!("The CGI process doesn't have standard output"))?,
-  };
-  #[cfg(feature = "runtime-monoio")]
-  let stderr = child.stderr.take().map(|x| x.compat());
+  let args: Vec<_> = executable_params_iter.map(std::ffi::OsStr::new).collect();
 
   #[cfg(feature = "runtime-tokio")]
-  let stdin = match child.stdin.take() {
-    Some(stdin) => stdin,
-    None => Err(anyhow::anyhow!("The CGI process doesn't have standard input"))?,
-  };
-  #[cfg(feature = "runtime-tokio")]
-  let stdout = match child.stdout.take() {
-    Some(stdout) => stdout,
-    None => Err(anyhow::anyhow!("The CGI process doesn't have standard output"))?,
-  };
-  #[cfg(feature = "runtime-tokio")]
-  let stderr = child.stderr.take();
+  let runtime = tokio_cegla::TokioCgiRuntime;
+  #[cfg(feature = "runtime-monoio")]
+  let runtime = CustomCgiRuntime;
 
-  ferron_common::runtime::spawn(async move {
-    let (mut cgi_stdin_reader, mut stdin) = (cgi_stdin_reader, stdin);
-    let _ = tokio::io::copy(&mut cgi_stdin_reader, &mut stdin).await;
-  });
+  let (response, stderr, exit_code_option) =
+    cegla_cgi::client::execute_cgi_send(request, runtime, cmd, &args, env_builder, Some(execute_dir_pathbuf)).await?;
 
-  let response = convert_to_http_response(stdout).await?;
   let (parts, body) = response.into_parts();
   let response = Response::from_parts(parts, body.boxed());
-
-  #[cfg(feature = "runtime-monoio")]
-  let exit_code_option = child.try_status()?;
-  #[cfg(feature = "runtime-tokio")]
-  let exit_code_option = child.try_wait()?;
 
   if let Some(exit_code) = exit_code_option {
     if !exit_code.success() {

@@ -93,7 +93,9 @@ smallvec = { version = "1.15.0", features = [
 ] }
 
 # Gateway interfaces
-cegla = { version = "0.1.0", optional = true, default-features = false, features = ["client"] }
+cegla = { version = "0.1.1", optional = true, default-features = false, features = ["client"] }
+cegla-cgi = { version = "0.1.1", optional = true, default-features = false, features = ["client"] }
+tokio-cegla = { version = "0.1.1", optional = true, default-features = false }
 
 [dev-dependencies]
 shiba = { workspace = true }
@@ -130,7 +132,7 @@ default-tokio = [
     "static",
 ]
 cache = ["cache_control", "quick_cache"]
-cgi = ["cegla"]
+cgi = ["cegla-cgi", "tokio-cegla", "tokio-cegla/cgi-client"]
 dcompress = ["async-compression"]
 fauth = ["rand", "connpool"]
 fcgi = ["tokio-util/codec", "cegla"]

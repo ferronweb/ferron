@@ -839,9 +839,9 @@ dependencies = [
 
 [[package]]
 name = "cegla"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48483a1fdbd3149844ff4c3ad065105b892f5164047e5cf72c40690d516e571b"
+checksum = "5d2bf8b0626a1a8806c0bbfd34a0b6a3c6b656a8df833ed3bc3a0359c31499cd"
 dependencies = [
  "bytes",
  "futures-util",
@@ -852,6 +852,19 @@ dependencies = [
  "httparse",
  "memchr",
  "smallvec",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "cegla-cgi"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b04e01f4029589c15aa24fea3c76b0194bfec29a48c213fb22f9753efb0ee8a1"
+dependencies = [
+ "cegla",
+ "http 1.4.0",
+ "http-body 1.0.1",
  "tokio",
  "tokio-util",
 ]
@@ -1459,6 +1472,7 @@ dependencies = [
  "bytes",
  "cache_control",
  "cegla",
+ "cegla-cgi",
  "chrono",
  "cidr",
  "connpool",
@@ -1486,6 +1500,7 @@ dependencies = [
  "smallvec",
  "tokenbucket",
  "tokio",
+ "tokio-cegla",
  "tokio-rustls",
  "tokio-util",
  "urlencoding",
@@ -4320,6 +4335,16 @@ dependencies = [
  "socket2 0.6.2",
  "tokio-macros",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "tokio-cegla"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f78915ebce513523d81849e8f8b176adf07b2516152305e418ab6715b0153be"
+dependencies = [
+ "cegla-cgi",
+ "tokio",
 ]
 
 [[package]]
