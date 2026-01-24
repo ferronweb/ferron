@@ -5,6 +5,7 @@ on:
     branches: ["2.x"]
     paths:
       - "docs/**"
+      - "CHANGELOG.md"
       - ".github/workflows/sync-website-v2.yml"
   workflow_dispatch:
 
