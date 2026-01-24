@@ -93,9 +93,10 @@ smallvec = { version = "1.15.0", features = [
 ] }
 
 # Gateway interfaces
-cegla = { version = "0.1.1", optional = true, default-features = false, features = ["client"] }
-cegla-cgi = { version = "0.1.1", optional = true, default-features = false, features = ["client"] }
-tokio-cegla = { version = "0.1.1", optional = true, default-features = false }
+cegla = { version = "0.1.2", optional = true, default-features = false, features = ["client"] }
+cegla-cgi = { version = "0.1.2", optional = true, default-features = false, features = ["client"] }
+cegla-scgi = { version = "0.1.2", optional = true, default-features = false, features = ["client"] }
+tokio-cegla = { version = "0.1.2", optional = true, default-features = false }
 
 [dev-dependencies]
 shiba = { workspace = true }
@@ -143,5 +144,5 @@ replace = ["memchr"]
 rproxy = ["rand", "ppp", "connpool"]
 runtime-monoio = ["async-process", "monoio", "monoio-compat", "send_wrapper"]
 runtime-tokio = ["hyper-util/tokio"]
-scgi = ["cegla"]
+scgi = ["cegla-scgi", "tokio-cegla", "tokio-cegla/scgi-client"]
 static = ["new_mime_guess", "async-compression", "xxhash-rust"]

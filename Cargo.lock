@@ -839,9 +839,9 @@ dependencies = [
 
 [[package]]
 name = "cegla"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d2bf8b0626a1a8806c0bbfd34a0b6a3c6b656a8df833ed3bc3a0359c31499cd"
+checksum = "254e7c7cdfe001a9343fd5e5601aa45ea1cdfd7d395de0baa873a75470c8d404"
 dependencies = [
  "bytes",
  "futures-util",
@@ -858,11 +858,25 @@ dependencies = [
 
 [[package]]
 name = "cegla-cgi"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b04e01f4029589c15aa24fea3c76b0194bfec29a48c213fb22f9753efb0ee8a1"
+checksum = "4379fdfb08f3fecd557169d18a8cf4b5950c62850e07b803f63d06a00a08cc45"
 dependencies = [
  "cegla",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "cegla-scgi"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08e9ecc40f12e626331b0270c92ea83de78d63f4259613659ef637229d0d7d79"
+dependencies = [
+ "cegla",
+ "hashlink",
  "http 1.4.0",
  "http-body 1.0.1",
  "tokio",
@@ -1473,6 +1487,7 @@ dependencies = [
  "cache_control",
  "cegla",
  "cegla-cgi",
+ "cegla-scgi",
  "chrono",
  "cidr",
  "connpool",
@@ -4339,11 +4354,12 @@ dependencies = [
 
 [[package]]
 name = "tokio-cegla"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f78915ebce513523d81849e8f8b176adf07b2516152305e418ab6715b0153be"
+checksum = "c49da70a28bdf9cb11dfe21d9b94fecf925a0354ed981740a73f78dfb25bc96d"
 dependencies = [
  "cegla-cgi",
+ "cegla-scgi",
  "tokio",
 ]
 

@@ -5,8 +5,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use cegla::client::{convert_to_http_response, CgiRequest};
-use cegla::CgiEnvironment;
+use cegla_scgi::client::CgiBuilder;
 #[cfg(feature = "runtime-monoio")]
 use ferron_common::util::SendAsyncIo;
 use http_body_util::combinators::BoxBody;
@@ -16,16 +15,28 @@ use hyper::{header, Request, Response, StatusCode};
 use monoio::io::IntoPollIo;
 #[cfg(feature = "runtime-monoio")]
 use monoio::net::TcpStream;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
-use tokio_util::io::StreamReader;
 
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use ferron_common::util::{ModuleCache, SERVER_SOFTWARE};
 use ferron_common::{get_entries, get_entries_for_validation, get_entry, get_value};
+
+/// Custom runtime for `cegla-scgi`
+#[cfg(feature = "runtime-monoio")]
+pub struct CustomScgiRuntime;
+
+#[cfg(feature = "runtime-monoio")]
+impl cegla_scgi::client::Runtime for CustomScgiRuntime {
+  fn spawn(&self, future: impl std::future::Future + 'static) {
+    monoio::spawn(async move {
+      future.await;
+    });
+  }
+}
 
 /// A SCGI module loader
 pub struct ScgiModuleLoader {
@@ -281,7 +292,7 @@ async fn execute_scgi_with_environment_variables(
     .as_ref()
     .and_then(|d| d.original_url.as_ref())
     .unwrap_or(request.uri());
-  let mut env_builder = cegla::client::CgiBuilder::new();
+  let mut env_builder = cegla_scgi::client::CgiBuilder::new();
 
   if let Some(auth_user) = request_data.as_ref().and_then(|u| u.auth_user.as_ref()) {
     let authorization_type = if let Some(authorization) = request.headers().get(header::AUTHORIZATION) {
@@ -305,7 +316,6 @@ async fn execute_scgi_with_environment_variables(
   }
 
   env_builder = env_builder
-    .var("SCGI".to_string(), "1".to_string())
     .server(SERVER_SOFTWARE.to_string())
     .server_address(socket_data.local_addr)
     .client_address(socket_data.remote_addr)
@@ -322,16 +332,14 @@ async fn execute_scgi_with_environment_variables(
     env_builder = env_builder.var_noreplace(env_var_key, env_var_value);
   }
 
-  let (cgi_environment, cgi_request) = env_builder.build(request);
-
-  execute_scgi(cgi_request, error_logger, scgi_to, cgi_environment).await
+  execute_scgi(request, error_logger, scgi_to, env_builder).await
 }
 
 async fn execute_scgi(
-  cgi_request: CgiRequest<BoxBody<Bytes, std::io::Error>>,
+  request: Request<BoxBody<Bytes, std::io::Error>>,
   error_logger: &ErrorLogger,
   scgi_to: &str,
-  cgi_environment: CgiEnvironment,
+  env_builder: CgiBuilder,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
   let scgi_to_fixed = if let Some(stripped) = scgi_to.strip_prefix("unix:///") {
     // hyper::Uri fails to parse a string if there is an empty authority, so add an "ignore" authority to Unix socket URLs
@@ -343,7 +351,7 @@ async fn execute_scgi(
   let scgi_to_url = scgi_to_fixed.parse::<hyper::Uri>()?;
   let scheme_str = scgi_to_url.scheme_str();
 
-  let (socket_reader, mut socket_writer) = match scheme_str {
+  let (socket_reader, socket_writer) = match scheme_str {
     Some("tcp") => {
       let host = match scgi_to_url.host() {
         Some(host) => host,
@@ -400,47 +408,16 @@ async fn execute_scgi(
     _ => Err(anyhow::anyhow!("Only TCP and Unix socket URLs are supported."))?,
   };
 
-  // Create environment variable netstring
-  let mut environment_variables_to_wrap = Vec::new();
-  for (key, value) in cgi_environment.iter() {
-    let mut environment_variable = Vec::new();
-    environment_variable.extend_from_slice(key.as_bytes());
-    environment_variable.push(b'\0');
-    environment_variable.extend_from_slice(value.as_bytes());
-    environment_variable.push(b'\0');
-    if key == "CONTENT_LENGTH" {
-      environment_variable.append(&mut environment_variables_to_wrap);
-      environment_variables_to_wrap = environment_variable;
-    } else {
-      environment_variables_to_wrap.append(&mut environment_variable);
-    }
-  }
-
-  let environment_variables_to_wrap_length = environment_variables_to_wrap.len();
-  let mut environment_variables_netstring = Vec::new();
-  environment_variables_netstring.extend_from_slice(environment_variables_to_wrap_length.to_string().as_bytes());
-  environment_variables_netstring.push(b':');
-  environment_variables_netstring.append(&mut environment_variables_to_wrap);
-  environment_variables_netstring.push(b',');
-
-  // Write environment variable netstring
-  socket_writer.write_all(&environment_variables_netstring).await?;
-
-  let cgi_stdin_reader = StreamReader::new(cgi_request);
-
-  // Emulated standard input and standard output
-  // SCGI doesn't support standard error
-  let stdin = socket_writer;
-  let stdout = socket_reader;
-
-  ferron_common::runtime::spawn(async move {
-    let (mut cgi_stdin_reader, mut stdin) = (cgi_stdin_reader, stdin);
-    let _ = tokio::io::copy(&mut cgi_stdin_reader, &mut stdin).await;
-  });
-
+  let io = tokio::io::join(socket_reader, socket_writer);
   #[cfg(feature = "runtime-monoio")]
-  let stdout = SendAsyncIo::new(stdout);
-  let response = convert_to_http_response(stdout).await?;
+  let io = SendAsyncIo::new(io);
+
+  #[cfg(feature = "runtime-tokio")]
+  let response =
+    cegla_scgi::client::client_handle_scgi_send(request, tokio_cegla::TokioScgiRuntime, io, env_builder).await?;
+  #[cfg(feature = "runtime-monoio")]
+  let response = cegla_scgi::client::client_handle_scgi(request, CustomScgiRuntime, io, env_builder).await?;
+
   let (parts, body) = response.into_parts();
   let response = Response::from_parts(parts, body.boxed());
 
