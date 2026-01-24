@@ -41,10 +41,9 @@ jobs:
 
           If you want to contribute to the documentation, please open a pull request on the Ferron repository, not on the website repository.
           EOF
-
-      - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v7
-        with:
-          commit_message: "chore: sync from https://github.com/ferronweb/ferron/tree/main"
-          repository: ./website
-          branch: main
+          cd website
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m 'chore: sync from https://github.com/ferronweb/ferron/tree/2.x'
+          git push origin main
