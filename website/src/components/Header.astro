@@ -294,9 +294,7 @@ const docLinks = Astro.props.docLinks;
 
   function hideSearchOnEsc(search: Element) {
     const listener = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        hideSearchMenu(e, search);
-      }
+      if (e.key === "Escape") hideSearchMenu(e, search);
     };
     document.addEventListener("keydown", listener);
     searchEscListeners.push(listener as EventListener);
@@ -304,10 +302,7 @@ const docLinks = Astro.props.docLinks;
 
   function addSearchTriggerListener(search: Element) {
     const searchTriggerListenerToAdd = (e: KeyboardEvent) => {
-      if (e.key === "/") {
-        showSearchMenu(e, search);
-        document.removeEventListener("keydown", searchTriggerListenerToAdd);
-      }
+      if (e.key === "/") showSearchMenu(e, search);
     };
     document.addEventListener("keydown", searchTriggerListenerToAdd);
     searchTriggerEvent = searchTriggerListenerToAdd as EventListener;
@@ -316,30 +311,28 @@ const docLinks = Astro.props.docLinks;
   function showSearchMenu(e: Event, search: Element | null) {
     e.preventDefault();
     if (search) {
-      hideSearchOnEsc(search);
+      if (searchTriggerEvent)
+        document.removeEventListener("keydown", searchTriggerEvent);
       search.classList.remove("hidden");
       document.documentElement.classList.add("max-md:overflow-hidden");
       const searchInput = document.querySelector(
         "[data-search-menu] input"
       ) as HTMLElement | null;
-      if (searchInput) {
-        searchInput.focus();
-      }
+      hideSearchOnEsc(search);
+      if (searchInput) searchInput.focus();
     }
   }
 
   function hideSearchMenu(e: Event, search: Element | null) {
     e.preventDefault();
     if (search) {
-      addSearchTriggerListener(search);
       while (searchEscListeners.length > 0) {
         const listener = searchEscListeners.pop();
-        if (listener) {
-          document.removeEventListener("keydown", listener);
-        }
+        if (listener) document.removeEventListener("keydown", listener);
       }
       search.classList.add("hidden");
       document.documentElement.classList.remove("max-md:overflow-hidden");
+      addSearchTriggerListener(search);
     }
   }
 
@@ -356,9 +349,7 @@ const docLinks = Astro.props.docLinks;
     menu: Element | null,
     preventDefault: boolean
   ) {
-    if (preventDefault) {
-      e.preventDefault();
-    }
+    if (preventDefault) e.preventDefault();
     if (menu) {
       menu.classList.add("hidden");
       document.documentElement.classList.remove("max-md:overflow-hidden");
