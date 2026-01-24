@@ -44,7 +44,7 @@ jobs:
           EOF
           cat << EOF > website/changelogs/v1.md
           ---
-          subject: Ferron 2
+          subject: Ferron 1.x
           ---
           EOF
           cat ferron/CHANGELOG.md | grep -vE '^# ' >> website/changelogs/v1.md
