@@ -847,13 +847,14 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
                   self.connection_reused = true;
                   let _ = send_request_item.inner_mut().take();
                   let proxy_request = Request::from_parts(proxy_request_parts, request_body);
-                  let result = http_proxy_kept_alive(
+                  let result = http_proxy(
                     send_request,
                     send_request_item,
                     proxy_request,
                     error_logger,
                     proxy_intercept_errors,
                     tracked_connection,
+                    true,
                   )
                   .await;
                   return result;
@@ -1734,7 +1735,7 @@ async fn http_proxy_handshake(
   })
 }
 
-/// Establishes a new HTTP connection to a backend server and forwards the request
+/// Forwards an HTTP request to a backend server
 ///
 /// This function:
 /// 1. Creates a new HTTP client connection to the specified backend
@@ -1754,7 +1755,6 @@ async fn http_proxy_handshake(
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
-#[inline]
 async fn http_proxy(
   mut sender: SendRequest,
   connection_pool_item: ConnectionPoolItem,
@@ -1868,160 +1868,6 @@ async fn http_proxy(
 
   // Store the HTTP connection in the connection pool for future reuse if it's still open
   if enable_keepalive && !sender.is_closed() {
-    // Safety: this Arc is cloned twice (when there's HTTP upgrade and when keepalive is disabled),
-    // but the clones' inner value isn't modified, so no race condition.
-    // We could wrap this value in a Mutex, but it's not really necessary in this case.
-    let connection_pool_item = unsafe { &mut *connection_pool_item.get() };
-    connection_pool_item
-      .inner_mut()
-      .replace(SendRequestWrapper::new(sender));
-  }
-
-  drop(connection_pool_item);
-
-  Ok(response)
-}
-
-/// Forwards a request using an existing, kept-alive HTTP connection to a backend server
-///
-/// This function:
-/// 1. Uses an existing HTTP connection from the connection pool
-/// 2. Forwards the request to the backend server over this connection
-/// 3. Handles protocol upgrades (e.g., WebSockets)
-/// 4. Processes the response from the backend
-///
-/// This is an optimization that avoids the overhead of establishing new TCP/TLS connections
-/// when an existing connection to the same backend server is available and reusable.
-///
-/// # Parameters
-/// * `sender` - The inner connection to the backend server
-/// * `connection_pool_item` - The connection pool item for the backend server, with the inner connection
-/// * `proxy_request` - The HTTP request to forward to the backend
-/// * `error_logger` - Logger for reporting errors
-/// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
-/// * `tracked_connection` - The optional tracked connection to the backend server
-///
-/// # Returns
-/// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
-#[inline]
-async fn http_proxy_kept_alive(
-  mut sender: SendRequest,
-  connection_pool_item: ConnectionPoolItem,
-  proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
-  error_logger: &ErrorLogger,
-  proxy_intercept_errors: bool,
-  tracked_connection: Option<Arc<()>>,
-) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
-  let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
-  let proxy_request = Request::from_parts(proxy_request_parts, proxy_request_body);
-
-  let send_request_result = sender.send_request(proxy_request).await;
-  #[allow(clippy::arc_with_non_send_sync)]
-  let connection_pool_item = Arc::new(UnsafeCell::new(connection_pool_item));
-
-  // Send the request over the existing connection and await the response
-  let proxy_response = match send_request_result {
-    Ok(response) => response,
-    Err(err) => {
-      // Log the error and return a 502 Bad Gateway response
-      error_logger.log(&format!("Bad gateway: {err}")).await;
-      return Ok(ResponseData {
-        request: None,
-        response: None,
-        response_status: Some(StatusCode::BAD_GATEWAY),
-        response_headers: None,
-        new_remote_address: None,
-      });
-    }
-  };
-
-  let (proxy_response_parts, proxy_response_body) = proxy_response.into_parts();
-  // Handle HTTP protocol upgrades (e.g., WebSockets)
-  if proxy_response_parts.status == StatusCode::SWITCHING_PROTOCOLS {
-    let proxy_response_cloned = Response::from_parts(proxy_response_parts.clone(), ());
-    match hyper::upgrade::on(proxy_response_cloned).await {
-      Ok(upgraded_backend) => {
-        // Needed to wrap in monoio::spawn call, since otherwise HTTP upgrades wouldn't work...
-        let error_logger = error_logger.clone();
-        let connection_pool_item = connection_pool_item.clone();
-        ferron_common::runtime::spawn(async move {
-          // Try to upgrade the client connection
-          match hyper::upgrade::on(proxy_request_cloned).await {
-            Ok(upgraded_proxy) => {
-              // Successfully upgraded both connections
-              // Now create Monoio- or Tokio-compatible I/O types
-              #[cfg(feature = "runtime-monoio")]
-              let mut upgraded_backend = MonoioIo::new(upgraded_backend);
-              #[cfg(feature = "runtime-tokio")]
-              let mut upgraded_backend = TokioIo::new(upgraded_backend);
-
-              #[cfg(feature = "runtime-monoio")]
-              let mut upgraded_proxy = MonoioIo::new(upgraded_proxy);
-              #[cfg(feature = "runtime-tokio")]
-              let mut upgraded_proxy = TokioIo::new(upgraded_proxy);
-
-              // Spawn a task to copy data bidirectionally between client and backend
-              ferron_common::runtime::spawn(async move {
-                tokio::io::copy_bidirectional(&mut upgraded_backend, &mut upgraded_proxy)
-                  .await
-                  .unwrap_or_default();
-                drop(connection_pool_item);
-              });
-            }
-            Err(err) => {
-              // Could not upgrade the client connection
-              error_logger.log(&format!("HTTP upgrade error: {err}")).await;
-            }
-          }
-        });
-      }
-      Err(err) => {
-        // Could not upgrade the backend connection
-        error_logger.log(&format!("HTTP upgrade error: {err}")).await;
-      }
-    }
-  }
-  let proxy_response = Response::from_parts(proxy_response_parts, proxy_response_body);
-
-  // Get the status code from the proxy response
-  let status_code = proxy_response.status();
-
-  // Handle the response differently based on whether we intercept error responses
-  let response = if proxy_intercept_errors && status_code.as_u16() >= 400 {
-    // If intercepting errors and status code is 400+, create a direct response with just the status code
-    // This allows the server to potentially apply custom error handling
-    ResponseData {
-      request: None,
-      response: None,
-      response_status: Some(status_code),
-      response_headers: None,
-      new_remote_address: None,
-    }
-  } else {
-    // For successful responses or when not intercepting errors, pass the backend response directly
-    let (response_parts, response_body) = proxy_response.into_parts();
-    let boxed_body = TrackedBody::new(
-      response_body.map_err(|e| std::io::Error::other(e.to_string())),
-      tracked_connection,
-      if !sender.is_closed() {
-        None
-      } else {
-        // Safety: this should be not modified, see the "unsafe" block below
-        Some(connection_pool_item.clone())
-      },
-    )
-    .boxed();
-    ResponseData {
-      request: None,
-      response: Some(Response::from_parts(response_parts, boxed_body)),
-      response_status: None,
-      response_headers: None,
-      new_remote_address: None,
-    }
-  };
-
-  if !sender.is_closed() {
     // Safety: this Arc is cloned twice (when there's HTTP upgrade and when keepalive is disabled),
     // but the clones' inner value isn't modified, so no race condition.
     // We could wrap this value in a Mutex, but it's not really necessary in this case.
