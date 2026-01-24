@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  sync:
     runs-on: ubuntu-latest
     environment: ferron-website-v2
     steps:
@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ferronweb/ferron.sh
-          ref: 2.x
+          ref: main
           path: website
 
       - name: Sync website
