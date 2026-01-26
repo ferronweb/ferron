@@ -3,6 +3,7 @@ body {
     margin: 0;
     padding: 0;
     font-family:
+        Funnel Sans,
         system-ui,
         -apple-system,
         BlinkMacSystemFont,
@@ -80,4 +81,74 @@ a {
     .logo {
         background-image: url(./logo-dark.png);
     }
+}
+
+@font-face {
+    font-family: "Funnel Sans";
+    src: url(./FunnelSans-Regular.woff2) format("woff2");
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Funnel Sans";
+    src: url(./FunnelSans-Bold.woff2) format("woff2");
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Funnel Sans";
+    src: url(./FunnelSans-Italic.woff2) format("woff2");
+    font-weight: normal;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: "Funnel Sans";
+    src: url(./FunnelSans-BoldItalic.woff2) format("woff2");
+    font-weight: bold;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: "Funnel Sans";
+    src: url(./FunnelSans-ExtraBold.woff2) format("woff2");
+    font-weight: 800;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Funnel Sans";
+    src: url(./FunnelSans-ExtraBoldItalic.woff2) format("woff2");
+    font-weight: 800;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: "Funnel Sans";
+    src: url(./FunnelSans-Light.woff2) format("woff2");
+    font-weight: 300;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Funnel Sans";
+    src: url(./FunnelSans-LightItalic.woff2) format("woff2");
+    font-weight: 300;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: "Funnel Sans";
+    src: url(./FunnelSans-Medium.woff2) format("woff2");
+    font-weight: 500;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Funnel Sans";
+    src: url(./FunnelSans-MediumItalic.woff2) format("woff2");
+    font-weight: 500;
+    font-style: italic;
 }
