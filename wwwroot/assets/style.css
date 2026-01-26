@@ -23,6 +23,7 @@ body {
     margin: 2em auto;
     padding: 1em;
     box-sizing: border-box;
+    font-size: 1.1em;
     width: 100%;
     max-width: 1280px;
 }
@@ -52,16 +53,23 @@ header {
 }
 
 h1 {
-    font-size: 2.5em;
+    font-size: 2.75em;
+    margin-top: 0.5em;
+    margin-bottom: 0.25em;
 }
 
 a {
     color: #f47825;
 }
 
-@media screen and (max-width: 512px) {
+@media screen and (max-width: 768px) {
+    body {
+        font-size: 1em;
+    }
+
     h1 {
-        font-size: 2em;
+        font-size: 2.25em;
+        margin-bottom: 1em;
     }
 
     .column {
