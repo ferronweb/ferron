@@ -1,8 +1,8 @@
 <p align="center">
   <a href="https://ferron.sh" target="_blank">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="wwwroot/img/logo-dark.png">
-      <img alt="Ferron logo" src="wwwroot/img/logo.png" width="256">
+      <source media="(prefers-color-scheme: dark)" srcset="wwwroot/assets/logo-dark.png">
+      <img alt="Ferron logo" src="wwwroot/assets/logo.png" width="256">
     </picture>
   </a>
 </p>
