@@ -36,7 +36,7 @@ rustls-native-certs = "0.8.1"
 ocsp-stapler = { version = "0.4.7", default-features = false, features = [
     "ring",
 ] }
-clap = { version = "4.5.28", features = ["derive"] }
+clap = { version = "4.5.55", features = ["derive"] }
 fancy-regex = "0.17.0"
 password-auth = { workspace = true }
 base64 = "0.22.1"
