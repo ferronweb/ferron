@@ -7,7 +7,7 @@ edition = "2021"
 ProductName = "Ferron YAML to KDL configuration converter"
 
 [dependencies]
-clap = { version = "4.5.38", features = ["cargo"] }
+clap = { version = "4.5.55", features = ["cargo"] }
 ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core" }
 
 [target.'cfg(target_arch = "x86")'.dependencies]
