@@ -276,7 +276,8 @@ pub async fn generate_directory_listing(
               Some("exe") | Some("dll") | Some("jar") | Some("cgi") => "⚙️",
 
               // Scripts
-              Some("js") | Some("ts") | Some("py") | Some("rb") | Some("sh") | Some("bat") | Some("ps1") => "📜",
+              Some("js") | Some("ts") | Some("py") | Some("pl") | Some("rb") | Some("sh") | Some("bat")
+              | Some("ps1") => "📜",
 
               // Fonts
               Some("ttf") | Some("otf") | Some("woff") | Some("woff2") => "🅰️",
