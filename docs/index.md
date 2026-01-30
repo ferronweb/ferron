@@ -10,7 +10,7 @@ To explore the documentation, either click on one of the positions in the sideba
 
 **Are you new to Ferron? No problem.** You can start by installing Ferron using one of the many available methods (you can find them when navigating the documentation), and then read about the common use cases (again, you can find them when navigating the documentation).
 
-If you'd like to learn more about Ferron's configuration, you can read about them in the [configuration reference](/docs/configuration-kdl).
+If you'd like to learn more about Ferron's configuration, you can read about it in the [configuration reference](/docs/configuration-kdl).
 
 **Whatever you do, enjoy using your new Ferron server!** 😄
 
