@@ -807,8 +807,8 @@ fn determine_default_configuration_adapter(_path: &Path) -> &'static str {
   "kdl"
 }
 
-/// Parses the command-line arguments
-fn parse_arguments(all_adapters: Vec<&'static str>) -> ArgMatches {
+/// Creates the [`Command`] struct that will parse arguments.
+fn create_command(all_adapters: Vec<&'static str>) -> Command {
   Command::new("Ferron")
     .about("A fast, memory-safe web server written in Rust")
     .arg(
@@ -841,7 +841,11 @@ fn parse_arguments(all_adapters: Vec<&'static str>) -> ArgMatches {
         .help("Print version and build information")
         .action(ArgAction::SetTrue)
     )
-    .get_matches()
+}
+
+/// Parses the command-line arguments
+fn parse_arguments(all_adapters: Vec<&'static str>) -> ArgMatches {
+  create_command(all_adapters).get_matches()
 }
 
 /// The main entry point of the application
@@ -879,5 +883,60 @@ fn main() {
   if let Err(err) = before_starting_server(args, configuration_adapters) {
     eprintln!("Error while running a server: {err}");
     std::process::exit(1);
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_supported_args() {
+    let (_, all_adapters) = obtain_configuration_adapters();
+    let command = create_command(all_adapters);
+    let args = command.get_matches_from(vec![
+      "ferron",
+      "--config",
+      "/dev/null",
+      "--config-adapter",
+      "kdl",
+      "--module-config",
+      "--version",
+    ]);
+    assert!(args.get_flag("module-config"));
+    assert!(args.get_flag("version"));
+    assert_eq!(
+      Some(PathBuf::from("/dev/null")),
+      args.get_one::<PathBuf>("config").map(|arg| arg.to_owned())
+    );
+    assert_eq!(
+      Some(String::from("kdl")),
+      args.get_one::<String>("config-adapter").map(|arg| arg.to_owned())
+    );
+  }
+
+  #[test]
+  fn test_supported_args_short_options() {
+    let (_, all_adapters) = obtain_configuration_adapters();
+    let command = create_command(all_adapters);
+    let args = command.get_matches_from(vec![
+      "ferron",
+      "-c",
+      "/dev/null",
+      "--config-adapter",
+      "kdl",
+      "--module-config",
+      "-V",
+    ]);
+    assert!(args.get_flag("module-config"));
+    assert!(args.get_flag("version"));
+    assert_eq!(
+      Some(PathBuf::from("/dev/null")),
+      args.get_one::<PathBuf>("config").map(|arg| arg.to_owned())
+    );
+    assert_eq!(
+      Some(String::from("kdl")),
+      args.get_one::<String>("config-adapter").map(|arg| arg.to_owned())
+    );
   }
 }
