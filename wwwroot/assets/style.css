@@ -14,7 +14,7 @@ html {
         "Open Sans",
         "Helvetica Neue",
         sans-serif;
-    background-image: radial-gradient(1024px 384px at 50% 0%, #f478251a, transparent 100%);
+    background-image: radial-gradient(1024px 384px at 50% 0%, #f4782533, transparent 100%);
     background-repeat: no-repeat;
     background-color: #ffffff;
     color: #0f172a;
@@ -64,6 +64,10 @@ a {
 }
 
 @media screen and (max-width: 768px) {
+    html {
+        background-image: radial-gradient(1024px 384px at 50% 0%, #f478251a, transparent 100%);
+    }
+
     body {
         font-size: 1em;
     }
