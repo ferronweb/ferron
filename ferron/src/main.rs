@@ -12,14 +12,13 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
 use async_channel::{Receiver, Sender};
-use clap::{Arg, ArgAction, ArgMatches, Command};
+use clap::{Parser, ValueEnum};
 use ferron_common::logging::{ErrorLogger, LogMessage};
 use ferron_common::{get_entry, get_value};
 use ferron_load_modules::{obtain_module_loaders, obtain_observability_backend_loaders};
@@ -106,19 +105,20 @@ fn handle_shutdown_signals(runtime: &tokio::runtime::Runtime) -> bool {
 
 /// Function called before starting a server
 fn before_starting_server(
-  args: ArgMatches,
+  args: Args,
   configuration_adapters: HashMap<String, Box<dyn ConfigurationAdapter + Send + Sync>>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   // Obtain the argument values
-  let configuration_path: &Path = args
-    .get_one::<PathBuf>("config")
-    .ok_or(anyhow::anyhow!("Cannot obtain the configuration path"))?
-    .as_path();
-  let configuration_adapter: &str = args
-    .get_one::<String>("config-adapter")
-    .map_or(determine_default_configuration_adapter(configuration_path), |s| {
-      s as &str
-    });
+  let configuration_path: &Path = args.config.as_path();
+  let configuration_adapter: &str = if let Some(config_adapter) = args.config_adapter.as_ref() {
+    match config_adapter {
+      ConfigAdapter::Kdl => "kdl",
+      #[cfg(feature = "config-yaml-legacy")]
+      ConfigAdapter::YamlLegacy => "yaml-legacy",
+    }
+  } else {
+    determine_default_configuration_adapter(configuration_path)
+  };
 
   // Old handler shutdown channels and secondary runtime
   let mut old_runtime: Option<tokio::runtime::Runtime> = None;
@@ -807,45 +807,45 @@ fn determine_default_configuration_adapter(_path: &Path) -> &'static str {
   "kdl"
 }
 
-/// Creates the [`Command`] struct that will parse arguments.
-fn create_command(all_adapters: Vec<&'static str>) -> Command {
-  Command::new("Ferron")
-    .about("A fast, memory-safe web server written in Rust")
-    .arg(
-      Arg::new("config")
-        .long("config")
-        .short('c')
-        .help("The path to the server configuration file")
-        .action(ArgAction::Set)
-        .default_value("./ferron.kdl")
-        .value_parser(PathBuf::from_str),
-    )
-    .arg(
-      Arg::new("config-adapter")
-        .long("config-adapter")
-        .help("The configuration adapter to use")
-        .action(ArgAction::Set)
-        .required(false)
-        .value_parser(all_adapters),
-    )
-    .arg(
-      Arg::new("module-config")
-        .long("module-config")
-        .help("Prints the used compile-time module configuration (`ferron-build.yaml` or `ferron-build-override.yaml` in the Ferron source) and exits")
-        .action(ArgAction::SetTrue)
-    )
-    .arg(
-      Arg::new("version")
-        .long("version")
-        .short('V')
-        .help("Print version and build information")
-        .action(ArgAction::SetTrue)
-    )
+#[derive(Debug, Clone, PartialEq, ValueEnum)]
+enum ConfigAdapter {
+  Kdl,
+  #[cfg(feature = "config-yaml-legacy")]
+  YamlLegacy,
 }
 
-/// Parses the command-line arguments
-fn parse_arguments(all_adapters: Vec<&'static str>) -> ArgMatches {
-  create_command(all_adapters).get_matches()
+fn print_version() {
+  // Print the server version and build information
+  println!("Ferron {}", build::PKG_VERSION);
+  println!("  Compiled on: {}", build::BUILD_TIME);
+  println!("  Git commit: {}", build::COMMIT_HASH);
+  println!("  Build target: {}", build::BUILD_TARGET);
+  println!("  Rust version: {}", build::RUST_VERSION);
+  println!("  Build host: {}", build::BUILD_OS);
+  if shadow_rs::is_debug() {
+    println!("WARNING: This is a debug build. It is not recommended for production use.");
+  }
+}
+
+/// A fast, memory-safe web server written in Rust
+#[derive(Parser, Debug)]
+#[command(about, long_about = None)]
+struct Args {
+  /// The path to the server configuration file
+  #[arg(short, long, default_value = "./ferron.kdl")]
+  config: PathBuf,
+
+  /// The configuration adapter to use
+  #[arg(long, value_enum)]
+  config_adapter: Option<ConfigAdapter>,
+
+  /// Prints the used compile-time module configuration (`ferron-build.yaml` or `ferron-build-override.yaml` in the Ferron source) and exits
+  #[arg(long)]
+  module_config: bool,
+
+  /// Print version and build information
+  #[arg(short = 'V', long)]
+  version: bool,
 }
 
 /// The main entry point of the application
@@ -856,26 +856,17 @@ fn main() {
     .support("- Send an email message to hello@ferron.sh"));
 
   // Obtain the configuration adapters
-  let (configuration_adapters, all_adapters) = obtain_configuration_adapters();
+  let (configuration_adapters, _all_adapters) = obtain_configuration_adapters();
 
   // Parse command-line arguments
-  let args = parse_arguments(all_adapters);
+  let args = Args::parse();
 
-  if args.get_flag("module-config") {
+  if args.module_config {
     // Dump the used compile-time module configuration and exit
     println!("{}", ferron_load_modules::FERRON_BUILD_YAML);
     return;
-  } else if args.get_flag("version") {
-    // Print the server version and build information
-    println!("Ferron {}", build::PKG_VERSION);
-    println!("  Compiled on: {}", build::BUILD_TIME);
-    println!("  Git commit: {}", build::COMMIT_HASH);
-    println!("  Build target: {}", build::BUILD_TARGET);
-    println!("  Rust version: {}", build::RUST_VERSION);
-    println!("  Build host: {}", build::BUILD_OS);
-    if shadow_rs::is_debug() {
-      println!("WARNING: This is a debug build. It is not recommended for production use.");
-    }
+  } else if args.version {
+    print_version();
     return;
   }
 
@@ -892,9 +883,7 @@ mod tests {
 
   #[test]
   fn test_supported_args() {
-    let (_, all_adapters) = obtain_configuration_adapters();
-    let command = create_command(all_adapters);
-    let args = command.get_matches_from(vec![
+    let args = Args::parse_from(vec![
       "ferron",
       "--config",
       "/dev/null",
@@ -903,23 +892,15 @@ mod tests {
       "--module-config",
       "--version",
     ]);
-    assert!(args.get_flag("module-config"));
-    assert!(args.get_flag("version"));
-    assert_eq!(
-      Some(PathBuf::from("/dev/null")),
-      args.get_one::<PathBuf>("config").map(|arg| arg.to_owned())
-    );
-    assert_eq!(
-      Some(String::from("kdl")),
-      args.get_one::<String>("config-adapter").map(|arg| arg.to_owned())
-    );
+    assert!(args.module_config);
+    assert!(args.version);
+    assert_eq!(PathBuf::from("/dev/null"), args.config);
+    assert_eq!(Some(ConfigAdapter::Kdl), args.config_adapter);
   }
 
   #[test]
   fn test_supported_args_short_options() {
-    let (_, all_adapters) = obtain_configuration_adapters();
-    let command = create_command(all_adapters);
-    let args = command.get_matches_from(vec![
+    let args = Args::parse_from(vec![
       "ferron",
       "-c",
       "/dev/null",
@@ -928,15 +909,18 @@ mod tests {
       "--module-config",
       "-V",
     ]);
-    assert!(args.get_flag("module-config"));
-    assert!(args.get_flag("version"));
-    assert_eq!(
-      Some(PathBuf::from("/dev/null")),
-      args.get_one::<PathBuf>("config").map(|arg| arg.to_owned())
-    );
-    assert_eq!(
-      Some(String::from("kdl")),
-      args.get_one::<String>("config-adapter").map(|arg| arg.to_owned())
-    );
+    assert!(args.module_config);
+    assert!(args.version);
+    assert_eq!(PathBuf::from("/dev/null"), args.config);
+    assert_eq!(Some(ConfigAdapter::Kdl), args.config_adapter);
+  }
+
+  #[test]
+  fn test_supported_optional_args() {
+    let args = Args::parse_from(vec!["ferron"]);
+    assert!(!args.module_config);
+    assert!(!args.version);
+    assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
+    assert_eq!(None, args.config_adapter);
   }
 }
