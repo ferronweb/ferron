@@ -34,7 +34,9 @@ sudo apt install ferron
 
 ### 3. Access the web server
 
-By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to verify that the server is running and serving the default `index.html` file.
+By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to check if the server is running and serving the default `index.html` file.
+
+If you see a "Ferron is installed successfully!" message on the page, the web server is installed successfully and is up and running.
 
 ## File structure
 
@@ -42,6 +44,7 @@ Ferron installed via the installer for GNU/Linux has following file structure:
 
 - _/usr/sbin/ferron_ - Ferron web server
 - _/usr/sbin/ferron-passwd_ - Ferron user password generation tool
+- _/usr/sbin/ferron-precompress_ - Ferron static files precompression tool
 - _/usr/sbin/ferron-yaml2kdl_ - Ferron configuration conversion tool
 - _/var/log/ferron/access.log_ - Ferron access log in Combined Log Format
 - _/var/log/ferron/error.log_ - Ferron error log

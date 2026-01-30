@@ -4,7 +4,7 @@ title: Installation via Docker
 
 ## Prerequisites
 
-Before proceeding with the installation, ensure you have the following:
+Before starting the installation, you need:
 
 - A system with Docker installed. If Docker is not installed, follow the official [Docker installation guide](https://docs.docker.com/get-started/get-docker/).
 - Internet connectivity to pull the Ferron Docker image.
@@ -21,7 +21,7 @@ docker pull ferronserver/ferron:2
 
 ### 2. Run the Ferron container
 
-Once the image is downloaded, start a Ferron container using the following command:
+Once the image is downloaded, start a Ferron container using the command below:
 
 ```sh
 docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:2
@@ -29,10 +29,10 @@ docker run --name myferron -d -p 80:80 --restart=always ferronserver/ferron:2
 
 This command does the following:
 
-- `--name myferron`: Assigns a name (`myferron`) to the running container.
-- `-d`: Runs the container in detached mode.
-- `-p 80:80`: Maps port 80 of the container to port 80 on the host machine.
-- `--restart=always`: Ensures the container automatically restarts if it stops or if the system reboots.
+- `--name myferron` - assigns a name (`myferron`) to the running container.
+- `-d` - runs the container in detached mode (as a background process).
+- `-p 80:80` - maps port 80 of the container to port 80 on the host machine.
+- `--restart=always` - ensures the container automatically restarts if it stops or if the system reboots.
 
 ## Verifying the installation
 
@@ -44,9 +44,9 @@ docker ps
 
 This should display a running container with the name `myferron`.
 
-To test the web server, open a browser and navigate to `http://localhost`. You should see the default Ferron welcome page.
+To test the web server, open a browser and navigate to `http://localhost`. If you see a "Ferron is installed successfully!" message on the page, the web server is installed successfully and is up and running.
 
-Alternatively, use `curl`:
+You can also use `curl` instead:
 
 ```sh
 curl http://localhost
@@ -58,6 +58,7 @@ Ferron on Docker has following file structure:
 
 - _/usr/sbin/ferron_ - Ferron web server
 - _/usr/sbin/ferron-passwd_ - Ferron user password generation tool
+- _/usr/sbin/ferron-precompress_ - Ferron static files precompression tool
 - _/usr/sbin/ferron-yaml2kdl_ - Ferron configuration conversion tool
 - _/var/cache/ferron-acme_ - Ferron's ACME cache directory (if not explicitly specified in the server configuration)
 - _/var/log/ferron/access.log_ - Ferron access log in Combined Log Format (default configuration)

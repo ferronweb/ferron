@@ -28,6 +28,7 @@ After extraction, you should see the following files and directories:
 
 - `ferron` or `ferron.exe` - the main Ferron web server executable.
 - `ferron-passwd` or `ferron-passwd.exe` - a tool for generating hashed passwords for the server's configuration.
+- `ferron-precompress` or `ferron-precompress.exe` - Ferron static files precompression tool
 - `ferron-yaml2kdl` or `ferron-yaml2kdl.exe` - a tool for converting the Ferron 1.x YAML configuration to Ferron 2.x KDL configuration.=
 - `ferron.kdl` - an example configuration file for Ferron.
 - `wwwroot/` - the webroot directory containing the default `index.html` file.
@@ -56,7 +57,9 @@ Modify the `ferron.yaml` configuration file to suit your server's requirements. 
 
 ### 6. Access the web server
 
-By default, Ferron serves content from the `wwwroot` directory. Open a web browser and navigate to `http://localhost` to verify that the server is running and serving the default `index.html` file.
+By default, Ferron serves content from the `wwwroot` directory. Open a web browser and navigate to `http://localhost` to check if the server is running and serving the default `index.html` file.
+
+If you see a "Ferron is installed successfully!" message on the page, the web server is installed successfully and is up and running.
 
 ## Reloading the configuration (Unix-like systems)
 

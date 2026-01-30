@@ -2,6 +2,8 @@
 title: Installation via installer (GNU/Linux)
 ---
 
+Ferron can be installed on GNU/Linux systems using an installer script. This guide will walk you through the installation process.
+
 ## Installation steps
 
 ### 1. Run the installer
@@ -12,11 +14,13 @@ To install Ferron web server, run the following command:
 sudo bash -c "$(curl -fsSL https://get.ferron.sh/v2)"
 ```
 
-You will be prompted to choose the installation type, and possibly whether to install packages containing `unzip` and `setcap`.
+You will be prompted to choose the installation type. You might be also prompted whether to install Ferron using a package manager (if packages are available).
 
 ### 2. Access the web server
 
-By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to verify that the server is running and serving the default `index.html` file.
+By default, Ferron serves content from the `/var/www/ferron` directory. Open a web browser and navigate to `http://localhost` to check if the server is running and serving the default `index.html` file.
+
+If you see a "Ferron is installed successfully!" message on the page, the web server is installed successfully and is up and running.
 
 ## File structure
 
@@ -24,6 +28,7 @@ Ferron installed via the installer for GNU/Linux has following file structure:
 
 - _/usr/sbin/ferron_ - Ferron web server
 - _/usr/sbin/ferron-passwd_ - Ferron user password generation tool
+- _/usr/sbin/ferron-precompress_ - Ferron static files precompression tool
 - _/usr/sbin/ferron-yaml2kdl_ - Ferron configuration conversion tool
 - _/var/log/ferron/access.log_ - Ferron access log in Combined Log Format
 - _/var/log/ferron/error.log_ - Ferron error log
