@@ -102,6 +102,11 @@ pub fn read_default_port(config: Option<&ferron_common::config::ServerConfigurat
 /// Resolves the SNI hostname from the given filters.
 pub fn resolve_sni_hostname(filters: &ServerConfigurationFilters) -> Option<String> {
   filters.hostname.clone().or_else(|| {
+    if filters.ip.is_some_and(|ip| ip.is_loopback()) {
+      // Host blocks with "localhost" specified will have "localhost" SNI hostname
+      return Some("localhost".to_string());
+    }
+
     // !!! UNTESTED, many clients don't send SNI hostname when accessing via IP address anyway
     match filters.ip {
       Some(IpAddr::V4(addr)) => Some(addr.to_string()),
