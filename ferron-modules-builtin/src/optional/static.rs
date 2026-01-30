@@ -273,11 +273,11 @@ pub async fn generate_directory_listing(
               | Some("iso") | Some("msi") | Some("deb") | Some("rpm") => "📦",
 
               // Binaries
-              Some("exe") | Some("dll") | Some("jar") | Some("cgi") => "⚙️",
+              Some("exe") | Some("dll") | Some("jar") | Some("cgi") | Some("com") => "⚙️",
 
               // Scripts
-              Some("js") | Some("ts") | Some("py") | Some("pl") | Some("rb") | Some("sh") | Some("bat")
-              | Some("ps1") => "📜",
+              Some("js") | Some("ts") | Some("py") | Some("php") | Some("pl") | Some("rb") | Some("sh")
+              | Some("bat") | Some("ps1") => "📜",
 
               // Fonts
               Some("ttf") | Some("otf") | Some("woff") | Some("woff2") => "🅰️",
