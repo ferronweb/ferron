@@ -2,6 +2,8 @@
 title: Installation via installer (Windows Server)
 ---
 
+Ferron can be installed on Windows Server using an installer script. This guide will walk you through the installation process.
+
 ## Installation steps
 
 ### 1. Run the installer
