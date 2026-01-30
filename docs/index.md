@@ -1,5 +1,5 @@
 ---
-title: Documentation
+title: Ferron 1.x documentation
 ---
 
 Welcome to the Ferron documentation!
