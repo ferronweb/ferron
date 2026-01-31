@@ -28,6 +28,7 @@ use rustls::server::{ResolvesServerCert, WebPkiClientVerifier};
 use rustls::{RootCertStore, ServerConfig};
 use rustls_native_certs::load_native_certs;
 use shadow_rs::shadow;
+use tempfile::NamedTempFile;
 use tokio_util::sync::CancellationToken;
 
 use crate::acme::{
@@ -108,14 +109,26 @@ fn before_starting_server(
   args: Args,
   configuration_adapters: HashMap<String, Box<dyn ConfigurationAdapter + Send + Sync>>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
+  // When a config string is specified, a tempfile is written with the contents of the string and then
+  // the tempfile is used as the configuration path.
+  let temp_config_file: NamedTempFile;
   // Obtain the argument values
-  let configuration_path: &Path = args.config.as_path();
+  let configuration_path: &Path = if let Some(config_string) = args.config_string.as_ref() {
+    temp_config_file = NamedTempFile::new()?;
+    std::fs::write(temp_config_file.path(), config_string)?;
+    temp_config_file.path()
+  } else {
+    args.config.as_path()
+  };
   let configuration_adapter: &str = if let Some(config_adapter) = args.config_adapter.as_ref() {
     match config_adapter {
       ConfigAdapter::Kdl => "kdl",
       #[cfg(feature = "config-yaml-legacy")]
       ConfigAdapter::YamlLegacy => "yaml-legacy",
     }
+  } else if args.config_string.is_some() {
+    // When a config string is specified but no configuration adapter is specified, default to using kdl.
+    "kdl"
   } else {
     determine_default_configuration_adapter(configuration_path)
   };
@@ -835,6 +848,10 @@ struct Args {
   #[arg(short, long, default_value = "./ferron.kdl")]
   config: PathBuf,
 
+  /// The path to the server configuration file
+  #[arg(long)]
+  config_string: Option<String>,
+
   /// The configuration adapter to use
   #[arg(long, value_enum)]
   config_adapter: Option<ConfigAdapter>,
@@ -912,6 +929,7 @@ mod tests {
     assert!(args.module_config);
     assert!(args.version);
     assert_eq!(PathBuf::from("/dev/null"), args.config);
+    assert_eq!(None, args.config_string);
     assert_eq!(Some(ConfigAdapter::Kdl), args.config_adapter);
   }
 
@@ -921,6 +939,19 @@ mod tests {
     assert!(!args.module_config);
     assert!(!args.version);
     assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
+    assert_eq!(None, args.config_string);
+    assert_eq!(None, args.config_adapter);
+  }
+
+  #[test]
+  fn test_supported_config_string_arg() {
+    let expected_string =
+      String::from(":8080 {\n  log \"/dev/stderr\"\n  error_log \"/dev/stderr\"\n  root \"/mnt/www\"\n}");
+    let args = Args::parse_from(vec!["ferron", "--config-string", &expected_string]);
+    assert!(!args.module_config);
+    assert!(!args.version);
+    assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
+    assert_eq!(Some(expected_string), args.config_string);
     assert_eq!(None, args.config_adapter);
   }
 }

@@ -14,9 +14,11 @@ A fast, memory-safe web server written in Rust
 Usage: ferron [OPTIONS]
 
 Options:
-  -c, --config <config>
+  -c, --config <CONFIG>
           The path to the server configuration file [default: ./ferron.kdl]
-      --config-adapter <config-adapter>
+      --config-string <CONFIG_STRING>
+          The path to the server configuration file
+      --config-adapter <CONFIG_ADAPTER>
           The configuration adapter to use [possible values: kdl, yaml-legacy]
       --module-config
           Prints the used compile-time module configuration (`ferron-build.yaml` or `ferron-build-override.yaml` in the Ferron source) and exits
