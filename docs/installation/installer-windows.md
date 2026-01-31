@@ -41,7 +41,7 @@ Ferron installed via the installer for Windows Server has following file structu
 
 To stop the Ferron service, run:
 
-```sh
+```batch
 net stop ferron
 ```
 
@@ -49,7 +49,7 @@ net stop ferron
 
 To restart the service:
 
-```sh
+```batch
 net stop ferron
 net start ferron
 ```
