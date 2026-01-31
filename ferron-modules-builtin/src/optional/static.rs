@@ -231,12 +231,14 @@ pub async fn generate_directory_listing(
       continue;
     }
 
+    let entry_path = entry.path();
+
     // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
     #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
-    let metadata_obt = fs::metadata(entry.path()).await;
+    let metadata_obt = fs::metadata(&entry_path).await;
     #[cfg(all(feature = "runtime-monoio", windows))]
     let metadata_obt = {
-      let entry_pathbuf = entry.path().clone();
+      let entry_pathbuf = entry_path.clone();
       monoio::spawn_blocking(move || std::fs::metadata(entry_pathbuf))
         .await
         .unwrap_or(Err(std::io::Error::other(
@@ -251,7 +253,41 @@ pub async fn generate_directory_listing(
           if metadata.is_dir() {
             "📁"
           } else if metadata.is_file() {
-            "📄"
+            match entry_path.extension().and_then(|e| e.to_str()) {
+              // Images (using escaped framed picture emoji in color)
+              Some("png") | Some("jpg") | Some("jpeg") | Some("gif") | Some("webp") | Some("svg") | Some("ico")
+              | Some("bmp") | Some("tiff") | Some("tif") => "\u{1f5bc}\u{fe0f}",
+
+              // Audio
+              Some("mp3") | Some("wav") | Some("ogg") | Some("flac") | Some("aac") => "🎵",
+
+              // Video
+              Some("mp4") | Some("mkv") | Some("avi") | Some("mov") | Some("wmv") | Some("flv") | Some("webm") => "🎥",
+
+              // Documents
+              Some("pdf") | Some("doc") | Some("docx") | Some("xls") | Some("xlsx") | Some("ppt") | Some("pptx")
+              | Some("txt") => "🧾",
+
+              // Packages
+              Some("zip") | Some("rar") | Some("tar") | Some("gz") | Some("xz") | Some("bz2") | Some("7z")
+              | Some("iso") | Some("msi") | Some("deb") | Some("rpm") => "📦",
+
+              // Binaries
+              Some("exe") | Some("dll") | Some("jar") | Some("cgi") | Some("com") => "⚙️",
+
+              // Scripts
+              Some("js") | Some("ts") | Some("py") | Some("php") | Some("pl") | Some("rb") | Some("sh")
+              | Some("bat") | Some("ps1") => "📜",
+
+              // Fonts
+              Some("ttf") | Some("otf") | Some("woff") | Some("woff2") => "🅰️",
+
+              // CSS stylesheets
+              Some("css") => "🎨",
+
+              // Others
+              _ => "📄",
+            }
           } else {
             "❓"
           },
