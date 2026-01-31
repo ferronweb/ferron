@@ -2,6 +2,8 @@
 title: Manual installation
 ---
 
+Ferron can be installed manually from a ZIP archive by following these steps:
+
 ## Installation steps
 
 ### 1. Download the Ferron ZIP archive
@@ -28,8 +30,8 @@ After extraction, you should see the following files and directories:
 
 - `ferron` or `ferron.exe` - the main Ferron web server executable.
 - `ferron-passwd` or `ferron-passwd.exe` - a tool for generating hashed passwords for the server's configuration.
-- `ferron-precompress` or `ferron-precompress.exe` - Ferron static files precompression tool
-- `ferron-yaml2kdl` or `ferron-yaml2kdl.exe` - a tool for converting the Ferron 1.x YAML configuration to Ferron 2.x KDL configuration.=
+- `ferron-precompress` or `ferron-precompress.exe` - Ferron static files precompression tool.
+- `ferron-yaml2kdl` or `ferron-yaml2kdl.exe` - a tool for converting the Ferron 1.x YAML configuration to Ferron 2.x KDL configuration.
 - `ferron.kdl` - an example configuration file for Ferron.
 - `wwwroot/` - the webroot directory containing the default `index.html` file.
 
