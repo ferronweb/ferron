@@ -287,7 +287,7 @@ This configuration reference organizes directives by both **scope** (where they 
 
 - `auth_to_concurrent_conns <auth_to_concurrent_conns: integer|null>` (_fauth_ module; Ferron 2.4.0 or newer)
   - This directive specifies the limit of TCP connections being established to backend servers (for forwarded authentication), to prevent exhaustion of network resources. If set as `auth_to_concurrent_conns #null`, the reverse proxy can theoretically establish an unlimited number of connections. Default: `auth_to_concurrent_conns 16384`
-  
+
 **Configuration example:**
 
 ```kdl

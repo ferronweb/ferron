@@ -11,6 +11,13 @@ if git diff --name-only --cached | grep -qE ".*\.rs$|(^|/)Cargo\.(lock|toml)$"; 
   cargo fmt || exit $?
 fi
 
+for file in $(git diff --name-only --cached | grep -qE "docs/.*\.md$"); do
+  if rumdl fmt $file; then
+    rumdl check --fix $file || exit $?
+    git add $file
+  fi
+done
+
 cargo shear --fix || true
 
 for rust_file in $(comm -12 <(git diff --name-only --cached | sort) <(git diff --name-only | sort) | grep ".*\.rs$"); do

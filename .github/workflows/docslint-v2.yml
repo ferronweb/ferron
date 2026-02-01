@@ -1,0 +1,46 @@
+name: Lint documentation (Ferron 2.x)
+
+on:
+  push:
+    branches: ["develop-2.x"]
+    paths:
+      - "docs/**/*.md"
+      - ".github/workflows/docslint-v2.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: develop-2.x
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install rumdl
+        if: matrix.command != 'cross'
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm rumdl --force
+
+      - name: Lint and format documentation
+        shell: bash
+        run: |
+          rumdl fmt docs
+          rumdl check --fix docs
+
+      - name: Commit fixed documentation
+        if: "!cancelled()"
+        shell: bash
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet docs; then
+            git add docs
+            git commit -m 'docs: fix lint errors and format the documentation [skip ci]'
+            git push origin main
+          fi
