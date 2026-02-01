@@ -124,6 +124,35 @@ fn before_starting_server(
           "* {{\n  listen_ip \"{}\"\n  default_http_port {}",
           http_serve_args.listen_ip, http_serve_args.port
         );
+        if !http_serve_args.credential.is_empty() {
+          let mut users = Vec::<String>::new();
+          for credential in http_serve_args.credential.iter() {
+            let (user, hashed_password) = credential
+              .split_once(':')
+              .ok_or(anyhow::anyhow!("Invalid credential format: {credential}"))?;
+            users.push(user.to_owned());
+            config_string.push_str(format!("\n  user \"{user}\" \"{hashed_password}\"").as_str());
+          }
+          if http_serve_args.forward_proxy {
+            config_string.push_str(
+              format!(
+                "\n  forward_proxy_auth users=\"{}\" brute_protection=#{}",
+                users.join(","),
+                http_serve_args.disable_brute_protection
+              )
+              .as_str(),
+            );
+          } else {
+            config_string.push_str(
+              format!(
+                "\n  status 401 users=\"{}\" brute_protection=#{}",
+                users.join(","),
+                http_serve_args.disable_brute_protection
+              )
+              .as_str(),
+            );
+          }
+        }
         match http_serve_args.log {
           LogOutput::Stdout => {
             config_string.push_str("\n  log \"/dev/stdout\"");
@@ -142,9 +171,14 @@ fn before_starting_server(
           }
           LogOutput::Off => {}
         }
-        config_string
-          .push_str(format!("\n  root \"{}\"", http_serve_args.root.to_string_lossy().into_owned()).as_str());
-        config_string.push_str("\n  directory_listing #true\n}\n");
+        if http_serve_args.forward_proxy {
+          config_string.push_str("\n  forward_proxy");
+        } else {
+          config_string
+            .push_str(format!("\n  root \"{}\"", http_serve_args.root.to_string_lossy().into_owned()).as_str());
+          config_string.push_str("\n  directory_listing #true");
+        }
+        config_string.push_str("\n}\n");
         temp_config_file = NamedTempFile::new()?;
         std::fs::write(temp_config_file.path(), config_string)?;
         temp_config_file.path()
@@ -894,6 +928,21 @@ struct ServeArgs {
   #[arg(short, long, default_value = ".")]
   root: PathBuf,
 
+  /// Basic authentication credentials for authorized users. The credential value must
+  /// be in the form "${user}:${hashed_password}" where the "${hashed_password}" is from
+  /// the ferron-passwd program or from any program using the password-auth generate_hash()
+  /// macro (see https://docs.rs/password-auth/latest/password_auth/fn.generate_hash.html).
+  #[arg(short, long)]
+  credential: Vec<String>,
+
+  /// Whether to disable brute-force password protection.
+  #[arg(long)]
+  disable_brute_protection: bool,
+
+  /// Whether to start the server as a forward proxy.
+  #[arg(long)]
+  forward_proxy: bool,
+
   /// Where to output logs.
   #[arg(long, default_value = "stdout")]
   log: LogOutput,
@@ -970,6 +1019,10 @@ fn main() {
 mod tests {
   use super::*;
 
+  // The hash here is for the password '123?45>6'.
+  const COMMON_TEST_PASSWORD: &str =
+    "$argon2id$v=19$m=19456,t=2,p=1$emTillHaS3OqFuvITdXxzg$G00heP8QSXk5H/ruTiLt302Xk3uETfU5QO8hBIwUq08";
+
   #[test]
   fn test_supported_args() {
     let args = FerronArgs::parse_from(vec![
@@ -1045,6 +1098,9 @@ mod tests {
         assert_eq!(String::from("127.0.0.1"), http_serve_args.listen_ip);
         assert_eq!(3000, http_serve_args.port);
         assert_eq!(PathBuf::from("."), http_serve_args.root);
+        assert_eq!(Vec::<String>::new(), http_serve_args.credential);
+        assert!(!http_serve_args.disable_brute_protection);
+        assert!(!http_serve_args.forward_proxy);
         assert_eq!(LogOutput::Stdout, http_serve_args.log);
         assert_eq!(LogOutput::Stderr, http_serve_args.error_log);
       }
@@ -1062,6 +1118,12 @@ mod tests {
       "8080",
       "--root",
       "./wwwroot",
+      "--credential",
+      format!("test:{COMMON_TEST_PASSWORD}").as_str(),
+      "--credential",
+      format!("test2:{COMMON_TEST_PASSWORD}").as_str(),
+      "--disable-brute-protection",
+      "--forward-proxy",
       "--log",
       "off",
       "--error-log",
@@ -1078,6 +1140,15 @@ mod tests {
         assert_eq!(String::from("0.0.0.0"), http_serve_args.listen_ip);
         assert_eq!(8080, http_serve_args.port);
         assert_eq!(PathBuf::from("./wwwroot"), http_serve_args.root);
+        assert_eq!(
+          vec![
+            format!("test:{COMMON_TEST_PASSWORD}"),
+            format!("test2:{COMMON_TEST_PASSWORD}")
+          ],
+          http_serve_args.credential
+        );
+        assert!(http_serve_args.disable_brute_protection);
+        assert!(http_serve_args.forward_proxy);
         assert_eq!(LogOutput::Off, http_serve_args.log);
         assert_eq!(LogOutput::Off, http_serve_args.error_log);
       }

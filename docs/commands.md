@@ -40,12 +40,15 @@ Utility command to start up a basic HTTP server
 Usage: ferron serve [OPTIONS]
 
 Options:
-  -l, --listen-ip <LISTEN_IP>  The listening IP to use [default: 127.0.0.1]
-  -p, --port <PORT>            The port to use [default: 3000]
-  -r, --root <ROOT>            The root directory to serve [default: .]
-      --log <LOG>              Where to output logs [default: stdout] [possible values: stdout, stderr, off]
-      --error-log <ERROR_LOG>  Where to output error logs [default: stderr] [possible values: stdout, stderr, off]
-  -h, --help                   Print help
+  -l, --listen-ip <LISTEN_IP>     The listening IP to use [default: 127.0.0.1]
+  -p, --port <PORT>               The port to use [default: 3000]
+  -r, --root <ROOT>               The root directory to serve [default: .]
+  -c, --credential <CREDENTIAL>   Basic authentication credentials for authorized users. The credential value must be in the form "${user}:${hashed_password}" where the "${hashed_password}" is from the ferron-passwd program or from any program using the password-auth generate_hash() macro (see https://docs.rs/password-auth/latest/password_auth/fn.generate_hash.html)
+      --disable-brute-protection  Whether to disable brute-force password protection
+      --forward-proxy             Whether to start the server as a forward proxy
+      --log <LOG>                 Where to output logs [default: stdout] [possible values: stdout, stderr, off]
+      --error-log <ERROR_LOG>     Where to output error logs [default: stderr] [possible values: stdout, stderr, off]
+  -h, --help                      Print help
 ```
 
 ### `ferron-passwd`
