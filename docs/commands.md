@@ -8,7 +8,7 @@ Ferron comes with several additional command-line tools.
 
 ### `ferron`
 
-```
+```text
 A fast, memory-safe web server written in Rust
 
 Usage: ferron [OPTIONS]
@@ -28,7 +28,7 @@ Options:
 
 ### `ferron-passwd`
 
-```
+```text
 A password tool for Ferron
 
 Usage: ferron-passwd
@@ -40,7 +40,7 @@ Options:
 
 ### `ferron-precompress`
 
-```
+```text
 A utility that precompresses static files for Ferron
 
 Usage: ferron-precompress [OPTIONS] <assets>...
@@ -56,7 +56,7 @@ Options:
 
 ### `ferron-yaml2kdl`
 
-```
+```text
 A utility that attempts to convert Ferron 1.x YAML configuration to Ferron 2.x KDL configuration
 
 Usage: ferron-yaml2kdl <input> <output>
