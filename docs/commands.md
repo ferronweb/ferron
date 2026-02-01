@@ -34,7 +34,7 @@ Options:
 
 ### `ferron serve`
 
-```plain
+```text
 Utility command to start up a basic HTTP server
 
 Usage: ferron serve [OPTIONS]
