@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use arc_swap::ArcSwap;
 use async_channel::{Receiver, Sender};
-use clap::{Parser, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use ferron_common::logging::{ErrorLogger, LogMessage};
 use ferron_common::{get_entry, get_value};
 use ferron_load_modules::{obtain_module_loaders, obtain_observability_backend_loaders};
@@ -106,7 +106,7 @@ fn handle_shutdown_signals(runtime: &tokio::runtime::Runtime) -> bool {
 
 /// Function called before starting a server
 fn before_starting_server(
-  args: Args,
+  args: FerronArgs,
   configuration_adapters: HashMap<String, Box<dyn ConfigurationAdapter + Send + Sync>>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   // When a config string is specified, a tempfile is written with the contents of the string and then
@@ -117,6 +117,39 @@ fn before_starting_server(
     temp_config_file = NamedTempFile::new()?;
     std::fs::write(temp_config_file.path(), config_string)?;
     temp_config_file.path()
+  } else if let Some(command) = args.command.as_ref() {
+    match command {
+      Command::Serve(http_serve_args) => {
+        let mut config_string = format!(
+          "* {{\n  listen_ip \"{}\"\n  default_http_port {}",
+          http_serve_args.listen_ip, http_serve_args.port
+        );
+        match http_serve_args.log {
+          LogOutput::Stdout => {
+            config_string.push_str("\n  log \"/dev/stdout\"");
+          }
+          LogOutput::Stderr => {
+            config_string.push_str("\n  log \"/dev/stderr\"");
+          }
+          LogOutput::Off => {}
+        }
+        match http_serve_args.error_log {
+          LogOutput::Stdout => {
+            config_string.push_str("\n  error_log \"/dev/stdout\"");
+          }
+          LogOutput::Stderr => {
+            config_string.push_str("\n  error_log \"/dev/stderr\"");
+          }
+          LogOutput::Off => {}
+        }
+        config_string
+          .push_str(format!("\n  root \"{}\"", http_serve_args.root.to_string_lossy().into_owned()).as_str());
+        config_string.push_str("\n  directory_listing #true\n}\n");
+        temp_config_file = NamedTempFile::new()?;
+        std::fs::write(temp_config_file.path(), config_string)?;
+        temp_config_file.path()
+      }
+    }
   } else {
     args.config.as_path()
   };
@@ -840,10 +873,46 @@ fn print_version() {
   }
 }
 
+#[derive(ValueEnum, Debug, Clone, PartialEq)]
+enum LogOutput {
+  Stdout,
+  Stderr,
+  Off,
+}
+
+#[derive(Args, Debug, Clone, PartialEq)]
+struct ServeArgs {
+  /// The listening IP to use.
+  #[arg(short, long, default_value = "127.0.0.1")]
+  listen_ip: String,
+
+  /// The port to use.
+  #[arg(short, long, default_value = "3000")]
+  port: u16,
+
+  /// The root directory to serve.
+  #[arg(short, long, default_value = ".")]
+  root: PathBuf,
+
+  /// Where to output logs.
+  #[arg(long, default_value = "stdout")]
+  log: LogOutput,
+
+  /// Where to output error logs.
+  #[arg(long, default_value = "stderr")]
+  error_log: LogOutput,
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+enum Command {
+  /// Utility command to start up a basic HTTP server.
+  Serve(ServeArgs),
+}
+
 /// A fast, memory-safe web server written in Rust
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, PartialEq)]
 #[command(about, long_about = None)]
-struct Args {
+struct FerronArgs {
   /// The path to the server configuration file
   #[arg(short, long, default_value = "./ferron.kdl")]
   config: PathBuf,
@@ -863,6 +932,9 @@ struct Args {
   /// Print version and build information
   #[arg(short = 'V', long)]
   version: bool,
+
+  #[command(subcommand)]
+  command: Option<Command>,
 }
 
 /// The main entry point of the application
@@ -876,7 +948,7 @@ fn main() {
   let (configuration_adapters, _all_adapters) = obtain_configuration_adapters();
 
   // Parse command-line arguments
-  let args = Args::parse();
+  let args = FerronArgs::parse();
 
   if args.module_config {
     // Dump the used compile-time module configuration and exit
@@ -900,7 +972,7 @@ mod tests {
 
   #[test]
   fn test_supported_args() {
-    let args = Args::parse_from(vec![
+    let args = FerronArgs::parse_from(vec![
       "ferron",
       "--config",
       "/dev/null",
@@ -913,11 +985,12 @@ mod tests {
     assert!(args.version);
     assert_eq!(PathBuf::from("/dev/null"), args.config);
     assert_eq!(Some(ConfigAdapter::Kdl), args.config_adapter);
+    assert_eq!(None, args.command);
   }
 
   #[test]
   fn test_supported_args_short_options() {
-    let args = Args::parse_from(vec![
+    let args = FerronArgs::parse_from(vec![
       "ferron",
       "-c",
       "/dev/null",
@@ -931,27 +1004,83 @@ mod tests {
     assert_eq!(PathBuf::from("/dev/null"), args.config);
     assert_eq!(None, args.config_string);
     assert_eq!(Some(ConfigAdapter::Kdl), args.config_adapter);
+    assert_eq!(None, args.command);
   }
 
   #[test]
   fn test_supported_optional_args() {
-    let args = Args::parse_from(vec!["ferron"]);
+    let args = FerronArgs::parse_from(vec!["ferron"]);
     assert!(!args.module_config);
     assert!(!args.version);
     assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
     assert_eq!(None, args.config_string);
     assert_eq!(None, args.config_adapter);
+    assert_eq!(None, args.command);
   }
 
   #[test]
   fn test_supported_config_string_arg() {
     let expected_string =
       String::from(":8080 {\n  log \"/dev/stderr\"\n  error_log \"/dev/stderr\"\n  root \"/mnt/www\"\n}");
-    let args = Args::parse_from(vec!["ferron", "--config-string", &expected_string]);
+    let args = FerronArgs::parse_from(vec!["ferron", "--config-string", &expected_string]);
     assert!(!args.module_config);
     assert!(!args.version);
     assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
     assert_eq!(Some(expected_string), args.config_string);
     assert_eq!(None, args.config_adapter);
+    assert_eq!(None, args.command);
+  }
+
+  #[test]
+  fn test_supported_http_serve_default_args() {
+    let args = FerronArgs::parse_from(vec!["ferron", "serve"]);
+    assert!(!args.module_config);
+    assert!(!args.version);
+    assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
+    assert_eq!(None, args.config_string);
+    assert_eq!(None, args.config_adapter);
+    assert!(args.command.is_some());
+    match args.command.unwrap() {
+      Command::Serve(http_serve_args) => {
+        assert_eq!(String::from("127.0.0.1"), http_serve_args.listen_ip);
+        assert_eq!(3000, http_serve_args.port);
+        assert_eq!(PathBuf::from("."), http_serve_args.root);
+        assert_eq!(LogOutput::Stdout, http_serve_args.log);
+        assert_eq!(LogOutput::Stderr, http_serve_args.error_log);
+      }
+    }
+  }
+
+  #[test]
+  fn test_supported_http_serve_args() {
+    let args = FerronArgs::parse_from(vec![
+      "ferron",
+      "serve",
+      "--listen-ip",
+      "0.0.0.0",
+      "--port",
+      "8080",
+      "--root",
+      "./wwwroot",
+      "--log",
+      "off",
+      "--error-log",
+      "off",
+    ]);
+    assert!(!args.module_config);
+    assert!(!args.version);
+    assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
+    assert_eq!(None, args.config_string);
+    assert_eq!(None, args.config_adapter);
+    assert!(args.command.is_some());
+    match args.command.unwrap() {
+      Command::Serve(http_serve_args) => {
+        assert_eq!(String::from("0.0.0.0"), http_serve_args.listen_ip);
+        assert_eq!(8080, http_serve_args.port);
+        assert_eq!(PathBuf::from("./wwwroot"), http_serve_args.root);
+        assert_eq!(LogOutput::Off, http_serve_args.log);
+        assert_eq!(LogOutput::Off, http_serve_args.error_log);
+      }
+    }
   }
 }

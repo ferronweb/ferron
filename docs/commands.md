@@ -8,10 +8,14 @@ Ferron comes with several additional command-line tools.
 
 ### `ferron`
 
-```
+```plain
 A fast, memory-safe web server written in Rust
 
-Usage: ferron [OPTIONS]
+Usage: ferron [OPTIONS] [COMMAND]
+
+Commands:
+  serve  Utility command to start up a basic HTTP server
+  help   Print this message or the help of the given subcommand(s)
 
 Options:
   -c, --config <CONFIG>
@@ -26,6 +30,22 @@ Options:
           Print version and build information
   -h, --help
           Print help
+```
+
+### `ferron serve`
+
+```plain
+Utility command to start up a basic HTTP server
+
+Usage: ferron serve [OPTIONS]
+
+Options:
+  -l, --listen-ip <LISTEN_IP>  The listening IP to use [default: 127.0.0.1]
+  -p, --port <PORT>            The port to use [default: 3000]
+  -r, --root <ROOT>            The root directory to serve [default: .]
+      --log <LOG>              Where to output logs [default: stdout] [possible values: stdout, stderr, off]
+      --error-log <ERROR_LOG>  Where to output error logs [default: stderr] [possible values: stdout, stderr, off]
+  -h, --help                   Print help
 ```
 
 ### `ferron-passwd`
