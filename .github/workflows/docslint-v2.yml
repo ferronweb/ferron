@@ -5,6 +5,7 @@ on:
     branches: ["develop-2.x"]
     paths:
       - "docs/**/*.md"
+      - ".github/workflows/docslint-v2.yml"
 
 jobs:
   build:
@@ -40,6 +41,6 @@ jobs:
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if ! git diff --quiet docs; then
             git add docs
-            git commit -m 'docs: fix lint errors and format the documentation'
+            git commit -m 'docs: fix lint errors and format the documentation [skip ci]'
             git push origin main
           fi
