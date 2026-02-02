@@ -1994,9 +1994,6 @@ fn construct_proxy_request_parts(
     request_parts.headers.insert(header::CONNECTION, "keep-alive".parse()?);
   }
 
-  // Remove Forwarded header to prevent spoofing (Ferron reverse proxy doesn't support "Forwarded" header)
-  request_parts.headers.remove(header::FORWARDED);
-
   let trust_x_forwarded_for = get_value!("trust_x_forwarded_for", config)
     .and_then(|v| v.as_bool())
     .unwrap_or(false);
@@ -2047,6 +2044,91 @@ fn construct_proxy_request_parts(
         .headers
         .insert(HeaderName::from_static("x-forwarded-host"), original_host);
     }
+  }
+
+  // Convert X-Forwarded-* header values into Forwarded header value
+  let mut forwarded_header_value = None;
+  if let Some(forwarded_header_value_obtained) = request_parts
+    .headers
+    .get(HeaderName::from_static("x-forwarded-for"))
+    .and_then(|h| h.to_str().ok())
+  {
+    let mut forwarded_header_value_new = Vec::new();
+    let mut is_first = true;
+
+    for ip in forwarded_header_value_obtained
+      .split(',')
+      .map(|s| s.trim())
+      .filter(|s| !s.is_empty())
+    {
+      // HTTP/1.1 "delimiters" and sequences that would be escaped by str::escape_default()...
+      let escape_determinants: &'static [char] = &[
+        '(', ')', ',', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '{', '}', '\"', '\'', '\r', '\n', '\t',
+      ];
+
+      let forwarded_for = if ip.parse::<std::net::Ipv4Addr>().is_ok() {
+        ip.to_string()
+      } else if ip.parse::<std::net::Ipv6Addr>().is_ok() {
+        // IPv6 addresses in "Forwarded" header must be quoted and enclosed in square brackets
+        format!("\"[{ip}]\"")
+      } else if ip.contains(escape_determinants) {
+        format!("\"{}\"", ip.escape_default())
+      } else {
+        ip.to_string()
+      };
+
+      // Forwarded host and protocols are only applicable for the first entry
+      let (forwarded_host, forwarded_proto) = if is_first {
+        (
+          request_parts
+            .headers
+            .get(HeaderName::from_static("x-forwarded-host"))
+            .and_then(|h| h.to_str().ok()),
+          request_parts
+            .headers
+            .get(HeaderName::from_static("x-forwarded-proto"))
+            .and_then(|h| h.to_str().ok()),
+        )
+      } else {
+        (None, None)
+      };
+
+      let mut forwarded_entry = Vec::new();
+      forwarded_entry.push(format!("for={}", forwarded_for));
+      if let Some(forwarded_proto) = forwarded_proto {
+        forwarded_entry.push(format!(
+          "proto={}",
+          if forwarded_proto.contains(escape_determinants) {
+            format!("\"{}\"", forwarded_proto.escape_default())
+          } else {
+            forwarded_proto.to_string()
+          }
+        ));
+      }
+      if let Some(forwarded_host) = forwarded_host {
+        forwarded_entry.push(format!(
+          "host={}",
+          if forwarded_host.contains(escape_determinants) {
+            format!("\"{}\"", forwarded_host.escape_default())
+          } else {
+            forwarded_host.to_string()
+          }
+        ));
+      }
+      forwarded_header_value_new.push(forwarded_entry.join(";"));
+
+      is_first = false;
+    }
+
+    forwarded_header_value = Some(forwarded_header_value_new.join(", "));
+  }
+  if let Some(forwarded_header_value) = forwarded_header_value {
+    request_parts
+      .headers
+      .insert(header::FORWARDED, forwarded_header_value.parse()?);
+  } else {
+    // Remove Forwarded header to prevent spoofing
+    request_parts.headers.remove(header::FORWARDED);
   }
 
   for (header_name_option, header_value) in headers_to_add {
