@@ -251,7 +251,7 @@ This configuration reference organizes directives by both **scope** (where they 
 ### Networking & system
 
 - `listen_ip <listen_ip: string>`
-  - This directive specifies the IP address to listen. Default: `listen_ip "::1"`
+  - This directive specifies the IP address to listen. Default: `listen_ip "::"`
 - `io_uring [enable_io_uring: bool|null]`
   - This directive specifies whether `io_uring` is enabled. If set as `io_uring #null` (supported on Ferron 2.4.0 and newer), `io_uring` is enabled with fallback with `io_uring` disabled. This directive has no effect for systems that don't support `io_uring` and for web server builds that use Tokio instead of Monoio. Default: `io_uring #null` (Ferron 2.4.0 or newer), `io_uring #true` (Ferron 2.3.2 and older)
 - `tcp_send_buffer <tcp_send_buffer: integer>`
