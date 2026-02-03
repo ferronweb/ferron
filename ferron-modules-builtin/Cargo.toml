@@ -65,7 +65,7 @@ connpool = { version = "0.2.0", optional = true }
 async-process = { version = "2.3.0", optional = true }
 
 # Data Handling & Serialization
-bytes = { version = "1.10.1" }
+bytes = { version = "1.11.1" }
 
 # File Serving & Compression
 new_mime_guess = { version = "4.0.4", optional = true, default-features = false }
