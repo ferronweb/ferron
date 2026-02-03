@@ -1,5 +1,6 @@
 ---
 title: Reverse proxying
+description: "Configure Ferron as a reverse proxy with WebSocket support, optional static/SPA hosting, multiple locations, and precompressed assets."
 ---
 
 Configuring Ferron as a reverse proxy is straightforward - you just need to specify the backend server URL in `proxy` directive. To configure Ferron as a reverse proxy, you can use the configuration below:

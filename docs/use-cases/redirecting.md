@@ -1,5 +1,6 @@
 ---
 title: Redirecting
+description: "Redirect domains with Ferron using status + Location: simple redirects, preserving paths, and www/non-www canonical redirects."
 ---
 
 If you want to redirect the entire website to another website, you can use this configuration:

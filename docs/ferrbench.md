@@ -1,5 +1,6 @@
 ---
 title: FerrBench
+description: "FerrBench is Ferron's HTTP/1 and HTTP/2 benchmarking tool, based on rewrk, with links to the upstream documentation."
 ---
 
 FerrBench is a modern HTTP benchmarking tool supporting HTTP/1 and HTTP/2 benchmarks, based on [rewrk](https://github.com/lnx-search/rewrk).

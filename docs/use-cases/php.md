@@ -1,5 +1,6 @@
 ---
 title: PHP hosting
+description: "Host PHP sites on Ferron using CGI or FastCGI/PHP-FPM, with example KDL configs and performance guidance."
 ---
 
 Ferron supports running PHP scripts either using PHP-CGI, PHP-CGI configured as a FastCGI server or PHP-FPM. This allows you to host websites built with PHP-based CMSes (like WordPress or Joomla) with Ferron.

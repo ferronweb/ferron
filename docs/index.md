@@ -1,5 +1,6 @@
 ---
 title: Ferron 2 documentation
+description: "Start here for Ferron 2 docs: installation options, common use cases, and links to configuration, modules, TLS, and tools."
 ---
 
 **Welcome to the Ferron documentation!** Ferron is a fast, modern, and easily configurable web server with support for automatic TLS certificate management. If you're new to Ferron, the way you serve your websites is about to change - you'd be able to quickly make your websites go live.

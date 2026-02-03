@@ -1,5 +1,6 @@
 ---
 title: Server configuration (legacy)
+description: "Legacy Ferron 1.x ferron.yaml configuration reference, including global settings and per-host options."
 ---
 
 Ferron can be also configured in the Ferron 1.x-compatible `ferron.yaml` file. Below is the description of configuration properties for this server.

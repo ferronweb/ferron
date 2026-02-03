@@ -1,5 +1,6 @@
 ---
 title: Commands
+description: "CLI reference for Ferron and bundled tools: ferron, ferron-passwd, ferron-precompress, and ferron-yaml2kdl."
 ---
 
 Ferron comes with several additional command-line tools.

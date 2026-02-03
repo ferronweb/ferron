@@ -1,5 +1,6 @@
 ---
 title: Installation via installer (Windows Server)
+description: "Install Ferron on Windows Server with the installer script. Includes commands, default paths, and how to start/stop the service."
 ---
 
 Ferron can be installed on Windows Server using an installer script. This guide will walk you through the installation process.

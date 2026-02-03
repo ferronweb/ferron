@@ -1,5 +1,6 @@
 ---
 title: Observability backends
+description: "Configure Ferron observability backends (logfile, OTLP) and learn the exported OpenTelemetry-style metrics, logs, and traces."
 ---
 
 Ferron 2.2.0 and newer support modular observability backends. This allows you to monitor your Ferron server and gain insights into its performance and behavior.

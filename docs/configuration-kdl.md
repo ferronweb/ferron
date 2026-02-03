@@ -1,5 +1,6 @@
 ---
 title: Server configuration
+description: "Full reference for Ferron's KDL configuration: global settings, hosts, locations, TLS, proxying, caching, modules, and more."
 ---
 
 Ferron 2.0.0 and newer can be configured in a [KDL-format](https://kdl.dev/) configuration file (often named `ferron.kdl`). Below are the descriptions of configuration properties for this server.

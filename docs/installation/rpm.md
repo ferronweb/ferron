@@ -1,5 +1,6 @@
 ---
 title: Installation via package managers (RHEL/Fedora)
+description: "Install Ferron on RHEL/Fedora using official RPM packages: add the yum repo, install Ferron, enable the systemd service, and verify."
 ---
 
 Ferron has official packages available for Red Hat Enterprise Linux (RHEL), Fedora, and derivatives. Below are the instructions on how to install Ferron on RHEL or Fedora via a package manager.

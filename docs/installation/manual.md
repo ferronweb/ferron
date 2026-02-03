@@ -1,5 +1,6 @@
 ---
 title: Manual installation
+description: "Manually install Ferron from a ZIP archive: download, extract, configure, run, reload config on Unix, and use bundled utilities."
 ---
 
 Ferron can be installed manually from a ZIP archive by following these steps:

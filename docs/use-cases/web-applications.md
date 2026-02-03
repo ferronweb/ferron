@@ -1,5 +1,6 @@
 ---
 title: Web applications
+description: "Example Ferron configs for apps like WordPress, Joomla, Laravel, and YaBB, including rewrites and security rules."
 ---
 
 Ferron is compatible with various web applications, like ones built with WordPress, Joomla, Laravel, and more.

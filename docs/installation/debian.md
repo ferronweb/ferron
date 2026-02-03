@@ -1,5 +1,6 @@
 ---
 title: Installation via package managers (Debian/Ubuntu)
+description: "Install Ferron on Debian/Ubuntu using official APT packages: add the repository key, install the ferron package, and manage the systemd service."
 ---
 
 Ferron has official packages available for Debian, Ubuntu, and derivatives. Below are the instructions on how to install Ferron on Debian or Ubuntu via a package manager.

@@ -1,5 +1,6 @@
 ---
 title: Playground
+description: "Use the community Ferron playground to test configurations and run HTTP requests in your browser - no local install required."
 ---
 
 If you like to try out Ferron without installing it first, you can try it out on [a community-maintained playground](https://tech-playground.com/playgrounds/ferron/).

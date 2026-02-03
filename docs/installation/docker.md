@@ -1,5 +1,6 @@
 ---
 title: Installation via Docker
+description: "Run Ferron in Docker or Docker Compose: pull the image, start a container, verify, manage containers, and see available image tags."
 ---
 
 ## Prerequisites

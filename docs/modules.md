@@ -1,5 +1,6 @@
 ---
 title: Server modules
+description: "Overview of Ferron modules: static serving, caching, proxying, CGI/FastCGI, limits, replacements, and compile-time add-ons."
 ---
 
 You can extend Ferron with modules written in Rust.

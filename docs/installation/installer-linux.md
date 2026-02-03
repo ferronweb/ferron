@@ -1,5 +1,6 @@
 ---
 title: Installation via installer (GNU/Linux)
+description: "Install Ferron on GNU/Linux with the installer script. Includes commands, default paths, updating, upgrading from 1.x, and service management."
 ---
 
 Ferron can be installed on GNU/Linux systems using an installer script. This guide will walk you through the installation process.
