@@ -1,5 +1,6 @@
 ---
 title: Installation via installer (GNU/Linux)
+description: Install Ferron on GNU/Linux using the official installer, then manage the service, update Ferron, and review installed paths.
 ---
 
 ## Installation steps

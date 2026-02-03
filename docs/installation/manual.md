@@ -1,5 +1,6 @@
 ---
 title: Manual installation
+description: "Manual Ferron installation steps: download the ZIP, extract files, configure ferron.yaml, and start the server."
 ---
 
 ## Installation steps

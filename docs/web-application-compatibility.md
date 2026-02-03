@@ -1,5 +1,6 @@
 ---
 title: Compatibility with web applications
+description: Compatibility notes and configuration examples for running common web apps (like WordPress) on Ferron, including rewrite guidance.
 ---
 
 Ferron has been tested for compatibility with various web applications, ensuring seamless integration with popular content management systems (CMS). Below, you'll find specific configurations and recommendations for using Ferron with different platforms. If you encounter any issues, consider checking for additional plugins or configurations that enhance compatibility.

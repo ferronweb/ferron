@@ -1,5 +1,6 @@
 ---
 title: Server configuration properties
+description: Reference for Ferron configuration properties in ferron.yaml, including ports, TLS, HTTP/2, logging, modules, and timeouts.
 ---
 
 Ferron can be configured in the `ferron.yaml` file. Below is the description of configuration properties for this server.

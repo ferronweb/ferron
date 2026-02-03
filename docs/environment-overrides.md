@@ -1,5 +1,6 @@
 ---
 title: Environment overrides
+description: List of supported FERRON_* environment variables for overriding Ferron configuration at runtime, with mappings to config properties.
 ---
 
 Ferron 1.2.0 and newer supports overriding the server configuration via environment variables that begin with `FERRON_`.

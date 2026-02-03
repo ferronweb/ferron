@@ -1,5 +1,6 @@
 ---
 title: Installation via package managers
+description: Install Ferron via community package managers like Homebrew, Nix, or Arch AUR, with commands and package links.
 ---
 
 Ferron has several community-maintained packages that can be installed via various package managers. Below are the instruction on how to install Ferron via a package manager.

@@ -1,5 +1,6 @@
 ---
 title: Ferron 1.x documentation
+description: Ferron 1.x documentation for installation, configuration, modules, PHP support, reverse proxying, and deployment.
 ---
 
 Welcome to the Ferron documentation!

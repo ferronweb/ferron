@@ -1,5 +1,6 @@
 ---
 title: Installation via Docker
+description: "Run Ferron with Docker: pull the official image, start a container, map ports, and verify the server is running."
 ---
 
 ## Prerequisites

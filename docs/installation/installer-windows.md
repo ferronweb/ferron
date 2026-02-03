@@ -1,5 +1,6 @@
 ---
 title: Installation via installer (Windows Server)
+description: Install Ferron on Windows Server using the PowerShell installer, review file locations, and manage the Ferron service.
 ---
 
 ## Installation steps

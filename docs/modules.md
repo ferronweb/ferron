@@ -1,5 +1,6 @@
 ---
 title: Server modules
+description: Overview of Ferron's built-in modules and what they do, plus configuration notes for cache, CGI/FastCGI, proxies, ASGI, and WSGI.
 ---
 
 You can extend Ferron with modules written in Rust.

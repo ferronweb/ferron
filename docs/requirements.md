@@ -1,5 +1,6 @@
 ---
 title: System requirements
+description: Supported operating systems and minimum requirements for running Ferron pre-built binaries on GNU/Linux, Windows, FreeBSD, and macOS.
 ---
 
 The supported operating systems for pre-built binaries are GNU/Linux, Windows, and FreeBSD.

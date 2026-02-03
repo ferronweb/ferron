@@ -1,5 +1,6 @@
 ---
 title: Installation
+description: "Choose an installation method for Ferron: installers for GNU/Linux and Windows Server, Docker, package managers, or manual install."
 ---
 
 Below are the ways to install Ferron:

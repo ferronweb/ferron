@@ -1,5 +1,6 @@
 ---
 title: Automatic TLS
+description: "Enable automatic TLS in Ferron using Let's Encrypt with TLS-ALPN-01 or HTTP-01 challenges, and configure staging vs production."
 ---
 
 Ferron supports automatic TLS via Let's Encrypt, and TLS-ALPN-01 and HTTP-01 (Ferron 1.1.0 and newer) ACME challenges. The domain names for the certificate will be extracted from the host configuration (wildcard domains are ignored, since TLS-ALPN-01 ACME challenge doesn't support them). The automatic TLS will work when the HTTPS port is set to `443`.

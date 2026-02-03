@@ -1,5 +1,6 @@
 ---
 title: PHP support
+description: Run PHP apps on Ferron using CGI or FastCGI (PHP-FPM), with example configurations and performance recommendations.
 ---
 
 Ferron supports running PHP scripts either with a _cgi_ module (using PHP-CGI) or with a _fcgi_ module (using either PHP-CGI configured as a FastCGI server or PHP-FPM). This allows you to host websites built with PHP-based CMSes (like WordPress or Joomla) with Ferron.
