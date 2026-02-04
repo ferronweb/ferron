@@ -129,15 +129,9 @@ pub fn create_http_handler(
 #[inline]
 async fn http_handler_fn(
   reloadable_data: Arc<ArcSwap<ReloadableHandlerData>>,
-  //configurations: Arc<ServerConfigurations>,
   rx: Receiver<ConnectionData>,
   handler_init_tx: &Sender<Option<Box<dyn Error + Send + Sync>>>,
   shutdown_rx: CancellationToken,
-  //tls_configs: HashMap<u16, Arc<ServerConfig>>,
-  //http3_enabled: bool,
-  //acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
-  //acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
-  //enable_proxy_protocol: bool,
   graceful_rx: Receiver<()>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   handler_init_tx.send(None).await.unwrap_or_default();
