@@ -9,7 +9,7 @@ porkbun-api = { version = "1.0.1", optional = true }
 dns-update = { version = "0.1.2", optional = true, default-features = false, features = [
     "hickory-aws-lc-rs",
 ] }
-aws-config = { version = "1.8.1", optional = true, default-features = false, features = [
+aws-config = { version = "1.8.13", optional = true, default-features = false, features = [
     "default-https-client", # This feature flag enables aws-lc-rs crypto provider
     "rt-tokio",
 ] } # Needed for Route53
