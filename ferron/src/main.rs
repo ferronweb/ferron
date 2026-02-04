@@ -647,7 +647,11 @@ fn before_starting_server(
       // Spawn request handler threads
       if start_new_handlers {
         let mut handler_shutdown_channels = HANDLERS.lock().expect("Can't access the handler threads");
-        let multi_cancel = Arc::new(MultiCancel::new(available_parallelism));
+
+        // The number of handler threads, minus one for the multi-cancel, because without "minus one",
+        // there would be a "deadlock" when shutting down handler threads, and they won't be able to shut down
+        let multi_cancel = Arc::new(MultiCancel::new(available_parallelism.saturating_sub(1)));
+
         for _ in 0..available_parallelism {
           handler_shutdown_channels.push(create_http_handler(
             reloadable_handler_data.clone(),
