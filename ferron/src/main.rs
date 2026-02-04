@@ -48,7 +48,7 @@ use crate::setup::tls::{
   resolve_sni_hostname, should_skip_server, TlsBuildContext,
 };
 use crate::setup::tls_single::{init_crypto_provider, set_tls_version};
-use crate::util::load_certs;
+use crate::util::{load_certs, MultiCancel};
 
 // Set the global allocator to use mimalloc for performance optimization
 #[global_allocator]
@@ -647,12 +647,14 @@ fn before_starting_server(
       // Spawn request handler threads
       if start_new_handlers {
         let mut handler_shutdown_channels = HANDLERS.lock().expect("Can't access the handler threads");
+        let multi_cancel = Arc::new(MultiCancel::new(available_parallelism));
         for _ in 0..available_parallelism {
           handler_shutdown_channels.push(create_http_handler(
             reloadable_handler_data.clone(),
             listener_handler_rx.clone(),
             enable_uring,
             io_uring_disabled_tx.clone(),
+            multi_cancel.clone(),
           )?);
         }
       }

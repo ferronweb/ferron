@@ -35,9 +35,9 @@ use crate::config::ServerConfigurations;
 use crate::get_value;
 use crate::listener_handler_communication::ConnectionData;
 use crate::request_handler::request_handler;
-use crate::util::read_proxy_header;
 #[cfg(feature = "runtime-monoio")]
 use crate::util::SendAsyncIo;
+use crate::util::{read_proxy_header, MultiCancel};
 
 static HTTP3_INVALID_HEADERS: [hyper::header::HeaderName; 5] = [
   hyper::header::HeaderName::from_static("keep-alive"),
@@ -86,6 +86,7 @@ pub fn create_http_handler(
   rx: Receiver<ConnectionData>,
   enable_uring: Option<bool>,
   io_uring_disabled: Sender<Option<std::io::Error>>,
+  multi_cancel: Arc<MultiCancel>,
 ) -> Result<(CancellationToken, Sender<()>), Box<dyn Error + Send + Sync>> {
   let shutdown_tx = CancellationToken::new();
   let shutdown_rx = shutdown_tx.clone();
@@ -109,9 +110,16 @@ pub fn create_http_handler(
         .send_blocking(rt.return_io_uring_error())
         .unwrap_or_default();
       rt.run(async move {
-        if let Some(error) = http_handler_fn(reloadable_data, rx, &handler_init_tx, shutdown_rx, graceful_rx)
-          .await
-          .err()
+        if let Some(error) = http_handler_fn(
+          reloadable_data,
+          rx,
+          &handler_init_tx,
+          shutdown_rx,
+          graceful_rx,
+          multi_cancel,
+        )
+        .await
+        .err()
         {
           handler_init_tx.send(Some(error)).await.unwrap_or_default();
         }
@@ -133,6 +141,7 @@ async fn http_handler_fn(
   handler_init_tx: &Sender<Option<Box<dyn Error + Send + Sync>>>,
   shutdown_rx: CancellationToken,
   graceful_rx: Receiver<()>,
+  multi_cancel: Arc<MultiCancel>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   handler_init_tx.send(None).await.unwrap_or_default();
 
@@ -249,6 +258,9 @@ async fn http_handler_fn(
   while Arc::weak_count(&connections_references) > 0 {
     crate::runtime::sleep(Duration::from_millis(100)).await;
   }
+
+  // Wait until all connections are closed, then shut down all the previous handler threads
+  multi_cancel.cancel().await;
 
   Ok(())
 }
