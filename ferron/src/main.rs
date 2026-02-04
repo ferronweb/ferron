@@ -755,6 +755,7 @@ fn before_starting_server(
       }
     }
 
+    drop(observability_backend_loaders);
     drop(module_loaders);
   }
 
