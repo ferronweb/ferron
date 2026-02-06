@@ -49,6 +49,22 @@ Ferron also consists of:
 - **`ferron-observability-builtin`** - built-in Ferron observability backend support.
 - **`ferron-yaml2kdl-core`** - the core library behind the `ferron-yaml2kdl` tool.
 
+## Installing Ferron from pre-built binaries
+
+The easiest way to install Ferron is installing it from pre-built binaries.
+
+Below are the different ways to install Ferron:
+
+- [Installation via installer (GNU/Linux)
+](https://ferron.sh/docs/installation/installer-linux)
+- [Installation via installer (Windows Server)
+](https://ferron.sh/docs/installation/installer-windows)
+- [Installation via package managers (Debian/Ubuntu)](https://ferron.sh/docs/installation/debian)
+- [Installation via package managers (RHEL/Fedora)](https://ferron.sh/docs/installation/rpm)
+- [Installation via Docker](https://ferron.sh/docs/installation/docker)
+- [Installation via package managers (community-maintained)](https://ferron.sh/docs/installation/package-managers)
+- [Manual installation](https://ferron.sh/docs/installation/manual)
+
 ## Building Ferron from source
 
 You can clone the repository and explore the existing code:
