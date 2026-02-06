@@ -386,7 +386,7 @@ fn build_on_demand_acme(
   sni_resolver.load_fallback_sender(fallback_sender, port);
 
   let rustls_client_config =
-    crate::acme::build_rustls_client_config(server, crypto_provider).map_err(|e| anyhow::anyhow!(e))?;
+    super::acme::build_rustls_client_config(server, crypto_provider).map_err(|e| anyhow::anyhow!(e))?;
 
   let config = AcmeOnDemandConfig {
     rustls_client_config,
@@ -396,13 +396,13 @@ fn build_on_demand_acme(
       .and_then(|v| v.as_str())
       .map(|c| vec![format!("mailto:{c}")])
       .unwrap_or_default(),
-    directory: crate::acme::resolve_acme_directory(server),
-    eab_key: crate::acme::parse_eab(server)?,
+    directory: super::acme::resolve_acme_directory(server),
+    eab_key: super::acme::parse_eab(server)?,
     profile: get_entry!("auto_tls_profile", server)
       .and_then(|e| e.values.first())
       .and_then(|v| v.as_str())
       .map(str::to_string),
-    cache_path: crate::acme::resolve_acme_cache_path(server)?,
+    cache_path: super::acme::resolve_acme_cache_path(server)?,
     sni_resolver_lock: ctx
       .tls_port_locks
       .get(&port)
@@ -446,8 +446,8 @@ fn build_eager_acme(
   let http_01_data_lock = Arc::new(RwLock::new(None));
 
   let rustls_client_config =
-    crate::acme::build_rustls_client_config(server, crypto_provider).map_err(|e| anyhow::anyhow!(e))?;
-  let (account_cache_path, certificate_cache_path) = crate::acme::resolve_cache_paths(server, port, &sni_hostname)?;
+    super::acme::build_rustls_client_config(server, crypto_provider).map_err(|e| anyhow::anyhow!(e))?;
+  let (account_cache_path, certificate_cache_path) = super::acme::resolve_cache_paths(server, port, &sni_hostname)?;
 
   let acme_config = AcmeConfig {
     rustls_client_config,
@@ -458,8 +458,8 @@ fn build_eager_acme(
       .and_then(|v| v.as_str())
       .map(|c| vec![format!("mailto:{c}")])
       .unwrap_or_default(),
-    directory: crate::acme::resolve_acme_directory(server),
-    eab_key: crate::acme::parse_eab(server)?,
+    directory: super::acme::resolve_acme_directory(server),
+    eab_key: super::acme::parse_eab(server)?,
     profile: get_entry!("auto_tls_profile", server)
       .and_then(|e| e.values.first())
       .and_then(|v| v.as_str())

@@ -32,8 +32,7 @@ use shadow_rs::shadow;
 use tokio_util::sync::CancellationToken;
 
 use crate::acme::{
-  background_acme_task, check_certificate_validity_or_install_cached, convert_on_demand_config, get_cached_domains,
-  ACME_TLS_ALPN_NAME,
+  check_certificate_validity_or_install_cached, convert_on_demand_config, get_cached_domains, ACME_TLS_ALPN_NAME,
 };
 use crate::config::adapters::ConfigurationAdapter;
 use crate::config::processing::{
@@ -43,6 +42,7 @@ use crate::config::ServerConfigurations;
 use crate::handler::{create_http_handler, ReloadableHandlerData};
 use crate::listener_handler_communication::ConnectionData;
 use crate::listeners::{create_quic_listener, create_tcp_listener};
+use crate::setup::acme::background_acme_task;
 use crate::setup::tls::{
   handle_automatic_tls, handle_manual_tls, handle_nonencrypted_ports, manual_tls_entry, read_default_port,
   resolve_sni_hostname, should_skip_server, TlsBuildContext,
