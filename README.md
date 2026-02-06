@@ -55,14 +55,14 @@ The easiest way to install Ferron is installing it from pre-built binaries.
 
 Below are the different ways to install Ferron:
 
-- [Installation via installer (GNU/Linux)
+- [Installer (GNU/Linux)
 ](https://ferron.sh/docs/installation/installer-linux)
-- [Installation via installer (Windows Server)
+- [nstaller (Windows Server)
 ](https://ferron.sh/docs/installation/installer-windows)
-- [Installation via package managers (Debian/Ubuntu)](https://ferron.sh/docs/installation/debian)
-- [Installation via package managers (RHEL/Fedora)](https://ferron.sh/docs/installation/rpm)
-- [Installation via Docker](https://ferron.sh/docs/installation/docker)
-- [Installation via package managers (community-maintained)](https://ferron.sh/docs/installation/package-managers)
+- [Package managers (Debian/Ubuntu)](https://ferron.sh/docs/installation/debian)
+- [Package managers (RHEL/Fedora)](https://ferron.sh/docs/installation/rpm)
+- [Docker](https://ferron.sh/docs/installation/docker)
+- [Package managers (community)](https://ferron.sh/docs/installation/package-managers)
 - [Manual installation](https://ferron.sh/docs/installation/manual)
 
 ## Building Ferron from source
