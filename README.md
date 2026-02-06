@@ -57,7 +57,7 @@ Below are the different ways to install Ferron:
 
 - [Installer (GNU/Linux)
 ](https://ferron.sh/docs/installation/installer-linux)
-- [nstaller (Windows Server)
+- [Installer (Windows Server)
 ](https://ferron.sh/docs/installation/installer-windows)
 - [Package managers (Debian/Ubuntu)](https://ferron.sh/docs/installation/debian)
 - [Package managers (RHEL/Fedora)](https://ferron.sh/docs/installation/rpm)
