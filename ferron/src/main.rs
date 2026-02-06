@@ -281,9 +281,17 @@ fn before_starting_server(
 
       let mut tls_build_ctx = TlsBuildContext::default();
       let memory_acme_account_cache_data: Arc<tokio::sync::RwLock<HashMap<String, Vec<u8>>>> = Default::default();
+      let mut invalid_wildcard_domains: HashSet<String> = HashSet::new();
 
       // Iterate server configurations (TLS configuration)
       for server in &server_configurations.inner {
+        let hostname = server.filters.hostname.as_deref();
+        if let Some(hostname) = hostname {
+          if hostname.contains("*.") && (hostname == "*." || !hostname.starts_with("*.")) {
+            invalid_wildcard_domains.insert(hostname.to_string());
+          }
+        }
+
         if should_skip_server(server) {
           continue;
         }
@@ -328,6 +336,23 @@ fn before_starting_server(
               key,
             )?;
           }
+        }
+      }
+
+      for invalid_wildcard_domain in invalid_wildcard_domains {
+        for logging_tx in global_configuration
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels)
+        {
+          logging_tx
+            .send_blocking(LogMessage::new(
+              format!(
+                "Invalid wildcard domain detected: \"{invalid_wildcard_domain}\". \
+                  It should be in the form of \"*.example.com\" (that means wildcard is at the beginning)."
+              ),
+              true,
+            ))
+            .unwrap_or_default();
         }
       }
 
