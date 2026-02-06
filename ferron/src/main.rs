@@ -614,10 +614,12 @@ fn before_starting_server(
 
       let mut start_new_handlers = true;
       if let Ok(mut handlers_locked) = HANDLERS.lock() {
-        while let Some((cancel_token, graceful_shutdown)) = handlers_locked.pop() {
-          if shutdown_handlers {
+        if shutdown_handlers {
+          while let Some((cancel_token, _)) = handlers_locked.pop() {
             cancel_token.cancel();
-          } else {
+          }
+        } else {
+          for (_, graceful_shutdown) in handlers_locked.iter() {
             start_new_handlers = false;
             let _ = graceful_shutdown.send_blocking(());
           }
