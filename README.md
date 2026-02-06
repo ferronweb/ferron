@@ -65,6 +65,30 @@ Below are the different ways to install Ferron:
 - [Package managers (community)](https://ferron.sh/docs/installation/package-managers)
 - [Manual installation](https://ferron.sh/docs/installation/manual)
 
+## Configuration examples
+
+### Basic static file serving
+
+```kdl
+// Example configuration with static file serving. Replace "example.com" with your domain name.
+example.com {
+    root "/var/www/html" // Replace "/var/www/html" with the directory containing your static files
+}
+```
+
+### Basic reverse proxying
+
+```kdl
+// Example configuration with reverse proxy. Replace "example.com" with your domain name.
+example.com {
+    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+}
+```
+
+### More examples
+
+You can find more configuration examples for common use cases in the [Ferron documentation](https://ferron.sh/docs).
+
 ## Building Ferron from source
 
 You can clone the repository and explore the existing code:
