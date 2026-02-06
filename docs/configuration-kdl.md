@@ -25,6 +25,11 @@ example.com {
   // Configuration for "example.com" virtual host
 }
 
+// Hostnames starting with a number need to be quoted, due to constraints of KDL syntax.
+"1.example.com" {
+  // Configuration for "1.example.com" virtual host
+}
+
 "192.168.1.1" {
   // Configuration for "192.168.1.1" IP virtual host
 }
