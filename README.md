@@ -7,7 +7,7 @@
   </a>
 </p>
 <p align="center">
-  <b>Ferron</b> - a fast, memory-safe web server written in Rust
+  <b>Ferron</b> - a fast, modern, and easily configurable web server with automatic TLS
 </p>
 
 * * *
@@ -21,12 +21,14 @@
   <a href="https://github.com/ferronweb/ferron" target="_blank"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/ferronweb/ferron?style=for-the-badge"></a>
 </p>
 
-## Features
+## Why Ferron?
 
-- **High performance** - built with Rust’s async capabilities for optimal speed.
-- **Memory-safe** - built with Rust, which is a programming language offering memory safety.
+- **High performance** - thoroughly optimized for speed with support for high concurrency.
+- **Memory-safe** - built with [Rust](https://rust-lang.org/), which is a programming language that can offer strong memory safety guarantees.
+- **Automatic TLS** - automatic SSL/TLS certificate acquisition and renewal with Let's Encrypt integration.
+- **Easy configuration** - simple, intuitive configuration with sensible, secure defaults and [comprehensive documentation](https://ferron.sh/docs).
 - **Extensibility** - modular architecture for easy customization.
-- **Secure** - focus on robust security practices and safe concurrency.
+- **Powerful reverse proxy** - advanced reverse proxy capabilities with support for load balancing and health checks.
 
 ## Components
 
