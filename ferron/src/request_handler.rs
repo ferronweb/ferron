@@ -149,6 +149,7 @@ async fn log_access(
 }
 
 /// Helper function to add custom headers to response
+#[inline]
 fn add_custom_headers(
   response_parts: &mut hyper::http::response::Parts,
   headers_to_add: &HeaderMap,
@@ -173,6 +174,7 @@ fn add_custom_headers(
 }
 
 /// Helper function to add HTTP/3 Alt-Svc header
+#[inline]
 fn add_http3_alt_svc_header(response_parts: &mut hyper::http::response::Parts, http3_alt_port: Option<u16>) {
   if let Some(http3_alt_port) = http3_alt_port {
     if let Ok(header_value) = match response_parts.headers.get(header::ALT_SVC) {
@@ -194,6 +196,7 @@ fn add_http3_alt_svc_header(response_parts: &mut hyper::http::response::Parts, h
 }
 
 /// Helper function to add server header
+#[inline]
 fn add_server_header(response_parts: &mut hyper::http::response::Parts) {
   response_parts
     .headers
