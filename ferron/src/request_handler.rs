@@ -362,6 +362,7 @@ async fn finalize_basic_error_response(
 
 /// Helper function to execute response modifying handlers
 #[allow(clippy::too_many_arguments)]
+#[inline]
 async fn execute_response_modifying_handlers(
   mut response: Response<BoxBody<Bytes, std::io::Error>>,
   mut executed_handlers: Vec<Box<dyn ModuleHandlers>>,
