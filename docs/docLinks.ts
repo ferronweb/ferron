@@ -90,6 +90,12 @@ export default [
     label: "Redirecting",
   },
   {
+    href: "/docs/use-cases/ferron-serve",
+    target: "_self",
+    sub: true,
+    label: "`ferron serve` subcommand",
+  },
+  {
     label: "Reference",
   },
   {
