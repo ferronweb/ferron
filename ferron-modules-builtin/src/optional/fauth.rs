@@ -92,7 +92,6 @@ unsafe impl<B> Send for TrackedBody<B> where B: Send {}
 unsafe impl<B> Sync for TrackedBody<B> where B: Sync {}
 
 /// A forwarded authentication module loader
-#[allow(clippy::type_complexity)]
 pub struct ForwardedAuthenticationModuleLoader {
   cache: ModuleCache<ForwardedAuthenticationModule>,
   connections: Option<ConnectionPool>,
@@ -257,7 +256,6 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
 }
 
 /// A forwarded authentication module
-#[allow(clippy::type_complexity)]
 struct ForwardedAuthenticationModule {
   auth_to: Option<Arc<String>>,
   local_limit_index: Option<usize>,
@@ -277,7 +275,6 @@ impl Module for ForwardedAuthenticationModule {
 }
 
 /// Handlers for the forwarded authentication proxy module
-#[allow(clippy::type_complexity)]
 struct ForwardedAuthenticationModuleHandlers {
   auth_to: Option<Arc<String>>,
   local_limit_index: Option<usize>,

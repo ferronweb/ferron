@@ -22,12 +22,11 @@ use ferron_common::get_entry;
 use ferron_common::logging::LogMessage;
 use instant_acme::ChallengeType;
 use rustls::crypto::CryptoProvider;
-use rustls::server::ResolvesServerCert;
 use rustls::sign::CertifiedKey;
 use tokio::sync::RwLock;
 
 use crate::acme::{AcmeCache, AcmeConfig, AcmeOnDemandConfig, Http01DataLock, TlsAlpn01DataLock, TlsAlpn01Resolver};
-use crate::util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver};
+use crate::util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver, SniResolverLock};
 
 /// Accumulates TLS and ACME-related state while building listener configuration.
 ///
@@ -42,8 +41,7 @@ use crate::util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedK
 /// number of parameters through builder functions.
 pub struct TlsBuildContext {
   pub tls_ports: HashMap<u16, CustomSniResolver>,
-  #[allow(clippy::type_complexity)]
-  pub tls_port_locks: HashMap<u16, Arc<RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>>,
+  pub tls_port_locks: HashMap<u16, SniResolverLock>,
   pub nonencrypted_ports: HashSet<u16>,
   pub certified_keys_to_preload: HashMap<u16, Vec<Arc<CertifiedKey>>>,
   pub used_sni_hostnames: HashSet<(u16, Option<String>)>,

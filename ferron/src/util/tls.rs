@@ -5,12 +5,14 @@ use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::sync::Arc;
 
+/// The type for the SNI resolver lock, which is a vector of tuples containing the hostname and the corresponding certificate resolver.
+pub type SniResolverLock = Arc<tokio::sync::RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>;
+
 /// Custom SNI resolver, consisting of multiple resolvers
 #[derive(Debug)]
 pub struct CustomSniResolver {
   fallback_resolver: Option<Arc<dyn ResolvesServerCert>>,
-  #[allow(clippy::type_complexity)]
-  resolvers: Arc<tokio::sync::RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>,
+  resolvers: SniResolverLock,
   fallback_sender: Option<(async_channel::Sender<(String, u16)>, u16)>,
 }
 
@@ -26,8 +28,7 @@ impl CustomSniResolver {
   }
 
   /// Creates a custom SNI resolver with provided resolvers lock
-  #[allow(clippy::type_complexity)]
-  pub fn with_resolvers(resolvers: Arc<tokio::sync::RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>) -> Self {
+  pub fn with_resolvers(resolvers: SniResolverLock) -> Self {
     Self {
       fallback_resolver: None,
       resolvers,

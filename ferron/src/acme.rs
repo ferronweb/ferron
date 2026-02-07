@@ -32,7 +32,7 @@ use tokio::{io::AsyncWriteExt, sync::RwLock, time::Instant};
 use x509_parser::prelude::{FromDer, X509Certificate};
 use xxhash_rust::xxh3::xxh3_128;
 
-use crate::util::load_host_resolver;
+use crate::util::{load_host_resolver, SniResolverLock};
 use ferron_common::dns::DnsProvider;
 use ferron_common::logging::ErrorLogger;
 
@@ -115,8 +115,7 @@ pub struct AcmeOnDemandConfig {
   /// The path to the cache directory for storing ACME information.
   pub cache_path: Option<PathBuf>,
   /// The lock for managing the SNI resolver.
-  #[allow(clippy::type_complexity)]
-  pub sni_resolver_lock: Arc<RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>,
+  pub sni_resolver_lock: SniResolverLock,
   /// The lock for managing the TLS-ALPN-01 resolver.
   pub tls_alpn_01_resolver_lock: Arc<RwLock<Vec<TlsAlpn01DataLock>>>,
   /// The lock for managing the HTTP-01 resolver.

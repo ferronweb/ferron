@@ -11,12 +11,12 @@ use send_wrapper::SendWrapper;
 const MAX_BUFFER_SIZE: usize = 16384;
 
 /// A wrapper over Monoio's `File` that implements a `Stream` trait and doesn't spawn a background task.
-#[allow(clippy::type_complexity)]
 pub struct MonoioFileStreamNoSpawn {
   file: Arc<SendWrapper<File>>,
   current_pos: u64,
   end: Option<u64>,
   finished: bool,
+  #[allow(clippy::type_complexity)]
   read_future: Option<Pin<Box<dyn Future<Output = Option<Result<Bytes, std::io::Error>>> + Send + Sync>>>,
 }
 

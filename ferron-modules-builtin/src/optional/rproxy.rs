@@ -56,14 +56,16 @@ use crate::util::{SendUnixStreamPoll, SendUnixStreamPollDropGuard};
 const DEFAULT_CONCURRENT_CONNECTIONS: usize = 16384;
 const DEFAULT_KEEPALIVE_IDLE_TIMEOUT: u64 = 60000;
 
-#[allow(clippy::type_complexity)]
+type ConnectionsTrackState = Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>;
+
 enum LoadBalancerAlgorithm {
   Random,
   RoundRobin(Arc<AtomicUsize>),
-  LeastConnections(Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>),
-  TwoRandomChoices(Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>),
+  LeastConnections(ConnectionsTrackState),
+  TwoRandomChoices(ConnectionsTrackState),
 }
 
+type ProxyToKey = (String, Option<String>, Option<usize>, Option<Duration>);
 type ProxyToVectorContentsBorrowed<'a> = (&'a str, Option<&'a str>, Option<usize>, Option<Duration>);
 
 type ConnectionPool = Arc<Pool<(String, Option<String>, Option<IpAddr>), SendRequestWrapper>>;
@@ -208,7 +210,6 @@ unsafe impl<B> Send for TrackedBody<B> where B: Send {}
 unsafe impl<B> Sync for TrackedBody<B> where B: Sync {}
 
 /// A reverse proxy module loader
-#[allow(clippy::type_complexity)]
 pub struct ReverseProxyModuleLoader {
   cache: ModuleCache<ReverseProxyModule>,
   connections: Option<ConnectionPool>,
@@ -606,11 +607,11 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 }
 
 /// A reverse proxy module
-#[allow(clippy::type_complexity)]
 struct ReverseProxyModule {
+  #[allow(clippy::type_complexity)]
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
   load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
-  proxy_to: Arc<Vec<(String, Option<String>, Option<usize>, Option<Duration>)>>,
+  proxy_to: Arc<Vec<ProxyToKey>>,
   health_check_max_fails: u64,
   connections: ConnectionPool,
   #[cfg(unix)]
@@ -635,11 +636,11 @@ impl Module for ReverseProxyModule {
 }
 
 /// Handlers for the reverse proxy module
-#[allow(clippy::type_complexity)]
 struct ReverseProxyModuleHandlers {
+  #[allow(clippy::type_complexity)]
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
   load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
-  proxy_to: Arc<Vec<(String, Option<String>, Option<usize>, Option<Duration>)>>,
+  proxy_to: Arc<Vec<ProxyToKey>>,
   health_check_max_fails: u64,
   selected_backends_metrics: Option<Vec<(String, Option<String>)>>,
   unhealthy_backends_metrics: Option<Vec<(String, Option<String>)>>,
@@ -1617,7 +1618,7 @@ async fn select_backend_index<'a>(
 /// * `load_balancer_algorithm` - The load balancing algorithm to use
 ///
 /// # Returns
-/// * `Option<(String, Option<String>, Option<usize>, Option<Duration>)>` -
+/// * `Option<ProxyToKey>` -
 ///   The URL, the optional Unix socket path,
 ///   the local limit index of the selected backend server,
 ///   and the keepalive timeout, or None if no valid backend exists
@@ -1628,7 +1629,7 @@ async fn determine_proxy_to<'a>(
   enable_health_check: bool,
   health_check_max_fails: u64,
   load_balancer_algorithm: &LoadBalancerAlgorithm,
-) -> Option<(String, Option<String>, Option<usize>, Option<Duration>)> {
+) -> Option<ProxyToKey> {
   let mut proxy_to = None;
   // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
   // The "proxy" directive is validated though.

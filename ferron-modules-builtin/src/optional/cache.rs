@@ -305,7 +305,6 @@ impl<Key, Val> quick_cache::Lifecycle<Key, Val> for CustomLifecycle<Key, Val> {
 }
 
 /// A cache module loader with optimized initialization
-#[allow(clippy::type_complexity)]
 pub struct CacheModuleLoader {
   module_cache: ModuleCache<CacheModule>,
   caches_to_drop: Vec<Arc<CacheInner>>,
@@ -474,7 +473,6 @@ impl Drop for CacheModuleLoader {
 }
 
 /// A cache module with optimized data structures
-#[allow(clippy::type_complexity)]
 struct CacheModule {
   cache: Arc<CacheInner>,
   vary_cache: Arc<quick_cache::sync::Cache<String, Arc<HeaderList>>>,
@@ -504,7 +502,6 @@ impl Module for CacheModule {
 }
 
 /// Optimized handlers for the cache module
-#[allow(clippy::type_complexity)]
 struct CacheModuleHandlers {
   cache: Arc<CacheInner>,
   vary_cache: Arc<quick_cache::sync::Cache<String, Arc<HeaderList>>>,
