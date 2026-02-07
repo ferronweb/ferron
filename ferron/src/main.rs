@@ -56,20 +56,21 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 shadow!(build);
 
-static LISTENER_HANDLER_CHANNEL: LazyLock<Arc<(Sender<ConnectionData>, Receiver<ConnectionData>)>> =
+type LazyLockArc<T> = LazyLock<Arc<T>>;
+type LazyLockMutex<T> = LazyLockArc<Mutex<T>>;
+
+static LISTENER_HANDLER_CHANNEL: LazyLockArc<(Sender<ConnectionData>, Receiver<ConnectionData>)> =
   LazyLock::new(|| Arc::new(async_channel::unbounded()));
-#[allow(clippy::type_complexity)]
-static TCP_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, CancellationToken>>>> =
+static TCP_LISTENERS: LazyLockMutex<HashMap<SocketAddr, CancellationToken>> =
   LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
 #[allow(clippy::type_complexity)]
-static QUIC_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, (CancellationToken, Sender<Arc<ServerConfig>>)>>>> =
+static QUIC_LISTENERS: LazyLockMutex<HashMap<SocketAddr, (CancellationToken, Sender<Arc<ServerConfig>>)>> =
   LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
-#[allow(clippy::type_complexity)]
-static HANDLERS: LazyLock<Arc<Mutex<Vec<(CancellationToken, Sender<()>)>>>> =
+static HANDLERS: LazyLockMutex<Vec<(CancellationToken, Sender<()>)>> =
   LazyLock::new(|| Arc::new(Mutex::new(Vec::new())));
 static SERVER_CONFIG_ARCSWAP: OnceLock<Arc<ArcSwap<ReloadableHandlerData>>> = OnceLock::new();
-static URING_ENABLED: LazyLock<Arc<Mutex<Option<bool>>>> = LazyLock::new(|| Arc::new(Mutex::new(None)));
-static LISTENER_LOGGING_CHANNEL: LazyLock<Arc<(Sender<LogMessage>, Receiver<LogMessage>)>> =
+static URING_ENABLED: LazyLockMutex<Option<bool>> = LazyLock::new(|| Arc::new(Mutex::new(None)));
+static LISTENER_LOGGING_CHANNEL: LazyLockArc<(Sender<LogMessage>, Receiver<LogMessage>)> =
   LazyLock::new(|| Arc::new(async_channel::unbounded()));
 
 /// Handles shutdown signals (SIGHUP and CTRL+C) and returns whether to continue running
