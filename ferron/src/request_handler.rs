@@ -46,14 +46,12 @@ async fn generate_error_response(
   if let Some(error_pages) = get_entries!("error_page", config) {
     for error_page in &error_pages.inner {
       if let Some(page_status_code) = error_page.values.first().and_then(|v| v.as_i128()) {
-        let page_status_code = match StatusCode::from_u16(match page_status_code.try_into() {
-          Ok(status_code) => status_code,
-          Err(_) => continue,
-        }) {
-          Ok(status_code) => status_code,
-          Err(_) => continue,
-        };
-        if status_code != page_status_code {
+        if page_status_code
+          .try_into()
+          .ok()
+          .and_then(|s| StatusCode::from_u16(s).ok())
+          .is_none_or(|s| s != status_code)
+        {
           continue;
         }
         if let Some(page_path) = error_page.values.get(1).and_then(|v| v.as_str()) {
@@ -62,9 +60,8 @@ async fn generate_error_response(
           #[cfg(feature = "runtime-tokio")]
           let file = tokio::fs::File::open(page_path).await;
 
-          let file = match file {
-            Ok(file) => file,
-            Err(_) => continue,
+          let Ok(file) = file else {
+            continue;
           };
 
           // Monoio's `File` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
@@ -80,10 +77,7 @@ async fn generate_error_response(
               )))
           };
 
-          content_length = match metadata {
-            Ok(metadata) => Some(metadata.len()),
-            Err(_) => None,
-          };
+          content_length = metadata.ok().map(|m| m.len());
 
           #[cfg(feature = "runtime-monoio")]
           let file_stream = MonoioFileStreamNoSpawn::new(file, None, content_length);
@@ -208,16 +202,18 @@ fn add_server_header(response_parts: &mut hyper::http::response::Parts) {
 
 /// Helper function to extract content length for logging
 fn extract_content_length(response: &Response<BoxBody<Bytes, std::io::Error>>) -> Option<u64> {
-  match response.headers().get(header::CONTENT_LENGTH) {
-    Some(header_value) => match header_value.to_str() {
-      Ok(header_value) => match header_value.parse::<u64>() {
-        Ok(content_length) => Some(content_length),
-        Err(_) => response.body().size_hint().exact(),
-      },
-      Err(_) => response.body().size_hint().exact(),
-    },
-    None => response.body().size_hint().exact(),
-  }
+  response
+    .headers()
+    .get(header::CONTENT_LENGTH)
+    .and_then(|header_value| {
+      header_value.to_str().ok().and_then(|header_value| {
+        header_value
+          .parse::<u64>()
+          .ok()
+          .or_else(|| response.body().size_hint().exact())
+      })
+    })
+    .or_else(|| response.body().size_hint().exact())
 }
 
 /// Helper function to apply all response headers and log if needed
@@ -498,16 +494,7 @@ pub async fn request_handler(
                 &socket_data,
                 None,
                 response.status().as_u16(),
-                match response.headers().get(header::CONTENT_LENGTH) {
-                  Some(header_value) => match header_value.to_str() {
-                    Ok(header_value) => match header_value.parse::<u64>() {
-                      Ok(content_length) => Some(content_length),
-                      Err(_) => response.body().size_hint().exact(),
-                    },
-                    Err(_) => response.body().size_hint().exact(),
-                  },
-                  None => response.body().size_hint().exact(),
-                },
+                extract_content_length(&response),
                 global_configuration
                   .as_deref()
                   .and_then(|c| get_value!("log_date_format", c))
@@ -577,16 +564,7 @@ pub async fn request_handler(
           &socket_data,
           None,
           response.status().as_u16(),
-          match response.headers().get(header::CONTENT_LENGTH) {
-            Some(header_value) => match header_value.to_str() {
-              Ok(header_value) => match header_value.parse::<u64>() {
-                Ok(content_length) => Some(content_length),
-                Err(_) => response.body().size_hint().exact(),
-              },
-              Err(_) => response.body().size_hint().exact(),
-            },
-            None => response.body().size_hint().exact(),
-          },
+          extract_content_length(&response),
           global_configuration
             .as_deref()
             .and_then(|c| get_value!("log_date_format", c))
@@ -693,16 +671,7 @@ pub async fn request_handler(
         &socket_data,
         None,
         response.status().as_u16(),
-        match response.headers().get(header::CONTENT_LENGTH) {
-          Some(header_value) => match header_value.to_str() {
-            Ok(header_value) => match header_value.parse::<u64>() {
-              Ok(content_length) => Some(content_length),
-              Err(_) => response.body().size_hint().exact(),
-            },
-            Err(_) => response.body().size_hint().exact(),
-          },
-          None => response.body().size_hint().exact(),
-        },
+        extract_content_length(&response),
         global_configuration
           .as_deref()
           .and_then(|c| get_value!("log_date_format", c))
@@ -771,16 +740,7 @@ pub async fn request_handler(
         &socket_data,
         None,
         response.status().as_u16(),
-        match response.headers().get(header::CONTENT_LENGTH) {
-          Some(header_value) => match header_value.to_str() {
-            Ok(header_value) => match header_value.parse::<u64>() {
-              Ok(content_length) => Some(content_length),
-              Err(_) => response.body().size_hint().exact(),
-            },
-            Err(_) => response.body().size_hint().exact(),
-          },
-          None => response.body().size_hint().exact(),
-        },
+        extract_content_length(&response),
         global_configuration
           .as_deref()
           .and_then(|c| get_value!("log_date_format", c))
