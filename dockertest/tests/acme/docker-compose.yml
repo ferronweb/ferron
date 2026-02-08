@@ -26,6 +26,7 @@ services:
     command: -config /etc/pebble-config.json
     volumes:
       - ./pebble-config.json:/etc/pebble-config.json
+      - ./certs:/etc/certs
     #ports:
     #  - 14000:14000 # HTTPS ACME API
     #  - 15000:15000 # HTTPS Management API

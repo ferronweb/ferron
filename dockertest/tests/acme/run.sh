@@ -1,5 +1,8 @@
 #!/bin/bash
 TEST_FAILED=0
+rm -rf certs
+mkdir -p certs
+docker run --rm -v ./certs:/etc/certs alpine/openssl req -x509 -newkey rsa:4096 -keyout /etc/certs/ca.key -out /etc/certs/ca.crt -days 365 -nodes -subj "/CN=localhost" > /dev/null 2>&1 || (echo "Failed to generate TLS key pair for a test suite" >&2; exit 1)
 docker run -v ./cache:/tmp/cache --rm alpine chmod -R a+rwx /tmp/cache > /dev/null 2>&1 || true
 rm -rf cache
 mkdir -p cache
@@ -17,6 +20,7 @@ docker compose --progress quiet kill -s SIGKILL > /dev/null || true
 docker compose --progress quiet down -v > /dev/null || true
 docker run -v ./cache:/tmp/cache --rm alpine chmod -R a+rwx /tmp/cache > /dev/null 2>&1 || true
 rm -rf cache
+rm -rf certs
 if [ "$TEST_FAILED" -eq 1 ]; then
     exit 1
 fi
