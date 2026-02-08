@@ -357,6 +357,9 @@ fn match_condition(
   }
 }
 
+// TODO: Use a custom variation of trie for server configurations struct
+// instead of iterating over a vector of configurations for more efficient configuration lookup.
+
 /// The struct containing all the Ferron server configurations
 #[derive(Debug)]
 pub struct ServerConfigurations {
