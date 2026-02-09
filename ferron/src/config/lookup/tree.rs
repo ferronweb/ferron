@@ -1,11 +1,11 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 use ferron_common::config::Conditional;
 
 use crate::config::lookup::conditionals::{match_conditional, ConditionMatchData};
 
 /// A single key for the configuration tree lookup
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConfigFilterTreeSingleKey {
   /// The configuration is a host configuration
   IsHostConfiguration,
@@ -37,7 +37,7 @@ impl ConfigFilterTreeSingleKey {
 }
 
 /// A multi-key for the configuration tree lookup
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct ConfigFilterTreeMultiKey(Vec<ConfigFilterTreeSingleKey>);
 
 #[allow(clippy::non_canonical_partial_ord_impl)]
@@ -224,91 +224,104 @@ impl<T> ConfigFilterTree<T> {
     key: Vec<ConfigFilterTreeSingleKey>,
     condition_match_data: Option<ConditionMatchData<'b>>,
   ) -> Result<Option<&'a T>, Box<dyn std::error::Error + Send + Sync>> {
-    let mut current_node = &self.root;
-    let mut key = ConfigFilterTreeMultiKey(key);
-    let mut value = current_node.value.as_ref();
-    while !key.0.is_empty() {
-      let key_end = key.0.split_off(1);
-      let mut partial_key = ConfigFilterTreeMultiKey(key.0);
-      key.0 = key_end;
-      if let Some((child_key, child)) = current_node.children_fixed.get_key_value(&partial_key) {
-        // If a fixed multi-key matches, continue with the child node and the remaining key
-        current_node = child;
-        let mut index = 0;
-        let mut secondary_index = 1;
-        let mut is_matching = true;
-        while let (Some(key_single), Some(child_key_single)) = (key.0.get(index), child_key.0.get(secondary_index)) {
-          if std::mem::discriminant(key_single) == std::mem::discriminant(child_key_single) {
-            // The keys have the same variant, so we can compare them
-            if key_single != child_key_single {
-              // The keys differ, so the fixed multi-key does not match
-              is_matching = false;
-              break;
-            } else {
-              // The keys match, continue with the next key
-              secondary_index += 1;
-            }
-          }
-          index += 1;
-        }
-        if !is_matching || (index >= key.0.len() && secondary_index < child_key.0.len()) {
-          // The keys differ or are out of bounds, so the fixed multi-key does not match
-          break;
-        }
-        key.0 = key.0.split_off(index);
-        if current_node.value.is_some() {
-          value = current_node.value.as_ref();
-        }
-        continue;
-      }
-
-      let partial_key = partial_key.0.remove(0);
-      if partial_key.is_predicate() {
-        // The next key is a predicate, so try to match the predicate single keys
-        if let Some(child) = current_node.children_predicate.get(&partial_key) {
-          // If a predicate key matches, continue with the child node and the remaining key
+    let mut current_nodes = VecDeque::new();
+    current_nodes.push_back((&self.root, ConfigFilterTreeMultiKey(key)));
+    let mut value = current_nodes[0].0.value.as_ref();
+    while let Some((mut current_node, mut key)) = current_nodes.pop_front() {
+      while !key.0.is_empty() {
+        let key_end = key.0.split_off(1);
+        let mut partial_key = ConfigFilterTreeMultiKey(key.0);
+        key.0 = key_end;
+        if let Some((child_key, child)) = current_node.children_fixed.get_key_value(&partial_key) {
+          // If a fixed multi-key matches, continue with the child node and the remaining key
           current_node = child;
+          let mut index = 0;
+          let mut secondary_index = 1;
+          let mut is_matching = true;
+          while let (Some(key_single), Some(child_key_single)) = (key.0.get(index), child_key.0.get(secondary_index)) {
+            if std::mem::discriminant(key_single) == std::mem::discriminant(child_key_single) {
+              // The keys have the same variant, so we can compare them
+              if key_single != child_key_single {
+                // The keys differ, so the fixed multi-key does not match
+                is_matching = false;
+                break;
+              } else {
+                // The keys match, continue with the next key
+                secondary_index += 1;
+              }
+            }
+            index += 1;
+          }
+          if !is_matching || (index >= key.0.len() && secondary_index < child_key.0.len()) {
+            // The keys differ or are out of bounds, so the fixed multi-key does not match
+            break;
+          }
+          key.0 = key.0.split_off(index);
           if current_node.value.is_some() {
             value = current_node.value.as_ref();
           }
           continue;
         }
-      }
 
-      // If no fixed multi-key matches, try to match the predicate single keys
-      for (predicate_key, child) in &current_node.children_predicate {
-        if predicate_key.is_predicate() {
-          // This is a predicate key, so we need to check if it matches the condition data
-          if predicate_key == &ConfigFilterTreeSingleKey::HostDomainLevelWildcard
-            && matches!(partial_key, ConfigFilterTreeSingleKey::HostDomainLevel(_))
-          {
-            // Host domain level wildcard matches any host domain level
+        let partial_key = partial_key.0.remove(0);
+        if partial_key.is_predicate() {
+          // The next key is a predicate, so try to match the predicate single keys
+          if let Some(child) = current_node.children_predicate.get(&partial_key) {
+            // If a predicate key matches, continue with the child node and the remaining key
             current_node = child;
-            let mut index = 0;
-            while let Some(ConfigFilterTreeSingleKey::HostDomainLevel(_)) = key.0.get(index) {
-              index += 1;
-            }
-            key.0 = key.0.split_off(index);
             if current_node.value.is_some() {
               value = current_node.value.as_ref();
             }
-            break;
-          } else if let ConfigFilterTreeSingleKey::Conditional(conditional) = predicate_key {
-            // Conditional key, check if the condition matches
-            if let Some(condition_match_data) = condition_match_data.as_ref() {
-              if match_conditional(conditional, condition_match_data)? {
-                current_node = child;
-                if current_node.value.is_some() {
-                  value = current_node.value.as_ref();
+            continue;
+          }
+        }
+
+        // If no fixed multi-key matches, try to match the predicate single keys
+        let mut conditional_predicate_matched = false;
+        for (predicate_key, child) in &current_node.children_predicate {
+          if predicate_key.is_predicate() {
+            // This is a predicate key, so we need to check if it matches the condition data
+            if predicate_key == &ConfigFilterTreeSingleKey::HostDomainLevelWildcard
+              && matches!(partial_key, ConfigFilterTreeSingleKey::HostDomainLevel(_))
+            {
+              // Host domain level wildcard matches any host domain level
+              current_node = child;
+              let mut index = 0;
+              while let Some(ConfigFilterTreeSingleKey::HostDomainLevel(_)) = key.0.get(index) {
+                index += 1;
+              }
+              key.0 = key.0.split_off(index);
+              if current_node.value.is_some() {
+                value = current_node.value.as_ref();
+              }
+              // There can be only one variation of HostDomainLevelWildcard at the same level of the tree,
+              // so we can break after the first match. This is in contrast to Conditional predicates,
+              // where there can be multiple different conditionals at the same level of the tree,
+              // and we need to check all of them.
+              break;
+            } else if let ConfigFilterTreeSingleKey::Conditional(conditional) = predicate_key {
+              // Conditional key, check if the condition matches
+              if let Some(condition_match_data) = condition_match_data.as_ref() {
+                if match_conditional(conditional, condition_match_data)? {
+                  let current_node = child;
+                  if current_node.value.is_some() {
+                    value = current_node.value.as_ref();
+                  }
+                  // Push to current nodes queue. At the end, a value with the longest matching key will be returned,
+                  // so we want to continue searching for other matches after this one.
+                  current_nodes.push_back((current_node, key.clone()));
+                  conditional_predicate_matched = true;
                 }
-                break;
               }
             }
           }
         }
-      }
+        if conditional_predicate_matched {
+          break;
+        }
 
-      // If nothing happened, probably no matching fixed multi-key or predicate single key found...
+        // If nothing happened, probably no matching fixed multi-key or predicate single key found...
+      }
     }
 
     Ok(value)
