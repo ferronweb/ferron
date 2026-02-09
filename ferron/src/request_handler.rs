@@ -796,7 +796,7 @@ pub async fn request_handler(
   let configuration_option =
     configurations.find_configuration(&request_parts, hostname_determinant.as_deref(), &socket_data);
   let mut request = Request::from_parts(request_parts, request_body);
-  let mut configuration = match configuration_option
+  let mut configuration_error_handler_lookup = match configuration_option
     .and_then(|c| c.ok_or_else(|| anyhow::anyhow!("No matching configuration found").into_boxed_dyn_error()))
   {
     Ok(configuration) => configuration,
@@ -805,6 +805,34 @@ pub async fn request_handler(
         logger
           .send(LogMessage::new(
             format!("Cannot determine server configuration: {err}"),
+            true,
+          ))
+          .await
+          .unwrap_or_default()
+      }
+      let response = basic_error_response(StatusCode::INTERNAL_SERVER_ERROR);
+      let (request_parts, _) = request.into_parts();
+      return Ok(
+        finalize_basic_error_response(
+          response,
+          request_parts,
+          http3_alt_port,
+          global_loggers,
+          &socket_data,
+          global_log_date_format,
+          global_log_format,
+        )
+        .await,
+      );
+    }
+  };
+  let mut configuration = match configuration_error_handler_lookup.get_default().cloned() {
+    Some(configuration) => configuration,
+    None => {
+      for logger in global_loggers {
+        logger
+          .send(LogMessage::new(
+            "Cannot determine server configuration: No matching configuration found".to_string(),
             true,
           ))
           .await
@@ -852,9 +880,12 @@ pub async fn request_handler(
           request = Request::from_parts(parts, body);
           match configuration_option {
             Ok(Some(new_configuration)) => {
-              configuration = new_configuration;
-              log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
-              log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
+              if let Some(new_config2) = new_configuration.get_default().cloned() {
+                configuration_error_handler_lookup = new_configuration;
+                configuration = new_config2;
+                log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
+                log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
+              }
             }
             Ok(None) => {}
             Err(err) => {
@@ -1041,14 +1072,7 @@ pub async fn request_handler(
   });
   let mut executed_handlers = Vec::new();
   let (request_parts, request_body) = request.into_parts();
-  let request_parts_cloned = if configurations.inner.iter().rev().any(|c| {
-    c.filters.is_host
-      && c.filters.hostname == configuration.filters.hostname
-      && c.filters.ip == configuration.filters.ip
-      && c.filters.port == configuration.filters.port
-      && (c.filters.condition.is_none() || c.filters.condition == configuration.filters.condition)
-      && c.filters.error_handler_status.is_some()
-  }) {
+  let request_parts_cloned = if configuration_error_handler_lookup.has_status_codes() {
     let mut request_parts_cloned = request_parts.clone();
     request_parts_cloned
       .headers
@@ -1172,9 +1196,7 @@ pub async fn request_handler(
           None => match status {
             Some(status) => {
               if !is_error_handler {
-                if let Some(error_configuration) =
-                  configurations.find_error_configuration(&configuration.filters, status.as_u16())
-                {
+                if let Some(error_configuration) = configuration_error_handler_lookup.get(status.as_u16()).cloned() {
                   let request_option = if let Some(request) = request_option {
                     Some(request)
                   } else {

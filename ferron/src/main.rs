@@ -285,7 +285,7 @@ fn before_starting_server(
       let mut invalid_wildcard_domains: HashSet<String> = HashSet::new();
 
       // Iterate server configurations (TLS configuration)
-      for server in &server_configurations.inner {
+      for server in &server_configurations.host_configs {
         let hostname = server.filters.hostname.as_deref();
         if let Some(hostname) = hostname {
           if hostname.contains("*.") && (hostname == "*." || !hostname.starts_with("*.")) {
