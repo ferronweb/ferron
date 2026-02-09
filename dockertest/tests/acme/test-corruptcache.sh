@@ -11,7 +11,7 @@ do
     curl -fsLk -o /dev/null https://ferron/ && break || true
 done
 
-TEST_RESULTS="$(curl -fsSLk -o /dev/null https://ferron-http-01/)"
+TEST_RESULTS="$(curl -fsSLk -o /dev/null https://ferron-http01/)"
 TEST_EXIT_CODE=$?
 if [ "$TEST_EXIT_CODE" -eq 0 ]; then
     echo "Automatic TLS (with cache corrupted before starting the server) passed!"
