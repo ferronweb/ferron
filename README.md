@@ -25,7 +25,7 @@
 
 - **High performance** - thoroughly optimized for speed with support for high concurrency.
 - **Memory-safe** - built with [Rust](https://rust-lang.org/), which is a programming language that can offer strong memory safety guarantees.
-- **Automatic TLS** - automatic SSL/TLS certificate acquisition and renewal with Let's Encrypt integration.
+- **Automatic TLS** - automatic SSL/TLS certificate acquisition and renewal with [Let's Encrypt](https://letsencrypt.org/) integration.
 - **Easy configuration** - simple, intuitive configuration with sensible, secure defaults and [comprehensive documentation](https://ferron.sh/docs).
 - **Extensibility** - modular architecture for easy customization.
 - **Powerful reverse proxy** - advanced reverse proxy capabilities with support for load balancing and health checks.
