@@ -75,7 +75,11 @@ impl<T> HostnameRadixTree<T> {
       }
       if part == "*" {
         is_wildcard = true;
-        break;
+        continue;
+      }
+      if is_wildcard {
+        is_wildcard = false;
+        key.push(Cow::Owned("*".to_string()));
       }
       key.push(Cow::Owned(part.to_string()));
     }
