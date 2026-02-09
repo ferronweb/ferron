@@ -22,7 +22,7 @@ services:
 
   # The ACME server for testing
   pebble:
-    image: ghcr.io/letsencrypt/pebble:latest
+    image: ghcr.io/letsencrypt/pebble:2.8.0
     command: -config /etc/pebble-config.json
     volumes:
       - ./pebble-config.json:/etc/pebble-config.json
