@@ -32,7 +32,7 @@ use tokio::{io::AsyncWriteExt, sync::RwLock, time::Instant};
 use x509_parser::prelude::{FromDer, X509Certificate};
 use xxhash_rust::xxh3::xxh3_128;
 
-use crate::util::{load_host_resolver, SniResolverLock};
+use crate::util::SniResolverLock;
 use ferron_common::dns::DnsProvider;
 use ferron_common::logging::ErrorLogger;
 
@@ -607,9 +607,8 @@ pub async fn convert_on_demand_config(
   let http_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
 
   // Insert new locked data
-  load_host_resolver(
-    &mut *config.sni_resolver_lock.write().await,
-    &sni_hostname,
+  config.sni_resolver_lock.write().await.insert(
+    sni_hostname.clone(),
     Arc::new(AcmeResolver::new(certified_key_lock.clone())),
   );
   match config.challenge_type {

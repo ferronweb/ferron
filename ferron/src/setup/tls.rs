@@ -26,7 +26,9 @@ use rustls::sign::CertifiedKey;
 use tokio::sync::RwLock;
 
 use crate::acme::{AcmeCache, AcmeConfig, AcmeOnDemandConfig, Http01DataLock, TlsAlpn01DataLock, TlsAlpn01Resolver};
-use crate::util::{load_certs, load_private_key, CustomSniResolver, OneCertifiedKeyResolver, SniResolverLock};
+use crate::util::{
+  load_certs, load_private_key, CustomSniResolver, HostnameRadixTree, OneCertifiedKeyResolver, SniResolverLock,
+};
 
 /// Accumulates TLS and ACME-related state while building listener configuration.
 ///
@@ -122,7 +124,7 @@ pub fn resolve_sni_hostname(filters: &ServerConfigurationFilters) -> Option<Stri
 /// Returns a mutable reference to the resolver for further configuration.
 fn ensure_tls_port_resolver(ctx: &mut TlsBuildContext, port: u16) -> &mut CustomSniResolver {
   ctx.tls_ports.entry(port).or_insert_with(|| {
-    let list = Arc::new(RwLock::new(Vec::new()));
+    let list = Arc::new(RwLock::new(HostnameRadixTree::new()));
     ctx.tls_port_locks.insert(port, list.clone());
     CustomSniResolver::with_resolvers(list)
   })
@@ -405,7 +407,7 @@ fn build_on_demand_acme(
       .tls_port_locks
       .get(&port)
       .cloned()
-      .unwrap_or_else(|| Arc::new(RwLock::new(Vec::new()))),
+      .unwrap_or_else(|| Arc::new(RwLock::new(HostnameRadixTree::new()))),
     tls_alpn_01_resolver_lock: ctx
       .acme_tls_alpn_01_resolver_locks
       .get(&port)

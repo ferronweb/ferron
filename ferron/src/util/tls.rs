@@ -1,4 +1,4 @@
-use crate::util::match_hostname;
+use crate::util::HostnameRadixTree;
 use rustls::server::{ClientHello, ResolvesServerCert};
 use rustls::sign::CertifiedKey;
 use rustls_pki_types::pem::PemObject;
@@ -6,7 +6,7 @@ use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::sync::Arc;
 
 /// The type for the SNI resolver lock, which is a vector of tuples containing the hostname and the corresponding certificate resolver.
-pub type SniResolverLock = Arc<tokio::sync::RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>;
+pub type SniResolverLock = Arc<tokio::sync::RwLock<HostnameRadixTree<Arc<dyn ResolvesServerCert>>>>;
 
 /// Custom SNI resolver, consisting of multiple resolvers
 #[derive(Debug)]
@@ -22,7 +22,7 @@ impl CustomSniResolver {
   pub fn new() -> Self {
     Self {
       fallback_resolver: None,
-      resolvers: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+      resolvers: Arc::new(tokio::sync::RwLock::new(HostnameRadixTree::new())),
       fallback_sender: None,
     }
   }
@@ -43,7 +43,7 @@ impl CustomSniResolver {
 
   /// Loads a host certificate resolver for a specific host
   pub fn load_host_resolver(&mut self, host: &str, resolver: Arc<dyn ResolvesServerCert>) {
-    load_host_resolver(&mut self.resolvers.blocking_write(), host, resolver);
+    self.resolvers.blocking_write().insert(host.to_string(), resolver);
   }
 
   /// Loads a fallback sender used for sending SNI hostnames for a specific host
@@ -62,10 +62,8 @@ impl ResolvesServerCert for CustomSniResolver {
       #[cfg(feature = "runtime-tokio")]
       let resolvers = futures_executor::block_on(async { self.resolvers.read().await });
 
-      for (configured_hostname, resolver) in resolvers.iter() {
-        if match_hostname(Some(configured_hostname), Some(hostname)) {
-          return resolver.resolve(client_hello);
-        }
+      if let Some(resolver) = resolvers.get(hostname).cloned() {
+        return resolver.resolve(client_hello);
       }
     }
     let hostname = hostname.map(|v| v.to_string());
@@ -103,28 +101,6 @@ impl ResolvesServerCert for OneCertifiedKeyResolver {
   }
 }
 
-/// Loads a host certificate resolver for a specific host
-pub fn load_host_resolver(
-  resolvers: &mut Vec<(String, Arc<dyn ResolvesServerCert>)>,
-  host: &str,
-  resolver: Arc<dyn ResolvesServerCert>,
-) {
-  if !resolvers.iter().any(|(h, _)| h == host) {
-    resolvers.push((host.to_string(), resolver));
-  }
-  resolvers.sort_by(|a, b| {
-    (a.0.starts_with("*."))
-      .cmp(&(b.0.starts_with("*."))) // Take wildcard hostnames into account
-      .then_with(|| {
-        b.0
-          .trim_end_matches('.')
-          .chars()
-          .filter(|c| *c == '.')
-          .count()
-          .cmp(&a.0.trim_end_matches('.').chars().filter(|c| *c == '.').count())
-      }) // Take also amount of dots in hostnames (domain level) into account
-  });
-}
 /// Loads a public certificate from file
 pub fn load_certs(filename: &str) -> std::io::Result<Vec<CertificateDer<'static>>> {
   let mut certfile = std::fs::File::open(filename)?;
