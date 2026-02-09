@@ -2,12 +2,12 @@ name: Deploy website ("develop" branch)
 
 on:
   push:
-    branches: [ "develop" ]
+    branches: ["develop"]
     paths:
-      - 'blog/**'
-      - 'docs/**'
-      - 'website/**'
-      - '.github/workflows/deploy-website-develop.yml'
+      - "blog/**"
+      - "docs/**"
+      - "website/**"
+      - ".github/workflows/deploy-website-develop.yml"
   workflow_dispatch:
 
 jobs:
@@ -47,7 +47,7 @@ jobs:
           type: "zip"
           filename: "../../ferron-website-develop.zip"
           directory: "website/dist"
-      
+
       - name: Set up SSH
         uses: LuisEnMarroquin/setup-ssh-action@v3.0.0
         with:
@@ -63,4 +63,4 @@ jobs:
           scp ferron-website-develop.zip ferron-servers:.
 
           # The "deploy-ferron-website-develop" is a custom command that deploys the Ferron website
-          ssh ferron-servers "sudo deploy-ferron-website-develop ferron-website-develop.zip && rm ferron-website-develop.zip"
+          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron-website-develop ferron-website-develop.zip && rm ferron-website-develop.zip"
