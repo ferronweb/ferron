@@ -225,7 +225,7 @@ jobs:
           scp ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip ferron-servers:ferron2/${{ env.FERRON_VERSION }}/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip
 
           # The "move-ferron2-archive" is a custom command that moves the ZIP archive to be served by the download server
-          ssh ferron-servers "sudo move-ferron2-archive ${{ env.FERRON_VERSION }} ${{ matrix.target }}"
+          ssh ferron-servers "/usr/bin/sudo-rs move-ferron2-archive ${{ env.FERRON_VERSION }} ${{ matrix.target }}"
 
       - name: Release Ferron to GitHub
         uses: ncipollo/release-action@v1
@@ -248,7 +248,7 @@ jobs:
           scp dist/ferron_${DEB_PACKAGE_VERSION}_${DEB_ARCHITECTURE}.deb ferron-servers:deb/ferron_${DEB_PACKAGE_VERSION}_${DEB_ARCHITECTURE}.deb
 
           # The "update-ferron-deb-repo" is a custom command that updates the Debian repository
-          ssh ferron-servers "sudo update-ferron-deb-repo $DEB_PACKAGE_VERSION $DEB_ARCHITECTURE"
+          ssh ferron-servers "/usr/bin/sudo-rs update-ferron-deb-repo $DEB_PACKAGE_VERSION $DEB_ARCHITECTURE"
 
       - name: Build and release RPM package
         if: matrix.runner == 'ubuntu-latest' && contains(matrix.target, 'linux-gnu')
@@ -263,7 +263,7 @@ jobs:
           scp dist/${RPM_FILE_NAME_WO_RPM}.rpm ferron-servers:rpm/${RPM_FILE_NAME_WO_RPM}.rpm
 
           # The "update-ferron-rpm-repo" is a custom command that updates the RPM repository
-          ssh ferron-servers "sudo update-ferron-rpm-repo $RPM_PACKAGE_VERSION $RPM_ARCHITECTURE"
+          ssh ferron-servers "/usr/bin/sudo-rs update-ferron-rpm-repo $RPM_PACKAGE_VERSION $RPM_ARCHITECTURE"
 
   docs:
     runs-on: ubuntu-latest
@@ -305,7 +305,7 @@ jobs:
           scp ferron2-rustdocs.zip ferron-servers:.
 
           # The "deploy-ferron2-rustdocs" is a custom command that deploys the Ferron's Rust crate documentation
-          ssh ferron-servers "sudo deploy-ferron2-rustdocs ferron2-rustdocs.zip && rm ferron2-rustdocs.zip"
+          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron2-rustdocs ferron2-rustdocs.zip && rm ferron2-rustdocs.zip"
 
   docker:
     runs-on: ubuntu-latest

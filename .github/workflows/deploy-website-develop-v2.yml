@@ -66,4 +66,4 @@ jobs:
           scp ferron2-website-develop.zip ferron-servers:.
 
           # The "deploy-ferron2-website-develop" is a custom command that deploys the Ferron website
-          ssh ferron-servers "sudo deploy-ferron2-website-develop ferron2-website-develop.zip && rm ferron2-website-develop.zip"
+          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron2-website-develop ferron2-website-develop.zip && rm ferron2-website-develop.zip"
