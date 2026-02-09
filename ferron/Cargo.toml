@@ -99,7 +99,7 @@ tokio-util = "0.7.15"
 futures-executor = { version = "0.3.31", optional = true }
 
 # Data Handling & Serialization
-bytes = { version = "1.10.1" }
+bytes = { version = "1.11.1" }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 kdl = { workspace = true }
