@@ -7,6 +7,7 @@ use ferron_common::{
   config::{ErrorHandlerStatus, ServerConfiguration, ServerConfigurationFilters},
   modules::SocketData,
 };
+use hashlink::LinkedHashMap;
 
 use crate::config::lookup::{
   conditionals::ConditionMatchData,
@@ -145,7 +146,7 @@ impl ServerConfigurations {
     inner.sort_by(|a, b| a.filters.cmp(&b.filters));
 
     let mut new_inner = ConfigFilterTree::new();
-    let mut host_config_filters = HashMap::new();
+    let mut host_config_filters = LinkedHashMap::new();
 
     for config in inner {
       let config = Arc::new(config);
@@ -187,7 +188,7 @@ impl ServerConfigurations {
 
     Self {
       inner: new_inner,
-      host_configs: host_config_filters.into_values().collect(),
+      host_configs: host_config_filters.into_iter().map(|(_, config)| config).collect(),
     }
   }
 

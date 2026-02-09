@@ -1381,6 +1381,7 @@ dependencies = [
  "glob",
  "h3",
  "h3-quinn",
+ "hashlink",
  "http-body-util",
  "httpdate",
  "human-panic",
