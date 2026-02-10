@@ -74,6 +74,11 @@ pub struct AcmeConfig {
   pub renewal_info: Option<(RenewalInfo, Instant)>,
   /// The ACME account information
   pub account: Option<Account>,
+  /// The paths to TLS certificate and private key files to save the obtained certificate and private key.
+  pub save_paths: Option<(PathBuf, PathBuf)>,
+  /// The command to execute after certificates and private key are obtained,
+  /// with environment variables `FERRON_ACME_DOMAIN`, `FERRON_ACME_CERT_PATH` and `FERRON_ACME_KEY_PATH` set.
+  pub post_obtain_command: Option<String>,
 }
 
 /// Represents the type of cache to use for storing ACME data.
@@ -237,6 +242,40 @@ fn get_hostname_cache_key(config: &AcmeOnDemandConfig) -> String {
   )
 }
 
+/// Saves the obtained certificate and private key to files if the save paths are configured, and executes the post-obtain command if configured.
+async fn post_process_obtained_certificate(
+  config: &AcmeConfig,
+  certificate_pem: &str,
+  private_key_pem: &str,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+  if let Some((cert_path, key_path)) = &config.save_paths {
+    tokio::fs::write(cert_path, certificate_pem).await?;
+
+    let mut open_options = tokio::fs::OpenOptions::new();
+    open_options.write(true).create(true).truncate(true);
+
+    #[cfg(unix)]
+    open_options.mode(0o600); // Don't allow others to read or write the private key
+
+    let mut file = open_options.open(key_path).await?;
+    file.write_all(private_key_pem.as_bytes()).await?;
+    file.flush().await.unwrap_or_default();
+
+    if let Some(command) = &config.post_obtain_command {
+      tokio::process::Command::new(command)
+        .env("FERRON_ACME_DOMAIN", config.domains.join(","))
+        .env("FERRON_ACME_CERT_PATH", cert_path)
+        .env("FERRON_ACME_KEY_PATH", key_path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+    }
+  }
+
+  Ok(())
+}
+
 /// Checks if the TLS certificate (cached or live) is valid. If cached certificate is valid, installs the cached certificate
 pub async fn check_certificate_validity_or_install_cached(
   config: &mut AcmeConfig,
@@ -298,6 +337,13 @@ pub async fn check_certificate_validity_or_install_cached(
                 .load_private_key(private_key)?;
 
               *config.certified_key_lock.write().await = Some(Arc::new(CertifiedKey::new(certs, signing_key)));
+
+              let _ = post_process_obtained_certificate(
+                config,
+                &certificate_data.certificate_chain_pem,
+                &certificate_data.private_key_pem,
+              )
+              .await;
 
               return Ok(true);
             }
@@ -479,6 +525,15 @@ pub async fn provision_certificate(
     let private_key_pem = acme_order.finalize().await?;
     let certificate_chain_pem = acme_order.poll_certificate(&RetryPolicy::default()).await?;
 
+    if let Err(err) = post_process_obtained_certificate(config, &certificate_chain_pem, &private_key_pem).await {
+      error_logger
+        .log(&format!(
+          "Failed to save or post-process the obtained certificate: {}",
+          err
+        ))
+        .await;
+    }
+
     let certificate_cache_data = CertificateCacheData {
       certificate_chain_pem: certificate_chain_pem.clone(),
       private_key_pem: private_key_pem.clone(),
@@ -651,6 +706,8 @@ pub async fn convert_on_demand_config(
     dns_provider: config.dns_provider.clone(),
     renewal_info: None,
     account: None,
+    save_paths: None,
+    post_obtain_command: None,
   }
 }
 

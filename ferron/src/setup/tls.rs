@@ -14,6 +14,8 @@
 
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_channel::{Receiver, Sender};
@@ -449,6 +451,20 @@ fn build_eager_acme(
     super::acme::build_rustls_client_config(server, crypto_provider).map_err(|e| anyhow::anyhow!(e))?;
   let (account_cache_path, certificate_cache_path) = super::acme::resolve_cache_paths(server, port, &sni_hostname)?;
 
+  let save_paths = get_entry!("auto_tls_save_data", server).and_then(|e| {
+    e.values
+      .first()
+      .and_then(|v| v.as_str())
+      .and_then(|v| PathBuf::from_str(v).ok())
+      .and_then(|v| {
+        e.values
+          .get(1)
+          .and_then(|v| v.as_str())
+          .and_then(|v| PathBuf::from_str(v).ok())
+          .map(|v2| (v, v2))
+      })
+  });
+
   let acme_config = AcmeConfig {
     rustls_client_config,
     domains: vec![sni_hostname.clone()],
@@ -480,6 +496,11 @@ fn build_eager_acme(
     dns_provider,
     renewal_info: None,
     account: None,
+    save_paths,
+    post_obtain_command: get_entry!("auto_tls_post_obtain_command", server)
+      .and_then(|e| e.values.first())
+      .and_then(|v| v.as_str())
+      .map(str::to_string),
   };
 
   ctx.acme_configs.push(acme_config);
