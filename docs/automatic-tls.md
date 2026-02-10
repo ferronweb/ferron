@@ -49,6 +49,22 @@ example.com {
 }
 ```
 
+## Using Ferron as an ACME client for other servers
+
+If you run other servers (alongside Ferron) that support TLS, but not automatic TLS functionality, you can use Ferron UNRELEASED and newer as an ACME client to obtain TLS certificates for those servers, like this:
+
+```kdl
+// Replace "example.com" with your website's domain name
+example.com {
+    auto_tls_save_data "/tmp/server.crt" "/tmp/server.key" // Replace "/tmp/server.crt" and "/tmp/server.key" with actual paths to the certificate and private key files.
+    
+    // Optionally, you can also specify the command to run after saving the certificate and private key, for example to reload the server that uses the obtained TLS certificate.
+    //auto_tls_save_command "/etc/reload-server.sh"
+    
+    root "/var/www/html"
+}
+```
+
 ## DNS providers
 
 Ferron 2.0.0 and newer supports DNS-01 ACME challenge for automatic TLS. The DNS-01 ACME challenge requires a DNS provider to be configured in the `provider` prop in the `auto_tls_challenge` directive.
