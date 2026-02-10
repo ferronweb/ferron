@@ -84,18 +84,56 @@ pub enum AcmeCache {
   File(PathBuf),
 }
 
+impl AcmeCache {
+  /// Gets data from the cache.
+  async fn get(&self, key: &str) -> Option<Vec<u8>> {
+    match self {
+      AcmeCache::Memory(cache) => cache.read().await.get(key).cloned(),
+      AcmeCache::File(path) => tokio::fs::read(path.join(key)).await.ok(),
+    }
+  }
+
+  /// Sets data in the cache.
+  async fn set(&self, key: &str, value: Vec<u8>) -> Result<(), std::io::Error> {
+    match self {
+      AcmeCache::Memory(cache) => {
+        cache.write().await.insert(key.to_string(), value);
+        Ok(())
+      }
+      AcmeCache::File(path) => {
+        tokio::fs::create_dir_all(path).await.unwrap_or_default();
+        let mut open_options = tokio::fs::OpenOptions::new();
+        open_options.write(true).create(true).truncate(true);
+
+        #[cfg(unix)]
+        open_options.mode(0o600); // Don't allow others to read or write
+
+        let mut file = open_options.open(path.join(key)).await?;
+        file.write_all(&value).await?;
+        file.flush().await.unwrap_or_default();
+
+        Ok(())
+      }
+    }
+  }
+
+  /// Removes data from the cache.
+  async fn remove(&self, key: &str) {
+    match self {
+      AcmeCache::Memory(cache) => {
+        cache.write().await.remove(key);
+      }
+      AcmeCache::File(path) => {
+        let _ = tokio::fs::remove_file(path.join(key)).await;
+      }
+    }
+  }
+}
+
 #[derive(Serialize, Deserialize)]
 struct CertificateCacheData {
   certificate_chain_pem: String,
   private_key_pem: String,
-}
-
-/// Gets data from the cache.
-async fn get_from_cache(cache: &AcmeCache, key: &str) -> Option<Vec<u8>> {
-  match cache {
-    AcmeCache::Memory(cache) => cache.read().await.get(key).cloned(),
-    AcmeCache::File(path) => tokio::fs::read(path.join(key)).await.ok(),
-  }
 }
 
 /// Represents the on-demand configuration for the ACME client.
@@ -126,42 +164,6 @@ pub struct AcmeOnDemandConfig {
   pub sni_hostname: Option<String>,
   /// The port to use for ACME communication.
   pub port: u16,
-}
-
-/// Sets data in the cache.
-async fn set_in_cache(cache: &AcmeCache, key: &str, value: Vec<u8>) -> Result<(), Box<dyn Error + Send + Sync>> {
-  match cache {
-    AcmeCache::Memory(cache) => {
-      cache.write().await.insert(key.to_string(), value);
-      Ok(())
-    }
-    AcmeCache::File(path) => {
-      tokio::fs::create_dir_all(path).await.unwrap_or_default();
-      let mut open_options = tokio::fs::OpenOptions::new();
-      open_options.write(true).create(true).truncate(true);
-
-      #[cfg(unix)]
-      open_options.mode(0o600); // Don't allow others to read or write
-
-      let mut file = open_options.open(path.join(key)).await?;
-      file.write_all(&value).await?;
-      file.flush().await.unwrap_or_default();
-
-      Ok(())
-    }
-  }
-}
-
-/// Removes data from the cache.
-async fn remove_from_cache(cache: &AcmeCache, key: &str) {
-  match cache {
-    AcmeCache::Memory(cache) => {
-      cache.write().await.remove(key);
-    }
-    AcmeCache::File(path) => {
-      let _ = tokio::fs::remove_file(path.join(key)).await;
-    }
-  }
 }
 
 /// Checks if the TLS certificate is valid
@@ -265,9 +267,7 @@ pub async fn check_certificate_validity_or_install_cached(
 
   let certificate_cache_key = get_certificate_cache_key(config);
 
-  if let Some(serialized_certificate_cache_data) =
-    get_from_cache(&config.certificate_cache, &certificate_cache_key).await
-  {
+  if let Some(serialized_certificate_cache_data) = config.certificate_cache.get(&certificate_cache_key).await {
     if let Ok(certificate_data) = serde_json::from_slice::<CertificateCacheData>(&serialized_certificate_cache_data) {
       // Corrupted certificates would be skipped
       if let Ok(certs) =
@@ -325,7 +325,9 @@ pub async fn provision_certificate(
     let acme_account_builder =
       Account::builder_with_http(Box::new(HttpsClientForAcme::new(config.rustls_client_config.clone())));
 
-    if let Some(account_credentials) = get_from_cache(&config.account_cache, &account_cache_key)
+    if let Some(account_credentials) = config
+      .account_cache
+      .get(&account_cache_key)
       .await
       .and_then(|c| serde_json::from_slice::<AccountCredentials>(&c).ok())
     {
@@ -343,12 +345,10 @@ pub async fn provision_certificate(
         )
         .await?;
 
-      if let Err(err) = set_in_cache(
-        &config.account_cache,
-        &account_cache_key,
-        serde_json::to_vec(&account_credentials)?,
-      )
-      .await
+      if let Err(err) = config
+        .account_cache
+        .set(&account_cache_key, serde_json::to_vec(&account_credentials)?)
+        .await
       {
         if !had_cache_error {
           error_logger
@@ -393,7 +393,7 @@ pub async fn provision_certificate(
     Err(instant_acme::Error::Api(problem)) => {
       if problem.r#type.as_deref() == Some("urn:ietf:params:acme:error:accountDoesNotExist") {
         // Remove non-existent account from the cache
-        remove_from_cache(&config.account_cache, &account_cache_key).await;
+        config.account_cache.remove(&account_cache_key).await;
       }
       Err(instant_acme::Error::Api(problem))?
     }
@@ -484,12 +484,10 @@ pub async fn provision_certificate(
       private_key_pem: private_key_pem.clone(),
     };
 
-    if let Err(err) = set_in_cache(
-      &config.certificate_cache,
-      &certificate_cache_key,
-      serde_json::to_vec(&certificate_cache_data)?,
-    )
-    .await
+    if let Err(err) = config
+      .certificate_cache
+      .set(&certificate_cache_key, serde_json::to_vec(&certificate_cache_data)?)
+      .await
     {
       if !had_cache_error {
         error_logger
@@ -559,7 +557,7 @@ pub async fn get_cached_domains(config: &AcmeOnDemandConfig) -> Vec<String> {
   if let Some(pathbuf) = config.cache_path.clone() {
     let hostname_cache_key = get_hostname_cache_key(config);
     let hostname_cache = AcmeCache::File(pathbuf);
-    let cache_data = get_from_cache(&hostname_cache, &hostname_cache_key).await;
+    let cache_data = hostname_cache.get(&hostname_cache_key).await;
     if let Some(data) = cache_data {
       serde_json::from_slice(&data).unwrap_or_default()
     } else {
@@ -581,7 +579,7 @@ pub async fn add_domain_to_cache(
     let mut cached_domains = get_cached_domains(config).await;
     cached_domains.push(domain.to_string());
     let data = serde_json::to_vec(&cached_domains)?;
-    set_in_cache(&hostname_cache, &hostname_cache_key, data).await?;
+    hostname_cache.set(&hostname_cache_key, data).await?;
   }
   Ok(())
 }
