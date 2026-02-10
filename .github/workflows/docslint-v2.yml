@@ -42,5 +42,5 @@ jobs:
           if ! git diff --quiet docs; then
             git add docs
             git commit -m 'docs: fix lint errors and format the documentation [skip ci]'
-            git push origin main
+            git push origin develop-2.x
           fi
