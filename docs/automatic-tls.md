@@ -57,10 +57,10 @@ If you run other servers (alongside Ferron) that support TLS, but not automatic 
 // Replace "example.com" with your website's domain name
 example.com {
     auto_tls_save_data "/tmp/server.crt" "/tmp/server.key" // Replace "/tmp/server.crt" and "/tmp/server.key" with actual paths to the certificate and private key files.
-    
+
     // Optionally, you can also specify the command to run after saving the certificate and private key, for example to reload the server that uses the obtained TLS certificate.
     //auto_tls_save_command "/etc/reload-server.sh"
-    
+
     root "/var/www/html"
 }
 ```
