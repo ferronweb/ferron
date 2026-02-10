@@ -149,10 +149,30 @@ async fn http_handler_fn(
   handler_init_tx.send(None).await.unwrap_or_default();
 
   let connections_references = Arc::new(());
-  let graceful_shutdown_token = ArcSwap::from_pointee(CancellationToken::new());
+  let graceful_shutdown_token = Arc::new(ArcSwap::from_pointee(CancellationToken::new()));
+  let graceful_shutdown_token_clone = graceful_shutdown_token.clone();
+
+  let mut graceful_rx_recv_future = Box::pin(async move {
+    while graceful_rx.recv().await.is_ok() {
+      graceful_shutdown_token_clone
+        .swap(Arc::new(CancellationToken::new()))
+        .cancel();
+    }
+
+    futures_util::future::pending::<()>().await;
+  });
 
   loop {
     let conn_data = crate::runtime::select! {
+        biased;
+
+        _ = &mut graceful_rx_recv_future => {
+            // This future should be always pending...
+            break;
+        }
+        _ = shutdown_rx.cancelled() => {
+            break;
+        }
         result = rx.recv() => {
             if let Ok(recv_data) = result {
                 recv_data
@@ -160,15 +180,7 @@ async fn http_handler_fn(
                 break;
             }
         }
-        _ = shutdown_rx.cancelled() => {
-            break;
-        }
     };
-    if graceful_rx.try_recv().is_ok() {
-      graceful_shutdown_token
-        .swap(Arc::new(CancellationToken::new()))
-        .cancel();
-    }
     let ReloadableHandlerData {
       configurations,
       tls_configs,
