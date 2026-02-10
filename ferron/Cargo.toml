@@ -117,7 +117,7 @@ regorus = { version = "0.5.0", default-features = false, features = [
 ]}
 
 # CLI & Configuration
-clap = { version = "4.5.38", features = ["cargo", "derive"] }
+clap = { version = "4.5.57", features = ["cargo", "derive"] }
 dirs = "6.0.0"
 
 # Performance & Utilities
