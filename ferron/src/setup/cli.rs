@@ -7,6 +7,8 @@ pub enum ConfigAdapter {
   Kdl,
   #[cfg(feature = "config-yaml-legacy")]
   YamlLegacy,
+  #[cfg(feature = "config-docker-auto")]
+  DockerAuto,
 }
 
 #[derive(ValueEnum, Debug, Clone, PartialEq)]
