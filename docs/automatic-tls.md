@@ -64,7 +64,7 @@ example.com {
     // - FERRON_ACME_DOMAIN - the domain name for which the certificate was obtained; comma-separated if multiple domain names
     // - FERRON_ACME_CERT_PATH - the path to the obtained TLS certificate
     // - FERRON_ACME_KEY_PATH - the path to the obtained private key
-    
+
     //auto_tls_post_obtain_command "/etc/reload-server.sh"
 
     root "/var/www/html"
