@@ -164,19 +164,19 @@ fn before_starting_server(
         }
         match http_serve_args.log {
           LogOutput::Stdout => {
-            config_string.push_str("\n  log \"/dev/stdout\"");
+            config_string.push_str("\n  log_stdout");
           }
           LogOutput::Stderr => {
-            config_string.push_str("\n  log \"/dev/stderr\"");
+            config_string.push_str("\n  log_stderr");
           }
           LogOutput::Off => {}
         }
         match http_serve_args.error_log {
           LogOutput::Stdout => {
-            config_string.push_str("\n  error_log \"/dev/stdout\"");
+            config_string.push_str("\n  error_log_stdout");
           }
           LogOutput::Stderr => {
-            config_string.push_str("\n  error_log \"/dev/stderr\"");
+            config_string.push_str("\n  error_log_stderr");
           }
           LogOutput::Off => {}
         }
