@@ -51,7 +51,7 @@ example.com {
 
 ## Using Ferron as an ACME client for other servers
 
-If you run other servers (alongside Ferron) that support TLS, but not automatic TLS functionality, you can use Ferron UNRELEASED and newer as an ACME client to obtain TLS certificates for those servers, like this:
+If you run other servers (alongside Ferron) that support TLS, but not automatic TLS functionality, you can use Ferron 2.5.0 and newer as an ACME client to obtain TLS certificates for those servers, like this:
 
 ```kdl
 // Replace "example.com" with your website's domain name

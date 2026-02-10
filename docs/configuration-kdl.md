@@ -327,9 +327,9 @@ This configuration reference organizes directives by both **scope** (where they 
   - This directive specifies whether to enable the automatic TLS on demand. The functionality obtains TLS certificates automatically when a website is accessed for the first time. It's recommended to use either HTTP-01 or TLS-ALPN-01 ACME challenges, as DNS-01 ACME challenges might be slower due to DNS propagation delays. It's also recommended to configure the `auto_tls_on_demand_ask` directive alongside this directive. Default: `auto_tls_on_demand #false`
 - `auto_tls_eab (<auto_tls_eab_key_id: string> <auto_tls_eab_key_hmac: string>)|<auto_tls_eab_disabled: null>`
   - This directive specifies the EAB key ID and HMAC for the ACME External Account Binding. The HMAC key value is encoded in a URL-safe Base64 encoding. If set as `auto_tls_eab_disabled #null`, the EAB is disabled. Default: `auto_tls_eab_disabled #null`
-- `auto_tls_save_data (<auto_tls_save_certificate_path: string> <auto_tls_save_private_key_path: string>)|<auto_tls_save_data_disabled: null>` (Ferron UNRELEASED or newer)
+- `auto_tls_save_data (<auto_tls_save_certificate_path: string> <auto_tls_save_private_key_path: string>)|<auto_tls_save_data_disabled: null>` (Ferron 2.5.0 or newer)
   - This directive specifies the path to save the obtained TLS certificate and private key when using automatic TLS. This can be useful for debugging purposes or for using the obtained TLS certificate and private key with other software. This directive isn't supported when using it alongside automatic TLS on demand. Default: `auto_tls_save_data #null`
-- `auto_tls_post_obtain_command <auto_tls_post_obtain_command: string>|<auto_tls_post_obtain_command_disabled: null>` (Ferron UNRELEASED or newer)
+- `auto_tls_post_obtain_command <auto_tls_post_obtain_command: string>|<auto_tls_post_obtain_command_disabled: null>` (Ferron 2.5.0 or newer)
   - This directive specifies the command (no arguments are supported though) to be executed after obtaining a TLS certificate when using automatic TLS. The command will be executed with the following environment variables set: `FERRON_ACME_DOMAIN` (the domain name for which the certificate was obtained; comma-separated if multiple domain names), `FERRON_ACME_CERT_PATH` (the path to the obtained TLS certificate), `FERRON_ACME_KEY_PATH` (the path to the obtained private key). This can be useful for running custom scripts after obtaining a TLS certificate, for example for reloading other software that uses the obtained TLS certificate. This directive is effective only when `auto_tls_save_data` directive is effective. Default: `auto_tls_post_obtain_command #null`
 
 **Configuration example:**
@@ -731,13 +731,13 @@ example.com {
   - This directive specifies the endpoint URL to be used for logging metrics into the OTLP (OpenTelemetry Protocol) endpoint. The `authorization` prop is a value for `Authorization` HTTP header, if HTTP protocol is used. The `protocol` prop specifies a protocol to use (`grpc` for gRPC, `http/protobuf` for HTTP with protobuf data, `http/json` for HTTP with JSON data). HTTP and HTTPS (only for HTTP-based protocols) URLs are supported. Default: `otlp_metrics #null protocol="grpc"`
 - `otlp_traces <otlp_traces_endpoint: string|null> [authorization=<otlp_traces_authorization: string>] [protocol=<otlp_traces_protocol: string>]` (_otlp_ observability backend; Ferron 2.2.0 or newer)
   - This directive specifies the endpoint URL to be used for logging traces into the OTLP (OpenTelemetry Protocol) endpoint. The `authorization` prop is a value for `Authorization` HTTP header, if HTTP protocol is used. The `protocol` prop specifies a protocol to use (`grpc` for gRPC, `http/protobuf` for HTTP with protobuf data, `http/json` for HTTP with JSON data). HTTP and HTTPS (only for HTTP-based protocols) URLs are supported. Default: `otlp_traces #null protocol="grpc"`
-- `log_stdout [enable_log_stdout: bool]` (_stdlog_ observability backend; Ferron UNRELEASED or newer)
+- `log_stdout [enable_log_stdout: bool]` (_stdlog_ observability backend; Ferron 2.5.0 or newer)
   - This directive specifies whether to enable logging HTTP response logs (access logs) to the standard output stream. Default: `log_stdout #false`
-- `log_stderr [enable_log_stderr: bool]` (_stdlog_ observability backend; Ferron UNRELEASED or newer)
+- `log_stderr [enable_log_stderr: bool]` (_stdlog_ observability backend; Ferron 2.5.0 or newer)
   - This directive specifies whether to enable logging HTTP response logs (access logs) to the standard error stream. Default: `log_stderr #false`
-- `error_log_stdout [enable_error_log_stdout: bool]` (_stdlog_ observability backend; Ferron UNRELEASED or newer)
+- `error_log_stdout [enable_error_log_stdout: bool]` (_stdlog_ observability backend; Ferron 2.5.0 or newer)
   - This directive specifies whether to enable logging error logs to the standard output stream. Default: `error_log_stdout #false`
-- `error_log_stderr [enable_error_log_stderr: bool]` (_stdlog_ observability backend; Ferron UNRELEASED or newer)
+- `error_log_stderr [enable_error_log_stderr: bool]` (_stdlog_ observability backend; Ferron 2.5.0 or newer)
   - This directive specifies whether to enable logging error logs to the standard error stream. Default: `error_log_stderr #false`
 
 **Configuration example:**
