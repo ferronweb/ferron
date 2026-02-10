@@ -12,14 +12,13 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
 use async_channel::{Receiver, Sender};
-use clap::{Arg, ArgAction, ArgMatches, Command};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use ferron_common::logging::{ErrorLogger, LogMessage};
 use ferron_common::{get_entry, get_value};
 use ferron_load_modules::{obtain_module_loaders, obtain_observability_backend_loaders};
@@ -29,6 +28,7 @@ use rustls::server::{ResolvesServerCert, WebPkiClientVerifier};
 use rustls::{RootCertStore, ServerConfig};
 use rustls_native_certs::load_native_certs;
 use shadow_rs::shadow;
+use tempfile::NamedTempFile;
 use tokio_util::sync::CancellationToken;
 
 use crate::acme::{
@@ -107,19 +107,99 @@ fn handle_shutdown_signals(runtime: &tokio::runtime::Runtime) -> bool {
 
 /// Function called before starting a server
 fn before_starting_server(
-  args: ArgMatches,
+  args: FerronArgs,
   configuration_adapters: HashMap<String, Box<dyn ConfigurationAdapter + Send + Sync>>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
+  // When a config string is specified, a tempfile is written with the contents of the string and then
+  // the tempfile is used as the configuration path.
+  let temp_config_file: NamedTempFile;
   // Obtain the argument values
-  let configuration_path: &Path = args
-    .get_one::<PathBuf>("config")
-    .ok_or(anyhow::anyhow!("Cannot obtain the configuration path"))?
-    .as_path();
-  let configuration_adapter: &str = args
-    .get_one::<String>("config-adapter")
-    .map_or(determine_default_configuration_adapter(configuration_path), |s| {
-      s as &str
-    });
+  let configuration_path: &Path = if let Some(config_string) = args.config_string.as_ref() {
+    temp_config_file = NamedTempFile::new()?;
+    std::fs::write(temp_config_file.path(), config_string)?;
+    temp_config_file.path()
+  } else if let Some(command) = args.command.as_ref() {
+    match command {
+      Command::Serve(http_serve_args) => {
+        let mut config_string = format!(
+          "* {{\n  listen_ip \"{}\"\n  default_http_port {}",
+          http_serve_args.listen_ip, http_serve_args.port
+        );
+        if !http_serve_args.credential.is_empty() {
+          let mut users = Vec::<String>::new();
+          for credential in http_serve_args.credential.iter() {
+            let (user, hashed_password) = credential
+              .split_once(':')
+              .ok_or(anyhow::anyhow!("Invalid credential format: {credential}"))?;
+            users.push(user.to_owned());
+            config_string.push_str(format!("\n  user \"{user}\" \"{hashed_password}\"").as_str());
+          }
+          if http_serve_args.forward_proxy {
+            config_string.push_str(
+              format!(
+                "\n  forward_proxy_auth users=\"{}\" brute_protection=#{}",
+                users.join(","),
+                http_serve_args.disable_brute_protection
+              )
+              .as_str(),
+            );
+          } else {
+            config_string.push_str(
+              format!(
+                "\n  status 401 users=\"{}\" brute_protection=#{}",
+                users.join(","),
+                http_serve_args.disable_brute_protection
+              )
+              .as_str(),
+            );
+          }
+        }
+        match http_serve_args.log {
+          LogOutput::Stdout => {
+            config_string.push_str("\n  log \"/dev/stdout\"");
+          }
+          LogOutput::Stderr => {
+            config_string.push_str("\n  log \"/dev/stderr\"");
+          }
+          LogOutput::Off => {}
+        }
+        match http_serve_args.error_log {
+          LogOutput::Stdout => {
+            config_string.push_str("\n  error_log \"/dev/stdout\"");
+          }
+          LogOutput::Stderr => {
+            config_string.push_str("\n  error_log \"/dev/stderr\"");
+          }
+          LogOutput::Off => {}
+        }
+        if http_serve_args.forward_proxy {
+          config_string.push_str("\n  forward_proxy");
+        } else {
+          config_string
+            .push_str(format!("\n  root \"{}\"", http_serve_args.root.to_string_lossy().into_owned()).as_str());
+          config_string.push_str("\n  directory_listing #true");
+        }
+        config_string.push_str("\n}\n");
+        temp_config_file = NamedTempFile::new()?;
+        std::fs::write(temp_config_file.path(), config_string)?;
+        temp_config_file.path()
+      }
+    }
+  } else {
+    args.config.as_path()
+  };
+  let configuration_adapter: &str = if let Some(config_adapter) = args.config_adapter.as_ref() {
+    match config_adapter {
+      ConfigAdapter::Kdl => "kdl",
+      #[cfg(feature = "config-yaml-legacy")]
+      ConfigAdapter::YamlLegacy => "yaml-legacy",
+    }
+  } else if args.config_string.is_some() {
+    // When a config string is specified but no configuration adapter is specified, default to using kdl.
+    "kdl"
+  } else {
+    determine_default_configuration_adapter(configuration_path)
+  };
 
   // Old handler shutdown channels and secondary runtime
   let mut old_runtime: Option<tokio::runtime::Runtime> = None;
@@ -842,41 +922,103 @@ fn determine_default_configuration_adapter(_path: &Path) -> &'static str {
   "kdl"
 }
 
-/// Parses the command-line arguments
-fn parse_arguments(all_adapters: Vec<&'static str>) -> ArgMatches {
-  Command::new("Ferron")
-    .about("A fast, memory-safe web server written in Rust")
-    .arg(
-      Arg::new("config")
-        .long("config")
-        .short('c')
-        .help("The path to the server configuration file")
-        .action(ArgAction::Set)
-        .default_value("./ferron.kdl")
-        .value_parser(PathBuf::from_str),
-    )
-    .arg(
-      Arg::new("config-adapter")
-        .long("config-adapter")
-        .help("The configuration adapter to use")
-        .action(ArgAction::Set)
-        .required(false)
-        .value_parser(all_adapters),
-    )
-    .arg(
-      Arg::new("module-config")
-        .long("module-config")
-        .help("Prints the used compile-time module configuration (`ferron-build.yaml` or `ferron-build-override.yaml` in the Ferron source) and exits")
-        .action(ArgAction::SetTrue)
-    )
-    .arg(
-      Arg::new("version")
-        .long("version")
-        .short('V')
-        .help("Print version and build information")
-        .action(ArgAction::SetTrue)
-    )
-    .get_matches()
+#[derive(Debug, Clone, PartialEq, ValueEnum)]
+enum ConfigAdapter {
+  Kdl,
+  #[cfg(feature = "config-yaml-legacy")]
+  YamlLegacy,
+}
+
+fn print_version() {
+  // Print the server version and build information
+  println!("Ferron {}", build::PKG_VERSION);
+  println!("  Compiled on: {}", build::BUILD_TIME);
+  println!("  Git commit: {}", build::COMMIT_HASH);
+  println!("  Build target: {}", build::BUILD_TARGET);
+  println!("  Rust version: {}", build::RUST_VERSION);
+  println!("  Build host: {}", build::BUILD_OS);
+  if shadow_rs::is_debug() {
+    println!("WARNING: This is a debug build. It is not recommended for production use.");
+  }
+}
+
+#[derive(ValueEnum, Debug, Clone, PartialEq)]
+enum LogOutput {
+  Stdout,
+  Stderr,
+  Off,
+}
+
+#[derive(Args, Debug, Clone, PartialEq)]
+struct ServeArgs {
+  /// The listening IP to use.
+  #[arg(short, long, default_value = "127.0.0.1")]
+  listen_ip: String,
+
+  /// The port to use.
+  #[arg(short, long, default_value = "3000")]
+  port: u16,
+
+  /// The root directory to serve.
+  #[arg(short, long, default_value = ".")]
+  root: PathBuf,
+
+  /// Basic authentication credentials for authorized users. The credential value must
+  /// be in the form "${user}:${hashed_password}" where the "${hashed_password}" is from
+  /// the ferron-passwd program or from any program using the password-auth generate_hash()
+  /// macro (see https://docs.rs/password-auth/latest/password_auth/fn.generate_hash.html).
+  #[arg(short, long)]
+  credential: Vec<String>,
+
+  /// Whether to disable brute-force password protection.
+  #[arg(long)]
+  disable_brute_protection: bool,
+
+  /// Whether to start the server as a forward proxy.
+  #[arg(long)]
+  forward_proxy: bool,
+
+  /// Where to output logs.
+  #[arg(long, default_value = "stdout")]
+  log: LogOutput,
+
+  /// Where to output error logs.
+  #[arg(long, default_value = "stderr")]
+  error_log: LogOutput,
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+enum Command {
+  /// Utility command to start up a basic HTTP server.
+  Serve(ServeArgs),
+}
+
+/// A fast, memory-safe web server written in Rust
+#[derive(Parser, Debug, PartialEq)]
+#[command(about, long_about = None)]
+struct FerronArgs {
+  /// The path to the server configuration file
+  #[arg(short, long, default_value = "./ferron.kdl")]
+  config: PathBuf,
+
+  /// The path to the server configuration file
+  #[arg(long)]
+  config_string: Option<String>,
+
+  /// The configuration adapter to use
+  #[arg(long, value_enum)]
+  config_adapter: Option<ConfigAdapter>,
+
+  /// Prints the used compile-time module configuration (`ferron-build.yaml` or `ferron-build-override.yaml` in the Ferron source) and exits
+  #[arg(long)]
+  module_config: bool,
+
+  /// Print version and build information
+  #[arg(short = 'V', long)]
+  version: bool,
+
+  #[command(subcommand)]
+  command: Option<Command>,
 }
 
 /// The main entry point of the application
@@ -887,26 +1029,17 @@ fn main() {
     .support("- Send an email message to hello@ferron.sh"));
 
   // Obtain the configuration adapters
-  let (configuration_adapters, all_adapters) = obtain_configuration_adapters();
+  let (configuration_adapters, _all_adapters) = obtain_configuration_adapters();
 
   // Parse command-line arguments
-  let args = parse_arguments(all_adapters);
+  let args = FerronArgs::parse();
 
-  if args.get_flag("module-config") {
+  if args.module_config {
     // Dump the used compile-time module configuration and exit
     println!("{}", ferron_load_modules::FERRON_BUILD_YAML);
     return;
-  } else if args.get_flag("version") {
-    // Print the server version and build information
-    println!("Ferron {}", build::PKG_VERSION);
-    println!("  Compiled on: {}", build::BUILD_TIME);
-    println!("  Git commit: {}", build::COMMIT_HASH);
-    println!("  Build target: {}", build::BUILD_TARGET);
-    println!("  Rust version: {}", build::RUST_VERSION);
-    println!("  Build host: {}", build::BUILD_OS);
-    if shadow_rs::is_debug() {
-      println!("WARNING: This is a debug build. It is not recommended for production use.");
-    }
+  } else if args.version {
+    print_version();
     return;
   }
 
@@ -914,5 +1047,146 @@ fn main() {
   if let Err(err) = before_starting_server(args, configuration_adapters) {
     eprintln!("Error while running a server: {err}");
     std::process::exit(1);
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  // The hash here is for the password '123?45>6'.
+  const COMMON_TEST_PASSWORD: &str =
+    "$argon2id$v=19$m=19456,t=2,p=1$emTillHaS3OqFuvITdXxzg$G00heP8QSXk5H/ruTiLt302Xk3uETfU5QO8hBIwUq08";
+
+  #[test]
+  fn test_supported_args() {
+    let args = FerronArgs::parse_from(vec![
+      "ferron",
+      "--config",
+      "/dev/null",
+      "--config-adapter",
+      "kdl",
+      "--module-config",
+      "--version",
+    ]);
+    assert!(args.module_config);
+    assert!(args.version);
+    assert_eq!(PathBuf::from("/dev/null"), args.config);
+    assert_eq!(Some(ConfigAdapter::Kdl), args.config_adapter);
+    assert_eq!(None, args.command);
+  }
+
+  #[test]
+  fn test_supported_args_short_options() {
+    let args = FerronArgs::parse_from(vec![
+      "ferron",
+      "-c",
+      "/dev/null",
+      "--config-adapter",
+      "kdl",
+      "--module-config",
+      "-V",
+    ]);
+    assert!(args.module_config);
+    assert!(args.version);
+    assert_eq!(PathBuf::from("/dev/null"), args.config);
+    assert_eq!(None, args.config_string);
+    assert_eq!(Some(ConfigAdapter::Kdl), args.config_adapter);
+    assert_eq!(None, args.command);
+  }
+
+  #[test]
+  fn test_supported_optional_args() {
+    let args = FerronArgs::parse_from(vec!["ferron"]);
+    assert!(!args.module_config);
+    assert!(!args.version);
+    assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
+    assert_eq!(None, args.config_string);
+    assert_eq!(None, args.config_adapter);
+    assert_eq!(None, args.command);
+  }
+
+  #[test]
+  fn test_supported_config_string_arg() {
+    let expected_string =
+      String::from(":8080 {\n  log \"/dev/stderr\"\n  error_log \"/dev/stderr\"\n  root \"/mnt/www\"\n}");
+    let args = FerronArgs::parse_from(vec!["ferron", "--config-string", &expected_string]);
+    assert!(!args.module_config);
+    assert!(!args.version);
+    assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
+    assert_eq!(Some(expected_string), args.config_string);
+    assert_eq!(None, args.config_adapter);
+    assert_eq!(None, args.command);
+  }
+
+  #[test]
+  fn test_supported_http_serve_default_args() {
+    let args = FerronArgs::parse_from(vec!["ferron", "serve"]);
+    assert!(!args.module_config);
+    assert!(!args.version);
+    assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
+    assert_eq!(None, args.config_string);
+    assert_eq!(None, args.config_adapter);
+    assert!(args.command.is_some());
+    match args.command.unwrap() {
+      Command::Serve(http_serve_args) => {
+        assert_eq!(String::from("127.0.0.1"), http_serve_args.listen_ip);
+        assert_eq!(3000, http_serve_args.port);
+        assert_eq!(PathBuf::from("."), http_serve_args.root);
+        assert_eq!(Vec::<String>::new(), http_serve_args.credential);
+        assert!(!http_serve_args.disable_brute_protection);
+        assert!(!http_serve_args.forward_proxy);
+        assert_eq!(LogOutput::Stdout, http_serve_args.log);
+        assert_eq!(LogOutput::Stderr, http_serve_args.error_log);
+      }
+    }
+  }
+
+  #[test]
+  fn test_supported_http_serve_args() {
+    let args = FerronArgs::parse_from(vec![
+      "ferron",
+      "serve",
+      "--listen-ip",
+      "0.0.0.0",
+      "--port",
+      "8080",
+      "--root",
+      "./wwwroot",
+      "--credential",
+      format!("test:{COMMON_TEST_PASSWORD}").as_str(),
+      "--credential",
+      format!("test2:{COMMON_TEST_PASSWORD}").as_str(),
+      "--disable-brute-protection",
+      "--forward-proxy",
+      "--log",
+      "off",
+      "--error-log",
+      "off",
+    ]);
+    assert!(!args.module_config);
+    assert!(!args.version);
+    assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
+    assert_eq!(None, args.config_string);
+    assert_eq!(None, args.config_adapter);
+    assert!(args.command.is_some());
+    match args.command.unwrap() {
+      Command::Serve(http_serve_args) => {
+        assert_eq!(String::from("0.0.0.0"), http_serve_args.listen_ip);
+        assert_eq!(8080, http_serve_args.port);
+        assert_eq!(PathBuf::from("./wwwroot"), http_serve_args.root);
+        assert_eq!(
+          vec![
+            format!("test:{COMMON_TEST_PASSWORD}"),
+            format!("test2:{COMMON_TEST_PASSWORD}")
+          ],
+          http_serve_args.credential
+        );
+        assert!(http_serve_args.disable_brute_protection);
+        assert!(http_serve_args.forward_proxy);
+        assert_eq!(LogOutput::Off, http_serve_args.log);
+        assert_eq!(LogOutput::Off, http_serve_args.error_log);
+      }
+    }
   }
 }

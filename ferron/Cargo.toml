@@ -117,7 +117,7 @@ regorus = { version = "0.5.0", default-features = false, features = [
 ]}
 
 # CLI & Configuration
-clap = { version = "4.5.38", features = ["cargo"] }
+clap = { version = "4.5.38", features = ["cargo", "derive"] }
 dirs = "6.0.0"
 
 # Performance & Utilities
@@ -129,6 +129,7 @@ smallvec = { version = "1.15.0", features = [
 
 # Build information
 shadow-rs = { version = "1.2.0", default-features = false }
+tempfile = "3.24.0"
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 # Process metrics
