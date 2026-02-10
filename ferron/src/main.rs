@@ -206,6 +206,8 @@ fn before_starting_server(
       ConfigAdapter::Kdl => "kdl",
       #[cfg(feature = "config-yaml-legacy")]
       ConfigAdapter::YamlLegacy => "yaml-legacy",
+      #[cfg(feature = "config-docker-auto")]
+      ConfigAdapter::DockerAuto => "docker-auto",
     }
   } else if args.config_string.is_some() {
     // When a config string is specified but no configuration adapter is specified, default to using kdl.
