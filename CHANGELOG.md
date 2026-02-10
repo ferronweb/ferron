@@ -2,6 +2,23 @@
 
 [View Ferron 1.x changelog](https://ferron.sh/changelog/v1)
 
+## Ferron 2.5.0
+
+**Released in February 10, 2026**
+
+- Added support for logging into standard I/O.
+- Added support for saving TLS certificates and private keys (when using automatic TLS functionality) into disk and executing commands afterwards.
+- Added support for sending `Forwarded` HTTP header to backend servers as a reverse proxy.
+- Added support for specifying configuration in command-line arguments.
+- Added the `ferron serve` subcommand.
+- Fixed TLS certificate not resolved for "localhost" SNI hostname.
+- Optimized the server configuration lookup performance.
+- Optimized the SNI certificate resolution performance.
+- Refreshed the default placeholder page design.
+- The server now differentiates between file types in directory listings.
+- The server now reuses threads when reloading the configuration, if possible.
+- The server now shuts down multiple threads at once when reloading the configuration.
+
 ## Ferron 2.4.1
 
 **Released in January 17, 2026**
