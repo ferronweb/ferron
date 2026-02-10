@@ -739,7 +739,7 @@ example.com {
   - This directive specifies whether to enable logging error logs to the standard output stream. Default: `error_log_stdout #false`
 - `error_log_stderr [enable_error_log_stderr: bool]` (_stdlog_ observability backend; Ferron UNRELEASED or newer)
   - This directive specifies whether to enable logging error logs to the standard error stream. Default: `error_log_stderr #false`
-  
+
 **Configuration example:**
 
 ```kdl
