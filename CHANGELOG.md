@@ -2,6 +2,12 @@
 
 [View Ferron 1.x changelog](https://ferron.sh/changelog/v1)
 
+## Ferron 2.5.1
+
+**Released in February 10, 2026**
+
+- Fixed graceful shutdowns when reloading the server configuration.
+
 ## Ferron 2.5.0
 
 **Released in February 10, 2026**
