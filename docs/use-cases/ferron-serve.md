@@ -1,5 +1,6 @@
 ---
-title: 'ferron serve' subcommand
+title: "'ferron serve' subcommand"
+description: "Using the `ferron serve` subcommand to serve files on the local filesystem without needing to write a configuration file."
 ---
 
 If you simply need to serve files on the local filesystem, you can
