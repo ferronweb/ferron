@@ -731,7 +731,15 @@ example.com {
   - This directive specifies the endpoint URL to be used for logging metrics into the OTLP (OpenTelemetry Protocol) endpoint. The `authorization` prop is a value for `Authorization` HTTP header, if HTTP protocol is used. The `protocol` prop specifies a protocol to use (`grpc` for gRPC, `http/protobuf` for HTTP with protobuf data, `http/json` for HTTP with JSON data). HTTP and HTTPS (only for HTTP-based protocols) URLs are supported. Default: `otlp_metrics #null protocol="grpc"`
 - `otlp_traces <otlp_traces_endpoint: string|null> [authorization=<otlp_traces_authorization: string>] [protocol=<otlp_traces_protocol: string>]` (_otlp_ observability backend; Ferron 2.2.0 or newer)
   - This directive specifies the endpoint URL to be used for logging traces into the OTLP (OpenTelemetry Protocol) endpoint. The `authorization` prop is a value for `Authorization` HTTP header, if HTTP protocol is used. The `protocol` prop specifies a protocol to use (`grpc` for gRPC, `http/protobuf` for HTTP with protobuf data, `http/json` for HTTP with JSON data). HTTP and HTTPS (only for HTTP-based protocols) URLs are supported. Default: `otlp_traces #null protocol="grpc"`
-
+- `log_stdout [enable_log_stdout: bool]` (_stdlog_ observability backend; Ferron UNRELEASED or newer)
+  - This directive specifies whether to enable logging HTTP response logs (access logs) to the standard output stream. Default: `log_stdout #false`
+- `log_stderr [enable_log_stderr: bool]` (_stdlog_ observability backend; Ferron UNRELEASED or newer)
+  - This directive specifies whether to enable logging HTTP response logs (access logs) to the standard error stream. Default: `log_stderr #false`
+- `error_log_stdout [enable_error_log_stdout: bool]` (_stdlog_ observability backend; Ferron UNRELEASED or newer)
+  - This directive specifies whether to enable logging error logs to the standard output stream. Default: `error_log_stdout #false`
+- `error_log_stderr [enable_error_log_stderr: bool]` (_stdlog_ observability backend; Ferron UNRELEASED or newer)
+  - This directive specifies whether to enable logging error logs to the standard error stream. Default: `error_log_stderr #false`
+  
 **Configuration example:**
 
 ```kdl
