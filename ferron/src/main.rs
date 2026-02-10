@@ -11,14 +11,14 @@ mod util;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
 use async_channel::{Receiver, Sender};
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::Parser;
 use ferron_common::logging::{ErrorLogger, LogMessage};
 use ferron_common::{get_entry, get_value};
 use ferron_load_modules::{obtain_module_loaders, obtain_observability_backend_loaders};
@@ -43,6 +43,7 @@ use crate::handler::{create_http_handler, ReloadableHandlerData};
 use crate::listener_handler_communication::ConnectionData;
 use crate::listeners::{create_quic_listener, create_tcp_listener};
 use crate::setup::acme::background_acme_task;
+use crate::setup::cli::{Command, ConfigAdapter, FerronArgs, LogOutput};
 use crate::setup::tls::{
   handle_automatic_tls, handle_manual_tls, handle_nonencrypted_ports, manual_tls_entry, read_default_port,
   resolve_sni_hostname, should_skip_server, TlsBuildContext,
@@ -922,13 +923,6 @@ fn determine_default_configuration_adapter(_path: &Path) -> &'static str {
   "kdl"
 }
 
-#[derive(Debug, Clone, PartialEq, ValueEnum)]
-enum ConfigAdapter {
-  Kdl,
-  #[cfg(feature = "config-yaml-legacy")]
-  YamlLegacy,
-}
-
 fn print_version() {
   // Print the server version and build information
   println!("Ferron {}", build::PKG_VERSION);
@@ -940,85 +934,6 @@ fn print_version() {
   if shadow_rs::is_debug() {
     println!("WARNING: This is a debug build. It is not recommended for production use.");
   }
-}
-
-#[derive(ValueEnum, Debug, Clone, PartialEq)]
-enum LogOutput {
-  Stdout,
-  Stderr,
-  Off,
-}
-
-#[derive(Args, Debug, Clone, PartialEq)]
-struct ServeArgs {
-  /// The listening IP to use.
-  #[arg(short, long, default_value = "127.0.0.1")]
-  listen_ip: String,
-
-  /// The port to use.
-  #[arg(short, long, default_value = "3000")]
-  port: u16,
-
-  /// The root directory to serve.
-  #[arg(short, long, default_value = ".")]
-  root: PathBuf,
-
-  /// Basic authentication credentials for authorized users. The credential value must
-  /// be in the form "${user}:${hashed_password}" where the "${hashed_password}" is from
-  /// the ferron-passwd program or from any program using the password-auth generate_hash()
-  /// macro (see https://docs.rs/password-auth/latest/password_auth/fn.generate_hash.html).
-  #[arg(short, long)]
-  credential: Vec<String>,
-
-  /// Whether to disable brute-force password protection.
-  #[arg(long)]
-  disable_brute_protection: bool,
-
-  /// Whether to start the server as a forward proxy.
-  #[arg(long)]
-  forward_proxy: bool,
-
-  /// Where to output logs.
-  #[arg(long, default_value = "stdout")]
-  log: LogOutput,
-
-  /// Where to output error logs.
-  #[arg(long, default_value = "stderr")]
-  error_log: LogOutput,
-}
-
-#[derive(Subcommand, Debug, Clone, PartialEq)]
-enum Command {
-  /// Utility command to start up a basic HTTP server.
-  Serve(ServeArgs),
-}
-
-/// A fast, memory-safe web server written in Rust
-#[derive(Parser, Debug, PartialEq)]
-#[command(about, long_about = None)]
-struct FerronArgs {
-  /// The path to the server configuration file
-  #[arg(short, long, default_value = "./ferron.kdl")]
-  config: PathBuf,
-
-  /// The path to the server configuration file
-  #[arg(long)]
-  config_string: Option<String>,
-
-  /// The configuration adapter to use
-  #[arg(long, value_enum)]
-  config_adapter: Option<ConfigAdapter>,
-
-  /// Prints the used compile-time module configuration (`ferron-build.yaml` or `ferron-build-override.yaml` in the Ferron source) and exits
-  #[arg(long)]
-  module_config: bool,
-
-  /// Print version and build information
-  #[arg(short = 'V', long)]
-  version: bool,
-
-  #[command(subcommand)]
-  command: Option<Command>,
 }
 
 /// The main entry point of the application
@@ -1047,146 +962,5 @@ fn main() {
   if let Err(err) = before_starting_server(args, configuration_adapters) {
     eprintln!("Error while running a server: {err}");
     std::process::exit(1);
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  // The hash here is for the password '123?45>6'.
-  const COMMON_TEST_PASSWORD: &str =
-    "$argon2id$v=19$m=19456,t=2,p=1$emTillHaS3OqFuvITdXxzg$G00heP8QSXk5H/ruTiLt302Xk3uETfU5QO8hBIwUq08";
-
-  #[test]
-  fn test_supported_args() {
-    let args = FerronArgs::parse_from(vec![
-      "ferron",
-      "--config",
-      "/dev/null",
-      "--config-adapter",
-      "kdl",
-      "--module-config",
-      "--version",
-    ]);
-    assert!(args.module_config);
-    assert!(args.version);
-    assert_eq!(PathBuf::from("/dev/null"), args.config);
-    assert_eq!(Some(ConfigAdapter::Kdl), args.config_adapter);
-    assert_eq!(None, args.command);
-  }
-
-  #[test]
-  fn test_supported_args_short_options() {
-    let args = FerronArgs::parse_from(vec![
-      "ferron",
-      "-c",
-      "/dev/null",
-      "--config-adapter",
-      "kdl",
-      "--module-config",
-      "-V",
-    ]);
-    assert!(args.module_config);
-    assert!(args.version);
-    assert_eq!(PathBuf::from("/dev/null"), args.config);
-    assert_eq!(None, args.config_string);
-    assert_eq!(Some(ConfigAdapter::Kdl), args.config_adapter);
-    assert_eq!(None, args.command);
-  }
-
-  #[test]
-  fn test_supported_optional_args() {
-    let args = FerronArgs::parse_from(vec!["ferron"]);
-    assert!(!args.module_config);
-    assert!(!args.version);
-    assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
-    assert_eq!(None, args.config_string);
-    assert_eq!(None, args.config_adapter);
-    assert_eq!(None, args.command);
-  }
-
-  #[test]
-  fn test_supported_config_string_arg() {
-    let expected_string =
-      String::from(":8080 {\n  log \"/dev/stderr\"\n  error_log \"/dev/stderr\"\n  root \"/mnt/www\"\n}");
-    let args = FerronArgs::parse_from(vec!["ferron", "--config-string", &expected_string]);
-    assert!(!args.module_config);
-    assert!(!args.version);
-    assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
-    assert_eq!(Some(expected_string), args.config_string);
-    assert_eq!(None, args.config_adapter);
-    assert_eq!(None, args.command);
-  }
-
-  #[test]
-  fn test_supported_http_serve_default_args() {
-    let args = FerronArgs::parse_from(vec!["ferron", "serve"]);
-    assert!(!args.module_config);
-    assert!(!args.version);
-    assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
-    assert_eq!(None, args.config_string);
-    assert_eq!(None, args.config_adapter);
-    assert!(args.command.is_some());
-    match args.command.unwrap() {
-      Command::Serve(http_serve_args) => {
-        assert_eq!(String::from("127.0.0.1"), http_serve_args.listen_ip);
-        assert_eq!(3000, http_serve_args.port);
-        assert_eq!(PathBuf::from("."), http_serve_args.root);
-        assert_eq!(Vec::<String>::new(), http_serve_args.credential);
-        assert!(!http_serve_args.disable_brute_protection);
-        assert!(!http_serve_args.forward_proxy);
-        assert_eq!(LogOutput::Stdout, http_serve_args.log);
-        assert_eq!(LogOutput::Stderr, http_serve_args.error_log);
-      }
-    }
-  }
-
-  #[test]
-  fn test_supported_http_serve_args() {
-    let args = FerronArgs::parse_from(vec![
-      "ferron",
-      "serve",
-      "--listen-ip",
-      "0.0.0.0",
-      "--port",
-      "8080",
-      "--root",
-      "./wwwroot",
-      "--credential",
-      format!("test:{COMMON_TEST_PASSWORD}").as_str(),
-      "--credential",
-      format!("test2:{COMMON_TEST_PASSWORD}").as_str(),
-      "--disable-brute-protection",
-      "--forward-proxy",
-      "--log",
-      "off",
-      "--error-log",
-      "off",
-    ]);
-    assert!(!args.module_config);
-    assert!(!args.version);
-    assert_eq!(PathBuf::from("./ferron.kdl"), args.config);
-    assert_eq!(None, args.config_string);
-    assert_eq!(None, args.config_adapter);
-    assert!(args.command.is_some());
-    match args.command.unwrap() {
-      Command::Serve(http_serve_args) => {
-        assert_eq!(String::from("0.0.0.0"), http_serve_args.listen_ip);
-        assert_eq!(8080, http_serve_args.port);
-        assert_eq!(PathBuf::from("./wwwroot"), http_serve_args.root);
-        assert_eq!(
-          vec![
-            format!("test:{COMMON_TEST_PASSWORD}"),
-            format!("test2:{COMMON_TEST_PASSWORD}")
-          ],
-          http_serve_args.credential
-        );
-        assert!(http_serve_args.disable_brute_protection);
-        assert!(http_serve_args.forward_proxy);
-        assert_eq!(LogOutput::Off, http_serve_args.log);
-        assert_eq!(LogOutput::Off, http_serve_args.error_log);
-      }
-    }
   }
 }
