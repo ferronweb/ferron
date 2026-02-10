@@ -26,6 +26,7 @@ use rustls::server::Acceptor;
 use rustls::ServerConfig;
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
+use tokio::runtime::Runtime;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::LazyConfigAcceptor;
 use tokio_util::sync::CancellationToken;
@@ -61,6 +62,8 @@ pub struct ReloadableHandlerData {
   pub http3_enabled: bool,
   /// Whether PROXY protocol is enabled
   pub enable_proxy_protocol: bool,
+  /// The secondary Tokio runtime associated with the data
+  pub secondary_runtime: Arc<Runtime>,
 }
 
 /// Tokio local executor
@@ -173,6 +176,7 @@ async fn http_handler_fn(
       acme_tls_alpn_01_configs,
       acme_http_01_resolvers,
       enable_proxy_protocol,
+      secondary_runtime,
     } = &**reloadable_data.load();
     let configurations = configurations.clone();
     let tls_config = if matches!(
@@ -196,6 +200,7 @@ async fn http_handler_fn(
     let shutdown_rx_clone = shutdown_rx.clone();
     let http3_enabled = *http3_enabled;
     let enable_proxy_protocol = *enable_proxy_protocol;
+    let secondary_runtime = secondary_runtime.clone();
     let graceful_shutdown_token = graceful_shutdown_token.load().clone();
     crate::runtime::spawn(async move {
       match conn_data.connection {
@@ -236,6 +241,7 @@ async fn http_handler_fn(
             enable_proxy_protocol,
             shutdown_rx_clone,
             graceful_shutdown_token,
+            secondary_runtime,
           )
           .await;
         }
@@ -248,6 +254,7 @@ async fn http_handler_fn(
             connections_references_cloned,
             shutdown_rx_clone,
             graceful_shutdown_token,
+            secondary_runtime,
           )
           .await;
         }
@@ -302,6 +309,7 @@ async fn http_tcp_handler_fn(
   enable_proxy_protocol: bool,
   shutdown_rx: CancellationToken,
   graceful_shutdown_token: Arc<CancellationToken>,
+  secondary_runtime: Arc<Runtime>,
 ) {
   let _connection_reference = Arc::downgrade(&connection_reference);
   #[cfg(feature = "runtime-monoio")]
@@ -487,6 +495,7 @@ async fn http_tcp_handler_fn(
             request_parts,
             request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
           );
+          let _runtime = secondary_runtime.clone();
           request_handler(
             request,
             client_address,
@@ -570,6 +579,7 @@ async fn http_tcp_handler_fn(
               request_parts,
               request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
             );
+            let _runtime = secondary_runtime.clone();
             request_handler(
               request,
               client_address,
@@ -657,6 +667,7 @@ async fn http_tcp_handler_fn(
             request_parts,
             request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
           );
+          let _runtime = secondary_runtime.clone();
           request_handler(
             request,
             client_address,
@@ -722,6 +733,7 @@ async fn http_quic_handler_fn(
   connection_reference: Arc<()>,
   shutdown_rx: CancellationToken,
   graceful_shutdown_token: Arc<CancellationToken>,
+  secondary_runtime: Arc<Runtime>,
 ) {
   match connection_attempt.await {
     Ok(connection) => {
@@ -763,6 +775,7 @@ async fn http_quic_handler_fn(
           Ok(Some(resolver)) => {
             let configurations = configurations.clone();
             let connection_reference = connection_reference.clone();
+            let secondary_runtime = secondary_runtime.clone();
             crate::runtime::spawn(async move {
               let _connection_reference = connection_reference;
               let (request, stream) = match resolver.resolve_request().await {
@@ -809,6 +822,7 @@ async fn http_quic_handler_fn(
               let request_body = BodyExt::boxed(StreamBody::new(request_body_stream));
               let (request_parts, _) = request.into_parts();
               let request = Request::from_parts(request_parts, request_body);
+              let _secondary_runtime = secondary_runtime.clone();
               let mut response = match request_handler(
                 request,
                 client_address,

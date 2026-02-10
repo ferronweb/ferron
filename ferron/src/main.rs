@@ -214,9 +214,6 @@ fn before_starting_server(
     determine_default_configuration_adapter(configuration_path)
   };
 
-  // Old handler shutdown channels and secondary runtime
-  let mut old_runtime: Option<tokio::runtime::Runtime> = None;
-
   // Obtain the configuration adapter
   let configuration_adapter = configuration_adapters
     .get(configuration_adapter)
@@ -239,14 +236,16 @@ fn before_starting_server(
     let mut observability_backend_loaders = obtain_observability_backend_loaders();
 
     // Create a secondary Tokio runtime
-    let secondary_runtime = tokio::runtime::Builder::new_multi_thread()
-      .worker_threads(match available_parallelism / 2 {
-        0 => 1,
-        non_zero => non_zero,
-      })
-      .thread_name("Secondary runtime")
-      .enable_all()
-      .build()?;
+    let secondary_runtime = Arc::new(
+      tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(match available_parallelism / 2 {
+          0 => 1,
+          non_zero => non_zero,
+        })
+        .thread_name("Secondary runtime")
+        .enable_all()
+        .build()?,
+    );
 
     // Load the configuration
     let configs_to_process = configuration_adapter.load_configuration(configuration_path)?;
@@ -270,9 +269,6 @@ fn before_starting_server(
 
     // Reference to the secondary Tokio runtime
     let secondary_runtime_ref = &secondary_runtime;
-
-    // Mutable reference to the old runtime
-    let old_runtime_ref = &mut old_runtime;
 
     // Execute the rest
     let execute_rest = move || {
@@ -696,6 +692,7 @@ fn before_starting_server(
         acme_tls_alpn_01_configs: Arc::new(acme_tls_alpn_01_configs),
         acme_http_01_resolvers: tls_build_ctx.acme_http_01_resolvers,
         enable_proxy_protocol,
+        secondary_runtime: secondary_runtime_ref.to_owned(),
       };
       let reloadable_handler_data = if let Some(data) = SERVER_CONFIG_ARCSWAP.get().cloned() {
         data.swap(Arc::new(inner_handler_data));
@@ -718,11 +715,6 @@ fn before_starting_server(
             let _ = graceful_shutdown.send_blocking(());
           }
         }
-      }
-
-      // Shut down secondary runtime
-      if let Some(secondary_runtime) = old_runtime_ref.take() {
-        drop(secondary_runtime);
       }
 
       let acme_on_demand_rx = tls_build_ctx.acme_on_demand_rx;
@@ -849,7 +841,6 @@ fn before_starting_server(
     match execute_rest() {
       Ok(to_restart) => {
         if to_restart {
-          old_runtime = Some(secondary_runtime);
           first_startup = false;
           println!("Reloading the server configuration...");
         } else {
