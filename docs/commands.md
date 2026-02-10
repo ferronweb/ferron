@@ -21,7 +21,7 @@ Options:
   -c, --config <CONFIG>
           The path to the server configuration file [default: ./ferron.kdl]
       --config-string <CONFIG_STRING>
-          The path to the server configuration file
+          The string containing the server configuration
       --config-adapter <CONFIG_ADAPTER>
           The configuration adapter to use [possible values: kdl, yaml-legacy]
       --module-config

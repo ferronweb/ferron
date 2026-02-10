@@ -68,7 +68,7 @@ pub struct FerronArgs {
   #[arg(short, long, default_value = "./ferron.kdl")]
   pub config: PathBuf,
 
-  /// The path to the server configuration file
+  /// The string containing the server configuration
   #[arg(long)]
   pub config_string: Option<String>,
 
