@@ -1,6 +1,6 @@
 [package]
 name = "ferron-load-modules"
-version = "2.4.1"
+version = "2.5.0"
 edition = "2021"
 
 [dependencies]
@@ -31,7 +31,8 @@ ferron-dns-builtin = { workspace = true, features = [
 ] }
 ferron-observability-builtin = { workspace = true, features = [
     "logfile",
-    "otlp"
+    "otlp",
+    "stdlog"
 ] }
 anyhow = "1.0.98"
 

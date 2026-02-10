@@ -40,6 +40,7 @@ enum CachedInstrument {
 /// OTLP observability backend loader
 pub struct OtlpObservabilityBackendLoader {
   cache: ModuleCache<OtlpObservabilityBackend>,
+  join_handles: Vec<tokio::task::JoinHandle<()>>,
 }
 
 impl Default for OtlpObservabilityBackendLoader {
@@ -59,6 +60,7 @@ impl OtlpObservabilityBackendLoader {
         "otlp_metrics",
         "otlp_traces",
       ]),
+      join_handles: Vec::new(),
     }
   }
 }
@@ -73,7 +75,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
     Ok(
       self
         .cache
-        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |config| {
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |config| {
           // Configuration properties
           let otlp_verify = !get_value!("otlp_no_verification", config)
             .and_then(|v| v.as_bool())
@@ -131,7 +133,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
             let hyper_tls_config = hyper_tls_config.clone();
             let (logging_tx, logging_rx) = async_channel::unbounded::<LogMessage>();
             logging_tx_option = Some(logging_tx);
-            secondary_runtime.spawn(async move {
+            let join_handle = secondary_runtime.spawn(async move {
               let log_provider = match match logs_protocol.as_deref() {
                 Some("http/protobuf") | Some("http/json") => opentelemetry_otlp::LogExporter::builder()
                   .with_http()
@@ -200,6 +202,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                 tokio::task::spawn_blocking(move || log_provider.shutdown().unwrap_or_default());
               }
             });
+            self.join_handles.push(join_handle);
           }
 
           // Metrics
@@ -223,7 +226,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
             let hyper_tls_config = hyper_tls_config.clone();
             let (metrics_tx, metrics_rx) = async_channel::unbounded::<Metric>();
             metrics_tx_option = Some(metrics_tx);
-            secondary_runtime.spawn(async move {
+            let join_handle = secondary_runtime.spawn(async move {
               let metric_provider = match match metrics_protocol.as_deref() {
                 Some("http/protobuf") | Some("http/json") => opentelemetry_otlp::MetricExporter::builder()
                   .with_http()
@@ -451,6 +454,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                 tokio::task::spawn_blocking(move || metric_provider.shutdown().unwrap_or_default());
               }
             });
+            self.join_handles.push(join_handle);
           }
 
           // Traces
@@ -475,7 +479,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
             let (traces_channel_tx, traces_channel_rx) = async_channel::unbounded::<Sender<TraceSignal>>();
             let (traces_request_tx, traces_request_rx) = async_channel::unbounded::<()>();
             traces_channel_option = Some((traces_request_tx, traces_channel_rx));
-            secondary_runtime.spawn(async move {
+            let join_handle = secondary_runtime.spawn(async move {
               let traces_provider = match match traces_protocol.as_deref() {
                 Some("http/protobuf") | Some("http/json") => opentelemetry_otlp::SpanExporter::builder()
                   .with_http()
@@ -566,6 +570,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
                 tokio::task::spawn_blocking(move || traces_provider.shutdown().unwrap_or_default());
               }
             });
+            self.join_handles.push(join_handle);
           }
 
           Ok(Arc::new(OtlpObservabilityBackend {
@@ -668,6 +673,14 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
     }
 
     Ok(())
+  }
+}
+
+impl Drop for OtlpObservabilityBackendLoader {
+  fn drop(&mut self) {
+    while let Some(join_handle) = self.join_handles.pop() {
+      join_handle.abort();
+    }
   }
 }
 

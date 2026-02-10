@@ -1,6 +1,10 @@
 services:
   # The web server to test
   ferron:
+    networks:
+      default:
+        aliases:
+          - sni.ferron
     build:
       context: ../../..
       dockerfile: Dockerfile.test

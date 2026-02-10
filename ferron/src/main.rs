@@ -5,57 +5,51 @@ mod listener_handler_communication;
 mod listeners;
 mod request_handler;
 mod runtime;
+mod setup;
 mod util;
 
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::path::Path;
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
+use arc_swap::ArcSwap;
 use async_channel::{Receiver, Sender};
-use base64::Engine;
-use clap::{Arg, ArgAction, ArgMatches, Command};
+use clap::Parser;
 use ferron_common::logging::{ErrorLogger, LogMessage};
-use ferron_common::{get_entry, get_value, get_values};
-use ferron_load_modules::{get_dns_provider, obtain_module_loaders, obtain_observability_backend_loaders};
+use ferron_common::{get_entry, get_value};
+use ferron_load_modules::{obtain_module_loaders, obtain_observability_backend_loaders};
 use human_panic::{setup_panic, Metadata};
-use instant_acme::{ChallengeType, ExternalAccountKey, LetsEncrypt};
 use mimalloc::MiMalloc;
-use rustls::client::WebPkiServerVerifier;
-use rustls::crypto::aws_lc_rs::cipher_suite::*;
-use rustls::crypto::aws_lc_rs::default_provider;
-use rustls::crypto::aws_lc_rs::kx_group::*;
 use rustls::server::{ResolvesServerCert, WebPkiClientVerifier};
-use rustls::sign::CertifiedKey;
-use rustls::version::{TLS12, TLS13};
-use rustls::{ClientConfig, RootCertStore, ServerConfig};
+use rustls::{RootCertStore, ServerConfig};
 use rustls_native_certs::load_native_certs;
-use rustls_platform_verifier::BuilderVerifierExt;
 use shadow_rs::shadow;
+use tempfile::NamedTempFile;
 use tokio_util::sync::CancellationToken;
-use xxhash_rust::xxh3::xxh3_128;
 
 use crate::acme::{
-  add_domain_to_cache, check_certificate_validity_or_install_cached, convert_on_demand_config, get_cached_domains,
-  provision_certificate, AcmeCache, AcmeConfig, AcmeOnDemandConfig, AcmeResolver, TlsAlpn01Resolver,
-  ACME_TLS_ALPN_NAME,
+  check_certificate_validity_or_install_cached, convert_on_demand_config, get_cached_domains, ACME_TLS_ALPN_NAME,
 };
 use crate::config::adapters::ConfigurationAdapter;
 use crate::config::processing::{
   load_modules, merge_duplicates, premerge_configuration, remove_and_add_global_configuration,
 };
 use crate::config::ServerConfigurations;
-use crate::handler::create_http_handler;
+use crate::handler::{create_http_handler, ReloadableHandlerData};
 use crate::listener_handler_communication::ConnectionData;
 use crate::listeners::{create_quic_listener, create_tcp_listener};
-use crate::util::{
-  is_localhost, load_certs, load_private_key, match_hostname, CustomSniResolver, NoServerVerifier,
-  OneCertifiedKeyResolver,
+use crate::setup::acme::background_acme_task;
+use crate::setup::cli::{Command, ConfigAdapter, FerronArgs, LogOutput};
+use crate::setup::tls::{
+  handle_automatic_tls, handle_manual_tls, handle_nonencrypted_ports, manual_tls_entry, read_default_port,
+  resolve_sni_hostname, should_skip_server, TlsBuildContext,
 };
+use crate::setup::tls_single::{init_crypto_provider, set_tls_version};
+use crate::util::{load_certs, MultiCancel};
 
 // Set the global allocator to use mimalloc for performance optimization
 #[global_allocator]
@@ -63,76 +57,164 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 shadow!(build);
 
-static LISTENER_HANDLER_CHANNEL: LazyLock<Arc<(Sender<ConnectionData>, Receiver<ConnectionData>)>> =
+type LazyLockArc<T> = LazyLock<Arc<T>>;
+type LazyLockMutex<T> = LazyLockArc<Mutex<T>>;
+
+static LISTENER_HANDLER_CHANNEL: LazyLockArc<(Sender<ConnectionData>, Receiver<ConnectionData>)> =
   LazyLock::new(|| Arc::new(async_channel::unbounded()));
-#[allow(clippy::type_complexity)]
-static TCP_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, CancellationToken>>>> =
+static TCP_LISTENERS: LazyLockMutex<HashMap<SocketAddr, CancellationToken>> =
   LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
 #[allow(clippy::type_complexity)]
-static QUIC_LISTENERS: LazyLock<Arc<Mutex<HashMap<SocketAddr, (CancellationToken, Sender<Arc<ServerConfig>>)>>>> =
+static QUIC_LISTENERS: LazyLockMutex<HashMap<SocketAddr, (CancellationToken, Sender<Arc<ServerConfig>>)>> =
   LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
-static URING_ENABLED: LazyLock<Arc<Mutex<Option<bool>>>> = LazyLock::new(|| Arc::new(Mutex::new(None)));
-static LISTENER_LOGGING_CHANNEL: LazyLock<Arc<(Sender<LogMessage>, Receiver<LogMessage>)>> =
+static HANDLERS: LazyLockMutex<Vec<(CancellationToken, Sender<()>)>> =
+  LazyLock::new(|| Arc::new(Mutex::new(Vec::new())));
+static SERVER_CONFIG_ARCSWAP: OnceLock<Arc<ArcSwap<ReloadableHandlerData>>> = OnceLock::new();
+static URING_ENABLED: LazyLockMutex<Option<bool>> = LazyLock::new(|| Arc::new(Mutex::new(None)));
+static LISTENER_LOGGING_CHANNEL: LazyLockArc<(Sender<LogMessage>, Receiver<LogMessage>)> =
   LazyLock::new(|| Arc::new(async_channel::unbounded()));
 
 /// Handles shutdown signals (SIGHUP and CTRL+C) and returns whether to continue running
 fn handle_shutdown_signals(runtime: &tokio::runtime::Runtime) -> bool {
   runtime.block_on(async move {
-    let (continue_tx, continue_rx) = async_channel::unbounded::<bool>();
-    let cancel_token = tokio_util::sync::CancellationToken::new();
-
     #[cfg(unix)]
-    {
-      let cancel_token_clone = cancel_token.clone();
-      let continue_tx_clone = continue_tx.clone();
-      tokio::spawn(async move {
-        if let Ok(mut signal) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()) {
-          tokio::select! {
-            _ = signal.recv() => {
-              continue_tx_clone.send(true).await.unwrap_or_default();
-            }
-            _ = cancel_token_clone.cancelled() => {}
-          }
-        }
-      });
-    }
-
-    let cancel_token_clone = cancel_token.clone();
-    tokio::spawn(async move {
-      tokio::select! {
-        result = tokio::signal::ctrl_c() => {
-          if result.is_ok() {
-            continue_tx.send(false).await.unwrap_or_default();
-          }
-        }
-        _ = cancel_token_clone.cancelled() => {}
+    let configuration_reload_future = async {
+      if let Ok(mut signal) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()) {
+        signal.recv().await
+      } else {
+        futures_util::future::pending().await
       }
-    });
+    };
+    #[cfg(not(unix))]
+    let configuration_reload_future = async { futures_util::future::pending::<Option<()>>().await };
 
-    let continue_running = continue_rx.recv().await.unwrap_or(false);
-    cancel_token.cancel();
+    let shutdown_future = async {
+      if tokio::signal::ctrl_c().await.is_err() {
+        futures_util::future::pending().await
+      }
+    };
+
+    let continue_running = tokio::select! {
+      _ = shutdown_future => {
+        false
+      }
+      _ = configuration_reload_future => {
+        true
+      }
+    };
     continue_running
   })
 }
 
 /// Function called before starting a server
 fn before_starting_server(
-  args: ArgMatches,
+  args: FerronArgs,
   configuration_adapters: HashMap<String, Box<dyn ConfigurationAdapter + Send + Sync>>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
+  // When a config string is specified, a tempfile is written with the contents of the string and then
+  // the tempfile is used as the configuration path.
+  let temp_config_file: NamedTempFile;
   // Obtain the argument values
-  let configuration_path: &Path = args
-    .get_one::<PathBuf>("config")
-    .ok_or(anyhow::anyhow!("Cannot obtain the configuration path"))?
-    .as_path();
-  let configuration_adapter: &str = args
-    .get_one::<String>("config-adapter")
-    .map_or(determine_default_configuration_adapter(configuration_path), |s| {
-      s as &str
-    });
-
-  // Old handler shutdown channels and secondary runtime
-  let mut old_runtime: Option<(Vec<CancellationToken>, tokio::runtime::Runtime)> = None;
+  let configuration_path: &Path = if let Some(config_string) = args.config_string.as_ref() {
+    temp_config_file = NamedTempFile::new()?;
+    std::fs::write(temp_config_file.path(), config_string)?;
+    temp_config_file.path()
+  } else if let Some(command) = args.command.as_ref() {
+    match command {
+      Command::Serve(http_serve_args) => {
+        let mut config_string = format!(
+          "* {{\n  listen_ip \"{}\"\n  default_http_port {}",
+          http_serve_args.listen_ip, http_serve_args.port
+        );
+        if !http_serve_args.credential.is_empty() {
+          let mut users = Vec::<String>::new();
+          for credential in http_serve_args.credential.iter() {
+            let (user, hashed_password) = credential
+              .rsplit_once(':')
+              .ok_or(anyhow::anyhow!("Invalid credential format: {credential}"))?;
+            users.push(user.to_owned());
+            config_string.push_str(
+              format!(
+                "\n  user \"{}\" \"{}\"",
+                user.escape_default(),
+                hashed_password.escape_default()
+              )
+              .as_str(),
+            );
+          }
+          if http_serve_args.forward_proxy {
+            config_string.push_str(
+              format!(
+                "\n  forward_proxy_auth users=\"{}\" brute_protection=#{}",
+                users.join(",").escape_default(),
+                http_serve_args.disable_brute_protection
+              )
+              .as_str(),
+            );
+          } else {
+            config_string.push_str(
+              format!(
+                "\n  status 401 users=\"{}\" brute_protection=#{}",
+                users.join(",").escape_default(),
+                http_serve_args.disable_brute_protection
+              )
+              .as_str(),
+            );
+          }
+        }
+        match http_serve_args.log {
+          LogOutput::Stdout => {
+            config_string.push_str("\n  log_stdout");
+          }
+          LogOutput::Stderr => {
+            config_string.push_str("\n  log_stderr");
+          }
+          LogOutput::Off => {}
+        }
+        match http_serve_args.error_log {
+          LogOutput::Stdout => {
+            config_string.push_str("\n  error_log_stdout");
+          }
+          LogOutput::Stderr => {
+            config_string.push_str("\n  error_log_stderr");
+          }
+          LogOutput::Off => {}
+        }
+        if http_serve_args.forward_proxy {
+          config_string.push_str("\n  forward_proxy");
+        } else {
+          config_string.push_str(
+            format!(
+              "\n  root \"{}\"",
+              http_serve_args.root.to_string_lossy().into_owned().escape_default()
+            )
+            .as_str(),
+          );
+          config_string.push_str("\n  directory_listing #true");
+        }
+        config_string.push_str("\n}\n");
+        temp_config_file = NamedTempFile::new()?;
+        std::fs::write(temp_config_file.path(), config_string)?;
+        temp_config_file.path()
+      }
+    }
+  } else {
+    args.config.as_path()
+  };
+  let configuration_adapter: &str = if let Some(config_adapter) = args.config_adapter.as_ref() {
+    match config_adapter {
+      ConfigAdapter::Kdl => "kdl",
+      #[cfg(feature = "config-yaml-legacy")]
+      ConfigAdapter::YamlLegacy => "yaml-legacy",
+      #[cfg(feature = "config-docker-auto")]
+      ConfigAdapter::DockerAuto => "docker-auto",
+    }
+  } else if args.config_string.is_some() {
+    // When a config string is specified but no configuration adapter is specified, default to using kdl.
+    "kdl"
+  } else {
+    determine_default_configuration_adapter(configuration_path)
+  };
 
   // Obtain the configuration adapter
   let configuration_adapter = configuration_adapters
@@ -156,14 +238,16 @@ fn before_starting_server(
     let mut observability_backend_loaders = obtain_observability_backend_loaders();
 
     // Create a secondary Tokio runtime
-    let secondary_runtime = tokio::runtime::Builder::new_multi_thread()
-      .worker_threads(match available_parallelism / 2 {
-        0 => 1,
-        non_zero => non_zero,
-      })
-      .thread_name("Secondary runtime")
-      .enable_all()
-      .build()?;
+    let secondary_runtime = Arc::new(
+      tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(match available_parallelism / 2 {
+          0 => 1,
+          non_zero => non_zero,
+        })
+        .thread_name("Secondary runtime")
+        .enable_all()
+        .build()?,
+    );
 
     // Load the configuration
     let configs_to_process = configuration_adapter.load_configuration(configuration_path)?;
@@ -188,9 +272,6 @@ fn before_starting_server(
     // Reference to the secondary Tokio runtime
     let secondary_runtime_ref = &secondary_runtime;
 
-    // Mutable reference to the old runtime
-    let old_runtime_ref = &mut old_runtime;
-
     // Execute the rest
     let execute_rest = move || {
       if let Some(first_module_error) = first_module_error {
@@ -214,60 +295,7 @@ fn before_starting_server(
       }
 
       // Configure cryptography provider for Rustls
-      let mut crypto_provider = default_provider();
-
-      // Configure cipher suites
-      let cipher_suite: Vec<&config::ServerConfigurationValue> = global_configuration
-        .as_deref()
-        .map_or(vec![], |c| get_values!("tls_cipher_suite", c));
-      if !cipher_suite.is_empty() {
-        let mut cipher_suites = Vec::new();
-        let cipher_suite_iter = cipher_suite.iter();
-        for cipher_suite_config in cipher_suite_iter {
-          if let Some(cipher_suite) = cipher_suite_config.as_str() {
-            let cipher_suite_to_add = match cipher_suite {
-              "TLS_AES_128_GCM_SHA256" => TLS13_AES_128_GCM_SHA256,
-              "TLS_AES_256_GCM_SHA384" => TLS13_AES_256_GCM_SHA384,
-              "TLS_CHACHA20_POLY1305_SHA256" => TLS13_CHACHA20_POLY1305_SHA256,
-              "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256" => TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-              "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384" => TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-              "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256" => TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-              "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256" => TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-              "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384" => TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-              "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256" => TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-              _ => Err(anyhow::anyhow!(
-                "The \"{}\" cipher suite is not supported",
-                cipher_suite
-              ))?,
-            };
-            cipher_suites.push(cipher_suite_to_add);
-          }
-        }
-        crypto_provider.cipher_suites = cipher_suites;
-      }
-
-      // Configure ECDH curves
-      let ecdh_curves = global_configuration
-        .as_deref()
-        .map_or(vec![], |c| get_values!("tls_ecdh_curve", c));
-      if !ecdh_curves.is_empty() {
-        let mut kx_groups = Vec::new();
-        let ecdh_curves_iter = ecdh_curves.iter();
-        for ecdh_curve_config in ecdh_curves_iter {
-          if let Some(ecdh_curve) = ecdh_curve_config.as_str() {
-            let kx_group_to_add = match ecdh_curve {
-              "secp256r1" => SECP256R1,
-              "secp384r1" => SECP384R1,
-              "x25519" => X25519,
-              "x25519mklem768" => X25519MLKEM768,
-              "mklem768" => MLKEM768,
-              _ => Err(anyhow::anyhow!("The \"{}\" ECDH curve is not supported", ecdh_curve))?,
-            };
-            kx_groups.push(kx_group_to_add);
-          }
-        }
-        crypto_provider.kx_groups = kx_groups;
-      }
+      let crypto_provider = init_crypto_provider(global_configuration.as_deref())?;
 
       // Install a process-wide cryptography provider. If it fails, then error it out.
       if crypto_provider.clone().install_default().is_err() && first_startup {
@@ -278,38 +306,8 @@ fn before_starting_server(
 
       // Build TLS configuration
       let tls_config_builder_wants_versions = ServerConfig::builder_with_provider(crypto_provider.clone());
-
-      let min_tls_version_option = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("tls_min_version", c))
-        .and_then(|v| v.as_str());
-      let max_tls_version_option = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("tls_max_version", c))
-        .and_then(|v| v.as_str());
-
-      let tls_config_builder_wants_verifier = if min_tls_version_option.is_none() && max_tls_version_option.is_none() {
-        tls_config_builder_wants_versions.with_safe_default_protocol_versions()?
-      } else {
-        let tls_versions = [("TLSv1.2", &TLS12), ("TLSv1.3", &TLS13)];
-        let min_tls_version_index = min_tls_version_option
-          .map_or(Some(0), |v| tls_versions.iter().position(|p| p.0 == v))
-          .ok_or(anyhow::anyhow!("Invalid minimum TLS version"))?;
-        let max_tls_version_index = max_tls_version_option
-          .map_or(Some(tls_versions.len() - 1), |v| {
-            tls_versions.iter().position(|p| p.0 == v)
-          })
-          .ok_or(anyhow::anyhow!("Invalid maximum TLS version"))?;
-        if max_tls_version_index < min_tls_version_index {
-          Err(anyhow::anyhow!("Maximum TLS version is older than minimum TLS version"))?
-        }
-        tls_config_builder_wants_versions.with_protocol_versions(
-          &tls_versions[min_tls_version_index..=max_tls_version_index]
-            .iter()
-            .map(|p| p.1)
-            .collect::<Vec<_>>(),
-        )?
-      };
+      let tls_config_builder_wants_verifier =
+        set_tls_version(tls_config_builder_wants_versions, global_configuration.as_deref())?;
 
       let tls_config_builder_wants_server_cert = if let Some(client_cert_path) = global_configuration
         .as_deref()
@@ -370,776 +368,94 @@ fn before_starting_server(
         Err(anyhow::anyhow!("PROXY protocol isn't supported with HTTP/3"))?
       }
 
-      let default_http_port = global_configuration
-        .as_deref()
-        .and_then(|c| get_entry!("default_http_port", c))
-        .and_then(|e| e.values.first())
-        .map_or(Some(80), |v| {
-          if v.is_null() {
-            None
-          } else {
-            Some(v.as_i128().unwrap_or(80) as u16)
-          }
-        });
-      let default_https_port = global_configuration
-        .as_deref()
-        .and_then(|c| get_entry!("default_https_port", c))
-        .and_then(|e| e.values.first())
-        .map_or(Some(443), |v| {
-          if v.is_null() {
-            None
-          } else {
-            Some(v.as_i128().unwrap_or(443) as u16)
-          }
-        });
+      let default_http_port = read_default_port(global_configuration.as_deref(), false);
+      let default_https_port = read_default_port(global_configuration.as_deref(), true);
 
-      let mut tls_ports: HashMap<u16, CustomSniResolver> = HashMap::new();
-      #[allow(clippy::type_complexity)]
-      let mut tls_port_locks: HashMap<u16, Arc<tokio::sync::RwLock<Vec<(String, Arc<dyn ResolvesServerCert>)>>>> =
-        HashMap::new();
-      let mut nonencrypted_ports = HashSet::new();
-      let mut certified_keys_to_preload: HashMap<u16, Vec<Arc<CertifiedKey>>> = HashMap::new();
-      let mut used_sni_hostnames = HashSet::new();
-      let mut automatic_tls_used_sni_hostnames = HashSet::new();
-      let mut acme_tls_alpn_01_resolvers: HashMap<u16, TlsAlpn01Resolver> = HashMap::new();
-      let mut acme_tls_alpn_01_resolver_locks: HashMap<
-        u16,
-        Arc<tokio::sync::RwLock<Vec<crate::acme::TlsAlpn01DataLock>>>,
-      > = HashMap::new();
-      let acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>> =
-        Arc::new(tokio::sync::RwLock::new(Vec::new()));
-      let acme_default_directory = dirs::data_local_dir().and_then(|mut p| {
-        p.push("ferron-acme");
-        p.into_os_string().into_string().ok()
-      });
-      let memory_acme_account_cache_data = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
-      let mut acme_configs = Vec::new();
-      let mut acme_on_demand_configs = Vec::new();
-      let (acme_on_demand_tx, acme_on_demand_rx) = async_channel::unbounded();
-      let on_demand_tls_ask_endpoint = match global_configuration
-        .as_ref()
-        .and_then(|c| get_value!("auto_tls_on_demand_ask", c))
-        .and_then(|v| v.as_str())
-        .map(|u| u.parse::<hyper::Uri>())
-      {
-        Some(Ok(uri)) => Some(uri),
-        Some(Err(err)) => Err(anyhow::anyhow!(
-          "Failed to parse automatic TLS on demand asking endpoint URI: {}",
-          err
-        ))?,
-        None => None,
-      };
-      let on_demand_tls_ask_endpoint_verify = !global_configuration
-        .as_ref()
-        .and_then(|c| get_value!("auto_tls_on_demand_ask_no_verification", c))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+      let mut tls_build_ctx = TlsBuildContext::default();
+      let memory_acme_account_cache_data: Arc<tokio::sync::RwLock<HashMap<String, Vec<u8>>>> = Default::default();
+      let mut invalid_wildcard_domains: HashSet<String> = HashSet::new();
 
       // Iterate server configurations (TLS configuration)
-      for server_configuration in &server_configurations.inner {
-        if server_configuration.filters.is_global_non_host()
-          || (server_configuration.filters.is_global() && server_configuration.entries.is_empty())
-        {
-          // Don't add listeners from an empty global configuration or non-host global configuration
+      for server in &server_configurations.host_configs {
+        let hostname = server.filters.hostname.as_deref();
+        if let Some(hostname) = hostname {
+          if hostname.contains("*.") && (hostname == "*." || !hostname.starts_with("*.")) {
+            invalid_wildcard_domains.insert(hostname.to_string());
+          }
+        }
+
+        if should_skip_server(server) {
           continue;
         }
 
-        let on_demand_tls = get_value!("auto_tls_on_demand", server_configuration)
-          .and_then(|v| v.as_bool())
-          .unwrap_or(false);
+        let sni_hostname = resolve_sni_hostname(&server.filters);
+        let https_port = server.filters.port.or(default_https_port);
 
-        let https_port = server_configuration.filters.port.or(default_https_port);
+        handle_nonencrypted_ports(&mut tls_build_ctx, server, default_http_port);
 
-        let sni_hostname = server_configuration.filters.hostname.clone().or_else(|| {
-          // !!! UNTESTED, many clients don't send SNI hostname when accessing via IP address anyway
-          match server_configuration.filters.ip {
-            Some(IpAddr::V4(address)) => Some(address.to_string()),
-            Some(IpAddr::V6(address)) => Some(format!("[{address}]")),
-            _ => None,
-          }
-        });
-
-        let is_sni_hostname_used = !https_port.is_none_or(|p| {
-          !used_sni_hostnames.contains(&(p, sni_hostname.clone()))
-            && !automatic_tls_used_sni_hostnames.contains(&(p, sni_hostname.clone()))
-        });
-        let is_auto_tls_sni_hostname_used =
-          https_port.is_some_and(|p| automatic_tls_used_sni_hostnames.contains(&(p, sni_hostname.clone())));
-
-        let mut automatic_tls_port = None;
-        if server_configuration.filters.port.is_none() {
-          if get_value!("auto_tls", server_configuration)
+        if let Some(https_port) = https_port {
+          let manual_tls_entry_option = manual_tls_entry(server);
+          if get_entry!("auto_tls", server)
+            .and_then(|e| e.values.first())
             .and_then(|v| v.as_bool())
-            .unwrap_or(!is_localhost(
-              server_configuration.filters.ip.as_ref(),
-              server_configuration.filters.hostname.as_deref(),
-            ))
+            .unwrap_or(server.filters.port.is_none() && manual_tls_entry_option.is_none())
           {
-            automatic_tls_port = default_https_port;
-          }
-          if let Some(http_port) = default_http_port {
-            nonencrypted_ports.insert(http_port);
-          }
-        }
-
-        if get_value!("auto_tls", server_configuration)
-          .and_then(|v| v.as_bool())
-          .unwrap_or(false)
-        {
-          automatic_tls_port = https_port;
-        } else if let Some(tls_entry) = get_entry!("tls", server_configuration) {
-          if let Some(https_port) = https_port {
-            if tls_entry.values.len() == 2 {
-              if let Some(cert_path) = tls_entry.values[0].as_str() {
-                if let Some(key_path) = tls_entry.values[1].as_str() {
-                  automatic_tls_port = None;
-
-                  if !is_sni_hostname_used {
-                    let certs = match load_certs(cert_path) {
-                      Ok(certs) => certs,
-                      Err(err) => Err(anyhow::anyhow!(
-                        "Cannot load the \"{}\" TLS certificate: {}",
-                        cert_path,
-                        err
-                      ))?,
-                    };
-                    let key = match load_private_key(key_path) {
-                      Ok(key) => key,
-                      Err(err) => Err(anyhow::anyhow!("Cannot load the \"{}\" private key: {}", key_path, err))?,
-                    };
-                    let signing_key = match crypto_provider.key_provider.load_private_key(key) {
-                      Ok(key) => key,
-                      Err(err) => Err(anyhow::anyhow!("Cannot load the \"{}\" private key: {}", key_path, err))?,
-                    };
-                    let certified_key = Arc::new(CertifiedKey::new(certs, signing_key));
-                    if let Some(certified_keys) = certified_keys_to_preload.get_mut(&https_port) {
-                      certified_keys.push(certified_key.clone());
-                    } else {
-                      certified_keys_to_preload.insert(https_port, vec![certified_key.clone()]);
-                    }
-                    let resolver = Arc::new(OneCertifiedKeyResolver::new(certified_key));
-                    if let Some(sni_resolver) = tls_ports.get_mut(&https_port) {
-                      if let Some(sni_hostname) = &sni_hostname {
-                        sni_resolver.load_host_resolver(sni_hostname, resolver);
-                      } else {
-                        sni_resolver.load_fallback_resolver(resolver);
-                      }
-                    } else {
-                      let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-                      tls_port_locks.insert(https_port, sni_resolver_list.clone());
-                      let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
-                      if let Some(sni_hostname) = &sni_hostname {
-                        sni_resolver.load_host_resolver(sni_hostname, resolver);
-                      } else {
-                        sni_resolver.load_fallback_resolver(resolver);
-                      }
-                      tls_ports.insert(https_port, sni_resolver);
-                    }
-                    used_sni_hostnames.insert((https_port, sni_hostname.clone()));
-                  }
-                }
-              }
-            }
-          }
-        } else if let Some(http_port) = server_configuration.filters.port.or(default_http_port) {
-          nonencrypted_ports.insert(http_port);
-        }
-        if let Some(automatic_tls_port) = automatic_tls_port {
-          if !is_auto_tls_sni_hostname_used {
-            if sni_hostname.is_some() || on_demand_tls {
-              let is_wildcard_domain = sni_hostname.as_ref().is_some_and(|s| s.starts_with("*."));
-              let challenge_type_entry = get_entry!("auto_tls_challenge", server_configuration);
-              let challenge_type_str = challenge_type_entry
-                .and_then(|e| e.values.first())
-                .and_then(|v| v.as_str())
-                .unwrap_or("tls-alpn-01");
-              let challenge_params = challenge_type_entry
-                .and_then(|e| {
-                  let mut props_str = HashMap::new();
-                  for (prop_name, prop_value) in e.props.iter() {
-                    if let Some(prop_value) = prop_value.as_str() {
-                      props_str.insert(prop_name.to_string(), prop_value.to_string());
-                    }
-                  }
-                  if props_str.is_empty() {
-                    None
-                  } else {
-                    Some(props_str)
-                  }
-                })
-                .unwrap_or(HashMap::new());
-              if let Some(sni_hostname) = &sni_hostname {
-                if sni_hostname.parse::<IpAddr>().is_ok() {
-                  for logging_tx in global_configuration
-                    .as_ref()
-                    .map_or(&vec![], |c| &c.observability.log_channels)
-                  {
-                    logging_tx
-                    .send_blocking(LogMessage::new(
-                      format!("Ferron's automatic TLS functionality doesn't support IP address-based identifiers, skipping SNI host \"{sni_hostname}\"..."),
-                      true,
-                    ))
-                    .unwrap_or_default();
-                  }
-                  continue;
-                }
-              }
-              let challenge_type = match &*challenge_type_str.to_uppercase() {
-                "HTTP-01" => {
-                  if let Some(sni_hostname) = &sni_hostname {
-                    if is_wildcard_domain && !on_demand_tls {
-                      for logging_tx in global_configuration
-                        .as_ref()
-                        .map_or(&vec![], |c| &c.observability.log_channels)
-                      {
-                        logging_tx
-                        .send_blocking(LogMessage::new(
-                          format!("HTTP-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."),
-                          true,
-                        ))
-                        .unwrap_or_default();
-                      }
-                      continue;
-                    }
-                  }
-                  ChallengeType::Http01
-                }
-                "TLS-ALPN-01" => {
-                  if let Some(sni_hostname) = &sni_hostname {
-                    if is_wildcard_domain && !on_demand_tls {
-                      for logging_tx in global_configuration
-                        .as_ref()
-                        .map_or(&vec![], |c| &c.observability.log_channels)
-                      {
-                        logging_tx
-                        .send_blocking(LogMessage::new(
-                          format!("TLS-ALPN-01 ACME challenge doesn't support wildcard hostnames, skipping SNI host \"{sni_hostname}\"..."),
-                          true,
-                        ))
-                        .unwrap_or_default();
-                      }
-                      continue;
-                    }
-                  }
-                  ChallengeType::TlsAlpn01
-                }
-                "DNS-01" => ChallengeType::Dns01,
-                unsupported => Err(anyhow::anyhow!("Unsupported ACME challenge type: {}", unsupported))?,
-              };
-              let dns_provider: Option<Arc<dyn ferron_common::dns::DnsProvider + Send + Sync>> =
-                if &*challenge_type_str.to_uppercase() != "DNS-01" {
-                  None
-                } else {
-                  let provider_name = challenge_params
-                    .get("provider")
-                    .ok_or(anyhow::anyhow!("No DNS provider specified"))?;
-                  Some(get_dns_provider(provider_name, &challenge_params)?)
-                };
-              let acme_cache_path_option = get_value!("auto_tls_cache", server_configuration)
-                .map_or(acme_default_directory.as_deref(), |v| {
-                  if v.is_null() {
-                    None
-                  } else if let Some(v) = v.as_str() {
-                    Some(v)
-                  } else {
-                    acme_default_directory.as_deref()
-                  }
-                })
-                .map(|path| path.to_owned());
-              let rustls_client_config = (if get_value!("auto_tls_no_verification", server_configuration)
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-              {
-                ClientConfig::builder_with_provider(crypto_provider.clone())
-                  .with_safe_default_protocol_versions()?
-                  .dangerous()
-                  .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
-              } else if let Ok(client_config) = BuilderVerifierExt::with_platform_verifier(
-                ClientConfig::builder_with_provider(crypto_provider.clone()).with_safe_default_protocol_versions()?,
-              ) {
-                client_config
-              } else {
-                ClientConfig::builder_with_provider(crypto_provider.clone())
-                  .with_safe_default_protocol_versions()?
-                  .with_webpki_verifier(
-                    WebPkiServerVerifier::builder(Arc::new(rustls::RootCertStore {
-                      roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-                    }))
-                    .build()?,
-                  )
-              })
-              .with_no_client_auth();
-              if on_demand_tls {
-                if &*challenge_type_str.to_uppercase() == "TLS-ALPN-01" {
-                  // Add TLS-ALPN-01 resolver
-                  let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-                  acme_tls_alpn_01_resolver_locks.insert(automatic_tls_port, sni_resolver_list.clone());
-                  let sni_resolver = TlsAlpn01Resolver::with_resolvers(sni_resolver_list);
-                  acme_tls_alpn_01_resolvers.insert(automatic_tls_port, sni_resolver);
-                }
-
-                if let Some(sni_resolver) = tls_ports.get_mut(&automatic_tls_port) {
-                  sni_resolver.load_fallback_sender(acme_on_demand_tx.clone(), automatic_tls_port);
-                } else {
-                  let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-                  tls_port_locks.insert(automatic_tls_port, sni_resolver_list.clone());
-                  let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
-                  sni_resolver.load_fallback_sender(acme_on_demand_tx.clone(), automatic_tls_port);
-                  tls_ports.insert(automatic_tls_port, sni_resolver);
-                }
-
-                let acme_on_demand_config = AcmeOnDemandConfig {
-                  rustls_client_config,
-                  challenge_type,
-                  contact: if let Some(contact) =
-                    get_value!("auto_tls_contact", server_configuration).and_then(|v| v.as_str())
-                  {
-                    vec![format!("mailto:{}", contact.to_string())]
-                  } else {
-                    vec![]
-                  },
-                  directory: if let Some(directory) =
-                    get_value!("auto_tls_directory", server_configuration).and_then(|v| v.as_str())
-                  {
-                    directory.to_string()
-                  } else if get_value!("auto_tls_letsencrypt_production", server_configuration)
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(true)
-                  {
-                    LetsEncrypt::Production.url().to_string()
-                  } else {
-                    LetsEncrypt::Staging.url().to_string()
-                  },
-                  eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab", server_configuration) {
-                    if let Some(eab_key_id) = eab_key_entry.values.first().and_then(|v| v.as_str()) {
-                      if let Some(eab_key_hmac) = eab_key_entry.values.get(1).and_then(|v| v.as_str()) {
-                        match base64::engine::general_purpose::URL_SAFE_NO_PAD
-                          .decode(eab_key_hmac.trim_end_matches('='))
-                        {
-                          Ok(decoded_key) => {
-                            Some(Arc::new(ExternalAccountKey::new(eab_key_id.to_string(), &decoded_key)))
-                          }
-                          Err(err) => Err(anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
-                        }
-                      } else {
-                        None
-                      }
-                    } else {
-                      None
-                    }
-                  } else {
-                    None
-                  },
-                  profile: get_value!("auto_tls_profile", server_configuration)
-                    .and_then(|v| v.as_str().map(|s| s.to_string())),
-                  cache_path: if let Some(acme_cache_path) = acme_cache_path_option.as_ref() {
-                    Some(PathBuf::from_str(acme_cache_path).map_err(|_| anyhow::anyhow!("Invalid ACME cache path"))?)
-                  } else {
-                    None
-                  },
-                  sni_resolver_lock: tls_port_locks
-                    .get(&automatic_tls_port)
-                    .cloned()
-                    .unwrap_or(Arc::new(tokio::sync::RwLock::new(Vec::new()))),
-                  tls_alpn_01_resolver_lock: acme_tls_alpn_01_resolver_locks
-                    .get(&automatic_tls_port)
-                    .cloned()
-                    .unwrap_or(Arc::new(tokio::sync::RwLock::new(Vec::new()))),
-                  http_01_resolver_lock: acme_http_01_resolvers.clone(),
-                  dns_provider,
-                  sni_hostname: sni_hostname.clone(),
-                  port: automatic_tls_port,
-                };
-                acme_on_demand_configs.push(acme_on_demand_config);
-                automatic_tls_used_sni_hostnames.insert((automatic_tls_port, sni_hostname));
-              } else if let Some(sni_hostname) = sni_hostname {
-                let (account_cache_path, cert_cache_path) =
-                  if let Some(acme_cache_path) = acme_cache_path_option.as_deref() {
-                    let mut pathbuf =
-                      PathBuf::from_str(acme_cache_path).map_err(|_| anyhow::anyhow!("Invalid ACME cache path"))?;
-                    let base_pathbuf = pathbuf.clone();
-                    let append_hash = base64::engine::general_purpose::URL_SAFE_NO_PAD
-                      .encode(xxh3_128(format!("{automatic_tls_port}-{sni_hostname}").as_bytes()).to_be_bytes());
-                    pathbuf.push(append_hash);
-                    (Some(base_pathbuf), Some(pathbuf))
-                  } else {
-                    (None, None)
-                  };
-                let certified_key_lock = Arc::new(tokio::sync::RwLock::new(None));
-                let tls_alpn_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
-                let http_01_data_lock = Arc::new(tokio::sync::RwLock::new(None));
-                let acme_config = AcmeConfig {
-                  rustls_client_config,
-                  domains: vec![sni_hostname.clone()],
-                  challenge_type,
-                  contact: if let Some(contact) =
-                    get_value!("auto_tls_contact", server_configuration).and_then(|v| v.as_str())
-                  {
-                    vec![format!("mailto:{}", contact.to_string())]
-                  } else {
-                    vec![]
-                  },
-                  directory: if let Some(directory) =
-                    get_value!("auto_tls_directory", server_configuration).and_then(|v| v.as_str())
-                  {
-                    directory.to_string()
-                  } else if get_value!("auto_tls_letsencrypt_production", server_configuration)
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(true)
-                  {
-                    LetsEncrypt::Production.url().to_string()
-                  } else {
-                    LetsEncrypt::Staging.url().to_string()
-                  },
-                  eab_key: if let Some(eab_key_entry) = get_entry!("auto_tls_eab", server_configuration) {
-                    if let Some(eab_key_id) = eab_key_entry.values.first().and_then(|v| v.as_str()) {
-                      if let Some(eab_key_hmac) = eab_key_entry.values.get(1).and_then(|v| v.as_str()) {
-                        Some(Arc::new(ExternalAccountKey::new(
-                          eab_key_id.to_string(),
-                          &base64::engine::general_purpose::URL_SAFE_NO_PAD
-                            .decode(eab_key_hmac.trim_end_matches('='))
-                            .map_err(|err| anyhow::anyhow!("Failed to decode EAB key HMAC: {}", err))?,
-                        )))
-                      } else {
-                        None
-                      }
-                    } else {
-                      None
-                    }
-                  } else {
-                    None
-                  },
-                  profile: get_value!("auto_tls_profile", server_configuration)
-                    .and_then(|v| v.as_str().map(|s| s.to_string())),
-                  account_cache: if let Some(account_cache_path) = account_cache_path {
-                    AcmeCache::File(account_cache_path)
-                  } else {
-                    AcmeCache::Memory(memory_acme_account_cache_data.clone())
-                  },
-                  certificate_cache: if let Some(cert_cache_path) = cert_cache_path {
-                    AcmeCache::File(cert_cache_path)
-                  } else {
-                    AcmeCache::Memory(Arc::new(tokio::sync::RwLock::new(HashMap::new())))
-                  },
-                  certified_key_lock: certified_key_lock.clone(),
-                  tls_alpn_01_data_lock: tls_alpn_01_data_lock.clone(),
-                  http_01_data_lock: http_01_data_lock.clone(),
-                  dns_provider,
-                  renewal_info: None,
-                  account: None,
-                };
-                let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock));
-                acme_configs.push(acme_config);
-                match &*challenge_type_str.to_uppercase() {
-                  "HTTP-01" => {
-                    acme_http_01_resolvers.blocking_write().push(http_01_data_lock);
-                  }
-                  "TLS-ALPN-01" => {
-                    if let Some(sni_resolver) = acme_tls_alpn_01_resolvers.get_mut(&automatic_tls_port) {
-                      sni_resolver.load_resolver(tls_alpn_01_data_lock);
-                    } else {
-                      let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-                      acme_tls_alpn_01_resolver_locks.insert(automatic_tls_port, sni_resolver_list.clone());
-                      let sni_resolver = TlsAlpn01Resolver::with_resolvers(sni_resolver_list);
-                      sni_resolver.load_resolver(tls_alpn_01_data_lock);
-                      acme_tls_alpn_01_resolvers.insert(automatic_tls_port, sni_resolver);
-                    }
-                  }
-                  _ => (),
-                }
-                if let Some(sni_resolver) = tls_ports.get_mut(&automatic_tls_port) {
-                  sni_resolver.load_host_resolver(&sni_hostname, acme_resolver);
-                } else {
-                  let sni_resolver_list = Arc::new(tokio::sync::RwLock::new(Vec::new()));
-                  tls_port_locks.insert(automatic_tls_port, sni_resolver_list.clone());
-                  let mut sni_resolver = CustomSniResolver::with_resolvers(sni_resolver_list);
-                  sni_resolver.load_host_resolver(&sni_hostname, acme_resolver);
-                  tls_ports.insert(automatic_tls_port, sni_resolver);
-                }
-                automatic_tls_used_sni_hostnames.insert((automatic_tls_port, Some(sni_hostname)));
-              }
-            } else if !server_configuration.filters.is_global() && !server_configuration.filters.is_global_non_host() {
+            if let Some(error_log_message) = handle_automatic_tls(
+              &mut tls_build_ctx,
+              server,
+              https_port,
+              sni_hostname.clone(),
+              crypto_provider.clone(),
+              memory_acme_account_cache_data.clone(),
+            )? {
               for logging_tx in global_configuration
                 .as_ref()
                 .map_or(&vec![], |c| &c.observability.log_channels)
               {
-                logging_tx
-                  .send_blocking(LogMessage::new(
-                    "Skipping automatic TLS for a host without a SNI hostname...".to_string(),
-                    true,
-                  ))
-                  .unwrap_or_default();
+                logging_tx.send_blocking(error_log_message.clone()).unwrap_or_default();
               }
+            } else {
+              continue;
             }
+          }
+          if let Some((cert, key)) = manual_tls_entry(server) {
+            handle_manual_tls(
+              &mut tls_build_ctx,
+              &crypto_provider,
+              https_port,
+              sni_hostname,
+              cert,
+              key,
+            )?;
           }
         }
       }
 
-      // Shut down request handler threads and secondary runtime
-      if let Some((handler_shutdown_channels, secondary_runtime)) = old_runtime_ref.take() {
-        for shutdown in handler_shutdown_channels {
-          shutdown.cancel();
+      for invalid_wildcard_domain in invalid_wildcard_domains {
+        for logging_tx in global_configuration
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels)
+        {
+          logging_tx
+            .send_blocking(LogMessage::new(
+              format!(
+                "Invalid wildcard domain detected: \"{invalid_wildcard_domain}\". \
+                  It should be in the form of \"*.example.com\" (that means wildcard is at the beginning)."
+              ),
+              true,
+            ))
+            .unwrap_or_default();
         }
-        drop(secondary_runtime);
-      }
-
-      if !acme_configs.is_empty() || !acme_on_demand_configs.is_empty() {
-        // Spawn a task to handle ACME certificate provisioning, one certificate at time
-
-        let global_configuration_clone = global_configuration.clone();
-        secondary_runtime_ref.spawn(async move {
-          for acme_config in &mut acme_configs {
-            // Install the certificates from the cache if they're valid
-            check_certificate_validity_or_install_cached(acme_config, None)
-              .await
-              .unwrap_or_default();
-          }
-
-          let mut existing_combinations = HashSet::new();
-          for acme_on_demand_config in &mut acme_on_demand_configs {
-            for cached_domain in get_cached_domains(acme_on_demand_config).await {
-              let mut acme_config = convert_on_demand_config(
-                acme_on_demand_config,
-                cached_domain.clone(),
-                memory_acme_account_cache_data.clone(),
-              )
-              .await;
-
-              existing_combinations.insert((cached_domain, acme_on_demand_config.port));
-
-              // Install the certificates from the cache if they're valid
-              check_certificate_validity_or_install_cached(&mut acme_config, None)
-                .await
-                .unwrap_or_default();
-
-              acme_configs.push(acme_config);
-            }
-          }
-
-          // Wrap ACME configurations in a mutex
-          let acme_configs_mutex = Arc::new(tokio::sync::Mutex::new(acme_configs));
-
-          let prevent_file_race_conditions_mutex = Arc::new(tokio::sync::Mutex::new(()));
-
-          if !acme_on_demand_configs.is_empty() {
-            // On-demand TLS
-            let acme_configs_mutex = acme_configs_mutex.clone();
-            let acme_on_demand_configs = Arc::new(acme_on_demand_configs);
-            let global_configuration_clone = global_configuration_clone.clone();
-            tokio::spawn(async move {
-              let mut existing_combinations = existing_combinations;
-              while let Ok(received_data) = acme_on_demand_rx.recv().await {
-                let on_demand_tls_ask_endpoint = on_demand_tls_ask_endpoint.clone();
-                if let Some(on_demand_tls_ask_endpoint) = on_demand_tls_ask_endpoint {
-                  let mut url_parts = on_demand_tls_ask_endpoint.into_parts();
-                  if let Some(path_and_query) = url_parts.path_and_query {
-                    let query = path_and_query.query();
-                    let query = if let Some(query) = query {
-                      format!("{}&domain={}", query, urlencoding::encode(&received_data.0))
-                    } else {
-                      format!("domain={}", urlencoding::encode(&received_data.0))
-                    };
-                    url_parts.path_and_query = Some(match format!("{}?{}", path_and_query.path(), query).parse() {
-                      Ok(parsed) => parsed,
-                      Err(err) => {
-                        for acme_logger in global_configuration_clone
-                          .as_ref()
-                          .map_or(&vec![], |c| &c.observability.log_channels)
-                        {
-                          acme_logger
-                            .send(LogMessage::new(
-                              format!("Error while formatting the URL for on-demand TLS request: {err}"),
-                              true,
-                            ))
-                            .await
-                            .unwrap_or_default();
-                        }
-                        continue;
-                      }
-                    });
-                  } else {
-                    url_parts.path_and_query = Some(
-                      match format!("/?domain={}", urlencoding::encode(&received_data.0)).parse() {
-                        Ok(parsed) => parsed,
-                        Err(err) => {
-                          for acme_logger in global_configuration_clone
-                            .as_ref()
-                            .map_or(&vec![], |c| &c.observability.log_channels)
-                          {
-                            acme_logger
-                              .send(LogMessage::new(
-                                format!("Error while formatting the URL for on-demand TLS request: {err}"),
-                                true,
-                              ))
-                              .await
-                              .unwrap_or_default();
-                          }
-                          continue;
-                        }
-                      },
-                    );
-                  }
-                  let endpoint_url = match hyper::Uri::from_parts(url_parts) {
-                    Ok(parsed) => parsed,
-                    Err(err) => {
-                      for acme_logger in global_configuration_clone
-                        .as_ref()
-                        .map_or(&vec![], |c| &c.observability.log_channels)
-                      {
-                        acme_logger
-                          .send(LogMessage::new(
-                            format!("Error while formatting the URL for on-demand TLS request: {err}"),
-                            true,
-                          ))
-                          .await
-                          .unwrap_or_default();
-                      }
-                      continue;
-                    }
-                  };
-                  let ask_closure = async {
-                    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-                      .build::<_, http_body_util::Empty<hyper::body::Bytes>>(
-                      hyper_rustls::HttpsConnectorBuilder::new()
-                        .with_tls_config(
-                          (if !on_demand_tls_ask_endpoint_verify {
-                            ClientConfig::builder_with_provider(crypto_provider.clone())
-                              .with_safe_default_protocol_versions()?
-                              .dangerous()
-                              .with_custom_certificate_verifier(Arc::new(NoServerVerifier::new()))
-                          } else if let Ok(client_config) = BuilderVerifierExt::with_platform_verifier(
-                            ClientConfig::builder_with_provider(crypto_provider.clone())
-                              .with_safe_default_protocol_versions()?,
-                          ) {
-                            client_config
-                          } else {
-                            ClientConfig::builder_with_provider(crypto_provider.clone())
-                              .with_safe_default_protocol_versions()?
-                              .with_webpki_verifier(
-                                WebPkiServerVerifier::builder(Arc::new(rustls::RootCertStore {
-                                  roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-                                }))
-                                .build()?,
-                              )
-                          })
-                          .with_no_client_auth(),
-                        )
-                        .https_or_http()
-                        .enable_http1()
-                        .enable_http2()
-                        .build(),
-                    );
-                    let request = hyper::Request::builder()
-                      .method(hyper::Method::GET)
-                      .uri(endpoint_url)
-                      .body(http_body_util::Empty::<hyper::body::Bytes>::new())?;
-                    let response = client.request(request).await?;
-
-                    Ok::<_, Box<dyn Error + Send + Sync>>(response.status().is_success())
-                  };
-                  match ask_closure.await {
-                    Ok(true) => (),
-                    Ok(false) => {
-                      for acme_logger in global_configuration_clone
-                        .as_ref()
-                        .map_or(&vec![], |c| &c.observability.log_channels)
-                      {
-                        acme_logger
-                          .send(LogMessage::new(
-                            format!(
-                              "The TLS certificate cannot be issued for \"{}\" hostname",
-                              &received_data.0
-                            ),
-                            true,
-                          ))
-                          .await
-                          .unwrap_or_default();
-                      }
-                      continue;
-                    }
-                    Err(err) => {
-                      for acme_logger in global_configuration_clone
-                        .as_ref()
-                        .map_or(&vec![], |c| &c.observability.log_channels)
-                      {
-                        acme_logger
-                          .send(LogMessage::new(
-                            format!(
-                              "Error while determining if the TLS certificate can be issued for \"{}\" hostname: {err}",
-                              &received_data.0
-                            ),
-                            true,
-                          ))
-                          .await
-                          .unwrap_or_default();
-                      }
-                      continue;
-                    }
-                  }
-                }
-                if existing_combinations.contains(&received_data) {
-                  continue;
-                } else {
-                  existing_combinations.insert(received_data.clone());
-                }
-                let (sni_hostname, port) = received_data;
-                let acme_configs_mutex = acme_configs_mutex.clone();
-                let acme_on_demand_configs = acme_on_demand_configs.clone();
-                let memory_acme_account_cache_data = memory_acme_account_cache_data.clone();
-                let prevent_file_race_conditions_mutex = prevent_file_race_conditions_mutex.clone();
-                tokio::spawn(async move {
-                  for acme_on_demand_config in acme_on_demand_configs.iter() {
-                    if match_hostname(acme_on_demand_config.sni_hostname.as_deref(), Some(&sni_hostname))
-                      && acme_on_demand_config.port == port
-                    {
-                      let mutex_guard = prevent_file_race_conditions_mutex.lock().await;
-                      add_domain_to_cache(acme_on_demand_config, &sni_hostname)
-                        .await
-                        .unwrap_or_default();
-                      drop(mutex_guard);
-
-                      acme_configs_mutex.lock().await.push(
-                        convert_on_demand_config(
-                          acme_on_demand_config,
-                          sni_hostname.clone(),
-                          memory_acme_account_cache_data,
-                        )
-                        .await,
-                      );
-                      break;
-                    }
-                  }
-                });
-              }
-            });
-          }
-
-          let error_logger = ErrorLogger::new_multiple(
-            global_configuration_clone
-              .as_ref()
-              .map_or(vec![], |c| c.observability.log_channels.clone()),
-          );
-          loop {
-            for acme_config in &mut *acme_configs_mutex.lock().await {
-              if let Err(acme_error) = provision_certificate(acme_config, &error_logger).await {
-                error_logger
-                  .log(&format!("Error while obtaining a TLS certificate: {acme_error}"))
-                  .await
-              }
-            }
-            tokio::time::sleep(Duration::from_secs(10)).await;
-          }
-        });
       }
 
       // If HTTP/1.1 isn't enabled, don't listen to non-encrypted ports
       if !protocols.contains(&"h1") {
-        nonencrypted_ports.clear();
+        tls_build_ctx.nonencrypted_ports.clear();
       }
 
-      for tls_port in tls_ports.keys() {
-        if nonencrypted_ports.contains(tls_port) {
-          nonencrypted_ports.remove(tls_port);
+      for tls_port in tls_build_ctx.tls_ports.keys() {
+        if tls_build_ctx.nonencrypted_ports.contains(tls_port) {
+          tls_build_ctx.nonencrypted_ports.remove(tls_port);
         }
       }
 
@@ -1147,7 +463,8 @@ fn before_starting_server(
       let mut quic_tls_configs = HashMap::new();
       let mut tls_configs = HashMap::new();
       let mut acme_tls_alpn_01_configs = HashMap::new();
-      for (tls_port, sni_resolver) in tls_ports.into_iter() {
+      let certified_keys_to_preload = Arc::new(tls_build_ctx.certified_keys_to_preload);
+      for (tls_port, sni_resolver) in tls_build_ctx.tls_ports.into_iter() {
         let enable_ocsp_stapling = global_configuration
           .as_ref()
           .and_then(|c| get_value!("ocsp_stapling", c))
@@ -1171,7 +488,7 @@ fn before_starting_server(
           .clone()
           .with_cert_resolver(resolver);
         if protocols.contains(&"h3") {
-          // TLS configuration used for QUIC listene
+          // TLS configuration used for QUIC listener
           let mut quic_tls_config = tls_config.clone();
           quic_tls_config.max_early_data_size = u32::MAX;
           quic_tls_config.alpn_protocols.insert(0, b"h3-29".to_vec());
@@ -1187,7 +504,7 @@ fn before_starting_server(
         }
         tls_configs.insert(tls_port, Arc::new(tls_config));
       }
-      for (tls_port, sni_resolver) in acme_tls_alpn_01_resolvers.into_iter() {
+      for (tls_port, sni_resolver) in tls_build_ctx.acme_tls_alpn_01_resolvers.into_iter() {
         let mut tls_config = tls_config_builder_wants_server_cert
           .clone()
           .with_cert_resolver(Arc::new(sni_resolver));
@@ -1202,122 +519,10 @@ fn before_starting_server(
         .map(|c| &c.observability.metric_channels)
         .cloned()
       {
-        secondary_runtime_ref.spawn(async move {
-          use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue};
-
-          let mut previous_instant = std::time::Instant::now();
-          let mut previous_cpu_user_time = 0.0;
-          let mut previous_cpu_system_time = 0.0;
-          let mut previous_rss = 0;
-          let mut previous_vms = 0;
-          loop {
-            // Sleep for 1 second
-            tokio::time::sleep(Duration::from_secs(1)).await;
-
-            if let Ok(Ok(stat)) =
-              tokio::task::spawn_blocking(|| procfs::process::Process::myself().and_then(|p| p.stat())).await
-            {
-              let cpu_user_time = stat.utime as f64 / procfs::ticks_per_second() as f64;
-              let cpu_system_time = stat.stime as f64 / procfs::ticks_per_second() as f64;
-              let cpu_user_time_increase = cpu_user_time - previous_cpu_user_time;
-              let cpu_system_time_increase = cpu_system_time - previous_cpu_system_time;
-              previous_cpu_user_time = cpu_user_time;
-              previous_cpu_system_time = cpu_system_time;
-
-              let rss = stat.rss * procfs::page_size();
-              let rss_diff = rss as i64 - previous_rss as i64;
-              let vms_diff = stat.vsize as i64 - previous_vms as i64;
-              previous_rss = rss;
-              previous_vms = stat.vsize;
-
-              let elapsed = previous_instant.elapsed().as_secs_f64();
-              previous_instant = std::time::Instant::now();
-
-              let cpu_user_utilization = cpu_user_time_increase / (elapsed * available_parallelism as f64);
-              let cpu_system_utilization = cpu_system_time_increase / (elapsed * available_parallelism as f64);
-
-              for metrics_sender in &metrics_channels {
-                metrics_sender
-                  .send(Metric::new(
-                    "process.cpu.time",
-                    vec![("cpu.mode", MetricAttributeValue::String("user".to_string()))],
-                    MetricType::Counter,
-                    MetricValue::F64(cpu_user_time_increase),
-                    Some("s"),
-                    Some("Total CPU seconds broken down by different states."),
-                  ))
-                  .await
-                  .unwrap_or_default();
-
-                metrics_sender
-                  .send(Metric::new(
-                    "process.cpu.time",
-                    vec![("cpu.mode", MetricAttributeValue::String("system".to_string()))],
-                    MetricType::Counter,
-                    MetricValue::F64(cpu_system_time_increase),
-                    Some("s"),
-                    Some("Total CPU seconds broken down by different states."),
-                  ))
-                  .await
-                  .unwrap_or_default();
-
-                metrics_sender
-                  .send(Metric::new(
-                    "process.cpu.utilization",
-                    vec![("cpu.mode", MetricAttributeValue::String("user".to_string()))],
-                    MetricType::Gauge,
-                    MetricValue::F64(cpu_user_utilization),
-                    Some("1"),
-                    Some(
-                      "Difference in process.cpu.time since the last measurement, \
-                       divided by the elapsed time and number of CPUs available to the process.",
-                    ),
-                  ))
-                  .await
-                  .unwrap_or_default();
-
-                metrics_sender
-                  .send(Metric::new(
-                    "process.cpu.utilization",
-                    vec![("cpu.mode", MetricAttributeValue::String("system".to_string()))],
-                    MetricType::Gauge,
-                    MetricValue::F64(cpu_system_utilization),
-                    Some("1"),
-                    Some(
-                      "Difference in process.cpu.time since the last measurement, \
-                      divided by the elapsed time and number of CPUs available to the process.",
-                    ),
-                  ))
-                  .await
-                  .unwrap_or_default();
-
-                metrics_sender
-                  .send(Metric::new(
-                    "process.memory.usage",
-                    vec![],
-                    MetricType::UpDownCounter,
-                    MetricValue::I64(rss_diff),
-                    Some("By"),
-                    Some("The amount of physical memory in use."),
-                  ))
-                  .await
-                  .unwrap_or_default();
-
-                metrics_sender
-                  .send(Metric::new(
-                    "process.memory.virtual",
-                    vec![],
-                    MetricType::UpDownCounter,
-                    MetricValue::I64(vms_diff),
-                    Some("By"),
-                    Some("The amount of committed virtual memory."),
-                  ))
-                  .await
-                  .unwrap_or_default();
-              }
-            }
-          }
-        });
+        secondary_runtime_ref.spawn(crate::setup::metrics::background_metrics(
+          metrics_channels,
+          available_parallelism,
+        ));
       }
 
       let (listener_handler_tx, listener_handler_rx) = &**LISTENER_HANDLER_CHANNEL;
@@ -1335,7 +540,8 @@ fn before_starting_server(
         .and_then(|v| v.as_str())
         .map_or(Ok(IpAddr::V6(Ipv6Addr::UNSPECIFIED)), |a| a.parse())
         .map_err(|_| anyhow::anyhow!("Invalid IP address to listen to"))?;
-      for (tcp_port, encrypted) in nonencrypted_ports
+      for (tcp_port, encrypted) in tls_build_ctx
+        .nonencrypted_ports
         .iter()
         .map(|p| (*p, false))
         .chain(tls_configs.keys().map(|p| (*p, true)))
@@ -1355,6 +561,7 @@ fn before_starting_server(
       let mut uring_enabled_locked = URING_ENABLED
         .lock()
         .map_err(|_| anyhow::anyhow!("Can't access the enabled `io_uring` option"))?;
+      let shutdown_handlers = enable_uring != *uring_enabled_locked;
       let mut tcp_listener_socketaddrs_to_remove = Vec::new();
       let mut quic_listener_socketaddrs_to_remove = Vec::new();
       for (key, value) in &*tcp_listeners {
@@ -1442,20 +649,133 @@ fn before_starting_server(
         io_uring_disabled_rx.close();
       }
 
+      let mut acme_configs = tls_build_ctx.acme_configs;
+      let mut acme_on_demand_configs = tls_build_ctx.acme_on_demand_configs;
+      let memory_acme_account_cache_data_clone = memory_acme_account_cache_data.clone();
+
+      // Preload the cached certificates before spawning the background ACME task
+      let (acme_configs, acme_on_demand_configs, existing_combinations) = secondary_runtime_ref.block_on(async move {
+        let mut existing_combinations = HashSet::new();
+
+        for acme_config in &mut acme_configs {
+          // Install the certificates from the cache if they're valid
+          check_certificate_validity_or_install_cached(acme_config, None)
+            .await
+            .unwrap_or_default();
+        }
+
+        for acme_on_demand_config in &mut acme_on_demand_configs {
+          for cached_domain in get_cached_domains(acme_on_demand_config).await {
+            let mut acme_config = convert_on_demand_config(
+              acme_on_demand_config,
+              cached_domain.clone(),
+              memory_acme_account_cache_data_clone.clone(),
+            )
+            .await;
+
+            existing_combinations.insert((cached_domain, acme_on_demand_config.port));
+
+            // Install the certificates from the cache if they're valid
+            check_certificate_validity_or_install_cached(&mut acme_config, None)
+              .await
+              .unwrap_or_default();
+
+            acme_configs.push(acme_config);
+          }
+        }
+
+        (acme_configs, acme_on_demand_configs, existing_combinations)
+      });
+
+      let inner_handler_data = ReloadableHandlerData {
+        configurations: server_configurations,
+        tls_configs: Arc::new(tls_configs),
+        http3_enabled: !quic_listened_socket_addresses.is_empty(),
+        acme_tls_alpn_01_configs: Arc::new(acme_tls_alpn_01_configs),
+        acme_http_01_resolvers: tls_build_ctx.acme_http_01_resolvers,
+        enable_proxy_protocol,
+        secondary_runtime: secondary_runtime_ref.to_owned(),
+      };
+      let reloadable_handler_data = if let Some(data) = SERVER_CONFIG_ARCSWAP.get().cloned() {
+        data.swap(Arc::new(inner_handler_data));
+        data
+      } else {
+        let reloadable_handler_data = Arc::new(ArcSwap::from_pointee(inner_handler_data));
+        let _ = SERVER_CONFIG_ARCSWAP.set(reloadable_handler_data.clone());
+        reloadable_handler_data
+      };
+
+      let mut start_new_handlers = true;
+      if let Ok(mut handlers_locked) = HANDLERS.lock() {
+        if shutdown_handlers {
+          while let Some((cancel_token, _)) = handlers_locked.pop() {
+            cancel_token.cancel();
+          }
+        } else {
+          for (_, graceful_shutdown) in handlers_locked.iter() {
+            start_new_handlers = false;
+            let _ = graceful_shutdown.send_blocking(());
+          }
+        }
+      }
+
+      let acme_on_demand_rx = tls_build_ctx.acme_on_demand_rx;
+      let on_demand_tls_ask_endpoint = match global_configuration
+        .as_ref()
+        .and_then(|c| get_value!("auto_tls_on_demand_ask", c))
+        .and_then(|v| v.as_str())
+        .map(|u| u.parse::<hyper::Uri>())
+      {
+        Some(Ok(uri)) => Some(uri),
+        Some(Err(err)) => Err(anyhow::anyhow!(
+          "Failed to parse automatic TLS on demand asking endpoint URI: {}",
+          err
+        ))?,
+        None => None,
+      };
+      let on_demand_tls_ask_endpoint_verify = !global_configuration
+        .as_ref()
+        .and_then(|c| get_value!("auto_tls_on_demand_ask_no_verification", c))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+      if !acme_configs.is_empty() || !acme_on_demand_configs.is_empty() {
+        // Spawn a task to handle ACME certificate provisioning, one certificate at time
+        let acme_logger = ErrorLogger::new_multiple(
+          global_configuration
+            .as_ref()
+            .map_or(vec![], |c| c.observability.log_channels.clone()),
+        );
+        secondary_runtime_ref.spawn(background_acme_task(
+          acme_configs,
+          acme_on_demand_configs,
+          memory_acme_account_cache_data,
+          acme_on_demand_rx,
+          on_demand_tls_ask_endpoint,
+          on_demand_tls_ask_endpoint_verify,
+          acme_logger,
+          crypto_provider,
+          existing_combinations,
+        ));
+      }
+
       // Spawn request handler threads
-      let mut handler_shutdown_channels = Vec::new();
-      for _ in 0..available_parallelism {
-        handler_shutdown_channels.push(create_http_handler(
-          server_configurations.clone(),
-          listener_handler_rx.clone(),
-          enable_uring,
-          tls_configs.clone(),
-          !quic_listened_socket_addresses.is_empty(),
-          acme_tls_alpn_01_configs.clone(),
-          acme_http_01_resolvers.clone(),
-          enable_proxy_protocol,
-          io_uring_disabled_tx.clone(),
-        )?);
+      if start_new_handlers {
+        let mut handler_shutdown_channels = HANDLERS.lock().expect("Can't access the handler threads");
+
+        // The number of handler threads, minus one for the multi-cancel, because without "minus one",
+        // there would be a "deadlock" when shutting down handler threads, and they won't be able to shut down
+        let multi_cancel = Arc::new(MultiCancel::new(available_parallelism.saturating_sub(1)));
+
+        for _ in 0..available_parallelism {
+          handler_shutdown_channels.push(create_http_handler(
+            reloadable_handler_data.clone(),
+            listener_handler_rx.clone(),
+            enable_uring,
+            io_uring_disabled_tx.clone(),
+            multi_cancel.clone(),
+          )?);
+        }
       }
 
       // Error out, if server is configured to listen to no port
@@ -1517,18 +837,19 @@ fn before_starting_server(
 
       let shutdown_result = handle_shutdown_signals(secondary_runtime_ref);
 
-      Ok::<_, Box<dyn Error + Send + Sync>>((shutdown_result, handler_shutdown_channels))
+      Ok::<_, Box<dyn Error + Send + Sync>>(shutdown_result)
     };
 
     match execute_rest() {
-      Ok((to_restart, handler_shutdown_channels)) => {
+      Ok(to_restart) => {
         if to_restart {
-          old_runtime = Some((handler_shutdown_channels, secondary_runtime));
           first_startup = false;
           println!("Reloading the server configuration...");
         } else {
-          for shutdown in handler_shutdown_channels {
-            shutdown.cancel();
+          if let Ok(mut handlers_locked) = HANDLERS.lock() {
+            while let Some((cancel_token, _)) = handlers_locked.pop() {
+              cancel_token.cancel();
+            }
           }
           drop(secondary_runtime);
           break;
@@ -1547,7 +868,11 @@ fn before_starting_server(
         Err(err)?
       }
     }
+
+    drop(observability_backend_loaders);
+    drop(module_loaders);
   }
+
   Ok(())
 }
 
@@ -1603,41 +928,17 @@ fn determine_default_configuration_adapter(_path: &Path) -> &'static str {
   "kdl"
 }
 
-/// Parses the command-line arguments
-fn parse_arguments(all_adapters: Vec<&'static str>) -> ArgMatches {
-  Command::new("Ferron")
-    .about("A fast, memory-safe web server written in Rust")
-    .arg(
-      Arg::new("config")
-        .long("config")
-        .short('c')
-        .help("The path to the server configuration file")
-        .action(ArgAction::Set)
-        .default_value("./ferron.kdl")
-        .value_parser(PathBuf::from_str),
-    )
-    .arg(
-      Arg::new("config-adapter")
-        .long("config-adapter")
-        .help("The configuration adapter to use")
-        .action(ArgAction::Set)
-        .required(false)
-        .value_parser(all_adapters),
-    )
-    .arg(
-      Arg::new("module-config")
-        .long("module-config")
-        .help("Prints the used compile-time module configuration (`ferron-build.yaml` or `ferron-build-override.yaml` in the Ferron source) and exits")
-        .action(ArgAction::SetTrue)
-    )
-    .arg(
-      Arg::new("version")
-        .long("version")
-        .short('V')
-        .help("Print version and build information")
-        .action(ArgAction::SetTrue)
-    )
-    .get_matches()
+fn print_version() {
+  // Print the server version and build information
+  println!("Ferron {}", build::PKG_VERSION);
+  println!("  Compiled on: {}", build::BUILD_TIME);
+  println!("  Git commit: {}", build::COMMIT_HASH);
+  println!("  Build target: {}", build::BUILD_TARGET);
+  println!("  Rust version: {}", build::RUST_VERSION);
+  println!("  Build host: {}", build::BUILD_OS);
+  if shadow_rs::is_debug() {
+    println!("WARNING: This is a debug build. It is not recommended for production use.");
+  }
 }
 
 /// The main entry point of the application
@@ -1648,35 +949,23 @@ fn main() {
     .support("- Send an email message to hello@ferron.sh"));
 
   // Obtain the configuration adapters
-  let (configuration_adapters, all_adapters) = obtain_configuration_adapters();
+  let (configuration_adapters, _all_adapters) = obtain_configuration_adapters();
 
   // Parse command-line arguments
-  let args = parse_arguments(all_adapters);
+  let args = FerronArgs::parse();
 
-  if args.get_flag("module-config") {
+  if args.module_config {
     // Dump the used compile-time module configuration and exit
     println!("{}", ferron_load_modules::FERRON_BUILD_YAML);
     return;
-  } else if args.get_flag("version") {
-    // Print the server version and build information
-    println!("Ferron {}", build::PKG_VERSION);
-    println!("  Compiled on: {}", build::BUILD_TIME);
-    println!("  Git commit: {}", build::COMMIT_HASH);
-    println!("  Build target: {}", build::BUILD_TARGET);
-    println!("  Rust version: {}", build::RUST_VERSION);
-    println!("  Build host: {}", build::BUILD_OS);
-    if shadow_rs::is_debug() {
-      println!("WARNING: This is a debug build. It is not recommended for production use.");
-    }
+  } else if args.version {
+    print_version();
     return;
   }
 
   // Start the server!
-  match before_starting_server(args, configuration_adapters) {
-    Ok(_) => (),
-    Err(err) => {
-      eprintln!("Error while running a server: {err}");
-      std::process::exit(1);
-    }
-  };
+  if let Err(err) = before_starting_server(args, configuration_adapters) {
+    eprintln!("Error while running a server: {err}");
+    std::process::exit(1);
+  }
 }

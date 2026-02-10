@@ -679,6 +679,42 @@ impl ModuleLoader for CoreModuleLoader {
       }
     }
 
+    if let Some(tls_entries) = get_entries_for_validation!("auto_tls_save_data", config, used_properties) {
+      for tls_entry in &tls_entries.inner {
+        if !(1..=2).contains(&tls_entry.values.len()) {
+          Err(anyhow::anyhow!(
+            "The `auto_tls_save_data` configuration property must have either one or two values"
+          ))?
+        } else if tls_entry.values.len() == 1 && !tls_entry.values[0].is_null() {
+          Err(anyhow::anyhow!(
+            "The `auto_tls_save_data` configuration property must have a null value if it has only one value"
+          ))?
+        } else if !tls_entry.values[0].is_string() {
+          Err(anyhow::anyhow!(
+            "The path to the TLS certificate saved after obtaining TLS certificate via ACME must be a string"
+          ))?
+        } else if !tls_entry.values[1].is_string() {
+          Err(anyhow::anyhow!(
+            "The path to the TLS private key saved after obtaining TLS certificate via ACME must be a string"
+          ))?
+        }
+      }
+    }
+
+    if let Some(entries) = get_entries_for_validation!("auto_tls_post_obtain_command", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `auto_tls_post_obtain_command` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
+          Err(anyhow::anyhow!(
+            "Invalid command specification after obtaining TLS certificate via ACME"
+          ))?
+        }
+      }
+    };
+
     Ok(())
   }
 }

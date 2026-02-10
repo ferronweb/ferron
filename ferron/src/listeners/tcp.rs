@@ -44,7 +44,7 @@ pub fn create_tcp_listener(
         .send_blocking(rt.return_io_uring_error())
         .unwrap_or_default();
       rt.run(async move {
-        let tcp_listener_future = tcp_listener_fn(
+        if let Err(error) = tcp_listener_fn(
           address,
           encrypted,
           tx,
@@ -52,16 +52,11 @@ pub fn create_tcp_listener(
           logging_tx,
           first_startup,
           tcp_buffer_sizes,
-        );
-        crate::runtime::select! {
-          result = tcp_listener_future => {
-            if let Some(error) = result.err() {
-                listen_error_tx.send(Some(error)).await.unwrap_or_default();
-            }
-          }
-          _ = shutdown_rx.cancelled() => {
-
-          }
+          shutdown_rx,
+        )
+        .await
+        {
+          listen_error_tx.send(Some(error)).await.unwrap_or_default();
         }
       });
     })?;
@@ -74,6 +69,7 @@ pub fn create_tcp_listener(
 }
 
 /// TCP listener function
+#[allow(clippy::too_many_arguments)]
 async fn tcp_listener_fn(
   address: SocketAddr,
   encrypted: bool,
@@ -82,6 +78,7 @@ async fn tcp_listener_fn(
   logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
   tcp_buffer_sizes: (Option<usize>, Option<usize>),
+  shutdown_rx: CancellationToken,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   let mut listener_result;
   let mut tries: u64 = 0;
@@ -172,7 +169,14 @@ async fn tcp_listener_fn(
   listen_error_tx.send(None).await.unwrap_or_default();
 
   loop {
-    let (tcp, remote_address) = match listener.accept().await {
+    let (tcp, remote_address) = match crate::runtime::select! {
+      result = listener.accept() => {
+        result
+      }
+      _ = shutdown_rx.cancelled() => {
+        return Ok(());
+      }
+    } {
       Ok(data) => data,
       Err(err) => {
         if let Some(logging_tx) = &logging_tx {

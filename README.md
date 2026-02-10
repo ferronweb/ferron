@@ -1,13 +1,13 @@
 <p align="center">
   <a href="https://ferron.sh" target="_blank">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="wwwroot/img/logo-dark.png">
-      <img alt="Ferron logo" src="wwwroot/img/logo.png" width="256">
+      <source media="(prefers-color-scheme: dark)" srcset="wwwroot/assets/logo-dark.png">
+      <img alt="Ferron logo" src="wwwroot/assets/logo.png" width="256">
     </picture>
   </a>
 </p>
 <p align="center">
-  <b>Ferron</b> - a fast, memory-safe web server written in Rust
+  <b>Ferron</b> - a fast, modern, and easily configurable web server with automatic TLS
 </p>
 
 * * *
@@ -21,12 +21,14 @@
   <a href="https://github.com/ferronweb/ferron" target="_blank"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/ferronweb/ferron?style=for-the-badge"></a>
 </p>
 
-## Features
+## Why Ferron?
 
-- **High performance** - built with Rust’s async capabilities for optimal speed.
-- **Memory-safe** - built with Rust, which is a programming language offering memory safety.
+- **High performance** - thoroughly optimized for speed with support for high concurrency.
+- **Memory-safe** - built with [Rust](https://rust-lang.org/), which is a programming language that can offer strong memory safety guarantees.
+- **Automatic TLS** - automatic SSL/TLS certificate acquisition and renewal with [Let's Encrypt](https://letsencrypt.org/) integration.
+- **Easy configuration** - simple, intuitive configuration with sensible, secure defaults and [comprehensive documentation](https://ferron.sh/docs).
 - **Extensibility** - modular architecture for easy customization.
-- **Secure** - focus on robust security practices and safe concurrency.
+- **Powerful reverse proxy** - advanced reverse proxy capabilities with support for load balancing and health checks.
 
 ## Components
 
@@ -46,6 +48,46 @@ Ferron also consists of:
 - **`ferron-modules-builtin`** - built-in Ferron modules.
 - **`ferron-observability-builtin`** - built-in Ferron observability backend support.
 - **`ferron-yaml2kdl-core`** - the core library behind the `ferron-yaml2kdl` tool.
+
+## Installing Ferron from pre-built binaries
+
+The easiest way to install Ferron is installing it from pre-built binaries.
+
+Below are the different ways to install Ferron:
+
+- [Installer (GNU/Linux)
+](https://ferron.sh/docs/installation/installer-linux)
+- [Installer (Windows Server)
+](https://ferron.sh/docs/installation/installer-windows)
+- [Package managers (Debian/Ubuntu)](https://ferron.sh/docs/installation/debian)
+- [Package managers (RHEL/Fedora)](https://ferron.sh/docs/installation/rpm)
+- [Docker](https://ferron.sh/docs/installation/docker)
+- [Package managers (community)](https://ferron.sh/docs/installation/package-managers)
+- [Manual installation](https://ferron.sh/docs/installation/manual)
+
+## Configuration examples
+
+### Basic static file serving
+
+```kdl
+// Example configuration with static file serving. Replace "example.com" with your domain name.
+example.com {
+    root "/var/www/html" // Replace "/var/www/html" with the directory containing your static files
+}
+```
+
+### Basic reverse proxying
+
+```kdl
+// Example configuration with reverse proxy. Replace "example.com" with your domain name.
+example.com {
+    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+}
+```
+
+### More examples
+
+You can find more configuration examples for common use cases in the [Ferron documentation](https://ferron.sh/docs).
 
 ## Building Ferron from source
 

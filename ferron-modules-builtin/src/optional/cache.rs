@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::error::Error;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
@@ -305,9 +305,11 @@ impl<Key, Val> quick_cache::Lifecycle<Key, Val> for CustomLifecycle<Key, Val> {
 }
 
 /// A cache module loader with optimized initialization
-#[allow(clippy::type_complexity)]
 pub struct CacheModuleLoader {
   module_cache: ModuleCache<CacheModule>,
+  caches_to_drop: Vec<Arc<CacheInner>>,
+  vary_caches_to_drop: Vec<Arc<quick_cache::sync::Cache<String, Arc<HeaderList>>>>,
+  dont_register_evictions: Arc<AtomicBool>,
 }
 
 impl Default for CacheModuleLoader {
@@ -321,6 +323,9 @@ impl CacheModuleLoader {
   pub fn new() -> Self {
     Self {
       module_cache: ModuleCache::new(vec![]),
+      caches_to_drop: Vec::new(),
+      vary_caches_to_drop: Vec::new(),
+      dont_register_evictions: Arc::new(AtomicBool::new(false)),
     }
   }
 }
@@ -350,27 +355,34 @@ impl ModuleLoader for CacheModuleLoader {
           // Use optimized cache size calculation
           let track_evictions = Arc::new(AtomicUsize::new(0));
 
+          let cache = Arc::new(quick_cache::sync::Cache::with(
+            maximum_cache_entries
+              .as_ref()
+              .map_or(usize::MAX, |v| (*v).saturating_add(1)),
+            maximum_cache_entries
+              .as_ref()
+              .map_or(u64::MAX, |v| (*v as u64).saturating_add(1)),
+            quick_cache::UnitWeighter,
+            quick_cache::DefaultHashBuilder::new(),
+            CustomLifecycle {
+              inner: quick_cache::sync::DefaultLifecycle::default(),
+              track_evictions: track_evictions.clone(),
+            },
+          ));
+          let vary_cache = Arc::new(quick_cache::sync::Cache::new(
+            maximum_cache_entries
+              .as_ref()
+              .map_or(usize::MAX, |v| (*v).saturating_add(1)),
+          ));
+
+          self.caches_to_drop.push(cache.clone());
+          self.vary_caches_to_drop.push(vary_cache.clone());
+
           Ok(Arc::new(CacheModule {
-            cache: Arc::new(quick_cache::sync::Cache::with(
-              maximum_cache_entries
-                .as_ref()
-                .map_or(usize::MAX, |v| (*v).saturating_add(1)),
-              maximum_cache_entries
-                .as_ref()
-                .map_or(u64::MAX, |v| (*v as u64).saturating_add(1)),
-              quick_cache::UnitWeighter,
-              quick_cache::DefaultHashBuilder::new(),
-              CustomLifecycle {
-                inner: quick_cache::sync::DefaultLifecycle::default(),
-                track_evictions: track_evictions.clone(),
-              },
-            )),
-            vary_cache: Arc::new(quick_cache::sync::Cache::new(
-              maximum_cache_entries
-                .as_ref()
-                .map_or(usize::MAX, |v| (*v).saturating_add(1)),
-            )),
+            cache,
+            vary_cache,
             track_evictions,
+            dont_register_evictions: self.dont_register_evictions.clone(),
           }))
         })?,
     )
@@ -448,12 +460,24 @@ impl ModuleLoader for CacheModuleLoader {
   }
 }
 
+impl Drop for CacheModuleLoader {
+  fn drop(&mut self) {
+    self.dont_register_evictions.store(true, Ordering::Relaxed);
+    while let Some(cache) = self.caches_to_drop.pop() {
+      cache.clear();
+    }
+    while let Some(vary_cache) = self.vary_caches_to_drop.pop() {
+      vary_cache.clear();
+    }
+  }
+}
+
 /// A cache module with optimized data structures
-#[allow(clippy::type_complexity)]
 struct CacheModule {
   cache: Arc<CacheInner>,
   vary_cache: Arc<quick_cache::sync::Cache<String, Arc<HeaderList>>>,
   track_evictions: Arc<AtomicUsize>,
+  dont_register_evictions: Arc<AtomicBool>,
 }
 
 impl Module for CacheModule {
@@ -472,12 +496,12 @@ impl Module for CacheModule {
       metric_cache_hit: None,
       metric_cache_evictions_expired: None,
       track_evictions: self.track_evictions.clone(),
+      dont_register_evictions: self.dont_register_evictions.clone(),
     })
   }
 }
 
 /// Optimized handlers for the cache module
-#[allow(clippy::type_complexity)]
 struct CacheModuleHandlers {
   cache: Arc<CacheInner>,
   vary_cache: Arc<quick_cache::sync::Cache<String, Arc<HeaderList>>>,
@@ -492,6 +516,7 @@ struct CacheModuleHandlers {
   metric_cache_hit: Option<bool>,
   metric_cache_evictions_expired: Option<usize>,
   track_evictions: Arc<AtomicUsize>,
+  dont_register_evictions: Arc<AtomicBool>,
 }
 
 impl CacheModuleHandlers {
@@ -826,38 +851,40 @@ impl ModuleHandlers for CacheModuleHandlers {
       .await;
 
     // Cache evictions
-    let metric_cache_evictions_size = self.track_evictions.swap(0, Ordering::Relaxed);
-    if metric_cache_evictions_size > 0 {
-      metrics_sender
-        .send(Metric::new(
-          "ferron.cache.evictions",
-          vec![(
-            "ferron.cache.eviction_reason",
-            MetricAttributeValue::String("size".to_string()),
-          )],
-          MetricType::Counter,
-          MetricValue::U64(metric_cache_evictions_size as u64),
-          Some("{eviction}"),
-          Some("Number of cache evictions."),
-        ))
-        .await;
-    }
+    if !self.dont_register_evictions.load(Ordering::Relaxed) {
+      let metric_cache_evictions_size = self.track_evictions.swap(0, Ordering::Relaxed);
+      if metric_cache_evictions_size > 0 {
+        metrics_sender
+          .send(Metric::new(
+            "ferron.cache.evictions",
+            vec![(
+              "ferron.cache.eviction_reason",
+              MetricAttributeValue::String("size".to_string()),
+            )],
+            MetricType::Counter,
+            MetricValue::U64(metric_cache_evictions_size as u64),
+            Some("{eviction}"),
+            Some("Number of cache evictions."),
+          ))
+          .await;
+      }
 
-    let metric_cache_evictions_expired = *self.metric_cache_evictions_expired.as_ref().unwrap_or(&0);
-    if metric_cache_evictions_expired > 0 {
-      metrics_sender
-        .send(Metric::new(
-          "ferron.cache.evictions",
-          vec![(
-            "ferron.cache.eviction_reason",
-            MetricAttributeValue::String("expired".to_string()),
-          )],
-          MetricType::Counter,
-          MetricValue::U64(metric_cache_evictions_expired as u64),
-          Some("{eviction}"),
-          Some("Number of cache evictions."),
-        ))
-        .await;
+      let metric_cache_evictions_expired = *self.metric_cache_evictions_expired.as_ref().unwrap_or(&0);
+      if metric_cache_evictions_expired > 0 {
+        metrics_sender
+          .send(Metric::new(
+            "ferron.cache.evictions",
+            vec![(
+              "ferron.cache.eviction_reason",
+              MetricAttributeValue::String("expired".to_string()),
+            )],
+            MetricType::Counter,
+            MetricValue::U64(metric_cache_evictions_expired as u64),
+            Some("{eviction}"),
+            Some("Number of cache evictions."),
+          ))
+          .await;
+      }
     }
   }
 }

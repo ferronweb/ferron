@@ -56,14 +56,16 @@ use crate::util::{SendUnixStreamPoll, SendUnixStreamPollDropGuard};
 const DEFAULT_CONCURRENT_CONNECTIONS: usize = 16384;
 const DEFAULT_KEEPALIVE_IDLE_TIMEOUT: u64 = 60000;
 
-#[allow(clippy::type_complexity)]
+type ConnectionsTrackState = Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>;
+
 enum LoadBalancerAlgorithm {
   Random,
   RoundRobin(Arc<AtomicUsize>),
-  LeastConnections(Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>),
-  TwoRandomChoices(Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>),
+  LeastConnections(ConnectionsTrackState),
+  TwoRandomChoices(ConnectionsTrackState),
 }
 
+type ProxyToKey = (String, Option<String>, Option<usize>, Option<Duration>);
 type ProxyToVectorContentsBorrowed<'a> = (&'a str, Option<&'a str>, Option<usize>, Option<Duration>);
 
 type ConnectionPool = Arc<Pool<(String, Option<String>, Option<IpAddr>), SendRequestWrapper>>;
@@ -208,7 +210,6 @@ unsafe impl<B> Send for TrackedBody<B> where B: Send {}
 unsafe impl<B> Sync for TrackedBody<B> where B: Sync {}
 
 /// A reverse proxy module loader
-#[allow(clippy::type_complexity)]
 pub struct ReverseProxyModuleLoader {
   cache: ModuleCache<ReverseProxyModule>,
   connections: Option<ConnectionPool>,
@@ -606,11 +607,11 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 }
 
 /// A reverse proxy module
-#[allow(clippy::type_complexity)]
 struct ReverseProxyModule {
+  #[allow(clippy::type_complexity)]
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
   load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
-  proxy_to: Arc<Vec<(String, Option<String>, Option<usize>, Option<Duration>)>>,
+  proxy_to: Arc<Vec<ProxyToKey>>,
   health_check_max_fails: u64,
   connections: ConnectionPool,
   #[cfg(unix)]
@@ -635,11 +636,11 @@ impl Module for ReverseProxyModule {
 }
 
 /// Handlers for the reverse proxy module
-#[allow(clippy::type_complexity)]
 struct ReverseProxyModuleHandlers {
+  #[allow(clippy::type_complexity)]
   failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
   load_balancer_algorithm: Arc<LoadBalancerAlgorithm>,
-  proxy_to: Arc<Vec<(String, Option<String>, Option<usize>, Option<Duration>)>>,
+  proxy_to: Arc<Vec<ProxyToKey>>,
   health_check_max_fails: u64,
   selected_backends_metrics: Option<Vec<(String, Option<String>)>>,
   unhealthy_backends_metrics: Option<Vec<(String, Option<String>)>>,
@@ -847,13 +848,14 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
                   self.connection_reused = true;
                   let _ = send_request_item.inner_mut().take();
                   let proxy_request = Request::from_parts(proxy_request_parts, request_body);
-                  let result = http_proxy_kept_alive(
+                  let result = http_proxy(
                     send_request,
                     send_request_item,
                     proxy_request,
                     error_logger,
                     proxy_intercept_errors,
                     tracked_connection,
+                    true,
                   )
                   .await;
                   return result;
@@ -1048,35 +1050,32 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
             }
           };
 
-          match stream.set_nodelay(true) {
-            Ok(_) => (),
-            Err(err) => {
-              if enable_health_check {
-                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
-                if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
-                  unhealthy_backends_metrics.push(proxy_key.clone());
-                }
-                let mut failed_backends_write = self.failed_backends.write().await;
-                let failed_attempts = failed_backends_write.get(&proxy_key);
-                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+          if let Err(err) = stream.set_nodelay(true) {
+            if enable_health_check {
+              let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+              if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
+                unhealthy_backends_metrics.push(proxy_key.clone());
               }
-
-              if retry_connection && !proxy_to_vector.is_empty() {
-                error_logger
-                  .log(&format!("Failed to connect to backend, trying another backend: {err}"))
-                  .await;
-                continue;
-              }
-
-              error_logger.log(&format!("Bad gateway: {err}")).await;
-              return Ok(ResponseData {
-                request: None,
-                response: None,
-                response_status: Some(StatusCode::BAD_GATEWAY),
-                response_headers: None,
-                new_remote_address: None,
-              });
+              let mut failed_backends_write = self.failed_backends.write().await;
+              let failed_attempts = failed_backends_write.get(&proxy_key);
+              failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
             }
+
+            if retry_connection && !proxy_to_vector.is_empty() {
+              error_logger
+                .log(&format!("Failed to connect to backend, trying another backend: {err}"))
+                .await;
+              continue;
+            }
+
+            error_logger.log(&format!("Bad gateway: {err}")).await;
+            return Ok(ResponseData {
+              request: None,
+              response: None,
+              response_status: Some(StatusCode::BAD_GATEWAY),
+              response_headers: None,
+              new_remote_address: None,
+            });
           };
 
           #[cfg(feature = "runtime-monoio")]
@@ -1227,36 +1226,33 @@ impl ModuleHandlers for ReverseProxyModuleHandlers {
         let mut stream = stream; // Make the stream a mutable variable (to be able to write PROXY protocol header to it).
 
         if let Some(proxy_header_to_write) = proxy_header_to_write {
-          match stream.write_all(&proxy_header_to_write).await {
-            Ok(_) => (),
-            Err(err) => {
-              if enable_health_check {
-                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
-                if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
-                  unhealthy_backends_metrics.push(proxy_key.clone());
-                }
-                let mut failed_backends_write = self.failed_backends.write().await;
-                let failed_attempts = failed_backends_write.get(&proxy_key);
-                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+          if let Err(err) = stream.write_all(&proxy_header_to_write).await {
+            if enable_health_check {
+              let proxy_key = (proxy_to.clone(), proxy_unix.clone());
+              if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
+                unhealthy_backends_metrics.push(proxy_key.clone());
               }
-
-              if retry_connection && !proxy_to_vector.is_empty() {
-                error_logger
-                  .log(&format!("Failed to connect to backend, trying another backend: {err}"))
-                  .await;
-                continue;
-              }
-
-              error_logger.log(&format!("Bad gateway: {err}")).await;
-              return Ok(ResponseData {
-                request: None,
-                response: None,
-                response_status: Some(StatusCode::BAD_GATEWAY),
-                response_headers: None,
-                new_remote_address: None,
-              });
+              let mut failed_backends_write = self.failed_backends.write().await;
+              let failed_attempts = failed_backends_write.get(&proxy_key);
+              failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
             }
-          };
+
+            if retry_connection && !proxy_to_vector.is_empty() {
+              error_logger
+                .log(&format!("Failed to connect to backend, trying another backend: {err}"))
+                .await;
+              continue;
+            }
+
+            error_logger.log(&format!("Bad gateway: {err}")).await;
+            return Ok(ResponseData {
+              request: None,
+              response: None,
+              response_status: Some(StatusCode::BAD_GATEWAY),
+              response_headers: None,
+              new_remote_address: None,
+            });
+          }
         }
 
         // Safety: the drop guard is dropped when the connection future is completed,
@@ -1622,7 +1618,7 @@ async fn select_backend_index<'a>(
 /// * `load_balancer_algorithm` - The load balancing algorithm to use
 ///
 /// # Returns
-/// * `Option<(String, Option<String>, Option<usize>, Option<Duration>)>` -
+/// * `Option<ProxyToKey>` -
 ///   The URL, the optional Unix socket path,
 ///   the local limit index of the selected backend server,
 ///   and the keepalive timeout, or None if no valid backend exists
@@ -1633,7 +1629,7 @@ async fn determine_proxy_to<'a>(
   enable_health_check: bool,
   health_check_max_fails: u64,
   load_balancer_algorithm: &LoadBalancerAlgorithm,
-) -> Option<(String, Option<String>, Option<usize>, Option<Duration>)> {
+) -> Option<ProxyToKey> {
   let mut proxy_to = None;
   // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
   // The "proxy" directive is validated though.
@@ -1740,7 +1736,7 @@ async fn http_proxy_handshake(
   })
 }
 
-/// Establishes a new HTTP connection to a backend server and forwards the request
+/// Forwards an HTTP request to a backend server
 ///
 /// This function:
 /// 1. Creates a new HTTP client connection to the specified backend
@@ -1760,7 +1756,6 @@ async fn http_proxy_handshake(
 ///
 /// # Returns
 /// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
-#[inline]
 async fn http_proxy(
   mut sender: SendRequest,
   connection_pool_item: ConnectionPoolItem,
@@ -1888,160 +1883,6 @@ async fn http_proxy(
   Ok(response)
 }
 
-/// Forwards a request using an existing, kept-alive HTTP connection to a backend server
-///
-/// This function:
-/// 1. Uses an existing HTTP connection from the connection pool
-/// 2. Forwards the request to the backend server over this connection
-/// 3. Handles protocol upgrades (e.g., WebSockets)
-/// 4. Processes the response from the backend
-///
-/// This is an optimization that avoids the overhead of establishing new TCP/TLS connections
-/// when an existing connection to the same backend server is available and reusable.
-///
-/// # Parameters
-/// * `sender` - The inner connection to the backend server
-/// * `connection_pool_item` - The connection pool item for the backend server, with the inner connection
-/// * `proxy_request` - The HTTP request to forward to the backend
-/// * `error_logger` - Logger for reporting errors
-/// * `proxy_intercept_errors` - Whether to intercept 4xx/5xx responses and handle them directly
-/// * `tracked_connection` - The optional tracked connection to the backend server
-///
-/// # Returns
-/// * `Result<ResponseData, Box<dyn Error + Send + Sync>>` - The HTTP response or error
-#[inline]
-async fn http_proxy_kept_alive(
-  mut sender: SendRequest,
-  connection_pool_item: ConnectionPoolItem,
-  proxy_request: Request<BoxBody<Bytes, std::io::Error>>,
-  error_logger: &ErrorLogger,
-  proxy_intercept_errors: bool,
-  tracked_connection: Option<Arc<()>>,
-) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  let (proxy_request_parts, proxy_request_body) = proxy_request.into_parts();
-  let proxy_request_cloned = Request::from_parts(proxy_request_parts.clone(), ());
-  let proxy_request = Request::from_parts(proxy_request_parts, proxy_request_body);
-
-  let send_request_result = sender.send_request(proxy_request).await;
-  #[allow(clippy::arc_with_non_send_sync)]
-  let connection_pool_item = Arc::new(UnsafeCell::new(connection_pool_item));
-
-  // Send the request over the existing connection and await the response
-  let proxy_response = match send_request_result {
-    Ok(response) => response,
-    Err(err) => {
-      // Log the error and return a 502 Bad Gateway response
-      error_logger.log(&format!("Bad gateway: {err}")).await;
-      return Ok(ResponseData {
-        request: None,
-        response: None,
-        response_status: Some(StatusCode::BAD_GATEWAY),
-        response_headers: None,
-        new_remote_address: None,
-      });
-    }
-  };
-
-  let (proxy_response_parts, proxy_response_body) = proxy_response.into_parts();
-  // Handle HTTP protocol upgrades (e.g., WebSockets)
-  if proxy_response_parts.status == StatusCode::SWITCHING_PROTOCOLS {
-    let proxy_response_cloned = Response::from_parts(proxy_response_parts.clone(), ());
-    match hyper::upgrade::on(proxy_response_cloned).await {
-      Ok(upgraded_backend) => {
-        // Needed to wrap in monoio::spawn call, since otherwise HTTP upgrades wouldn't work...
-        let error_logger = error_logger.clone();
-        let connection_pool_item = connection_pool_item.clone();
-        ferron_common::runtime::spawn(async move {
-          // Try to upgrade the client connection
-          match hyper::upgrade::on(proxy_request_cloned).await {
-            Ok(upgraded_proxy) => {
-              // Successfully upgraded both connections
-              // Now create Monoio- or Tokio-compatible I/O types
-              #[cfg(feature = "runtime-monoio")]
-              let mut upgraded_backend = MonoioIo::new(upgraded_backend);
-              #[cfg(feature = "runtime-tokio")]
-              let mut upgraded_backend = TokioIo::new(upgraded_backend);
-
-              #[cfg(feature = "runtime-monoio")]
-              let mut upgraded_proxy = MonoioIo::new(upgraded_proxy);
-              #[cfg(feature = "runtime-tokio")]
-              let mut upgraded_proxy = TokioIo::new(upgraded_proxy);
-
-              // Spawn a task to copy data bidirectionally between client and backend
-              ferron_common::runtime::spawn(async move {
-                tokio::io::copy_bidirectional(&mut upgraded_backend, &mut upgraded_proxy)
-                  .await
-                  .unwrap_or_default();
-                drop(connection_pool_item);
-              });
-            }
-            Err(err) => {
-              // Could not upgrade the client connection
-              error_logger.log(&format!("HTTP upgrade error: {err}")).await;
-            }
-          }
-        });
-      }
-      Err(err) => {
-        // Could not upgrade the backend connection
-        error_logger.log(&format!("HTTP upgrade error: {err}")).await;
-      }
-    }
-  }
-  let proxy_response = Response::from_parts(proxy_response_parts, proxy_response_body);
-
-  // Get the status code from the proxy response
-  let status_code = proxy_response.status();
-
-  // Handle the response differently based on whether we intercept error responses
-  let response = if proxy_intercept_errors && status_code.as_u16() >= 400 {
-    // If intercepting errors and status code is 400+, create a direct response with just the status code
-    // This allows the server to potentially apply custom error handling
-    ResponseData {
-      request: None,
-      response: None,
-      response_status: Some(status_code),
-      response_headers: None,
-      new_remote_address: None,
-    }
-  } else {
-    // For successful responses or when not intercepting errors, pass the backend response directly
-    let (response_parts, response_body) = proxy_response.into_parts();
-    let boxed_body = TrackedBody::new(
-      response_body.map_err(|e| std::io::Error::other(e.to_string())),
-      tracked_connection,
-      if !sender.is_closed() {
-        None
-      } else {
-        // Safety: this should be not modified, see the "unsafe" block below
-        Some(connection_pool_item.clone())
-      },
-    )
-    .boxed();
-    ResponseData {
-      request: None,
-      response: Some(Response::from_parts(response_parts, boxed_body)),
-      response_status: None,
-      response_headers: None,
-      new_remote_address: None,
-    }
-  };
-
-  if !sender.is_closed() {
-    // Safety: this Arc is cloned twice (when there's HTTP upgrade and when keepalive is disabled),
-    // but the clones' inner value isn't modified, so no race condition.
-    // We could wrap this value in a Mutex, but it's not really necessary in this case.
-    let connection_pool_item = unsafe { &mut *connection_pool_item.get() };
-    connection_pool_item
-      .inner_mut()
-      .replace(SendRequestWrapper::new(sender));
-  }
-
-  drop(connection_pool_item);
-
-  Ok(response)
-}
-
 /// Constructs a proxy request based on the original request.
 #[inline]
 fn construct_proxy_request_parts(
@@ -2154,9 +1995,6 @@ fn construct_proxy_request_parts(
     request_parts.headers.insert(header::CONNECTION, "keep-alive".parse()?);
   }
 
-  // Remove Forwarded header to prevent spoofing (Ferron reverse proxy doesn't support "Forwarded" header)
-  request_parts.headers.remove(header::FORWARDED);
-
   let trust_x_forwarded_for = get_value!("trust_x_forwarded_for", config)
     .and_then(|v| v.as_bool())
     .unwrap_or(false);
@@ -2207,6 +2045,91 @@ fn construct_proxy_request_parts(
         .headers
         .insert(HeaderName::from_static("x-forwarded-host"), original_host);
     }
+  }
+
+  // Convert X-Forwarded-* header values into Forwarded header value
+  let mut forwarded_header_value = None;
+  if let Some(forwarded_header_value_obtained) = request_parts
+    .headers
+    .get(HeaderName::from_static("x-forwarded-for"))
+    .and_then(|h| h.to_str().ok())
+  {
+    let mut forwarded_header_value_new = Vec::new();
+    let mut is_first = true;
+
+    for ip in forwarded_header_value_obtained
+      .split(',')
+      .map(|s| s.trim())
+      .filter(|s| !s.is_empty())
+    {
+      // HTTP/1.1 "delimiters" and sequences that would be escaped by str::escape_default()...
+      let escape_determinants: &'static [char] = &[
+        '(', ')', ',', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '{', '}', '\"', '\'', '\r', '\n', '\t',
+      ];
+
+      let forwarded_for = if ip.parse::<std::net::Ipv4Addr>().is_ok() {
+        ip.to_string()
+      } else if ip.parse::<std::net::Ipv6Addr>().is_ok() {
+        // IPv6 addresses in "Forwarded" header must be quoted and enclosed in square brackets
+        format!("\"[{ip}]\"")
+      } else if ip.contains(escape_determinants) {
+        format!("\"{}\"", ip.escape_default())
+      } else {
+        ip.to_string()
+      };
+
+      // Forwarded host and protocols are only applicable for the first entry
+      let (forwarded_host, forwarded_proto) = if is_first {
+        (
+          request_parts
+            .headers
+            .get(HeaderName::from_static("x-forwarded-host"))
+            .and_then(|h| h.to_str().ok()),
+          request_parts
+            .headers
+            .get(HeaderName::from_static("x-forwarded-proto"))
+            .and_then(|h| h.to_str().ok()),
+        )
+      } else {
+        (None, None)
+      };
+
+      let mut forwarded_entry = Vec::new();
+      forwarded_entry.push(format!("for={}", forwarded_for));
+      if let Some(forwarded_proto) = forwarded_proto {
+        forwarded_entry.push(format!(
+          "proto={}",
+          if forwarded_proto.contains(escape_determinants) {
+            format!("\"{}\"", forwarded_proto.escape_default())
+          } else {
+            forwarded_proto.to_string()
+          }
+        ));
+      }
+      if let Some(forwarded_host) = forwarded_host {
+        forwarded_entry.push(format!(
+          "host={}",
+          if forwarded_host.contains(escape_determinants) {
+            format!("\"{}\"", forwarded_host.escape_default())
+          } else {
+            forwarded_host.to_string()
+          }
+        ));
+      }
+      forwarded_header_value_new.push(forwarded_entry.join(";"));
+
+      is_first = false;
+    }
+
+    forwarded_header_value = Some(forwarded_header_value_new.join(", "));
+  }
+  if let Some(forwarded_header_value) = forwarded_header_value {
+    request_parts
+      .headers
+      .insert(header::FORWARDED, forwarded_header_value.parse()?);
+  } else {
+    // Remove Forwarded header to prevent spoofing
+    request_parts.headers.remove(header::FORWARDED);
   }
 
   for (header_name_option, header_value) in headers_to_add {

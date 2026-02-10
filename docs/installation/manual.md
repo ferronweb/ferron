@@ -78,10 +78,13 @@ kill -HUP $(pidof ferron)
 
   The `ferron-passwd` tool assists in generating user entries with hashed passwords for secure configurations. To use it:
   - **Unix-like Systems**:
+
     ```bash
     ./ferron-passwd someuser
     ```
+
   - **Windows**:
+
     ```cmd
     ferron-passwd.exe someuser
     ```

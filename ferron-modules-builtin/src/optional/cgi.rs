@@ -5,16 +5,11 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
-#[cfg(feature = "runtime-monoio")]
-use async_process::Command;
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures_util::stream::TryStreamExt;
-use hashlink::LinkedHashMap;
+use cegla_cgi::CgiEnvironment;
 use http_body_util::combinators::BoxBody;
-use http_body_util::{BodyExt, StreamBody};
-use httparse::EMPTY_HEADER;
-use hyper::body::Frame;
+use http_body_util::BodyExt;
 use hyper::{header, Request, Response, StatusCode};
 #[cfg(feature = "runtime-monoio")]
 use monoio::fs;
@@ -25,15 +20,79 @@ use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tokio::sync::RwLock;
 #[cfg(feature = "runtime-monoio")]
-use tokio_util::compat::{FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
-use tokio_util::io::{ReaderStream, StreamReader};
+use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
 
-use crate::util::cgi::CgiResponse;
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use ferron_common::util::{ModuleCache, TtlCache, SERVER_SOFTWARE};
 use ferron_common::{get_entries, get_entries_for_validation, get_entry, get_value};
+
+/// Custom runtime for `cegla-cgi`
+#[cfg(feature = "runtime-monoio")]
+pub struct CustomCgiRuntime;
+
+/// Custom child process for `cegla-cgi`
+#[cfg(feature = "runtime-monoio")]
+pub struct CustomCgiChild {
+  inner: async_process::Child,
+}
+
+#[cfg(feature = "runtime-monoio")]
+impl cegla_cgi::client::SendRuntime for CustomCgiRuntime {
+  type Child = CustomCgiChild;
+
+  fn spawn(&self, future: impl std::future::Future + Send + 'static) {
+    monoio::spawn(async move {
+      future.await;
+    });
+  }
+
+  fn start_child(
+    &self,
+    cmd: &std::ffi::OsStr,
+    args: &[&std::ffi::OsStr],
+    env: CgiEnvironment,
+    cwd: Option<PathBuf>,
+  ) -> Result<Self::Child, std::io::Error> {
+    let mut command = async_process::Command::new(cmd);
+    command
+      .stdin(Stdio::piped())
+      .stdout(Stdio::piped())
+      .stderr(Stdio::piped())
+      .envs(env)
+      .args(args);
+    if let Some(cwd) = cwd {
+      command.current_dir(cwd);
+    }
+    Ok(CustomCgiChild {
+      inner: command.spawn()?,
+    })
+  }
+}
+
+#[cfg(feature = "runtime-monoio")]
+impl cegla_cgi::client::SendChild for CustomCgiChild {
+  type Stdin = Compat<async_process::ChildStdin>;
+  type Stdout = Compat<async_process::ChildStdout>;
+  type Stderr = Compat<async_process::ChildStderr>;
+
+  fn stdin(&mut self) -> Option<Self::Stdin> {
+    self.inner.stdin.take().map(|io| io.compat_write())
+  }
+
+  fn stdout(&mut self) -> Option<Self::Stdout> {
+    self.inner.stdout.take().map(|io| io.compat())
+  }
+
+  fn stderr(&mut self) -> Option<Self::Stderr> {
+    self.inner.stderr.take().map(|io| io.compat())
+  }
+
+  fn try_status(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+    self.inner.try_status()
+  }
+}
 
 /// A CGI module loader
 #[allow(clippy::type_complexity)]
@@ -563,7 +622,7 @@ impl ModuleHandlers for CgiModuleHandlers {
 
 #[allow(clippy::too_many_arguments)]
 async fn execute_cgi_with_environment_variables(
-  request: Request<BoxBody<Bytes, std::io::Error>>,
+  mut request: Request<BoxBody<Bytes, std::io::Error>>,
   socket_data: &SocketData,
   error_logger: &ErrorLogger,
   wwwroot: &Path,
@@ -574,178 +633,52 @@ async fn execute_cgi_with_environment_variables(
   cgi_interpreters: HashMap<String, Vec<String>>,
   additional_environment_variables: HashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  let mut environment_variables: LinkedHashMap<String, String> = LinkedHashMap::new();
-
-  let request_data = request.extensions().get::<RequestData>();
+  let request_data = request.extensions_mut().remove::<RequestData>();
 
   let original_request_uri = request_data
+    .as_ref()
     .and_then(|d| d.original_url.as_ref())
     .unwrap_or(request.uri());
+  let mut env_builder = cegla_cgi::client::CgiBuilder::new();
 
-  if let Some(auth_user) = request_data.and_then(|u| u.auth_user.as_ref()) {
-    if let Some(authorization) = request.headers().get(header::AUTHORIZATION) {
+  if let Some(auth_user) = request_data.as_ref().and_then(|u| u.auth_user.as_ref()) {
+    let authorization_type = if let Some(authorization) = request.headers().get(header::AUTHORIZATION) {
       let authorization_value = String::from_utf8_lossy(authorization.as_bytes()).to_string();
       let mut authorization_value_split = authorization_value.split(" ");
-      if let Some(authorization_type) = authorization_value_split.next() {
-        environment_variables.insert("AUTH_TYPE".to_string(), authorization_type.to_string());
-      }
-    }
-    environment_variables.insert("REMOTE_USER".to_string(), auth_user.to_string());
+      authorization_value_split
+        .next()
+        .map(|authorization_type| authorization_type.to_string())
+    } else {
+      None
+    };
+    env_builder = env_builder.auth(authorization_type, auth_user.to_string());
   }
 
-  environment_variables.insert(
-    "QUERY_STRING".to_string(),
-    match request.uri().query() {
-      Some(query) => query.to_string(),
-      None => "".to_string(),
-    },
-  );
-
-  environment_variables.insert("SERVER_SOFTWARE".to_string(), SERVER_SOFTWARE.to_string());
-  environment_variables.insert(
-    "SERVER_PROTOCOL".to_string(),
-    match request.version() {
-      hyper::Version::HTTP_09 => "HTTP/0.9".to_string(),
-      hyper::Version::HTTP_10 => "HTTP/1.0".to_string(),
-      hyper::Version::HTTP_11 => "HTTP/1.1".to_string(),
-      hyper::Version::HTTP_2 => "HTTP/2.0".to_string(),
-      hyper::Version::HTTP_3 => "HTTP/3.0".to_string(),
-      _ => "HTTP/Unknown".to_string(),
-    },
-  );
-  environment_variables.insert("SERVER_PORT".to_string(), socket_data.local_addr.port().to_string());
-  environment_variables.insert(
-    "SERVER_ADDR".to_string(),
-    socket_data.local_addr.ip().to_canonical().to_string(),
-  );
-  environment_variables.insert(
-    "SERVER_NAME".to_string(),
-    server_name
-      .map(|name| name.to_string())
-      .unwrap_or_else(|| socket_data.local_addr.ip().to_canonical().to_string()),
-  );
   if let Some(server_administrator_email) = server_administrator_email {
-    environment_variables.insert("SERVER_ADMIN".to_string(), server_administrator_email.to_string());
-  }
-
-  environment_variables.insert("DOCUMENT_ROOT".to_string(), wwwroot.to_string_lossy().to_string());
-  environment_variables.insert(
-    "PATH_INFO".to_string(),
-    match &path_info {
-      Some(path_info) => format!("/{path_info}"),
-      None => "".to_string(),
-    },
-  );
-  environment_variables.insert(
-    "PATH_TRANSLATED".to_string(),
-    match &path_info {
-      Some(path_info) => {
-        let mut path_translated = execute_pathbuf.clone();
-        path_translated.push(path_info);
-        path_translated.to_string_lossy().to_string()
-      }
-      None => "".to_string(),
-    },
-  );
-  environment_variables.insert("REQUEST_METHOD".to_string(), request.method().to_string());
-  environment_variables.insert("GATEWAY_INTERFACE".to_string(), "CGI/1.1".to_string());
-  environment_variables.insert(
-    "REQUEST_URI".to_string(),
-    format!(
-      "{}{}",
-      original_request_uri.path(),
-      match original_request_uri.query() {
-        Some(query) => format!("?{query}"),
-        None => String::from(""),
-      }
-    ),
-  );
-
-  environment_variables.insert("REMOTE_PORT".to_string(), socket_data.remote_addr.port().to_string());
-  environment_variables.insert(
-    "REMOTE_ADDR".to_string(),
-    socket_data.remote_addr.ip().to_canonical().to_string(),
-  );
-
-  environment_variables.insert(
-    "SCRIPT_FILENAME".to_string(),
-    execute_pathbuf.to_string_lossy().to_string(),
-  );
-  if let Ok(script_path) = execute_pathbuf.as_path().strip_prefix(wwwroot) {
-    environment_variables.insert(
-      "SCRIPT_NAME".to_string(),
-      format!(
-        "/{}",
-        match cfg!(windows) {
-          true => script_path.to_string_lossy().to_string().replace("\\", "/"),
-          false => script_path.to_string_lossy().to_string(),
-        }
-      ),
-    );
+    env_builder = env_builder.server_admin(server_administrator_email.to_string());
   }
 
   if socket_data.encrypted {
-    environment_variables.insert("HTTPS".to_string(), "on".to_string());
+    env_builder = env_builder.https();
   }
 
-  for (header_name, header_value) in request.headers().iter() {
-    let env_header_name = match *header_name {
-      header::CONTENT_LENGTH => "CONTENT_LENGTH".to_string(),
-      header::CONTENT_TYPE => "CONTENT_TYPE".to_string(),
-      _ => {
-        let mut result = String::new();
-
-        result.push_str("HTTP_");
-
-        for c in header_name.as_str().to_uppercase().chars() {
-          if c.is_alphanumeric() {
-            result.push(c);
-          } else {
-            result.push('_');
-          }
-        }
-
-        result
-      }
-    };
-    if environment_variables.contains_key(&env_header_name) {
-      let value = environment_variables.get_mut(&env_header_name);
-      if let Some(value) = value {
-        if env_header_name == "HTTP_COOKIE" {
-          value.push_str("; ");
-        } else {
-          // See https://stackoverflow.com/a/1801191
-          value.push_str(", ");
-        }
-        value.push_str(String::from_utf8_lossy(header_value.as_bytes()).as_ref());
-      } else {
-        environment_variables.insert(
-          env_header_name,
-          String::from_utf8_lossy(header_value.as_bytes()).to_string(),
-        );
-      }
-    } else {
-      environment_variables.insert(
-        env_header_name,
-        String::from_utf8_lossy(header_value.as_bytes()).to_string(),
-      );
-    }
-  }
+  env_builder = env_builder
+    .server(SERVER_SOFTWARE.to_string())
+    .server_address(socket_data.local_addr)
+    .client_address(socket_data.remote_addr)
+    .hostname(
+      server_name
+        .map(|name| name.to_string())
+        .unwrap_or_else(|| socket_data.local_addr.ip().to_canonical().to_string()),
+    )
+    .script_path(execute_pathbuf.clone(), wwwroot.to_path_buf(), path_info)
+    .request_uri(original_request_uri);
 
   for (env_var_key, env_var_value) in additional_environment_variables {
-    if let hashlink::linked_hash_map::Entry::Vacant(entry) = environment_variables.entry(env_var_key) {
-      entry.insert(env_var_value);
-    }
+    env_builder = env_builder.var_noreplace(env_var_key, env_var_value);
   }
 
-  execute_cgi(
-    request,
-    error_logger,
-    execute_pathbuf,
-    cgi_interpreters,
-    environment_variables,
-  )
-  .await
+  execute_cgi(request, error_logger, execute_pathbuf, cgi_interpreters, env_builder).await
 }
 
 async fn execute_cgi(
@@ -753,10 +686,8 @@ async fn execute_cgi(
   error_logger: &ErrorLogger,
   execute_pathbuf: PathBuf,
   cgi_interpreters: HashMap<String, Vec<String>>,
-  environment_variables: LinkedHashMap<String, String>,
+  env_builder: cegla_cgi::client::CgiBuilder,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
-  let (_, body) = request.into_parts();
-
   let executable_params = match get_executable(&execute_pathbuf).await {
     Ok(params) => params,
     Err(err) => {
@@ -775,122 +706,26 @@ async fn execute_cgi(
     }
   };
 
-  let mut executable_params_iter = executable_params.iter();
+  let mut execute_dir_pathbuf = execute_pathbuf.clone();
+  execute_dir_pathbuf.pop();
 
-  let mut command = Command::new(match executable_params_iter.next() {
+  let mut executable_params_iter = executable_params.iter();
+  let cmd = std::ffi::OsStr::new(match executable_params_iter.next() {
     Some(executable_name) => executable_name,
     None => Err(anyhow::anyhow!("Cannot determine the executable"))?,
   });
-
-  // Set standard I/O to be piped
-  command.stdin(Stdio::piped());
-  command.stdout(Stdio::piped());
-  command.stderr(Stdio::piped());
-
-  for param in executable_params_iter {
-    command.arg(param);
-  }
-
-  command.envs(environment_variables);
-
-  let mut execute_dir_pathbuf = execute_pathbuf.clone();
-  execute_dir_pathbuf.pop();
-  command.current_dir(execute_dir_pathbuf);
-
-  let mut child = command.spawn()?;
-
-  let cgi_stdin_reader = StreamReader::new(body.into_data_stream().map_err(std::io::Error::other));
-
-  #[cfg(feature = "runtime-monoio")]
-  let stdin = match child.stdin.take() {
-    Some(stdin) => stdin.compat_write(),
-    None => Err(anyhow::anyhow!("The CGI process doesn't have standard input"))?,
-  };
-  #[cfg(feature = "runtime-monoio")]
-  let stdout = match child.stdout.take() {
-    Some(stdout) => stdout.compat(),
-    None => Err(anyhow::anyhow!("The CGI process doesn't have standard output"))?,
-  };
-  #[cfg(feature = "runtime-monoio")]
-  let stderr = child.stderr.take().map(|x| x.compat());
+  let args: Vec<_> = executable_params_iter.map(std::ffi::OsStr::new).collect();
 
   #[cfg(feature = "runtime-tokio")]
-  let stdin = match child.stdin.take() {
-    Some(stdin) => stdin,
-    None => Err(anyhow::anyhow!("The CGI process doesn't have standard input"))?,
-  };
-  #[cfg(feature = "runtime-tokio")]
-  let stdout = match child.stdout.take() {
-    Some(stdout) => stdout,
-    None => Err(anyhow::anyhow!("The CGI process doesn't have standard output"))?,
-  };
-  #[cfg(feature = "runtime-tokio")]
-  let stderr = child.stderr.take();
-
-  let mut cgi_response = CgiResponse::new(stdout);
-
-  ferron_common::runtime::spawn(async move {
-    let (mut cgi_stdin_reader, mut stdin) = (cgi_stdin_reader, stdin);
-    let _ = tokio::io::copy(&mut cgi_stdin_reader, &mut stdin).await;
-  });
-
-  let mut headers = [EMPTY_HEADER; 128];
-
-  let obtained_head = cgi_response.get_head().await?;
-  if !obtained_head.is_empty() {
-    httparse::parse_headers(obtained_head, &mut headers)?;
-  }
-
-  let mut response_builder = Response::builder();
-  let mut status_code = 200;
-  for header in headers {
-    if header == EMPTY_HEADER {
-      break;
-    }
-    let mut is_status_header = false;
-    match &header.name.to_lowercase() as &str {
-      "location" => {
-        if !(300..=399).contains(&status_code) {
-          status_code = 302;
-        }
-      }
-      "status" => {
-        is_status_header = true;
-        let header_value_cow = String::from_utf8_lossy(header.value);
-        let mut split_status = header_value_cow.split(" ");
-        let first_part = split_status.next();
-        if let Some(first_part) = first_part {
-          if first_part.starts_with("HTTP/") {
-            let second_part = split_status.next();
-            if let Some(second_part) = second_part {
-              if let Ok(parsed_status_code) = second_part.parse::<u16>() {
-                status_code = parsed_status_code;
-              }
-            }
-          } else if let Ok(parsed_status_code) = first_part.parse::<u16>() {
-            status_code = parsed_status_code;
-          }
-        }
-      }
-      _ => (),
-    }
-    if !is_status_header {
-      response_builder = response_builder.header(header.name, header.value);
-    }
-  }
-
-  response_builder = response_builder.status(status_code);
-
-  let reader_stream = ReaderStream::new(cgi_response);
-  let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
-  let boxed_body = stream_body.boxed();
-
-  let response = response_builder.body(boxed_body)?;
-
+  let runtime = tokio_cegla::TokioCgiRuntime;
   #[cfg(feature = "runtime-monoio")]
-  let exit_code_option = child.try_status()?;
-  #[cfg(feature = "runtime-tokio")]
-  let exit_code_option = child.try_wait()?;
+  let runtime = CustomCgiRuntime;
+
+  let (response, stderr, exit_code_option) =
+    cegla_cgi::client::execute_cgi_send(request, runtime, cmd, &args, env_builder, Some(execute_dir_pathbuf)).await?;
+
+  let (parts, body) = response.into_parts();
+  let response = Response::from_parts(parts, body.boxed());
 
   if let Some(exit_code) = exit_code_option {
     if !exit_code.success() {

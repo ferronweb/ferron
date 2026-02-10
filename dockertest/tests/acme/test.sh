@@ -3,26 +3,7 @@
 TEST_FAILED=0
 
 # Wait for the TLS certificate to be issued
-for i in $(seq 1 60)
-do
-    if [ "$i" -gt 1 ]; then
-        sleep 1
-    fi
-    curl -fsLk -o /dev/null https://ferron/ && break || true
-done
-
-TEST_RESULTS="$(curl -fsSLk -o /dev/null https://ferron/)"
-TEST_EXIT_CODE=$?
-if [ "$TEST_EXIT_CODE" -eq 0 ]; then
-    echo "Automatic TLS (TLS-ALPN-01 ACME challenge) connection test passed!"
-else
-    echo "Automatic TLS (TLS-ALPN-01 ACME challenge) connection test failed!" >&2
-    echo "  Exit code: $TEST_EXIT_CODE" >&2
-    TEST_FAILED=1
-fi
-
-# Wait for the TLS certificate to be issued
-for i in $(seq 1 60)
+for i in $(seq 1 75)
 do
     if [ "$i" -gt 1 ]; then
         sleep 1
@@ -41,7 +22,26 @@ else
 fi
 
 # Wait for the TLS certificate to be issued
-for i in $(seq 1 60)
+for i in $(seq 1 75)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    curl -fsLk -o /dev/null https://ferron/ && break || true
+done
+
+TEST_RESULTS="$(curl -fsSLk -o /dev/null https://ferron/)"
+TEST_EXIT_CODE=$?
+if [ "$TEST_EXIT_CODE" -eq 0 ]; then
+    echo "Automatic TLS (TLS-ALPN-01 ACME challenge) connection test passed!"
+else
+    echo "Automatic TLS (TLS-ALPN-01 ACME challenge) connection test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    TEST_FAILED=1
+fi
+
+# Wait for the TLS certificate to be issued
+for i in $(seq 1 75)
 do
     if [ "$i" -gt 1 ]; then
         sleep 1
@@ -62,8 +62,20 @@ fi
 # Request on-demand TLS certificate
 curl -fsLk -o /dev/null https://ferron-ondemand || true
 
+# Request on-demand TLS certificate
+curl -fsLk -o /dev/null https://ferron-http01-ondemand || true
+
 # Wait for the TLS certificate to be issued
-for i in $(seq 1 60)
+for i in $(seq 1 75)
+do
+    if [ "$i" -gt 1 ]; then
+        sleep 1
+    fi
+    curl -fsLk -o /dev/null https://ferron-http01-ondemand/ && break || true
+done
+
+# Wait for the TLS certificate to be issued
+for i in $(seq 1 75)
 do
     if [ "$i" -gt 1 ]; then
         sleep 1
@@ -80,18 +92,6 @@ else
     echo "  Exit code: $TEST_EXIT_CODE" >&2
     TEST_FAILED=1
 fi
-
-# Request on-demand TLS certificate
-curl -fsLk -o /dev/null https://ferron-http01-ondemand || true
-
-# Wait for the TLS certificate to be issued
-for i in $(seq 1 60)
-do
-    if [ "$i" -gt 1 ]; then
-        sleep 1
-    fi
-    curl -fsLk -o /dev/null https://ferron-http01-ondemand/ && break || true
-done
 
 TEST_RESULTS="$(curl -fsSLk -o /dev/null https://ferron-http01-ondemand/)"
 TEST_EXIT_CODE=$?

@@ -1,6 +1,6 @@
 [package]
 name = "ferron"
-version = "2.4.1"
+version = "2.5.0"
 edition = "2021"
 
 [dependencies]
@@ -10,8 +10,10 @@ ferron-load-modules = { workspace = true }
 
 # Error Handling & Utilities
 anyhow = "1.0.98"
+arc-swap = "1.8.0"
 send_wrapper = { version = "0.6.0", optional = true, features = ["futures"] }
 human-panic = "2.0.2"
+hashlink = "0.11.0"
 chrono = "0.4.41"
 fancy-regex = "0.17.0"
 glob = "0.3.2"
@@ -102,7 +104,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 kdl = { workspace = true }
 ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core", optional = true }
-regorus = { version = "0.5.0", default-features = false, features = [
+regorus = { version = "0.9.1", default-features = false, features = [
   "arc",
   "regex",
   "glob",
@@ -115,7 +117,7 @@ regorus = { version = "0.5.0", default-features = false, features = [
 ]}
 
 # CLI & Configuration
-clap = { version = "4.5.38", features = ["cargo"] }
+clap = { version = "4.5.38", features = ["cargo", "derive"] }
 dirs = "6.0.0"
 
 # Performance & Utilities
@@ -127,6 +129,7 @@ smallvec = { version = "1.15.0", features = [
 
 # Build information
 shadow-rs = { version = "1.2.0", default-features = false }
+tempfile = "3.24.0"
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 # Process metrics

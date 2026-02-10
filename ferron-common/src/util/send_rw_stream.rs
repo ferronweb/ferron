@@ -12,7 +12,6 @@ const MAX_READ_CHANNEL_CAPACITY: usize = 2;
 const MAX_WRITE_CHANNEL_CAPACITY: usize = 2;
 
 /// A wrapper over struct implementing Tokio's `AsyncRead` and `AsyncWrite` (no need for struct to be `Send`) that implements `Stream` and `Sink` trait.
-#[allow(clippy::type_complexity)]
 pub struct SendRwStream {
   rx: Pin<Box<Receiver<Result<Bytes, std::io::Error>>>>,
   tx: Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send>>,

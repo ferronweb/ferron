@@ -21,7 +21,7 @@ example.org {
 }
 ```
 
-### Redirecting from URL without "www." to URL with "www."
+## Redirecting from URL without "www." to URL with "www."
 
 If you want to redirect all requests from an URL without "www." to URL with "www.", you can use this configuration:
 

@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use arc_swap::ArcSwap;
 use async_channel::{Receiver, Sender};
 use bytes::{Buf, Bytes};
 use ferron_common::logging::LogMessage;
@@ -25,6 +26,7 @@ use rustls::server::Acceptor;
 use rustls::ServerConfig;
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
+use tokio::runtime::Runtime;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::LazyConfigAcceptor;
 use tokio_util::sync::CancellationToken;
@@ -34,9 +36,9 @@ use crate::config::ServerConfigurations;
 use crate::get_value;
 use crate::listener_handler_communication::ConnectionData;
 use crate::request_handler::request_handler;
-use crate::util::read_proxy_header;
 #[cfg(feature = "runtime-monoio")]
 use crate::util::SendAsyncIo;
+use crate::util::{read_proxy_header, MultiCancel};
 
 static HTTP3_INVALID_HEADERS: [hyper::header::HeaderName; 5] = [
   hyper::header::HeaderName::from_static("keep-alive"),
@@ -45,6 +47,24 @@ static HTTP3_INVALID_HEADERS: [hyper::header::HeaderName; 5] = [
   hyper::header::TE,
   hyper::header::UPGRADE,
 ];
+
+/// A struct holding reloadable data for handler threads
+pub struct ReloadableHandlerData {
+  /// ACME TLS-ALPN-01 configurations
+  pub acme_tls_alpn_01_configs: Arc<HashMap<u16, Arc<ServerConfig>>>,
+  /// ACME HTTP-01 resolvers
+  pub acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
+  /// Server configurations
+  pub configurations: Arc<ServerConfigurations>,
+  /// TLS configurations
+  pub tls_configs: Arc<HashMap<u16, Arc<ServerConfig>>>,
+  /// Whether HTTP/3 is enabled
+  pub http3_enabled: bool,
+  /// Whether PROXY protocol is enabled
+  pub enable_proxy_protocol: bool,
+  /// The secondary Tokio runtime associated with the data
+  pub secondary_runtime: Arc<Runtime>,
+}
 
 /// Tokio local executor
 #[cfg(feature = "runtime-tokio")]
@@ -64,21 +84,17 @@ where
 }
 
 /// Creates a HTTP request handler
-#[allow(clippy::too_many_arguments)]
 pub fn create_http_handler(
-  configurations: Arc<ServerConfigurations>,
+  reloadable_data: Arc<ArcSwap<ReloadableHandlerData>>,
   rx: Receiver<ConnectionData>,
   enable_uring: Option<bool>,
-  tls_configs: HashMap<u16, Arc<ServerConfig>>,
-  http3_enabled: bool,
-  acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
-  acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
-  enable_proxy_protocol: bool,
   io_uring_disabled: Sender<Option<std::io::Error>>,
-) -> Result<CancellationToken, Box<dyn Error + Send + Sync>> {
+  multi_cancel: Arc<MultiCancel>,
+) -> Result<(CancellationToken, Sender<()>), Box<dyn Error + Send + Sync>> {
   let shutdown_tx = CancellationToken::new();
   let shutdown_rx = shutdown_tx.clone();
   let (handler_init_tx, listen_error_rx) = async_channel::unbounded();
+  let (graceful_tx, graceful_rx) = async_channel::unbounded();
   std::thread::Builder::new()
     .name("Request handler".to_string())
     .spawn(move || {
@@ -98,15 +114,12 @@ pub fn create_http_handler(
         .unwrap_or_default();
       rt.run(async move {
         if let Some(error) = http_handler_fn(
-          configurations,
+          reloadable_data,
           rx,
           &handler_init_tx,
           shutdown_rx,
-          tls_configs,
-          http3_enabled,
-          acme_tls_alpn_01_configs,
-          acme_http_01_resolvers,
-          enable_proxy_protocol,
+          graceful_rx,
+          multi_cancel,
         )
         .await
         .err()
@@ -120,26 +133,23 @@ pub fn create_http_handler(
     Err(error)?;
   }
 
-  Ok(shutdown_tx)
+  Ok((shutdown_tx, graceful_tx))
 }
 
 /// HTTP handler function
 #[inline]
-#[allow(clippy::too_many_arguments)]
 async fn http_handler_fn(
-  configurations: Arc<ServerConfigurations>,
+  reloadable_data: Arc<ArcSwap<ReloadableHandlerData>>,
   rx: Receiver<ConnectionData>,
   handler_init_tx: &Sender<Option<Box<dyn Error + Send + Sync>>>,
   shutdown_rx: CancellationToken,
-  tls_configs: HashMap<u16, Arc<ServerConfig>>,
-  http3_enabled: bool,
-  acme_tls_alpn_01_configs: HashMap<u16, Arc<ServerConfig>>,
-  acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
-  enable_proxy_protocol: bool,
+  graceful_rx: Receiver<()>,
+  multi_cancel: Arc<MultiCancel>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
   handler_init_tx.send(None).await.unwrap_or_default();
 
   let connections_references = Arc::new(());
+  let graceful_shutdown_token = ArcSwap::from_pointee(CancellationToken::new());
 
   loop {
     let conn_data = crate::runtime::select! {
@@ -154,6 +164,20 @@ async fn http_handler_fn(
             break;
         }
     };
+    if graceful_rx.try_recv().is_ok() {
+      graceful_shutdown_token
+        .swap(Arc::new(CancellationToken::new()))
+        .cancel();
+    }
+    let ReloadableHandlerData {
+      configurations,
+      tls_configs,
+      http3_enabled,
+      acme_tls_alpn_01_configs,
+      acme_http_01_resolvers,
+      enable_proxy_protocol,
+      secondary_runtime,
+    } = &**reloadable_data.load();
     let configurations = configurations.clone();
     let tls_config = if matches!(
       conn_data.connection,
@@ -174,6 +198,10 @@ async fn http_handler_fn(
     let acme_http_01_resolvers = acme_http_01_resolvers.clone();
     let connections_references_cloned = connections_references.clone();
     let shutdown_rx_clone = shutdown_rx.clone();
+    let http3_enabled = *http3_enabled;
+    let enable_proxy_protocol = *enable_proxy_protocol;
+    let secondary_runtime = secondary_runtime.clone();
+    let graceful_shutdown_token = graceful_shutdown_token.load().clone();
     crate::runtime::spawn(async move {
       match conn_data.connection {
         crate::listener_handler_communication::Connection::Tcp(tcp_stream) => {
@@ -212,6 +240,8 @@ async fn http_handler_fn(
             acme_http_01_resolvers,
             enable_proxy_protocol,
             shutdown_rx_clone,
+            graceful_shutdown_token,
+            secondary_runtime,
           )
           .await;
         }
@@ -223,6 +253,8 @@ async fn http_handler_fn(
             configurations,
             connections_references_cloned,
             shutdown_rx_clone,
+            graceful_shutdown_token,
+            secondary_runtime,
           )
           .await;
         }
@@ -233,6 +265,9 @@ async fn http_handler_fn(
   while Arc::weak_count(&connections_references) > 0 {
     crate::runtime::sleep(Duration::from_millis(100)).await;
   }
+
+  // Wait until all connections are closed, then shut down all the previous handler threads
+  multi_cancel.cancel().await;
 
   Ok(())
 }
@@ -260,6 +295,7 @@ enum MaybeTlsStream {
 
 /// HTTP/1.x and HTTP/2 handler function
 #[allow(clippy::too_many_arguments)]
+#[inline]
 async fn http_tcp_handler_fn(
   tcp_stream: TcpStream,
   client_address: SocketAddr,
@@ -272,6 +308,8 @@ async fn http_tcp_handler_fn(
   acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
   enable_proxy_protocol: bool,
   shutdown_rx: CancellationToken,
+  graceful_shutdown_token: Arc<CancellationToken>,
+  secondary_runtime: Arc<Runtime>,
 ) {
   let _connection_reference = Arc::downgrade(&connection_reference);
   #[cfg(feature = "runtime-monoio")]
@@ -344,21 +382,18 @@ async fn http_tcp_handler_fn(
         .flatten()
         .eq([ACME_TLS_ALPN_NAME])
       {
-        match start_handshake.into_stream(acme_config).await {
-          Ok(_) => (),
-          Err(err) => {
-            for logging_tx in configurations
-              .find_global_configuration()
-              .as_ref()
-              .map_or(&vec![], |c| &c.observability.log_channels)
-            {
-              logging_tx
-                .send(LogMessage::new(format!("Error during TLS handshake: {err}"), true))
-                .await
-                .unwrap_or_default();
-            }
-            return;
+        if let Err(err) = start_handshake.into_stream(acme_config).await {
+          for logging_tx in configurations
+            .find_global_configuration()
+            .as_ref()
+            .map_or(&vec![], |c| &c.observability.log_channels)
+          {
+            logging_tx
+              .send(LogMessage::new(format!("Error during TLS handshake: {err}"), true))
+              .await
+              .unwrap_or_default();
           }
+          return;
         };
         return;
       }
@@ -460,6 +495,7 @@ async fn http_tcp_handler_fn(
             request_parts,
             request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
           );
+          let _runtime = secondary_runtime.clone();
           request_handler(
             request,
             client_address,
@@ -482,6 +518,10 @@ async fn http_tcp_handler_fn(
           result
         }
         _ = shutdown_rx.cancelled() => {
+          std::pin::Pin::new(&mut http_future).graceful_shutdown();
+          http_future.await
+        }
+        _ = graceful_shutdown_token.cancelled() => {
           std::pin::Pin::new(&mut http_future).graceful_shutdown();
           http_future.await
         }
@@ -539,6 +579,7 @@ async fn http_tcp_handler_fn(
               request_parts,
               request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
             );
+            let _runtime = secondary_runtime.clone();
             request_handler(
               request,
               client_address,
@@ -562,6 +603,10 @@ async fn http_tcp_handler_fn(
           result
         }
         _ = shutdown_rx.cancelled() => {
+          std::pin::Pin::new(&mut http_future).graceful_shutdown();
+          http_future.await
+        }
+        _ = graceful_shutdown_token.cancelled() => {
           std::pin::Pin::new(&mut http_future).graceful_shutdown();
           http_future.await
         }
@@ -622,6 +667,7 @@ async fn http_tcp_handler_fn(
             request_parts,
             request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
           );
+          let _runtime = secondary_runtime.clone();
           request_handler(
             request,
             client_address,
@@ -645,6 +691,10 @@ async fn http_tcp_handler_fn(
         result
       }
       _ = shutdown_rx.cancelled() => {
+        std::pin::Pin::new(&mut http_future).graceful_shutdown();
+        http_future.await
+      }
+      _ = graceful_shutdown_token.cancelled() => {
         std::pin::Pin::new(&mut http_future).graceful_shutdown();
         http_future.await
       }
@@ -682,6 +732,8 @@ async fn http_quic_handler_fn(
   configurations: Arc<ServerConfigurations>,
   connection_reference: Arc<()>,
   shutdown_rx: CancellationToken,
+  graceful_shutdown_token: Arc<CancellationToken>,
+  secondary_runtime: Arc<Runtime>,
 ) {
   match connection_attempt.await {
     Ok(connection) => {
@@ -712,6 +764,10 @@ async fn http_quic_handler_fn(
               h3_conn.shutdown(0).await.unwrap_or_default();
               return;
             }
+            _ = graceful_shutdown_token.cancelled() => {
+              h3_conn.shutdown(0).await.unwrap_or_default();
+              return;
+            }
             result = h3_conn.accept() => {
               result
             }
@@ -719,6 +775,7 @@ async fn http_quic_handler_fn(
           Ok(Some(resolver)) => {
             let configurations = configurations.clone();
             let connection_reference = connection_reference.clone();
+            let secondary_runtime = secondary_runtime.clone();
             crate::runtime::spawn(async move {
               let _connection_reference = connection_reference;
               let (request, stream) = match resolver.resolve_request().await {
@@ -765,6 +822,7 @@ async fn http_quic_handler_fn(
               let request_body = BodyExt::boxed(StreamBody::new(request_body_stream));
               let (request_parts, _) = request.into_parts();
               let request = Request::from_parts(request_parts, request_body);
+              let _secondary_runtime = secondary_runtime.clone();
               let mut response = match request_handler(
                 request,
                 client_address,
