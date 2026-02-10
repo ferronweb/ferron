@@ -104,7 +104,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 kdl = { workspace = true }
 ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core", optional = true }
-regorus = { version = "0.5.0", default-features = false, features = [
+regorus = { version = "0.9.1", default-features = false, features = [
   "arc",
   "regex",
   "glob",
