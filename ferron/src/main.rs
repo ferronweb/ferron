@@ -130,16 +130,23 @@ fn before_starting_server(
           let mut users = Vec::<String>::new();
           for credential in http_serve_args.credential.iter() {
             let (user, hashed_password) = credential
-              .split_once(':')
+              .rsplit_once(':')
               .ok_or(anyhow::anyhow!("Invalid credential format: {credential}"))?;
             users.push(user.to_owned());
-            config_string.push_str(format!("\n  user \"{user}\" \"{hashed_password}\"").as_str());
+            config_string.push_str(
+              format!(
+                "\n  user \"{}\" \"{}\"",
+                user.escape_default(),
+                hashed_password.escape_default()
+              )
+              .as_str(),
+            );
           }
           if http_serve_args.forward_proxy {
             config_string.push_str(
               format!(
                 "\n  forward_proxy_auth users=\"{}\" brute_protection=#{}",
-                users.join(","),
+                users.join(",").escape_default(),
                 http_serve_args.disable_brute_protection
               )
               .as_str(),
@@ -148,7 +155,7 @@ fn before_starting_server(
             config_string.push_str(
               format!(
                 "\n  status 401 users=\"{}\" brute_protection=#{}",
-                users.join(","),
+                users.join(",").escape_default(),
                 http_serve_args.disable_brute_protection
               )
               .as_str(),
@@ -176,8 +183,13 @@ fn before_starting_server(
         if http_serve_args.forward_proxy {
           config_string.push_str("\n  forward_proxy");
         } else {
-          config_string
-            .push_str(format!("\n  root \"{}\"", http_serve_args.root.to_string_lossy().into_owned()).as_str());
+          config_string.push_str(
+            format!(
+              "\n  root \"{}\"",
+              http_serve_args.root.to_string_lossy().into_owned().escape_default()
+            )
+            .as_str(),
+          );
           config_string.push_str("\n  directory_listing #true");
         }
         config_string.push_str("\n}\n");
