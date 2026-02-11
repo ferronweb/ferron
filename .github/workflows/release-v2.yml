@@ -197,7 +197,7 @@ jobs:
       - name: Prepare for release
         shell: bash
         run: |
-          { echo; cat CHANGELOG.md } | sed '1,/^## /d;/^## /,$d;/^\*\*Released in/d;/^[[:space:]]*$/d;' > CHANGES-CURRENT
+          { echo; cat CHANGELOG.md; } | sed '1,/^## /d;/^## /,$d;/^\*\*Released in/d;/^[[:space:]]*$/d;' > CHANGES-CURRENT
           mkdir release
           find target/${{ matrix.target }}/release -mindepth 1 -maxdepth 1 -type f ! -name "*.*" -o -name "*.exe" -o -name "*.dll" -o -name "*.dylib" -o -name "*.so" | sed -E "s|(.*)|cp -a \1 release|" | bash
           cp -a ferron-release.kdl release/ferron.kdl
