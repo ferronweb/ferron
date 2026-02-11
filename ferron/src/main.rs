@@ -233,24 +233,22 @@ fn before_starting_server(
   // Cancel token for ACME and process metrics
   let mut background_cancel_token: CancellationToken = CancellationToken::new();
 
+  // Secondary Tokio runtime
+  let secondary_runtime = tokio::runtime::Builder::new_multi_thread()
+    .worker_threads(match available_parallelism / 2 {
+      0 => 1,
+      non_zero => non_zero,
+    })
+    .thread_name("Secondary runtime")
+    .enable_all()
+    .build()?;
+
   loop {
     // Obtain the module loaders
     let mut module_loaders = obtain_module_loaders();
 
     // Obtain the observability backend loaders
     let mut observability_backend_loaders = obtain_observability_backend_loaders();
-
-    // Create a secondary Tokio runtime
-    let secondary_runtime = Arc::new(
-      tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(match available_parallelism / 2 {
-          0 => 1,
-          non_zero => non_zero,
-        })
-        .thread_name("Secondary runtime")
-        .enable_all()
-        .build()?,
-    );
 
     // Load the configuration
     let configs_to_process = configuration_adapter.load_configuration(configuration_path)?;
@@ -272,7 +270,6 @@ fn before_starting_server(
     let global_configuration = server_configurations.find_global_configuration();
     let global_configuration_clone = global_configuration.clone();
 
-    // Reference to the secondary Tokio runtime
     let secondary_runtime_ref = &secondary_runtime;
 
     // Reference to a cancel token
@@ -708,7 +705,6 @@ fn before_starting_server(
         acme_tls_alpn_01_configs: Arc::new(acme_tls_alpn_01_configs),
         acme_http_01_resolvers: tls_build_ctx.acme_http_01_resolvers,
         enable_proxy_protocol,
-        secondary_runtime: secondary_runtime_ref.to_owned(),
       };
       let reloadable_handler_data = if let Some(data) = SERVER_CONFIG_ARCSWAP.get().cloned() {
         data.swap(Arc::new(inner_handler_data));
