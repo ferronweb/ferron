@@ -25,8 +25,6 @@ mod ferron_util {
   #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
   pub mod cgi_response;
   pub mod combine_config;
-  #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
-  pub mod copy_move;
   pub mod env_config;
   pub mod error_config;
   pub mod error_pages;
@@ -52,8 +50,6 @@ mod ferron_util {
   pub mod obtain_config_struct_vec;
   #[cfg(all(unix, feature = "wsgid"))]
   pub mod preforked_process_pool;
-  #[cfg(feature = "fcgi")]
-  pub mod read_to_end_move;
   pub mod sizify;
   pub mod sni;
   #[cfg(feature = "fcgi")]

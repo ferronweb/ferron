@@ -25,7 +25,6 @@ use tokio_util::io::{ReaderStream, StreamReader};
 
 use crate::ferron_res::server_software::SERVER_SOFTWARE;
 use crate::ferron_util::cgi_response::CgiResponse;
-use crate::ferron_util::copy_move::Copier;
 
 pub fn server_module_init(
   _config: &ServerConfig,
@@ -340,7 +339,7 @@ async fn execute_scgi_with_environment_variables(
   }
 
   if socket_data.encrypted {
-    environment_variables.insert("HTTPS".to_string(), "ON".to_string());
+    environment_variables.insert("HTTPS".to_string(), "on".to_string());
   }
 
   let mut content_length_set = false;
@@ -524,7 +523,12 @@ async fn execute_scgi(
 
   let mut cgi_response = CgiResponse::new(stdout);
 
-  let stdin_copy_future = Copier::new(cgi_stdin_reader, stdin).copy();
+  let stdin_copy_future = async move {
+    let (mut cgi_stdin_reader, mut stdin) = (cgi_stdin_reader, stdin);
+    tokio::io::copy(&mut cgi_stdin_reader, &mut stdin)
+      .await
+      .map(|_| ())
+  };
   let mut stdin_copy_future_pinned = Box::pin(stdin_copy_future);
 
   let mut headers = [EMPTY_HEADER; 128];

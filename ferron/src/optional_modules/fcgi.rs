@@ -21,7 +21,7 @@ use hyper::body::{Bytes, Frame};
 use hyper::{header, Response, StatusCode};
 use hyper_tungstenite::HyperWebsocket;
 use tokio::fs;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::runtime::Handle;
 use tokio::sync::RwLock;
@@ -30,12 +30,10 @@ use tokio_util::io::{ReaderStream, SinkWriter, StreamReader};
 
 use crate::ferron_res::server_software::SERVER_SOFTWARE;
 use crate::ferron_util::cgi_response::CgiResponse;
-use crate::ferron_util::copy_move::Copier;
 use crate::ferron_util::fcgi_decoder::{FcgiDecodedData, FcgiDecoder};
 use crate::ferron_util::fcgi_encoder::FcgiEncoder;
 use crate::ferron_util::fcgi_name_value_pair::construct_fastcgi_name_value_pair;
 use crate::ferron_util::fcgi_record::construct_fastcgi_record;
-use crate::ferron_util::read_to_end_move::ReadToEndFuture;
 use crate::ferron_util::split_stream_by_map::SplitStreamByMapExt;
 use crate::ferron_util::ttl_cache::TtlCache;
 
@@ -549,7 +547,7 @@ async fn execute_fastcgi_with_environment_variables(
   }
 
   if socket_data.encrypted {
-    environment_variables.insert("HTTPS".to_string(), "ON".to_string());
+    environment_variables.insert("HTTPS".to_string(), "on".to_string());
   }
 
   let mut content_length_set = false;
@@ -746,10 +744,25 @@ async fn execute_fastcgi(
 
   let mut cgi_response = CgiResponse::new(stdout);
 
-  let stdin_copy_future = Copier::with_zero_packet_writing(cgi_stdin_reader, stdin).copy();
+  let stdin_copy_future = async move {
+    let (mut cgi_stdin_reader, mut stdin) = (cgi_stdin_reader, stdin);
+    let result1 = tokio::io::copy(&mut cgi_stdin_reader, &mut stdin)
+      .await
+      .map(|_| ());
+
+    // Send terminating STDIN packet
+    let result2 = stdin.write(&[]).await.map(|_| ());
+    let result3 = stdin.flush().await.map(|_| ());
+
+    result1.and(result2).and(result3)
+  };
   let mut stdin_copy_future_pinned = Box::pin(stdin_copy_future);
 
-  let stderr_read_future = ReadToEndFuture::new(stderr);
+  let stderr_read_future = async move {
+    let mut stderr = stderr;
+    let mut buf = Vec::new();
+    stderr.read_to_end(&mut buf).await.map(|_| buf)
+  };
   let mut stderr_read_future_pinned = Box::pin(stderr_read_future);
 
   let mut headers = [EMPTY_HEADER; 128];
@@ -779,12 +792,13 @@ async fn execute_fastcgi(
       },
       result = &mut stderr_read_future_pinned => {
         let stderr_vec = result?;
-          let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
-          if !stderr_string.is_empty() {
-            error_logger
-              .log(&format!("There were CGI errors: {stderr_string}"))
-              .await;
-          }
+        let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
+        let stderr_string_trimmed = stderr_string.trim();
+        if !stderr_string_trimmed.is_empty() {
+          error_logger
+            .log(&format!("There were FastCGI errors: {stderr_string_trimmed}"))
+            .await;
+        }
         return Ok(
           ResponseData::builder_without_request()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -800,12 +814,13 @@ async fn execute_fastcgi(
 
         result = &mut stderr_read_future_pinned => {
           let stderr_vec = result?;
-            let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
-            if !stderr_string.is_empty() {
-              error_logger
-                .log(&format!("There were FastCGI errors: {stderr_string}"))
-                .await;
-            }
+          let stderr_string = String::from_utf8_lossy(stderr_vec.as_slice()).to_string();
+          let stderr_string_trimmed = stderr_string.trim();
+          if !stderr_string_trimmed.is_empty() {
+            error_logger
+              .log(&format!("There were FastCGI errors: {stderr_string_trimmed}"))
+              .await;
+          }
           return Ok(
             ResponseData::builder_without_request()
               .status(StatusCode::INTERNAL_SERVER_ERROR)

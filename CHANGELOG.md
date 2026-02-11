@@ -2,6 +2,12 @@
 
 [View changelog for current major version](https://ferron.sh/changelog)
 
+## Ferron 1.3.8
+
+**Released in February 11, 2025**
+
+- Fixed a CGI, SCGI and FastCGI interoperability issue caused by the wrong value of the "HTTPS" variable.
+
 ## Ferron 1.3.7
 
 **Released in December 23, 2025**
