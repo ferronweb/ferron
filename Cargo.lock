@@ -1252,7 +1252,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1332,7 +1332,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1375,7 +1375,7 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "ferron"
-version = "2.5.2"
+version = "2.5.3"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1438,7 +1438,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-common"
-version = "2.5.2"
+version = "2.5.3"
 dependencies = [
  "async-channel",
  "async-trait",
@@ -1461,7 +1461,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-dns-builtin"
-version = "2.5.2"
+version = "2.5.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1478,7 +1478,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-load-modules"
-version = "2.5.2"
+version = "2.5.3"
 dependencies = [
  "anyhow",
  "ferron-common",
@@ -1492,7 +1492,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-modules-builtin"
-version = "2.5.2"
+version = "2.5.3"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -1541,7 +1541,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-builtin"
-version = "2.5.2"
+version = "2.5.3"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1563,7 +1563,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-passwd"
-version = "2.5.2"
+version = "2.5.3"
 dependencies = [
  "clap",
  "mimalloc",
@@ -1575,7 +1575,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-precompress"
-version = "2.5.2"
+version = "2.5.3"
 dependencies = [
  "brotli",
  "clap",
@@ -1589,7 +1589,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-yaml2kdl"
-version = "2.5.2"
+version = "2.5.3"
 dependencies = [
  "clap",
  "ferron-yaml2kdl-core",
@@ -1600,7 +1600,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-yaml2kdl-core"
-version = "2.5.2"
+version = "2.5.3"
 dependencies = [
  "anyhow",
  "glob",
@@ -3385,7 +3385,7 @@ dependencies = [
  "once_cell",
  "socket2 0.6.2",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3792,7 +3792,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3850,7 +3850,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4278,7 +4278,7 @@ dependencies = [
  "getrandom 0.4.1",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5004,7 +5004,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

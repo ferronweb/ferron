@@ -2,9 +2,9 @@
 
 [View Ferron 1.x changelog](https://ferron.sh/changelog/v1)
 
-## Ferron UNRELEASED
+## Ferron 2.5.3
 
-**Not yet released**
+**Released in February 11, 2026**
 
 - Fixed process-related metrics not being sent at all.
 
