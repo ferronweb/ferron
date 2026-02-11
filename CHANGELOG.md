@@ -2,6 +2,13 @@
 
 [View Ferron 1.x changelog](https://ferron.sh/changelog/v1)
 
+
+## Ferron 2.5.5
+
+**Released in February 11, 2026**
+
+- Fixed OTLP data not being sent after configuration reloads.
+
 ## Ferron 2.5.4
 
 **Released in February 11, 2026**
