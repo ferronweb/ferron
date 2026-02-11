@@ -24,6 +24,7 @@ use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
 use rustls::{client::WebPkiServerVerifier, ClientConfig};
 use rustls_platform_verifier::BuilderVerifierExt;
+use tokio_util::sync::CancellationToken;
 
 enum CachedInstrument {
   F64Counter(opentelemetry::metrics::Counter<f64>),
@@ -40,6 +41,7 @@ enum CachedInstrument {
 /// OTLP observability backend loader
 pub struct OtlpObservabilityBackendLoader {
   cache: ModuleCache<OtlpObservabilityBackend>,
+  cancel_tokens: Vec<CancellationToken>,
 }
 
 impl Default for OtlpObservabilityBackendLoader {
@@ -59,6 +61,7 @@ impl OtlpObservabilityBackendLoader {
         "otlp_metrics",
         "otlp_traces",
       ]),
+      cancel_tokens: Vec::new(),
     }
   }
 }
@@ -73,7 +76,7 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
     Ok(
       self
         .cache
-        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, move |config| {
+        .get_or_init::<_, Box<dyn std::error::Error + Send + Sync>>(config, |config| {
           // Configuration properties
           let otlp_verify = !get_value!("otlp_no_verification", config)
             .and_then(|v| v.as_bool())
@@ -568,6 +571,8 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
             });
           }
 
+          self.cancel_tokens.push(cancel_token.clone());
+
           Ok(Arc::new(OtlpObservabilityBackend {
             cancel_token,
             logging_tx_option,
@@ -668,6 +673,14 @@ impl ObservabilityBackendLoader for OtlpObservabilityBackendLoader {
     }
 
     Ok(())
+  }
+}
+
+impl Drop for OtlpObservabilityBackendLoader {
+  fn drop(&mut self) {
+    while let Some(cancel_token) = self.cancel_tokens.pop() {
+      cancel_token.cancel();
+    }
   }
 }
 
