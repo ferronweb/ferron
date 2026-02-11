@@ -1440,6 +1440,7 @@ dependencies = [
 name = "ferron-common"
 version = "2.5.4"
 dependencies = [
+ "anyhow",
  "async-channel",
  "async-trait",
  "bytes",
