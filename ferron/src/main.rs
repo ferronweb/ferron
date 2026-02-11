@@ -515,27 +515,6 @@ fn before_starting_server(
         acme_tls_alpn_01_configs.insert(tls_port, Arc::new(tls_config));
       }
 
-      // Process metrics initialization
-      #[cfg(any(target_os = "linux", target_os = "android"))]
-      if let Some(metrics_channels) = global_configuration
-        .as_ref()
-        .map(|c| &c.observability.metric_channels)
-        .cloned()
-      {
-        let background_cancel_token = background_cancel_token_ref.clone();
-        secondary_runtime_ref.spawn(async move {
-          tokio::select! {
-            biased;
-
-            _ = background_cancel_token.cancelled() => {}
-            _ = crate::setup::metrics::background_metrics(
-              metrics_channels,
-              available_parallelism,
-            ) => {}
-          }
-        });
-      }
-
       let (listener_handler_tx, listener_handler_rx) = &**LISTENER_HANDLER_CHANNEL;
       let mut tcp_listeners = TCP_LISTENERS
         .lock()
@@ -772,6 +751,27 @@ fn before_starting_server(
           existing_combinations,
           Some(background_cancel_token_ref.clone()),
         ));
+      }
+
+      // Process metrics initialization
+      #[cfg(any(target_os = "linux", target_os = "android"))]
+      if let Some(metrics_channels) = global_configuration
+        .as_ref()
+        .map(|c| &c.observability.metric_channels)
+        .cloned()
+      {
+        let background_cancel_token = background_cancel_token_ref.clone();
+        secondary_runtime_ref.spawn(async move {
+          tokio::select! {
+            biased;
+
+            _ = background_cancel_token.cancelled() => {}
+            _ = crate::setup::metrics::background_metrics(
+              metrics_channels,
+              available_parallelism,
+            ) => {}
+          }
+        });
       }
 
       // Spawn request handler threads
