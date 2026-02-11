@@ -233,6 +233,9 @@ fn before_starting_server(
   // Cancel token for ACME and process metrics
   let mut background_cancel_token: CancellationToken = CancellationToken::new();
 
+  // Cancel token for OCSP stapling
+  let mut ocsp_cancel_token: CancellationToken = CancellationToken::new();
+
   // Secondary Tokio runtime
   let secondary_runtime = tokio::runtime::Builder::new_multi_thread()
     .worker_threads(match available_parallelism / 2 {
@@ -272,8 +275,9 @@ fn before_starting_server(
 
     let secondary_runtime_ref = &secondary_runtime;
 
-    // Reference to a cancel token
+    // Reference to cancel tokens
     let background_cancel_token_ref = &mut background_cancel_token;
+    let ocsp_cancel_token_ref = &mut ocsp_cancel_token;
 
     // Execute the rest
     let execute_rest = move || {
@@ -462,6 +466,10 @@ fn before_starting_server(
         }
       }
 
+      // Cancel OCSP stapling background tasks
+      ocsp_cancel_token_ref.cancel();
+      *ocsp_cancel_token_ref = CancellationToken::new();
+
       // Create TLS server configurations
       let mut quic_tls_configs = HashMap::new();
       let mut tls_configs = HashMap::new();
@@ -483,7 +491,16 @@ fn before_starting_server(
               stapler.preload(certified_key.clone());
             }
           }
-          Arc::new(stapler)
+          let stapler_arc = Arc::new(stapler);
+
+          let stapler_arc_clone = stapler_arc.clone();
+          let ocsp_cancel_token_clone = ocsp_cancel_token_ref.clone();
+          secondary_runtime_ref.spawn(async move {
+            ocsp_cancel_token_clone.cancelled().await;
+            stapler_arc_clone.stop().await;
+          });
+
+          stapler_arc
         } else {
           Arc::new(sni_resolver)
         };

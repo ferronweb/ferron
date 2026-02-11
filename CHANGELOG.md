@@ -2,6 +2,12 @@
 
 [View Ferron 1.x changelog](https://ferron.sh/changelog/v1)
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+- Fixed high CPU usage after configuration reloads caused by the OCSP stapler.
+
 ## Ferron 2.5.3
 
 **Released in February 11, 2026**
