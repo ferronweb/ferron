@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 yaml-rust2 = "0.11.0"
-toml = "0.9.12"
+toml = "1.0.0"
