@@ -1,6 +1,6 @@
 [package]
 name = "ferron-modules-builtin"
-version = "2.5.3"
+version = "2.5.4"
 edition = "2021"
 
 [dependencies]
