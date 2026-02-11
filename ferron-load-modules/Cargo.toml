@@ -41,7 +41,7 @@ shiba = { workspace = true }
 
 [build-dependencies]
 yaml-rust2 = "0.11.0"
-toml = "0.9.2"
+toml = "1.0.0"
 
 [features]
 default = ["runtime-monoio"]
