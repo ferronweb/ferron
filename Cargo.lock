@@ -471,9 +471,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-async"
-version = "1.2.11"
+version = "1.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52eec3db979d18cb807fc1070961cc51d87d069abe9ab57917769687368a8c6c"
+checksum = "3cba48474f1d6807384d06fec085b909f5807e16653c5af5c45dfe89539f0b70"
 dependencies = [
  "futures-util",
  "pin-project-lite",
@@ -482,9 +482,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.63.3"
+version = "0.63.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "630e67f2a31094ffa51b210ae030855cb8f3b7ee1329bdd8d085aaf61e8b97fc"
+checksum = "af4a8a5fe3e4ac7ee871237c340bbce13e982d37543b65700f4419e039f5d78e"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -503,9 +503,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.1.9"
+version = "1.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12fb0abf49ff0cab20fd31ac1215ed7ce0ea92286ba09e2854b42ba5cabe7525"
+checksum = "0709f0083aa19b704132684bc26d3c868e06bd428ccc4373b0b55c3e8748a58b"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
@@ -527,27 +527,27 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.62.3"
+version = "0.62.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cb96aa208d62ee94104645f7b2ecaf77bf27edf161590b6224bfbac2832f979"
+checksum = "27b3a779093e18cad88bbae08dc4261e1d95018c4c5b9356a52bcae7c0b6e9bb"
 dependencies = [
  "aws-smithy-types",
 ]
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0a46543fbc94621080b3cf553eb4cbbdc41dd9780a30c4756400f0139440a1d"
+checksum = "4d3f39d5bb871aaf461d59144557f16d5927a5248a983a40654d9cf3b9ba183b"
 dependencies = [
  "aws-smithy-runtime-api",
 ]
 
 [[package]]
 name = "aws-smithy-query"
-version = "0.60.13"
+version = "0.60.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cebbddb6f3a5bd81553643e9c7daf3cc3dc5b0b5f398ac668630e8a84e6fff0"
+checksum = "05f76a580e3d8f8961e5d48763214025a2af65c2fa4cd1fb7f270a0e107a71b0"
 dependencies = [
  "aws-smithy-types",
  "urlencoding",
@@ -555,9 +555,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.10.0"
+version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3df87c14f0127a0d77eb261c3bc45d5b4833e2a1f63583ebfb728e4852134ee"
+checksum = "8fd3dfc18c1ce097cf81fced7192731e63809829c6cbf933c1ec47452d08e1aa"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -580,9 +580,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.11.3"
+version = "1.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49952c52f7eebb72ce2a754d3866cc0f87b97d2a46146b79f80f3a93fb2b3716"
+checksum = "8c55e0837e9b8526f49e0b9bfa9ee18ddee70e853f5bc09c5d11ebceddcb0fec"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -597,9 +597,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.4.3"
+version = "1.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b3a26048eeab0ddeba4b4f9d51654c79af8c3b32357dc5f336cee85ab331c33"
+checksum = "576b0d6991c9c32bc14fc340582ef148311f924d41815f641a308b5d11e8e7cd"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -623,9 +623,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-xml"
-version = "0.60.13"
+version = "0.60.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11b2f670422ff42bf7065031e72b45bc52a3508bd089f743ea90731ca2b6ea57"
+checksum = "b53543b4b86ed43f051644f704a98c7291b3618b67adf057ee77a366fa52fcaa"
 dependencies = [
  "xmlparser",
 ]
@@ -1215,9 +1215,9 @@ dependencies = [
 
 [[package]]
 name = "deranged"
-version = "0.5.5"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ececcb659e7ba858fb4f10388c250a7252eb0a27373f1a72b8748afdd248e587"
+checksum = "cc3dc5ad92c2e2d1c193bbbbdf2ea477cb81331de4f3103f267ca18368b988c4"
 dependencies = [
  "powerfmt",
  "serde_core",
@@ -1375,7 +1375,7 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "ferron"
-version = "2.5.1"
+version = "2.5.2"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1438,7 +1438,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-common"
-version = "2.5.1"
+version = "2.5.2"
 dependencies = [
  "async-channel",
  "async-trait",
@@ -1461,7 +1461,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-dns-builtin"
-version = "2.5.1"
+version = "2.5.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1478,7 +1478,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-load-modules"
-version = "2.5.1"
+version = "2.5.2"
 dependencies = [
  "anyhow",
  "ferron-common",
@@ -1492,7 +1492,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-modules-builtin"
-version = "2.5.1"
+version = "2.5.2"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -1541,7 +1541,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-observability-builtin"
-version = "2.5.1"
+version = "2.5.2"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -1563,7 +1563,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-passwd"
-version = "2.5.1"
+version = "2.5.2"
 dependencies = [
  "clap",
  "mimalloc",
@@ -1575,7 +1575,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-precompress"
-version = "2.5.1"
+version = "2.5.2"
 dependencies = [
  "brotli",
  "clap",
@@ -1589,7 +1589,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-yaml2kdl"
-version = "2.5.1"
+version = "2.5.2"
 dependencies = [
  "clap",
  "ferron-yaml2kdl-core",
@@ -1600,7 +1600,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-yaml2kdl-core"
-version = "2.5.1"
+version = "2.5.2"
 dependencies = [
  "anyhow",
  "glob",
@@ -4493,9 +4493,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.9.11+spec-1.1.0"
+version = "0.9.12+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3afc9a848309fe1aaffaed6e1546a7a14de1f935dc9d89d32afd9a44bab7c46"
+checksum = "cf92845e79fc2e2def6a5d828f0801e29a2f8acc037becc5ab08595c7d5e9863"
 dependencies = [
  "indexmap",
  "serde_core",
@@ -4517,9 +4517,9 @@ dependencies = [
 
 [[package]]
 name = "toml_parser"
-version = "1.0.6+spec-1.1.0"
+version = "1.0.7+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3198b4b0a8e11f09dd03e133c0280504d0801269e9afa46362ffde1cbeebf44"
+checksum = "247eaa3197818b831697600aadf81514e577e0cba5eab10f7e064e78ae154df1"
 dependencies = [
  "winnow 0.7.14",
 ]

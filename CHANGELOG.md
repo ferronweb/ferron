@@ -2,6 +2,12 @@
 
 [View Ferron 1.x changelog](https://ferron.sh/changelog/v1)
 
+## Ferron 2.5.2
+
+**Released in February 11, 2026**
+
+- Improved memory usage during configuration reloads.
+
 ## Ferron 2.5.1
 
 **Released in February 10, 2026**
