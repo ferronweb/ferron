@@ -65,7 +65,7 @@ tokio-tungstenite = { version = "0.28.0", features = [
     "rustls-tls-native-roots",
 ] }
 http = "1.2.0"
-pyo3 = { version = "0.27.2", optional = true, features = [
+pyo3 = { version = "0.28.0", optional = true, features = [
     "anyhow",
     "auto-initialize",
 ] }
