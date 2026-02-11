@@ -230,6 +230,9 @@ fn before_starting_server(
   // First startup flag
   let mut first_startup = true;
 
+  // Cancel token for ACME and process metrics
+  let mut background_cancel_token: CancellationToken = CancellationToken::new();
+
   loop {
     // Obtain the module loaders
     let mut module_loaders = obtain_module_loaders();
@@ -271,6 +274,9 @@ fn before_starting_server(
 
     // Reference to the secondary Tokio runtime
     let secondary_runtime_ref = &secondary_runtime;
+
+    // Reference to a cancel token
+    let background_cancel_token_ref = &mut background_cancel_token;
 
     // Execute the rest
     let execute_rest = move || {
@@ -519,10 +525,18 @@ fn before_starting_server(
         .map(|c| &c.observability.metric_channels)
         .cloned()
       {
-        secondary_runtime_ref.spawn(crate::setup::metrics::background_metrics(
-          metrics_channels,
-          available_parallelism,
-        ));
+        let background_cancel_token = background_cancel_token_ref.clone();
+        secondary_runtime_ref.spawn(async move {
+          tokio::select! {
+            biased;
+
+            _ = background_cancel_token.cancelled() => {}
+            _ = crate::setup::metrics::background_metrics(
+              metrics_channels,
+              available_parallelism,
+            ) => {}
+          }
+        });
       }
 
       let (listener_handler_tx, listener_handler_rx) = &**LISTENER_HANDLER_CHANNEL;
@@ -739,6 +753,10 @@ fn before_starting_server(
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+      // Cancel some background tasks
+      background_cancel_token_ref.cancel();
+      *background_cancel_token_ref = CancellationToken::new();
+
       if !acme_configs.is_empty() || !acme_on_demand_configs.is_empty() {
         // Spawn a task to handle ACME certificate provisioning, one certificate at time
         let acme_logger = ErrorLogger::new_multiple(
@@ -756,6 +774,7 @@ fn before_starting_server(
           acme_logger,
           crypto_provider,
           existing_combinations,
+          Some(background_cancel_token_ref.clone()),
         ));
       }
 

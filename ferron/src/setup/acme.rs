@@ -12,6 +12,7 @@ use instant_acme::{ExternalAccountKey, LetsEncrypt};
 use rustls::{client::WebPkiServerVerifier, crypto::CryptoProvider, ClientConfig};
 use rustls_platform_verifier::BuilderVerifierExt;
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 use xxhash_rust::xxh3::xxh3_128;
 
 use crate::acme::{
@@ -156,6 +157,7 @@ pub async fn background_acme_task(
   acme_logger: ErrorLogger,
   crypto_provider: Arc<CryptoProvider>,
   existing_combinations: HashSet<(String, u16)>,
+  cancel_token: Option<CancellationToken>,
 ) {
   let acme_logger = Arc::new(acme_logger);
 
@@ -164,25 +166,63 @@ pub async fn background_acme_task(
 
   let prevent_file_race_conditions_sem = Arc::new(tokio::sync::Semaphore::new(1));
 
+  let acme_logger_clone = acme_logger.clone();
+  let acme_configs_mutex_clone = acme_configs_mutex.clone();
   if !acme_on_demand_configs.is_empty() {
+    let cancel_token_clone = cancel_token.clone();
+    let cancelled_future = async move {
+      if let Some(token) = cancel_token_clone {
+        token.cancelled().await
+      } else {
+        futures_util::future::pending().await
+      }
+    };
+
     // On-demand TLS
-    tokio::spawn(background_on_demand_acme_task(
-      existing_combinations,
-      acme_on_demand_rx,
-      on_demand_tls_ask_endpoint,
-      on_demand_tls_ask_endpoint_verify,
-      acme_logger.clone(),
-      crypto_provider,
-      acme_configs_mutex.clone(),
-      acme_on_demand_configs,
-      memory_acme_account_cache_data,
-      prevent_file_race_conditions_sem,
-    ));
+    tokio::spawn(async move {
+      tokio::select! {
+        biased;
+
+        _ = cancelled_future => {},
+        _ = background_on_demand_acme_task(
+          existing_combinations,
+          acme_on_demand_rx,
+          on_demand_tls_ask_endpoint,
+          on_demand_tls_ask_endpoint_verify,
+          acme_logger_clone,
+          crypto_provider,
+          acme_configs_mutex_clone,
+          acme_on_demand_configs,
+          memory_acme_account_cache_data,
+          prevent_file_race_conditions_sem,
+        ) => {}
+      }
+    });
   }
 
+  let mut cancelled_future = Box::pin(async move {
+    if let Some(token) = cancel_token {
+      token.cancelled().await
+    } else {
+      futures_util::future::pending().await
+    }
+  });
+
   loop {
-    for acme_config in &mut *acme_configs_mutex.lock().await {
-      if let Err(acme_error) = provision_certificate(acme_config, &acme_logger).await {
+    for acme_config in &mut *(tokio::select! {
+        biased;
+        _ = &mut cancelled_future => {
+            return;
+        },
+        result = acme_configs_mutex.lock() => result
+    }) {
+      if let Err(acme_error) = tokio::select! {
+        biased;
+        _ = &mut cancelled_future => {
+            return;
+        },
+        result = provision_certificate(acme_config, &acme_logger) => result
+      } {
         acme_logger
           .log(&format!("Error while obtaining a TLS certificate: {acme_error}"))
           .await
