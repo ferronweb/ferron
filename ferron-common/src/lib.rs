@@ -1,5 +1,7 @@
 pub mod config;
 pub mod dns;
+#[cfg(feature = "http-proxy")]
+pub mod http_proxy;
 pub mod logging;
 pub mod modules;
 pub mod observability;

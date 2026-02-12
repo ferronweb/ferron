@@ -20,11 +20,23 @@ tokio-util = "0.7.15"
 futures-util = { version = "0.3.31", features = ["sink"] }
 regorus = { version = "0.9.1", default-features = false, features = ["arc"] }
 send_wrapper = { version = "0.6.0", optional = true, features = ["futures"] }
+rand = { version = "0.10.0", optional = true }
+ppp = { version = "2.3.0", optional = true }
+connpool = { version = "0.2.0", optional = true }
+tokio-rustls = { version = "0.26.2", optional = true, default-features = false, features = [
+    "tls12",
+    "aws-lc-rs",
+] }
+rustls-platform-verifier = { version = "0.6.0", optional = true }
+monoio-compat = { version = "0.2.2", optional = true, features = ["hyper"] }
+anyhow = { version = "1.0.98", optional = true }
+webpki-roots = { version = "1.0.2", optional = true }
 
 [dev-dependencies]
 shiba = { workspace = true }
 
 [features]
 default = ["runtime-monoio"]
-runtime-monoio = ["monoio", "send_wrapper"]
+runtime-monoio = ["monoio", "monoio-compat", "send_wrapper"]
 runtime-tokio = []
+http-proxy = ["rand", "ppp", "connpool", "rustls-platform-verifier", "tokio-rustls", "anyhow", "webpki-roots"]

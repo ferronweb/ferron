@@ -6,6 +6,7 @@
 
 **Not yet released**
 
+- Added support for Unix socket backends in forwarded authentication module.
 - Fixed body replacement MIME type filtering logic not being effective at all.
 
 ## Ferron 2.5.5

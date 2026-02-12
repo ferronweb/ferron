@@ -592,8 +592,8 @@ api.example.com {
 
 ### Authentication forwarding
 
-- `auth_to <auth_to: string|null> [limit=<conn_limit: integer|null>] [idle_timeout=<idle_timeout: integer|null>]` (_fauth_ module)
-  - This directive specifies the URL to which the web server should send requests for forwarded authentication. Established connections can be limited by the `limit` prop (Ferron 2.4.0 and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron 2.4.0 and newer); by default it is set to `60000` (60 seconds). Default: none
+- `auth_to <auth_to: string|null> [unix=<unix_socket_path: string>] [limit=<conn_limit: integer|null>] [idle_timeout=<idle_timeout: integer|null>]` (_fauth_ module)
+  - This directive specifies the URL to which the web server should send requests for forwarded authentication. Unix sockets are also supported via the `unix` prop set to the path to the socket (and the main value is set to the URL of the website), supported only on Unix and Unix-like systems (Ferron UNRELEASED and newer). Established connections can be limited by the `limit` prop (Ferron 2.4.0 and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron 2.4.0 and newer); by default it is set to `60000` (60 seconds). Default: none
 - `auth_to_no_verification [auth_to_no_verification: bool]` (_fauth_ module)
   - This directive specifies whether the server should not verify the TLS certificate of the backend authentication server. Default: `auth_to_no_verification #false`
 - `auth_to_copy <request_header_to_copy: string> [<request_header_to_copy: string> ...]` (_fauth_ module)
