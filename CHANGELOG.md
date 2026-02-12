@@ -2,6 +2,11 @@
 
 [View Ferron 1.x changelog](https://ferron.sh/changelog/v1)
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+- Fixed body replacement MIME type filtering logic not being effective at all.
 
 ## Ferron 2.5.5
 

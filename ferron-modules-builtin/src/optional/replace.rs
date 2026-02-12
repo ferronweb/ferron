@@ -188,6 +188,7 @@ impl ModuleHandlers for ReplaceModuleHandlers {
       .map(|h| String::from_utf8_lossy(h.as_bytes()));
 
     if can_replace {
+      can_replace = false;
       for filter_type in &self.filter_types {
         if filter_type == "*"
           || response_mime_type.as_deref().map(|t| {
