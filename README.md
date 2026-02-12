@@ -30,25 +30,6 @@
 - **Extensibility** - modular architecture for easy customization.
 - **Powerful reverse proxy** - advanced reverse proxy capabilities with support for load balancing and health checks.
 
-## Components
-
-Ferron consists of multiple components:
-
-- **`ferron`** - the main web server.
-- **`ferron-passwd`** - a tool for generating hashed passwords, which can be copied into the web server's configuration file.
-- **`ferron-precompress`** - a tool for precompressing static files for Ferron.
-- **`ferron-yaml2kdl`** - a tool for attempting to convert the Ferron 1.x YAML configuration to Ferron 2.x KDL configuration.
-
-Ferron also consists of:
-
-- **`build/prepare`** - internal tool for preparation when building Ferron with modules.
-- **`ferron-common`** - code common for Ferron and its modules.
-- **`ferron-dns-builtin`** - built-in Ferron DNS providers.
-- **`ferron-load-modules`** - functions for loading Ferron modules.
-- **`ferron-modules-builtin`** - built-in Ferron modules.
-- **`ferron-observability-builtin`** - built-in Ferron observability backend support.
-- **`ferron-yaml2kdl-core`** - the core library behind the `ferron-yaml2kdl` tool.
-
 ## Installing Ferron from pre-built binaries
 
 The easiest way to install Ferron is installing it from pre-built binaries.
