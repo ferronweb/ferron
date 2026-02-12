@@ -59,7 +59,7 @@ jobs:
 
       # Build the test Ferron image to cache it for the test suite
       - name: Build the test Ferron image
-        uses: docker/build-push-action@v6.19.1
+        uses: docker/build-push-action@v6.19.2
         with:
           context: .
           file: Dockerfile.test
@@ -69,7 +69,7 @@ jobs:
 
       # Build the test runner image to cache it for the test suite
       - name: Build the test runner image
-        uses: docker/build-push-action@v6.19.1
+        uses: docker/build-push-action@v6.19.2
         with:
           context: ./dockertest/runner
           load: true
