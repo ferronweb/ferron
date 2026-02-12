@@ -16,7 +16,7 @@ on:
       - "ferron-dns-builtin/**"
       - "ferron-load-modules/**"
       - "ferron-modules-builtin/**"
-      - "ferron-yaml2kdl-core/**"
+      - "yaml2kdl-core/**"
       - "ferron-build.yaml"
       - "ferron-build-override.yaml"
       - "packaging/**"
