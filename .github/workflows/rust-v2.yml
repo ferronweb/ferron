@@ -74,7 +74,7 @@ jobs:
               fi; \
           done
           RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 cargo build --verbose --target-dir ../../target
-          cd ..
+          cd ../..
 
       - name: Smoke test the binary
         shell: bash
