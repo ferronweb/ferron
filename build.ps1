@@ -64,7 +64,7 @@ function Run
     Build
     if (-not (Test-Path "ferron.kdl"))
     {
-        Copy-Item "ferron-test.kdl" "ferron.kdl" -ErrorAction SilentlyContinue -Force
+        Copy-Item "configs/ferron.test.kdl" "ferron.kdl" -ErrorAction SilentlyContinue -Force
     }
     & "$cargoTargetRoot/release/ferron"
 }
@@ -74,7 +74,7 @@ function RunDev
     BuildDev
     if (-not (Test-Path "ferron.kdl"))
     {
-        Copy-Item "ferron-test.kdl" "ferron.kdl" -ErrorAction SilentlyContinue -Force
+        Copy-Item "configs/ferron.test.kdl" "ferron.kdl" -ErrorAction SilentlyContinue -Force
     }
     & "$cargoTargetRoot/debug/ferron"
 }
@@ -148,7 +148,7 @@ function Package
             Copy-Item -Path $_.FullName -Destination $buildRelease -Force
         }
 
-    Copy-Item ferron-release.kdl "$buildRelease/ferron.kdl" -Force
+    Copy-Item configs/ferron.release.kdl "$buildRelease/ferron.kdl" -Force
     Copy-Item wwwroot -Destination $buildRelease -Recurse -Force
 
     if (-not (Test-Path "dist"))

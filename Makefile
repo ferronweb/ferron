@@ -38,11 +38,11 @@ smoketest: build
 	FERRON="$(PWD)/$(CARGO_TARGET_ROOT)/release/ferron" smoketest/smoketest.sh
 
 run: build
-	if ! [ -f "ferron.kdl" ]; then cp ferron-test.kdl ferron.kdl; fi
+	if ! [ -f "ferron.kdl" ]; then cp configs/ferron.test.kdl ferron.kdl; fi
 	$(CARGO_TARGET_ROOT)/release/ferron
 
 run-dev: build-dev
-	if ! [ -f "ferron.kdl" ]; then cp ferron-test.kdl ferron.kdl; fi
+	if ! [ -f "ferron.kdl" ]; then cp configs/ferron.test.kdl ferron.kdl; fi
 	$(CARGO_TARGET_ROOT)/debug/ferron
 
 build: prepare-build fix-conflicts
@@ -74,7 +74,7 @@ fix-conflicts:
 package:
 	rm -rf $(BUILD_RELEASE); mkdir $(BUILD_RELEASE)
 	(find $(CARGO_TARGET_ROOT)/release -mindepth 1 -maxdepth 1 -type f ! -name "*.*" -o -name "*.exe" -o -name "*.dll" -o -name "*.dylib" -o -name "*.so" || true) | sed -E "s|(.*)|cp -a \1 $(BUILD_RELEASE)|" | sh
-	cp -a ferron-release.kdl $(BUILD_RELEASE)/ferron.kdl
+	cp -a configs/ferron.release.kdl $(BUILD_RELEASE)/ferron.kdl
 	cp -a wwwroot $(BUILD_RELEASE)
 	mkdir -p dist
 	rm -f dist/ferron-$(FERRON_VERSION)-$(DEST_TARGET_TRIPLE).zip; cd $(BUILD_RELEASE) && zip -r ../dist/ferron-$(FERRON_VERSION)-$(DEST_TARGET_TRIPLE).zip *

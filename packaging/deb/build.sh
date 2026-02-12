@@ -60,7 +60,7 @@ cp ferron.service $DEB_BUILD_DIRECTORY_NAME/usr/lib/systemd/system/
 
 # Copy the Ferron configuration file (not from the archive)
 mkdir -p $DEB_BUILD_DIRECTORY_NAME/etc
-cp $PROJECT_ROOT_DIR/ferron-packages.kdl $DEB_BUILD_DIRECTORY_NAME/etc/ferron.kdl
+cp $PROJECT_ROOT_DIR/configs/ferron.packages.kdl $DEB_BUILD_DIRECTORY_NAME/etc/ferron.kdl
 
 # Create empty directories
 mkdir -p $DEB_BUILD_DIRECTORY_NAME/var/lib/ferron

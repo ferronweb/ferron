@@ -106,7 +106,7 @@ cd build-workspace
 cargo update # If you experience crate conflicts
 cargo build -r --target-dir ../target
 cd ..
-cp ferron-test.kdl ferron.kdl
+cp configs/ferron.test.kdl ferron.kdl
 target/release/ferron
 ```
 

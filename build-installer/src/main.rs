@@ -10,7 +10,7 @@ fn main() -> Result<(), std::io::Error> {
 
   if let Ok(mut installer_script) = fs::read_to_string("installer/install-template.sh") {
     let mut updater_script = fs::read_to_string("installer/updater-template.sh").ok();
-    if let Ok(config) = fs::read_to_string("ferron-packages.kdl") {
+    if let Ok(config) = fs::read_to_string("configs/ferron.packages.kdl") {
       updater_script = updater_script.map(|s| s.replace(CONFIG_TEMPLATE, &config.trim_end()));
       installer_script = installer_script.replace(CONFIG_TEMPLATE, &config.trim_end());
     }

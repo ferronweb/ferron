@@ -88,7 +88,7 @@ COPY --from=builder /usr/src/ferron/.dist /usr/sbin
 USER nobody
 
 # Copy the web server configuration
-COPY --chown=nobody ferron-docker.kdl /etc/ferron.kdl
+COPY --chown=nobody configs/ferron.docker.kdl /etc/ferron.kdl
 
 # Copy the web root contents
 COPY --chown=nobody wwwroot /var/www/ferron/

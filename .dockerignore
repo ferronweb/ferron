@@ -46,9 +46,9 @@ Dockerfile*
 *.md
 
 # Configuration
-/ferron-*.kdl
+/configs/
 # except
-!/ferron-docker.kdl
+!/configs/ferron.docker.kdl
 
 # Smoke test (they're not needed when building a Docker image)
 /smoketest/

@@ -60,7 +60,7 @@ cp ferron.service data/usr/lib/systemd/system/
 
 # Copy the Ferron configuration file (not from the archive)
 mkdir -p data/etc
-cp $PROJECT_ROOT_DIR/ferron-packages.kdl data/etc/ferron.kdl
+cp $PROJECT_ROOT_DIR/configs/ferron.packages.kdl data/etc/ferron.kdl
 
 # Create empty directories
 mkdir -p data/var/lib/ferron
