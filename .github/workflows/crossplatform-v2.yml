@@ -12,13 +12,11 @@ on:
       - "ferron-dns-builtin/**"
       - "ferron-load-modules/**"
       - "ferron-modules-builtin/**"
-      - "ferron-passwd/**"
-      - "ferron-precompress/**"
-      - "ferron-yaml2kdl/**"
       - "ferron-yaml2kdl-core/**"
       - "ferron-build.yaml"
       - "ferron-build-override.yaml"
       - "smoketest/**"
+      - "utils/**"
       - ".github/workflows/crossplatform-v2.yml"
   pull_request:
     branches: ["develop-2.x"]
@@ -31,13 +29,11 @@ on:
       - "ferron-dns-builtin/**"
       - "ferron-load-modules/**"
       - "ferron-modules-builtin/**"
-      - "ferron-passwd/**"
-      - "ferron-precompress/**"
-      - "ferron-yaml2kdl/**"
       - "ferron-yaml2kdl-core/**"
       - "ferron-build.yaml"
       - "ferron-build-override.yaml"
       - "smoketest/**"
+      - "utils/**"
       - ".github/workflows/crossplatform-v2.yml"
 
 env:
