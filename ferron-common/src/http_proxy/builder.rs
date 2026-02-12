@@ -10,8 +10,8 @@ use super::{Connections, LoadBalancerAlgorithm, LoadBalancerAlgorithmInner, Prox
 use crate::util::TtlCache;
 
 /// Builder for configuring and constructing a [`ReverseProxy`].
-pub struct ReverseProxyBuilder {
-  pub(super) connections: Connections,
+pub struct ReverseProxyBuilder<'a> {
+  pub(super) connections: &'a mut Connections,
   #[allow(clippy::type_complexity)]
   pub(super) upstreams: Vec<(String, Option<String>, Option<usize>, Option<Duration>)>,
   pub(super) lb_algorithm: LoadBalancerAlgorithm,
@@ -30,7 +30,7 @@ pub struct ReverseProxyBuilder {
   pub(super) proxy_request_header_remove: Vec<HeaderName>,
 }
 
-impl ReverseProxyBuilder {
+impl<'a> ReverseProxyBuilder<'a> {
   /// Adds an upstream backend target.
   ///
   /// `proxy_to` is the backend URL (for example `http://127.0.0.1:8080`).
@@ -160,10 +160,43 @@ impl ReverseProxyBuilder {
       })
       .collect::<Vec<ProxyToKey>>();
 
+    let proxy_to = Arc::new(proxy_to);
+    let load_balancer_algorithm = if let Some(algorithm) = self
+      .connections
+      .load_balancer_cache
+      .get(&(self.lb_algorithm, proxy_to.clone()))
+    {
+      algorithm.clone()
+    } else {
+      let new_algorithm = Arc::new(build_load_balancer_algorithm(self.lb_algorithm));
+      self
+        .connections
+        .load_balancer_cache
+        .insert((self.lb_algorithm, proxy_to.clone()), new_algorithm.clone());
+      new_algorithm
+    };
+    let failed_backends = if let Some(failed) = self.connections.failed_backend_cache.get(&(
+      self.lb_health_check_window,
+      self.lb_health_check_max_fails,
+      proxy_to.clone(),
+    )) {
+      failed.clone()
+    } else {
+      let new_failed = Arc::new(RwLock::new(TtlCache::new(self.lb_health_check_window)));
+      self.connections.failed_backend_cache.insert(
+        (
+          self.lb_health_check_window,
+          self.lb_health_check_max_fails,
+          proxy_to.clone(),
+        ),
+        new_failed.clone(),
+      );
+      new_failed
+    };
     ReverseProxy {
-      failed_backends: Arc::new(RwLock::new(TtlCache::new(self.lb_health_check_window))),
-      load_balancer_algorithm: Arc::new(build_load_balancer_algorithm(self.lb_algorithm)),
-      proxy_to: Arc::new(proxy_to),
+      failed_backends,
+      load_balancer_algorithm,
+      proxy_to,
       health_check_max_fails: self.lb_health_check_max_fails,
       enable_health_check: self.lb_health_check,
       disable_certificate_verification: self.proxy_no_verification,

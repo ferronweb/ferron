@@ -78,14 +78,11 @@ impl ModuleLoader for ReverseProxyModuleLoader {
           )
         }
       });
-    let connections = self
-      .connections
-      .get_or_insert(if let Some(limit) = concurrency_limit {
-        Connections::with_global_limit(limit)
-      } else {
-        Connections::new()
-      })
-      .clone();
+    let connections = self.connections.get_or_insert(if let Some(limit) = concurrency_limit {
+      Connections::with_global_limit(limit)
+    } else {
+      Connections::new()
+    });
     Ok(
       self
         .cache

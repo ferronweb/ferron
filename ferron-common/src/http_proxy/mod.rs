@@ -65,7 +65,7 @@ enum LoadBalancerAlgorithmInner {
 }
 
 /// Backend selection strategy used when multiple upstreams are configured.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum LoadBalancerAlgorithm {
   /// Selects a backend randomly for each request.
   Random,
@@ -231,8 +231,24 @@ unsafe impl<B> Send for TrackedBody<B> where B: Send {}
 unsafe impl<B> Sync for TrackedBody<B> where B: Sync {}
 
 /// Connection pool for reverse proxy
-#[derive(Clone)]
 pub struct Connections {
+  #[allow(clippy::type_complexity)]
+  load_balancer_cache: HashMap<
+    (
+      LoadBalancerAlgorithm,
+      Arc<Vec<(String, Option<String>, Option<usize>, Option<Duration>)>>,
+    ),
+    Arc<LoadBalancerAlgorithmInner>,
+  >,
+  #[allow(clippy::type_complexity)]
+  failed_backend_cache: HashMap<
+    (
+      Duration,
+      u64,
+      Arc<Vec<(String, Option<String>, Option<usize>, Option<Duration>)>>,
+    ),
+    Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
+  >,
   connections: ConnectionPool,
   #[cfg(unix)]
   unix_connections: ConnectionPool,
@@ -242,6 +258,8 @@ impl Connections {
   /// Creates a connection pool without a global connection limit.
   pub fn new() -> Self {
     Self {
+      load_balancer_cache: HashMap::new(),
+      failed_backend_cache: HashMap::new(),
       connections: Arc::new(Pool::new_unbounded()),
       #[cfg(unix)]
       unix_connections: Arc::new(Pool::new_unbounded()),
@@ -253,6 +271,8 @@ impl Connections {
   /// Unix socket connections remain unbounded.
   pub fn with_global_limit(global_limit: usize) -> Self {
     Self {
+      load_balancer_cache: HashMap::new(),
+      failed_backend_cache: HashMap::new(),
       connections: Arc::new(Pool::new(global_limit)),
       #[cfg(unix)]
       unix_connections: Arc::new(Pool::new_unbounded()),
@@ -260,9 +280,9 @@ impl Connections {
   }
 
   /// Starts a reverse proxy builder using this connection pool.
-  pub fn get_builder(&self) -> ReverseProxyBuilder {
+  pub fn get_builder<'a>(&'a mut self) -> ReverseProxyBuilder<'a> {
     ReverseProxyBuilder {
-      connections: self.clone(),
+      connections: self,
       upstreams: Vec::new(),
       lb_algorithm: LoadBalancerAlgorithm::TwoRandomChoices,
       lb_health_check_window: Duration::from_millis(5000),
