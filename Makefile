@@ -12,12 +12,12 @@ ifdef TARGET
 	CARGO_FINAL_EXTRA_ARGS = --target $(TARGET) $(CARGO_FINAL_EXTRA_ARGS_ENV)
 	CARGO_TARGET_ROOT = target/$(TARGET)
 	DEST_TARGET_TRIPLE = $(TARGET)
-	BUILD_RELEASE = build-release-$(TARGET)
+	BUILD_RELEASE = build/release-$(TARGET)
 else
 	CARGO_FINAL_EXTRA_ARGS = $(CARGO_FINAL_EXTRA_ARGS_ENV)
 	CARGO_TARGET_ROOT = target
 	DEST_TARGET_TRIPLE = $(HOST_TARGET_TRIPLE)
-	BUILD_RELEASE = build-release
+	BUILD_RELEASE = build/release
 endif
 
 ifdef NO_MONOIO
@@ -46,16 +46,16 @@ run-dev: build-dev
 	$(CARGO_TARGET_ROOT)/debug/ferron
 
 build: prepare-build fix-conflicts
-	cd build-workspace && RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 $(CARGO_FINAL) build --target-dir ../target -r $(CARGO_FINAL_EXTRA_ARGS)
+	cd build/workspace && RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 $(CARGO_FINAL) build --target-dir ../../target -r $(CARGO_FINAL_EXTRA_ARGS)
 
 build-dev: prepare-build fix-conflicts
-	cd build-workspace && RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 $(CARGO_FINAL) build --target-dir ../target $(CARGO_FINAL_EXTRA_ARGS)
+	cd build/workspace && RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 $(CARGO_FINAL) build --target-dir ../../target $(CARGO_FINAL_EXTRA_ARGS)
 
 prepare-build:
-	cargo run --manifest-path build-prepare/Cargo.toml
+	cargo run --manifest-path build/prepare/Cargo.toml
 
 fix-conflicts:
-	@ cd build-workspace && \
+	@ cd build/workspace && \
 	while [ "$$OLD_CONFLICTING_PACKAGES" != "$$CONFLICTING_PACKAGES" ] || [ "$$OLD_CONFLICTING_PACKAGES" = "" ]; do \
 	    OLD_CONFLICTING_PACKAGES=$$CONFLICTING_PACKAGES; \
 		CONFLICTING_PACKAGES=$$( (cargo update -w --dry-run 2>&1 || true) | (grep -E '^error: failed to select a version for (the requirement )?`[^ `]+' || true) | sed -E 's|[^`]*`([^ `]+).*|\1|' | xargs); \
@@ -91,11 +91,11 @@ build-with-package-deb: build package-deb
 build-with-package-rpm: build package-rpm
 
 installer:
-	cargo run --manifest-path build-installer/Cargo.toml
+	cargo run --manifest-path build/installer/Cargo.toml
 
 clean:
-	rm -rf build-workspace build-release dist packaging/deb/ferron_* packaging/deb/md5sums.tmp packaging/rpm/data packaging/rpm/ferron.spec packaging/rpm/rpm
+	rm -rf build/workspace build/release dist packaging/deb/ferron_* packaging/deb/md5sums.tmp packaging/rpm/data packaging/rpm/ferron.spec packaging/rpm/rpm
 	cargo clean
-	cd build-prepare && cargo clean
+	cd build/prepare && cargo clean
 
 .PHONY: smoketest installer

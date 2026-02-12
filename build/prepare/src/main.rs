@@ -68,11 +68,11 @@ fn setup_workspace() -> Result<()> {
   println!("Setting up temporary workspace...");
 
   // Clean up any existing workspace
-  if Path::new("build-workspace").exists() {
-    fs::remove_dir_all("build-workspace").map_err(BuildError::IoError)?;
+  if Path::new("build/workspace").exists() {
+    fs::remove_dir_all("build/workspace").map_err(BuildError::IoError)?;
   }
 
-  fs::create_dir("build-workspace").map_err(BuildError::IoError)?;
+  fs::create_dir("build/workspace").map_err(BuildError::IoError)?;
 
   Ok(())
 }
@@ -113,7 +113,7 @@ fn process_cargo_workspace() -> Result<Vec<String>> {
       if workspace_member_str != "ferron-load-modules" {
         let src_path = Path::new(workspace_member_str);
         if src_path.exists() {
-          let dst_path = format!("build-workspace/{workspace_member_str}");
+          let dst_path = format!("build/workspace/{workspace_member_str}");
           copy_dir_all(src_path, &dst_path).map_err(BuildError::IoError)?;
           copied_members.push(workspace_member_str.to_string());
           println!("Copied workspace member: {workspace_member_str}");
@@ -125,12 +125,12 @@ fn process_cargo_workspace() -> Result<Vec<String>> {
   }
 
   // Write updated Cargo.toml
-  fs::write("build-workspace/Cargo.toml", cargo_workspace.to_string().as_bytes()).map_err(BuildError::IoError)?;
+  fs::write("build/workspace/Cargo.toml", cargo_workspace.to_string().as_bytes()).map_err(BuildError::IoError)?;
 
   // Copy optional files
-  copy_optional_file("Cargo.lock", "build-workspace/Cargo.lock");
-  copy_optional_file("Cross.toml", "build-workspace/Cross.toml");
-  copy_optional_directory("assets", "build-workspace/assets");
+  copy_optional_file("Cargo.lock", "build/workspace/Cargo.lock");
+  copy_optional_file("Cross.toml", "build/workspace/Cross.toml");
+  copy_optional_directory("assets", "build/workspace/assets");
 
   Ok(copied_members)
 }
@@ -169,11 +169,11 @@ fn process_ferron_load_modules(build_config: &yaml_rust2::Yaml) -> Result<()> {
   println!("Processing ferron-load-modules...");
 
   // Copy ferron-load-modules directory
-  copy_dir_all("ferron-load-modules", "build-workspace/ferron-load-modules")
+  copy_dir_all("ferron-load-modules", "build/workspace/ferron-load-modules")
     .map_err(|_| BuildError::MissingFile("ferron-load-modules directory".to_string()))?;
 
   // Load and modify Cargo.toml
-  let manifest_path = "build-workspace/ferron-load-modules/Cargo.toml";
+  let manifest_path = "build/workspace/ferron-load-modules/Cargo.toml";
   let crate_manifest_contents =
     fs::read_to_string(manifest_path).map_err(|_| BuildError::MissingFile(manifest_path.to_string()))?;
 
@@ -398,8 +398,8 @@ fn process_ferron_load_modules(build_config: &yaml_rust2::Yaml) -> Result<()> {
   fs::write(manifest_path, crate_manifest.to_string().as_bytes()).map_err(BuildError::IoError)?;
 
   // Handle build.rs files
-  let old_build_rs = "build-workspace/ferron-load-modules/build.rs";
-  let new_build_rs = "build-workspace/ferron-load-modules/build_with_modules.rs";
+  let old_build_rs = "build/workspace/ferron-load-modules/build.rs";
+  let new_build_rs = "build/workspace/ferron-load-modules/build_with_modules.rs";
 
   if Path::new(new_build_rs).exists() {
     if Path::new(old_build_rs).exists() {
@@ -419,10 +419,10 @@ fn copy_build_config() -> Result<()> {
 
   // Try to copy override config first, then fallback to regular config
   if Path::new("ferron-build-override.yaml").exists() {
-    fs::copy("ferron-build-override.yaml", "build-workspace/ferron-build.yaml").map_err(BuildError::IoError)?;
+    fs::copy("ferron-build-override.yaml", "build/workspace/ferron-build.yaml").map_err(BuildError::IoError)?;
     println!("Copied ferron-build-override.yaml as ferron-build.yaml");
   } else if Path::new("ferron-build.yaml").exists() {
-    fs::copy("ferron-build.yaml", "build-workspace/ferron-build.yaml").map_err(BuildError::IoError)?;
+    fs::copy("ferron-build.yaml", "build/workspace/ferron-build.yaml").map_err(BuildError::IoError)?;
     println!("Copied ferron-build.yaml");
   } else {
     return Err(BuildError::MissingFile("ferron-build.yaml".to_string()));

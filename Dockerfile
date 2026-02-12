@@ -63,7 +63,7 @@ COPY . .
 RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     --mount=type=cache,sharing=private,target=/usr/local/cargo/registry \
     --mount=type=cache,sharing=private,target=/usr/src/ferron/target \
-    --mount=type=cache,sharing=private,target=/usr/src/ferron/build-prepare/target \
+    --mount=type=cache,sharing=private,target=/usr/src/ferron/build/prepare/target \
     # Set target triple and path
     TARGET_TRIPLE="$(cat /tmp/target_triple)" && \
     TARGET_PATH="target/$TARGET_TRIPLE/release" && \

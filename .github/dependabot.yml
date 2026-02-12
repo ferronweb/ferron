@@ -44,12 +44,12 @@ updates:
       interval: "weekly"
     target-branch: "develop-2.x"
   - package-ecosystem: "cargo"
-    directory: "/build-prepare"
+    directory: "/build/prepare"
     schedule:
       interval: "weekly"
     target-branch: "develop-2.x"
   - package-ecosystem: "cargo"
-    directory: "/build-installer"
+    directory: "/build/installer"
     schedule:
       interval: "weekly"
     target-branch: "develop-2.x"

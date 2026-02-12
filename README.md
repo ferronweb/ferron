@@ -41,7 +41,7 @@ Ferron consists of multiple components:
 
 Ferron also consists of:
 
-- **`build-prepare`** - internal tool for preparation when building Ferron with modules.
+- **`build/prepare`** - internal tool for preparation when building Ferron with modules.
 - **`ferron-common`** - code common for Ferron and its modules.
 - **`ferron-dns-builtin`** - built-in Ferron DNS providers.
 - **`ferron-load-modules`** - functions for loading Ferron modules.
@@ -101,10 +101,10 @@ cd ferron
 You can then build and run the web server using Cargo:
 
 ```sh
-cargo run --manifest-path build-prepare/Cargo.toml
-cd build-workspace
+cargo run --manifest-path build/prepare/Cargo.toml
+cd build/workspace
 cargo update # If you experience crate conflicts
-cargo build -r --target-dir ../target
+cargo build -r --target-dir ../../target
 cd ..
 cp configs/ferron.test.kdl ferron.kdl
 target/release/ferron

@@ -27,13 +27,13 @@ if ($env:TARGET)
     $cargoFinalExtraArgs = "--target $env:TARGET"
     $cargoTargetRoot = "target/$env:TARGET"
     $destTargetTriple = $env:TARGET
-    $buildRelease = "build-release-$env:TARGET"
+    $buildRelease = "build/release-$env:TARGET"
 } else
 {
     $cargoFinalExtraArgs = ""
     $cargoTargetRoot = "target"
     $destTargetTriple = $hostTargetTriple
-    $buildRelease = "build-release"
+    $buildRelease = "build/release"
 }
 
 # Append extra arguments if set
@@ -97,8 +97,8 @@ function Build
 {
     PrepareBuild
     FixConflicts
-    Push-Location build-workspace
-    & $cargoFinal build --target-dir ../target -r $cargoFinalExtraArgs
+    Push-Location build/workspace
+    & $cargoFinal build --target-dir ../../target -r $cargoFinalExtraArgs
     Pop-Location
 }
 
@@ -106,19 +106,19 @@ function BuildDev
 {
     PrepareBuild
     FixConflicts
-    Push-Location build-workspace
-    & $cargoFinal build --target-dir ../target $cargoFinalExtraArgs
+    Push-Location build/workspace
+    & $cargoFinal build --target-dir ../../target $cargoFinalExtraArgs
     Pop-Location
 }
 
 function PrepareBuild
 {
-    & cargo run --manifest-path build-prepare/Cargo.toml
+    & cargo run --manifest-path build/prepare/Cargo.toml
 }
 
 function FixConflicts
 {
-    Push-Location build-workspace
+    Push-Location build/workspace
     while (($oldConflictingPackages -ne $conflictingPackages) -or (-not $oldConflictingPackages))
     {
         $oldConflictingPackages = $conflictingPackages
@@ -171,14 +171,14 @@ function BuildWithPackage
 
 function Installer
 {
-    & cargo run --manifest-path build-installer/Cargo.toml
+    & cargo run --manifest-path build/installer/Cargo.toml
 }
 
 function Clean
 {
-    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build-workspace, build-release, dist, packaging/deb/ferron_* packaging/deb/md5sums.tmp
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build/workspace, build/release, dist, packaging/deb/ferron_* packaging/deb/md5sums.tmp
     & cargo clean
-    Push-Location build-prepare
+    Push-Location build/prepare
     & cargo clean
     Pop-Location
 }

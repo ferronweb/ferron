@@ -4,7 +4,7 @@ on:
   push:
     branches: ["2.x"]
     paths:
-      - "build-installer/**"
+      - "build/installer/**"
       - "installer/**"
       - ".github/workflows/installer-v2.yml"
 
@@ -28,10 +28,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            ./build-installer -> target
+            ./build/installer -> target
 
       - name: Generate the installers
-        run: "cargo run --manifest-path build-installer/Cargo.toml"
+        run: "cargo run --manifest-path build/installer/Cargo.toml"
 
       - name: Create the installers ZIP archive
         uses: thedoctor0/zip-release@0.7.6

@@ -130,7 +130,7 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            build-prepare/target/
+            build/prepare/target/
             target/
           key: CompileTestFerron2-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: CompileTestFerron2-${{ runner.os }}-${{ matrix.target }}-
@@ -156,8 +156,8 @@ jobs:
       - name: Build binaries
         shell: bash
         run: |
-          cargo run --manifest-path build-prepare/Cargo.toml
-          cd build-workspace
+          cargo run --manifest-path build/prepare/Cargo.toml
+          cd build/workspace
           while [ "$OLD_CONFLICTING_PACKAGES" != "$CONFLICTING_PACKAGES" ] || [ "$OLD_CONFLICTING_PACKAGES" = "" ]; do \
               OLD_CONFLICTING_PACKAGES=$CONFLICTING_PACKAGES; \
               CONFLICTING_PACKAGES=$( (cargo update -w --dry-run 2>&1 || true) | (grep -E '^error: failed to select a version for (the requirement )?`[^ `]+' || true) | sed -E 's|[^`]*`([^ `]+).*|\1|' | xargs); \
@@ -172,7 +172,7 @@ jobs:
                   cargo update $CONFLICTING_PACKAGES || true; \
               fi; \
           done
-          RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 ${{ matrix.command }} build --verbose --target-dir ../target --target ${{ matrix.target }} ${{ matrix.options }}
+          RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 ${{ matrix.command }} build --verbose --target-dir ../../target --target ${{ matrix.target }} ${{ matrix.options }}
           cd ..
 
       - name: Smoke test the binary (Unix-like)

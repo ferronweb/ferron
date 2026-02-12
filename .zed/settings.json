@@ -4,8 +4,8 @@
       "initialization_options": {
         "linkedProjects": [
           "./Cargo.toml",
-          "./build-prepare/Cargo.toml",
-          "./build-installer/Cargo.toml",
+          "./build/prepare/Cargo.toml",
+          "./build/installer/Cargo.toml",
         ],
       },
     },
