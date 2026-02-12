@@ -8,7 +8,7 @@ ProductName = "Ferron YAML to KDL configuration converter"
 
 [dependencies]
 clap = { version = "4.5.38", features = ["cargo"] }
-ferron-yaml2kdl-core = { workspace = true }
+ferron-yaml2kdl-core = { path = "../ferron-yaml2kdl-core" }
 
 [target.'cfg(target_arch = "x86")'.dependencies]
 mimalloc = { workspace = true } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
