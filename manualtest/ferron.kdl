@@ -1,0 +1,33 @@
+globals {
+  auto_tls_directory "https://pebble:14000/dir"
+  auto_tls_no_verification
+
+  protocols "h1" "h2" "h3"
+
+  otlp_logs "http://otel-collector:4317/v1/logs" protocol="grpc"
+  otlp_metrics "http://otel-collector:4317/v1/metrics" protocol="grpc"
+
+  log_stdout
+  error_log_stderr
+
+  cache
+}
+
+ferron.test {
+  root "/var/www/ferron"
+  file_cache_control "public, max-age=900"
+}
+
+grafana.ferron.test {
+  proxy "http://grafana:3000"
+  proxy_request_header_replace "Host" "{header:Host}" // To prevent Host header mismatches
+
+  cache #false
+}
+
+php.ferron.test {
+  root "/var/www/php"
+  fcgi_php "tcp://php-fpm:9000"
+
+  rewrite "^/.*" "/" directory=#false file=#false last=#true
+}

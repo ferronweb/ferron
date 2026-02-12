@@ -1,0 +1,87 @@
+# Here, there aren't many persistent volumes,
+# since this Docker Compose setup is meant for manual testing and development..
+
+services:
+  ferron:
+    networks:
+      - acme
+      - otlp
+      - grafana-proxied
+      - php-proxied
+    build:
+      context: ..
+      dockerfile: Dockerfile.alpine
+    ports:
+      - 80:80 # HTTP
+      - 443:443 # HTTPS
+      - 443:443/udp # HTTP/3
+    volumes:
+      - ./ferron.kdl:/etc/ferron.kdl
+      - ./php:/var/www/php
+
+  pebble:
+    image: ghcr.io/letsencrypt/pebble:latest
+    command: -config /etc/pebble-config.json
+    networks:
+      - acme
+    extra_hosts:
+      - "ferron.test:host-gateway"
+      - "grafana.ferron.test:host-gateway"
+      - "php.ferron.test:host-gateway"
+    volumes:
+      - ./pebble-config.json:/etc/pebble-config.json
+
+  php-fpm:
+    image: php:fpm
+    volumes:
+      - ./php:/var/www/php
+    networks:
+      - php-proxied
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    networks:
+      - otlp
+      - otel-collector
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+
+  prometheus:
+    image: prom/prometheus:latest
+    networks:
+      - otel-collector
+      - grafana
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  loki:
+    image: grafana/loki:latest
+    networks:
+      - otel-collector
+      - grafana
+    command: -config.file=/etc/loki/local-config.yaml
+
+  grafana:
+    image: grafana/grafana:latest
+    networks:
+      - grafana
+      - grafana-proxied
+    volumes:
+      - ./grafana-datasources:/etc/grafana/provisioning/datasources
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+networks:
+  acme:
+    driver: bridge
+  otlp:
+    driver: bridge
+  grafana:
+    driver: bridge
+  grafana-proxied:
+    driver: bridge
+  php-proxied:
+    driver: bridge
+  otel-collector:
+    driver: bridge
