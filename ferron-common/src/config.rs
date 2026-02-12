@@ -64,8 +64,8 @@ impl Ord for ConditionalData {
       (Self::SetConstant(v1, v2), Self::SetConstant(v3, v4)) => v1.cmp(v3).then(v2.cmp(v4)),
       _ => {
         // SAFETY: See https://doc.rust-lang.org/core/mem/fn.discriminant.html
-        let discriminant_self = unsafe { *<*const _>::from(self).cast::<u8>() };
-        let discriminant_other = unsafe { *<*const _>::from(other).cast::<u8>() };
+        let discriminant_self = unsafe { *<*const ConditionalData>::from(self).cast::<u8>() };
+        let discriminant_other = unsafe { *<*const ConditionalData>::from(other).cast::<u8>() };
         discriminant_self.cmp(&discriminant_other)
       }
     }
