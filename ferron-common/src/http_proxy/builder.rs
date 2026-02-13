@@ -235,18 +235,19 @@ fn apply_local_limit(
   connections: &super::ConnectionPool,
   #[cfg(unix)] unix_connections: &super::ConnectionPool,
 ) -> Option<usize> {
-  local_limit.map(|limit| {
+  #[allow(clippy::bind_instead_of_map)]
+  local_limit.and_then(|limit| {
     if is_unix_socket {
       #[cfg(unix)]
       {
-        unix_connections.set_local_limit(limit)
+        Some(unix_connections.set_local_limit(limit))
       }
       #[cfg(not(unix))]
       {
         None
       }
     } else {
-      connections.set_local_limit(limit)
+      Some(connections.set_local_limit(limit))
     }
   })
 }
