@@ -545,7 +545,9 @@ example.com {
   - This directive specifies whether the reverse proxy uses HTTP/2 protocol (without HTTP/1.1 fallback) when connecting to backend servers. When the backend server is connected via HTTPS, the reverse proxy negotiates HTTP/2 during the TLS handshake. When the backend server is connected via HTTP, the reverse proxy uses HTTP/2 with prior knowledge. This directive can be used when proxying gRPC requests. Default: `proxy_http2_only #false`
 - `proxy_proxy_header <proxy_version_version: string|null>` (_rproxy_ module; Ferron 2.1.0 or newer)
   - This directive specifies the version of the PROXY protocol header to be sent to backend servers when acting as a reverse proxy. Supported versions are `"v1"` (PROXY protocol version 1) and `"v2"` (PROXY protocol version 2). If specified with `#null` value, no PROXY protocol header is sent. Default: `proxy_proxy_header #null`
-
+- `proxy_srv <proxy_srv_to: string|null> [limit=<conn_limit: integer|null>] [idle_timeout=<idle_timeout: integer|null> [dns_servers=<dns_servers: string|null>]` (_rproxy_ module)
+  - This directive specifies the URL (with hostname leading to an SRV record) to which the reverse proxy should forward requests. HTTP (for example `http://_http._tcp.example.com/`) and HTTPS URLs (for example `https://_https._tcp.example.com/`) are supported. Established connections can be limited by the `limit` prop (Ferron 2.3.0 and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron 2.3.0 and newer); by default it is set to `60000` (60 seconds). Custom DNS resolvers are also supported via specifying comma-separated IP addresses of DNS servers in the `dns_server` prop. This directive can be specified multiple times. Default: none
+  
 **Configuration example:**
 
 ```kdl

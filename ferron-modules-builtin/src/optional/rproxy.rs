@@ -52,6 +52,7 @@ impl ReverseProxyModuleLoader {
         "proxy_request_header",
         "proxy_request_header_remove",
         "proxy_request_header_replace",
+        "proxy_srv",
       ]),
       connections: None,
     }
@@ -63,7 +64,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
     &mut self,
     config: &ServerConfiguration,
     global_config: Option<&ServerConfiguration>,
-    _secondary_runtime: &tokio::runtime::Runtime,
+    secondary_runtime: &tokio::runtime::Runtime,
   ) -> Result<Arc<dyn Module + Send + Sync>, Box<dyn Error + Send + Sync>> {
     let concurrency_limit = global_config
       .and_then(|c| get_value!("proxy_concurrent_conns", c))
@@ -114,9 +115,51 @@ impl ModuleLoader for ReverseProxyModuleLoader {
               })
               .collect()
           });
+          let proxy_to_srv_raw = get_entries!("proxy_srv", config).map_or(vec![], |e| {
+            e.inner
+              .iter()
+              .filter_map(|e| {
+                e.values
+                  .first()
+                  .and_then(|v| v.as_str().map(|s| s.to_owned()))
+                  .map(|v| {
+                    (
+                      v,
+                      e.props.get("limit").and_then(|v| v.as_i128()).map(|v| v as usize),
+                      e.props
+                        .get("idle_timeout")
+                        .map_or(Some(DEFAULT_KEEPALIVE_IDLE_TIMEOUT), |v| {
+                          if v.is_null() {
+                            None
+                          } else {
+                            Some(v.as_i128().map(|v| v as u64).unwrap_or(DEFAULT_KEEPALIVE_IDLE_TIMEOUT))
+                          }
+                        })
+                        .map(Duration::from_millis),
+                      e.props
+                        .get("dns_servers")
+                        .and_then(|v| v.as_str())
+                        .map_or(vec![], |s| s.split(",").collect())
+                        .into_iter()
+                        .filter_map(|s| s.trim().parse::<std::net::IpAddr>().ok())
+                        .collect::<Vec<_>>(),
+                    )
+                  })
+              })
+              .collect()
+          });
           let mut proxy_builder = connections.get_builder();
           for (proxy_to, proxy_unix, keepalive_limit, keepalive_idle_timeout) in proxy_to_raw {
             proxy_builder = proxy_builder.upstream(proxy_to, proxy_unix, keepalive_limit, keepalive_idle_timeout);
+          }
+          for (to, keepalive_limit, keepalive_idle_timeout, dns_servers) in proxy_to_srv_raw {
+            proxy_builder = proxy_builder.upstream_srv(
+              to,
+              keepalive_limit,
+              keepalive_idle_timeout,
+              secondary_runtime.handle().to_owned(),
+              dns_servers,
+            );
           }
           if let Some(custom_headers) = get_entries!("proxy_request_header", config) {
             for custom_header in custom_headers.inner.iter().rev() {
@@ -226,7 +269,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
   }
 
   fn get_requirements(&self) -> Vec<&'static str> {
-    vec!["proxy"]
+    vec!["proxy", "proxy_srv"]
   }
 
   fn validate_configuration(
@@ -305,6 +348,39 @@ impl ModuleLoader for ReverseProxyModuleLoader {
         #[cfg(not(unix))]
         if entry.props.get("unix").is_some() {
           Err(anyhow::anyhow!("Unix sockets are not supported on this platform"))?
+        }
+      }
+    };
+
+    if let Some(entries) = get_entries_for_validation!("proxy_srv", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `proxy_srv` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_string() && !entry.values[0].is_null() {
+          Err(anyhow::anyhow!("Invalid proxy dynamic SRV backend server"))?
+        }
+        if let Some(prop) = entry.props.get("limit") {
+          if !prop.is_null() && prop.as_i128().unwrap_or(0) < 1 {
+            Err(anyhow::anyhow!("Invalid proxy connection limit for a backend server"))?
+          }
+        }
+        if let Some(prop) = entry.props.get("idle_timeout") {
+          if !prop.is_null() && prop.as_i128().unwrap_or(0) < 1 {
+            Err(anyhow::anyhow!(
+              "Invalid proxy idle keep-alive connection timeout for a backend server"
+            ))?
+          }
+        }
+        if let Some(prop) = entry.props.get("dns_servers") {
+          if !prop.is_null()
+            && (prop
+              .as_str()
+              .is_none_or(|p| p.split(",").any(|s| s.trim().parse::<std::net::IpAddr>().is_err())))
+          {
+            Err(anyhow::anyhow!("Invalid proxy dynamic SRV backend server DNS servers"))?
+          }
         }
       }
     };

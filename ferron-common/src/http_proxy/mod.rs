@@ -55,7 +55,7 @@ use self::send_net_io::{SendTcpStreamPoll, SendTcpStreamPollDropGuard};
 use self::send_net_io::{SendUnixStreamPoll, SendUnixStreamPollDropGuard};
 use self::send_request::{SendRequest, SendRequestWrapper};
 
-type ConnectionsTrackState = Arc<RwLock<HashMap<(String, Option<String>), Arc<()>>>>;
+type ConnectionsTrackState = Arc<RwLock<HashMap<UpstreamInner, Arc<()>>>>;
 
 enum LoadBalancerAlgorithmInner {
   Random,
@@ -86,11 +86,126 @@ pub enum ProxyHeader {
   V2,
 }
 
-type ProxyToKey = (String, Option<String>, Option<usize>, Option<Duration>);
-type ProxyToVectorContentsBorrowed<'a> = (&'a str, Option<&'a str>, Option<usize>, Option<Duration>);
+#[derive(Clone, Eq, PartialEq, Hash)]
+struct UpstreamInner {
+  proxy_to: String,
+  proxy_unix: Option<String>,
+}
 
-type ConnectionPool = Arc<Pool<(String, Option<String>, Option<IpAddr>), SendRequestWrapper>>;
-type ConnectionPoolItem = Item<(String, Option<String>, Option<IpAddr>), SendRequestWrapper>;
+#[derive(Clone)]
+struct SrvUpstreamData {
+  to: String,
+  secondary_runtime_handle: tokio::runtime::Handle,
+  dns_resolver: Arc<hickory_resolver::TokioResolver>,
+}
+
+impl PartialEq for SrvUpstreamData {
+  fn eq(&self, other: &Self) -> bool {
+    self.to == other.to
+  }
+}
+
+impl Eq for SrvUpstreamData {}
+
+impl std::hash::Hash for SrvUpstreamData {
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    self.to.hash(state);
+  }
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+enum Upstream {
+  Static(UpstreamInner),
+  Srv(SrvUpstreamData),
+}
+
+impl Upstream {
+  async fn resolve(
+    &self,
+    failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>>,
+    health_check_max_fails: u64,
+  ) -> Vec<UpstreamInner> {
+    match self {
+      Upstream::Static(inner) => vec![inner.clone()],
+      Upstream::Srv(srv_data) => {
+        let to = srv_data.to.clone();
+        let resolver = srv_data.dns_resolver.clone();
+        let failed_backends = failed_backends.clone();
+        srv_data
+          .secondary_runtime_handle
+          .spawn(async move {
+            let to_url = match Uri::from_str(&to) {
+              Ok(uri) => uri,
+              Err(_) => return vec![],
+            };
+            let to = match to_url.host() {
+              Some(host) => host.to_string(),
+              None => return vec![],
+            };
+
+            let srv_records = match resolver.srv_lookup(&to).await {
+              Ok(records) => records,
+              Err(_) => return vec![],
+            };
+
+            let failed_backends = failed_backends.read().await;
+            let srv_upstreams = srv_records
+              .into_iter()
+              .filter_map(|record| {
+                let mut to_url_parts = to_url.clone().into_parts();
+                to_url_parts.authority = Some(format!("{}:{}", record.target(), record.port()).parse().ok()?);
+                let upstream_inner = UpstreamInner {
+                  proxy_to: Uri::from_parts(to_url_parts).ok()?.to_string(),
+                  proxy_unix: None,
+                };
+                if failed_backends
+                  .get(&upstream_inner)
+                  .is_some_and(|fails| fails > health_check_max_fails)
+                {
+                  // Backend is unhealthy, skip it
+                  None
+                } else {
+                  Some((upstream_inner, record.weight(), record.priority()))
+                }
+              })
+              .collect::<Vec<_>>();
+            let highest_priority = srv_upstreams
+              .iter()
+              .map(|(_, _, priority)| *priority)
+              .min()
+              .unwrap_or(0);
+            let filtered_srv_upstreams = srv_upstreams
+              .into_iter()
+              .filter(|(_, _, priority)| *priority == highest_priority)
+              .map(|(upstream, weight, _)| (upstream, weight))
+              .collect::<Vec<_>>();
+            let cumulative_weight: u64 = filtered_srv_upstreams.iter().map(|(_, weight)| *weight as u64).sum();
+            let random_weight = if cumulative_weight == 0 {
+              // Prevent empty range sampling panics
+              0
+            } else {
+              rand::random_range(0..cumulative_weight)
+            };
+            for upstream in filtered_srv_upstreams {
+              let weight = upstream.1;
+              if random_weight <= weight as u64 {
+                return vec![upstream.0];
+              }
+            }
+            vec![]
+          })
+          .await
+          .unwrap_or(vec![])
+      }
+    }
+  }
+}
+
+type ProxyToKey = (Upstream, Option<usize>, Option<Duration>);
+type ProxyToKeyInner = (UpstreamInner, Option<usize>, Option<Duration>);
+
+type ConnectionPool = Arc<Pool<(UpstreamInner, Option<IpAddr>), SendRequestWrapper>>;
+type ConnectionPoolItem = Item<(UpstreamInner, Option<IpAddr>), SendRequestWrapper>;
 
 #[cfg(feature = "runtime-monoio")]
 #[allow(unused)]
@@ -236,18 +351,14 @@ pub struct Connections {
   load_balancer_cache: HashMap<
     (
       LoadBalancerAlgorithm,
-      Arc<Vec<(String, Option<String>, Option<usize>, Option<Duration>)>>,
+      Arc<Vec<(Upstream, Option<usize>, Option<Duration>)>>,
     ),
     Arc<LoadBalancerAlgorithmInner>,
   >,
   #[allow(clippy::type_complexity)]
   failed_backend_cache: HashMap<
-    (
-      Duration,
-      u64,
-      Arc<Vec<(String, Option<String>, Option<usize>, Option<Duration>)>>,
-    ),
-    Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
+    (Duration, u64, Arc<Vec<(Upstream, Option<usize>, Option<Duration>)>>),
+    Arc<RwLock<TtlCache<UpstreamInner, u64>>>,
   >,
   connections: ConnectionPool,
   #[cfg(unix)]
@@ -311,7 +422,7 @@ impl Default for Connections {
 /// A reverse proxy
 pub struct ReverseProxy {
   #[allow(clippy::type_complexity)]
-  failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
+  failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>>,
   load_balancer_algorithm: Arc<LoadBalancerAlgorithmInner>,
   proxy_to: Arc<Vec<ProxyToKey>>,
   health_check_max_fails: u64,
@@ -363,12 +474,12 @@ impl ReverseProxy {
 /// Handlers for the reverse proxy module
 pub struct ReverseProxyHandler {
   #[allow(clippy::type_complexity)]
-  failed_backends: Arc<RwLock<TtlCache<(String, Option<String>), u64>>>,
+  failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>>,
   load_balancer_algorithm: Arc<LoadBalancerAlgorithmInner>,
   proxy_to: Arc<Vec<ProxyToKey>>,
   health_check_max_fails: u64,
-  selected_backends_metrics: Option<Vec<(String, Option<String>)>>,
-  unhealthy_backends_metrics: Option<Vec<(String, Option<String>)>>,
+  selected_backends_metrics: Option<Vec<UpstreamInner>>,
+  unhealthy_backends_metrics: Option<Vec<UpstreamInner>>,
   connection_reused: bool,
   enable_health_check: bool,
   disable_certificate_verification: bool,
@@ -415,11 +526,22 @@ impl ModuleHandlers for ReverseProxyHandler {
     let health_check_max_fails = self.health_check_max_fails;
     let disable_certificate_verification = self.disable_certificate_verification;
     let proxy_intercept_errors = self.proxy_intercept_errors;
-    let mut proxy_to_vector = self
-      .proxy_to
-      .iter()
-      .map(|e| (&*e.0, e.1.as_deref(), e.2, e.3))
-      .collect();
+    if self.proxy_to.is_empty() {
+      // No upstreams configured...
+      return Ok(ResponseData {
+        request: Some(request),
+        response: None,
+        response_status: None,
+        response_headers: None,
+        new_remote_address: None,
+      });
+    }
+    let mut proxy_to_vector = resolve_upstreams(
+      &self.proxy_to,
+      self.failed_backends.clone(),
+      self.health_check_max_fails,
+    )
+    .await;
     let load_balancer_algorithm = self.load_balancer_algorithm.clone();
     let connection_track = match &*load_balancer_algorithm {
       LoadBalancerAlgorithmInner::LeastConnections(connection_track) => Some(connection_track),
@@ -431,7 +553,7 @@ impl ModuleHandlers for ReverseProxyHandler {
     let mut request_parts = Some(request_parts);
 
     loop {
-      if let Some((proxy_to, proxy_unix, local_limit_index, keepalive_idle_timeout)) = determine_proxy_to(
+      if let Some((upstream, local_limit_index, keepalive_idle_timeout)) = determine_proxy_to(
         &mut proxy_to_vector,
         &self.failed_backends,
         enable_health_check,
@@ -441,8 +563,9 @@ impl ModuleHandlers for ReverseProxyHandler {
       .await
       {
         if let Some(selected_backends_metrics) = self.selected_backends_metrics.as_mut() {
-          selected_backends_metrics.push((proxy_to.clone(), proxy_unix.clone()));
+          selected_backends_metrics.push(upstream.clone());
         }
+        let UpstreamInner { proxy_to, proxy_unix } = &upstream;
         let proxy_request_url = proxy_to.parse::<hyper::Uri>()?;
         let scheme_str = proxy_request_url.scheme_str();
         let mut encrypted = false;
@@ -487,21 +610,18 @@ impl ModuleHandlers for ReverseProxyHandler {
         )?;
 
         let tracked_connection = if let Some(connection_track) = connection_track {
-          let connection_track_key = (proxy_to.clone(), proxy_unix.clone());
           let connection_track_read = connection_track.read().await;
-          Some(
-            if let Some(connection_count) = connection_track_read.get(&connection_track_key) {
-              connection_count.clone()
-            } else {
-              let tracked_connection = Arc::new(());
-              drop(connection_track_read);
-              connection_track
-                .write()
-                .await
-                .insert(connection_track_key, tracked_connection.clone());
-              tracked_connection
-            },
-          )
+          Some(if let Some(connection_count) = connection_track_read.get(&upstream) {
+            connection_count.clone()
+          } else {
+            let tracked_connection = Arc::new(());
+            drop(connection_track_read);
+            connection_track
+              .write()
+              .await
+              .insert(upstream.clone(), tracked_connection.clone());
+            tracked_connection
+          })
         } else {
           None
         };
@@ -532,16 +652,10 @@ impl ModuleHandlers for ReverseProxyHandler {
           loop {
             let mut send_request_item = if send_request_items.is_empty() {
               connections
-                .pull_with_wait_local_limit(
-                  (proxy_to.clone(), proxy_unix.clone(), proxy_client_ip),
-                  local_limit_index,
-                )
+                .pull_with_wait_local_limit((upstream.clone(), proxy_client_ip), local_limit_index)
                 .await
             } else if let Poll::Ready(send_request_item_option) = connections
-              .pull_with_wait_local_limit(
-                (proxy_to.clone(), proxy_unix.clone(), proxy_client_ip),
-                local_limit_index,
-              )
+              .pull_with_wait_local_limit((upstream.clone(), proxy_client_ip), local_limit_index)
               .boxed_local()
               .poll_unpin(&mut Context::from_waker(Waker::noop()))
             {
@@ -560,7 +674,7 @@ impl ModuleHandlers for ReverseProxyHandler {
               };
               crate::runtime::select! {
                 item = connections
-                  .pull_with_wait_local_limit((proxy_to.clone(), proxy_unix.clone(), proxy_client_ip), local_limit_index)
+                  .pull_with_wait_local_limit((upstream.clone(), proxy_client_ip), local_limit_index)
                 => {
                   item
                 },
@@ -634,13 +748,12 @@ impl ModuleHandlers for ReverseProxyHandler {
               Ok(stream) => stream,
               Err(err) => {
                 if enable_health_check {
-                  let proxy_key = (proxy_to.clone(), proxy_unix.clone());
                   if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
-                    unhealthy_backends_metrics.push(proxy_key.clone());
+                    unhealthy_backends_metrics.push(upstream.clone());
                   }
                   let mut failed_backends_write = self.failed_backends.write().await;
-                  let failed_attempts = failed_backends_write.get(&proxy_key);
-                  failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+                  let failed_attempts = failed_backends_write.get(&upstream);
+                  failed_backends_write.insert(upstream, failed_attempts.map_or(1, |x| x + 1));
                 }
 
                 if retry_connection && !proxy_to_vector.is_empty() {
@@ -692,13 +805,12 @@ impl ModuleHandlers for ReverseProxyHandler {
               Ok(stream) => stream,
               Err(err) => {
                 if enable_health_check {
-                  let proxy_key = (proxy_to.clone(), proxy_unix.clone());
                   if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
-                    unhealthy_backends_metrics.push(proxy_key.clone());
+                    unhealthy_backends_metrics.push(upstream.clone());
                   }
                   let mut failed_backends_write = self.failed_backends.write().await;
-                  let failed_attempts = failed_backends_write.get(&proxy_key);
-                  failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+                  let failed_attempts = failed_backends_write.get(&upstream);
+                  failed_backends_write.insert(upstream, failed_attempts.map_or(1, |x| x + 1));
                 }
 
                 if retry_connection && !proxy_to_vector.is_empty() {
@@ -726,13 +838,12 @@ impl ModuleHandlers for ReverseProxyHandler {
             Ok(stream) => stream,
             Err(err) => {
               if enable_health_check {
-                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
                 if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
-                  unhealthy_backends_metrics.push(proxy_key.clone());
+                  unhealthy_backends_metrics.push(upstream.clone());
                 }
                 let mut failed_backends_write = self.failed_backends.write().await;
-                let failed_attempts = failed_backends_write.get(&proxy_key);
-                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+                let failed_attempts = failed_backends_write.get(&upstream);
+                failed_backends_write.insert(upstream, failed_attempts.map_or(1, |x| x + 1));
               }
 
               if retry_connection && !proxy_to_vector.is_empty() {
@@ -781,13 +892,12 @@ impl ModuleHandlers for ReverseProxyHandler {
 
           if let Err(err) = stream.set_nodelay(true) {
             if enable_health_check {
-              let proxy_key = (proxy_to.clone(), proxy_unix.clone());
               if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
-                unhealthy_backends_metrics.push(proxy_key.clone());
+                unhealthy_backends_metrics.push(upstream.clone());
               }
               let mut failed_backends_write = self.failed_backends.write().await;
-              let failed_attempts = failed_backends_write.get(&proxy_key);
-              failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+              let failed_attempts = failed_backends_write.get(&upstream);
+              failed_backends_write.insert(upstream, failed_attempts.map_or(1, |x| x + 1));
             }
 
             if retry_connection && !proxy_to_vector.is_empty() {
@@ -812,13 +922,12 @@ impl ModuleHandlers for ReverseProxyHandler {
             Ok(stream) => stream,
             Err(err) => {
               if enable_health_check {
-                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
                 if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
-                  unhealthy_backends_metrics.push(proxy_key.clone());
+                  unhealthy_backends_metrics.push(upstream.clone());
                 }
                 let mut failed_backends_write = self.failed_backends.write().await;
-                let failed_attempts = failed_backends_write.get(&proxy_key);
-                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+                let failed_attempts = failed_backends_write.get(&upstream);
+                failed_backends_write.insert(upstream, failed_attempts.map_or(1, |x| x + 1));
               }
 
               if retry_connection && !proxy_to_vector.is_empty() {
@@ -957,13 +1066,12 @@ impl ModuleHandlers for ReverseProxyHandler {
         if let Some(proxy_header_to_write) = proxy_header_to_write {
           if let Err(err) = stream.write_all(&proxy_header_to_write).await {
             if enable_health_check {
-              let proxy_key = (proxy_to.clone(), proxy_unix.clone());
               if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
-                unhealthy_backends_metrics.push(proxy_key.clone());
+                unhealthy_backends_metrics.push(upstream.clone());
               }
               let mut failed_backends_write = self.failed_backends.write().await;
-              let failed_attempts = failed_backends_write.get(&proxy_key);
-              failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+              let failed_attempts = failed_backends_write.get(&upstream);
+              failed_backends_write.insert(upstream, failed_attempts.map_or(1, |x| x + 1));
             }
 
             if retry_connection && !proxy_to_vector.is_empty() {
@@ -1002,13 +1110,12 @@ impl ModuleHandlers for ReverseProxyHandler {
             Ok(sender) => sender,
             Err(err) => {
               if enable_health_check {
-                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
                 if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
-                  unhealthy_backends_metrics.push(proxy_key.clone());
+                  unhealthy_backends_metrics.push(upstream.clone());
                 }
                 let mut failed_backends_write = self.failed_backends.write().await;
-                let failed_attempts = failed_backends_write.get(&proxy_key);
-                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+                let failed_attempts = failed_backends_write.get(&upstream);
+                failed_backends_write.insert(upstream, failed_attempts.map_or(1, |x| x + 1));
               }
 
               if retry_connection && !proxy_to_vector.is_empty() {
@@ -1062,13 +1169,12 @@ impl ModuleHandlers for ReverseProxyHandler {
             Ok(stream) => stream,
             Err(err) => {
               if enable_health_check {
-                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
                 if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
-                  unhealthy_backends_metrics.push(proxy_key.clone());
+                  unhealthy_backends_metrics.push(upstream.clone());
                 }
                 let mut failed_backends_write = self.failed_backends.write().await;
-                let failed_attempts = failed_backends_write.get(&proxy_key);
-                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+                let failed_attempts = failed_backends_write.get(&upstream);
+                failed_backends_write.insert(upstream, failed_attempts.map_or(1, |x| x + 1));
               }
 
               if retry_connection && !proxy_to_vector.is_empty() {
@@ -1103,13 +1209,12 @@ impl ModuleHandlers for ReverseProxyHandler {
             Ok(sender) => sender,
             Err(err) => {
               if enable_health_check {
-                let proxy_key = (proxy_to.clone(), proxy_unix.clone());
                 if let Some(unhealthy_backends_metrics) = self.unhealthy_backends_metrics.as_mut() {
-                  unhealthy_backends_metrics.push(proxy_key.clone());
+                  unhealthy_backends_metrics.push(upstream.clone());
                 }
                 let mut failed_backends_write = self.failed_backends.write().await;
-                let failed_attempts = failed_backends_write.get(&proxy_key);
-                failed_backends_write.insert(proxy_key, failed_attempts.map_or(1, |x| x + 1));
+                let failed_attempts = failed_backends_write.get(&upstream);
+                failed_backends_write.insert(upstream, failed_attempts.map_or(1, |x| x + 1));
               }
 
               if retry_connection && !proxy_to_vector.is_empty() {
@@ -1147,10 +1252,11 @@ impl ModuleHandlers for ReverseProxyHandler {
         .await;
       } else {
         let request_parts = request_parts.ok_or(anyhow::anyhow!("Request parts are missing"))?;
+        error_logger.log("No upstreams available").await;
         return Ok(ResponseData {
           request: Some(Request::from_parts(request_parts, request_body)),
           response: None,
-          response_status: None,
+          response_status: Some(StatusCode::SERVICE_UNAVAILABLE), // No upstreams available
           response_headers: None,
           new_remote_address: None,
         });
@@ -1174,9 +1280,9 @@ impl ModuleHandlers for ReverseProxyHandler {
         let mut attributes = Vec::new();
         attributes.push((
           "ferron.proxy.backend_url",
-          MetricAttributeValue::String(selected_backend.0),
+          MetricAttributeValue::String(selected_backend.proxy_to),
         ));
-        if let Some(backend_unix) = selected_backend.1 {
+        if let Some(backend_unix) = selected_backend.proxy_unix {
           attributes.push((
             "ferron.proxy.backend_unix_path",
             MetricAttributeValue::String(backend_unix),
@@ -1199,9 +1305,9 @@ impl ModuleHandlers for ReverseProxyHandler {
         let mut attributes = Vec::new();
         attributes.push((
           "ferron.proxy.backend_url",
-          MetricAttributeValue::String(unhealthy_backend.0),
+          MetricAttributeValue::String(unhealthy_backend.proxy_to),
         ));
-        if let Some(backend_unix) = unhealthy_backend.1 {
+        if let Some(backend_unix) = unhealthy_backend.proxy_unix {
           attributes.push((
             "ferron.proxy.backend_unix_path",
             MetricAttributeValue::String(backend_unix),
@@ -1243,9 +1349,9 @@ impl ModuleHandlers for ReverseProxyHandler {
 ///
 /// # Returns
 /// * `usize` - The index of the selected backend server.
-async fn select_backend_index<'a>(
+async fn select_backend_index(
   load_balancer_algorithm: &LoadBalancerAlgorithmInner,
-  backends: &[ProxyToVectorContentsBorrowed<'a>],
+  backends: &[ProxyToKeyInner],
 ) -> usize {
   match load_balancer_algorithm {
     LoadBalancerAlgorithmInner::TwoRandomChoices(connection_track) => {
@@ -1258,34 +1364,26 @@ async fn select_backend_index<'a>(
       if backends.len() > 1 && random_choice2 >= random_choice1 {
         random_choice2 += 1;
       }
-      let backend1 = backends[random_choice1];
-      let backend2 = backends[random_choice2];
-      let connection_track_key1 = (backend1.0.to_string(), backend1.1.as_ref().map(|s| s.to_string()));
-      let connection_track_key2 = (backend2.0.to_string(), backend2.1.as_ref().map(|s| s.to_string()));
+      let backend1 = &backends[random_choice1];
+      let backend2 = &backends[random_choice2];
       let connection_track_read = connection_track.read().await;
       let connection_count_option1 = connection_track_read
-        .get(&connection_track_key1)
+        .get(&backend1.0)
         .map(|connection_count| Arc::strong_count(connection_count) - 1);
       let connection_count_option2 = connection_track_read
-        .get(&connection_track_key2)
+        .get(&backend2.0)
         .map(|connection_count| Arc::strong_count(connection_count) - 1);
       drop(connection_track_read);
       let connection_count1 = if let Some(count) = connection_count_option1 {
         count
       } else {
-        connection_track
-          .write()
-          .await
-          .insert(connection_track_key1, Arc::new(()));
+        connection_track.write().await.insert(backend1.0.clone(), Arc::new(()));
         0
       };
       let connection_count2 = if let Some(count) = connection_count_option2 {
         count
       } else {
-        connection_track
-          .write()
-          .await
-          .insert(connection_track_key2, Arc::new(()));
+        connection_track.write().await.insert(backend2.0.clone(), Arc::new(()));
         0
       };
       if connection_count2 >= connection_count1 {
@@ -1297,17 +1395,13 @@ async fn select_backend_index<'a>(
     LoadBalancerAlgorithmInner::LeastConnections(connection_track) => {
       let mut min_indexes = Vec::new();
       let mut min_connections = None;
-      for (index, (uri, unix, _, _)) in backends.iter().enumerate() {
-        let connection_track_key = (uri.to_string(), unix.as_ref().map(|s| s.to_string()));
+      for (index, (upstream, _, _)) in backends.iter().enumerate() {
         let connection_track_read = connection_track.read().await;
-        let connection_count = if let Some(connection_count) = connection_track_read.get(&connection_track_key) {
+        let connection_count = if let Some(connection_count) = connection_track_read.get(upstream) {
           Arc::strong_count(connection_count) - 1
         } else {
           drop(connection_track_read);
-          connection_track
-            .write()
-            .await
-            .insert(connection_track_key, Arc::new(()));
+          connection_track.write().await.insert((*upstream).clone(), Arc::new(()));
           0
         };
         if min_connections.is_none_or(|min| connection_count < min) {
@@ -1352,13 +1446,13 @@ async fn select_backend_index<'a>(
 ///   the local limit index of the selected backend server,
 ///   and the keepalive timeout, or None if no valid backend exists
 #[inline]
-async fn determine_proxy_to<'a>(
-  proxy_to_vector: &mut Vec<ProxyToVectorContentsBorrowed<'a>>,
-  failed_backends: &RwLock<TtlCache<(String, Option<String>), u64>>,
+async fn determine_proxy_to(
+  proxy_to_vector: &mut Vec<ProxyToKeyInner>,
+  failed_backends: &RwLock<TtlCache<UpstreamInner, u64>>,
   enable_health_check: bool,
   health_check_max_fails: u64,
   load_balancer_algorithm: &LoadBalancerAlgorithmInner,
-) -> Option<ProxyToKey> {
+) -> Option<ProxyToKeyInner> {
   let mut proxy_to = None;
   // When the array is supplied with non-string values, the reverse proxy may have undesirable behavior
   // The "proxy" directive is validated though.
@@ -1367,30 +1461,25 @@ async fn determine_proxy_to<'a>(
     return None;
   } else if proxy_to_vector.len() == 1 {
     let proxy_to_borrowed = proxy_to_vector.remove(0);
-    let proxy_to_url = proxy_to_borrowed.0.to_string();
-    let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-    let local_limit_index = proxy_to_borrowed.2;
-    let keepalive_idle_timeout = proxy_to_borrowed.3;
-    proxy_to = Some((proxy_to_url, proxy_to_header, local_limit_index, keepalive_idle_timeout));
+    let upstream = proxy_to_borrowed.0;
+    let local_limit_index = proxy_to_borrowed.1;
+    let keepalive_idle_timeout = proxy_to_borrowed.2;
+    proxy_to = Some((upstream, local_limit_index, keepalive_idle_timeout));
   } else if enable_health_check {
     loop {
       if !proxy_to_vector.is_empty() {
         let index = select_backend_index(load_balancer_algorithm, proxy_to_vector).await;
         let proxy_to_borrowed = proxy_to_vector.remove(index);
-        let proxy_to_url = proxy_to_borrowed.0.to_string();
-        let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-        let local_limit_index = proxy_to_borrowed.2;
-        let keepalive_idle_timeout = proxy_to_borrowed.3;
-        proxy_to = Some((
-          proxy_to_url.clone(),
-          proxy_to_header.clone(),
-          local_limit_index,
-          keepalive_idle_timeout,
-        ));
+        let upstream = proxy_to_borrowed.0;
+        let local_limit_index = proxy_to_borrowed.1;
+        let keepalive_idle_timeout = proxy_to_borrowed.2;
         let failed_backends_read = failed_backends.read().await;
-        let failed_backend_fails = match failed_backends_read.get(&(proxy_to_url, proxy_to_header)) {
-          Some(fails) => fails,
-          None => break,
+        let failed_backend_fails_option = failed_backends_read.get(&upstream);
+        proxy_to = Some((upstream, local_limit_index, keepalive_idle_timeout));
+        let failed_backend_fails = if let Some(fails) = failed_backend_fails_option {
+          fails
+        } else {
+          break;
         };
         if failed_backend_fails <= health_check_max_fails {
           break;
@@ -1404,14 +1493,32 @@ async fn determine_proxy_to<'a>(
     // select one backend from all available options
     let index = select_backend_index(load_balancer_algorithm, proxy_to_vector).await;
     let proxy_to_borrowed = proxy_to_vector.remove(index);
-    let proxy_to_url = proxy_to_borrowed.0.to_string();
-    let proxy_to_header = proxy_to_borrowed.1.map(|header| header.to_string());
-    let local_limit_index = proxy_to_borrowed.2;
-    let keepalive_idle_timeout = proxy_to_borrowed.3;
-    proxy_to = Some((proxy_to_url, proxy_to_header, local_limit_index, keepalive_idle_timeout));
+    let upstream = proxy_to_borrowed.0;
+    let local_limit_index = proxy_to_borrowed.1;
+    let keepalive_idle_timeout = proxy_to_borrowed.2;
+    proxy_to = Some((upstream, local_limit_index, keepalive_idle_timeout));
   }
 
   proxy_to
+}
+
+/// Resolves inner upstreams from a list of upstreams
+async fn resolve_upstreams(
+  proxy_to: &[ProxyToKey],
+  failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>>,
+  health_check_max_fails: u64,
+) -> Vec<ProxyToKeyInner> {
+  let mut upstreams = Vec::new();
+  for proxy_to in proxy_to {
+    let upstream = proxy_to
+      .0
+      .resolve(failed_backends.clone(), health_check_max_fails)
+      .await;
+    for upstream in upstream {
+      upstreams.push((upstream, proxy_to.1, proxy_to.2));
+    }
+  }
+  upstreams
 }
 
 /// Establishes a new HTTP connection to a backend server

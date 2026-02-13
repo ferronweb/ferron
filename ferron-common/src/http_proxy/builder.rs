@@ -1,19 +1,23 @@
-use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::time::Duration;
+use std::{collections::HashMap, net::IpAddr};
 
+use hickory_resolver::{config::ResolverConfig, name_server::TokioConnectionProvider};
 use hyper::header::HeaderName;
 use tokio::sync::RwLock;
 
 use super::{Connections, LoadBalancerAlgorithm, LoadBalancerAlgorithmInner, ProxyHeader, ProxyToKey, ReverseProxy};
-use crate::util::TtlCache;
+use crate::{
+  http_proxy::{SrvUpstreamData, Upstream, UpstreamInner},
+  util::TtlCache,
+};
 
 /// Builder for configuring and constructing a [`ReverseProxy`].
 pub struct ReverseProxyBuilder<'a> {
   pub(super) connections: &'a mut Connections,
   #[allow(clippy::type_complexity)]
-  pub(super) upstreams: Vec<(String, Option<String>, Option<usize>, Option<Duration>)>,
+  pub(super) upstreams: Vec<(Upstream, Option<usize>, Option<Duration>)>,
   pub(super) lb_algorithm: LoadBalancerAlgorithm,
   pub(super) lb_health_check_window: Duration,
   pub(super) lb_health_check_max_fails: u64,
@@ -44,9 +48,56 @@ impl<'a> ReverseProxyBuilder<'a> {
     local_limit: Option<usize>,
     keepalive_idle_timeout: Option<Duration>,
   ) -> Self {
+    self.upstreams.push((
+      Upstream::Static(UpstreamInner { proxy_to, proxy_unix }),
+      local_limit,
+      keepalive_idle_timeout,
+    ));
     self
-      .upstreams
-      .push((proxy_to, proxy_unix, local_limit, keepalive_idle_timeout));
+  }
+
+  /// Adds a dynamic (SRV-based) upstream backend target.
+  ///
+  /// `to` is the backend URL (for example `http://_http._tcp.example.com`).
+  /// `local_limit` controls per-upstream connection limit.
+  /// `keepalive_idle_timeout` sets pooled connection idle timeout.
+  pub fn upstream_srv(
+    mut self,
+    to: String,
+    local_limit: Option<usize>,
+    keepalive_idle_timeout: Option<Duration>,
+    secondary_runtime_handle: tokio::runtime::Handle,
+    dns_servers: Vec<IpAddr>,
+  ) -> Self {
+    let dns_resolver = secondary_runtime_handle.block_on(async {
+      if !dns_servers.is_empty() {
+        hickory_resolver::Resolver::builder_with_config(
+          ResolverConfig::from_parts(
+            None,
+            vec![],
+            hickory_resolver::config::NameServerConfigGroup::from_ips_clear(&dns_servers, 53, true),
+          ),
+          TokioConnectionProvider::default(),
+        )
+        .build()
+      } else {
+        hickory_resolver::Resolver::builder_tokio()
+          .unwrap_or(hickory_resolver::Resolver::builder_with_config(
+            ResolverConfig::default(),
+            TokioConnectionProvider::default(),
+          ))
+          .build()
+      }
+    });
+    self.upstreams.push((
+      Upstream::Srv(SrvUpstreamData {
+        to,
+        secondary_runtime_handle,
+        dns_resolver: Arc::new(dns_resolver),
+      }),
+      local_limit,
+      keepalive_idle_timeout,
+    ));
     self
   }
 
@@ -143,18 +194,22 @@ impl<'a> ReverseProxyBuilder<'a> {
     let proxy_to = self
       .upstreams
       .drain(..)
-      .map(|(proxy_to, proxy_unix, local_limit, keepalive_idle_timeout)| {
-        let is_unix_socket = proxy_unix.is_some();
+      .map(|(upstream, local_limit, keepalive_idle_timeout)| {
+        let is_unix_socket = match &upstream {
+          Upstream::Static(inner) => Some(inner.proxy_unix.is_some()),
+          Upstream::Srv(_) => Some(false), // SRV records lead to A/AAAA lookups, so they cannot be Unix sockets
+        };
         (
-          proxy_to,
-          proxy_unix,
-          apply_local_limit(
-            local_limit,
-            is_unix_socket,
-            &connections,
-            #[cfg(unix)]
-            &unix_connections,
-          ),
+          upstream,
+          is_unix_socket.and_then(|is_unix_socket| {
+            apply_local_limit(
+              local_limit,
+              is_unix_socket,
+              &connections,
+              #[cfg(unix)]
+              &unix_connections,
+            )
+          }),
           keepalive_idle_timeout,
         )
       })
