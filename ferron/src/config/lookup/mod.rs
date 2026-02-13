@@ -101,7 +101,6 @@ impl<T> ErrorHandlerStatusLookup<T> {
       .status_code_values
       .get(&status_code)
       .or(self.catchall_value.as_ref())
-      .or(self.default_value.as_ref())
   }
 
   pub fn get_default(&self) -> Option<&T> {
