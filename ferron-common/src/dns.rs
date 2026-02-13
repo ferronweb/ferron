@@ -25,9 +25,12 @@ pub async fn separate_subdomain_from_domain_name(domain_name: &str) -> (String, 
     .unwrap_or(domain_name)
     .split('.')
     .collect();
-  let resolver =
-    hickory_resolver::Resolver::builder_with_config(ResolverConfig::default(), TokioConnectionProvider::default())
-      .build();
+  let resolver = hickory_resolver::Resolver::builder_tokio()
+    .unwrap_or(hickory_resolver::Resolver::builder_with_config(
+      ResolverConfig::default(),
+      TokioConnectionProvider::default(),
+    ))
+    .build();
 
   for parts_index in 0..parts.len() {
     if resolver
