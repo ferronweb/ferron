@@ -37,7 +37,7 @@ h1 {
 }
 
 a {
-    color: #f47825;
+    color: #b84f0a;
 }
 
 @media screen and (max-width: 512px) {
@@ -51,5 +51,9 @@ a {
     body {
         background-color: #14181f;
         color: #f2f2f2;
+    }
+
+    a {
+        color: #f47825;
     }
 }

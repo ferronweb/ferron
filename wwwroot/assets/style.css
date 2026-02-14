@@ -60,7 +60,7 @@ h1 {
 }
 
 a {
-    color: #f47825;
+    color: #b84f0a;
 }
 
 @media screen and (max-width: 768px) {
@@ -92,6 +92,10 @@ a {
 
     .logo {
         background-image: url(./logo-dark.png);
+    }
+
+    a {
+        color: #f47825;
     }
 }
 
