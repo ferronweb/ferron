@@ -7,10 +7,12 @@
 **Not yet released**
 
 ### Added
+
 - Support for dynamic SRV-based backend discovery for reverse proxy upstreams.
 - Support for Unix socket backends in the forwarded authentication module.
 
 ### Fixed
+
 - Body replacement MIME type filtering was not applied correctly.
 - Duplicate error log entries in certain cases.
 
