@@ -6,10 +6,13 @@
 
 **Not yet released**
 
-- Added support for dynamic SRV-based backend server discovery as a reverse proxy.
-- Added support for Unix socket backends in forwarded authentication module.
-- Fixed body replacement MIME type filtering logic not being effective at all.
-- Fixed some errors logged two times.
+### Added
+- Support for dynamic SRV-based backend discovery for reverse proxy upstreams.
+- Support for Unix socket backends in the forwarded authentication module.
+
+### Fixed
+- Body replacement MIME type filtering was not applied correctly.
+- Duplicate error log entries in certain cases.
 
 ## Ferron 2.5.5
 
