@@ -313,7 +313,7 @@ This configuration reference organizes directives by both **scope** (where they 
 - `auto_tls_contact <auto_tls_contact: string|null>`
   - This directive specifies the email address used to register an ACME account for automatic TLS. Default: `auto_tls_contact #null`
 - `auto_tls_cache <auto_tls_cache: string|null>`
-  - This directive specifies the directory to store cached ACME data, such as cached account data and certifies. Default: OS-specific directory, for example on GNU/Linux it can be `/home/user/.local/share/ferron-acme` for the "user" user, on macOS it can be `/Users/user/Library/Application Support/ferron-acme` for the "user" user, on Windows it can be `C:\Users\user\AppData\Local\ferron-acme` for the "user" user. On Docker, it would be `/var/lib/ferron-acme`.
+  - This directive specifies the directory to store cached ACME data, such as cached account data and certificates. Default: OS-specific directory, for example on GNU/Linux it can be `/home/user/.local/share/ferron-acme` for the "user" user, on macOS it can be `/Users/user/Library/Application Support/ferron-acme` for the "user" user, on Windows it can be `C:\Users\user\AppData\Local\ferron-acme` for the "user" user. On Docker, it would be `/var/lib/ferron-acme`.
 - `auto_tls_letsencrypt_production [enable_auto_tls_letsencrypt_production: bool]`
   - This directive specifies whether the production Let's Encrypt ACME endpoint is used. If set as `auto_tls_letsencrypt_production #false`, the staging Let's Encrypt ACME endpoint is used. Default: `auto_tls_letsencrypt_production #true`
 - `auto_tls_challenge <acme_challenge_type: string> [provider=<acme_challenge_provider: string>] [...]`
