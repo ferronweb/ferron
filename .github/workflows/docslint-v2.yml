@@ -8,7 +8,7 @@ on:
       - ".github/workflows/docslint-v2.yml"
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
 
     permissions:
