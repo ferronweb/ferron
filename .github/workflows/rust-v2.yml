@@ -57,7 +57,7 @@ jobs:
       - name: Build binaries
         shell: bash
         run: |
-          make build TARGET="${{ matrix.target }}" CARGO_FINAL="${{ matrix.command }}" CARGO_FINAL_EXTRA_ARGS="--verbose"
+          make build CARGO_FINAL_EXTRA_ARGS="--verbose"
 
       - name: Smoke test the binary
         shell: bash

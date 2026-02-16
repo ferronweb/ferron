@@ -172,7 +172,7 @@ jobs:
           $env:TARGET = "${{ matrix.target }}"
           $env:CARGO_FINAL = "${{ matrix.command }}"
           $env:CARGO_FINAL_EXTRA_ARGS = "--verbose"
-          powershell -ExecutionPolicy Bypass .\build.ps1
+          powershell -ExecutionPolicy Bypass .\build.ps1 Build
 
       - name: Smoke test the binary (Unix-like)
         if: matrix.runner != 'windows-latest' && matrix.smoketest == true
