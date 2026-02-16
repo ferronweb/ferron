@@ -128,7 +128,7 @@ if (!($manuallyInstalled))
 
 # Create Ferron configuration
 $ferronKdlConfig = @"
-// See https://ferron.sh/docs/configuration-kdl/fundamentals for the configuration reference
+// See https://ferron.sh/docs/configuration/fundamentals for the configuration reference
 
 // Global configuration.
 //

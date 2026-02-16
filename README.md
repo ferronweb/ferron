@@ -168,7 +168,7 @@ If you would like to develop Ferron modules, you can find the [Ferron module dev
 
 ## Server configuration
 
-You can check the [Ferron documentation](https://ferron.sh/docs/configuration-kdl/fundamentals) to see configuration properties used by Ferron.
+You can check the [Ferron documentation](https://ferron.sh/docs/configuration/fundamentals) to see configuration properties used by Ferron.
 
 ## Contributing
 
