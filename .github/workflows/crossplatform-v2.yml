@@ -157,7 +157,7 @@ jobs:
         if: matrix.runner != 'windows-latest'
         shell: bash
         run: |
-          make build TARGET="${{ matrix.target }}" CARGO_FINAL="${{ matrix.command }}" CARGO_FINAL_EXTRA_ARGS="--verbose"
+          make build-dev TARGET="${{ matrix.target }}" CARGO_FINAL="${{ matrix.command }}" CARGO_FINAL_EXTRA_ARGS="--verbose"
 
       - name: Build binaries (Windows)
         if: matrix.runner == 'windows-latest'
@@ -166,7 +166,7 @@ jobs:
           $env:TARGET = "${{ matrix.target }}"
           $env:CARGO_FINAL = "${{ matrix.command }}"
           $env:CARGO_FINAL_EXTRA_ARGS = "--verbose"
-          powershell -ExecutionPolicy Bypass .\build.ps1 Build
+          powershell -ExecutionPolicy Bypass .\build.ps1 BuildDev
 
       - name: Smoke test the binary (Unix-like)
         if: matrix.runner != 'windows-latest' && matrix.smoketest == true

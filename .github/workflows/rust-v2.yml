@@ -57,7 +57,7 @@ jobs:
       - name: Build binaries
         shell: bash
         run: |
-          make build CARGO_FINAL_EXTRA_ARGS="--verbose"
+          make build-dev CARGO_FINAL_EXTRA_ARGS="--verbose"
 
       - name: Smoke test the binary
         shell: bash
