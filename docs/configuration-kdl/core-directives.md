@@ -34,7 +34,7 @@ This page covers core KDL directives that control Ferron's global HTTP behavior,
 - `buffer_response <response_buffer_size: integer|null>`
   - This directive specifies the buffer size in bytes for outgoing responses. If set as `buffer_response #null`, the response buffer is disabled. Default: `buffer_response #null`
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 * {
@@ -64,7 +64,7 @@ This page covers core KDL directives that control Ferron's global HTTP behavior,
 - `tcp_recv_buffer <tcp_recv_buffer: integer>`
   - This directive specifies the receive buffer size in bytes for TCP listeners. Default: none
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 * {

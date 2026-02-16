@@ -12,7 +12,7 @@ This page covers KDL traffic-control directives used to rate-limit requests glob
 - `limit [enable_limit: bool] [rate=<rate: integer|float>] [burst=<rate: integer|float>]` (_limit_ module)
   - This directive specifies whether the rate limiting is enabled. The `rate` prop specifies the maximum average amount of requests per second, defaults to 25 requests per second. The `burst` prop specifies the maximum peak amount of requests per second, defaults to 4 times the maximum average amount of requests per second. Default: `limit #false`
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 example.com {

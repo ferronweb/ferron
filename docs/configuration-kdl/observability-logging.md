@@ -36,7 +36,7 @@ This page describes KDL directives for configuring Ferron logging outputs, forma
 - `error_log_stderr [enable_error_log_stderr: bool]` (_stdlog_ observability backend; Ferron 2.5.0 or newer)
   - This directive specifies whether to enable logging error logs to the standard error stream. Default: `error_log_stderr #false`
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 * {

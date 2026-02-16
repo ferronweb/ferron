@@ -12,7 +12,7 @@ This page describes KDL directives for serving static assets, tuning response ca
 - `cache_max_entries <cache_max_entries: integer|null>` (_cache_ module)
   - This directive specifies the maximum number of entries that can be stored in the HTTP cache. If set as `cache_max_entries #null`, the cache can theoretically store an unlimited number of entries. The cache keys for entries depend on the request method, the rewritten request URL, the "Host" header value, and varying request headers. Default: `cache_max_entries 1024`
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 * {
@@ -41,7 +41,7 @@ This page describes KDL directives for serving static assets, tuning response ca
 - `dynamic_compressed [enable_dynamic_content_compression: bool]` (_dcompress_ module; Ferron 2.1.0 or newer)
   - This directive specifies whether the HTTP compression for dynamic content is enabled. Default: `dynamic_compressed #false`
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 example.com {
@@ -68,7 +68,7 @@ example.com {
 - `file_cache_control <cache_control: string|null>` (_static_ module)
   - This directive specifies the Cache-Control header value for static files. If set as `file_cache_control #null`, the Cache-Control header is not set. Default: `file_cache_control #null`
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 example.com {
@@ -90,7 +90,7 @@ Disabling HTTP compression is required for string replacement.
 - `replace_filter_types <filter_type: string> [<filter_type: string> ...]` (_replace_ module)
   - This directive specifies the response MIME type filters. The filter can be either a specific MIME type (like `text/html`) or a wildcard (`*`) specifying that responses with all MIME types are processed for replacement. This directive can be specified multiple times. Default: `replace_filter_types "text/html"`
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 example.com {

@@ -12,7 +12,7 @@ This page documents KDL directives for reverse proxying, backend balancing, forw
 - `proxy_concurrent_conns <proxy_concurrent_conns: integer|null>` (_rproxy_ module; Ferron 2.3.0 or newer)
   - This directive specifies the limit of TCP connections being established to backend servers, to prevent exhaustion of network resources. If set as `proxy_concurrent_conns #null`, the reverse proxy can theoretically establish an unlimited number of connections. Default: `proxy_concurrent_conns 16384`
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 * {
@@ -25,7 +25,7 @@ This page documents KDL directives for reverse proxying, backend balancing, forw
 - `auth_to_concurrent_conns <auth_to_concurrent_conns: integer|null>` (_fauth_ module; Ferron 2.4.0 or newer)
   - This directive specifies the limit of TCP connections being established to backend servers (for forwarded authentication), to prevent exhaustion of network resources. If set as `auth_to_concurrent_conns #null`, the reverse proxy can theoretically establish an unlimited number of connections. Default: `auth_to_concurrent_conns 16384`
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 * {
@@ -71,7 +71,7 @@ This page documents KDL directives for reverse proxying, backend balancing, forw
 - `proxy_srv <proxy_srv_to: string|null> [limit=<conn_limit: integer|null>] [idle_timeout=<idle_timeout: integer|null> [dns_servers=<dns_servers: string|null>]` (_rproxy_ module)
   - This directive specifies the URL (with hostname leading to an SRV record) to which the reverse proxy should forward requests. HTTP (for example `http://_http._tcp.example.com/`) and HTTPS URLs (for example `https://_https._tcp.example.com/`) are supported. Established connections can be limited by the `limit` prop (Ferron 2.3.0 and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron 2.3.0 and newer); by default it is set to `60000` (60 seconds). Custom DNS resolvers are also supported via specifying comma-separated IP addresses of DNS servers in the `dns_server` prop. This directive can be specified multiple times. Default: none
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 api.example.com {
@@ -107,7 +107,7 @@ api.example.com {
 - `forward_proxy_auth [enable_forward_proxy_auth: bool] [realm=<realm: string>] [brute_protection=<enable_brute_protection: bool>] [users=<users: string>]` (_fproxyauth_ module; Ferron 2.4.0 or newer)
   - This directive specifies whether the forward proxy authentication (HTTP Basic authentication) is enabled. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whether the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. Default: `forward_proxy #false`
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 * {
@@ -124,7 +124,7 @@ api.example.com {
 - `auth_to_copy <request_header_to_copy: string> [<request_header_to_copy: string> ...]` (_fauth_ module)
   - This directive specifies the request headers that will be copied and sent to the forwarded authentication backend server. This directive can be specified multiple times. Default: none
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 app.example.com {

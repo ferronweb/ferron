@@ -20,7 +20,7 @@ This page explains KDL directives for request routing, URL normalization and rew
 - `header_replace <header_name: string> <header_value: string>`
   - This directive specifies a header to be added to HTTP responses, potentially replacing existing headers. The header values supports placeholders like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 example.com {
@@ -56,7 +56,7 @@ example.com {
 - `disable_url_sanitizer [disable_url_sanitizer: bool]` (Ferron 2.3.0 or newer)
   - This directive specifies whenever URL sanitation is disabled. Disabling URL sanitation allows the server to process the request URL as is, without rewriting the URL with potential path traversal sequences; this can be useful for certain applications that require raw URLs, for [RFC 3986 compliance](https://datatracker.ietf.org/doc/html/rfc3986#section-2.2). **Disabling URL sanitation may lead to risk of path traversal vulnerabilities, although built-in static file serving, CGI, SCGI and FastCGI module functionality would perform additional checks to prevent path traversal attacks.** Default: `disable_url_sanitizer #false`
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 example.com {

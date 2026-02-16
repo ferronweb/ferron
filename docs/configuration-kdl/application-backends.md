@@ -30,7 +30,7 @@ This page documents KDL directives for connecting Ferron to dynamic application 
 - `fcgi_environment <environment_variable_name: string> <environment_variable_value: string>` (_fcgi_ module)
   - This directive specifies an environment variable passed into FastCGI server. This directive can be specified multiple times. Default: none
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 cgi.example.com {

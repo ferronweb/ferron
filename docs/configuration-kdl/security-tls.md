@@ -26,7 +26,7 @@ This page covers KDL directives for TLS configuration, certificate automation, a
 - `auto_tls_on_demand_ask_no_verification [auto_tls_on_demand_ask_no_verification: bool]`
   - This directive specifies whether the server should not verify the TLS certificate of the automatic TLS on demand asking endpoint. Default: `auto_tls_on_demand_ask_no_verification #false`
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 * {
@@ -70,7 +70,7 @@ This page covers KDL directives for TLS configuration, certificate automation, a
 - `auto_tls_post_obtain_command <auto_tls_post_obtain_command: string>|<auto_tls_post_obtain_command_disabled: null>` (Ferron 2.5.0 or newer)
   - This directive specifies the command (no arguments are supported though) to be executed after obtaining a TLS certificate when using automatic TLS. The command will be executed with the following environment variables set: `FERRON_ACME_DOMAIN` (the domain name for which the certificate was obtained; comma-separated if multiple domain names), `FERRON_ACME_CERT_PATH` (the path to the obtained TLS certificate), `FERRON_ACME_KEY_PATH` (the path to the obtained private key). This can be useful for running custom scripts after obtaining a TLS certificate, for example for reloading other software that uses the obtained TLS certificate. This directive is effective only when `auto_tls_save_data` directive is effective. Default: `auto_tls_post_obtain_command #null`
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 example.com {
@@ -102,7 +102,7 @@ manual-tls.example.com {
 - `allow (<allowed_ip: string> [<allowed_ip: string> ...])|<not_specified: null>`
   - This directive specifies IP addresses and CIDR ranges to be allowed. If set as `allow #null`, this directive is ignored. This directive was global-only before Ferron 2.1.0. This directive can be specified multiple times. Default: none
 
-## Configuration example
+**Configuration example:**
 
 ```kdl
 example.com {
