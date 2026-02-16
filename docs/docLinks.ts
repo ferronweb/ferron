@@ -90,6 +90,12 @@ export default [
     label: "Redirecting",
   },
   {
+    href: "/docs/use-cases/automatic-tls",
+    target: "_self",
+    sub: true,
+    label: "Automatic TLS",
+  },
+  {
     href: "/docs/use-cases/ferron-serve",
     target: "_self",
     sub: true,
@@ -190,12 +196,6 @@ export default [
     target: "_self",
     sub: true,
     label: "Observability backends",
-  },
-  {
-    href: "/docs/automatic-tls",
-    target: "_self",
-    sub: true,
-    label: "Automatic TLS",
   },
   {
     href: "/docs/commands",

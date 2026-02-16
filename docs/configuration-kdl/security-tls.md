@@ -1,6 +1,6 @@
 ---
 title: "Configuration: security & TLS"
-description: "TLS settings, automatic certificate management, and access control directives for KDL configuration."
+description: "TLS settings, automatic certificate management, and access control directives for KDL configuration. Included supported DNS providers for DNS-01 challenge."
 ---
 
 This page covers KDL directives for TLS configuration, certificate automation, and request-security controls in Ferron.
@@ -122,3 +122,135 @@ example.com {
     allow "192.168.1.0/24" "10.0.0.0/8"
 }
 ```
+
+## DNS providers for ACME DNS-01 challenge
+
+When using `auto_tls_challenge "dns-01"` directive, you can specify the DNS provider to be used for the ACME DNS-01 challenge with the `provider` prop. Below is the list of supported DNS providers and their additional configuration props.
+
+### Amazon Route 53 (`route53`)
+
+This DNS provider uses [Amazon Route 53 API](https://docs.aws.amazon.com/Route53/latest/APIReference/Welcome.html) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.0.0.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="route53" access_key_id="your_key_id" secret_access_key="your_secret_access_key" region="aws-region" hosted_zone_id="your_hosted_zone_id"
+```
+
+#### Additional props
+
+- `access_key_id` - AWS access key ID (optional)
+- `secret_access_key` - AWS secret access key (optional)
+- `region` - AWS region (optional)
+- `profile_name` - AWS profile name (optional)
+- `hosted_zone_id` - Amazon Route 53 hosted zone ID (optional)
+
+### bunny.net (`bunny`)
+
+This DNS provider uses [bunny.net API](https://docs.bunny.net/reference) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.4.0.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="bunny" api_key="your_api_key"
+```
+
+#### Additional props
+
+- `api_key` - bunny.net API key (required)
+
+### Cloudflare (`cloudflare`)
+
+This DNS provider uses [Cloudflare API](https://developers.cloudflare.com/api/resources/dns/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.0.0.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="cloudflare" api_key="your_api_key" email="your_email@example.com"
+```
+
+#### Additional props
+
+- `api_key` - Cloudflare API key (required)
+- `email` - Cloudflare account email address (optional)
+
+### deSEC (`desec`)
+
+This DNS provider uses [deSEC API](https://desec.readthedocs.io/en/latest/index.html) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.0.0.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="desec" api_token="your_api_token"
+```
+
+#### Additional props
+
+- `api_token` - deSEC API token (required)
+
+### DigitalOcean (`digitalocean`)
+
+This DNS provider uses [DigitalOcean API](https://docs.digitalocean.com/reference/api/digitalocean/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.4.0.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="digitalocean" oauth_token="your_token"
+```
+
+#### Additional props
+
+- `token` - DigitalOcean OAuth token (required)
+
+### OVH (`ovh`)
+
+This DNS provider uses [OVH API](https://api.ovh.com/console/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.4.0.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="ovh" application_key="your_application_key" application_secret="your_application_secret" consumer_key="your_consumer_key" endpoint="ovh-eu"
+```
+
+#### Additional props
+
+- `application_key` - OVH application key (required)
+- `application_secret` - OVH application secret (required)
+- `consumer_key` - OVH consumer key (required)
+- `endpoint` - OVH endpoint. Supported values are `ovh-eu`, `ovh-ca`, `kimsufi-eu`, `kimsufi-ca`, `soyoustart-eu` and `soyoustart-ca` (required)
+
+### Porkbun (`porkbun`)
+
+This DNS provider uses [Porkbun API](https://porkbun.com/api/json/v3/documentation) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.0.0.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="porkbun" api_key="your_api_key" secret_key="your_secret_key"
+```
+
+#### Additional props
+
+- `api_key` - Porkbun API key (required)
+- `secret_key` - Porkbun secret API key (required)
+
+### RFC 2136 (`rfc2136`)
+
+This DNS provider uses [RFC 2136 protocol](https://tools.ietf.org/html/rfc2136) to authenticate and authorize ACME-related DNS records. This provider can be used with servers that support RFC 2136, like Bind9. This provider was added in Ferron 2.0.0.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="rfc2136" server="udp://127.0.0.1:53" key_name="dnskey" key_secret="your_key_secret" key_algorithm="hmac-sha256"
+```
+
+#### Additional props
+
+- `server` - DNS server address URL, with either "tcp" or "udp" scheme (required)
+- `key_name` - DNS server key name (required)
+- `key_secret` - DNS server key secret, encoded in Base64 (required)
+- `key_algorithm` - DNS server key algorithm. Supported values are `hmac-md5`, `gss`, `hmac-sha1`, `hmac-sha224`, `hmac-sha256`, `hmac-sha256-128`, `hmac-sha384`, `hmac-sha384-192`, `hmac-sha512` and `hmac-sha512-256` (required)
+
+## Additional DNS providers
+
+If you would like to use Ferron with additional DNS providers, you can check the [compilation notes](https://github.com/ferronweb/ferron/blob/2.x/COMPILATION.md).
