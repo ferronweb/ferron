@@ -38,7 +38,7 @@ After extraction, you should see the following files and directories:
 
 ### 4. Configure Ferron
 
-Modify the `ferron.yaml` configuration file to suit your server's requirements. This file includes settings for server ports, logging, modules, and more. Detailed configuration options are available in the [server configuration properties page](/docs/configuration/fundamentals).
+Modify the `ferron.kdl` configuration file to suit your server's requirements. This file includes settings for server ports, logging, modules, and more. Detailed configuration options are available in the [server configuration properties page](/docs/configuration/fundamentals).
 
 ### 5. Run Ferron
 
