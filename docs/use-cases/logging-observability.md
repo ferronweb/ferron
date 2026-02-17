@@ -12,7 +12,7 @@ This page focuses on common deployment patterns. For directive-level details, se
 Use this when running Ferron directly on a VM or bare metal and collecting logs from disk.
 
 ```kdl
-* {
+globals {
     log_date_format "%d/%b/%Y:%H:%M:%S %z"
     log_format "{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""
 }
@@ -48,7 +48,7 @@ Use this when shipping logs, metrics, and traces to an OpenTelemetry collector.
 OTLP directives are available in Ferron 2.2.0 and newer.
 
 ```kdl
-* {
+globals {
     otlp_service_name "ferron-prod"
 
     otlp_logs "http://otel-collector.internal:4317" protocol="grpc"
@@ -60,7 +60,7 @@ OTLP directives are available in Ferron 2.2.0 and newer.
 If you use HTTP OTLP endpoints, set `protocol="http/protobuf"` (or `"http/json"`) and optionally an auth header:
 
 ```kdl
-* {
+globals {
     otlp_logs "https://otel.example.net/v1/logs" protocol="http/protobuf" authorization="Bearer YOUR_TOKEN"
     otlp_metrics "https://otel.example.net/v1/metrics" protocol="http/protobuf" authorization="Bearer YOUR_TOKEN"
     otlp_traces "https://otel.example.net/v1/traces" protocol="http/protobuf" authorization="Bearer YOUR_TOKEN"
@@ -72,7 +72,7 @@ If you use HTTP OTLP endpoints, set `protocol="http/protobuf"` (or `"http/json"`
 A practical migration strategy is to keep file logs for local troubleshooting while also exporting telemetry centrally.
 
 ```kdl
-* {
+globals {
     otlp_service_name "ferron-prod"
     otlp_logs "http://otel-collector.internal:4317" protocol="grpc"
     otlp_metrics "http://otel-collector.internal:4317" protocol="grpc"
