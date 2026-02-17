@@ -17,7 +17,7 @@ Below is the example Ferron configuration that configures automatic TLS with pro
 * {
     auto_tls
     auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-    auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory. Optional property, but recommended
+    auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory. This directive is optional.
     auto_tls_letsencrypt_production
 }
 
@@ -37,7 +37,7 @@ When enabling on-demand issuance, configure `auto_tls_on_demand_ask` to avoid ab
 * {
     auto_tls
     auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-    auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory. Optional property, but recommended
+    auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory. This directive is optional.
     auto_tls_letsencrypt_production
 
     // Ask endpoint to authorize per-domain issuance, e.g. https://auth.example.com/check?domain=example.com
