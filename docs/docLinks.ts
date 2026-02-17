@@ -90,6 +90,12 @@ export default [
     label: "Web applications",
   },
   {
+    href: "/docs/use-cases/automatic-tls",
+    target: "_self",
+    sub: true,
+    label: "Automatic TLS",
+  },
+  {
     href: "/docs/use-cases/url-rewriting",
     target: "_self",
     sub: true,
@@ -102,10 +108,10 @@ export default [
     label: "Redirecting",
   },
   {
-    href: "/docs/use-cases/automatic-tls",
+    href: "/docs/use-cases/access-control",
     target: "_self",
     sub: true,
-    label: "Automatic TLS",
+    label: "Access control",
   },
   {
     href: "/docs/use-cases/ferron-serve",
