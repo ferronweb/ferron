@@ -27,30 +27,6 @@ example.com {
 }
 ```
 
-## Automatic TLS on demand
-
-Ferron can also obtain certificates on demand when a hostname is accessed for the first time (`auto_tls_on_demand`). This is useful for multi-tenant setups where hostnames are not fully known in advance.
-
-When enabling on-demand issuance, configure `auto_tls_on_demand_ask` to avoid abuse. Ferron will call the configured URL with the `domain` query parameter, and your endpoint should allow or deny issuance for that domain.
-
-```kdl
-* {
-    auto_tls
-    auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-    auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory. This directive is optional.
-    auto_tls_letsencrypt_production
-
-    // Ask endpoint to authorize per-domain issuance, e.g. https://auth.example.com/check?domain=example.com
-    auto_tls_on_demand_ask "https://auth.example.com/check"
-    auto_tls_on_demand_ask_no_verification #false // Keep verification enabled unless you explicitly need otherwise
-}
-
-example.com {
-    auto_tls_on_demand
-    root "/var/www/html"
-}
-```
-
 ## Note about Cloudflare proxies (and other HTTPS proxies)
 
 Ferron uses TLS-ALPN-01 ACME challenge for automatic TLS by default, however this wouldn't work if your website is behind a proxy that terminates TLS, as TLS-ALPN-01 challenge works on TLS handshake level.
@@ -91,6 +67,30 @@ example.com {
 
     //auto_tls_post_obtain_command "/etc/reload-server.sh"
 
+    root "/var/www/html"
+}
+```
+
+## Automatic TLS on demand
+
+Ferron can also obtain certificates on demand when a hostname is accessed for the first time (`auto_tls_on_demand`). This is useful for multi-tenant setups where hostnames are not fully known in advance.
+
+When enabling on-demand issuance, configure `auto_tls_on_demand_ask` to avoid abuse. Ferron will call the configured URL with the `domain` query parameter, and your endpoint should allow or deny issuance for that domain.
+
+```kdl
+* {
+    auto_tls
+    auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
+    auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory. This directive is optional.
+    auto_tls_letsencrypt_production
+
+    // Ask endpoint to authorize per-domain issuance, e.g. https://auth.example.com/check?domain=example.com
+    auto_tls_on_demand_ask "https://auth.example.com/check"
+    auto_tls_on_demand_ask_no_verification #false // Keep verification enabled unless you explicitly need otherwise
+}
+
+example.com {
+    auto_tls_on_demand
     root "/var/www/html"
 }
 ```
