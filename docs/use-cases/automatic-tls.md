@@ -15,9 +15,12 @@ Below is the example Ferron configuration that configures automatic TLS with pro
 
 ```kdl
 * {
-    auto_tls
+    auto_tls // This directive is optional. Ferron enables automatic TLS by default without needing to specify this directive.
     auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-    auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory. This directive is optional.
+    
+    // Optionally, specify the ACME cache directory
+    //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
+    
     auto_tls_letsencrypt_production
 }
 
@@ -35,10 +38,11 @@ You can use HTTP-01 challenge instead, which works on HTTP level. You can add a 
 
 ```kdl
 * {
-    auto_tls
+    auto_tls // This directive is optional. Ferron enables automatic TLS by default without needing to specify this directive.
     auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-    auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory. Optional property, but recommended
-    auto_tls_letsencrypt_production
+    
+    // Optionally, specify the ACME cache directory
+    //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
 
     // Use HTTP-01 challenge instead of TLS-ALPN-01, because the server is behind an HTTPS proxy.
     auto_tls_challenge "http-01"
@@ -79,10 +83,11 @@ When enabling on-demand issuance, configure `auto_tls_on_demand_ask` to avoid ab
 
 ```kdl
 * {
-    auto_tls
+    auto_tls // This directive is optional. Ferron enables automatic TLS by default without needing to specify this directive.
     auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-    auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory. This directive is optional.
-    auto_tls_letsencrypt_production
+    
+    // Optionally, specify the ACME cache directory
+    //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
 
     // Ask endpoint to authorize per-domain issuance, e.g. https://auth.example.com/check?domain=example.com
     auto_tls_on_demand_ask "https://auth.example.com/check"
@@ -105,8 +110,10 @@ Below is the example Ferron configuration that configures automatic TLS with pro
 * {
     auto_tls
     auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-    auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory. Optional property, but recommended
-    auto_tls_letsencrypt_production
+    
+    // Optionally, specify the ACME cache directory
+    //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
+    
     auto_tls_challenge "dns-01" provider="example" some_prop="value" // The "some_prop" prop is used to configure the DNS provider
 }
 
