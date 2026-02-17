@@ -96,6 +96,12 @@ export default [
     label: "Automatic TLS",
   },
   {
+    href: "/docs/use-cases/manual-tls",
+    target: "_self",
+    sub: true,
+    label: "Manual TLS",
+  },
+  {
     href: "/docs/use-cases/url-rewriting",
     target: "_self",
     sub: true,
