@@ -74,5 +74,5 @@ example.com {
 - If Ferron is behind a reverse proxy/load balancer, configure `trust_x_forwarded_for` so IP-based rules use client IP rather than proxy IP.
 - Test restrictive rules with a temporary endpoint first to avoid locking yourself out.
 - Prefer `url` matches when possible; use `regex` only when you need pattern matching.
-- For complex logic (method/header/path combinations), use conditional configuration. See [Configuration: subconditions](/docs/configuration/subconditions).
+- For complex logic (method/header/path combinations), use conditional configuration. See [Configuration: conditionals](/docs/configuration/conditionals).
 - For directive details (`status`, `user`, `allow`, `block`, `trust_x_forwarded_for`), see [Configuration: security & TLS](/docs/configuration/security-tls).

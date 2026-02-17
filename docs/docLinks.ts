@@ -209,9 +209,9 @@ export default [
     label: "Placeholders",
   },
   {
-    href: "/docs/configuration/subconditions",
+    href: "/docs/configuration/conditionals",
     target: "_self",
-    label: "Subconditions",
+    label: "Conditionals",
   },
   {
     href: "/docs/configuration/examples",
