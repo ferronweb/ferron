@@ -12,6 +12,10 @@
 - Support for dynamic SRV-based backend discovery for reverse proxy upstreams.
 - Support for Unix socket backends in the forwarded authentication module.
 
+### Deprecated
+
+- Rego-based subconditions are deprecated and will be removed in a future release.
+
 ### Fixed
 
 - Body replacement MIME type filtering was not applied correctly.
