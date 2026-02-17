@@ -44,9 +44,9 @@ This page covers KDL directives for TLS configuration, certificate automation, a
 ### TLS/SSL & security
 
 - `tls <certificate_path: string> <private_key_path: string>`
-  - This directive specifies the path to the TLS certificate and private key. Default: none
+  - This directive specifies the path to the TLS certificate and private key. Note: Per-IP TLS certificates are not supported. TLS certificates are selected by hostname (SNI), not by destination IP address. Default: none
 - `auto_tls [enable_automatic_tls: bool]`
-  - This directive specifies whether automatic TLS is enabled. Default: `auto_tls #true` when port isn't explicitly specified and if the hostname doesn't look like a local address (`127.0.0.1`, `::1`, `localhost`), otherwise `auto_tls #false`
+  - This directive specifies whether automatic TLS is enabled. Note: Per-IP automatic TLS are not supported. TLS certificates are selected by hostname (SNI), not by destination IP address. Default: `auto_tls #true` when port isn't explicitly specified and if the hostname doesn't look like a local address (`127.0.0.1`, `::1`, `localhost`), otherwise `auto_tls #false`
 - `auto_tls_contact <auto_tls_contact: string|null>`
   - This directive specifies the email address used to register an ACME account for automatic TLS. Default: `auto_tls_contact #null`
 - `auto_tls_cache <auto_tls_cache: string|null>`
