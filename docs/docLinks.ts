@@ -90,6 +90,12 @@ export default [
     label: "Web applications",
   },
   {
+    href: "/docs/use-cases/url-rewriting",
+    target: "_self",
+    sub: true,
+    label: "URL rewriting",
+  },
+  {
     href: "/docs/use-cases/redirecting",
     target: "_self",
     sub: true,

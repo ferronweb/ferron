@@ -46,5 +46,6 @@ CGI is functional but usually slower than FastCGI for production workloads becau
 - If you get `500 Internal Server Error` with `fcgi_php`, verify the socket or TCP endpoint exists and your PHP FastCGI daemon (PHP-FPM or PHP-CGI in FastCGI mode) is running.
 - If using Unix sockets, ensure Ferron can access the socket file (owner/group/mode in PHP-FPM pool config).
 - Keep upload/download directories outside of `cgi-bin` when using CGI to avoid accidental CGI execution of uploaded files.
+- For "pretty URLs" and front controller patterns (common in PHP CMS/framework stacks), see [URL rewriting](/docs/use-cases/url-rewriting).
 - For framework/CMS-specific rewrites and hardening, see [Web applications](/docs/use-cases/web-applications).
 - For directive details (`cgi`, `cgi_extension`, `fcgi_php`), see [Configuration: application backends](/docs/configuration/application-backends).
