@@ -715,6 +715,18 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
+    if let Some(entries) = get_entries_for_validation!("abort", config, used_properties) {
+      for entry in &entries.inner {
+        if entry.values.len() != 1 {
+          Err(anyhow::anyhow!(
+            "The `abort` configuration property must have exactly one value"
+          ))?
+        } else if !entry.values[0].is_bool() {
+          Err(anyhow::anyhow!("Invalid option to abort the request"))?
+        }
+      }
+    }
+
     Ok(())
   }
 }
@@ -758,6 +770,11 @@ impl ModuleHandlers for CoreModuleHandlers {
     socket_data: &SocketData,
     _error_logger: &ErrorLogger,
   ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
+    if get_value!("abort", config).and_then(|v| v.as_bool()).unwrap_or(false) {
+      // An error with an empty message would internally mean aborting the HTTP request.
+      return Err(anyhow::anyhow!("").into_boxed_dyn_error());
+    }
+
     // Determine if the request is a forward proxy request
     let is_proxy_request = match request.version() {
       hyper::Version::HTTP_2 | hyper::Version::HTTP_3 => {

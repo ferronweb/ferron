@@ -1289,18 +1289,21 @@ pub async fn request_handler(
       }
       Err(err) => {
         let response = generate_error_response(StatusCode::INTERNAL_SERVER_ERROR, &configuration, &None).await;
+        let err_string = err.to_string();
 
-        for logger in &configuration.observability.log_channels {
-          logger
-            .send(LogMessage::new(
-              format!("Unexpected error while serving a request: {err}"),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
+        if !err_string.is_empty() {
+          for logger in &configuration.observability.log_channels {
+            logger
+              .send(LogMessage::new(
+                format!("Unexpected error while serving a request: {err}"),
+                true,
+              ))
+              .await
+              .unwrap_or_default();
+          }
         }
 
-        return finalize_with_modifying_handlers(
+        let response_result = finalize_with_modifying_handlers(
           response,
           executed_handlers,
           &configuration,
@@ -1321,6 +1324,13 @@ pub async fn request_handler(
           timeout_duration,
         )
         .await;
+
+        if err_string.is_empty() {
+          // Abort the HTTP request
+          return Err(anyhow::anyhow!("HTTP request aborted"));
+        }
+
+        return response_result;
       }
     }
   }
