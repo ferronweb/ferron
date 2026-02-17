@@ -17,10 +17,10 @@ Below is the example Ferron configuration that configures automatic TLS with pro
 * {
     auto_tls // This directive is optional. Ferron enables automatic TLS by default without needing to specify this directive.
     auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-    
+
     // Optionally, specify the ACME cache directory
     //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
-    
+
     auto_tls_letsencrypt_production
 }
 
@@ -40,7 +40,7 @@ You can use HTTP-01 challenge instead, which works on HTTP level. You can add a 
 * {
     auto_tls // This directive is optional. Ferron enables automatic TLS by default without needing to specify this directive.
     auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-    
+
     // Optionally, specify the ACME cache directory
     //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
 
@@ -85,7 +85,7 @@ When enabling on-demand issuance, configure `auto_tls_on_demand_ask` to avoid ab
 * {
     auto_tls // This directive is optional. Ferron enables automatic TLS by default without needing to specify this directive.
     auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-    
+
     // Optionally, specify the ACME cache directory
     //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
 
@@ -110,10 +110,10 @@ Below is the example Ferron configuration that configures automatic TLS with pro
 * {
     auto_tls
     auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-    
+
     // Optionally, specify the ACME cache directory
     //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
-    
+
     auto_tls_challenge "dns-01" provider="example" some_prop="value" // The "some_prop" prop is used to configure the DNS provider
 }
 
