@@ -7,23 +7,21 @@ else
 endif
 HOST_TARGET_TRIPLE = $(shell rustc -vV | sed -n 's|host: ||p')
 
-CARGO_FINAL_EXTRA_ARGS_ENV := $(CARGO_FINAL_EXTRA_ARGS)
-undefine CARGO_FINAL_EXTRA_ARGS
 ifdef TARGET
-	CARGO_FINAL_EXTRA_ARGS = --target $(TARGET) $(CARGO_FINAL_EXTRA_ARGS_ENV)
+	CARGO_FINAL_ARGS := --target $(TARGET)
 	CARGO_TARGET_ROOT = target/$(TARGET)
 	DEST_TARGET_TRIPLE = $(TARGET)
 	BUILD_RELEASE = build/release-$(TARGET)
 else
-	CARGO_FINAL_EXTRA_ARGS = $(CARGO_FINAL_EXTRA_ARGS_ENV)
+	CARGO_FINAL_ARGS :=
 	CARGO_TARGET_ROOT = target
 	DEST_TARGET_TRIPLE = $(HOST_TARGET_TRIPLE)
 	BUILD_RELEASE = build/release
 endif
 
 ifdef NO_MONOIO
-    CARGO_FINAL_EXTRA_ARGS_NO_MONOIO_ENV := $(CARGO_FINAL_EXTRA_ARGS)
-    CARGO_FINAL_EXTRA_ARGS = --no-default-features -F ferron/runtime-tokio $(CARGO_FINAL_EXTRA_ARGS_NO_MONOIO_ENV)
+    CARGO_FINAL_ARGS_NO_MONOIO_ENV := $(CARGO_FINAL_ARGS)
+    CARGO_FINAL_ARGS := --no-default-features -F ferron/runtime-tokio $(CARGO_FINAL_ARGS_NO_MONOIO_ENV)
 endif
 
 ifndef CARGO_FINAL
@@ -47,10 +45,10 @@ run-dev: build-dev
 	$(CARGO_TARGET_ROOT)/debug/ferron
 
 build: prepare-build fix-conflicts
-	cd build/workspace && RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 $(CARGO_FINAL) build --target-dir ../../target -r $(CARGO_FINAL_EXTRA_ARGS)
+	cd build/workspace && RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 $(CARGO_FINAL) build --target-dir ../../target -r $(CARGO_FINAL_ARGS) $(CARGO_FINAL_EXTRA_ARGS)
 
 build-dev: prepare-build fix-conflicts
-	cd build/workspace && RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 $(CARGO_FINAL) build --target-dir ../../target $(CARGO_FINAL_EXTRA_ARGS)
+	cd build/workspace && RUST_LIBC_UNSTABLE_MUSL_V1_2_3=1 $(CARGO_FINAL) build --target-dir ../../target $(CARGO_FINAL_ARGS) $(CARGO_FINAL_EXTRA_ARGS)
 
 prepare-build:
 	cargo run --manifest-path build/prepare/Cargo.toml
