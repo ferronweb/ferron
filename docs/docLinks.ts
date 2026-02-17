@@ -102,6 +102,12 @@ export default [
     label: "`ferron serve` subcommand",
   },
   {
+    href: "/docs/use-cases/logging-observability",
+    target: "_self",
+    sub: true,
+    label: "Logging and observability",
+  },
+  {
     label: "Configuration",
   },
   {
