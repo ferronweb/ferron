@@ -27,6 +27,30 @@ example.com {
 }
 ```
 
+## Automatic TLS on demand
+
+Ferron can also obtain certificates on demand when a hostname is accessed for the first time (`auto_tls_on_demand`). This is useful for multi-tenant setups where hostnames are not fully known in advance.
+
+When enabling on-demand issuance, configure `auto_tls_on_demand_ask` to avoid abuse. Ferron will call the configured URL with the `domain` query parameter, and your endpoint should allow or deny issuance for that domain.
+
+```kdl
+* {
+    auto_tls
+    auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
+    auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory. Optional property, but recommended
+    auto_tls_letsencrypt_production
+
+    // Ask endpoint to authorize per-domain issuance, e.g. https://auth.example.com/check?domain=example.com
+    auto_tls_on_demand_ask "https://auth.example.com/check"
+    auto_tls_on_demand_ask_no_verification #false // Keep verification enabled unless you explicitly need otherwise
+}
+
+example.com {
+    auto_tls_on_demand
+    root "/var/www/html"
+}
+```
+
 ## Note about Cloudflare proxies (and other HTTPS proxies)
 
 Ferron uses TLS-ALPN-01 ACME challenge for automatic TLS by default, however this wouldn't work if your website is behind a proxy that terminates TLS, as TLS-ALPN-01 challenge works on TLS handshake level.
@@ -96,10 +120,15 @@ For the reference of supported DNS providers and their configuration properties,
 
 ## Notes and troubleshooting
 
-- Use Let's Encrypt staging first to validate configuration and avoid production rate limits during setup/testing.
+- Use Let's Encrypt staging first (`auto_tls_letsencrypt_production #false`) to validate configuration and avoid production rate limits during setup/testing.
 - Ensure your public DNS records point to the Ferron server before requesting certificates; ACME challenges will fail if traffic goes elsewhere.
 - TLS-ALPN-01 and HTTP-01 require reachable public endpoints. Make sure inbound traffic to the required ports is not blocked by firewall rules or provider security groups.
 - If your site is behind an HTTPS-terminating proxy (for example Cloudflare proxy mode), switch to `auto_tls_challenge "http-01"` (or DNS-01) because TLS-ALPN-01 will not work through TLS termination.
 - If you need wildcard certificates, use DNS-01 challenge; wildcard domains are ignored for TLS-ALPN-01 and HTTP-01.
 - Keep `auto_tls_cache` on persistent storage and ensure Ferron can read/write it, otherwise certificate renewals may fail or repeat unnecessarily.
 - For DNS-01 failures, verify provider credentials/props and allow time for DNS propagation before retrying.
+
+### Notes for on-demand mode
+
+- Prefer `auto_tls_challenge "tls-alpn-01"` (default) or `auto_tls_challenge "http-01"` for faster validation. DNS-01 can be slower due to DNS propagation.
+- `auto_tls_save_data` is not supported together with `auto_tls_on_demand`.
