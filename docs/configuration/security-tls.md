@@ -200,7 +200,7 @@ auto_tls_challenge "dns-01" provider="digitalocean" oauth_token="your_token"
 
 #### Additional props
 
-- `token` - DigitalOcean OAuth token (required)
+- `oauth_token` - DigitalOcean OAuth token (required)
 
 ### OVH (`ovh`)
 
