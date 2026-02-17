@@ -4,7 +4,7 @@ on:
   push:
     branches: ["develop-2.x"]
     paths:
-      - "Cargo.lock"
+      - Cargo.lock
       - "Cargo.toml"
       - "Cross.toml"
       - "ferron/**"
