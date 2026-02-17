@@ -15,13 +15,18 @@ Below is the example Ferron configuration that configures automatic TLS with pro
 
 ```kdl
 * {
-    auto_tls // This directive is optional. Ferron enables automatic TLS by default without needing to specify this directive.
-    auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-
+    // The directive below is optional.
+    // Ferron enables automatic TLS by default without needing to specify this directive, unless it's explicitly disabled.
+    //auto_tls
+    
+    // Optionally, specify the contact email address for ACME registration and expiration notices.
+    //auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
+    
     // Optionally, specify the ACME cache directory
     //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
-
-    auto_tls_letsencrypt_production
+    
+    // Production Let's Encrypt directory is used by default, so the directive below is optional, unless using staging Let's Encrypt directory for testing purposes.
+    //auto_tls_letsencrypt_production
 }
 
 // Replace "example.com" with your website's domain name
@@ -38,9 +43,13 @@ You can use HTTP-01 challenge instead, which works on HTTP level. You can add a 
 
 ```kdl
 * {
-    auto_tls // This directive is optional. Ferron enables automatic TLS by default without needing to specify this directive.
-    auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-
+    // The directive below is optional.
+    // Ferron enables automatic TLS by default without needing to specify this directive, unless it's explicitly disabled.
+    //auto_tls
+    
+    // Optionally, specify the contact email address for ACME registration and expiration notices.
+    //auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
+    
     // Optionally, specify the ACME cache directory
     //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
 
@@ -83,9 +92,13 @@ When enabling on-demand issuance, configure `auto_tls_on_demand_ask` to avoid ab
 
 ```kdl
 * {
-    auto_tls // This directive is optional. Ferron enables automatic TLS by default without needing to specify this directive.
-    auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-
+    // The directive below is optional.
+    // Ferron enables automatic TLS by default without needing to specify this directive, unless it's explicitly disabled.
+    //auto_tls
+    
+    // Optionally, specify the contact email address for ACME registration and expiration notices.
+    //auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
+    
     // Optionally, specify the ACME cache directory
     //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
 
