@@ -14,7 +14,7 @@ Also, Ferron 2.0.0 and newer support a default OS-specific ACME cache directory 
 Below is the example Ferron configuration that configures automatic TLS with production Let's Encrypt directory:
 
 ```kdl
-* {
+globals {
     // The directive below is optional.
     // Ferron enables automatic TLS by default without needing to specify this directive, unless it's explicitly disabled.
     //auto_tls
@@ -42,7 +42,7 @@ Ferron uses TLS-ALPN-01 ACME challenge for automatic TLS by default, however thi
 You can use HTTP-01 challenge instead, which works on HTTP level. You can add a `auto_tls_challenge "http-01"` global configuration directive, for example like this:
 
 ```kdl
-* {
+globals {
     // The directive below is optional.
     // Ferron enables automatic TLS by default without needing to specify this directive, unless it's explicitly disabled.
     //auto_tls
@@ -91,7 +91,7 @@ Ferron can also obtain certificates on demand when a hostname is accessed for th
 When enabling on-demand issuance, configure `auto_tls_on_demand_ask` to avoid abuse. Ferron will call the configured URL with the `domain` query parameter, and your endpoint should allow or deny issuance for that domain.
 
 ```kdl
-* {
+globals {
     // The directive below is optional.
     // Ferron enables automatic TLS by default without needing to specify this directive, unless it's explicitly disabled.
     //auto_tls
@@ -107,7 +107,7 @@ When enabling on-demand issuance, configure `auto_tls_on_demand_ask` to avoid ab
     auto_tls_on_demand_ask_no_verification #false // Keep verification enabled unless you explicitly need otherwise
 }
 
-example.com {
+example.com,*.example.com {
     auto_tls_on_demand
     root "/var/www/html"
 }
@@ -120,7 +120,7 @@ Ferron 2.0.0 and newer supports DNS-01 ACME challenge for automatic TLS. The DNS
 Below is the example Ferron configuration that configures automatic TLS with production Let's Encrypt directory and hypothetical `example` DNS provider:
 
 ```kdl
-* {
+globals {
     auto_tls
     auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
 
