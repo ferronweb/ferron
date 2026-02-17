@@ -149,6 +149,17 @@ grpc.example.com {
 }
 ```
 
+## Reverse proxy to dynamic backends (via SRV records)
+
+Ferron supports reverse proxying to dynamic backends via SRV records. To configure Ferron for reverse proxying to dynamic backends, you can use this configuration:
+
+```kdl
+// Example configuration with reverse proxy to dynamic backends. Replace "example.com" with your domain name.
+example.com {
+    proxy_srv "http://_backend._tcp.example.com/" // Replace "_backend._tcp.example.com" with the actual SRV record for your backend servers
+}
+```
+
 ## Example: Ferron multiplexing to several backend servers
 
 In this example, the `example.com` and `bar.example.com` domains point to a server running Ferron.
