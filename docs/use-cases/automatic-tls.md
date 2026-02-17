@@ -146,9 +146,5 @@ For the reference of supported DNS providers and their configuration properties,
 - If your site is behind an HTTPS-terminating proxy (for example Cloudflare proxy mode), switch to `auto_tls_challenge "http-01"` (or DNS-01) because TLS-ALPN-01 will not work through TLS termination.
 - If you need wildcard certificates, use DNS-01 challenge; wildcard domains are ignored for TLS-ALPN-01 and HTTP-01.
 - Keep `auto_tls_cache` on persistent storage and ensure Ferron can read/write it, otherwise certificate renewals may fail or repeat unnecessarily.
-- For DNS-01 failures, verify provider credentials/props and allow time for DNS propagation before retrying.
-
-### Notes for on-demand mode
-
-- Prefer `auto_tls_challenge "tls-alpn-01"` (default) or `auto_tls_challenge "http-01"` for faster validation. DNS-01 can be slower due to DNS propagation.
 - `auto_tls_save_data` is not supported together with `auto_tls_on_demand`.
+- For DNS-01 failures, verify provider credentials/props and allow time for DNS propagation before retrying.
