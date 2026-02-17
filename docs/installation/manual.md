@@ -71,22 +71,3 @@ To reload the configuration without restarting the service, send a `SIGHUP` sign
 ```bash
 kill -HUP $(pidof ferron)
 ```
-
-## Additional tools
-
-- **Ferron password tool**:
-
-  The `ferron-passwd` tool assists in generating user entries with hashed passwords for secure configurations. To use it:
-  - **Unix-like Systems**:
-
-    ```bash
-    ./ferron-passwd someuser
-    ```
-
-  - **Windows**:
-
-    ```cmd
-    ferron-passwd.exe someuser
-    ```
-
-  Follow the on-screen prompts to generate the necessary entries for your configuration file.
