@@ -51,9 +51,9 @@ OTLP directives are available in Ferron 2.2.0 and newer.
 globals {
     otlp_service_name "ferron-prod"
 
-    otlp_logs "http://otel-collector.internal:4317" protocol="grpc"
-    otlp_metrics "http://otel-collector.internal:4317" protocol="grpc"
-    otlp_traces "http://otel-collector.internal:4317" protocol="grpc"
+    otlp_logs "http://otel-collector.internal:4317/v1/logs" protocol="grpc"
+    otlp_metrics "http://otel-collector.internal:4317/v1/metrics" protocol="grpc"
+    otlp_traces "http://otel-collector.internal:4317/v1/traces" protocol="grpc"
 }
 ```
 
@@ -74,9 +74,9 @@ A practical migration strategy is to keep file logs for local troubleshooting wh
 ```kdl
 globals {
     otlp_service_name "ferron-prod"
-    otlp_logs "http://otel-collector.internal:4317" protocol="grpc"
-    otlp_metrics "http://otel-collector.internal:4317" protocol="grpc"
-    otlp_traces "http://otel-collector.internal:4317" protocol="grpc"
+    otlp_logs "http://otel-collector.internal:4317/v1/logs" protocol="grpc"
+    otlp_metrics "http://otel-collector.internal:4317/v1/metrics" protocol="grpc"
+    otlp_traces "http://otel-collector.internal:4317/v1/traces" protocol="grpc"
 }
 
 example.com {
