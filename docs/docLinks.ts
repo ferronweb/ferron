@@ -78,6 +78,12 @@ export default [
     label: "PHP hosting",
   },
   {
+    href: "/docs/use-cases/cgi-applications",
+    target: "_self",
+    sub: true,
+    label: "CGI applications",
+  },
+  {
     href: "/docs/use-cases/web-applications",
     target: "_self",
     sub: true,
