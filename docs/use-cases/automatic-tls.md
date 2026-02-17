@@ -93,3 +93,13 @@ example.com {
 ```
 
 For the reference of supported DNS providers and their configuration properties, see the [configuration reference](/docs/configuration/security-tls#dns-providers-for-acme-dns-01-challenge)
+
+## Notes and troubleshooting
+
+- Use Let's Encrypt staging first to validate configuration and avoid production rate limits during setup/testing.
+- Ensure your public DNS records point to the Ferron server before requesting certificates; ACME challenges will fail if traffic goes elsewhere.
+- TLS-ALPN-01 and HTTP-01 require reachable public endpoints. Make sure inbound traffic to the required ports is not blocked by firewall rules or provider security groups.
+- If your site is behind an HTTPS-terminating proxy (for example Cloudflare proxy mode), switch to `auto_tls_challenge "http-01"` (or DNS-01) because TLS-ALPN-01 will not work through TLS termination.
+- If you need wildcard certificates, use DNS-01 challenge; wildcard domains are ignored for TLS-ALPN-01 and HTTP-01.
+- Keep `auto_tls_cache` on persistent storage and ensure Ferron can read/write it, otherwise certificate renewals may fail or repeat unnecessarily.
+- For DNS-01 failures, verify provider credentials/props and allow time for DNS propagation before retrying.

@@ -199,3 +199,13 @@ bar.example.com {
 ```
 
 For `http://calender.example.net:5000/agenda/example`, you will probably have to either configure the calendar service to strip 'agenda/' or configure URL rewriting in Ferron.
+
+## Notes and troubleshooting
+
+- If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the backend URL/port, make sure the backend process is running, and confirm network/firewall access from Ferron to the backend.
+- If only some paths fail, review `location` matching order and `remove_base` behavior so forwarded paths match what the backend expects.
+- If your backend application reports host mismatch errors or wrong absolute URLs, use `proxy_request_header_replace "Host" "{header:Host}"` (see the intact Host header section).
+- If requests return unexpected `404 Not Found` at the backend, test with and without `disable_url_sanitizer` and confirm backend path handling before disabling URL sanitization.
+- For mixed static + API setups, keep API routes in a dedicated prefix like `/api` and use a catch-all `/` location for static files or SPA fallback.
+- For gRPC upstreams, enable `proxy_http2_only`; without HTTP/2-only proxying, many gRPC backends will fail.
+- If Ferron is behind an HTTPS-terminating proxy and you also use automatic TLS, use HTTP-01 challenge instead of TLS-ALPN-01. See [Automatic TLS](/docs/use-cases/automatic-tls#note-about-cloudflare-proxies-and-other-https-proxies).
