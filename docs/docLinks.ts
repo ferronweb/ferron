@@ -13,18 +13,10 @@ export default [
   },
   {
     label: "Installation",
+    category: true,
   },
   {
-    href: "/docs/installation/installer-linux",
-    target: "_self",
-    sub: true,
-    label: "Installer (GNU/Linux)",
-  },
-  {
-    href: "/docs/installation/installer-windows",
-    target: "_self",
-    sub: true,
-    label: "Installer (Windows Server)",
+    label: "GNU/Linux",
   },
   {
     href: "/docs/installation/debian",
@@ -39,37 +31,47 @@ export default [
     label: "RHEL/Fedora",
   },
   {
-    href: "/docs/installation/docker",
+    href: "/docs/installation/installer-linux",
     target: "_self",
     sub: true,
+    label: "Installer",
+  },
+  {
+    label: "Windows Server",
+  },
+  {
+    href: "/docs/installation/installer-windows",
+    target: "_self",
+    sub: true,
+    label: "Installer",
+  },
+  {
+    href: "/docs/installation/docker",
+    target: "_self",
     label: "Docker",
   },
   {
     href: "/docs/installation/package-managers",
     target: "_self",
-    sub: true,
     label: "Package managers (community)",
   },
   {
     href: "/docs/installation/manual",
     target: "_self",
-    sub: true,
     label: "Manual installation",
   },
   {
     label: "Common use cases",
+    category: true,
+  },
+  {
+    label: "Static & content",
   },
   {
     href: "/docs/use-cases/static-file-serving",
     target: "_self",
     sub: true,
     label: "Static file serving",
-  },
-  {
-    href: "/docs/use-cases/reverse-proxy",
-    target: "_self",
-    sub: true,
-    label: "Reverse proxying",
   },
   {
     href: "/docs/use-cases/php",
@@ -90,16 +92,13 @@ export default [
     label: "Web applications",
   },
   {
-    href: "/docs/use-cases/automatic-tls",
-    target: "_self",
-    sub: true,
-    label: "Automatic TLS",
+    label: "Traffic & routing",
   },
   {
-    href: "/docs/use-cases/manual-tls",
+    href: "/docs/use-cases/reverse-proxy",
     target: "_self",
     sub: true,
-    label: "Manual TLS",
+    label: "Reverse proxying",
   },
   {
     href: "/docs/use-cases/url-rewriting",
@@ -114,31 +113,47 @@ export default [
     label: "Redirecting",
   },
   {
+    label: "Security",
+  },
+  {
+    href: "/docs/use-cases/automatic-tls",
+    target: "_self",
+    sub: true,
+    label: "Automatic TLS",
+  },
+  {
+    href: "/docs/use-cases/manual-tls",
+    target: "_self",
+    sub: true,
+    label: "Manual TLS",
+  },
+  {
     href: "/docs/use-cases/access-control",
     target: "_self",
     sub: true,
     label: "Access control",
   },
   {
-    href: "/docs/use-cases/ferron-serve",
-    target: "_self",
-    sub: true,
-    label: "`ferron serve` subcommand",
-  },
-  {
     href: "/docs/use-cases/logging-observability",
     target: "_self",
-    sub: true,
     label: "Logging and observability",
   },
   {
+    href: "/docs/use-cases/ferron-serve",
+    target: "_self",
+    label: "`ferron serve` subcommand",
+  },
+  {
     label: "Configuration",
+    category: true,
   },
   {
     href: "/docs/configuration/fundamentals",
     target: "_self",
-    sub: true,
     label: "Fundamentals",
+  },
+  {
+    label: "Directives",
   },
   {
     href: "/docs/configuration/core-directives",
@@ -191,58 +206,50 @@ export default [
   {
     href: "/docs/configuration/placeholders",
     target: "_self",
-    sub: true,
     label: "Placeholders",
   },
   {
     href: "/docs/configuration/subconditions",
     target: "_self",
-    sub: true,
     label: "Subconditions",
   },
   {
     href: "/docs/configuration/examples",
     target: "_self",
-    sub: true,
-    label: "Configuration examples",
+    label: "Examples",
   },
   {
     label: "Reference",
+    category: true,
   },
   {
     href: "/docs/reference/configuration-legacy",
     target: "_self",
-    sub: true,
     label: "Server configuration (legacy)",
   },
   {
     href: "/docs/reference/modules",
     target: "_self",
-    sub: true,
     label: "Server modules",
   },
   {
     href: "/docs/reference/observability",
     target: "_self",
-    sub: true,
     label: "Observability backends",
   },
   {
     href: "/docs/reference/commands",
     target: "_self",
-    sub: true,
     label: "Commands",
   },
   {
     href: "/docs/reference/ferrbench",
     target: "_self",
-    sub: true,
     label: "FerrBench",
   },
   {
     href: "https://rustdocs-v2.ferron.sh",
     target: "_self",
-    sub: true,
     label: "Rust crate documentation",
   },
 ];
