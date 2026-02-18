@@ -76,9 +76,11 @@ Placeholders can be used in subconditions where applicable (for example `{path}`
 
 **Note: Ferron previously supported Rego-based subconditions for advanced access control. This feature is now deprecated and will be removed in a future release.**
 
-**For most use cases, standard conditionals are sufficient and recommended. Advanced policy logic will instead be provided by a future API gateway from Ferron, which will offer full Rego support in a dedicated, lean, and extensible environment**
+For most use cases, standard conditionals are sufficient and recommended. Advanced policy logic will instead be provided by a future API gateway from Ferron, which will offer full Rego support in a dedicated, lean, and extensible environment
 
-**Existing configurations using Rego subconditions will continue to work for now, but it is advised to migrate to standard conditional or plan for the future API gateway when it comes available.**
+Existing configurations using Rego subconditions will continue to work for now, but it is advised to migrate to standard conditional or plan for the future API gateway when it comes available.
+
+---
 
 Ferron 2.0.0 and newer support advanced conditional checks with embedded Rego policy.
 
