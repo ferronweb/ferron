@@ -170,6 +170,12 @@ export default [
     label: "Security headers",
   },
   {
+    href: "/docs/use-cases/cors",
+    target: "_self",
+    sub: true,
+    label: "CORS headers",
+  },
+  {
     href: "/docs/use-cases/logging-observability",
     target: "_self",
     label: "Logging and observability",
