@@ -101,6 +101,30 @@ export default [
     label: "Reverse proxying",
   },
   {
+    href: "/docs/use-cases/forward-auth",
+    target: "_self",
+    sub: true,
+    label: "Forward auth",
+  },
+  {
+    href: "/docs/use-cases/client-ip",
+    target: "_self",
+    sub: true,
+    label: "Client IP",
+  },
+  {
+    href: "/docs/use-cases/rate-limiting",
+    target: "_self",
+    sub: true,
+    label: "Rate limiting",
+  },
+  {
+    href: "/docs/use-cases/error-pages",
+    target: "_self",
+    sub: true,
+    label: "Error pages",
+  },
+  {
     href: "/docs/use-cases/url-rewriting",
     target: "_self",
     sub: true,
@@ -128,10 +152,22 @@ export default [
     label: "Manual TLS",
   },
   {
+    href: "/docs/use-cases/mtls",
+    target: "_self",
+    sub: true,
+    label: "mTLS",
+  },
+  {
     href: "/docs/use-cases/access-control",
     target: "_self",
     sub: true,
     label: "Access control",
+  },
+  {
+    href: "/docs/use-cases/security-headers",
+    target: "_self",
+    sub: true,
+    label: "Security headers",
   },
   {
     href: "/docs/use-cases/logging-observability",
