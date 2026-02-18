@@ -76,3 +76,4 @@ The following request headers are provided to the backend server:
 - **X-Forwarded-Proto** - if the original request is encrypted, it's `"https"`, otherwise it's `"http"`.
 - **X-Forwarded-Host** - the value of the _Host_ header from the original request
 - **X-Forwarded-For** - the client's IP address
+- **Forwarded** - standardized header with the same information as the previous three headers
