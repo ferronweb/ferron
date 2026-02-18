@@ -86,7 +86,7 @@ api.example.com {
     header_replace "Access-Control-Allow-Methods" "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     header_replace "Access-Control-Allow-Headers" "Authorization, Content-Type"
     header "Vary" "Origin"
-    
+
     // Or delete headers
     //header_remove "Access-Control-Allow-Origin"
     //header_remove "Access-Control-Allow-Methods"
