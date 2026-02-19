@@ -17,7 +17,7 @@ You can also combine both in one config.
 A web server listens for HTTP/HTTPS requests and returns responses.
 
 - Static file serving - the server reads files from disk and sends them to the client.
-- Reverse proxying - the server forwards requests to another server (for example Node.js, Python, Go, Java, PHP-FPM, or another API service), then returns that response to the client.
+- Reverse proxying - the server forwards requests to another server (for example Node.js, Python, Go, Java, or another API service), then returns that response to the client.
 
 ## Which setup should you choose?
 
