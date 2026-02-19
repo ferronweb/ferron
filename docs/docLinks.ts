@@ -184,7 +184,7 @@ export default [
   {
     href: "/docs/use-cases/logging-observability",
     target: "_self",
-    label: "Logging and observability",
+    label: "Logging & observability",
   },
   {
     href: "/docs/use-cases/ferron-serve",

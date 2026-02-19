@@ -1,5 +1,5 @@
 ---
-title: Logging and observability
+title: Logging & observability
 description: "Practical Ferron setups for access/error logs, container-friendly std streams, and OTLP export for centralized observability."
 ---
 
