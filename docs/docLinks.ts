@@ -12,6 +12,12 @@ export default [
     label: "Playground",
   },
   {
+    href: "/docs/getting-started",
+    target: "_self",
+    sub: false,
+    label: "Getting started",
+  },
+  {
     label: "Installation",
     category: true,
   },

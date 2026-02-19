@@ -9,7 +9,9 @@ To explore the documentation, either click on one of the positions in the sideba
 
 ## First time?
 
-**Are you new to Ferron? No problem.** You can start by installing Ferron using one of the many available methods (you can find them when navigating the documentation), and then read about the common use cases (again, you can find them when navigating the documentation).
+**Are you new to Ferron? No problem.** Start with the [Getting started guide](/docs/getting-started) to learn web server basics and decide whether you should use static file serving, reverse proxying, or a mixed setup.
+
+After that, install Ferron using one of the available installation methods, and then read about the common use cases.
 
 If you'd like to learn more about Ferron's configuration, you can read about it in the [configuration reference](/docs/configuration/fundamentals).
 
