@@ -15,6 +15,8 @@ After that, install Ferron using one of the available installation methods, and 
 
 If you'd like to learn more about Ferron's configuration, you can read about it in the [configuration reference](/docs/configuration/fundamentals).
 
+If something goes wrong, start with the [troubleshooting guide](/docs/troubleshooting).
+
 **Whatever you do, enjoy using your new Ferron server!** 😄
 
 ## If you have questions about Ferron

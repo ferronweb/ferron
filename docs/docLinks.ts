@@ -18,6 +18,12 @@ export default [
     label: "Getting started",
   },
   {
+    href: "/docs/troubleshooting",
+    target: "_self",
+    sub: false,
+    label: "Troubleshooting",
+  },
+  {
     label: "Installation",
     category: true,
   },
