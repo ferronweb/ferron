@@ -41,7 +41,7 @@ If you see a "Ferron is installed successfully!" message on the page, the web se
 
 ## File structure
 
-Ferron installed via the installer for GNU/Linux has following file structure:
+Ferron installed via the package for Debian/Ubuntu has following file structure:
 
 - _/usr/sbin/ferron_ - Ferron web server
 - _/usr/sbin/ferron-passwd_ - Ferron user password generation tool
