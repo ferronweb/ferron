@@ -136,7 +136,7 @@ include "/etc/ferron.d/**/*.kdl"
 
 Ferron configuration directives have different scopes, which determine where they can be used within the configuration file. Some directives can only be used in the global scope, while others can be used in both global and virtual host scopes, or even in more specific contexts like location blocks.
 
-### Scopes
+In Ferron, configuration directives can be categorized into the following scopes:
 
 - **Global-only** - can only be used in the global configuration scope
 - **Global and virtual host** - can be used in both global and virtual host scopes

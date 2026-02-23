@@ -84,9 +84,9 @@ example.com {
 }
 ```
 
-## Complete example combining multiple sections
+## Complete example combining multiple configuration aspects
 
-Below is a complete example of Ferron configuration, combining multiple sections:
+Below is a complete example of Ferron configuration, combining multiple aspects of the configuration:
 
 ```kdl
 // Global configuration
