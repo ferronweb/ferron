@@ -13,7 +13,7 @@ Ferron supports the following placeholders for header values, subconditions, rev
 - `{path_and_query}` - the request URI with path and query string (for example, `/index.html?param=value`)
 - `{method}` - the request method
 - `{version}` - the HTTP version of the request
-- `{header:<header_name>}` - the header value of the request URI
+- `{header:<header_name>}` - the value of a header with the specified name (`<header_name>` is replaced with the name of the header, for example, `Content-Type`)
 - `{scheme}` - the scheme of the request URI (`http` or `https`), applicable only for subconditions, reverse proxying and redirect destinations.
 - `{client_ip}` - the client IP address, applicable only for subconditions, reverse proxying and redirect destinations.
 - `{client_port}` - the client port number, applicable only for subconditions, reverse proxying and redirect destinations.
@@ -30,7 +30,7 @@ Ferron 2.0.0 and newer supports the following placeholders for access logs:
 - `{path_and_query}` - the request URI with path and query string (for example, `/index.html?param=value`)
 - `{method}` - the request method
 - `{version}` - the HTTP version of the request
-- `{header:<header_name>}` - the header value of the request URI (`-`, if header is missing)
+- `{header:<header_name>}` - the value of a header with the specified name (`<header_name>` is replaced with the name of the header, for example, `Content-Type`; `-`, if header is missing)
 - `{scheme}` - the scheme of the request URI (`http` or `https`).
 - `{client_ip}` - the client IP address.
 - `{client_port}` - the client port number.
