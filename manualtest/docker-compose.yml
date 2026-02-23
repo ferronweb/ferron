@@ -20,7 +20,7 @@ services:
       - ./php:/var/www/php
 
   pebble:
-    image: ghcr.io/letsencrypt/pebble:2.9
+    image: ghcr.io/letsencrypt/pebble:2.10
     command: -config /etc/pebble-config.json
     networks:
       - acme
