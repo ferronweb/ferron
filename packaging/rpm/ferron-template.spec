@@ -63,9 +63,29 @@ if [ $1 -eq 1 ]; then
     find /var/log/ferron -type f -exec chmod 644 {} \;
     find /var/log/ferron -type d -exec chmod 755 {} \;
 
-    # TODO: proper SELinux support
-    if type restorecon >/dev/null 2>&1; then
-        restorecon -r /usr/sbin/ferron{,-*} /etc/ferron.kdl /var/www/ferron /var/log/ferron /var/lib/ferron
+    if type selinuxenabled >/dev/null 2>&1 && selinuxenabled; then
+        if type setsebool >/dev/null 2>&1; then
+            # ACME and reverse proxy (taken from Caddy's RPM spec)
+            setsebool -P httpd_can_network_connect on
+        fi
+
+        if type semanage >/dev/null 2>&1; then
+            semanage fcontext -a -t httpd_exec_t "/usr/sbin/ferron" 2>/dev/null || semanage fcontext -m -t httpd_exec_t "/usr/sbin/ferron" || semanage fcontext -a -t httpd_exec_t "/usr/bin/ferron" 2>/dev/null || semanage fcontext -m -t httpd_exec_t "/usr/bin/ferron" || :
+            semanage fcontext -a -t httpd_config_t "/etc/ferron.kdl" 2>/dev/null || semanage fcontext -m -t httpd_config_t "/etc/ferron.kdl" || :
+            semanage fcontext -a -t httpd_sys_content_t "/var/www/ferron(/.*)?" 2>/dev/null || semanage fcontext -m -t httpd_sys_content_t "/var/www/ferron(/.*)?" || :
+            semanage fcontext -a -t httpd_log_t "/var/log/ferron(/.*)?" 2>/dev/null || semanage fcontext -m -t httpd_log_t "/var/log/ferron(/.*)?" || :
+            semanage fcontext -a -t httpd_var_lib_t "/var/lib/ferron(/.*)?" 2>/dev/null || semanage fcontext -m -t httpd_var_lib_t "/var/lib/ferron(/.*)?" || :
+        fi
+
+        if type restorecon >/dev/null 2>&1; then
+            restorecon -r /usr/sbin/ferron{,-*} /etc/ferron.kdl /var/www/ferron /var/log/ferron /var/lib/ferron || :
+        fi
+
+        if type semanage >/dev/null 2>&1; then
+            # QUIC (taken from Caddy's RPM spec)
+            semanage port -a -t http_port_t -p udp 80 || semanage port -m -t http_port_t -p udp 80 || :
+            semanage port -a -t http_port_t -p udp 443 || semanage port -m -t http_port_t -p udp 443 || :
+        fi
     fi
 fi
 
@@ -83,6 +103,31 @@ fi
 
 %postun
 if [ $1 -eq 0 ]; then
+    if type selinuxenabled >/dev/null 2>&1 && selinuxenabled; then
+        if type setsebool >/dev/null 2>&1; then
+            # ACME and reverse proxy (taken from Caddy's RPM spec)
+            setsebool -P httpd_can_network_connect off
+        fi
+
+        if type semanage >/dev/null 2>&1; then
+            semanage fcontext -d "/usr/sbin/ferron" || semanage fcontext -d "/usr/bin/ferron" || :
+            semanage fcontext -d "/etc/ferron.kdl" || :
+            semanage fcontext -d "/var/www/ferron(/.*)?" || :
+            semanage fcontext -d "/var/log/ferron(/.*)?" || :
+            semanage fcontext -d "/var/lib/ferron(/.*)?" || :
+        fi
+
+        if type restorecon >/dev/null 2>&1; then
+            restorecon -r /usr/sbin/ferron{,-*} /etc/ferron.kdl /var/www/ferron /var/log/ferron /var/lib/ferron || :
+        fi
+
+        if type semanage >/dev/null 2>&1; then
+            # QUIC (taken from Caddy's RPM spec)
+            semanage port -d -t http_port_t -p udp 80 || :
+            semanage port -d -t http_port_t -p udp 443 || :
+        fi
+    fi
+
     rm -rf /var/lib/ferron /var/log/ferron /etc/ferron
 fi
 
