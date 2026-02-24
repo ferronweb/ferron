@@ -171,6 +171,32 @@ static NON_COMPRESSIBLE_FILE_EXTENSIONS: LazyLock<BTreeSet<&'static str>> = Lazy
   ])
 });
 
+/// Split an ETag request header into individual ETags.
+#[inline]
+fn split_etag_request_header(etag: &str) -> Vec<String> {
+  let mut is_quote = false;
+  let mut result = Vec::new();
+  let mut current = String::new();
+  let mut chars = etag.chars();
+
+  while let Some(c) = chars.next() {
+    if c == '"' {
+      is_quote = !is_quote;
+    } else if c == ',' && !is_quote {
+      result.push(current.trim().to_owned());
+      current.clear();
+    } else if c == '\\' && is_quote {
+      if let Some(next) = chars.next() {
+        current.push(next);
+      }
+    } else {
+      current.push(c);
+    }
+  }
+  result.push(current.trim().to_owned());
+  result
+}
+
 /// Generates a directory listing
 #[inline]
 pub async fn generate_directory_listing(
@@ -959,42 +985,44 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               if let Some(if_none_match_value) = request.headers().get(header::IF_NONE_MATCH) {
                 match if_none_match_value.to_str() {
                   Ok(if_none_match) => {
-                    if let Some((etag_extracted, suffix_option, _)) = extract_etag_inner(if_none_match, true) {
-                      // Client's cached version matches our current version
-                      if etag_extracted == etag {
-                        let mut etag_new_inner = String::new();
-                        etag_new_inner.push_str(&etag);
-                        if let Some(suffix) = suffix_option {
-                          match &*suffix {
-                            // These suffixes are supported by Ferron
-                            "gzip" | "deflate" | "br" | "zstd" => {
-                              etag_new_inner.push('-');
-                              etag_new_inner.push_str(&suffix);
+                    for if_none_match in split_etag_request_header(if_none_match) {
+                      if let Some((etag_extracted, suffix_option, _)) = extract_etag_inner(&if_none_match, true) {
+                        // Client's cached version matches our current version
+                        if etag_extracted == etag {
+                          let mut etag_new_inner = String::new();
+                          etag_new_inner.push_str(&etag);
+                          if let Some(suffix) = suffix_option {
+                            match &*suffix {
+                              // These suffixes are supported by Ferron
+                              "gzip" | "deflate" | "br" | "zstd" => {
+                                etag_new_inner.push('-');
+                                etag_new_inner.push_str(&suffix);
+                              }
+                              _ => {}
                             }
-                            _ => {}
                           }
+                          // Ferron's static file serving functionality would also emit weak ETags,
+                          // so for RFC 7232 compliance, weak ETags are sent in 304 responses as well.
+                          // Therefore, we construct a weak ETag here.
+                          let constructed_etag = construct_etag(&etag_new_inner, true);
+                          let mut not_modified_response = Response::builder()
+                            .status(StatusCode::NOT_MODIFIED)
+                            .header(header::ETAG, &constructed_etag)
+                            .header(header::VARY, HeaderValue::from_static(vary))
+                            .body(Empty::new().map_err(|e| match e {}).boxed())?;
+                          if let Some(cache_control) = cache_control {
+                            not_modified_response
+                              .headers_mut()
+                              .insert(header::CACHE_CONTROL, HeaderValue::from_str(cache_control)?);
+                          }
+                          return Ok(ResponseData {
+                            request: Some(request),
+                            response: Some(not_modified_response),
+                            response_status: None,
+                            response_headers: None,
+                            new_remote_address: None,
+                          });
                         }
-                        // Ferron's static file serving functionality would also emit weak ETags,
-                        // so for RFC 7232 compliance, weak ETags are sent in 304 responses as well.
-                        // Therefore, we construct a weak ETag here.
-                        let constructed_etag = construct_etag(&etag_new_inner, true);
-                        let mut not_modified_response = Response::builder()
-                          .status(StatusCode::NOT_MODIFIED)
-                          .header(header::ETAG, &constructed_etag)
-                          .header(header::VARY, HeaderValue::from_static(vary))
-                          .body(Empty::new().map_err(|e| match e {}).boxed())?;
-                        if let Some(cache_control) = cache_control {
-                          not_modified_response
-                            .headers_mut()
-                            .insert(header::CACHE_CONTROL, HeaderValue::from_str(cache_control)?);
-                        }
-                        return Ok(ResponseData {
-                          request: Some(request),
-                          response: Some(not_modified_response),
-                          response_status: None,
-                          response_headers: None,
-                          new_remote_address: None,
-                        });
                       }
                     }
                   }
@@ -1018,9 +1046,12 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 match if_match_value.to_str() {
                   Ok(if_match) => {
                     // "*" means any version is acceptable
-                    if if_match != "*" {
-                      // Ferron only emits weak ETags, and comparing a strong ETag with it would not match
-                      // for strong comparsions, for more details see RFC 7232
+                    // Ferron only emits weak ETags, and comparing a strong ETag with it would not match
+                    // for strong comparsions, for more details see RFC 7232
+                    if !split_etag_request_header(if_match)
+                      .into_iter()
+                      .any(|if_match| if_match == "*")
+                    {
                       let mut header_map = HeaderMap::new();
                       header_map.insert(header::ETAG, if_match_value.clone());
                       header_map.insert(header::VARY, HeaderValue::from_static(vary));

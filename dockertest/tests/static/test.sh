@@ -181,6 +181,19 @@ else
     TEST_FAILED=1
 fi
 
+TEST_RESULTS="$(curl -fsSL -w %{http_code} -H "If-None-Match: $(curl -fsSLI http://ferron/basic.txt | grep -i 'etag:' | cut -d ':' -f 2 | tr -d '[:space:]'), \"something\"" http://ferron/basic.txt)"
+TEST_EXIT_CODE=$?
+TEST_EXPECTED="304"
+if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
+    echo "Multiple ETag test passed!"
+else
+    echo "Multiple ETag test failed!" >&2
+    echo "  Exit code: $TEST_EXIT_CODE" >&2
+    echo "  Expected: $TEST_EXPECTED" >&2
+    echo "  Received: $TEST_RESULTS" >&2
+    TEST_FAILED=1
+fi
+
 TEST_RESULTS="$(curl -fsL -w %{http_code} -H "If-Match: $(curl -fsSLI http://ferron/basic.txt | grep -i 'etag:' | cut -d ':' -f 2 | tr -d '[:space:]')" http://ferron/basic.txt || true)"
 TEST_EXIT_CODE=$?
 TEST_EXPECTED="412"
