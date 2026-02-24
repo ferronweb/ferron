@@ -58,10 +58,10 @@ if [ $1 -eq 1 ]; then
     fi
 
     chown -R ferron:ferron /var/log/ferron /var/lib/ferron /var/www/ferron
-    find /var/www/ferron/* -type f -exec chmod 644 {} \;
-    find /var/www/ferron/* -type d -exec chmod 755 {} \;
-    find /var/log/ferron/* -type f -exec chmod 644 {} \;
-    find /var/log/ferron/* -type d -exec chmod 755 {} \;
+    find /var/www/ferron -type f -exec chmod 644 {} \;
+    find /var/www/ferron -type d -exec chmod 755 {} \;
+    find /var/log/ferron -type f -exec chmod 644 {} \;
+    find /var/log/ferron -type d -exec chmod 755 {} \;
 
     # TODO: proper SELinux support
     if type restorecon >/dev/null 2>&1; then
