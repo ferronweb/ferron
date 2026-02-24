@@ -1081,6 +1081,9 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 .map(|mime_type| mime_type.to_string())
             });
 
+            // Get file size
+            let file_length = metadata.len();
+
             // Handle Range requests for partial content
             let range_header = match request.headers().get(header::RANGE) {
               Some(value) => match value.to_str() {
@@ -1088,6 +1091,10 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 Err(_) => {
                   let mut header_map = HeaderMap::new();
                   header_map.insert(header::VARY, HeaderValue::from_static(vary));
+                  header_map.insert(
+                    header::CONTENT_RANGE,
+                    HeaderValue::from_str(&format!("bytes */{file_length}"))?,
+                  );
                   return Ok(ResponseData {
                     request: Some(request),
                     response: None,
@@ -1102,12 +1109,14 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
             // Process range request if present
             if let Some(range_header) = range_header {
-              // Get file size
-              let file_length = metadata.len();
               // Can't satisfy range request for empty files
               if file_length == 0 {
                 let mut header_map = HeaderMap::new();
                 header_map.insert(header::VARY, HeaderValue::from_static(vary));
+                header_map.insert(
+                  header::CONTENT_RANGE,
+                  HeaderValue::from_str(&format!("bytes */{file_length}"))?,
+                );
                 return Ok(ResponseData {
                   request: Some(request),
                   response: None,

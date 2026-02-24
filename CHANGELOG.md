@@ -21,6 +21,7 @@
 - Body replacement MIME type filtering was not applied correctly.
 - Duplicate error log entries in certain cases.
 - Redirect loop when using `wwwredirect` directive and requesting with a hostname without a port.
+- The `Content-Range` header was omitted in some 416 Range Not Satisfiable responses when serving static files.
 
 ## Ferron 2.5.5
 
