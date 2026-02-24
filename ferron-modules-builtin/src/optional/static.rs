@@ -171,6 +171,16 @@ static NON_COMPRESSIBLE_FILE_EXTENSIONS: LazyLock<BTreeSet<&'static str>> = Lazy
   ])
 });
 
+/// A compression algorithm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Compression {
+  Gzip,
+  Brotli,
+  Deflate,
+  Zstd,
+  Identity,
+}
+
 /// Split an ETag request header into individual ETags.
 #[inline]
 fn split_etag_request_header(etag: &str) -> Vec<String> {
@@ -1303,10 +1313,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
               // Initialize compression flags
               let mut precompressed_extensions = Vec::new();
-              let mut use_gzip = false;
-              let mut use_deflate = false;
-              let mut use_brotli = false;
-              let mut use_zstd = false;
+              let mut used_compression = Compression::Identity;
 
               // Determine the appropriate compression algorithm based on Accept-Encoding
               if compression_possible {
@@ -1348,38 +1355,50 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     // Parse Accept-Encoding header to select the best compression method
                     // Check for supported compression algorithms in order of preference
                     for accepted_encoding in parse_q_value_header(accept_encoding) {
-                      if accepted_encoding == "br" {
-                        use_brotli = true;
-                        if enable_precompression {
-                          precompressed_extensions.push("br");
-                        } else {
-                          break;
+                      match &*accepted_encoding {
+                        "br" => {
+                          if enable_precompression {
+                            precompressed_extensions.push("br");
+                          } else {
+                            used_compression = Compression::Brotli;
+                            break;
+                          }
                         }
-                      }
-                      if (enable_precompression || !use_brotli) && accepted_encoding == "zstd" {
-                        use_zstd = true;
-                        if enable_precompression {
-                          precompressed_extensions.push("zst");
-                        } else {
-                          break;
+                        "zstd" => {
+                          if enable_precompression {
+                            precompressed_extensions.push("zst");
+                          } else {
+                            used_compression = Compression::Zstd;
+                            break;
+                          }
                         }
-                      }
-                      if (enable_precompression || !(use_brotli || use_zstd)) && accepted_encoding == "deflate" {
-                        use_deflate = true;
-                        if enable_precompression {
-                          precompressed_extensions.push("deflate");
-                        } else {
-                          break;
+                        "gzip" => {
+                          if enable_precompression {
+                            precompressed_extensions.push("gz");
+                          } else {
+                            used_compression = Compression::Gzip;
+                            break;
+                          }
                         }
-                      }
-                      if (enable_precompression || !(use_brotli || use_zstd || use_deflate))
-                        && accepted_encoding == "gzip"
-                      {
-                        use_gzip = true;
-                        if enable_precompression {
-                          precompressed_extensions.push("gz");
-                        } else {
-                          break;
+                        "deflate" => {
+                          if enable_precompression {
+                            precompressed_extensions.push("deflate");
+                          } else {
+                            used_compression = Compression::Deflate;
+                            break;
+                          }
+                        }
+                        "identity" => {
+                          // "identity" HTTP compression is basically no compression
+                          if enable_precompression {
+                            precompressed_extensions.push(""); // No extension for "identity"
+                          } else {
+                            used_compression = Compression::Identity;
+                            break;
+                          }
+                        }
+                        _ => {
+                          // Ignore unknown compression methods
                         }
                       }
                     }
@@ -1391,6 +1410,12 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               if enable_precompression {
                 // Find the precompressed file
                 for extension in precompressed_extensions {
+                  if extension.is_empty() {
+                    // No extension, use the original file
+                    used_compression = Compression::Identity;
+                    break;
+                  }
+
                   let mut joined_pathbuf_with_extension = joined_pathbuf.clone();
                   joined_pathbuf_with_extension.set_extension(
                     format!(
@@ -1420,29 +1445,16 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                       joined_pathbuf = joined_pathbuf_with_extension;
                       metadata = metadata_obt_ok;
 
-                      // Respect client preference
-                      use_brotli = extension == "br";
-                      use_zstd = extension == "zst";
-                      use_deflate = extension == "deflate";
-                      use_gzip = extension == "gz";
+                      used_compression = match extension {
+                        "br" => Compression::Brotli,
+                        "zst" => Compression::Zstd,
+                        "deflate" => Compression::Deflate,
+                        "gz" => Compression::Gzip,
+                        _ => Compression::Identity,
+                      };
 
                       break;
                     }
-                  }
-                  match extension {
-                    "br" => {
-                      use_brotli = false;
-                    }
-                    "zst" => {
-                      use_zstd = false;
-                    }
-                    "deflate" => {
-                      use_deflate = false;
-                    }
-                    "gz" => {
-                      use_gzip = false;
-                    }
-                    _ => {}
                   }
                 }
               }
@@ -1458,18 +1470,16 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
               // Include ETag in response with suffix based on compression method
               if let Some(etag) = etag_option {
-                if use_brotli {
-                  response_builder = response_builder.header(header::ETAG, format!("W/\"{etag}-br\""));
-                } else if use_zstd {
-                  response_builder = response_builder.header(header::ETAG, format!("W/\"{etag}-zstd\""));
-                } else if use_deflate {
-                  response_builder = response_builder.header(header::ETAG, format!("W/\"{etag}-deflate\""));
-                } else if use_gzip {
-                  response_builder = response_builder.header(header::ETAG, format!("W/\"{etag}-gzip\""));
-                } else {
-                  // Uncompressed content
-                  response_builder = response_builder.header(header::ETAG, format!("W/\"{etag}\""));
-                }
+                response_builder = response_builder.header(
+                  header::ETAG,
+                  match used_compression {
+                    Compression::Brotli => format!("W/\"{etag}-br\""),
+                    Compression::Zstd => format!("W/\"{etag}-zstd\""),
+                    Compression::Deflate => format!("W/\"{etag}-deflate\""),
+                    Compression::Gzip => format!("W/\"{etag}-gzip\""),
+                    _ => format!("W/\"{etag}\""),
+                  },
+                );
               }
 
               response_builder = response_builder.header(header::VARY, vary);
@@ -1483,19 +1493,27 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               }
 
               // Set appropriate Content-Encoding header based on compression method
-              if use_brotli {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("br"));
-              } else if use_zstd {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("zstd"));
-              } else if use_deflate {
-                response_builder =
-                  response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("deflate"));
-              } else if use_gzip {
-                response_builder = response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
-              } else {
-                // Only include Content-Length for uncompressed responses
-                // Content-Length header + HTTP compression = broken HTTP responses!
-                response_builder = response_builder.header(header::CONTENT_LENGTH, content_length);
+              match used_compression {
+                Compression::Brotli => {
+                  response_builder = response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("br"));
+                }
+                Compression::Zstd => {
+                  response_builder =
+                    response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("zstd"));
+                }
+                Compression::Deflate => {
+                  response_builder =
+                    response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("deflate"));
+                }
+                Compression::Gzip => {
+                  response_builder =
+                    response_builder.header(header::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
+                }
+                _ => {
+                  // Only include Content-Length for uncompressed responses
+                  // Content-Length header + HTTP compression = broken HTTP responses!
+                  response_builder = response_builder.header(header::CONTENT_LENGTH, content_length);
+                }
               }
 
               // Create the response based on the HTTP method
@@ -1537,63 +1555,69 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
                   // Create the appropriate response body based on compression method, if precompression is disabled
-                  let boxed_body = if !enable_precompression && use_brotli {
-                    // Wrap the stream as a `AsyncRead`
-                    let file_bufreader = StreamReader::new(file_stream);
+                  let boxed_body = match (enable_precompression, used_compression) {
+                    (false, Compression::Brotli) => {
+                      // Wrap the stream as a `AsyncRead`
+                      let file_bufreader = StreamReader::new(file_stream);
 
-                    // Use Brotli compression with moderate quality (4) for good compression/speed balance
-                    // Also, set the window size and block size to optimize compression, and reduce memory usage
-                    let reader_stream = ReaderStream::with_capacity(
-                      BrotliEncoder::with_params(
-                        file_bufreader,
-                        EncoderParams::default()
-                          .quality(Level::Precise(4))
-                          .window_size(17)
-                          .block_size(18),
-                      ),
-                      COMPRESSED_STREAM_READER_BUFFER_SIZE,
-                    );
-                    let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
-                    stream_body.boxed()
-                  } else if !enable_precompression && use_zstd {
-                    // Wrap the stream as a `AsyncRead`
-                    let file_bufreader = StreamReader::new(file_stream);
+                      // Use Brotli compression with moderate quality (4) for good compression/speed balance
+                      // Also, set the window size and block size to optimize compression, and reduce memory usage
+                      let reader_stream = ReaderStream::with_capacity(
+                        BrotliEncoder::with_params(
+                          file_bufreader,
+                          EncoderParams::default()
+                            .quality(Level::Precise(4))
+                            .window_size(17)
+                            .block_size(18),
+                        ),
+                        COMPRESSED_STREAM_READER_BUFFER_SIZE,
+                      );
+                      let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
+                      stream_body.boxed()
+                    }
+                    (false, Compression::Zstd) => {
+                      // Wrap the stream as a `AsyncRead`
+                      let file_bufreader = StreamReader::new(file_stream);
 
-                    // Limit the Zstandard window size to 128K (2^17 bytes) to support many HTTP clients
-                    // Also, set the size of the initial probe table to reduce memory usage
-                    let reader_stream = ReaderStream::with_capacity(
-                      ZstdEncoder::with_quality_and_params(
-                        file_bufreader,
-                        Level::Default,
-                        &[CParameter::window_log(17), CParameter::hash_log(10)],
-                      ),
-                      COMPRESSED_STREAM_READER_BUFFER_SIZE,
-                    );
-                    let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
-                    stream_body.boxed()
-                  } else if !enable_precompression && use_deflate {
-                    // Wrap the stream as a `AsyncRead`
-                    let file_bufreader = StreamReader::new(file_stream);
+                      // Limit the Zstandard window size to 128K (2^17 bytes) to support many HTTP clients
+                      // Also, set the size of the initial probe table to reduce memory usage
+                      let reader_stream = ReaderStream::with_capacity(
+                        ZstdEncoder::with_quality_and_params(
+                          file_bufreader,
+                          Level::Default,
+                          &[CParameter::window_log(17), CParameter::hash_log(10)],
+                        ),
+                        COMPRESSED_STREAM_READER_BUFFER_SIZE,
+                      );
+                      let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
+                      stream_body.boxed()
+                    }
+                    (false, Compression::Deflate) => {
+                      // Wrap the stream as a `AsyncRead`
+                      let file_bufreader = StreamReader::new(file_stream);
 
-                    let reader_stream = ReaderStream::with_capacity(
-                      DeflateEncoder::new(file_bufreader),
-                      COMPRESSED_STREAM_READER_BUFFER_SIZE,
-                    );
-                    let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
-                    stream_body.boxed()
-                  } else if !enable_precompression && use_gzip {
-                    // Wrap the stream as a `AsyncRead`
-                    let file_bufreader = StreamReader::new(file_stream);
+                      let reader_stream = ReaderStream::with_capacity(
+                        DeflateEncoder::new(file_bufreader),
+                        COMPRESSED_STREAM_READER_BUFFER_SIZE,
+                      );
+                      let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
+                      stream_body.boxed()
+                    }
+                    (false, Compression::Gzip) => {
+                      // Wrap the stream as a `AsyncRead`
+                      let file_bufreader = StreamReader::new(file_stream);
 
-                    let reader_stream = ReaderStream::with_capacity(
-                      GzipEncoder::new(file_bufreader),
-                      COMPRESSED_STREAM_READER_BUFFER_SIZE,
-                    );
-                    let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
-                    stream_body.boxed()
-                  } else {
-                    let stream_body = StreamBody::new(file_stream.map_ok(Frame::data));
-                    stream_body.boxed()
+                      let reader_stream = ReaderStream::with_capacity(
+                        GzipEncoder::new(file_bufreader),
+                        COMPRESSED_STREAM_READER_BUFFER_SIZE,
+                      );
+                      let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
+                      stream_body.boxed()
+                    }
+                    _ => {
+                      let stream_body = StreamBody::new(file_stream.map_ok(Frame::data));
+                      stream_body.boxed()
+                    }
                   };
 
                   response_builder.body(boxed_body)?
