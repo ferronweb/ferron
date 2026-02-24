@@ -37,7 +37,7 @@ use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 #[cfg(feature = "runtime-monoio")]
 use ferron_common::util::MonoioFileStreamNoSpawn;
-use ferron_common::util::{anti_xss, sizify, ModuleCache, TtlCache};
+use ferron_common::util::{anti_xss, parse_q_value_header, sizify, ModuleCache, TtlCache};
 use ferron_common::{format_page, get_entries, get_entries_for_validation, get_entry, get_value};
 
 const COMPRESSED_STREAM_READER_BUFFER_SIZE: usize = 16384;
@@ -1277,6 +1277,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               // Handle full file response (no range request)
 
               // Initialize compression flags
+              let mut precompressed_extensions = Vec::new();
               let mut use_gzip = false;
               let mut use_deflate = false;
               let mut use_brotli = false;
@@ -1314,26 +1315,49 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   && !is_netscape_4_broken_compression
                 {
                   // Get Accept-Encoding header to determine supported compression algorithms
-                  let accept_encoding = match request.headers().get(header::ACCEPT_ENCODING) {
-                    Some(header_value) => header_value.to_str().unwrap_or_default(),
-                    None => "",
-                  };
-
-                  // Parse Accept-Encoding header to select the best compression method
-                  // Check for supported compression algorithms in order of preference
-                  if accept_encoding.contains("br") {
-                    use_brotli = true;
-                  }
-                  if (enable_precompression || !use_brotli) && accept_encoding.contains("zstd") {
-                    use_zstd = true;
-                  }
-                  if (enable_precompression || !(use_brotli || use_zstd)) && accept_encoding.contains("deflate") {
-                    use_deflate = true;
-                  }
-                  if (enable_precompression || !(use_brotli || use_zstd || use_deflate))
-                    && accept_encoding.contains("gzip")
+                  if let Some(accept_encoding) = request
+                    .headers()
+                    .get(header::ACCEPT_ENCODING)
+                    .map(|header_value| header_value.to_str().unwrap_or_default())
                   {
-                    use_gzip = true;
+                    // Parse Accept-Encoding header to select the best compression method
+                    // Check for supported compression algorithms in order of preference
+                    for accepted_encoding in parse_q_value_header(accept_encoding) {
+                      if accepted_encoding == "br" {
+                        use_brotli = true;
+                        if enable_precompression {
+                          precompressed_extensions.push("br");
+                        } else {
+                          break;
+                        }
+                      }
+                      if (enable_precompression || !use_brotli) && accepted_encoding == "zstd" {
+                        use_zstd = true;
+                        if enable_precompression {
+                          precompressed_extensions.push("zst");
+                        } else {
+                          break;
+                        }
+                      }
+                      if (enable_precompression || !(use_brotli || use_zstd)) && accepted_encoding == "deflate" {
+                        use_deflate = true;
+                        if enable_precompression {
+                          precompressed_extensions.push("deflate");
+                        } else {
+                          break;
+                        }
+                      }
+                      if (enable_precompression || !(use_brotli || use_zstd || use_deflate))
+                        && accepted_encoding == "gzip"
+                      {
+                        use_gzip = true;
+                        if enable_precompression {
+                          precompressed_extensions.push("gz");
+                        } else {
+                          break;
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -1341,20 +1365,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               // Handle precompression
               if enable_precompression {
                 // Find the precompressed file
-                let mut extensions = Vec::new();
-                if use_brotli {
-                  extensions.push("br");
-                }
-                if use_zstd {
-                  extensions.push("zst");
-                }
-                if use_deflate {
-                  extensions.push("deflate");
-                }
-                if use_gzip {
-                  extensions.push("gz");
-                }
-                for extension in extensions {
+                for extension in precompressed_extensions {
                   let mut joined_pathbuf_with_extension = joined_pathbuf.clone();
                   joined_pathbuf_with_extension.set_extension(
                     format!(

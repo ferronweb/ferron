@@ -22,6 +22,7 @@
 - Duplicate error log entries in certain cases.
 - ETag matching wasn't applied correctly when `If-Match` or `If-None-Match` headers contained multiple ETags.
 - `HEAD` requests for directory listings caused responses with a body.
+- HTTP compression support sometimes chose the wrong compression algorithm.
 - Redirect loop when using `wwwredirect` directive and requesting with a hostname without a port.
 - The `Content-Range` header was omitted in some 416 Range Not Satisfiable responses when serving static files.
 
