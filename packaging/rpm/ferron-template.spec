@@ -50,20 +50,23 @@ if ! id ferron &>/dev/null; then
 fi
 
 %post
-mkdir -p /var/www/ferron
-if [ ! -e /var/www/ferron/index.html ]; then
-    cp -r /usr/share/ferron/wwwroot/* /var/www/ferron/
-fi
+if [ $1 -eq 1 ]; then
+    # Initial installation
+    mkdir -p /var/www/ferron
+    if [ ! -e /var/www/ferron/index.html ]; then
+        cp -r /usr/share/ferron/wwwroot/* /var/www/ferron/
+    fi
 
-chown -R ferron:ferron /var/log/ferron /var/lib/ferron /var/www/ferron
-find /var/www/ferron/* -type f -exec chmod 644 {} \;
-find /var/www/ferron/* -type d -exec chmod 755 {} \;
-find /var/log/ferron/* -type f -exec chmod 644 {} \;
-find /var/log/ferron/* -type d -exec chmod 755 {} \;
+    chown -R ferron:ferron /var/log/ferron /var/lib/ferron /var/www/ferron
+    find /var/www/ferron/* -type f -exec chmod 644 {} \;
+    find /var/www/ferron/* -type d -exec chmod 755 {} \;
+    find /var/log/ferron/* -type f -exec chmod 644 {} \;
+    find /var/log/ferron/* -type d -exec chmod 755 {} \;
 
-# TODO: proper SELinux support
-if type restorecon >/dev/null 2>&1; then
-    restorecon -r /usr/sbin/ferron{,-*} /etc/ferron.kdl /var/www/ferron /var/log/ferron /var/lib/ferron
+    # TODO: proper SELinux support
+    if type restorecon >/dev/null 2>&1; then
+        restorecon -r /usr/sbin/ferron{,-*} /etc/ferron.kdl /var/www/ferron /var/log/ferron /var/lib/ferron
+    fi
 fi
 
 # systemd macros aren't used, so that the RPM package can be built on Debian-based systems
