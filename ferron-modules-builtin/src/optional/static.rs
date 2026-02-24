@@ -985,6 +985,19 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               if let Some(if_none_match_value) = request.headers().get(header::IF_NONE_MATCH) {
                 match if_none_match_value.to_str() {
                   Ok(if_none_match) => {
+                    if !matches!(request.method(), &Method::GET | &Method::HEAD) {
+                      // Precondition failed when method is not GET or HEAD
+                      let mut header_map = HeaderMap::new();
+                      header_map.insert(header::VARY, HeaderValue::from_static(vary));
+                      return Ok(ResponseData {
+                        request: Some(request),
+                        response: None,
+                        response_status: Some(StatusCode::PRECONDITION_FAILED),
+                        response_headers: Some(header_map),
+                        new_remote_address: None,
+                      });
+                    }
+
                     for if_none_match in split_etag_request_header(if_none_match) {
                       if let Some((etag_extracted, suffix_option, _)) = extract_etag_inner(&if_none_match, true) {
                         // Client's cached version matches our current version
@@ -1045,6 +1058,19 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               if let Some(if_match_value) = request.headers().get(header::IF_MATCH) {
                 match if_match_value.to_str() {
                   Ok(if_match) => {
+                    if !matches!(request.method(), &Method::GET | &Method::HEAD) {
+                      // Precondition failed when method is not GET or HEAD
+                      let mut header_map = HeaderMap::new();
+                      header_map.insert(header::VARY, HeaderValue::from_static(vary));
+                      return Ok(ResponseData {
+                        request: Some(request),
+                        response: None,
+                        response_status: Some(StatusCode::PRECONDITION_FAILED),
+                        response_headers: Some(header_map),
+                        new_remote_address: None,
+                      });
+                    }
+
                     // "*" means any version is acceptable
                     // Ferron only emits weak ETags, and comparing a strong ETag with it would not match
                     // for strong comparsions, for more details see RFC 7232
@@ -1053,7 +1079,6 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                       .any(|if_match| if_match == "*")
                     {
                       let mut header_map = HeaderMap::new();
-                      header_map.insert(header::ETAG, if_match_value.clone());
                       header_map.insert(header::VARY, HeaderValue::from_static(vary));
                       return Ok(ResponseData {
                         request: Some(request),
