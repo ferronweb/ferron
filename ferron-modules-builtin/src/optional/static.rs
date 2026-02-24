@@ -1419,6 +1419,13 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     if metadata_obt_ok.is_file() {
                       joined_pathbuf = joined_pathbuf_with_extension;
                       metadata = metadata_obt_ok;
+
+                      // Respect client preference
+                      use_brotli = extension == "br";
+                      use_zstd = extension == "zst";
+                      use_deflate = extension == "deflate";
+                      use_gzip = extension == "gz";
+
                       break;
                     }
                   }
