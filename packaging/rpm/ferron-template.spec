@@ -17,6 +17,8 @@ Provides:       webserver
 %description
 A fast, modern, and easily configurable web server with automatic TLS.
 
+%global debug_package %{nil}
+
 %prep
 %setup -q
 
