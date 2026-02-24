@@ -46,3 +46,4 @@ Thumbs.db
 /packaging/rpm/data/
 /packaging/rpm/rpm/
 /packaging/rpm/ferron.spec
+/packaging/rpm/*.list
