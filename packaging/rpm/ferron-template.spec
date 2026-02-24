@@ -56,8 +56,10 @@ if [ ! -e /var/www/ferron/index.html ]; then
 fi
 
 chown -R ferron:ferron /var/log/ferron /var/lib/ferron /var/www/ferron
-chmod -R 755 /var/log/ferron /var/www/ferron
-chmod -R 644 /var/log/ferron/* /var/www/ferron/* 2>/dev/null || true
+find /var/www/ferron/* -type f -exec chmod 644 {} \;
+find /var/www/ferron/* -type d -exec chmod 755 {} \;
+find /var/log/ferron/* -type f -exec chmod 644 {} \;
+find /var/log/ferron/* -type d -exec chmod 755 {} \;
 
 # TODO: proper SELinux support
 if type restorecon >/dev/null 2>&1; then
