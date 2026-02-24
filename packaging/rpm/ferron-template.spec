@@ -127,8 +127,6 @@ if [ $1 -eq 0 ]; then
             semanage port -d -t http_port_t -p udp 443 || :
         fi
     fi
-
-    rm -rf /var/lib/ferron /var/log/ferron /etc/ferron
 fi
 
 %files
