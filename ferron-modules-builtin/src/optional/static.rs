@@ -1593,11 +1593,15 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               }
               response_builder = response_builder.header(header::CONTENT_TYPE, "text/html");
 
-              let response = response_builder.body(
-                Full::new(Bytes::from(directory_listing_html))
-                  .map_err(|e| match e {})
-                  .boxed(),
-              )?;
+              let response = if request.method() == Method::HEAD {
+                response_builder.body(Empty::new().map_err(|e| match e {}).boxed())?
+              } else {
+                response_builder.body(
+                  Full::new(Bytes::from(directory_listing_html))
+                    .map_err(|e| match e {})
+                    .boxed(),
+                )?
+              };
 
               return Ok(ResponseData {
                 request: Some(request),
