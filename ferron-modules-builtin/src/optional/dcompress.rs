@@ -18,7 +18,7 @@ use hyper::{header, Request, Response};
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
-use ferron_common::util::ModuleCache;
+use ferron_common::util::{parse_q_value_header, ModuleCache};
 use ferron_common::{get_entries_for_validation, get_value};
 use tokio_util::io::{ReaderStream, StreamReader};
 
@@ -106,6 +106,16 @@ static NON_COMPRESSIBLE_MIME_TYPES: LazyLock<BTreeSet<&'static str>> = LazyLock:
     "video/x-ms-wmv",
   ])
 });
+
+/// A compression algorithm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Compression {
+  Gzip,
+  Brotli,
+  Deflate,
+  Zstd,
+  Identity,
+}
 
 /// A dynamic content compression module loader
 pub struct DynamicCompressionModuleLoader {
@@ -225,10 +235,7 @@ impl ModuleHandlers for DynamicCompressionModuleHandlers {
     mut response: Response<BoxBody<Bytes, std::io::Error>>,
   ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Box<dyn Error>> {
     // Initialize compression flags
-    let mut use_gzip = false;
-    let mut use_deflate = false;
-    let mut use_brotli = false;
-    let mut use_zstd = false;
+    let mut used_compression = Compression::Identity;
 
     // Get response content type
     let content_type_option = response
@@ -270,21 +277,37 @@ impl ModuleHandlers for DynamicCompressionModuleHandlers {
         && !is_netscape_4_broken_compression
       {
         // Get Accept-Encoding header to determine supported compression algorithms
-        let accept_encoding = self.accept_encoding.as_deref().unwrap_or("");
-
-        // Parse Accept-Encoding header to select the best compression method
-        // Check for supported compression algorithms in order of preference
-        if accept_encoding.contains("br") {
-          use_brotli = true;
-        }
-        if (!use_brotli) && accept_encoding.contains("zstd") {
-          use_zstd = true;
-        }
-        if (!(use_brotli || use_zstd)) && accept_encoding.contains("deflate") {
-          use_deflate = true;
-        }
-        if (!(use_brotli || use_zstd || use_deflate)) && accept_encoding.contains("gzip") {
-          use_gzip = true;
+        if let Some(accept_encoding) = &self.accept_encoding {
+          // Parse Accept-Encoding header to select the best compression method
+          // Check for supported compression algorithms in order of preference
+          for accepted_encoding in parse_q_value_header(accept_encoding) {
+            match &*accepted_encoding {
+              "br" => {
+                used_compression = Compression::Brotli;
+                break;
+              }
+              "zstd" => {
+                used_compression = Compression::Zstd;
+                break;
+              }
+              "gzip" => {
+                used_compression = Compression::Gzip;
+                break;
+              }
+              "deflate" => {
+                used_compression = Compression::Deflate;
+                break;
+              }
+              "identity" => {
+                // "identity" HTTP compression is basically no compression
+                used_compression = Compression::Identity;
+                break;
+              }
+              _ => {
+                // Ignore unknown compression methods
+              }
+            }
+          }
         }
       }
     }
@@ -306,21 +329,17 @@ impl ModuleHandlers for DynamicCompressionModuleHandlers {
     }
 
     // Remove Content-Length header if compression is used
-    if use_brotli || use_zstd || use_deflate || use_gzip {
+    if used_compression != Compression::Identity {
       while response.headers_mut().remove(header::CONTENT_LENGTH).is_some() {}
     }
 
     // Content-Encoding header value
-    let algorithm_str = if use_brotli {
-      Some("br")
-    } else if use_zstd {
-      Some("zstd")
-    } else if use_deflate {
-      Some("deflate")
-    } else if use_gzip {
-      Some("gzip")
-    } else {
-      None
+    let algorithm_str = match used_compression {
+      Compression::Brotli => Some("br"),
+      Compression::Zstd => Some("zstd"),
+      Compression::Deflate => Some("deflate"),
+      Compression::Gzip => Some("gzip"),
+      _ => None,
     };
 
     // Add ETag suffix based on compression method
@@ -345,87 +364,93 @@ impl ModuleHandlers for DynamicCompressionModuleHandlers {
       let (response_parts, response_body) = response.into_parts();
 
       // Create the appropriate response body based on compression method
-      let boxed_body = if use_brotli {
-        let (data_stream, trailer_stream) = BodyStream::new(response_body).split_by_map(|f| match f {
-          Ok(frame) if frame.is_trailers() => Either::Right(Ok::<_, std::io::Error>(frame)),
-          Ok(frame) => match frame.into_data() {
-            Ok(data) => Either::Left(Ok(data)),
-            Err(frame) => Either::Right(Ok(frame)),
-          },
-          Err(err) => Either::Left(Err(err)),
-        });
-        let body_reader = StreamReader::new(data_stream);
+      let boxed_body = match used_compression {
+        Compression::Brotli => {
+          let (data_stream, trailer_stream) = BodyStream::new(response_body).split_by_map(|f| match f {
+            Ok(frame) if frame.is_trailers() => Either::Right(Ok::<_, std::io::Error>(frame)),
+            Ok(frame) => match frame.into_data() {
+              Ok(data) => Either::Left(Ok(data)),
+              Err(frame) => Either::Right(Ok(frame)),
+            },
+            Err(err) => Either::Left(Err(err)),
+          });
+          let body_reader = StreamReader::new(data_stream);
 
-        // Use Brotli compression with moderate quality (4) for good compression/speed balance
-        // Also, set the window size and block size to optimize compression, and reduce memory usage
-        let reader_stream = ReaderStream::with_capacity(
-          BrotliEncoder::with_params(
-            body_reader,
-            EncoderParams::default()
-              .quality(Level::Precise(4))
-              .window_size(17)
-              .block_size(18),
-          ),
-          COMPRESSED_STREAM_READER_BUFFER_SIZE,
-        );
-        let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data).chain(trailer_stream));
-        BodyExt::boxed(stream_body)
-      } else if use_zstd {
-        let (data_stream, trailer_stream) = BodyStream::new(response_body).split_by_map(|f| match f {
-          Ok(frame) if frame.is_trailers() => Either::Right(Ok::<_, std::io::Error>(frame)),
-          Ok(frame) => match frame.into_data() {
-            Ok(data) => Either::Left(Ok(data)),
-            Err(frame) => Either::Right(Ok(frame)),
-          },
-          Err(err) => Either::Left(Err(err)),
-        });
-        let body_reader = StreamReader::new(data_stream);
+          // Use Brotli compression with moderate quality (4) for good compression/speed balance
+          // Also, set the window size and block size to optimize compression, and reduce memory usage
+          let reader_stream = ReaderStream::with_capacity(
+            BrotliEncoder::with_params(
+              body_reader,
+              EncoderParams::default()
+                .quality(Level::Precise(4))
+                .window_size(17)
+                .block_size(18),
+            ),
+            COMPRESSED_STREAM_READER_BUFFER_SIZE,
+          );
+          let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data).chain(trailer_stream));
+          BodyExt::boxed(stream_body)
+        }
+        Compression::Zstd => {
+          let (data_stream, trailer_stream) = BodyStream::new(response_body).split_by_map(|f| match f {
+            Ok(frame) if frame.is_trailers() => Either::Right(Ok::<_, std::io::Error>(frame)),
+            Ok(frame) => match frame.into_data() {
+              Ok(data) => Either::Left(Ok(data)),
+              Err(frame) => Either::Right(Ok(frame)),
+            },
+            Err(err) => Either::Left(Err(err)),
+          });
+          let body_reader = StreamReader::new(data_stream);
 
-        // Limit the Zstandard window size to 128K (2^17 bytes) to support many HTTP clients
-        // Also, set the size of the initial probe table to reduce memory usage
-        let reader_stream = ReaderStream::with_capacity(
-          ZstdEncoder::with_quality_and_params(
-            body_reader,
-            Level::Default,
-            &[CParameter::window_log(17), CParameter::hash_log(10)],
-          ),
-          COMPRESSED_STREAM_READER_BUFFER_SIZE,
-        );
-        let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data).chain(trailer_stream));
-        BodyExt::boxed(stream_body)
-      } else if use_deflate {
-        let (data_stream, trailer_stream) = BodyStream::new(response_body).split_by_map(|f| match f {
-          Ok(frame) if frame.is_trailers() => Either::Right(Ok::<_, std::io::Error>(frame)),
-          Ok(frame) => match frame.into_data() {
-            Ok(data) => Either::Left(Ok(data)),
-            Err(frame) => Either::Right(Ok(frame)),
-          },
-          Err(err) => Either::Left(Err(err)),
-        });
-        let body_reader = StreamReader::new(data_stream);
+          // Limit the Zstandard window size to 128K (2^17 bytes) to support many HTTP clients
+          // Also, set the size of the initial probe table to reduce memory usage
+          let reader_stream = ReaderStream::with_capacity(
+            ZstdEncoder::with_quality_and_params(
+              body_reader,
+              Level::Default,
+              &[CParameter::window_log(17), CParameter::hash_log(10)],
+            ),
+            COMPRESSED_STREAM_READER_BUFFER_SIZE,
+          );
+          let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data).chain(trailer_stream));
+          BodyExt::boxed(stream_body)
+        }
+        Compression::Deflate => {
+          let (data_stream, trailer_stream) = BodyStream::new(response_body).split_by_map(|f| match f {
+            Ok(frame) if frame.is_trailers() => Either::Right(Ok::<_, std::io::Error>(frame)),
+            Ok(frame) => match frame.into_data() {
+              Ok(data) => Either::Left(Ok(data)),
+              Err(frame) => Either::Right(Ok(frame)),
+            },
+            Err(err) => Either::Left(Err(err)),
+          });
+          let body_reader = StreamReader::new(data_stream);
 
-        let reader_stream =
-          ReaderStream::with_capacity(DeflateEncoder::new(body_reader), COMPRESSED_STREAM_READER_BUFFER_SIZE);
-        let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data).chain(trailer_stream));
-        BodyExt::boxed(stream_body)
-      } else if use_gzip {
-        let (data_stream, trailer_stream) = BodyStream::new(response_body).split_by_map(|f| match f {
-          Ok(frame) if frame.is_trailers() => Either::Right(Ok::<_, std::io::Error>(frame)),
-          Ok(frame) => match frame.into_data() {
-            Ok(data) => Either::Left(Ok(data)),
-            Err(frame) => Either::Right(Ok(frame)),
-          },
-          Err(err) => Either::Left(Err(err)),
-        });
-        let body_reader = StreamReader::new(data_stream);
+          let reader_stream =
+            ReaderStream::with_capacity(DeflateEncoder::new(body_reader), COMPRESSED_STREAM_READER_BUFFER_SIZE);
+          let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data).chain(trailer_stream));
+          BodyExt::boxed(stream_body)
+        }
+        Compression::Gzip => {
+          let (data_stream, trailer_stream) = BodyStream::new(response_body).split_by_map(|f| match f {
+            Ok(frame) if frame.is_trailers() => Either::Right(Ok::<_, std::io::Error>(frame)),
+            Ok(frame) => match frame.into_data() {
+              Ok(data) => Either::Left(Ok(data)),
+              Err(frame) => Either::Right(Ok(frame)),
+            },
+            Err(err) => Either::Left(Err(err)),
+          });
+          let body_reader = StreamReader::new(data_stream);
 
-        let reader_stream =
-          ReaderStream::with_capacity(GzipEncoder::new(body_reader), COMPRESSED_STREAM_READER_BUFFER_SIZE);
-        let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data).chain(trailer_stream));
-        BodyExt::boxed(stream_body)
-      } else {
-        // No compression algorithm is used, so we can just return the original response body
-        response_body
+          let reader_stream =
+            ReaderStream::with_capacity(GzipEncoder::new(body_reader), COMPRESSED_STREAM_READER_BUFFER_SIZE);
+          let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data).chain(trailer_stream));
+          BodyExt::boxed(stream_body)
+        }
+        _ => {
+          // No compression algorithm is used, so we can just return the original response body
+          response_body
+        }
       };
 
       response = Response::from_parts(response_parts, boxed_body);

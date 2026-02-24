@@ -173,7 +173,7 @@ static NON_COMPRESSIBLE_FILE_EXTENSIONS: LazyLock<BTreeSet<&'static str>> = Lazy
 
 /// A compression algorithm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Compression {
+enum Compression {
   Gzip,
   Brotli,
   Deflate,
@@ -209,7 +209,7 @@ fn split_etag_request_header(etag: &str) -> Vec<String> {
 
 /// Generates a directory listing
 #[inline]
-pub async fn generate_directory_listing(
+async fn generate_directory_listing(
   directory: ReadDir,
   request_path: &str,
   description: Option<String>,
