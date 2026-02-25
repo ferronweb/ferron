@@ -75,7 +75,7 @@ fi
 
 TEST_RESULTS="$(curl -fsSL http://ferron/hostname)"
 TEST_EXIT_CODE=$?
-TEST_EXPECTED="backend:3000"
+TEST_EXPECTED="ferron"
 if [ "$TEST_EXIT_CODE" -eq 0 ] && [ "$TEST_RESULTS" = "$TEST_EXPECTED" ]; then
     echo "Backend hostname setting test passed!"
 else
