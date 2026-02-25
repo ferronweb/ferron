@@ -32,6 +32,7 @@ pub struct ReverseProxyBuilder<'a> {
   pub(super) proxy_request_header: Vec<(HeaderName, String)>,
   pub(super) proxy_request_header_replace: Vec<(HeaderName, String)>,
   pub(super) proxy_request_header_remove: Vec<HeaderName>,
+  pub(super) rewrite_host: bool,
 }
 
 impl<'a> ReverseProxyBuilder<'a> {
@@ -185,6 +186,12 @@ impl<'a> ReverseProxyBuilder<'a> {
     self
   }
 
+  /// Enables or disables `Host` header rewriting for non-HTTPS upstream requests.
+  pub fn rewrite_host(mut self, rewrite_host: bool) -> Self {
+    self.rewrite_host = rewrite_host;
+    self
+  }
+
   /// Builds a [`ReverseProxy`] from the configured options.
   pub fn build(mut self) -> ReverseProxy {
     let connections = self.connections.connections.clone();
@@ -264,6 +271,7 @@ impl<'a> ReverseProxyBuilder<'a> {
       headers_to_add: Arc::new(self.proxy_request_header.drain(..).collect()),
       headers_to_replace: Arc::new(self.proxy_request_header_replace.drain(..).collect()),
       headers_to_remove: Arc::new(self.proxy_request_header_remove.drain(..).collect()),
+      rewrite_host: self.rewrite_host,
       connections,
       #[cfg(unix)]
       unix_connections,

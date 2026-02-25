@@ -11,6 +11,7 @@ use crate::util::replace_header_placeholders;
 
 /// Constructs a proxy request based on the original request.
 #[inline]
+#[allow(clippy::too_many_arguments)]
 pub(super) fn construct_proxy_request_parts(
   mut request_parts: hyper::http::request::Parts,
   config: &ServerConfiguration,
@@ -19,6 +20,7 @@ pub(super) fn construct_proxy_request_parts(
   headers_to_add: &[(HeaderName, String)],
   headers_to_replace: &[(HeaderName, String)],
   headers_to_remove: &[HeaderName],
+  rewrite_host: bool,
 ) -> Result<hyper::http::request::Parts, Box<dyn Error + Send + Sync>> {
   let headers_to_add = HeaderMap::from_iter(headers_to_add.iter().cloned().filter_map(|(name, value)| {
     replace_header_placeholders(&value, &request_parts, Some(socket_data))
@@ -60,14 +62,16 @@ pub(super) fn construct_proxy_request_parts(
 
   let original_host = request_parts.headers.get(header::HOST).cloned();
 
-  match authority {
-    Some(authority) => {
-      request_parts
-        .headers
-        .insert(header::HOST, authority.to_string().parse()?);
-    }
-    None => {
-      request_parts.headers.remove(header::HOST);
+  if rewrite_host || proxy_request_url.scheme_str() == Some("https") {
+    match authority {
+      Some(authority) => {
+        request_parts
+          .headers
+          .insert(header::HOST, authority.to_string().parse()?);
+      }
+      None => {
+        request_parts.headers.remove(header::HOST);
+      }
     }
   }
 

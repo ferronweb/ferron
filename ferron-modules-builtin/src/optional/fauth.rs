@@ -96,7 +96,7 @@ impl ModuleLoader for ForwardedAuthenticationModuleLoader {
           if let Some((proxy_to, proxy_unix, keepalive_limit, keepalive_idle_timeout)) = proxy_to_raw {
             proxy_builder = proxy_builder.upstream(proxy_to, proxy_unix, keepalive_limit, keepalive_idle_timeout);
           }
-          let proxy = proxy_builder.build();
+          let proxy = proxy_builder.rewrite_host(true).build();
 
           Ok(Arc::new(ForwardedAuthenticationModule { proxy }))
         })?,

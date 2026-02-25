@@ -12,6 +12,10 @@
 - Support for dynamic SRV-based backend discovery for reverse proxy upstreams.
 - Support for Unix socket backends in the forwarded authentication module.
 
+### Changed
+
+- The `Host` header is now no longer rewritten to the proxy request URL's host by default when using plaintext HTTP for the backend servers.
+
 ### Deprecated
 
 - Rego-based subconditions are deprecated and will be removed in a future release.

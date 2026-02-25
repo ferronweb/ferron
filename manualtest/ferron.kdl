@@ -20,7 +20,6 @@ ferron.test {
 
 grafana.ferron.test {
   proxy "http://grafana:3000"
-  proxy_request_header_replace "Host" "{header:Host}" // To prevent Host header mismatches
 
   cache #false
 }

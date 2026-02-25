@@ -361,6 +361,7 @@ impl Connections {
       proxy_request_header: Vec::new(),
       proxy_request_header_replace: Vec::new(),
       proxy_request_header_remove: Vec::new(),
+      rewrite_host: false,
     }
   }
 }
@@ -389,6 +390,7 @@ pub struct ReverseProxy {
   headers_to_add: Arc<Vec<(HeaderName, String)>>,
   headers_to_replace: Arc<Vec<(HeaderName, String)>>,
   headers_to_remove: Arc<Vec<HeaderName>>,
+  rewrite_host: bool,
   connections: ConnectionPool,
   #[cfg(unix)]
   unix_connections: ConnectionPool,
@@ -416,6 +418,7 @@ impl ReverseProxy {
       headers_to_add: self.headers_to_add.clone(),
       headers_to_replace: self.headers_to_replace.clone(),
       headers_to_remove: self.headers_to_remove.clone(),
+      rewrite_host: self.rewrite_host,
       connections: self.connections.clone(),
       #[cfg(unix)]
       unix_connections: self.unix_connections.clone(),
@@ -444,6 +447,7 @@ pub struct ReverseProxyHandler {
   headers_to_add: Arc<Vec<(HeaderName, String)>>,
   headers_to_replace: Arc<Vec<(HeaderName, String)>>,
   headers_to_remove: Arc<Vec<HeaderName>>,
+  rewrite_host: bool,
   connections: ConnectionPool,
   #[cfg(unix)]
   unix_connections: ConnectionPool,
@@ -615,6 +619,7 @@ impl ModuleHandlers for ReverseProxyHandler {
           &self.headers_to_add,
           &self.headers_to_replace,
           &self.headers_to_remove,
+          self.rewrite_host,
         )?;
 
         let tracked_connection = if let Some(connection_track) = connection_track {

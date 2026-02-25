@@ -86,14 +86,6 @@ For HTTPS upstreams with private/self-signed certs:
 - Prefer fixing trust (install proper CA chain) rather than disabling verification.
 - `proxy_no_verification` can help confirm diagnosis, but keep it disabled in production unless you fully understand the risk.
 
-### Is the upstream app confused about hostnames?
-
-By default, Ferron rewrites `Host` for upstream requests and preserves the original host in `X-Forwarded-Host`.
-
-Some applications do not correctly handle `X-Forwarded-Host` and need the original `Host` header instead. In that case, set `proxy_request_header_replace "Host" "{header:Host}"`.
-
-Use this only when needed, and re-test app URL generation/host validation behavior after changing it.
-
 ### Timeout vs connection refused?
 
 - `connection refused` - wrong port/host, or service down.
