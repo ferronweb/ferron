@@ -10,7 +10,7 @@
 
 ## Ferron 1.3.8
 
-**Released in February 11, 2025**
+**Released in February 11, 2026**
 
 - Fixed a CGI, SCGI and FastCGI interoperability issue caused by the wrong value of the "HTTPS" variable.
 
