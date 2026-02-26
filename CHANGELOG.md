@@ -1,8 +1,8 @@
 # Ferron 1.x change log
 
-## Ferron UNRELEASED
+## Ferron 1.3.9
 
-**Not yet released**
+**Released in February 26, 2026**
 
 ### Fixed
 
