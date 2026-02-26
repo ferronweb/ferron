@@ -168,6 +168,9 @@ async fn tcp_listener_fn(
   }
   listen_error_tx.send(None).await.unwrap_or_default();
 
+  #[cfg(unix)]
+  let mut handle_exhaustion_backoff = Duration::from_millis(10);
+
   loop {
     let (tcp, remote_address) = match crate::runtime::select! {
       result = listener.accept() => {
@@ -177,7 +180,10 @@ async fn tcp_listener_fn(
         return Ok(());
       }
     } {
-      Ok(data) => data,
+      Ok(data) => {
+        handle_exhaustion_backoff = Duration::from_millis(10);
+        data
+      }
       Err(err) => {
         if let Some(logging_tx) = &logging_tx {
           logging_tx
@@ -185,6 +191,17 @@ async fn tcp_listener_fn(
             .await
             .unwrap_or_default();
         }
+
+        // 24 = EMFILE
+        #[cfg(unix)]
+        if err.raw_os_error() == Some(24) {
+          crate::runtime::sleep(handle_exhaustion_backoff).await;
+          handle_exhaustion_backoff *= 2;
+          if handle_exhaustion_backoff > Duration::from_secs(1) {
+            handle_exhaustion_backoff = Duration::from_secs(1);
+          }
+        }
+
         continue;
       }
     };
