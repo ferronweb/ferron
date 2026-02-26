@@ -1,7 +1,5 @@
 # Ferron 1.x change log
 
-[View changelog for current major version](https://ferron.sh/changelog)
-
 ## Ferron UNRELEASED
 
 **Not yet released**
