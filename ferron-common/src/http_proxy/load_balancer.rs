@@ -159,3 +159,102 @@ pub(super) async fn resolve_upstreams(
   }
   upstreams
 }
+
+#[cfg(test)]
+mod tests {
+  use std::collections::HashMap;
+  use std::future::Future;
+  use std::sync::atomic::AtomicUsize;
+  use std::time::Duration;
+
+  use super::*;
+
+  fn run_async<T>(future: impl Future<Output = T>) -> T {
+    tokio::runtime::Builder::new_current_thread()
+      .enable_all()
+      .build()
+      .expect("runtime should be created")
+      .block_on(future)
+  }
+
+  fn upstream(proxy_to: &str) -> UpstreamInner {
+    UpstreamInner {
+      proxy_to: proxy_to.to_string(),
+      proxy_unix: None,
+    }
+  }
+
+  #[test]
+  fn round_robin_cycles_through_backends() {
+    run_async(async {
+      let backends = vec![
+        (upstream("http://backend-1"), None, None),
+        (upstream("http://backend-2"), None, None),
+        (upstream("http://backend-3"), None, None),
+      ];
+      let algorithm = LoadBalancerAlgorithmInner::RoundRobin(Arc::new(AtomicUsize::new(0)));
+
+      assert_eq!(select_backend_index(&algorithm, &backends).await, 0);
+      assert_eq!(select_backend_index(&algorithm, &backends).await, 1);
+      assert_eq!(select_backend_index(&algorithm, &backends).await, 2);
+      assert_eq!(select_backend_index(&algorithm, &backends).await, 0);
+    });
+  }
+
+  #[test]
+  fn least_connections_picks_backend_with_lowest_connection_count() {
+    run_async(async {
+      let heavily_loaded = upstream("http://backend-1");
+      let least_loaded = upstream("http://backend-2");
+      let moderately_loaded = upstream("http://backend-3");
+
+      let heavily_loaded_tracker = Arc::new(());
+      let _heavy_1 = heavily_loaded_tracker.clone();
+      let _heavy_2 = heavily_loaded_tracker.clone();
+      let moderately_loaded_tracker = Arc::new(());
+      let _moderate_1 = moderately_loaded_tracker.clone();
+
+      let connection_track = Arc::new(RwLock::new(HashMap::new()));
+      {
+        let mut connection_track_write = connection_track.write().await;
+        connection_track_write.insert(heavily_loaded.clone(), heavily_loaded_tracker);
+        connection_track_write.insert(least_loaded.clone(), Arc::new(()));
+        connection_track_write.insert(moderately_loaded.clone(), moderately_loaded_tracker);
+      }
+
+      let backends = vec![
+        (heavily_loaded, None, None),
+        (least_loaded, None, None),
+        (moderately_loaded, None, None),
+      ];
+      let algorithm = LoadBalancerAlgorithmInner::LeastConnections(connection_track);
+
+      for _ in 0..32 {
+        let selected_index = select_backend_index(&algorithm, &backends).await;
+        assert_eq!(selected_index, 1);
+      }
+    });
+  }
+
+  #[test]
+  fn determine_proxy_to_skips_unhealthy_backend_when_alternatives_exist() {
+    run_async(async {
+      let unhealthy = upstream("http://backend-unhealthy");
+      let healthy = upstream("http://backend-healthy");
+      let mut proxy_to_vector = vec![(unhealthy.clone(), None, None), (healthy.clone(), None, None)];
+
+      let failed_backends = RwLock::new(TtlCache::new(Duration::from_secs(60)));
+      {
+        let mut failed_backends_write = failed_backends.write().await;
+        failed_backends_write.insert(unhealthy, 4);
+      }
+
+      let algorithm = LoadBalancerAlgorithmInner::RoundRobin(Arc::new(AtomicUsize::new(0)));
+      let selected = determine_proxy_to(&mut proxy_to_vector, &failed_backends, true, 3, &algorithm).await;
+
+      assert!(selected.is_some());
+      let (selected_upstream, _, _) = selected.expect("a backend should be selected");
+      assert!(selected_upstream == healthy);
+    });
+  }
+}
