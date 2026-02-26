@@ -17,7 +17,6 @@ use std::error::Error;
 use std::fmt::Debug;
 #[cfg(feature = "runtime-monoio")]
 use std::future::Future;
-#[cfg(feature = "runtime-monoio")]
 use std::io;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 #[cfg(feature = "runtime-monoio")]
@@ -42,6 +41,8 @@ use send_wrapper::SendWrapper;
 use tokio_util::sync::CancellationToken;
 
 use crate::listener_handler_communication::{Connection, ConnectionData};
+
+type ListenerError = Box<dyn Error + Send + Sync>;
 
 /// A timer for Quinn that utilizes Monoio's timer.
 #[cfg(feature = "runtime-monoio")]
@@ -88,6 +89,51 @@ impl Runtime for EnterTokioRuntime {
 
   fn wrap_udp_socket(&self, sock: std::net::UdpSocket) -> io::Result<Arc<dyn AsyncUdpSocket>> {
     quinn::TokioRuntime::wrap_udp_socket(&quinn::TokioRuntime, sock)
+  }
+}
+
+#[inline]
+fn build_quic_server_config(tls_config: Arc<ServerConfig>) -> Result<quinn::ServerConfig, ListenerError> {
+  let quic_server_config = QuicServerConfig::try_from(tls_config)
+    .map_err(|err| anyhow::anyhow!("Cannot prepare the QUIC server configuration: {err}"))?;
+  Ok(quinn::ServerConfig::with_crypto(Arc::new(quic_server_config)))
+}
+
+#[inline]
+fn bind_udp_socket(address: SocketAddr) -> io::Result<std::net::UdpSocket> {
+  // Create a new socket
+  let listener_socket2 = socket2::Socket::new(
+    if address.is_ipv6() {
+      socket2::Domain::IPV6
+    } else {
+      socket2::Domain::IPV4
+    },
+    socket2::Type::DGRAM,
+    Some(socket2::Protocol::UDP),
+  )?;
+
+  // Set socket options
+  if address.is_ipv6() {
+    listener_socket2.set_only_v6(false).unwrap_or_default();
+  }
+
+  // Bind the socket to the address
+  listener_socket2.bind(&address.into())?;
+
+  // Wrap the socket into a UdpSocket
+  Ok(listener_socket2.into())
+}
+
+#[inline]
+async fn log_accept_closed(logging_tx: &Option<Sender<LogMessage>>) {
+  if let Some(logging_tx) = logging_tx {
+    logging_tx
+      .send(LogMessage::new(
+        "HTTP/3 connections can't be accepted anymore".to_string(),
+        true,
+      ))
+      .await
+      .unwrap_or_default();
   }
 }
 
@@ -149,45 +195,18 @@ async fn quic_listener_fn(
   address: SocketAddr,
   tls_config: Arc<ServerConfig>,
   tx: Sender<ConnectionData>,
-  listen_error_tx: &Sender<Option<Box<dyn Error + Send + Sync>>>,
+  listen_error_tx: &Sender<Option<ListenerError>>,
   logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
   shutdown_rx: CancellationToken,
   rustls_config_rx: Receiver<Arc<ServerConfig>>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
-  let quic_server_config = Arc::new(match QuicServerConfig::try_from(tls_config) {
-    Ok(config) => config,
-    Err(err) => Err(anyhow::anyhow!("Cannot prepare the QUIC server configuration: {}", err))?,
-  });
-  let server_config = quinn::ServerConfig::with_crypto(quic_server_config);
+) -> Result<(), ListenerError> {
+  let server_config = build_quic_server_config(tls_config)?;
   let udp_port = address.port();
   let mut udp_socket_result;
   let mut tries: u64 = 0;
   loop {
-    udp_socket_result = (|| {
-      // Create a new socket
-      let listener_socket2 = socket2::Socket::new(
-        if address.is_ipv6() {
-          socket2::Domain::IPV6
-        } else {
-          socket2::Domain::IPV4
-        },
-        socket2::Type::DGRAM,
-        Some(socket2::Protocol::UDP),
-      )?;
-
-      // Set socket options
-      if address.is_ipv6() {
-        listener_socket2.set_only_v6(false).unwrap_or_default();
-      }
-
-      // Bind the socket to the address
-      listener_socket2.bind(&address.into())?;
-
-      // Wrap the socket into a UdpSocket
-      let listener_socket: std::net::UdpSocket = listener_socket2.into();
-      Ok::<_, std::io::Error>(listener_socket)
-    })();
+    udp_socket_result = bind_udp_socket(address);
     if first_startup || udp_socket_result.is_ok() {
       break;
     }
@@ -206,7 +225,7 @@ async fn quic_listener_fn(
   }
   let udp_socket = match udp_socket_result {
     Ok(socket) => socket,
-    Err(err) => Err(anyhow::anyhow!("Cannot listen to HTTP/3 port: {}", err))?,
+    Err(err) => Err(anyhow::anyhow!("Cannot listen to HTTP/3 port: {err}"))?,
   };
   let endpoint = match quinn::Endpoint::new(quinn::EndpointConfig::default(), Some(server_config), udp_socket, {
     #[cfg(feature = "runtime-monoio")]
@@ -217,63 +236,51 @@ async fn quic_listener_fn(
     runtime
   }) {
     Ok(endpoint) => endpoint,
-    Err(err) => Err(anyhow::anyhow!("Cannot listen to HTTP/3 port: {}", err))?,
+    Err(err) => Err(anyhow::anyhow!("Cannot listen to HTTP/3 port: {err}"))?,
   };
   println!("HTTP/3 server is listening on {address}...");
   listen_error_tx.send(None).await.unwrap_or_default();
 
   loop {
-    let rustls_receive_future = async {
-      if let Ok(rustls_server_config) = rustls_config_rx.recv().await {
-        rustls_server_config
-      } else {
-        futures_util::future::pending().await
-      }
-    };
+    let rustls_receive_future = async { rustls_config_rx.recv().await.ok() };
 
-    let new_conn = crate::runtime::select! {
+    let connection = crate::runtime::select! {
       result = endpoint.accept() => {
-          match result {
-              Some(conn) => conn,
-              None => {
-                  if let Some(logging_tx) = &logging_tx {
-                      logging_tx
-                          .send(LogMessage::new(
-                              "HTTP/3 connections can't be accepted anymore".to_string(),
-                              true,
-                          ))
-                          .await
-                          .unwrap_or_default();
-                  }
-                  break;
-              }
+        match result {
+          Some(conn) => conn,
+          None => {
+            log_accept_closed(&logging_tx).await;
+            break;
           }
+        }
       }
       tls_config = rustls_receive_future => {
-          let quic_server_config = Arc::new(match QuicServerConfig::try_from(tls_config) {
-              Ok(config) => config,
-              Err(_) => continue,
-          });
-          let server_config = quinn::ServerConfig::with_crypto(quic_server_config);
+        let Some(tls_config) = tls_config else {
+          futures_util::future::pending::<()>().await;
+          unreachable!();
+        };
+
+        if let Ok(server_config) = build_quic_server_config(tls_config) {
           endpoint.set_server_config(Some(server_config));
-          continue;
+        }
+        continue;
       }
       _ = shutdown_rx.cancelled() => {
-          break;
+        break;
       }
     };
-    let remote_address = new_conn.remote_address();
+    let remote_address = connection.remote_address();
     let local_address = SocketAddr::new(
-      new_conn.local_ip().unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED)),
+      connection.local_ip().unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED)),
       udp_port,
     );
     let quic_data = ConnectionData {
-      connection: Connection::Quic(new_conn),
+      connection: Connection::Quic(connection),
       client_address: remote_address,
       server_address: local_address,
     };
     let quic_tx = tx.clone();
-    tokio::spawn(async move {
+    crate::runtime::spawn(async move {
       quic_tx.send(quic_data).await.unwrap_or_default();
     });
   }

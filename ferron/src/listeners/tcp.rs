@@ -11,6 +11,92 @@ use tokio_util::sync::CancellationToken;
 
 use crate::listener_handler_communication::{Connection, ConnectionData};
 
+type ListenerError = Box<dyn Error + Send + Sync>;
+type ListenerResult = Result<TcpListener, std::io::Error>;
+
+fn protocol_name(encrypted: bool) -> &'static str {
+  if encrypted {
+    "HTTPS"
+  } else {
+    "HTTP"
+  }
+}
+
+fn listen_error_message(encrypted: bool, err: &std::io::Error) -> anyhow::Error {
+  anyhow::anyhow!("Cannot listen to {} port: {err}", protocol_name(encrypted))
+}
+
+fn log_retry(encrypted: bool, tries: u64, duration: Duration) {
+  println!(
+    "{} port is used at try #{tries}, retrying in {duration:?}...",
+    protocol_name(encrypted)
+  );
+}
+
+fn log_skip(encrypted: bool, tries: u64) {
+  println!("{} port is used at try #{tries}, skipping...", protocol_name(encrypted));
+}
+
+fn log_listening(encrypted: bool, address: SocketAddr) {
+  println!("{} server is listening on {address}...", protocol_name(encrypted));
+}
+
+fn build_tcp_listener(address: SocketAddr, tcp_buffer_sizes: (Option<usize>, Option<usize>)) -> ListenerResult {
+  // Create a new socket
+  let listener_socket2 = socket2::Socket::new(
+    if address.is_ipv6() {
+      socket2::Domain::IPV6
+    } else {
+      socket2::Domain::IPV4
+    },
+    socket2::Type::STREAM,
+    Some(socket2::Protocol::TCP),
+  )?;
+
+  // Set socket options
+  listener_socket2.set_reuse_address(!cfg!(windows)).unwrap_or_default();
+  #[cfg(unix)]
+  listener_socket2.set_reuse_port(false).unwrap_or_default();
+  if let Some(tcp_send_buffer_size) = tcp_buffer_sizes.0 {
+    listener_socket2
+      .set_send_buffer_size(tcp_send_buffer_size)
+      .unwrap_or_default();
+  }
+  if let Some(tcp_recv_buffer_size) = tcp_buffer_sizes.1 {
+    listener_socket2
+      .set_recv_buffer_size(tcp_recv_buffer_size)
+      .unwrap_or_default();
+  }
+  if address.is_ipv6() {
+    listener_socket2.set_only_v6(false).unwrap_or_default();
+  }
+
+  #[cfg(feature = "runtime-monoio")]
+  let is_poll_io = monoio::utils::is_legacy();
+  #[cfg(feature = "runtime-tokio")]
+  let is_poll_io = true;
+
+  if is_poll_io {
+    listener_socket2.set_nonblocking(true).unwrap_or_default();
+  }
+
+  // Bind the socket to the address
+  listener_socket2.bind(&address.into())?;
+  listener_socket2.listen(-1)?;
+
+  // Wrap the socket into a TcpListener
+  TcpListener::from_std(listener_socket2.into())
+}
+
+async fn log_accept_error(logging_tx: &Option<Sender<LogMessage>>, err: &std::io::Error) {
+  if let Some(logging_tx) = logging_tx {
+    logging_tx
+      .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
+      .await
+      .unwrap_or_default();
+  }
+}
+
 /// Creates a TCP listener
 #[allow(clippy::too_many_arguments)]
 pub fn create_tcp_listener(
@@ -22,7 +108,7 @@ pub fn create_tcp_listener(
   first_startup: bool,
   tcp_buffer_sizes: (Option<usize>, Option<usize>),
   io_uring_disabled: Sender<Option<std::io::Error>>,
-) -> Result<CancellationToken, Box<dyn Error + Send + Sync>> {
+) -> Result<CancellationToken, ListenerError> {
   let shutdown_tx = CancellationToken::new();
   let shutdown_rx = shutdown_tx.clone();
   let (listen_error_tx, listen_error_rx) = async_channel::unbounded();
@@ -74,98 +160,35 @@ async fn tcp_listener_fn(
   address: SocketAddr,
   encrypted: bool,
   tx: Sender<ConnectionData>,
-  listen_error_tx: &Sender<Option<Box<dyn Error + Send + Sync>>>,
+  listen_error_tx: &Sender<Option<ListenerError>>,
   logging_tx: Option<Sender<LogMessage>>,
   first_startup: bool,
   tcp_buffer_sizes: (Option<usize>, Option<usize>),
   shutdown_rx: CancellationToken,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> Result<(), ListenerError> {
   let mut listener_result;
   let mut tries: u64 = 0;
   loop {
-    listener_result = (|| {
-      // Create a new socket
-      let listener_socket2 = socket2::Socket::new(
-        if address.is_ipv6() {
-          socket2::Domain::IPV6
-        } else {
-          socket2::Domain::IPV4
-        },
-        socket2::Type::STREAM,
-        Some(socket2::Protocol::TCP),
-      )?;
-
-      // Set socket options
-      listener_socket2.set_reuse_address(!cfg!(windows)).unwrap_or_default();
-      #[cfg(unix)]
-      listener_socket2.set_reuse_port(false).unwrap_or_default();
-      if let Some(tcp_send_buffer_size) = tcp_buffer_sizes.0 {
-        listener_socket2
-          .set_send_buffer_size(tcp_send_buffer_size)
-          .unwrap_or_default();
-      }
-      if let Some(tcp_recv_buffer_size) = tcp_buffer_sizes.1 {
-        listener_socket2
-          .set_recv_buffer_size(tcp_recv_buffer_size)
-          .unwrap_or_default();
-      }
-      if address.is_ipv6() {
-        listener_socket2.set_only_v6(false).unwrap_or_default();
-      }
-
-      #[cfg(feature = "runtime-monoio")]
-      let is_poll_io = monoio::utils::is_legacy();
-      #[cfg(feature = "runtime-tokio")]
-      let is_poll_io = true;
-
-      if is_poll_io {
-        listener_socket2.set_nonblocking(true).unwrap_or_default();
-      }
-
-      // Bind the socket to the address
-      listener_socket2.bind(&address.into())?;
-      listener_socket2.listen(-1)?;
-
-      // Wrap the socket into a TcpListener
-      TcpListener::from_std(listener_socket2.into())
-    })();
+    listener_result = build_tcp_listener(address, tcp_buffer_sizes);
     if first_startup || listener_result.is_ok() {
       break;
     }
     tries += 1;
     if tries >= 10 {
-      if encrypted {
-        println!("HTTPS port is used at try #{tries}, skipping...");
-      } else {
-        println!("HTTP port is used at try #{tries}, skipping...");
-      }
+      log_skip(encrypted, tries);
       listen_error_tx.send(None).await.unwrap_or_default();
       break;
     }
     let duration = Duration::from_millis(1000);
-    if encrypted {
-      println!("HTTPS port is used at try #{tries}, retrying in {duration:?}...");
-    } else {
-      println!("HTTP port is used at try #{tries}, retrying in {duration:?}...");
-    }
+    log_retry(encrypted, tries, duration);
     crate::runtime::sleep(duration).await;
   }
   let listener = match listener_result {
     Ok(listener) => listener,
-    Err(err) => {
-      if encrypted {
-        Err(anyhow::anyhow!(format!("Cannot listen to HTTPS port: {}", err)))?
-      } else {
-        Err(anyhow::anyhow!(format!("Cannot listen to HTTP port: {}", err)))?
-      }
-    }
+    Err(err) => Err(listen_error_message(encrypted, &err))?,
   };
 
-  if encrypted {
-    println!("HTTPS server is listening on {address}...");
-  } else {
-    println!("HTTP server is listening on {address}...");
-  }
+  log_listening(encrypted, address);
   listen_error_tx.send(None).await.unwrap_or_default();
 
   #[cfg(unix)]
@@ -181,16 +204,14 @@ async fn tcp_listener_fn(
       }
     } {
       Ok(data) => {
-        handle_exhaustion_backoff = Duration::from_millis(10);
+        #[cfg(unix)]
+        {
+          handle_exhaustion_backoff = Duration::from_millis(10);
+        }
         data
       }
       Err(err) => {
-        if let Some(logging_tx) = &logging_tx {
-          logging_tx
-            .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
-            .await
-            .unwrap_or_default();
-        }
+        log_accept_error(&logging_tx, &err).await;
 
         // 24 = EMFILE
         #[cfg(unix)]
@@ -208,12 +229,7 @@ async fn tcp_listener_fn(
     let local_address: SocketAddr = match tcp.local_addr() {
       Ok(data) => data,
       Err(err) => {
-        if let Some(logging_tx) = &logging_tx {
-          logging_tx
-            .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
-            .await
-            .unwrap_or_default();
-        }
+        log_accept_error(&logging_tx, &err).await;
         continue;
       }
     };
