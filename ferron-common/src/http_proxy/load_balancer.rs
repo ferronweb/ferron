@@ -63,9 +63,11 @@ async fn select_backend_index(
           0
         };
         if min_connections.is_none_or(|min| connection_count < min) {
+          // Less connections than minimum
           min_indexes = vec![index];
           min_connections = Some(connection_count);
-        } else {
+        } else if min_connections == Some(connection_count) {
+          // Same amount of connections
           min_indexes.push(index);
         }
       }
