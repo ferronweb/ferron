@@ -13,6 +13,8 @@ async fn select_backend_index(
 ) -> usize {
   match load_balancer_algorithm {
     LoadBalancerAlgorithmInner::TwoRandomChoices(connection_track) => {
+      // *1 - random choice #1
+      // *2 - random choice #2
       let random_choice1 = rand::random_range(..backends.len());
       let mut random_choice2 = if backends.len() > 1 {
         rand::random_range(..(backends.len() - 1))
@@ -72,12 +74,13 @@ async fn select_backend_index(
         }
       }
       match min_indexes.len() {
-        0 => 0,
+        0 => 0, // Possible edge case
         1 => min_indexes[0],
         _ => min_indexes[rand::random_range(0..min_indexes.len())],
       }
     }
     LoadBalancerAlgorithmInner::RoundRobin(round_robin_index) => {
+      // Add to round robin index, then modulo the length of backends to prevent overflow
       round_robin_index.fetch_add(1, Ordering::Relaxed) % backends.len()
     }
     LoadBalancerAlgorithmInner::Random => rand::random_range(..backends.len()),
