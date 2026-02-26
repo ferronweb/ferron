@@ -80,6 +80,7 @@ pub(super) fn construct_proxy_request_parts(
     if connection_str
       .to_lowercase()
       .split(",")
+      .map(|c| c.trim())
       .all(|c| c != "keep-alive" && c != "upgrade" && c != "close")
     {
       request_parts
