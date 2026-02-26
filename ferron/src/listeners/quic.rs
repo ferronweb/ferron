@@ -221,7 +221,7 @@ async fn quic_listener_fn(
     if shutdown_rx.is_cancelled() {
       break;
     }
-    crate::runtime::sleep(duration).await;
+    tokio::time::sleep(duration).await;
   }
   let udp_socket = match udp_socket_result {
     Ok(socket) => socket,
@@ -244,7 +244,7 @@ async fn quic_listener_fn(
   loop {
     let rustls_receive_future = async { rustls_config_rx.recv().await.ok() };
 
-    let connection = crate::runtime::select! {
+    let connection = tokio::select! {
       result = endpoint.accept() => {
         match result {
           Some(conn) => conn,
@@ -280,7 +280,7 @@ async fn quic_listener_fn(
       server_address: local_address,
     };
     let quic_tx = tx.clone();
-    crate::runtime::spawn(async move {
+    tokio::spawn(async move {
       quic_tx.send(quic_data).await.unwrap_or_default();
     });
   }
