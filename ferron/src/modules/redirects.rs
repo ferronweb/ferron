@@ -153,7 +153,7 @@ impl ServerModuleHandlers for RedirectsModuleHandlers {
                 })
                 .authority(match host_port {
                   Some(port) => format!("www.{host_name}:{port}"),
-                  None => host_name,
+                  None => format!("www.{host_name}"),
                 })
                 .path_and_query(path_and_query)
                 .build()?;

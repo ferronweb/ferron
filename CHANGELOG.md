@@ -2,6 +2,14 @@
 
 [View changelog for current major version](https://ferron.sh/changelog)
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+- Redirect loop when using `wwwredirect` directive and requesting with a hostname without a port.
+
 ## Ferron 1.3.8
 
 **Released in February 11, 2025**
