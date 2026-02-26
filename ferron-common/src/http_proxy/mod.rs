@@ -180,7 +180,7 @@ impl Upstream {
               .map(|(upstream, weight, _)| (upstream, weight))
               .collect::<Vec<_>>();
             let cumulative_weight: u64 = filtered_srv_upstreams.iter().map(|(_, weight)| *weight as u64).sum();
-            let random_weight = if cumulative_weight == 0 {
+            let mut random_weight = if cumulative_weight == 0 {
               // Prevent empty range sampling panics
               0
             } else {
@@ -191,6 +191,7 @@ impl Upstream {
               if random_weight <= weight as u64 {
                 return vec![upstream.0];
               }
+              random_weight -= weight as u64;
             }
             vec![]
           })
