@@ -14,6 +14,7 @@ use crate::listener_handler_communication::{Connection, ConnectionData};
 type ListenerError = Box<dyn Error + Send + Sync>;
 type ListenerResult = Result<TcpListener, std::io::Error>;
 
+#[inline]
 fn protocol_name(encrypted: bool) -> &'static str {
   if encrypted {
     "HTTPS"
@@ -22,10 +23,12 @@ fn protocol_name(encrypted: bool) -> &'static str {
   }
 }
 
+#[inline]
 fn listen_error_message(encrypted: bool, err: &std::io::Error) -> anyhow::Error {
   anyhow::anyhow!("Cannot listen to {} port: {err}", protocol_name(encrypted))
 }
 
+#[inline]
 fn log_retry(encrypted: bool, tries: u64, duration: Duration) {
   println!(
     "{} port is used at try #{tries}, retrying in {duration:?}...",
@@ -33,14 +36,17 @@ fn log_retry(encrypted: bool, tries: u64, duration: Duration) {
   );
 }
 
+#[inline]
 fn log_skip(encrypted: bool, tries: u64) {
   println!("{} port is used at try #{tries}, skipping...", protocol_name(encrypted));
 }
 
+#[inline]
 fn log_listening(encrypted: bool, address: SocketAddr) {
   println!("{} server is listening on {address}...", protocol_name(encrypted));
 }
 
+#[inline]
 fn build_tcp_listener(address: SocketAddr, tcp_buffer_sizes: (Option<usize>, Option<usize>)) -> ListenerResult {
   // Create a new socket
   let listener_socket2 = socket2::Socket::new(
@@ -88,6 +94,7 @@ fn build_tcp_listener(address: SocketAddr, tcp_buffer_sizes: (Option<usize>, Opt
   TcpListener::from_std(listener_socket2.into())
 }
 
+#[inline]
 async fn log_accept_error(logging_tx: &Option<Sender<LogMessage>>, err: &std::io::Error) {
   if let Some(logging_tx) = logging_tx {
     logging_tx
