@@ -41,7 +41,7 @@ monoio = { version = "0.2.4", optional = true, features = [
 monoio-compat = { version = "0.2.2", optional = true, features = ["hyper"] }
 async-trait = "0.1.88"
 futures-util = { version = "0.3.31", features = ["sink"] }
-pin-project-lite = "0.2.16"
+pin-project-lite = "0.2.17"
 tokio-util = { version = "0.7.15", features = ["compat"] }
 
 # Process & System Integration
