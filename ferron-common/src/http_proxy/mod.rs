@@ -2,6 +2,7 @@ mod builder;
 mod load_balancer;
 mod proxy_client;
 mod request_parts;
+#[cfg(feature = "runtime-monoio")]
 mod send_net_io;
 mod send_request;
 
