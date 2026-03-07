@@ -15,7 +15,9 @@ use hyper_util::rt::{TokioExecutor, TokioIo};
 use monoio_compat::hyper::{MonoioExecutor, MonoioIo};
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use super::{ConnectionPoolItem, DropGuard};
+use super::ConnectionPoolItem;
+#[cfg(feature = "runtime-monoio")]
+use super::DropGuard;
 use crate::http_proxy::send_request::{SendRequest, SendRequestWrapper};
 use crate::logging::ErrorLogger;
 use crate::modules::ResponseData;

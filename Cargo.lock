@@ -1452,6 +1452,7 @@ dependencies = [
  "hickory-resolver",
  "http-body-util",
  "hyper",
+ "hyper-util",
  "monoio",
  "monoio-compat",
  "ppp",
