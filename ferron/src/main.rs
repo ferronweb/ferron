@@ -44,6 +44,7 @@ use crate::listener_handler_communication::ConnectionData;
 use crate::listeners::{create_quic_listener, create_tcp_listener};
 use crate::setup::acme::background_acme_task;
 use crate::setup::cli::{Command, ConfigAdapter, FerronArgs, LogOutput};
+use crate::setup::ocsp::OcspStapler;
 use crate::setup::tls::{
   handle_automatic_tls, handle_manual_tls, handle_nonencrypted_ports, manual_tls_entry, read_default_port,
   resolve_sni_hostname, should_skip_server, TlsBuildContext,
@@ -482,10 +483,11 @@ fn before_starting_server(
           .and_then(|v| v.as_bool())
           .unwrap_or(true);
         let resolver: Arc<dyn ResolvesServerCert> = if enable_ocsp_stapling {
-          // The `ocsp_stapler` crate is dependent on Tokio, so we create a stapler in the Tokio runtime...
-          // If this wasn't wrapped in a Tokio runtime, creation of a OCSP stapler would just cause a panic.
-          let stapler =
-            secondary_runtime_ref.block_on(async move { ocsp_stapler::Stapler::new(Arc::new(sni_resolver)) });
+          let logging_tx = global_configuration
+            .as_ref()
+            .map_or(vec![], |c| c.observability.log_channels.clone());
+
+          let stapler = OcspStapler::new(Arc::new(sni_resolver), secondary_runtime_ref, logging_tx);
           if let Some(certified_keys_to_preload) = certified_keys_to_preload.get(&tls_port) {
             for certified_key in certified_keys_to_preload {
               stapler.preload(certified_key.clone());
