@@ -4,9 +4,9 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
+use crate::util::{Cachability, CacheControl};
 use async_trait::async_trait;
 use bytes::Bytes;
-use cache_control::{Cachability, CacheControl};
 use ferron_common::observability::{Metric, MetricAttributeValue, MetricType, MetricValue};
 use futures_util::stream::{StreamExt, TryStreamExt};
 use http_body_util::combinators::BoxBody;

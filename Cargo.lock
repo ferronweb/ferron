@@ -825,11 +825,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cache_control"
-version = "0.2.0"
-source = "git+https://github.com/DorianNiemiecSVRJS/rust-cache-control.git#2229d7b60c30eb1291654e2a8935c3c0ae9948e7"
-
-[[package]]
 name = "cc"
 version = "1.2.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1510,7 +1505,6 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
- "cache_control",
  "cegla",
  "cegla-cgi",
  "cegla-scgi",
