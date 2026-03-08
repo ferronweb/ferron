@@ -8,6 +8,7 @@
 
 - Configuration directive for aborting an HTTP request.
 - Support for dynamic SRV-based backend discovery for reverse proxy upstreams.
+- Support for file size-based log rotation.
 - Support for Unix socket backends in the forwarded authentication module.
 
 ### Changed

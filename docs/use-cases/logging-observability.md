@@ -7,7 +7,7 @@ Ferron supports multiple observability outputs, so you can start with local log 
 
 This page focuses on common deployment patterns. For directive-level details, see [Configuration: observability & logging](/docs/configuration/observability-logging) and [Observability backends reference](/docs/reference/observability).
 
-## 1. Basic production logs to files
+## Basic production logs to files
 
 Use this when running Ferron directly on a VM or bare metal and collecting logs from disk.
 
@@ -23,7 +23,7 @@ example.com {
 }
 ```
 
-## 2. Container-friendly logging to stdout/stderr
+## Container-friendly logging to stdout/stderr
 
 Use this when running Ferron in containers (Docker, Kubernetes), where platform log collectors read process streams.
 
@@ -41,7 +41,7 @@ example.com {
 
 If your platform expects everything on one stream, you can use `log_stderr` and `error_log_stderr`, or `log_stdout` and `error_log_stdout`.
 
-## 3. Centralized observability with OTLP
+## Centralized observability with OTLP
 
 Use this when shipping logs, metrics, and traces to an OpenTelemetry collector.
 
@@ -67,7 +67,7 @@ globals {
 }
 ```
 
-## 4. Hybrid setup: local fallback + OTLP
+## Hybrid setup: local fallback + OTLP
 
 A practical migration strategy is to keep file logs for local troubleshooting while also exporting telemetry centrally.
 
@@ -77,6 +77,58 @@ globals {
     otlp_logs "http://otel-collector.internal:4317/v1/logs" protocol="grpc"
     otlp_metrics "http://otel-collector.internal:4317/v1/metrics" protocol="grpc"
     otlp_traces "http://otel-collector.internal:4317/v1/traces" protocol="grpc"
+}
+
+example.com {
+    log "/var/log/ferron/example.com.access.log"
+    error_log "/var/log/ferron/example.com.error.log"
+}
+```
+
+## Log rotation for file-based logging
+
+Use this when you need to manage disk space usage for log files by rotating and retaining them based on size and count.
+
+Log rotation directives are available in Ferron UNRELEASED and newer.
+
+```kdl
+globals {
+    log_date_format "%d/%b/%Y:%H:%M:%S %z"
+    log_format "{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""
+
+    // Rotate access logs when they reach 100MB, keep 5 rotated files
+    log_rotate_size 104857600  // 100 * 1024 * 1024
+    log_rotate_keep 5
+
+    // Rotate error logs when they reach 50MB, keep 3 rotated files
+    error_log_rotate_size 52428800  // 50 * 1024 * 1024
+    error_log_rotate_keep 3
+}
+
+example.com {
+    log "/var/log/ferron/example.com.access.log"
+    error_log "/var/log/ferron/example.com.error.log"
+}
+```
+
+## Hybrid setup with log rotation and OTLP
+
+You can combine log rotation with OTLP export for a robust observability setup:
+
+```kdl
+globals {
+    otlp_service_name "ferron-prod"
+    otlp_logs "http://otel-collector.internal:4317/v1/logs" protocol="grpc"
+    otlp_metrics "http://otel-collector.internal:4317/v1/metrics" protocol="grpc"
+    otlp_traces "http://otel-collector.internal:4317/v1/traces" protocol="grpc"
+
+    // Rotate access logs when they reach 100MB, keep 5 rotated files
+    log_rotate_size 104857600
+    log_rotate_keep 5
+
+    // Rotate error logs when they reach 50MB, keep 3 rotated files
+    error_log_rotate_size 52428800
+    error_log_rotate_keep 3
 }
 
 example.com {

@@ -35,7 +35,15 @@ This page describes KDL directives for configuring Ferron logging outputs, forma
   - This directive specifies whether to enable logging error logs to the standard output stream. Default: `error_log_stdout #false`
 - `error_log_stderr [enable_error_log_stderr: bool]` (_stdlog_ observability backend; Ferron 2.5.0 or newer)
   - This directive specifies whether to enable logging error logs to the standard error stream. Default: `error_log_stderr #false`
-
+- `log_rotate_size <log_rotate_size: integer|null>` (_log_ observability backend; Ferron UNRELEASED or newer)
+  - This directive specifies the maximum size (in bytes) of an access log file before it is rotated. After rotation, previous log files are renamed with a numeric suffix. If the value is `#null`, log rotation is disabled. Default: `log_rotate_size #null`
+- `log_rotate_keep <log_rotate_keep: integer|null>` (_log_ observability backend; Ferron UNRELEASED or newer)
+  - This directive specifies the maximum number of access log files to keep. If the value is `#null`, log rotation is disabled. Default: `log_rotate_count #null`
+- `error_log_rotate_size <error_log_rotate_size: integer|null>` (_log_ observability backend; Ferron UNRELEASED or newer)
+  - This directive specifies the maximum size (in bytes) of an error log file before it is rotated. After rotation, previous log files are renamed with a numeric suffix. If the value is `#null`, log rotation is disabled. Default: `error_log_rotate_size #null`
+- `error_log_rotate_keep <error_log_rotate_keep: integer|null>` (_log_ observability backend; Ferron UNRELEASED or newer)
+  - This directive specifies the maximum number of error log files to keep. If the value is `#null`, log rotation is disabled. Default: `error_log_rotate_count #null`
+  
 **Configuration example:**
 
 ```kdl
