@@ -104,7 +104,7 @@ impl ObservabilityBackendLoader for LogFileObservabilityBackendLoader {
           let error_log_rotate_size = get_value!("error_log_rotate_size", config)
             .and_then(|v| v.as_i128())
             .map(|v| v as usize);
-          let _error_log_rotate_keep = get_value!("error_log_rotate_keep", config)
+          let error_log_rotate_keep = get_value!("error_log_rotate_keep", config)
             .and_then(|v| v.as_i128())
             .map(|v| v as usize);
           let (logging_tx, logging_rx) = async_channel::unbounded::<LogMessage>();
@@ -238,7 +238,16 @@ impl ObservabilityBackendLoader for LogFileObservabilityBackendLoader {
                   && log_file_size_obtained > log_rotate_size_obtained.map(|x| x as u64)
                 {
                   if let Some(filename) = if is_error { &error_log_filename } else { &log_filename } {
-                    if let Err(e) = rotate_log_file(filename, log_rotate_keep).await {
+                    if let Err(e) = rotate_log_file(
+                      filename,
+                      if is_error {
+                        error_log_rotate_keep
+                      } else {
+                        log_rotate_keep
+                      },
+                    )
+                    .await
+                    {
                       eprintln!("Failed to rotate log file: {e}");
                     } else {
                       let logfile_new = match tokio::fs::OpenOptions::new()
