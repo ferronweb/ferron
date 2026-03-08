@@ -1,21 +1,21 @@
 use std::{collections::HashMap, error::Error};
 
 use async_trait::async_trait;
-use porkbun_api::{CreateOrEditDnsRecord, DnsRecordType};
+use dns_update::DnsUpdater;
 
 use ferron_common::dns::{separate_subdomain_from_domain_name, DnsProvider};
 
 /// Porkbun DNS provider
 pub struct PorkbunDnsProvider {
-  client: porkbun_api::Client<porkbun_api::transport::DefaultTransport>,
+  client: DnsUpdater,
 }
 
 impl PorkbunDnsProvider {
   /// Create a new Porkbun DNS provider
-  fn new(api_key: &str, secret_key: &str) -> Self {
-    let api_key = porkbun_api::ApiKey::new(secret_key, api_key);
-    let client = porkbun_api::Client::new(api_key);
-    Self { client }
+  fn new(api_key: &str, secret_key: &str) -> dns_update::Result<Self> {
+    Ok(Self {
+      client: DnsUpdater::new_porkbun(api_key, secret_key, None)?,
+    })
   }
 
   /// Load a Porkbun DNS provider from ACME challenge parameters
@@ -26,7 +26,7 @@ impl PorkbunDnsProvider {
     let secret_key = challenge_params
       .get("secret_key")
       .ok_or_else(|| anyhow::anyhow!("Missing Porkbun secret key"))?;
-    Ok(Self::new(api_key, secret_key))
+    Ok(Self::new(api_key, secret_key).map_err(|e| anyhow::anyhow!("Failed to initalize Porkbun DNS provider: {}", e))?)
   }
 }
 
@@ -43,8 +43,19 @@ impl DnsProvider for PorkbunDnsProvider {
     } else {
       format!("_acme-challenge.{subdomain}")
     };
-    let record = CreateOrEditDnsRecord::new(Some(&subdomain), DnsRecordType::TXT, dns_value);
-    self.client.create(&domain_name, record).await?;
+    let full_domain = format!("{subdomain}.{domain_name}");
+    self
+      .client
+      .create(
+        full_domain,
+        dns_update::DnsRecord::TXT {
+          content: dns_value.to_string(),
+        },
+        600,
+        domain_name,
+      )
+      .await
+      .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())
   }
 
@@ -55,11 +66,12 @@ impl DnsProvider for PorkbunDnsProvider {
     } else {
       format!("_acme-challenge.{subdomain}")
     };
-    for dns_entry in self.client.get_all(&domain_name).await? {
-      if dns_entry.name == format!("{subdomain}.{domain_name}") && dns_entry.record_type == DnsRecordType::TXT {
-        self.client.delete(&domain_name, &dns_entry.id).await?;
-      }
-    }
+    let full_domain = format!("{subdomain}.{domain_name}");
+    self
+      .client
+      .delete(full_domain, domain_name, dns_update::DnsRecordType::TXT)
+      .await
+      .map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(())
   }
 }

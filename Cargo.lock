@@ -1077,16 +1077,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cookie"
-version = "0.18.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ddef33a339a91ea89fb53151bd0a4689cfce27055c291dfa69945475d22c747"
-dependencies = [
- "time",
- "version_check",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1478,7 +1468,6 @@ dependencies = [
  "dns-update",
  "ferron-common",
  "hyper",
- "porkbun-api",
  "tokio",
 ]
 
@@ -3175,25 +3164,6 @@ dependencies = [
  "pin-project-lite",
  "rustix",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "porkbun-api"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7f97f4f0aca7e592a34f1dae1331d26d0f87544c079c87c9c41d35f6313bae8"
-dependencies = [
- "chrono",
- "cookie",
- "http-body-util",
- "hyper",
- "hyper-util",
- "rustls",
- "rustls-platform-verifier",
- "serde",
- "serde_json",
- "tokio",
- "tokio-rustls",
 ]
 
 [[package]]
