@@ -49,6 +49,103 @@ async fn rotate_log_file(log_filename: &str, rotate_keep: Option<usize>) -> Resu
   Ok(())
 }
 
+struct LogFile {
+  filename: String,
+  rotate_size: Option<usize>,
+  rotate_keep: Option<usize>,
+  writer: Arc<tokio::sync::Mutex<BufWriter<tokio::fs::File>>>,
+  size: Option<Arc<tokio::sync::RwLock<u64>>>,
+}
+
+impl LogFile {
+  async fn new(
+    filename: String,
+    rotate_size: Option<usize>,
+    rotate_keep: Option<usize>,
+  ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    let file = tokio::fs::OpenOptions::new()
+      .append(true)
+      .create(true)
+      .open(&filename)
+      .await?;
+
+    let size = if rotate_size.is_some() {
+      Some(Arc::new(tokio::sync::RwLock::new(file.metadata().await?.len())))
+    } else {
+      None
+    };
+
+    Ok(Self {
+      filename,
+      rotate_size,
+      rotate_keep,
+      writer: Arc::new(tokio::sync::Mutex::new(BufWriter::with_capacity(131072, file))),
+      size,
+    })
+  }
+
+  async fn write(&mut self, mut message: String) {
+    message.push('\n');
+
+    let current_size = if let Some(size_lock) = &self.size {
+      Some(*size_lock.read().await)
+    } else {
+      None
+    };
+
+    if let (Some(current_size), Some(rotate_size)) = (current_size, self.rotate_size) {
+      if current_size > rotate_size as u64 {
+        if let Err(e) = self.rotate().await {
+          eprintln!("Failed to rotate log file: {e}");
+        }
+      }
+    }
+
+    let writer = self.writer.clone();
+    let size_lock = self.size.clone();
+    tokio::task::spawn(async move {
+      let mut locked_file = writer.lock().await;
+      if let Err(e) = locked_file.write(message.as_bytes()).await {
+        eprintln!("Failed to write to log file: {e}");
+      }
+      if let Some(size_lock) = size_lock {
+        size_lock.write().await.add_assign(message.len() as u64);
+      }
+    });
+  }
+
+  async fn flush(&self) {
+    let writer = self.writer.clone();
+    tokio::task::spawn(async move {
+      let mut locked_file = writer.lock().await;
+      locked_file.flush().await.unwrap_or_default();
+    });
+  }
+
+  async fn rotate(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    rotate_log_file(&self.filename, self.rotate_keep).await?;
+
+    let file = tokio::fs::OpenOptions::new()
+      .append(true)
+      .create(true)
+      .open(&self.filename)
+      .await?;
+    let new_writer = BufWriter::with_capacity(131072, file);
+
+    {
+      let mut old_writer = self.writer.lock().await;
+      let _ = old_writer.flush().await;
+    }
+
+    self.writer = Arc::new(tokio::sync::Mutex::new(new_writer));
+    if self.size.is_some() {
+      self.size = Some(Arc::new(tokio::sync::RwLock::new(0)));
+    }
+
+    Ok(())
+  }
+}
+
 /// Log file observability backend loader
 pub struct LogFileObservabilityBackendLoader {
   cache: ModuleCache<LogFileObservabilityBackend>,
@@ -109,195 +206,62 @@ impl ObservabilityBackendLoader for LogFileObservabilityBackendLoader {
             .map(|v| v as usize);
           let (logging_tx, logging_rx) = async_channel::unbounded::<LogMessage>();
           secondary_runtime.spawn(async move {
-            let log_file = match &log_filename {
-              Some(log_filename) => Some(
-                tokio::fs::OpenOptions::new()
-                  .append(true)
-                  .create(true)
-                  .open(log_filename)
-                  .await,
-              ),
-              None => None,
-            };
-
-            let error_log_file = match &error_log_filename {
-              Some(error_log_filename) => Some(
-                tokio::fs::OpenOptions::new()
-                  .append(true)
-                  .create(true)
-                  .open(error_log_filename)
-                  .await,
-              ),
-              None => None,
-            };
-
-            let mut log_file_size = if log_rotate_size.is_some() {
-              if let Some(file) = log_file.as_ref().and_then(|r| r.as_ref().ok()) {
-                file
-                  .metadata()
-                  .await
-                  .ok()
-                  .map(|m| Arc::new(tokio::sync::RwLock::new(m.len())))
-              } else {
-                None
+            let mut access_log = if let Some(filename) = log_filename {
+              match LogFile::new(filename, log_rotate_size, log_rotate_keep).await {
+                Ok(l) => Some(l),
+                Err(e) => {
+                  eprintln!("Failed to open log file: {e}");
+                  None
+                }
               }
             } else {
               None
             };
 
-            let mut error_log_file_size = if error_log_rotate_size.is_some() {
-              if let Some(file) = error_log_file.as_ref().and_then(|r| r.as_ref().ok()) {
-                file
-                  .metadata()
-                  .await
-                  .ok()
-                  .map(|m| Arc::new(tokio::sync::RwLock::new(m.len())))
-              } else {
-                None
+            let mut error_log = if let Some(filename) = error_log_filename {
+              match LogFile::new(filename, error_log_rotate_size, error_log_rotate_keep).await {
+                Ok(l) => Some(l),
+                Err(e) => {
+                  eprintln!("Failed to open error log file: {e}");
+                  None
+                }
               }
             } else {
               None
             };
 
-            let mut log_file_wrapped = match log_file {
-              Some(Ok(file)) => Some(Arc::new(tokio::sync::Mutex::new(BufWriter::with_capacity(
-                131072, file,
-              )))),
-              Some(Err(e)) => {
-                eprintln!("Failed to open log file: {e}");
-                None
-              }
-              None => None,
-            };
-
-            let mut error_log_file_wrapped = match error_log_file {
-              Some(Ok(file)) => Some(Arc::new(tokio::sync::Mutex::new(BufWriter::with_capacity(
-                131072, file,
-              )))),
-              Some(Err(e)) => {
-                eprintln!("Failed to open error log file: {e}");
-                None
-              }
-              None => None,
-            };
-
-            // The logs are written when the log message is received by the log event loop, and flushed every 100 ms, improving the server performance.
-            let log_file_wrapped_cloned_for_sleep = log_file_wrapped.clone();
-            let error_log_file_wrapped_cloned_for_sleep = error_log_file_wrapped.clone();
-            tokio::task::spawn(async move {
-              let mut interval = tokio::time::interval(Duration::from_millis(100));
-              loop {
-                interval.tick().await;
-                if let Some(log_file_wrapped_cloned) = log_file_wrapped_cloned_for_sleep.clone() {
-                  let mut locked_file = log_file_wrapped_cloned.lock().await;
-                  locked_file.flush().await.unwrap_or_default();
-                }
-                if let Some(error_log_file_wrapped_cloned) = error_log_file_wrapped_cloned_for_sleep.clone() {
-                  let mut locked_file = error_log_file_wrapped_cloned.lock().await;
-                  locked_file.flush().await.unwrap_or_default();
-                }
-              }
-            });
+            let mut interval = tokio::time::interval(Duration::from_millis(100));
 
             // Logging loop
-            while let Ok(message) = tokio::select! {
-              message = logging_rx.recv() => message,
-              _ = cancel_token.cancelled() => return,
-            } {
-              let (mut message, is_error) = message.get_message();
-              let log_file_wrapped_cloned = if !is_error {
-                log_file_wrapped.clone()
-              } else {
-                error_log_file_wrapped.clone()
-              };
-              let log_file_size_rwlock = if !is_error {
-                log_file_size.clone()
-              } else {
-                error_log_file_size.clone()
-              };
-              let log_file_size_obtained = if let Some(size_rwlock) = &log_file_size_rwlock {
-                Some(*size_rwlock.read().await)
-              } else {
-                None
-              };
-              let log_rotate_size_obtained = if !is_error {
-                log_rotate_size
-              } else {
-                error_log_rotate_size
-              };
-
-              if let Some(mut log_file_wrapped_cloned) = log_file_wrapped_cloned {
-                if is_error {
-                  let now: DateTime<Local> = Local::now();
-                  let formatted_time = now.format("%Y-%m-%d %H:%M:%S").to_string();
-                  message = format!("[{formatted_time}]: {message}");
+            loop {
+              tokio::select! {
+                message = logging_rx.recv() => {
+                   match message {
+                       Ok(message) => {
+                          let (mut message, is_error) = message.get_message();
+                          if is_error {
+                              let now: DateTime<Local> = Local::now();
+                              let formatted_time = now.format("%Y-%m-%d %H:%M:%S").to_string();
+                              message = format!("[{formatted_time}]: {message}");
+                              if let Some(log) = &mut error_log {
+                                  log.write(message).await;
+                              }
+                          } else if let Some(log) = &mut access_log {
+                              log.write(message).await;
+                          }
+                       }
+                       Err(_) => break, // Channel closed
+                   }
                 }
-                message.push('\n');
-                if log_file_size_obtained.is_some()
-                  && log_rotate_size_obtained.is_some()
-                  && log_file_size_obtained > log_rotate_size_obtained.map(|x| x as u64)
-                {
-                  if let Some(filename) = if is_error { &error_log_filename } else { &log_filename } {
-                    if let Err(e) = rotate_log_file(
-                      filename,
-                      if is_error {
-                        error_log_rotate_keep
-                      } else {
-                        log_rotate_keep
-                      },
-                    )
-                    .await
-                    {
-                      eprintln!("Failed to rotate log file: {e}");
-                    } else {
-                      let logfile_new = match tokio::fs::OpenOptions::new()
-                        .append(true)
-                        .create(true)
-                        .open(filename)
-                        .await
-                      {
-                        Ok(file) => Some(BufWriter::with_capacity(131072, file)),
-                        Err(err) => {
-                          eprintln!("Failed to open log file: {err}");
-                          None
-                        }
-                      };
-                      if let Some(logfile_new) = logfile_new {
-                        if is_error {
-                          error_log_file_size = Some(Arc::new(tokio::sync::RwLock::new(0)));
-                          if let Some(error_log_file_wrapped) = &mut error_log_file_wrapped {
-                            let mut locked_file = error_log_file_wrapped.lock().await;
-                            let _ = locked_file.flush().await;
-                            *locked_file = logfile_new;
-                          } else {
-                            error_log_file_wrapped = Some(Arc::new(tokio::sync::Mutex::new(logfile_new)));
-                          }
-                          log_file_wrapped_cloned =
-                            error_log_file_wrapped.clone().expect("error_log_file_wrapped is None");
-                        } else {
-                          log_file_size = Some(Arc::new(tokio::sync::RwLock::new(0)));
-                          if let Some(log_file_wrapped) = &mut log_file_wrapped {
-                            let mut locked_file = log_file_wrapped.lock().await;
-                            let _ = locked_file.flush().await;
-                            *locked_file = logfile_new;
-                          } else {
-                            log_file_wrapped = Some(Arc::new(tokio::sync::Mutex::new(logfile_new)));
-                          }
-                          log_file_wrapped_cloned = log_file_wrapped.clone().expect("log_file_wrapped is None");
-                        }
-                      }
+                _ = interval.tick() => {
+                    if let Some(log) = &access_log {
+                        log.flush().await;
                     }
-                  }
+                    if let Some(log) = &error_log {
+                        log.flush().await;
+                    }
                 }
-                tokio::task::spawn(async move {
-                  let mut locked_file = log_file_wrapped_cloned.lock().await;
-                  if let Err(e) = locked_file.write(message.as_bytes()).await {
-                    eprintln!("Failed to write to log file: {e}");
-                  }
-                  if let Some(rwlock) = log_file_size_rwlock {
-                    rwlock.write().await.add_assign(message.len() as u64);
-                  }
-                });
+                _ = cancel_token.cancelled() => return,
               }
             }
           });
