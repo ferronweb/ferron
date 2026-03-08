@@ -42,16 +42,12 @@ impl CacheControl {
       } else if key.eq_ignore_ascii_case("public") {
         cc.cachability = Some(Cachability::Public);
       } else if key.eq_ignore_ascii_case("max-age") {
-        if let Some(val) = value {
-          if let Ok(secs) = val.parse::<u64>() {
-            cc.max_age = Some(Duration::from_secs(secs));
-          }
+        if let Some(secs) = value.map(|v| v.trim_matches('"')).and_then(|v| v.parse::<u64>().ok()) {
+          cc.max_age = Some(Duration::from_secs(secs));
         }
       } else if key.eq_ignore_ascii_case("s-maxage") {
-        if let Some(val) = value {
-          if let Ok(secs) = val.parse::<u64>() {
-            cc.s_max_age = Some(Duration::from_secs(secs));
-          }
+        if let Some(secs) = value.map(|v| v.trim_matches('"')).and_then(|v| v.parse::<u64>().ok()) {
+          cc.s_max_age = Some(Duration::from_secs(secs));
         }
       }
     }
