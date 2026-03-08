@@ -1,0 +1,17 @@
+:80 {
+  root "/var/www/ferron"
+  cache
+
+  location "/long" {
+    file_cache_control "public, max-age=60"
+  }
+
+  location "/short" {
+    file_cache_control "public, max-age=2"
+  }
+
+  location "/vary" {
+    file_cache_control "public, max-age=60"
+    cache_vary "X-Test-Header"
+  }
+}
