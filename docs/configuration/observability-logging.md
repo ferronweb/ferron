@@ -43,7 +43,7 @@ This page describes KDL directives for configuring Ferron logging outputs, forma
   - This directive specifies the maximum size (in bytes) of an error log file before it is rotated. After rotation, previous log files are renamed with a numeric suffix. If the value is `#null`, log rotation is disabled. Default: `error_log_rotate_size #null`
 - `error_log_rotate_keep <error_log_rotate_keep: integer|null>` (_log_ observability backend; Ferron UNRELEASED or newer)
   - This directive specifies the maximum number of error log files to keep. If the value is `#null`, log rotation is disabled. Default: `error_log_rotate_count #null`
-  
+
 **Configuration example:**
 
 ```kdl
