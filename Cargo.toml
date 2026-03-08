@@ -25,7 +25,7 @@ ferron-observability-builtin = { path = "./ferron-observability-builtin", defaul
 
 [patch.crates-io]
 monoio = { git = "https://github.com/DorianNiemiecSVRJS/monoio.git" }                                           # This is needed for the web server to be able to accept more than one connection on Windows, and to be able to be compiled correctly on FreeBSD
-dns-update = { git = "https://github.com/DorianNiemiecSVRJS/dns-update.git" }                                   # This is a fork of "dns-update" crate, with updated dependencies and crypto provider requirement removed
+dns-update = { git = "https://github.com/stalwartlabs/dns-update.git" }                                         # This is the Git upstream of the "dns-update" crate, with updated dependencies and more DNS providers
 async-compression = { git = "https://github.com/DorianNiemiecSVRJS/async-compression.git", branch = "0.4.28"  } # This is a fork of "async-compression" crate that uses "zlib-rs" backend for "flate2" instead of "miniz_oxide"
 
 [patch.'https://github.com/ferronweb/ferron']
