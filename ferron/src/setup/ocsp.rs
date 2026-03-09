@@ -14,6 +14,7 @@ use rustls::sign::CertifiedKey;
 use rustls_pki_types::CertificateDer;
 use rustls_platform_verifier::BuilderVerifierExt;
 use sha1::{Digest, Sha1};
+use sha2::Sha256;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use x509_parser::prelude::*;
@@ -247,6 +248,30 @@ async fn fetch_ocsp_response(
   >,
   chain: &[CertificateDer<'_>],
 ) -> anyhow::Result<Option<(Vec<u8>, SystemTime)>> {
+  // Try SHA-256 first
+  let response = fetch_ocsp_response_inner(client, chain, true).await;
+
+  if response.is_ok() {
+    return response;
+  }
+
+  // SHA-1 fallback
+  if let Ok(sha1_response) = fetch_ocsp_response_inner(client, chain, false).await {
+    return Ok(sha1_response);
+  }
+
+  // If both fail, return the error from SHA-256
+  response
+}
+
+async fn fetch_ocsp_response_inner(
+  client: &Client<
+    hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+    http_body_util::Full<hyper::body::Bytes>,
+  >,
+  chain: &[CertificateDer<'_>],
+  use_sha256: bool,
+) -> anyhow::Result<Option<(Vec<u8>, SystemTime)>> {
   if chain.len() < 2 {
     // Certificate chain too short, don't bother with OCSP
     return Ok(None);
@@ -264,7 +289,7 @@ async fn fetch_ocsp_response(
   };
 
   // Create Request
-  let req_der = create_ocsp_request(&leaf_cert, &issuer_cert)?;
+  let req_der = create_ocsp_request(&leaf_cert, &issuer_cert, use_sha256)?;
 
   let req = Request::builder()
     .method("POST")
@@ -363,11 +388,17 @@ fn extract_ocsp_url(cert: &X509Certificate) -> Option<String> {
   None
 }
 
-fn create_ocsp_request(leaf: &X509Certificate, issuer: &X509Certificate) -> anyhow::Result<Vec<u8>> {
+fn create_ocsp_request(leaf: &X509Certificate, issuer: &X509Certificate, use_sha256: bool) -> anyhow::Result<Vec<u8>> {
   // 1. Hash Issuer DN
-  let mut sha1 = Sha1::new();
-  sha1.update(issuer.subject().as_raw());
-  let issuer_name_hash = sha1.finalize().to_vec();
+  let issuer_name_hash = if use_sha256 {
+    let mut sha256 = Sha256::new();
+    sha256.update(issuer.subject().as_raw());
+    sha256.finalize().to_vec()
+  } else {
+    let mut sha1 = Sha1::new();
+    sha1.update(issuer.subject().as_raw());
+    sha1.finalize().to_vec()
+  };
 
   // 2. Hash Issuer Key
   // x509-parser gives SubjectPublicKeyInfo.
@@ -375,9 +406,15 @@ fn create_ocsp_request(leaf: &X509Certificate, issuer: &X509Certificate) -> anyh
   let spki = issuer.public_key();
   // spki.subject_public_key is BitString. We want the bytes.
   let pub_key_bytes = &spki.subject_public_key.data;
-  let mut sha1 = Sha1::new();
-  sha1.update(pub_key_bytes);
-  let issuer_key_hash = sha1.finalize().to_vec();
+  let issuer_key_hash = if use_sha256 {
+    let mut sha256 = Sha256::new();
+    sha256.update(pub_key_bytes);
+    sha256.finalize().to_vec()
+  } else {
+    let mut sha1 = Sha1::new();
+    sha1.update(pub_key_bytes);
+    sha1.finalize().to_vec()
+  };
 
   // 3. Serial Number
   let serial_number = &leaf.tbs_certificate.serial;
@@ -390,7 +427,11 @@ fn create_ocsp_request(leaf: &X509Certificate, issuer: &X509Certificate) -> anyh
 
   let cert_id = CertId {
     hash_algorithm: rasn_pkix::AlgorithmIdentifier {
-      algorithm: rasn::types::Oid::ISO_IDENTIFIED_ORGANISATION_OIW_SECSIG_ALGORITHM_SHA1.to_owned(), // sha1
+      algorithm: if use_sha256 {
+        rasn::types::Oid::JOINT_ISO_ITU_T_COUNTRY_US_ORGANIZATION_GOV_CSOR_NIST_ALGORITHMS_HASH_SHA256.to_owned()
+      } else {
+        rasn::types::Oid::ISO_IDENTIFIED_ORGANISATION_OIW_SECSIG_ALGORITHM_SHA1.to_owned()
+      },
       parameters: None,
     },
     issuer_name_hash: rasn::types::OctetString::from(issuer_name_hash),
