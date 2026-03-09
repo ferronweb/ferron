@@ -230,8 +230,8 @@ async fn background_ocsp_task(
             for tx in &logging_tx {
               let _ = tx.send(LogMessage::new(format!("OCSP fetch failed: {e}"), true)).await;
             }
-            // Retry later
-            next_updates.insert(key, now + Duration::from_secs(300));
+            // Retry later; with some randomness to avoid refresh storm.
+            next_updates.insert(key, now + Duration::from_secs(rand::random_range(100..=500)));
             continue;
           }
         };
