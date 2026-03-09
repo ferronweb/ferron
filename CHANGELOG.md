@@ -13,6 +13,7 @@
 
 ### Changed
 
+- Replaced the OCSP stapling implementation (that implemented RFC 5019) with a new implementation that implements RFC 6960.
 - The `Host` header is now no longer rewritten to the proxy request URL's host by default when using plaintext HTTP for the backend servers.
 
 ### Deprecated
