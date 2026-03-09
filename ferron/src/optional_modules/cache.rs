@@ -8,9 +8,9 @@ use crate::ferron_common::{
   ServerModuleHandlers, SocketData,
 };
 use crate::ferron_common::{HyperResponse, WithRuntime};
+use crate::ferron_util::cache_control::{Cachability, CacheControl};
 use ahash::RandomState;
 use async_trait::async_trait;
-use cache_control::{Cachability, CacheControl};
 use futures_util::{StreamExt, TryStreamExt};
 use hashlink::LinkedHashMap;
 use http_body_util::{BodyExt, Full, StreamBody};

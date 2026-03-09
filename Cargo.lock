@@ -330,11 +330,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
-name = "cache_control"
-version = "0.2.0"
-source = "git+https://github.com/DorianNiemiecSVRJS/rust-cache-control.git#2229d7b60c30eb1291654e2a8935c3c0ae9948e7"
-
-[[package]]
 name = "cc"
 version = "1.2.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -728,7 +723,6 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
- "cache_control",
  "chrono",
  "cidr",
  "clap",
