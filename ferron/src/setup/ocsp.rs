@@ -317,7 +317,21 @@ async fn fetch_ocsp_response(
   for single_res in basic_response.tbs_response_data.responses {
     let next_update = single_res.next_update.map(SystemTime::from);
 
-    if let Some(nu) = next_update {
+    if let Some(mut nu) = next_update {
+      // Next update with safety margin.
+      let nu_safety_margin = nu
+        .duration_since(SystemTime::from(single_res.this_update))
+        .map(|d| d / 4)
+        .unwrap_or_else(|_| Duration::from_secs(0))
+        .max(Duration::from_hours(1)); // Minimum 1h
+
+      // Add randomness to avoid refresh storm.
+      let nu_safety_margin = nu_safety_margin + (nu_safety_margin.mul_f64(rand::random_range::<f64, _>(0.0..0.5)));
+
+      if nu - nu_safety_margin > SystemTime::now() {
+        nu -= nu_safety_margin;
+      }
+
       match min_next_update {
         Some(min) => {
           if nu < min {
@@ -329,7 +343,7 @@ async fn fetch_ocsp_response(
     }
   }
 
-  let next_update = min_next_update.unwrap_or_else(|| SystemTime::now() + Duration::from_secs(3600 * 24)); // Default 24h if not specified? Or strictly fail?
+  let next_update = min_next_update.unwrap_or_else(|| SystemTime::now() + Duration::from_hours(12));
 
   Ok(Some((response_der, next_update)))
 }

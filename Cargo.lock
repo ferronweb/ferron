@@ -1389,6 +1389,7 @@ dependencies = [
  "ppp",
  "procfs",
  "quinn",
+ "rand 0.10.0",
  "rasn",
  "rasn-ocsp",
  "rasn-pkix",
