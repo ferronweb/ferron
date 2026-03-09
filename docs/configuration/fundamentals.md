@@ -169,7 +169,7 @@ In practice, this makes it easier to:
 
 - keep global defaults in one place
 - split virtual hosts into smaller files
-- reuse snippets and condition definitions across files
+- reuse snippets and condition definitions across files (supported on Ferron UNRELEASED and newer)
 
 ## Reuse and branching fundamentals
 

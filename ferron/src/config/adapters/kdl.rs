@@ -45,6 +45,7 @@ fn kdl_node_to_configuration_entry(kdl_node: &KdlNode) -> ServerConfigurationEnt
 fn load_configuration_inner(
   path: PathBuf,
   loaded_paths: &mut HashSet<PathBuf>,
+  snippets: &mut HashMap<String, KdlDocument>,
 ) -> Result<Vec<ServerConfiguration>, Box<dyn Error + Send + Sync>> {
   // Canonicalize the path
   let canonical_pathbuf = fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
@@ -92,9 +93,6 @@ fn load_configuration_inner(
 
   // Loaded conditions
   let mut loaded_conditions: HashMap<String, Vec<ConditionalData>> = HashMap::new();
-
-  // KDL configuration snippets
-  let mut snippets: HashMap<String, KdlDocument> = HashMap::new();
 
   // Iterate over KDL nodes
   for kdl_node in kdl_document {
@@ -587,7 +585,7 @@ fn load_configuration_inner(
             &mut None,
             false,
             &mut loaded_conditions,
-            &snippets,
+            snippets,
           )?;
         }
         let (hostname, ip, port, is_host) = host_filter;
@@ -664,7 +662,7 @@ fn load_configuration_inner(
       }
 
       for included_file in include_files {
-        configurations.extend(load_configuration_inner(included_file, loaded_paths)?);
+        configurations.extend(load_configuration_inner(included_file, loaded_paths, snippets)?);
       }
     } else {
       let canonical_path = canonical_pathbuf.to_string_lossy().into_owned();
@@ -688,6 +686,6 @@ impl KdlConfigurationAdapter {
 
 impl ConfigurationAdapter for KdlConfigurationAdapter {
   fn load_configuration(&self, path: &Path) -> Result<Vec<ServerConfiguration>, Box<dyn Error + Send + Sync>> {
-    load_configuration_inner(path.to_path_buf(), &mut HashSet::new())
+    load_configuration_inner(path.to_path_buf(), &mut HashSet::new(), &mut HashMap::new())
   }
 }
