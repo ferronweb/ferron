@@ -1597,7 +1597,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                       let file_bufreader = StreamReader::new(file_stream);
 
                       let reader_stream = ReaderStream::with_capacity(
-                        DeflateEncoder::new(file_bufreader),
+                        DeflateEncoder::with_quality(file_bufreader, Level::Precise(4)),
                         COMPRESSED_STREAM_READER_BUFFER_SIZE,
                       );
                       let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
@@ -1608,7 +1608,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                       let file_bufreader = StreamReader::new(file_stream);
 
                       let reader_stream = ReaderStream::with_capacity(
-                        GzipEncoder::new(file_bufreader),
+                        GzipEncoder::with_quality(file_bufreader, Level::Precise(4)),
                         COMPRESSED_STREAM_READER_BUFFER_SIZE,
                       );
                       let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));

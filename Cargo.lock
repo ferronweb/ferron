@@ -199,12 +199,12 @@ dependencies = [
 
 [[package]]
 name = "async-compression"
-version = "0.4.36"
-source = "git+https://github.com/DorianNiemiecSVRJS/async-compression.git?branch=0.4.28#047a5ce864dc544ef9d5885ed9e95ccc8cfa3fc6"
+version = "0.4.41"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0f9ee0f6e02ffd7ad5816e9464499fba7b3effd01123b515c41d1697c43dad1"
 dependencies = [
  "compression-codecs",
  "compression-core",
- "futures-core",
  "pin-project-lite",
  "tokio",
 ]
@@ -1007,8 +1007,9 @@ dependencies = [
 
 [[package]]
 name = "compression-codecs"
-version = "0.4.35"
-source = "git+https://github.com/DorianNiemiecSVRJS/async-compression.git?branch=0.4.28#047a5ce864dc544ef9d5885ed9e95ccc8cfa3fc6"
+version = "0.4.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb7b51a7d9c967fc26773061ba86150f19c50c0d65c887cb1fbe295fd16619b7"
 dependencies = [
  "brotli",
  "compression-core",
@@ -1021,7 +1022,8 @@ dependencies = [
 [[package]]
 name = "compression-core"
 version = "0.4.31"
-source = "git+https://github.com/DorianNiemiecSVRJS/async-compression.git?branch=0.4.28#047a5ce864dc544ef9d5885ed9e95ccc8cfa3fc6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75984efb6ed102a0d42db99afb6c1948f0380d1d91808d5529916e6c08b49d8d"
 
 [[package]]
 name = "concurrent-queue"
@@ -1108,6 +1110,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b2a41393f66f16b0823bb79094d54ac5fbd34ab292ddafb9a0456ac9f87d201"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "crc32fast"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511"
+dependencies = [
+ "cfg-if",
 ]
 
 [[package]]
@@ -1498,6 +1509,7 @@ dependencies = [
  "cidr",
  "fancy-regex",
  "ferron-common",
+ "flate2",
  "futures-util",
  "hashlink",
  "http-body-util",
@@ -1603,6 +1615,7 @@ version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
+ "crc32fast",
  "miniz_oxide",
  "zlib-rs",
 ]
@@ -3286,9 +3299,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.13"
+version = "0.11.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1906b49b0c3bc04b5fe5d86a77925ae6524a19b816ae38ce1e426255f1d8a31"
+checksum = "434b42fec591c96ef50e21e886936e66d3cc3f737104fdb9b737c40ffb94c098"
 dependencies = [
  "aws-lc-rs",
  "bytes",
@@ -5601,18 +5614,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.40"
+version = "0.8.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a789c6e490b576db9f7e6b6d661bcc9799f7c0ac8352f56ea20193b2681532e5"
+checksum = "f2578b716f8a7a858b7f02d5bd870c14bf4ddbbcf3a4c05414ba6503640505e3"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.40"
+version = "0.8.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f65c489a7071a749c849713807783f70672b28094011623e200cb86dcb835953"
+checksum = "7e6cc098ea4d3bd6246687de65af3f920c430e236bee1e3bf2e441463f08a02f"
 dependencies = [
  "proc-macro2",
  "quote",

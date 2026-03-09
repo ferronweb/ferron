@@ -426,8 +426,10 @@ impl ModuleHandlers for DynamicCompressionModuleHandlers {
           });
           let body_reader = StreamReader::new(data_stream);
 
-          let reader_stream =
-            ReaderStream::with_capacity(DeflateEncoder::new(body_reader), COMPRESSED_STREAM_READER_BUFFER_SIZE);
+          let reader_stream = ReaderStream::with_capacity(
+            DeflateEncoder::with_quality(body_reader, Level::Precise(4)),
+            COMPRESSED_STREAM_READER_BUFFER_SIZE,
+          );
           let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data).chain(trailer_stream));
           BodyExt::boxed(stream_body)
         }
@@ -442,8 +444,10 @@ impl ModuleHandlers for DynamicCompressionModuleHandlers {
           });
           let body_reader = StreamReader::new(data_stream);
 
-          let reader_stream =
-            ReaderStream::with_capacity(GzipEncoder::new(body_reader), COMPRESSED_STREAM_READER_BUFFER_SIZE);
+          let reader_stream = ReaderStream::with_capacity(
+            GzipEncoder::with_quality(body_reader, Level::Precise(4)),
+            COMPRESSED_STREAM_READER_BUFFER_SIZE,
+          );
           let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data).chain(trailer_stream));
           BodyExt::boxed(stream_body)
         }
