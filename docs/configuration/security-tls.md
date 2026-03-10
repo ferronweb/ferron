@@ -101,7 +101,7 @@ manual-tls.example.com {
   - This directive specifies IP addresses and CIDR ranges to be blocked. If set as `block #null`, this directive is ignored. This directive was global-only before Ferron 2.1.0. This directive can be specified multiple times. Default: none
 - `allow (<allowed_ip: string> [<allowed_ip: string> ...])|<not_specified: null>`
   - This directive specifies IP addresses and CIDR ranges to be allowed. If set as `allow #null`, this directive is ignored. This directive was global-only before Ferron 2.1.0. This directive can be specified multiple times. Default: none
-- `abort [abort_request: bool]` (Ferron UNRELEASED or newer)
+- `abort [abort_request: bool]` (Ferron 2.6.0 or newer)
   - This directive specifies whether to immediately close the connection without sending any response. Default: `abort #false`
 
 **Configuration example:**

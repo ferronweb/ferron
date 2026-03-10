@@ -89,7 +89,7 @@ example.com {
 
 Use this when you need to manage disk space usage for log files by rotating and retaining them based on size and count.
 
-Log rotation directives are available in Ferron UNRELEASED and newer.
+Log rotation directives are available in Ferron 2.6.0 and newer.
 
 ```kdl
 globals {
