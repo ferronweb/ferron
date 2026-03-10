@@ -1,6 +1,7 @@
 :8443 {
   tls "/etc/certs/server.crt" "/etc/certs/server.key"
   proxy "http://ferron-smoketest:3000"
+  proxy_request_header_replace "Host" "ferron-smoketest:3000"
 }
 
 acme-test.test:8443 {
