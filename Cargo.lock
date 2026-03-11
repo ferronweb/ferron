@@ -3436,9 +3436,9 @@ dependencies = [
 
 [[package]]
 name = "rasn"
-version = "0.28.8"
+version = "0.28.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01b3381fcae416ac1686c3eb5efa1547116d048762da4ca6725966f15442c59e"
+checksum = "cb25c0478aef8ef8b01acc58864a7c7062ff29418d80e7724c20e9d498a2a2e1"
 dependencies = [
  "bitvec",
  "bitvec-nom2",
@@ -4195,7 +4195,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix",
  "windows-sys 0.52.0",
