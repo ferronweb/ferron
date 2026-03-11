@@ -3484,9 +3484,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-ocsp"
-version = "0.28.8"
+version = "0.28.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "066f634542b44970094ff19bc66bb0e15c4dc81db232e3059dba620a7ba6cf3a"
+checksum = "d284da74105051ee0cd050eb79320cdfc212211e141580945b994bc1e41ab879"
 dependencies = [
  "rasn",
  "rasn-pkix",
@@ -4195,7 +4195,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix",
  "windows-sys 0.52.0",
