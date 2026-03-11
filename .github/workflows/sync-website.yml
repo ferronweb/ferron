@@ -33,9 +33,9 @@ jobs:
 
       - name: Sync website
         run: |
-          rm -rf website/docs/v1
-          cp -r ferron/docs website/docs/v1
-          cat << EOF > website/docs/v1/README.md
+          rm -rf website/src/content/docs/v1
+          cp -r ferron/docs website/src/content/docs/v1
+          cat << EOF > website/src/content/docs/v1/README.md
           # Ferron documentation
 
           This Ferron documentation is automatically synchronized with https://github.com/ferronweb/ferron/tree/main.
