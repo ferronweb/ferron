@@ -3494,9 +3494,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-pkix"
-version = "0.28.8"
+version = "0.28.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07fbf365c6b30bf49aa168d091af940091e56bbeaaedf76839dee036cffa1d2d"
+checksum = "8e5b1682e18705315ef5a6b1510dd0fc26b85ce057cbf6aaf67a4fac43bf95a4"
 dependencies = [
  "rasn",
 ]
@@ -4195,7 +4195,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix",
  "windows-sys 0.52.0",
