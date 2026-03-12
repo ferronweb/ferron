@@ -83,7 +83,7 @@ cegla-cgi = { version = "0.1.2", optional = true, default-features = false, feat
 cegla-scgi = { version = "0.1.2", optional = true, default-features = false, features = ["client"] }
 tokio-cegla = { version = "0.1.2", optional = true, default-features = false }
 
-[dev-dependencies]
+[target.'cfg(unix)'.dev-dependencies]
 shiba = { workspace = true }
 
 [features]

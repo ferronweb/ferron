@@ -17,7 +17,7 @@ mimalloc = { workspace = true } # Mimalloc v3 would use instructions unsupported
 [target.'cfg(not(target_arch = "x86"))'.dependencies]
 mimalloc = { workspace = true, features = ["v3"] }
 
-[dev-dependencies]
+[target.'cfg(unix)'.dev-dependencies]
 shiba = { workspace = true }
 
 [build-dependencies]
