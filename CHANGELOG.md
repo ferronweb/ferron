@@ -1,5 +1,13 @@
 # Ferron 2 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Added
+
+- DNSimple DNS provider for DNS-01 ACME challenges
+
 ## Ferron 2.6.0
 
 **Released in March 10, 2026**

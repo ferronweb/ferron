@@ -81,6 +81,10 @@ dns:
     cargo_feature: digitalocean
     provider: DigitalOceanDnsProvider
   - builtin: true
+    id: dnsimple
+    cargo_feature: dnsimple
+    provider: DnsimpleDnsProvider
+  - builtin: true
     id: ovh
     cargo_feature: ovh
     provider: OvhDnsProvider

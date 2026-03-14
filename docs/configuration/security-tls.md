@@ -200,9 +200,20 @@ This DNS provider uses [DigitalOcean API](https://docs.digitalocean.com/referenc
 auto_tls_challenge "dns-01" provider="digitalocean" oauth_token="your_token"
 ```
 
+### DNSimple (`dnsimple`)
+
+This DNS provider uses [DNSimple API](https://developer.dnsimple.com/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron UNRELEASED.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="dnsimple" oauth_token="your_oauth_token" account_id="your_account_id"
+```
+
 #### Additional props
 
-- `oauth_token` - DigitalOcean OAuth token (required)
+- `oauth_token` - DNSimple OAuth token (required)
+- `account_id` - DNSimple account ID (required)
 
 ### OVH (`ovh`)
 
