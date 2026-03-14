@@ -70,7 +70,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43d5b281e737544384e969a5ccad3f1cdd24b48086a0fc1b2a5262a26b8f4f4a"
 dependencies = [
  "anstyle",
- "anstyle-parse",
+ "anstyle-parse 0.2.7",
+ "anstyle-query",
+ "anstyle-wincon",
+ "colorchoice",
+ "is_terminal_polyfill",
+ "utf8parse",
+]
+
+[[package]]
+name = "anstream"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "824a212faf96e9acacdbd09febd34438f8f711fb84e09a8916013cd7815ca28d"
+dependencies = [
+ "anstyle",
+ "anstyle-parse 1.0.0",
  "anstyle-query",
  "anstyle-wincon",
  "colorchoice",
@@ -80,15 +95,24 @@ dependencies = [
 
 [[package]]
 name = "anstyle"
-version = "1.0.13"
+version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5192cca8006f1fd4f7237516f40fa183bb07f8fbdfedaa0036de5ea9b0b45e78"
+checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 
 [[package]]
 name = "anstyle-parse"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7644824f0aa2c7b9384579234ef10eb7efb6a0deb83f9630a49594dd9c15c2"
+dependencies = [
+ "utf8parse",
+]
+
+[[package]]
+name = "anstyle-parse"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52ce7f38b242319f7cabaa6813055467063ecdc9d355bbb4ce0c68908cd8130e"
 dependencies = [
  "utf8parse",
 ]
@@ -826,9 +850,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.56"
+version = "1.2.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aebf35691d1bfb0ac386a69bac2fde4dd276fb618cf8bf4f5318fe285e821bb2"
+checksum = "7a0dd1ca384932ff3641c8718a02769f1698e7563dc6974ffd03346116310423"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -942,9 +966,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.60"
+version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2797f34da339ce31042b27d23607e051786132987f595b02ba4f6a6dffb7030a"
+checksum = "b193af5b67834b676abd72466a96c1024e6a6ad978a1f484bd90b85c94041351"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -952,11 +976,11 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.60"
+version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24a241312cea5059b13574bb9b3861cabf758b879c15190b37b6d6fd63ab6876"
+checksum = "714a53001bf66416adb0e2ef5ac857140e7dc3a0c48fb28b2f10762fc4b5069f"
 dependencies = [
- "anstream",
+ "anstream 1.0.0",
  "anstyle",
  "clap_lex",
  "strsim",
@@ -964,9 +988,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.5.55"
+version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a92793da1a46a5f2a02a6f4c46c6496b28c43638adea8306fcb0caa1634f24e5"
+checksum = "1110bd8a634a1ab8cb04345d8d878267d57c3cf1b38d91b71af6686408bbca6a"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -976,9 +1000,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
+checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "cmake"
@@ -991,9 +1015,9 @@ dependencies = [
 
 [[package]]
 name = "colorchoice"
-version = "1.0.4"
+version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
+checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
 name = "combine"
@@ -1256,7 +1280,7 @@ dependencies = [
 [[package]]
 name = "dns-update"
 version = "0.1.6"
-source = "git+https://github.com/stalwartlabs/dns-update.git#070a4cc2cd1bdb1350bdb246848d93bbcdc621f5"
+source = "git+https://github.com/stalwartlabs/dns-update.git#af7f09050f7b80bfda9f8b4c95e97121eab250ff"
 dependencies = [
  "aws-lc-rs",
  "hickory-client",
@@ -2083,7 +2107,7 @@ version = "2.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "075e8747af11abcff07d55d98297c9c6c70eb5d6365b25e7b12f02e484935191"
 dependencies = [
- "anstream",
+ "anstream 0.6.21",
  "anstyle",
  "backtrace",
  "serde",
@@ -2883,9 +2907,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.21.3"
+version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
+checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 dependencies = [
  "critical-section",
  "portable-atomic",
@@ -3436,9 +3460,9 @@ dependencies = [
 
 [[package]]
 name = "rasn"
-version = "0.28.9"
+version = "0.28.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb25c0478aef8ef8b01acc58864a7c7062ff29418d80e7724c20e9d498a2a2e1"
+checksum = "891614cb7ad883e74f7ccc47472b49d1bb50150e3d1cc62ed78a3f0665d8985e"
 dependencies = [
  "bitvec",
  "bitvec-nom2",
@@ -3459,9 +3483,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-derive"
-version = "0.28.9"
+version = "0.28.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c526c69770b7ee14db689fcf3d2057aa6029c682a2205280cd2d8566e7b66f07"
+checksum = "68ff97b92a60f72686b2e9bcb94803c511554391972f70bc7efa7e0674971fbb"
 dependencies = [
  "proc-macro2",
  "rasn-derive-impl",
@@ -3470,9 +3494,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-derive-impl"
-version = "0.28.9"
+version = "0.28.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a506db7fad651cca57ebcf2034d61f185ff5e57ff1755433bc8581435eb802fb"
+checksum = "cc6ac4350890433832fe54b49f634b10be1a57fcdb53f0a6dc4e397f413b55a1"
 dependencies = [
  "either",
  "itertools 0.13.0",
@@ -3484,9 +3508,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-ocsp"
-version = "0.28.9"
+version = "0.28.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d284da74105051ee0cd050eb79320cdfc212211e141580945b994bc1e41ab879"
+checksum = "0cdc767c7ad9bb24b5eb4c4a8ee6a3160f73f48e72ca6a9b1f5860d3c7a20ee9"
 dependencies = [
  "rasn",
  "rasn-pkix",
@@ -3494,9 +3518,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-pkix"
-version = "0.28.9"
+version = "0.28.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e5b1682e18705315ef5a6b1510dd0fc26b85ce057cbf6aaf67a4fac43bf95a4"
+checksum = "0d605209c02f614485e3b3d7048045a92b8dbfdafb175a2dc085332b0d0b5a5b"
 dependencies = [
  "rasn",
 ]
