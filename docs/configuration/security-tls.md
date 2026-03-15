@@ -163,7 +163,7 @@ auto_tls_challenge "dns-01" provider="bunny" api_key="your_api_key"
 
 ### Cloudflare (`cloudflare`)
 
-This DNS provider uses [Cloudflare API](https://developers.cloudflare.com/api/resources/dns/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.0.0.
+This DNS provider uses [Cloudflare API](https://developers.cloudflare.com/api/resources/dns/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.0.0. To get `your_api_key` add a new token via [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens), using the "Edit zone DNS" template with "**Permissions**" of "Zone"→"DNS"→"Edit" and "**Zone Resources**" "Include"→"Specific zone"→"your custom domain".
 
 #### Example directive specification
 
