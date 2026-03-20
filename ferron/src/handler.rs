@@ -149,7 +149,7 @@ async fn http_handler_fn(
   let graceful_shutdown_token = Arc::new(ArcSwap::from_pointee(CancellationToken::new()));
   let graceful_shutdown_token_clone = graceful_shutdown_token.clone();
 
-  let mut graceful_rx_recv_future = Box::pin(async move {
+  let mut graceful_rx_recv_future = std::pin::pin!(async move {
     while graceful_rx.recv().await.is_ok() {
       graceful_shutdown_token_clone
         .swap(Arc::new(CancellationToken::new()))
