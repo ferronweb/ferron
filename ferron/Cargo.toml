@@ -22,7 +22,8 @@ urlencoding = "2.1.3"
 miette = { version = "7.6.0", features = ["fancy"] }
 
 # HTTP/Web Server Core
-hyper = { version = "1.6.0", features = ["full"] }
+vibeio-http = { version = "0.2.1", optional = true, features = ["h1", "h1-zerocopy", "h2", "h3"] }
+hyper = { version = "1.6.0", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1.13", features = ["client"] }
 h3 = "0.0.8"
 h3-quinn = "0.0.10"
@@ -96,7 +97,6 @@ monoio = { version = "0.2.4", optional = true, features = [
     "threadpool"
 ] }
 vibeio = { version = "0.2.5", optional = true }
-vibeio-hyper = { version = "0.2.5", optional = true }
 monoio-compat = { version = "0.2.2", optional = true, features = ["hyper"] }
 async-channel = "2.3.1"
 futures-util = { version = "0.3.31", features = ["sink"] }
@@ -166,6 +166,7 @@ config-yaml-legacy = ["ferron-yaml2kdl-core"]
 runtime-monoio = [
     "monoio",
     "monoio-compat",
+    "hyper/server",
     "blocking",
     "send_wrapper",
     "ferron-common/runtime-monoio",
@@ -174,13 +175,14 @@ runtime-monoio = [
 runtime-tokio = [
     "tokio/full",
     "futures-executor",
+    "hyper/server",
     "hyper-util/tokio",
     "ferron-common/runtime-tokio",
     "ferron-load-modules/runtime-tokio",
 ]
 runtime-vibeio = [
     "vibeio",
-    "vibeio-hyper",
+    "vibeio-http",
     "send_wrapper",
     "core_affinity",
     "ferron-common/runtime-vibeio",

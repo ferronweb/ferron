@@ -2,18 +2,35 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
+#[cfg(not(feature = "runtime-vibeio"))]
+use std::time::SystemTime;
 
+use crate::acme::ACME_TLS_ALPN_NAME;
+use crate::config::ServerConfigurations;
+use crate::get_value;
+use crate::listener_handler_communication::ConnectionData;
+use crate::request_handler::request_handler;
+#[cfg(feature = "runtime-monoio")]
+use crate::util::SendAsyncIo;
+use crate::util::{read_proxy_header, MultiCancel};
 use arc_swap::ArcSwap;
 use async_channel::{Receiver, Sender};
+#[cfg(not(feature = "runtime-vibeio"))]
 use bytes::{Buf, Bytes};
 #[cfg(feature = "runtime-vibeio")]
 use core_affinity::CoreId;
 use ferron_common::logging::LogMessage;
-use http_body_util::{BodyExt, StreamBody};
+use http_body_util::BodyExt;
+#[cfg(not(feature = "runtime-vibeio"))]
+use http_body_util::StreamBody;
+#[cfg(not(feature = "runtime-vibeio"))]
 use hyper::body::{Frame, Incoming};
+#[cfg(not(feature = "runtime-vibeio"))]
 use hyper::service::service_fn;
-use hyper::{Request, Response};
+use hyper::Request;
+#[cfg(not(feature = "runtime-vibeio"))]
+use hyper::Response;
 #[cfg(feature = "runtime-tokio")]
 use hyper_util::rt::{TokioIo, TokioTimer};
 #[cfg(feature = "runtime-monoio")]
@@ -35,18 +52,8 @@ use tokio_util::sync::CancellationToken;
 use vibeio::net::PollTcpStream;
 #[cfg(feature = "runtime-vibeio")]
 use vibeio::net::TcpStream;
-#[cfg(feature = "runtime-vibeio")]
-use vibeio_hyper::{VibeioExecutor, VibeioIo, VibeioTimer};
 
-use crate::acme::ACME_TLS_ALPN_NAME;
-use crate::config::ServerConfigurations;
-use crate::get_value;
-use crate::listener_handler_communication::ConnectionData;
-use crate::request_handler::request_handler;
-#[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
-use crate::util::SendAsyncIo;
-use crate::util::{read_proxy_header, MultiCancel};
-
+#[cfg(not(feature = "runtime-vibeio"))]
 static HTTP3_INVALID_HEADERS: [hyper::header::HeaderName; 5] = [
   hyper::header::HeaderName::from_static("keep-alive"),
   hyper::header::HeaderName::from_static("proxy-connection"),
@@ -308,10 +315,10 @@ enum MaybeTlsStream {
 #[cfg(feature = "runtime-vibeio")]
 enum MaybeTlsStream {
   /// TLS stream
-  Tls(TlsStream<SendAsyncIo<PollTcpStream>>),
+  Tls(TlsStream<PollTcpStream>),
 
   /// Plain TCP stream
-  Plain(SendAsyncIo<PollTcpStream>),
+  Plain(PollTcpStream),
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -361,7 +368,7 @@ async fn http_tcp_handler_fn(
   };
   #[cfg(feature = "runtime-vibeio")]
   let tcp_stream = match tcp_stream.into_poll() {
-    Ok(stream) => SendAsyncIo::new(stream),
+    Ok(stream) => stream,
     Err(err) => {
       for logging_tx in configurations
         .find_global_configuration()
@@ -475,23 +482,188 @@ async fn http_tcp_handler_fn(
     #[cfg(feature = "runtime-tokio")]
     let io = TokioIo::new(tls_stream);
 
+    // Ferron with Vibeio would use `vibeio-http` for HTTP
+    #[cfg(feature = "runtime-vibeio")]
+    if is_http2 {
+      use vibeio_http::{Http2Options, HttpProtocol};
+
+      let mut h2_options = Http2Options::default();
+      let http2_builder = h2_options.h2_builder();
+
+      let global_configuration = configurations.find_global_configuration();
+
+      if let Some(initial_window_size) = global_configuration
+        .as_deref()
+        .and_then(|c| get_value!("h2_initial_window_size", c))
+        .and_then(|v| v.as_i128())
+      {
+        http2_builder.initial_window_size(initial_window_size as u32);
+      }
+      if let Some(max_frame_size) = global_configuration
+        .as_deref()
+        .and_then(|c| get_value!("h2_max_frame_size", c))
+        .and_then(|v| v.as_i128())
+      {
+        http2_builder.max_frame_size(max_frame_size as u32);
+      }
+      if let Some(max_concurrent_streams) = global_configuration
+        .as_deref()
+        .and_then(|c| get_value!("h2_max_concurrent_streams", c))
+        .and_then(|v| v.as_i128())
+      {
+        http2_builder.max_concurrent_streams(max_concurrent_streams as u32);
+      }
+      if let Some(max_header_list_size) = global_configuration
+        .as_deref()
+        .and_then(|c| get_value!("h2_max_header_list_size", c))
+        .and_then(|v| v.as_i128())
+      {
+        http2_builder.max_header_list_size(max_header_list_size as u32);
+      }
+      if let Some(enable_connect_protocol) = global_configuration
+        .as_deref()
+        .and_then(|c| get_value!("h2_enable_connect_protocol", c))
+        .and_then(|v| v.as_bool())
+      {
+        if enable_connect_protocol {
+          http2_builder.enable_connect_protocol();
+        }
+      }
+
+      let configurations_clone = configurations.clone();
+      let graceful_shutdown_token2 = CancellationToken::new();
+      let connection_reference = _connection_reference.clone();
+      let http_future = vibeio_http::Http2::new(tls_stream, h2_options)
+        .graceful_shutdown_token(graceful_shutdown_token2.clone())
+        .handle(move |request: Request<vibeio_http::Incoming>| {
+          let (request_parts, request_body) = request.into_parts();
+          let request = Request::from_parts(
+            request_parts,
+            request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
+          );
+          let fut = request_handler(
+            request,
+            client_address,
+            server_address,
+            true,
+            configurations_clone.clone(),
+            if http3_enabled {
+              Some(server_address.port())
+            } else {
+              None
+            },
+            acme_http_01_resolvers.clone(),
+            proxy_protocol_client_address,
+            proxy_protocol_server_address,
+          );
+          let connection_reference = connection_reference.clone();
+          async move {
+            let r = fut.await.map_err(|e| std::io::Error::other(e.to_string()));
+            drop(connection_reference);
+            r
+          }
+        });
+      let mut http_future_pin = std::pin::pin!(http_future);
+      let http_future_result = crate::runtime::select! {
+        result = &mut http_future_pin => {
+          result
+        }
+        _ = shutdown_rx.cancelled() => {
+            graceful_shutdown_token.cancel();
+            http_future_pin.await
+        }
+        _ = graceful_shutdown_token.cancelled() => {
+            graceful_shutdown_token.cancel();
+          http_future_pin.await
+        }
+      };
+      if let Err(err) = http_future_result {
+        for logging_tx in configurations
+          .find_global_configuration()
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels)
+        {
+          logging_tx
+            .send(LogMessage::new(format!("Error serving HTTPS connection: {err}"), true))
+            .await
+            .unwrap_or_default();
+        }
+      }
+    } else {
+      use vibeio_http::{Http1Options, HttpProtocol};
+
+      let configurations_clone = configurations.clone();
+      let graceful_shutdown_token2 = CancellationToken::new();
+      let connection_reference = _connection_reference.clone();
+      let mut http_future = Box::pin(
+        vibeio_http::Http1::new(tls_stream, Http1Options::default())
+          .graceful_shutdown_token(graceful_shutdown_token2.clone())
+          .handle(move |request: Request<vibeio_http::Incoming>| {
+            let (request_parts, request_body) = request.into_parts();
+            let request = Request::from_parts(
+              request_parts,
+              request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
+            );
+            let fut = request_handler(
+              request,
+              client_address,
+              server_address,
+              true,
+              configurations_clone.clone(),
+              if http3_enabled {
+                Some(server_address.port())
+              } else {
+                None
+              },
+              acme_http_01_resolvers.clone(),
+              proxy_protocol_client_address,
+              proxy_protocol_server_address,
+            );
+            let connection_reference = connection_reference.clone();
+            async move {
+              let r = fut.await.map_err(|e| std::io::Error::other(e.to_string()));
+              drop(connection_reference);
+              r
+            }
+          }),
+      );
+      let http_future_result = crate::runtime::select! {
+        result = &mut http_future => {
+          result
+        }
+        _ = shutdown_rx.cancelled() => {
+            graceful_shutdown_token.cancel();
+            http_future.await
+        }
+        _ = graceful_shutdown_token.cancelled() => {
+            graceful_shutdown_token.cancel();
+          http_future.await
+        }
+      };
+      if let Err(err) = http_future_result {
+        for logging_tx in configurations
+          .find_global_configuration()
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels)
+        {
+          logging_tx
+            .send(LogMessage::new(format!("Error serving HTTPS connection: {err}"), true))
+            .await
+            .unwrap_or_default();
+        }
+      }
+    }
+
+    #[cfg(not(feature = "runtime-vibeio"))]
     if is_http2 {
       // Hyper's HTTP/2 connection doesn't require underlying I/O to be `Send`.
       #[cfg(feature = "runtime-monoio")]
       let io = MonoioIo::new(tls_stream);
-      #[cfg(feature = "runtime-vibeio")]
-      let io = VibeioIo::new(tls_stream);
 
       #[cfg(feature = "runtime-monoio")]
       let mut http2_builder = {
         let mut http2_builder = hyper::server::conn::http2::Builder::new(MonoioExecutor);
         http2_builder.timer(MonoioTimer);
-        http2_builder
-      };
-      #[cfg(feature = "runtime-vibeio")]
-      let mut http2_builder = {
-        let mut http2_builder = hyper::server::conn::http2::Builder::new(VibeioExecutor);
-        http2_builder.timer(VibeioTimer);
         http2_builder
       };
       #[cfg(feature = "runtime-tokio")]
@@ -603,8 +775,6 @@ async fn http_tcp_handler_fn(
     } else {
       #[cfg(feature = "runtime-monoio")]
       let io = MonoioIo::new(tls_stream);
-      #[cfg(feature = "runtime-vibeio")]
-      let io = VibeioIo::new(tls_stream);
 
       #[cfg(feature = "runtime-monoio")]
       let http1_builder = {
@@ -621,15 +791,6 @@ async fn http_tcp_handler_fn(
 
         // The timer is neccessary for the header timeout to work to mitigate Slowloris.
         http1_builder.timer(TokioTimer::new());
-
-        http1_builder
-      };
-      #[cfg(feature = "runtime-vibeio")]
-      let http1_builder = {
-        let mut http1_builder = hyper::server::conn::http1::Builder::new();
-
-        // The timer is neccessary for the header timeout to work to mitigate Slowloris.
-        http1_builder.timer(VibeioTimer);
 
         http1_builder
       };
@@ -697,98 +858,272 @@ async fn http_tcp_handler_fn(
       }
     }
   } else if let MaybeTlsStream::Plain(stream) = maybe_tls_stream {
-    #[cfg(feature = "runtime-monoio")]
-    let io = MonoioIo::new(stream);
-    #[cfg(feature = "runtime-tokio")]
-    let io = TokioIo::new(stream);
     #[cfg(feature = "runtime-vibeio")]
-    let io = VibeioIo::new(stream);
+    {
+      use vibeio_http::{Http1Options, HttpProtocol};
 
-    #[cfg(feature = "runtime-monoio")]
-    let http1_builder = {
-      let mut http1_builder = hyper::server::conn::http1::Builder::new();
+      let configurations_clone = configurations.clone();
+      let connection_reference = _connection_reference.clone();
+      let graceful_shutdown_token2 = CancellationToken::new();
+      let http1 = vibeio_http::Http1::new(stream, Http1Options::default())
+        .graceful_shutdown_token(graceful_shutdown_token2.clone());
 
-      // The timer is neccessary for the header timeout to work to mitigate Slowloris.
-      http1_builder.timer(MonoioTimer);
-
-      http1_builder
-    };
-    #[cfg(feature = "runtime-tokio")]
-    let http1_builder = {
-      let mut http1_builder = hyper::server::conn::http1::Builder::new();
-
-      // The timer is neccessary for the header timeout to work to mitigate Slowloris.
-      http1_builder.timer(TokioTimer::new());
-
-      http1_builder
-    };
-    #[cfg(feature = "runtime-vibeio")]
-    let http1_builder = {
-      let mut http1_builder = hyper::server::conn::http1::Builder::new();
-
-      // The timer is neccessary for the header timeout to work to mitigate Slowloris.
-      http1_builder.timer(VibeioTimer);
-
-      http1_builder
-    };
-
-    let configurations_clone = configurations.clone();
-    let mut http_future = http1_builder
-      .serve_connection(
-        io,
-        service_fn(move |request: Request<Incoming>| {
-          let (request_parts, request_body) = request.into_parts();
-          let request = Request::from_parts(
-            request_parts,
-            request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
-          );
-          request_handler(
-            request,
-            client_address,
-            server_address,
-            false,
-            configurations_clone.clone(),
-            if http3_enabled {
-              Some(server_address.port())
-            } else {
-              None
-            },
-            acme_http_01_resolvers.clone(),
-            proxy_protocol_client_address,
-            proxy_protocol_server_address,
-          )
-        }),
-      )
-      .with_upgrades();
-    let http_future_result = crate::runtime::select! {
-      result = &mut http_future => {
-        result
-      }
-      _ = shutdown_rx.cancelled() => {
-        std::pin::Pin::new(&mut http_future).graceful_shutdown();
-        http_future.await
-      }
-      _ = graceful_shutdown_token.cancelled() => {
-        std::pin::Pin::new(&mut http_future).graceful_shutdown();
-        http_future.await
-      }
-    };
-    if let Err(err) = http_future_result {
-      let error_to_log = if err.is_user() {
-        err.source().unwrap_or(&err)
-      } else {
-        &err
+      #[cfg(target_os = "linux")]
+      let mut http_future = Box::pin(http1.zerocopy().handle(move |request: Request<vibeio_http::Incoming>| {
+        let (request_parts, request_body) = request.into_parts();
+        let request = Request::from_parts(
+          request_parts,
+          request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
+        );
+        let fut = request_handler(
+          request,
+          client_address,
+          server_address,
+          true,
+          configurations_clone.clone(),
+          if http3_enabled {
+            Some(server_address.port())
+          } else {
+            None
+          },
+          acme_http_01_resolvers.clone(),
+          proxy_protocol_client_address,
+          proxy_protocol_server_address,
+        );
+        let connection_reference = connection_reference.clone();
+        async move {
+          let r = fut.await.map_err(|e| std::io::Error::other(e.to_string()));
+          drop(connection_reference);
+          r
+        }
+      }));
+      #[cfg(not(target_os = "linux"))]
+      let mut http_future = Box::pin(http1.handle(move |request: Request<vibeio_http::Incoming>| {
+        let (request_parts, request_body) = request.into_parts();
+        let request = Request::from_parts(
+          request_parts,
+          request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
+        );
+        let fut = request_handler(
+          request,
+          client_address,
+          server_address,
+          true,
+          configurations_clone.clone(),
+          if http3_enabled {
+            Some(server_address.port())
+          } else {
+            None
+          },
+          acme_http_01_resolvers.clone(),
+          proxy_protocol_client_address,
+          proxy_protocol_server_address,
+        );
+        let connection_reference = connection_reference.clone();
+        async move {
+          let r = fut.await.map_err(|e| std::io::Error::other(e.to_string()));
+          drop(connection_reference);
+          r
+        }
+      }));
+      let http_future_result = crate::runtime::select! {
+        result = &mut http_future => {
+          result
+        }
+        _ = shutdown_rx.cancelled() => {
+            graceful_shutdown_token.cancel();
+            http_future.await
+        }
+        _ = graceful_shutdown_token.cancelled() => {
+            graceful_shutdown_token.cancel();
+          http_future.await
+        }
       };
+      if let Err(err) = http_future_result {
+        for logging_tx in configurations
+          .find_global_configuration()
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels)
+        {
+          logging_tx
+            .send(LogMessage::new(format!("Error serving HTTP connection: {err}"), true))
+            .await
+            .unwrap_or_default();
+        }
+      }
+    }
+    #[cfg(not(feature = "runtime-vibeio"))]
+    {
+      #[cfg(feature = "runtime-monoio")]
+      let io = MonoioIo::new(stream);
+      #[cfg(feature = "runtime-tokio")]
+      let io = TokioIo::new(stream);
+
+      #[cfg(feature = "runtime-monoio")]
+      let http1_builder = {
+        let mut http1_builder = hyper::server::conn::http1::Builder::new();
+
+        // The timer is neccessary for the header timeout to work to mitigate Slowloris.
+        http1_builder.timer(MonoioTimer);
+
+        http1_builder
+      };
+      #[cfg(feature = "runtime-tokio")]
+      let http1_builder = {
+        let mut http1_builder = hyper::server::conn::http1::Builder::new();
+
+        // The timer is neccessary for the header timeout to work to mitigate Slowloris.
+        http1_builder.timer(TokioTimer::new());
+
+        http1_builder
+      };
+
+      let configurations_clone = configurations.clone();
+      let mut http_future = http1_builder
+        .serve_connection(
+          io,
+          service_fn(move |request: Request<Incoming>| {
+            let (request_parts, request_body) = request.into_parts();
+            let request = Request::from_parts(
+              request_parts,
+              request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
+            );
+            request_handler(
+              request,
+              client_address,
+              server_address,
+              false,
+              configurations_clone.clone(),
+              if http3_enabled {
+                Some(server_address.port())
+              } else {
+                None
+              },
+              acme_http_01_resolvers.clone(),
+              proxy_protocol_client_address,
+              proxy_protocol_server_address,
+            )
+          }),
+        )
+        .with_upgrades();
+      let http_future_result = crate::runtime::select! {
+        result = &mut http_future => {
+          result
+        }
+        _ = shutdown_rx.cancelled() => {
+          std::pin::Pin::new(&mut http_future).graceful_shutdown();
+          http_future.await
+        }
+        _ = graceful_shutdown_token.cancelled() => {
+          std::pin::Pin::new(&mut http_future).graceful_shutdown();
+          http_future.await
+        }
+      };
+      if let Err(err) = http_future_result {
+        let error_to_log = if err.is_user() {
+          err.source().unwrap_or(&err)
+        } else {
+          &err
+        };
+        for logging_tx in configurations
+          .find_global_configuration()
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels)
+        {
+          logging_tx
+            .send(LogMessage::new(
+              format!("Error serving HTTP connection: {error_to_log}"),
+              true,
+            ))
+            .await
+            .unwrap_or_default();
+        }
+      }
+    }
+  }
+}
+
+/// HTTP/3 handler function
+#[inline]
+#[cfg(feature = "runtime-vibeio")]
+#[allow(clippy::too_many_arguments)]
+async fn http_quic_handler_fn(
+  connection_attempt: quinn::Incoming,
+  client_address: SocketAddr,
+  server_address: SocketAddr,
+  configurations: Arc<ServerConfigurations>,
+  connection_reference: Arc<()>,
+  shutdown_rx: CancellationToken,
+  graceful_shutdown_token: Arc<CancellationToken>,
+) {
+  use vibeio_http::{Http3Options, HttpProtocol};
+  match connection_attempt.await {
+    Ok(connection) => {
+      let _connection_reference = Arc::downgrade(&connection_reference);
+      let configurations_clone = configurations.clone();
+      let graceful_shutdown_token2 = CancellationToken::new();
+      let mut http_future = Box::pin(
+        vibeio_http::Http3::new(h3_quinn::Connection::new(connection), Http3Options::default())
+          .graceful_shutdown_token(graceful_shutdown_token2.clone())
+          .handle(move |request: Request<vibeio_http::Incoming>| {
+            let (request_parts, request_body) = request.into_parts();
+            let request = Request::from_parts(
+              request_parts,
+              request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
+            );
+            let fut = request_handler(
+              request,
+              client_address,
+              server_address,
+              true,
+              configurations_clone.clone(),
+              None,
+              Arc::new(tokio::sync::RwLock::new(vec![])),
+              None,
+              None,
+            );
+            let connection_reference = connection_reference.clone();
+            async move {
+              let r = fut.await.map_err(|e| std::io::Error::other(e.to_string()));
+              drop(connection_reference);
+              r
+            }
+          }),
+      );
+      let http_future_result = crate::runtime::select! {
+        result = &mut http_future => {
+          result
+        }
+        _ = shutdown_rx.cancelled() => {
+            graceful_shutdown_token.cancel();
+            http_future.await
+        }
+        _ = graceful_shutdown_token.cancelled() => {
+            graceful_shutdown_token.cancel();
+          http_future.await
+        }
+      };
+      if let Err(err) = http_future_result {
+        for logging_tx in configurations
+          .find_global_configuration()
+          .as_ref()
+          .map_or(&vec![], |c| &c.observability.log_channels)
+        {
+          logging_tx
+            .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
+            .await
+            .unwrap_or_default();
+        }
+      }
+    }
+    Err(err) => {
       for logging_tx in configurations
         .find_global_configuration()
         .as_ref()
         .map_or(&vec![], |c| &c.observability.log_channels)
       {
         logging_tx
-          .send(LogMessage::new(
-            format!("Error serving HTTP connection: {error_to_log}"),
-            true,
-          ))
+          .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
           .await
           .unwrap_or_default();
       }
@@ -797,6 +1132,7 @@ async fn http_tcp_handler_fn(
 }
 
 /// HTTP/3 handler function
+#[cfg(not(feature = "runtime-vibeio"))]
 #[inline]
 #[allow(clippy::too_many_arguments)]
 async fn http_quic_handler_fn(

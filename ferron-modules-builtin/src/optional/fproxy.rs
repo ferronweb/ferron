@@ -124,8 +124,22 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
     if is_connect_proxy_request {
       if let Some(connect_address) = request.uri().authority().map(|auth| auth.to_string()) {
         let error_logger = error_logger.clone();
+        #[cfg(feature = "runtime-vibeio")]
+        let upgrade_on = {
+          let mut request = request;
+          vibeio_http::prepare_upgrade(&mut request)
+        };
         ferron_common::runtime::spawn(async move {
-          match hyper::upgrade::on(request).await {
+          #[cfg(feature = "runtime-vibeio")]
+          let upgrade_on = (if let Some(upgraded_request) = upgrade_on {
+            upgraded_request.await
+          } else {
+            None
+          })
+          .ok_or(std::io::Error::other("vibeio HTTP upgrade failure"));
+          #[cfg(not(feature = "runtime-vibeio"))]
+          let upgrade_on = hyper::upgrade::on(request).await;
+          match upgrade_on {
             Ok(upgraded_request) => {
               let stream = match TcpStream::connect(connect_address).await {
                 Ok(stream) => stream,
@@ -172,7 +186,7 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
               #[cfg(feature = "runtime-tokio")]
               let mut upgraded = TokioIo::new(upgraded_request);
               #[cfg(feature = "runtime-vibeio")]
-              let mut upgraded = VibeioIo::new(upgraded_request);
+              let mut upgraded = upgraded_request;
 
               tokio::io::copy_bidirectional(&mut upgraded, &mut stream)
                 .await

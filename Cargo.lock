@@ -1461,7 +1461,7 @@ dependencies = [
  "tokio-util",
  "urlencoding",
  "vibeio",
- "vibeio-hyper",
+ "vibeio-http",
  "webpki-roots",
  "winresource",
  "x509-parser",
@@ -1498,6 +1498,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "vibeio",
+ "vibeio-http",
  "vibeio-hyper",
  "webpki-roots",
 ]
@@ -1571,6 +1572,7 @@ dependencies = [
  "tokio-util",
  "urlencoding",
  "vibeio",
+ "vibeio-http",
  "vibeio-hyper",
  "xxhash-rust",
 ]
@@ -2513,6 +2515,16 @@ checksum = "b49715b7073f385ba4bc528e5747d02e66cb39c6146efb66b781f131f0fb399c"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "kanal"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e3953adf0cd667798b396c2fa13552d6d9b3269d7dd1154c4c416442d1ff574"
+dependencies = [
+ "futures-core",
+ "lock_api",
 ]
 
 [[package]]
@@ -4819,6 +4831,30 @@ dependencies = [
  "tm-wheel",
  "tokio",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "vibeio-http"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c35c546af99dd6c7475195f7b1cadce57bb016782bee2ff187522640d5e8ef0"
+dependencies = [
+ "bytes",
+ "futures-util",
+ "h2",
+ "h3",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "httparse",
+ "httpdate",
+ "kanal",
+ "memchr",
+ "oneshot",
+ "send_wrapper",
+ "tokio",
+ "tokio-util",
+ "vibeio",
 ]
 
 [[package]]
