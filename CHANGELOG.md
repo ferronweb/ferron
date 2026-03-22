@@ -6,7 +6,11 @@
 
 ### Added
 
-- DNSimple DNS provider for DNS-01 ACME challenges
+- DNSimple DNS provider for DNS-01 ACME challenges.
+
+### Fixed
+
+- `Server` and `Alt-Svc` (for HTTP/3) headers couldn't be modified or removed.
 
 ## Ferron 2.6.0
 

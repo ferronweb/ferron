@@ -305,14 +305,14 @@ async fn finalize_response_and_log(
 ) -> Response<BoxBody<Bytes, std::io::Error>> {
   let (mut response_parts, response_body) = response.into_parts();
 
+  add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
+  add_server_header(&mut response_parts);
   add_custom_headers(
     &mut response_parts,
     &headers_to_add,
     &headers_to_replace,
     &headers_to_remove,
   );
-  add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
-  add_server_header(&mut response_parts);
 
   let response = Response::from_parts(response_parts, response_body);
 
@@ -505,14 +505,15 @@ async fn finalize_with_modifying_handlers(
   timeout_duration: Option<std::time::Duration>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
   let (mut response_parts, response_body) = response.into_parts();
+
+  add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
+  add_server_header(&mut response_parts);
   add_custom_headers(
     &mut response_parts,
     &headers_to_add,
     &headers_to_replace,
     &headers_to_remove,
   );
-  add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
-  add_server_header(&mut response_parts);
 
   let response = Response::from_parts(response_parts, response_body);
 
