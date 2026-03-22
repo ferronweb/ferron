@@ -32,6 +32,8 @@ monoio-compat = { version = "0.2.2", optional = true, features = ["hyper"] }
 anyhow = { version = "1.0.98", optional = true }
 webpki-roots = { version = "1.0.2", optional = true }
 hyper-util = { version = "0.1.13", optional = true }
+vibeio = { version = "0.2.5", optional = true }
+vibeio-hyper = { version = "0.2.5", optional = true }
 
 [target.'cfg(unix)'.dev-dependencies]
 shiba = { workspace = true }
@@ -40,4 +42,5 @@ shiba = { workspace = true }
 default = ["runtime-monoio"]
 runtime-monoio = ["monoio", "monoio-compat", "send_wrapper"]
 runtime-tokio = ["hyper-util", "hyper-util/tokio"]
+runtime-vibeio = ["vibeio", "vibeio-hyper", "send_wrapper"]
 http-proxy = ["rand", "ppp", "connpool", "rustls-platform-verifier", "tokio-rustls", "anyhow", "webpki-roots"]

@@ -14,10 +14,10 @@ use hyper_util::rt::{TokioExecutor, TokioIo};
 #[cfg(feature = "runtime-monoio")]
 use monoio_compat::hyper::{MonoioExecutor, MonoioIo};
 use tokio::io::{AsyncRead, AsyncWrite};
+#[cfg(feature = "runtime-vibeio")]
+use vibeio_hyper::{VibeioExecutor, VibeioIo};
 
-use super::ConnectionPoolItem;
-#[cfg(feature = "runtime-monoio")]
-use super::DropGuard;
+use super::{ConnectionPoolItem, DropGuard};
 use crate::http_proxy::send_request::{SendRequest, SendRequestWrapper};
 use crate::logging::ErrorLogger;
 use crate::modules::ResponseData;
@@ -74,14 +74,18 @@ unsafe impl<B> Sync for TrackedBody<B> where B: Sync {}
 pub(super) async fn http_proxy_handshake(
   stream: impl AsyncRead + AsyncWrite + Send + Unpin + 'static,
   use_http2: bool,
-  #[cfg(feature = "runtime-monoio")] drop_guard: DropGuard,
+  #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))] drop_guard: DropGuard,
 ) -> Result<SendRequest, Box<dyn Error + Send + Sync>> {
+  #[cfg(feature = "runtime-vibeio")]
+  let io = VibeioIo::new(stream);
   #[cfg(feature = "runtime-monoio")]
   let io = MonoioIo::new(stream);
   #[cfg(feature = "runtime-tokio")]
   let io = TokioIo::new(stream);
 
   Ok(if use_http2 {
+    #[cfg(feature = "runtime-vibeio")]
+    let executor = VibeioExecutor;
     #[cfg(feature = "runtime-monoio")]
     let executor = MonoioExecutor;
     #[cfg(feature = "runtime-tokio")]
@@ -102,7 +106,7 @@ pub(super) async fn http_proxy_handshake(
     let conn_with_upgrades = conn.with_upgrades();
     crate::runtime::spawn(async move {
       conn_with_upgrades.await.unwrap_or_default();
-      #[cfg(feature = "runtime-monoio")]
+      #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
       drop(drop_guard);
     });
 
@@ -154,11 +158,15 @@ pub(super) async fn http_proxy(
         crate::runtime::spawn(async move {
           match hyper::upgrade::on(proxy_request_cloned).await {
             Ok(upgraded_proxy) => {
+              #[cfg(feature = "runtime-vibeio")]
+              let mut upgraded_backend = VibeioIo::new(upgraded_backend);
               #[cfg(feature = "runtime-monoio")]
               let mut upgraded_backend = MonoioIo::new(upgraded_backend);
               #[cfg(feature = "runtime-tokio")]
               let mut upgraded_backend = TokioIo::new(upgraded_backend);
 
+              #[cfg(feature = "runtime-vibeio")]
+              let mut upgraded_proxy = VibeioIo::new(upgraded_proxy);
               #[cfg(feature = "runtime-monoio")]
               let mut upgraded_proxy = MonoioIo::new(upgraded_proxy);
               #[cfg(feature = "runtime-tokio")]

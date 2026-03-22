@@ -7,6 +7,8 @@ use std::time::{Duration, SystemTime};
 use arc_swap::ArcSwap;
 use async_channel::{Receiver, Sender};
 use bytes::{Buf, Bytes};
+#[cfg(feature = "runtime-vibeio")]
+use core_affinity::CoreId;
 use ferron_common::logging::LogMessage;
 use http_body_util::{BodyExt, StreamBody};
 use hyper::body::{Frame, Incoming};
@@ -29,13 +31,19 @@ use tokio::net::TcpStream;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::LazyConfigAcceptor;
 use tokio_util::sync::CancellationToken;
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::net::PollTcpStream;
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::net::TcpStream;
+#[cfg(feature = "runtime-vibeio")]
+use vibeio_hyper::{VibeioExecutor, VibeioIo, VibeioTimer};
 
 use crate::acme::ACME_TLS_ALPN_NAME;
 use crate::config::ServerConfigurations;
 use crate::get_value;
 use crate::listener_handler_communication::ConnectionData;
 use crate::request_handler::request_handler;
-#[cfg(feature = "runtime-monoio")]
+#[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
 use crate::util::SendAsyncIo;
 use crate::util::{read_proxy_header, MultiCancel};
 
@@ -87,6 +95,7 @@ pub fn create_http_handler(
   enable_uring: Option<bool>,
   io_uring_disabled: Sender<Option<std::io::Error>>,
   multi_cancel: Arc<MultiCancel>,
+  #[cfg(feature = "runtime-vibeio")] core_affinity: Option<CoreId>,
 ) -> Result<(CancellationToken, Sender<()>), Box<dyn Error + Send + Sync>> {
   let shutdown_tx = CancellationToken::new();
   let shutdown_rx = shutdown_tx.clone();
@@ -95,6 +104,10 @@ pub fn create_http_handler(
   std::thread::Builder::new()
     .name("Request handler".to_string())
     .spawn(move || {
+      #[cfg(feature = "runtime-vibeio")]
+      if let Some(affinity) = core_affinity {
+        core_affinity::set_for_current(affinity);
+      }
       let mut rt = match crate::runtime::Runtime::new_runtime(enable_uring) {
         Ok(rt) => rt,
         Err(error) => {
@@ -149,7 +162,7 @@ async fn http_handler_fn(
   let graceful_shutdown_token = Arc::new(ArcSwap::from_pointee(CancellationToken::new()));
   let graceful_shutdown_token_clone = graceful_shutdown_token.clone();
 
-  let mut graceful_rx_recv_future = std::pin::pin!(async move {
+  let mut graceful_rx_recv_future = Box::pin(async move {
     while graceful_rx.recv().await.is_ok() {
       graceful_shutdown_token_clone
         .swap(Arc::new(CancellationToken::new()))
@@ -216,8 +229,10 @@ async fn http_handler_fn(
           // Unset it when io_uring is enabled, and set it otherwise.
           #[cfg(feature = "runtime-monoio")]
           let _ = tcp_stream.set_nonblocking(monoio::utils::is_legacy());
+          #[cfg(feature = "runtime-vibeio")]
+          let _ = tcp_stream.set_nonblocking(vibeio::util::supports_completion());
 
-          #[cfg(feature = "runtime-monoio")]
+          #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
           let tcp_stream = match TcpStream::from_std(tcp_stream) {
             Ok(stream) => stream,
             Err(err) => {
@@ -288,6 +303,17 @@ enum MaybeTlsStream {
   Plain(SendAsyncIo<TcpStreamPoll>),
 }
 
+/// Enum for maybe TLS stream
+#[allow(clippy::large_enum_variant)]
+#[cfg(feature = "runtime-vibeio")]
+enum MaybeTlsStream {
+  /// TLS stream
+  Tls(TlsStream<SendAsyncIo<PollTcpStream>>),
+
+  /// Plain TCP stream
+  Plain(SendAsyncIo<PollTcpStream>),
+}
+
 #[allow(clippy::large_enum_variant)]
 #[cfg(feature = "runtime-tokio")]
 enum MaybeTlsStream {
@@ -318,6 +344,23 @@ async fn http_tcp_handler_fn(
   let _connection_reference = Arc::downgrade(&connection_reference);
   #[cfg(feature = "runtime-monoio")]
   let tcp_stream = match tcp_stream.into_poll_io() {
+    Ok(stream) => SendAsyncIo::new(stream),
+    Err(err) => {
+      for logging_tx in configurations
+        .find_global_configuration()
+        .as_ref()
+        .map_or(&vec![], |c| &c.observability.log_channels)
+      {
+        logging_tx
+          .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
+          .await
+          .unwrap_or_default();
+      }
+      return;
+    }
+  };
+  #[cfg(feature = "runtime-vibeio")]
+  let tcp_stream = match tcp_stream.into_poll() {
     Ok(stream) => SendAsyncIo::new(stream),
     Err(err) => {
       for logging_tx in configurations
@@ -436,11 +479,19 @@ async fn http_tcp_handler_fn(
       // Hyper's HTTP/2 connection doesn't require underlying I/O to be `Send`.
       #[cfg(feature = "runtime-monoio")]
       let io = MonoioIo::new(tls_stream);
+      #[cfg(feature = "runtime-vibeio")]
+      let io = VibeioIo::new(tls_stream);
 
       #[cfg(feature = "runtime-monoio")]
       let mut http2_builder = {
         let mut http2_builder = hyper::server::conn::http2::Builder::new(MonoioExecutor);
         http2_builder.timer(MonoioTimer);
+        http2_builder
+      };
+      #[cfg(feature = "runtime-vibeio")]
+      let mut http2_builder = {
+        let mut http2_builder = hyper::server::conn::http2::Builder::new(VibeioExecutor);
+        http2_builder.timer(VibeioTimer);
         http2_builder
       };
       #[cfg(feature = "runtime-tokio")]
@@ -552,6 +603,8 @@ async fn http_tcp_handler_fn(
     } else {
       #[cfg(feature = "runtime-monoio")]
       let io = MonoioIo::new(tls_stream);
+      #[cfg(feature = "runtime-vibeio")]
+      let io = VibeioIo::new(tls_stream);
 
       #[cfg(feature = "runtime-monoio")]
       let http1_builder = {
@@ -568,6 +621,15 @@ async fn http_tcp_handler_fn(
 
         // The timer is neccessary for the header timeout to work to mitigate Slowloris.
         http1_builder.timer(TokioTimer::new());
+
+        http1_builder
+      };
+      #[cfg(feature = "runtime-vibeio")]
+      let http1_builder = {
+        let mut http1_builder = hyper::server::conn::http1::Builder::new();
+
+        // The timer is neccessary for the header timeout to work to mitigate Slowloris.
+        http1_builder.timer(VibeioTimer);
 
         http1_builder
       };
@@ -639,6 +701,8 @@ async fn http_tcp_handler_fn(
     let io = MonoioIo::new(stream);
     #[cfg(feature = "runtime-tokio")]
     let io = TokioIo::new(stream);
+    #[cfg(feature = "runtime-vibeio")]
+    let io = VibeioIo::new(stream);
 
     #[cfg(feature = "runtime-monoio")]
     let http1_builder = {
@@ -655,6 +719,15 @@ async fn http_tcp_handler_fn(
 
       // The timer is neccessary for the header timeout to work to mitigate Slowloris.
       http1_builder.timer(TokioTimer::new());
+
+      http1_builder
+    };
+    #[cfg(feature = "runtime-vibeio")]
+    let http1_builder = {
+      let mut http1_builder = hyper::server::conn::http1::Builder::new();
+
+      // The timer is neccessary for the header timeout to work to mitigate Slowloris.
+      http1_builder.timer(VibeioTimer);
 
       http1_builder
     };

@@ -21,12 +21,16 @@ use tokio::process::Command;
 use tokio::sync::RwLock;
 #[cfg(feature = "runtime-monoio")]
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::fs;
 
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use ferron_common::util::{ModuleCache, TtlCache, SERVER_SOFTWARE};
 use ferron_common::{get_entries, get_entries_for_validation, get_entry, get_value};
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::util::AsyncWrap;
 
 /// Custom runtime for `cegla-cgi`
 #[cfg(feature = "runtime-monoio")]
@@ -91,6 +95,98 @@ impl cegla_cgi::client::SendChild for CustomCgiChild {
 
   fn try_status(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
     self.inner.try_status()
+  }
+}
+
+/// Custom runtime for `cegla-cgi`
+#[cfg(feature = "runtime-vibeio")]
+pub struct CustomCgiRuntime;
+
+/// Custom child process for `cegla-cgi`
+#[cfg(feature = "runtime-vibeio")]
+pub struct CustomCgiChild {
+  inner: vibeio::process::Child,
+}
+
+#[cfg(feature = "runtime-vibeio")]
+impl cegla_cgi::client::Runtime for CustomCgiRuntime {
+  type Child = CustomCgiChild;
+
+  fn spawn(&self, future: impl std::future::Future + 'static) {
+    vibeio::spawn(async move {
+      future.await;
+    });
+  }
+
+  fn start_child(
+    &self,
+    cmd: &std::ffi::OsStr,
+    args: &[&std::ffi::OsStr],
+    env: CgiEnvironment,
+  ) -> Result<Self::Child, std::io::Error> {
+    let mut command = vibeio::process::Command::new(cmd);
+    command
+      .stdin(Stdio::piped())
+      .stdout(Stdio::piped())
+      .stderr(Stdio::piped())
+      .envs(env)
+      .args(args);
+    Ok(CustomCgiChild {
+      inner: command.spawn()?,
+    })
+  }
+}
+
+#[cfg(feature = "runtime-vibeio")]
+impl cegla_cgi::client::Child for CustomCgiChild {
+  type Stdin = AsyncWrap<vibeio::process::ChildStdin>;
+  type Stdout = AsyncWrap<vibeio::process::ChildStdout>;
+  type Stderr = AsyncWrap<vibeio::process::ChildStderr>;
+
+  fn stdin(&mut self) -> Option<Self::Stdin> {
+    self.inner.stdin.take().map(AsyncWrap::new)
+  }
+
+  fn stdout(&mut self) -> Option<Self::Stdout> {
+    self.inner.stdout.take().map(AsyncWrap::new)
+  }
+
+  fn stderr(&mut self) -> Option<Self::Stderr> {
+    self.inner.stderr.take().map(AsyncWrap::new)
+  }
+
+  fn try_status(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+    self.inner.try_wait()
+  }
+}
+
+#[cfg(feature = "runtime-vibeio")]
+struct SendWrapBody<B> {
+  inner: send_wrapper::SendWrapper<std::pin::Pin<Box<B>>>,
+}
+
+#[cfg(feature = "runtime-vibeio")]
+impl<B> SendWrapBody<B> {
+  fn new(inner: B) -> Self {
+    Self {
+      inner: send_wrapper::SendWrapper::new(Box::pin(inner)),
+    }
+  }
+}
+
+#[cfg(feature = "runtime-vibeio")]
+impl<B> hyper::body::Body for SendWrapBody<B>
+where
+  B: hyper::body::Body + 'static,
+{
+  type Data = B::Data;
+  type Error = B::Error;
+
+  fn poll_frame(
+    mut self: std::pin::Pin<&mut Self>,
+    cx: &mut std::task::Context<'_>,
+  ) -> std::task::Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
+    self.inner.as_mut().poll_frame(cx)
   }
 }
 
@@ -287,7 +383,7 @@ impl ModuleHandlers for CgiModuleHandlers {
                 "Can't spawn a blocking task to obtain the canonical webroot path",
               )))
           };
-          #[cfg(feature = "runtime-tokio")]
+          #[cfg(any(feature = "runtime-tokio", feature = "runtime-vibeio"))]
           let canonicalize_result = fs::canonicalize(&wwwroot_unknown).await;
 
           match canonicalize_result {
@@ -341,7 +437,7 @@ impl ModuleHandlers for CgiModuleHandlers {
                   "Can't spawn a blocking task to obtain the canonical file path",
                 )))
             };
-            #[cfg(feature = "runtime-tokio")]
+            #[cfg(any(feature = "runtime-tokio", feature = "runtime-vibeio"))]
             let canonicalize_result = fs::canonicalize(&joined_pathbuf).await;
 
             let canonical_joined_pathbuf = match canonicalize_result {
@@ -370,6 +466,11 @@ impl ModuleHandlers for CgiModuleHandlers {
           #[cfg(feature = "runtime-tokio")]
           let metadata = {
             use tokio::fs;
+            fs::metadata(&joined_pathbuf).await
+          };
+          #[cfg(feature = "runtime-vibeio")]
+          let metadata = {
+            use vibeio::fs;
             fs::metadata(&joined_pathbuf).await
           };
           #[cfg(all(feature = "runtime-monoio", unix))]
@@ -419,6 +520,11 @@ impl ModuleHandlers for CgiModuleHandlers {
                   #[cfg(all(feature = "runtime-monoio", unix))]
                   let temp_metadata = {
                     use monoio::fs;
+                    fs::metadata(&temp_joined_pathbuf).await
+                  };
+                  #[cfg(feature = "runtime-vibeio")]
+                  let temp_metadata = {
+                    use vibeio::fs;
                     fs::metadata(&temp_joined_pathbuf).await
                   };
                   #[cfg(all(feature = "runtime-monoio", windows))]
@@ -475,6 +581,11 @@ impl ModuleHandlers for CgiModuleHandlers {
                   #[cfg(all(feature = "runtime-monoio", unix))]
                   let temp_metadata = {
                     use monoio::fs;
+                    fs::metadata(&temp_pathbuf).await
+                  };
+                  #[cfg(feature = "runtime-vibeio")]
+                  let temp_metadata = {
+                    use vibeio::fs;
                     fs::metadata(&temp_pathbuf).await
                   };
                   #[cfg(all(feature = "runtime-monoio", windows))]
@@ -720,12 +831,21 @@ async fn execute_cgi(
   let runtime = tokio_cegla::TokioCgiRuntime;
   #[cfg(feature = "runtime-monoio")]
   let runtime = CustomCgiRuntime;
+  #[cfg(feature = "runtime-vibeio")]
+  let runtime = CustomCgiRuntime;
 
+  #[cfg(not(feature = "runtime-vibeio"))]
   let (response, stderr, exit_code_option) =
     cegla_cgi::client::execute_cgi_send(request, runtime, cmd, &args, env_builder, Some(execute_dir_pathbuf)).await?;
+  #[cfg(feature = "runtime-vibeio")]
+  let (response, stderr, exit_code_option) =
+    cegla_cgi::client::execute_cgi(request, runtime, cmd, &args, env_builder).await?;
 
   let (parts, body) = response.into_parts();
+  #[cfg(not(feature = "runtime-vibeio"))]
   let response = Response::from_parts(parts, body.boxed());
+  #[cfg(feature = "runtime-vibeio")]
+  let response = Response::from_parts(parts, SendWrapBody::new(body).boxed());
 
   if let Some(exit_code) = exit_code_option {
     if !exit_code.success() {

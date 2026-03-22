@@ -23,6 +23,8 @@ use tokio::sync::RwLock;
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio_util::io::{SinkWriter, StreamReader};
 use tokio_util::sync::CancellationToken;
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::net::TcpStream;
 
 use crate::util::fcgi::{
   construct_fastcgi_name_value_pair, construct_fastcgi_record, FcgiDecodedData, FcgiDecoder, FcgiEncoder,
@@ -263,6 +265,8 @@ impl ModuleHandlers for FcgiModuleHandlers {
               };
               #[cfg(feature = "runtime-tokio")]
               let canonicalize_result = tokio::fs::canonicalize(&wwwroot_unknown).await;
+              #[cfg(feature = "runtime-vibeio")]
+              let canonicalize_result = vibeio::fs::canonicalize(&wwwroot_unknown).await;
 
               match canonicalize_result {
                 Ok(pathbuf) => pathbuf,
@@ -310,6 +314,8 @@ impl ModuleHandlers for FcgiModuleHandlers {
             };
             #[cfg(feature = "runtime-tokio")]
             let canonicalize_result = tokio::fs::canonicalize(&joined_pathbuf).await;
+            #[cfg(feature = "runtime-vibeio")]
+            let canonicalize_result = vibeio::fs::canonicalize(&joined_pathbuf).await;
 
             let canonical_joined_pathbuf = match canonicalize_result {
               Ok(pathbuf) => pathbuf,
@@ -368,6 +374,8 @@ impl ModuleHandlers for FcgiModuleHandlers {
               };
               #[cfg(feature = "runtime-tokio")]
               let canonicalize_result = tokio::fs::canonicalize(&wwwroot_unknown).await;
+              #[cfg(feature = "runtime-vibeio")]
+              let canonicalize_result = vibeio::fs::canonicalize(&wwwroot_unknown).await;
 
               match canonicalize_result {
                 Ok(pathbuf) => pathbuf,
@@ -414,6 +422,11 @@ impl ModuleHandlers for FcgiModuleHandlers {
                 use tokio::fs;
                 fs::metadata(&joined_pathbuf).await
               };
+              #[cfg(all(feature = "runtime-vibeio", unix))]
+              let metadata = {
+                use vibeio::fs;
+                fs::metadata(&joined_pathbuf).await
+              };
               #[cfg(all(feature = "runtime-monoio", unix))]
               let metadata = {
                 use monoio::fs;
@@ -445,6 +458,11 @@ impl ModuleHandlers for FcgiModuleHandlers {
                       #[cfg(feature = "runtime-tokio")]
                       let temp_metadata = {
                         use tokio::fs;
+                        fs::metadata(&temp_joined_pathbuf).await
+                      };
+                      #[cfg(feature = "runtime-vibeio")]
+                      let temp_metadata = {
+                        use vibeio::fs;
                         fs::metadata(&temp_joined_pathbuf).await
                       };
                       #[cfg(all(feature = "runtime-monoio", unix))]
@@ -496,6 +514,11 @@ impl ModuleHandlers for FcgiModuleHandlers {
                       #[cfg(all(feature = "runtime-monoio", unix))]
                       let temp_metadata = {
                         use monoio::fs;
+                        fs::metadata(&temp_pathbuf).await
+                      };
+                      #[cfg(feature = "runtime-vibeio")]
+                      let temp_metadata = {
+                        use vibeio::fs;
                         fs::metadata(&temp_pathbuf).await
                       };
                       #[cfg(all(feature = "runtime-monoio", windows))]
@@ -885,6 +908,15 @@ async fn connect_tcp(addr: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn 
   Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
 }
 
+#[cfg(feature = "runtime-vibeio")]
+async fn connect_tcp(addr: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
+  let socket = TcpStream::connect(addr).await?;
+  socket.set_nodelay(true)?;
+
+  let (socket_reader_set, socket_writer_set) = tokio::io::split(socket.into_poll()?);
+  Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
+}
+
 #[cfg(feature = "runtime-tokio")]
 async fn connect_tcp(
   addr: &str,
@@ -910,6 +942,17 @@ async fn connect_unix(path: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn
   let socket = UnixStream::connect(path).await?;
 
   let (socket_reader_set, socket_writer_set) = tokio::io::split(socket.into_poll_io()?);
+  Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
+}
+
+#[allow(dead_code)]
+#[cfg(all(feature = "runtime-vibeio", unix))]
+async fn connect_unix(path: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
+  use vibeio::net::UnixStream;
+
+  let socket = UnixStream::connect(path).await?;
+
+  let (socket_reader_set, socket_writer_set) = tokio::io::split(socket.into_poll()?);
   Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
 }
 

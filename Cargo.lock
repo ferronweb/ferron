@@ -1119,6 +1119,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
+name = "core_affinity"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a034b3a7b624016c6e13f5df875747cc25f884156aad2abd12b6c46797971342"
+dependencies = [
+ "libc",
+ "num_cpus",
+ "winapi",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1397,6 +1408,7 @@ dependencies = [
  "bytes",
  "chrono",
  "clap",
+ "core_affinity",
  "dirs",
  "fancy-regex",
  "ferron-common",
@@ -1448,6 +1460,8 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "urlencoding",
+ "vibeio",
+ "vibeio-hyper",
  "webpki-roots",
  "winresource",
  "x509-parser",
@@ -1483,6 +1497,8 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-util",
+ "vibeio",
+ "vibeio-hyper",
  "webpki-roots",
 ]
 
@@ -1554,6 +1570,8 @@ dependencies = [
  "tokio-cegla",
  "tokio-util",
  "urlencoding",
+ "vibeio",
+ "vibeio-hyper",
  "xxhash-rust",
 ]
 
@@ -2659,9 +2677,9 @@ dependencies = [
 
 [[package]]
 name = "moka"
-version = "0.12.14"
+version = "0.12.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85f8024e1c8e71c778968af91d43700ce1d11b219d127d79fb2934153b82b42b"
+checksum = "957228ad12042ee839f93c8f257b62b4c0ab5eaae1d4fa60de53b27c9d7c5046"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-epoch",
@@ -2920,6 +2938,12 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
+
+[[package]]
+name = "oneshot"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfe21416a02c693fb9f980befcb230ecc70b0b3d1cc4abf88b9675c4c1457f0c"
 
 [[package]]
 name = "openssl-probe"
@@ -3843,6 +3867,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
+name = "rusty_pool"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ed36cdb20de66d89a17ea04b8883fc7a386f2cf877aaedca5005583ce4876ff"
+dependencies = [
+ "crossbeam-channel",
+ "futures",
+ "futures-channel",
+ "futures-executor",
+ "num_cpus",
+]
+
+[[package]]
 name = "ryu"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4353,6 +4390,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
+name = "tm-wheel"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77555380a341278942ff24ae5a39cb4f0afe93971755ce91f4370b9d209c1520"
+dependencies = [
+ "slab",
+]
+
+[[package]]
 name = "tokenbucket"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4753,6 +4799,38 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vibeio"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78dce705a708cacdd5822824342a8843abcceb9619e7079dc0e97b77dcc4ce1c"
+dependencies = [
+ "async-channel",
+ "crossbeam-queue",
+ "futures-util",
+ "io-uring",
+ "libc",
+ "mio",
+ "once_cell",
+ "oneshot",
+ "rusty_pool",
+ "slab",
+ "tm-wheel",
+ "tokio",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "vibeio-hyper"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c236ec90026336f087b14ffe4035bd0a910c766539d13aa6a624ee71a0a1d682"
+dependencies = [
+ "hyper",
+ "tokio",
+ "vibeio",
+]
 
 [[package]]
 name = "vsimd"

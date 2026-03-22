@@ -75,7 +75,7 @@ impl ResolvesServerCert for OcspStapler {
       // Check cache
       //
       // If blocking_read() method is used when only Tokio is used, the program would panic on resolving a TLS certificate.
-      #[cfg(feature = "runtime-monoio")]
+      #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
       let cache = self.cache.blocking_read();
       #[cfg(feature = "runtime-tokio")]
       let cache = futures_executor::block_on(async { self.cache.read().await });

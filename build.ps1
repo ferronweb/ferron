@@ -45,6 +45,11 @@ if ($env:CARGO_FINAL_EXTRA_ARGS)
 if ($env:NO_MONOIO)
 {
     $cargoFinalExtraArgs = "--no-default-features -F ferron/runtime-tokio $cargoFinalExtraArgs"
+} else {
+    if ($env:EXPERIMENTAL_VIBEIO)
+    {
+        $cargoFinalExtraArgs = "--no-default-features -F ferron/runtime-vibeio $cargoFinalExtraArgs"
+    }
 }
 
 # Split the arguments (to avoid being interpreted as one large argument)

@@ -801,6 +801,31 @@ fn before_starting_server(
         // there would be a "deadlock" when shutting down handler threads, and they won't be able to shut down
         let multi_cancel = Arc::new(MultiCancel::new(available_parallelism.saturating_sub(1)));
 
+        #[cfg(feature = "runtime-vibeio")]
+        if let Some(core_ids) = core_affinity::get_core_ids() {
+          for core_id in core_ids {
+            handler_shutdown_channels.push(create_http_handler(
+              reloadable_handler_data.clone(),
+              listener_handler_rx.clone(),
+              enable_uring,
+              io_uring_disabled_tx.clone(),
+              multi_cancel.clone(),
+              Some(core_id),
+            )?);
+          }
+        } else {
+          for _ in 0..available_parallelism {
+            handler_shutdown_channels.push(create_http_handler(
+              reloadable_handler_data.clone(),
+              listener_handler_rx.clone(),
+              enable_uring,
+              io_uring_disabled_tx.clone(),
+              multi_cancel.clone(),
+              None,
+            )?);
+          }
+        }
+        #[cfg(not(feature = "runtime-vibeio"))]
         for _ in 0..available_parallelism {
           handler_shutdown_channels.push(create_http_handler(
             reloadable_handler_data.clone(),
