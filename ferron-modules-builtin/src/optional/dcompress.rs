@@ -361,7 +361,8 @@ impl ModuleHandlers for DynamicCompressionModuleHandlers {
         .headers_mut()
         .insert(header::CONTENT_ENCODING, algorithm_str.parse()?);
 
-      let (response_parts, response_body) = response.into_parts();
+      let (mut response_parts, response_body) = response.into_parts();
+      let mut remove_extensions = false;
 
       // Create the appropriate response body based on compression method
       let boxed_body = match used_compression {
@@ -453,9 +454,15 @@ impl ModuleHandlers for DynamicCompressionModuleHandlers {
         }
         _ => {
           // No compression algorithm is used, so we can just return the original response body
+          remove_extensions = false;
           response_body
         }
       };
+
+      if remove_extensions {
+        // Remove extensions from response parts (to prevent zerocopy from interfering with the dynamic compression)
+        response_parts.extensions.clear();
+      }
 
       response = Response::from_parts(response_parts, boxed_body);
     }

@@ -166,7 +166,8 @@ impl ModuleHandlers for BufferModuleHandlers {
     mut response: Response<BoxBody<Bytes, std::io::Error>>,
   ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Box<dyn Error>> {
     if let Some(response_buffer_size) = self.response_buffer_size {
-      let (response_parts, mut response_body) = response.into_parts();
+      let (mut response_parts, mut response_body) = response.into_parts();
+      response_parts.extensions.clear();
       let mut response_body_buffer = Vec::new();
       let mut data_len: usize = 0;
       while let Some(frame) = response_body.frame().await {
