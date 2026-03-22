@@ -73,7 +73,7 @@ struct CustomAsyncTimer {
 #[cfg(feature = "runtime-vibeio")]
 impl AsyncTimer for CustomAsyncTimer {
   fn reset(mut self: Pin<&mut Self>, t: Instant) {
-    (*self.inner).as_mut().reset(t.into())
+    (*self.inner).as_mut().reset(t)
   }
 
   fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<()> {
@@ -105,7 +105,7 @@ impl Runtime for EnterTokioRuntime {
       });
       #[cfg(feature = "runtime-vibeio")]
       let timer = Box::pin(CustomAsyncTimer {
-        inner: SendWrapper::new(Box::pin(vibeio::time::sleep_until(t.into()))),
+        inner: SendWrapper::new(Box::pin(vibeio::time::sleep_until(t))),
       });
       timer
     }

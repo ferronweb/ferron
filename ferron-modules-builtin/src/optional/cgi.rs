@@ -969,6 +969,62 @@ async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dy
 }
 
 #[allow(dead_code)]
+#[cfg(all(feature = "runtime-vibeio", not(unix)))]
+async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
+  let magic_signature_buffer = vec![0u8; 2].into_boxed_slice();
+  let open_file = fs::File::open(&execute_pathbuf).await?;
+  let open_file_result = open_file.read_exact_at(magic_signature_buffer, 0).await;
+  if open_file_result.0.is_err() {
+    Err(anyhow::anyhow!("Failed to read the CGI program signature"))?
+  }
+
+  match Bytes::from_owner(open_file_result.1).as_ref() {
+    b"PE" => {
+      // Windows executables
+      let executable_params_vector = vec![execute_pathbuf.to_string_lossy().to_string()];
+      Ok(executable_params_vector)
+    }
+    b"#!" => {
+      // Scripts with a shebang line
+      let mut shebang_line_bytes = Vec::new();
+      let mut shebang_bytes_read = 0;
+      loop {
+        let buf = vec![0u8; 1024].into_boxed_slice();
+        let read_result = open_file.read_at(buf, shebang_bytes_read).await;
+        let read = read_result.0?;
+        let mut buf = Bytes::from_owner(read_result.1);
+        buf.truncate(read);
+
+        shebang_bytes_read += read as u64;
+        if let Some(index) = memchr::memchr(b'\n', &buf) {
+          shebang_line_bytes.extend_from_slice(&buf[..index + 1]);
+          break;
+        } else if let Some(index) = memchr::memchr(b'\r', &buf) {
+          shebang_line_bytes.extend_from_slice(&buf[..index + 1]);
+          break;
+        } else {
+          shebang_line_bytes.extend_from_slice(&buf);
+        }
+      }
+      let shebang_line = String::from_utf8_lossy(&shebang_line_bytes);
+
+      let mut command_begin: Vec<String> = shebang_line[2..]
+        .replace("\r", "")
+        .replace("\n", "")
+        .split(" ")
+        .map(|s| s.to_owned())
+        .collect();
+      command_begin.push(execute_pathbuf.to_string_lossy().to_string());
+      Ok(command_begin)
+    }
+    _ => {
+      // It's not executable
+      Err(anyhow::anyhow!("The CGI program is not executable"))?
+    }
+  }
+}
+
+#[allow(dead_code)]
 #[cfg(all(feature = "runtime-tokio", not(unix)))]
 async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
   use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};

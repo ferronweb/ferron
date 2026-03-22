@@ -422,7 +422,7 @@ impl ModuleHandlers for FcgiModuleHandlers {
                 use tokio::fs;
                 fs::metadata(&joined_pathbuf).await
               };
-              #[cfg(all(feature = "runtime-vibeio", unix))]
+              #[cfg(feature = "runtime-vibeio")]
               let metadata = {
                 use vibeio::fs;
                 fs::metadata(&joined_pathbuf).await

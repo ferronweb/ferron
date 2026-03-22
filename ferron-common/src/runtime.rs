@@ -22,26 +22,26 @@ pub fn spawn(future: impl Future + 'static) {
 pub use monoio::spawn_blocking;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::task::spawn_blocking;
-#[cfg(feature = "vibeio")]
+#[cfg(feature = "runtime-vibeio")]
 pub use vibeio::spawn_blocking;
 
 #[cfg(feature = "runtime-monoio")]
 pub use monoio::time::sleep;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::time::sleep;
-#[cfg(feature = "vibeio")]
+#[cfg(feature = "runtime-vibeio")]
 pub use vibeio::time::sleep;
 
 #[cfg(feature = "runtime-monoio")]
 pub use monoio::time::timeout;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::time::timeout;
-#[cfg(feature = "vibeio")]
+#[cfg(feature = "runtime-vibeio")]
 pub use vibeio::time::timeout;
 
 #[cfg(feature = "runtime-monoio")]
 pub use monoio::select;
-#[cfg(feature = "vibeio")]
+#[cfg(feature = "runtime-vibeio")]
 pub use tokio::select;
 #[cfg(feature = "runtime-tokio")]
 pub use tokio::select;
