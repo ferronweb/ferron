@@ -976,7 +976,7 @@ async fn connect_unix(
 }
 
 #[allow(dead_code)]
-#[cfg(all(feature = "runtime-monoio", not(unix)))]
+#[cfg(all(any(feature = "runtime-monoio", feature = "runtime-vibeio"), not(unix)))]
 async fn connect_unix(
   _path: &str,
 ) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
