@@ -569,11 +569,11 @@ async fn http_tcp_handler_fn(
           result
         }
         _ = shutdown_rx.cancelled() => {
-            graceful_shutdown_token.cancel();
+            graceful_shutdown_token2.cancel();
             http_future_pin.await
         }
         _ = graceful_shutdown_token.cancelled() => {
-            graceful_shutdown_token.cancel();
+            graceful_shutdown_token2.cancel();
           http_future_pin.await
         }
       };
@@ -632,11 +632,11 @@ async fn http_tcp_handler_fn(
           result
         }
         _ = shutdown_rx.cancelled() => {
-            graceful_shutdown_token.cancel();
+            graceful_shutdown_token2.cancel();
             http_future.await
         }
         _ = graceful_shutdown_token.cancelled() => {
-            graceful_shutdown_token.cancel();
+            graceful_shutdown_token2.cancel();
           http_future.await
         }
       };
@@ -879,7 +879,7 @@ async fn http_tcp_handler_fn(
           request,
           client_address,
           server_address,
-          true,
+          false,
           configurations_clone.clone(),
           if http3_enabled {
             Some(server_address.port())
@@ -931,11 +931,11 @@ async fn http_tcp_handler_fn(
           result
         }
         _ = shutdown_rx.cancelled() => {
-            graceful_shutdown_token.cancel();
+            graceful_shutdown_token2.cancel();
             http_future.await
         }
         _ = graceful_shutdown_token.cancelled() => {
-            graceful_shutdown_token.cancel();
+            graceful_shutdown_token2.cancel();
           http_future.await
         }
       };
@@ -1095,11 +1095,11 @@ async fn http_quic_handler_fn(
           result
         }
         _ = shutdown_rx.cancelled() => {
-            graceful_shutdown_token.cancel();
+            graceful_shutdown_token2.cancel();
             http_future.await
         }
         _ = graceful_shutdown_token.cancelled() => {
-            graceful_shutdown_token.cancel();
+            graceful_shutdown_token2.cancel();
           http_future.await
         }
       };
