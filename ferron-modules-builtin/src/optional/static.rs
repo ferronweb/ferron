@@ -1595,6 +1595,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   #[cfg(feature = "runtime-tokio")]
                   let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
+                  #[cfg(feature = "runtime-vibeio")]
                   let mut enable_zerocopy = false;
                   // Create the appropriate response body based on compression method, if precompression is disabled
                   let boxed_body = match (enable_precompression, used_compression) {
@@ -1657,17 +1658,25 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                       stream_body.boxed()
                     }
                     _ => {
-                      enable_zerocopy = true;
+                      #[cfg(feature = "runtime-vibeio")]
+                      {
+                        enable_zerocopy = true;
+                      }
                       let stream_body = StreamBody::new(file_stream.map_ok(Frame::data));
                       stream_body.boxed()
                     }
                   };
 
-                  let mut response = response_builder.body(boxed_body)?;
-                  if enable_zerocopy {
-                    unsafe { vibeio_http::install_zerocopy(&mut response, zerocopy_fd) };
+                  #[cfg(feature = "runtime-vibeio")]
+                  {
+                    let mut response = response_builder.body(boxed_body)?;
+                    if enable_zerocopy {
+                      unsafe { vibeio_http::install_zerocopy(&mut response, zerocopy_fd) };
+                    }
+                    response
                   }
-                  response
+                  #[cfg(not(feature = "runtime-vibeio"))]
+                  response_builder.body(boxed_body)?
                 }
               };
 
