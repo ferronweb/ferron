@@ -22,6 +22,9 @@ passthrough = [
 image = "ghcr.io/cross-rs/i686-unknown-linux-gnu:edge"
 
 [target.aarch64-unknown-linux-gnu]
+pre-build = [
+    "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --assume-yes --no-install-recommends gcc-11 g++-11 gfortran-11 g++-11-aarch64-linux-gnu && apt-get install --assume-yes --no-install-recommends gcc-11-aarch64-linux-gnu || true",
+]
 image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:edge"
 
 [target.armv7-unknown-linux-gnueabihf]
@@ -44,6 +47,9 @@ image = "ghcr.io/dorianniemiecsvrjs/cross-x86_64-unknown-linux-musl:latest"
 image = "ghcr.io/dorianniemiecsvrjs/cross-i686-unknown-linux-musl:latest"
 
 [target.aarch64-unknown-linux-musl]
+pre-build = [
+    "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --assume-yes --no-install-recommends gcc-11 g++-11 gfortran-11 g++-11-aarch64-linux-gnu && apt-get install --assume-yes --no-install-recommends gcc-11-aarch64-linux-gnu || true",
+]
 image = "ghcr.io/dorianniemiecsvrjs/cross-aarch64-unknown-linux-musl:latest"
 
 [target.armv7-unknown-linux-musleabihf]
