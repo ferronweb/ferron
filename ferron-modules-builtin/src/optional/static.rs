@@ -1582,6 +1582,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     },
                   };
 
+                  #[cfg(all(feature = "runtime-vibeio", unix))]
+                  let zerocopy_fd = std::os::fd::AsRawFd::as_raw_fd(&file);
+                  #[cfg(all(feature = "runtime-vibeio", windows))]
+                  let zerocopy_fd = std::os::windows::io::AsRawHandle::as_raw_handle(&file);
+
                   // Create a file stream.
                   #[cfg(feature = "runtime-monoio")]
                   let file_stream = MonoioFileStreamNoSpawn::new(file, None, Some(content_length));
@@ -1590,6 +1595,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   #[cfg(feature = "runtime-tokio")]
                   let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
+                  let mut enable_zerocopy = false;
                   // Create the appropriate response body based on compression method, if precompression is disabled
                   let boxed_body = match (enable_precompression, used_compression) {
                     (false, Compression::Brotli) => {
@@ -1651,12 +1657,17 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                       stream_body.boxed()
                     }
                     _ => {
+                      enable_zerocopy = true;
                       let stream_body = StreamBody::new(file_stream.map_ok(Frame::data));
                       stream_body.boxed()
                     }
                   };
 
-                  response_builder.body(boxed_body)?
+                  let mut response = response_builder.body(boxed_body)?;
+                  if enable_zerocopy {
+                    unsafe { vibeio_http::install_zerocopy(&mut response, zerocopy_fd) };
+                  }
+                  response
                 }
               };
 
