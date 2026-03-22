@@ -1,4 +1,6 @@
 use std::future::Future;
+#[cfg(feature = "runtime-vibeio")]
+use std::sync::LazyLock;
 
 /// A representation of an asynchronous runtime
 pub struct Runtime {
