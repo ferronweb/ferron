@@ -29,6 +29,7 @@ RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
 # Install the right Rust target and configure Cargo
 RUN \
     # Determine the target
+    ALPINE_PLATFORM="" && \
     TARGET_TRIPLE="" && \
     LIB_PATH="" && \
     if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
@@ -42,16 +43,40 @@ RUN \
     else \
     TARGET_TRIPLE="$(rustc --print host-tuple | sed 's/gnu/musl/')" && COMPILER_PREFIX="" && LIB_PATH="/usr/lib/$(gcc -dumpmachine | sed 's/gnu/musl/')"; \
     fi && \
+    case "$TARGET_TRIPLE" in \
+    "i686-unknown-linux-musl") ALPINE_PLATFORM="x86" ;; \
+    "x86_64-unknown-linux-musl") ALPINE_PLATFORM="x86_64" ;; \
+    "aarch64-unknown-linux-musl") ALPINE_PLATFORM="aarch64" ;; \
+    "armv7-unknown-linux-musleabihf") ALPINE_PLATFORM="armv7" ;; \
+    "*") echo "Unsupported target triple: $TARGET_TRIPLE" && exit 1 ;; \
+    esac && \
     # Create a GCC wrapper script
     echo "#!/bin/sh\n${COMPILER_PREFIX}gcc \"\$@\" -specs \"${LIB_PATH}/musl-gcc.specs\"" > /tmp/musl-gcc && chmod +x /tmp/musl-gcc && \
+    echo "#!/bin/sh\n${COMPILER_PREFIX}g++ \"\$@\" -specs \"${LIB_PATH}/musl-gcc.specs\" -isystem /tmp/sysroot/usr/include -isystem /tmp/sysroot/usr/include/c++/v1" > /tmp/musl-g++ && chmod +x /tmp/musl-g++ && \
     # Install the Rustup target
     rustup target add $TARGET_TRIPLE && \
     # Copy self-contained libunwind
     mkdir -p /tmp/lib && cp $(rustc --print target-libdir --target $TARGET_TRIPLE)/self-contained/libunwind.a /tmp/lib && \
     # Configure Cargo
-    echo "[target.$TARGET_TRIPLE]\nlinker = \"/tmp/musl-gcc\"\nrustflags = [\"-Clink-args=-L$LIB_PATH\", \"-Clink-args=-L/tmp/lib\", \"-Clink-self-contained=no\"]" >> /usr/local/cargo/config.toml && \
+    echo "[target.$TARGET_TRIPLE]\nlinker = \"/tmp/musl-gcc\"\nrustflags = [\"-Clink-args=-L$LIB_PATH\", \"-Clink-args=-L/tmp/lib\", \"-Clink-args=-lc++abi\", \"-Clink-self-contained=no\"]" >> /usr/local/cargo/config.toml && \
     # Save target triple
-    echo "$TARGET_TRIPLE" > /tmp/target_triple
+    echo "$TARGET_TRIPLE" > /tmp/target_triple && \
+    # Obtain libc++ for static linking
+    mkdir /tmp/libcxx && \
+    wget -qO- "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/$ALPINE_PLATFORM/libc%2B%2B-static-21.1.2-r0.apk" | tar -xz -C /tmp/libcxx && \
+    mv /tmp/libcxx/usr/lib/*.a /tmp/lib && rm -rf /tmp/libcxx && \
+    # Prepare C++ sysroot
+    mkdir -p /tmp/sysroot && \
+    # Obtain libc++ headers
+    mkdir /tmp/libcxx-dev && mkdir -p /tmp/sysroot/usr/include/c++/v1/ && \
+    wget -qO- "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/$ALPINE_PLATFORM/libc%2B%2B-dev-21.1.2-r0.apk" | tar -xz -C /tmp/libcxx-dev && \
+    mv /tmp/libcxx-dev/usr/include/c++/v1/* /tmp/sysroot/usr/include/c++/v1/ && rm -rf /tmp/libcxx-dev && \
+    # Obtain musl headers
+    mkdir /tmp/musl-dev && mkdir -p /tmp/sysroot/usr/include/musl/ && \
+    wget -qO- "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/$ALPINE_PLATFORM/musl-dev-1.2.5-r21.apk" | tar -xz -C /tmp/musl-dev && \
+    mv /tmp/musl-dev/usr/include/* /tmp/sysroot/usr/include/ && rm -rf /tmp/musl-dev && \
+    # Symlink GCC toolchain
+    mkdir -p /tmp/sysroot/usr/lib && ln -s /usr/lib/gcc /tmp/sysroot/usr/lib/gcc
 
 # Set the working directory
 WORKDIR /usr/src/ferron
@@ -72,6 +97,10 @@ RUN --mount=type=cache,sharing=private,target=/usr/local/cargo/git \
     CARGO_FINAL_EXTRA_ARGS="--features ferron/config-docker-auto" \
     TARGET="$TARGET_TRIPLE" \
     CC="/tmp/musl-gcc" \
+    CXX="clang++" \
+    # There has to be "-U TCMALLOC_INTERNAL_METHODS_ONLY", otherwise linking fails
+    CXXFLAGS="-U TCMALLOC_INTERNAL_METHODS_ONLY -isystem/tmp/sysroot/usr/include -I/tmp/sysroot/usr/include/c++/v1 -stdlib=libc++ -std=c++17 -nostdinc++ -static --target=$TARGET_TRIPLE" \
+    CXXSTDLIB="c++" \
     make build && \
     # Copy executables out of the cache
     mkdir .dist && cp $TARGET_PATH/ferron $TARGET_PATH/ferron-passwd $TARGET_PATH/ferron-precompress $TARGET_PATH/ferron-yaml2kdl .dist
