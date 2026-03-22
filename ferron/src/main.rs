@@ -23,6 +23,9 @@ use ferron_common::logging::{ErrorLogger, LogMessage};
 use ferron_common::{get_entry, get_value};
 use ferron_load_modules::{obtain_module_loaders, obtain_observability_backend_loaders};
 use human_panic::{setup_panic, Metadata};
+#[cfg(feature = "runtime-vibeio")]
+use malloc_best_effort::BEMalloc;
+#[cfg(not(feature = "runtime-vibeio"))]
 use mimalloc::MiMalloc;
 use rustls::server::{ResolvesServerCert, WebPkiClientVerifier};
 use rustls::{RootCertStore, ServerConfig};
@@ -52,9 +55,12 @@ use crate::setup::tls::{
 use crate::setup::tls_single::{init_crypto_provider, set_tls_version};
 use crate::util::{load_certs, MultiCancel};
 
-// Set the global allocator to use mimalloc for performance optimization
+#[cfg(not(feature = "runtime-vibeio"))]
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
+#[cfg(feature = "runtime-vibeio")]
+#[global_allocator]
+static GLOBAL: BEMalloc = BEMalloc::new();
 
 shadow!(build);
 
@@ -1002,6 +1008,9 @@ fn print_version() {
 
 /// The main entry point of the application
 fn main() {
+  #[cfg(feature = "runtime-vibeio")]
+  BEMalloc::init();
+
   // Set the panic handler
   setup_panic!(Metadata::new("Ferron", env!("CARGO_PKG_VERSION"))
     .homepage("https://ferron.sh")
