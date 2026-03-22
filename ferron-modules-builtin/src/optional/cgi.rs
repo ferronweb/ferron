@@ -123,6 +123,7 @@ impl cegla_cgi::client::Runtime for CustomCgiRuntime {
     cmd: &std::ffi::OsStr,
     args: &[&std::ffi::OsStr],
     env: CgiEnvironment,
+    cwd: Option<PathBuf>,
   ) -> Result<Self::Child, std::io::Error> {
     let mut command = vibeio::process::Command::new(cmd);
     command
@@ -131,6 +132,9 @@ impl cegla_cgi::client::Runtime for CustomCgiRuntime {
       .stderr(Stdio::piped())
       .envs(env)
       .args(args);
+    if let Some(cwd) = cwd {
+      command.current_dir(cwd);
+    }
     Ok(CustomCgiChild {
       inner: command.spawn()?,
     })
@@ -839,7 +843,7 @@ async fn execute_cgi(
     cegla_cgi::client::execute_cgi_send(request, runtime, cmd, &args, env_builder, Some(execute_dir_pathbuf)).await?;
   #[cfg(feature = "runtime-vibeio")]
   let (response, stderr, exit_code_option) =
-    cegla_cgi::client::execute_cgi(request, runtime, cmd, &args, env_builder).await?;
+    cegla_cgi::client::execute_cgi(request, runtime, cmd, &args, env_builder, Some(execute_dir_pathbuf)).await?;
 
   let (parts, body) = response.into_parts();
   #[cfg(not(feature = "runtime-vibeio"))]
