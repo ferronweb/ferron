@@ -45,12 +45,20 @@ name = "cache"
 path = "tests/cache.rs"
 
 [[test]]
+name = "cgi"
+path = "tests/cgi.rs"
+
+[[test]]
 name = "config"
 path = "tests/config.rs"
 
 [[test]]
 name = "dcompress"
 path = "tests/dcompress.rs"
+
+[[test]]
+name = "fcgi"
+path = "tests/fcgi.rs"
 
 [[test]]
 name = "lb"

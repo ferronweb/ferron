@@ -15,6 +15,8 @@ use tokio::sync::Mutex;
 static FERRON_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> = LazyLock::new(|| Mutex::new(None));
 static BACKEND_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> = LazyLock::new(|| Mutex::new(None));
 static BACKEND_GRPC_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> = LazyLock::new(|| Mutex::new(None));
+static CGI_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> = LazyLock::new(|| Mutex::new(None));
+static FCGIWRAP_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> = LazyLock::new(|| Mutex::new(None));
 
 pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
   let mut ferron_image = FERRON_IMAGE.lock().await;
@@ -56,6 +58,34 @@ pub async fn build_backend_grpc_image() -> Result<GenericImage, TestcontainersEr
     .await?;
   backend_grpc_image.replace(backend_grpc_image_built.clone());
   Ok(backend_grpc_image_built)
+}
+
+pub async fn build_cgi_image() -> Result<GenericImage, TestcontainersError> {
+  let mut cgi_image = CGI_IMAGE.lock().await;
+  if let Some(image) = cgi_image.as_ref() {
+    return Ok(image.clone());
+  }
+  let cgi_image_built = GenericBuildableImage::new("e2e-test-cgi", "latest")
+    .with_dockerfile(concat!(env!("CARGO_MANIFEST_DIR"), "/images/cgi/Dockerfile"))
+    .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/cgi"), ".")
+    .build_image()
+    .await?;
+  cgi_image.replace(cgi_image_built.clone());
+  Ok(cgi_image_built)
+}
+
+pub async fn build_fcgiwrap_image() -> Result<GenericImage, TestcontainersError> {
+  let mut fcgiwrap_image = FCGIWRAP_IMAGE.lock().await;
+  if let Some(image) = fcgiwrap_image.as_ref() {
+    return Ok(image.clone());
+  }
+  let fcgiwrap_image_built = GenericBuildableImage::new("e2e-test-fcgiwrap", "latest")
+    .with_dockerfile(concat!(env!("CARGO_MANIFEST_DIR"), "/images/fcgiwrap/Dockerfile"))
+    .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/fcgiwrap"), ".")
+    .build_image()
+    .await?;
+  fcgiwrap_image.replace(fcgiwrap_image_built.clone());
+  Ok(fcgiwrap_image_built)
 }
 
 pub fn write_file(path: PathBuf, content: &[u8]) -> Result<(), std::io::Error> {
