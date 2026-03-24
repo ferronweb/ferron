@@ -1,4 +1,4 @@
-name: Run test suite (Ferron 2.x)
+name: Run E2E tests (Ferron 2.x)
 
 on:
   push:
@@ -40,7 +40,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  dockertest:
+  e2e:
     runs-on: ubuntu-latest
 
     steps:
