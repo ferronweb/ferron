@@ -20,7 +20,7 @@ h3-quinn = "0.0.10"
 rustls = { version = "0.23.37", default-features = false, features = ["std", "ring", "tls12"] }
 rustls-pki-types = "1.14.0"
 http = "1.4.0"
-tokio-tungstenite = "0.26.1"
+tokio-tungstenite = "0.29.0"
 futures-util = "0.3.31"
 tonic = "0.14"
 prost = "0.14"
