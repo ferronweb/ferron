@@ -24,6 +24,10 @@ http = "1.4.0"
 nix = { version = "0.31.2", features = ["fs"] }
 
 [[test]]
+name = "acme"
+path = "tests/acme.rs"
+
+[[test]]
 name = "auth"
 path = "tests/auth.rs"
 
