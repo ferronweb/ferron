@@ -1,6 +1,0 @@
-ferron:80 {
-  root "/var/www/ferron"
-
-  compressed #false
-  dynamic_compressed
-}

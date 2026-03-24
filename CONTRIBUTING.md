@@ -71,7 +71,10 @@ powershell -ExecutionPolicy Bypass .\smoketest\smoketest.ps1
 If your change affects runtime behavior, networking, modules, container packaging, or configuration parsing, also run:
 
 ```bash
-bash ./dockertest/test.sh
+docker rm -f $(docker ps -a --filter ancestor=e2e-test-ferron -q)
+docker image rm e2e-test-ferron
+cd e2e
+cargo test
 ```
 
 ## Documentation expectations

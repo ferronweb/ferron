@@ -1,3 +1,0 @@
-global:
-  port: 80
-  wwwroot: "/var/www/ferron"
