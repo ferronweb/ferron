@@ -6,6 +6,7 @@ This directory contains the end-to-end test suite for the Ferron web server, wri
 
 - **Docker** - the tests rely on Docker to run Ferron and auxiliary services. Ensure the Docker daemon is running and accessible by the user running the tests.
 - **Rust** - you need a standard Rust toolchain installed (Cargo).
+- **`protoc`** - the tests use the `prost-build` crate to generate Rust code from Protocol Buffers definitions. Ensure `protoc` is installed and available in your `PATH`.
 
 ## How to run tests?
 
