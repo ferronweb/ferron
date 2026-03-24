@@ -6,6 +6,7 @@
           "./Cargo.toml",
           "./build/prepare/Cargo.toml",
           "./build/installer/Cargo.toml",
+          "./e2e/Cargo.toml",
         ],
       },
     },

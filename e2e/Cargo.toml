@@ -1,0 +1,59 @@
+[package]
+name = "e2e"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+reqwest = "0.13.2"
+tempfile = "3.27.0"
+testcontainers = { version = "0.27.2", features = ["http_wait_plain", "reusable-containers"] }
+tokio = { version = "1.50.0", features = ["full"] }
+flate2 = "1.1.9"
+password-auth = "1.0.0"
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31.2", features = ["fs"] }
+
+[[test]]
+name = "auth"
+path = "tests/auth.rs"
+
+[[test]]
+name = "cache"
+path = "tests/cache.rs"
+
+[[test]]
+name = "config"
+path = "tests/config.rs"
+
+[[test]]
+name = "dcompress"
+path = "tests/dcompress.rs"
+
+[[test]]
+name = "limit"
+path = "tests/limit.rs"
+
+[[test]]
+name = "redirecting"
+path = "tests/redirecting.rs"
+
+[[test]]
+name = "replace"
+path = "tests/replace.rs"
+
+[[test]]
+name = "reload"
+path = "tests/reload.rs"
+
+[[test]]
+name = "rewrite"
+path = "tests/rewrite.rs"
+
+[[test]]
+name = "static"
+path = "tests/static.rs"
+
+[[test]]
+name = "yaml2kdl"
+path = "tests/yaml2kdl.rs"

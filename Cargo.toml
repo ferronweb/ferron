@@ -9,7 +9,7 @@ members = [
     "ferron-yaml2kdl-core",
     "ferron-yaml2kdl", "ferron-precompress", "ferron-observability-builtin",
 ]
-exclude = ["build/installer", "build/prepare", "dockertest"]
+exclude = ["build/installer", "build/prepare", "dockertest", "e2e"]
 resolver = "2"
 
 [workspace.dependencies]
