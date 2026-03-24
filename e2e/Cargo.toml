@@ -19,6 +19,8 @@ h3-quinn = "0.0.10"
 rustls = { version = "0.23.37", default-features = false, features = ["std", "ring", "tls12"] }
 rustls-pki-types = "1.14.0"
 http = "1.4.0"
+tokio-tungstenite = "0.26.1"
+futures-util = "0.3.31"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31.2", features = ["fs"] }
@@ -44,6 +46,10 @@ name = "dcompress"
 path = "tests/dcompress.rs"
 
 [[test]]
+name = "lb"
+path = "tests/lb.rs"
+
+[[test]]
 name = "limit"
 path = "tests/limit.rs"
 
@@ -62,6 +68,10 @@ path = "tests/reload.rs"
 [[test]]
 name = "rewrite"
 path = "tests/rewrite.rs"
+
+[[test]]
+name = "rproxy"
+path = "tests/rproxy.rs"
 
 [[test]]
 name = "static"

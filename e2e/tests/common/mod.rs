@@ -13,6 +13,7 @@ use testcontainers::{
 use tokio::sync::Mutex;
 
 static FERRON_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> = LazyLock::new(|| Mutex::new(None));
+static BACKEND_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> = LazyLock::new(|| Mutex::new(None));
 
 pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
   let mut ferron_image = FERRON_IMAGE.lock().await;
@@ -26,6 +27,20 @@ pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
     .await?;
   ferron_image.replace(ferron_image_built.clone());
   Ok(ferron_image_built)
+}
+
+pub async fn build_backend_image() -> Result<GenericImage, TestcontainersError> {
+  let mut backend_image = BACKEND_IMAGE.lock().await;
+  if let Some(image) = backend_image.as_ref() {
+    return Ok(image.clone());
+  }
+  let backend_image_built = GenericBuildableImage::new("e2e-test-backend", "latest")
+    .with_dockerfile(concat!(env!("CARGO_MANIFEST_DIR"), "/images/backend/Dockerfile"))
+    .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/backend"), ".")
+    .build_image()
+    .await?;
+  backend_image.replace(backend_image_built.clone());
+  Ok(backend_image_built)
 }
 
 pub fn write_file(path: PathBuf, content: &[u8]) -> Result<(), std::io::Error> {
