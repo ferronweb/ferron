@@ -26,7 +26,6 @@ ferron-observability-builtin = { path = "./ferron-observability-builtin", defaul
 [patch.crates-io]
 monoio = { git = "https://github.com/DorianNiemiecSVRJS/monoio.git" }                                           # This is needed for the web server to be able to accept more than one connection on Windows, and to be able to be compiled correctly on FreeBSD
 dns-update = { git = "https://github.com/stalwartlabs/dns-update.git" }                                         # This is the Git upstream of the "dns-update" crate, with updated dependencies and more DNS providers
-tm-wheel = { git = "https://github.com/DorianNiemiecSVRJS/tm-wheel-rs.git" }                                    # This is a fork of the "tm-wheel" crate, with a fix for an off-by-one error in the timer wheel
 
 [patch.'https://github.com/ferronweb/ferron']
 ferron-common = { path = "./ferron-common" }
