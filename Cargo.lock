@@ -4516,8 +4516,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "tm-wheel"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77555380a341278942ff24ae5a39cb4f0afe93971755ce91f4370b9d209c1520"
+source = "git+https://github.com/DorianNiemiecSVRJS/tm-wheel-rs.git#ff88638679244c674b9aa10f767cb916b7e345de"
 dependencies = [
  "slab",
 ]
