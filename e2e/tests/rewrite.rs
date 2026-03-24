@@ -58,8 +58,8 @@ async fn test_url_rewriting() {
 :80 {
   location "/" {
     root "/var/www/ferron"
-    rewrite "^/($|[?#].*)" "/basic.txt$1" last=true
-    rewrite "^/([^?#]*)($|[?#].*)" "/$1.txt$2" file=false
+    rewrite "^/($|[?#].*)" "/basic.txt$1" last=#true
+    rewrite "^/([^?#]*)($|[?#].*)" "/$1.txt$2" file=#false
   }
 }
 "#
