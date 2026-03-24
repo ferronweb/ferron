@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-reqwest = "0.13.2"
+reqwest = { version = "0.13.2", default-features = false, features = ["http2", "rustls-no-provider"] }
 tempfile = "3.27.0"
 testcontainers = { version = "0.27.2", features = ["http_wait_plain", "reusable-containers"] }
 tokio = { version = "1.50.0", features = ["full"] }
@@ -12,6 +12,13 @@ flate2 = "1.1.9"
 password-auth = "1.0.0"
 brotli = "8.0.2"
 zstd = "0.13.3"
+rcgen = "0.14.7"
+h3 = "0.0.8"
+quinn = "0.11.9"
+h3-quinn = "0.0.10"
+rustls = { version = "0.23.37", default-features = false, features = ["std", "ring", "tls12"] }
+rustls-pki-types = "1.14.0"
+http = "1.4.0"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31.2", features = ["fs"] }
@@ -55,6 +62,10 @@ path = "tests/rewrite.rs"
 [[test]]
 name = "static"
 path = "tests/static.rs"
+
+[[test]]
+name = "tls"
+path = "tests/tls.rs"
 
 [[test]]
 name = "yaml2kdl"
