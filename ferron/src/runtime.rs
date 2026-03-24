@@ -49,7 +49,7 @@ impl Runtime {
       }
     }
     #[cfg(all(feature = "runtime-vibeio", target_os = "linux"))]
-    if enable_uring.is_none_or(|x| x) {
+    if enable_uring.is_none_or(|x| x) && vibeio::util::supports_io_uring() {
       match vibeio::RuntimeBuilder::new()
         .driver(vibeio::DriverKind::IoUring)
         .enable_timer(true)
