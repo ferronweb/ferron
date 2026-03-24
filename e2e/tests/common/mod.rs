@@ -14,6 +14,7 @@ use tokio::sync::Mutex;
 
 static FERRON_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> = LazyLock::new(|| Mutex::new(None));
 static BACKEND_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> = LazyLock::new(|| Mutex::new(None));
+static BACKEND_GRPC_IMAGE: std::sync::LazyLock<Mutex<Option<GenericImage>>> = LazyLock::new(|| Mutex::new(None));
 
 pub async fn build_ferron_image() -> Result<GenericImage, TestcontainersError> {
   let mut ferron_image = FERRON_IMAGE.lock().await;
@@ -44,11 +45,16 @@ pub async fn build_backend_image() -> Result<GenericImage, TestcontainersError> 
 }
 
 pub async fn build_backend_grpc_image() -> Result<GenericImage, TestcontainersError> {
+  let mut backend_grpc_image = BACKEND_GRPC_IMAGE.lock().await;
+  if let Some(image) = backend_grpc_image.as_ref() {
+    return Ok(image.clone());
+  }
   let backend_grpc_image_built = GenericBuildableImage::new("e2e-test-backend-grpc", "latest")
     .with_dockerfile(concat!(env!("CARGO_MANIFEST_DIR"), "/images/backend-grpc/Dockerfile"))
     .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/backend-grpc"), ".")
     .build_image()
     .await?;
+  backend_grpc_image.replace(backend_grpc_image_built.clone());
   Ok(backend_grpc_image_built)
 }
 
