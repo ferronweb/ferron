@@ -11,7 +11,7 @@ pub struct ConnectionData {
 #[allow(clippy::large_enum_variant)]
 pub enum Connection {
   /// TCP connection
-  #[cfg(feature = "runtime-monoio")]
+  #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
   Tcp(std::net::TcpStream),
 
   /// TCP connection

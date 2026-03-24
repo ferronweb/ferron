@@ -22,6 +22,11 @@ endif
 ifdef NO_MONOIO
     CARGO_FINAL_ARGS_NO_MONOIO_ENV := $(CARGO_FINAL_ARGS)
     CARGO_FINAL_ARGS := --no-default-features -F ferron/runtime-tokio $(CARGO_FINAL_ARGS_NO_MONOIO_ENV)
+else
+    ifdef EXPERIMENTAL_VIBEIO
+        CARGO_FINAL_ARGS_EXPERIMENTAL_VIBEIO_ENV := $(CARGO_FINAL_ARGS)
+        CARGO_FINAL_ARGS := --no-default-features -F ferron/runtime-vibeio $(CARGO_FINAL_ARGS_EXPERIMENTAL_VIBEIO_ENV)
+    endif
 endif
 
 ifndef CARGO_FINAL

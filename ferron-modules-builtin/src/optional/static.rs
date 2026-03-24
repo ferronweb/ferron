@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, HashSet};
 use std::error::Error;
 use std::ffi::OsStr;
-#[cfg(feature = "runtime-monoio")]
+#[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
 use std::fs::ReadDir;
 #[cfg(feature = "runtime-tokio")]
 use std::io::SeekFrom;
@@ -31,10 +31,14 @@ use tokio::fs::{self, ReadDir};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, BufReader};
 use tokio::sync::RwLock;
 use tokio_util::io::{ReaderStream, StreamReader};
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::fs;
 
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
+#[cfg(feature = "runtime-vibeio")]
+use ferron_common::util::FileStream;
 #[cfg(feature = "runtime-monoio")]
 use ferron_common::util::MonoioFileStreamNoSpawn;
 use ferron_common::util::{anti_xss, parse_q_value_header, sizify, ModuleCache, TtlCache};
@@ -248,6 +252,18 @@ async fn generate_directory_listing(
   .unwrap_or(Err(std::io::Error::other(
     "Can't spawn a blocking task to obtain the files in a directory",
   )))?;
+  #[cfg(feature = "runtime-vibeio")]
+  let mut entries = vibeio::spawn_blocking(move || {
+    let mut entries = Vec::new();
+    for entry in directory {
+      entries.push(entry?);
+    }
+    Ok(entries)
+  })
+  .await
+  .unwrap_or(Err(std::io::Error::other(
+    "Can't spawn a blocking task to obtain the files in a directory",
+  )))?;
   #[cfg(feature = "runtime-tokio")]
   let mut entries = {
     let mut entries = Vec::new();
@@ -270,7 +286,11 @@ async fn generate_directory_listing(
     let entry_path = entry.path();
 
     // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-    #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
+    #[cfg(any(
+      feature = "runtime-tokio",
+      all(feature = "runtime-monoio", unix),
+      feature = "runtime-vibeio"
+    ))]
     let metadata_obt = fs::metadata(&entry_path).await;
     #[cfg(all(feature = "runtime-monoio", windows))]
     let metadata_obt = {
@@ -792,7 +812,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   "Can't spawn a blocking task to obtain the canonical file path",
                 )))
             };
-            #[cfg(feature = "runtime-tokio")]
+            #[cfg(any(feature = "runtime-vibeio", feature = "runtime-tokio"))]
             let canonicalize_result = fs::canonicalize(&joined_pathbuf).await;
 
             let canonical_joined_pathbuf = match canonicalize_result {
@@ -810,7 +830,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                   "Can't spawn a blocking task to obtain the canonical file path",
                 )))
             };
-            #[cfg(feature = "runtime-tokio")]
+            #[cfg(any(feature = "runtime-vibeio", feature = "runtime-tokio"))]
             let canonicalize_result = fs::canonicalize(wwwroot).await;
 
             let canonical_wwwroot = match canonicalize_result {
@@ -842,7 +862,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
 
       // Get file metadata (platform-specific implementation)
       // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-      #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
+      #[cfg(any(
+        feature = "runtime-tokio",
+        all(feature = "runtime-monoio", unix),
+        feature = "runtime-vibeio"
+      ))]
       let metadata_obt = fs::metadata(&joined_pathbuf).await;
       #[cfg(all(feature = "runtime-monoio", windows))]
       let metadata_obt = {
@@ -864,7 +888,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                 let temp_joined_pathbuf = joined_pathbuf.join(index);
 
                 // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-                #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
+                #[cfg(any(
+                  feature = "runtime-tokio",
+                  all(feature = "runtime-monoio", unix),
+                  feature = "runtime-vibeio"
+                ))]
                 let metadata_obt = fs::metadata(&temp_joined_pathbuf).await;
                 #[cfg(all(feature = "runtime-monoio", windows))]
                 let metadata_obt = {
@@ -1265,6 +1293,8 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     // Construct a boxed body
                     #[cfg(feature = "runtime-monoio")]
                     let file_stream = MonoioFileStreamNoSpawn::new(file, Some(range_begin), Some(range_end + 1));
+                    #[cfg(feature = "runtime-vibeio")]
+                    let file_stream = FileStream::new(file, Some(range_begin), Some(range_end + 1));
                     #[cfg(feature = "runtime-tokio")]
                     let file_stream = {
                       let mut file = file;
@@ -1429,7 +1459,11 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     .trim_matches('.'),
                   );
                   // Monoio's `fs` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-                  #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
+                  #[cfg(any(
+                    feature = "runtime-tokio",
+                    all(feature = "runtime-monoio", unix),
+                    feature = "runtime-vibeio"
+                  ))]
                   let metadata_obt = fs::metadata(&joined_pathbuf_with_extension).await;
                   #[cfg(all(feature = "runtime-monoio", windows))]
                   let metadata_obt = {
@@ -1548,12 +1582,21 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                     },
                   };
 
+                  #[cfg(all(feature = "runtime-vibeio", unix))]
+                  let zerocopy_fd = std::os::fd::AsRawFd::as_raw_fd(&file);
+                  #[cfg(all(feature = "runtime-vibeio", windows))]
+                  let zerocopy_fd = std::os::windows::io::AsRawHandle::as_raw_handle(&file);
+
                   // Create a file stream.
                   #[cfg(feature = "runtime-monoio")]
                   let file_stream = MonoioFileStreamNoSpawn::new(file, None, Some(content_length));
+                  #[cfg(feature = "runtime-vibeio")]
+                  let file_stream = FileStream::new(file, None, Some(content_length));
                   #[cfg(feature = "runtime-tokio")]
                   let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
+                  #[cfg(feature = "runtime-vibeio")]
+                  let mut enable_zerocopy = false;
                   // Create the appropriate response body based on compression method, if precompression is disabled
                   let boxed_body = match (enable_precompression, used_compression) {
                     (false, Compression::Brotli) => {
@@ -1597,7 +1640,7 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                       let file_bufreader = StreamReader::new(file_stream);
 
                       let reader_stream = ReaderStream::with_capacity(
-                        DeflateEncoder::with_quality(file_bufreader, Level::Precise(4)),
+                        DeflateEncoder::new(file_bufreader),
                         COMPRESSED_STREAM_READER_BUFFER_SIZE,
                       );
                       let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
@@ -1608,18 +1651,31 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
                       let file_bufreader = StreamReader::new(file_stream);
 
                       let reader_stream = ReaderStream::with_capacity(
-                        GzipEncoder::with_quality(file_bufreader, Level::Precise(4)),
+                        GzipEncoder::new(file_bufreader),
                         COMPRESSED_STREAM_READER_BUFFER_SIZE,
                       );
                       let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
                       stream_body.boxed()
                     }
                     _ => {
+                      #[cfg(feature = "runtime-vibeio")]
+                      {
+                        enable_zerocopy = true;
+                      }
                       let stream_body = StreamBody::new(file_stream.map_ok(Frame::data));
                       stream_body.boxed()
                     }
                   };
 
+                  #[cfg(feature = "runtime-vibeio")]
+                  {
+                    let mut response = response_builder.body(boxed_body)?;
+                    if enable_zerocopy {
+                      unsafe { vibeio_http::install_zerocopy(&mut response, zerocopy_fd) };
+                    }
+                    response
+                  }
+                  #[cfg(not(feature = "runtime-vibeio"))]
                   response_builder.body(boxed_body)?
                 }
               };
@@ -1645,6 +1701,12 @@ impl ModuleHandlers for StaticFileServingModuleHandlers {
               // Read the directory contents (using blocking task on Windows and with Monoio)
               #[cfg(feature = "runtime-monoio")]
               let directory_result = monoio::spawn_blocking(move || std::fs::read_dir(joined_pathbuf))
+                .await
+                .unwrap_or(Err(std::io::Error::other(
+                  "Can't spawn a blocking task to read the directory",
+                )));
+              #[cfg(feature = "runtime-vibeio")]
+              let directory_result = vibeio::spawn_blocking(move || std::fs::read_dir(joined_pathbuf))
                 .await
                 .unwrap_or(Err(std::io::Error::other(
                   "Can't spawn a blocking task to read the directory",

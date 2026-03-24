@@ -8,6 +8,8 @@ use monoio::net::TcpListener;
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::net::TcpListener;
 
 use crate::listener_handler_communication::{Connection, ConnectionData};
 
@@ -79,6 +81,8 @@ fn build_tcp_listener(address: SocketAddr, tcp_buffer_sizes: (Option<usize>, Opt
 
   #[cfg(feature = "runtime-monoio")]
   let is_poll_io = monoio::utils::is_legacy();
+  #[cfg(feature = "runtime-vibeio")]
+  let is_poll_io = !vibeio::util::supports_completion();
   #[cfg(feature = "runtime-tokio")]
   let is_poll_io = true;
 
@@ -241,7 +245,7 @@ async fn tcp_listener_fn(
       }
     };
 
-    #[cfg(feature = "runtime-monoio")]
+    #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
     let tcp_data = {
       #[cfg(unix)]
       let tcp_std = {

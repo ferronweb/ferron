@@ -787,14 +787,14 @@ impl ResolvesServerCert for TlsAlpn01Resolver {
     let hostname = client_hello.server_name().map(|hn| hn.strip_suffix('.').unwrap_or(hn));
 
     // If blocking_read() method is used when only Tokio is used, the program would panic on resolving a TLS certificate.
-    #[cfg(feature = "runtime-monoio")]
+    #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
     let resolver_locks = self.resolvers.blocking_read();
     #[cfg(feature = "runtime-tokio")]
     let resolver_locks = futures_executor::block_on(async { self.resolvers.read().await });
 
     for resolver_lock in &*resolver_locks {
       if let Some(hostname) = hostname {
-        #[cfg(feature = "runtime-monoio")]
+        #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
         let resolver_data = resolver_lock.blocking_read().clone();
         #[cfg(feature = "runtime-tokio")]
         let resolver_data = futures_executor::block_on(async { resolver_lock.read().await }).clone();

@@ -57,7 +57,7 @@ impl ResolvesServerCert for CustomSniResolver {
     let hostname = client_hello.server_name().map(|hn| hn.strip_suffix('.').unwrap_or(hn));
     if let Some(hostname) = hostname {
       // If blocking_read() method is used when only Tokio is used, the program would panic on resolving a TLS certificate.
-      #[cfg(feature = "runtime-monoio")]
+      #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
       let resolvers = self.resolvers.blocking_read();
       #[cfg(feature = "runtime-tokio")]
       let resolvers = futures_executor::block_on(async { self.resolvers.read().await });

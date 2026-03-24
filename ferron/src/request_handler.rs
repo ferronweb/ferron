@@ -7,6 +7,8 @@ use async_channel::Sender;
 use chrono::{DateTime, Local};
 use ferron_common::logging::{ErrorLogger, LogMessage};
 use ferron_common::observability::{MetricsMultiSender, TraceSignal};
+#[cfg(feature = "runtime-vibeio")]
+use ferron_common::util::FileStream;
 use futures_util::stream::TryStreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
@@ -59,13 +61,19 @@ async fn generate_error_response(
           let file = monoio::fs::File::open(page_path).await;
           #[cfg(feature = "runtime-tokio")]
           let file = tokio::fs::File::open(page_path).await;
+          #[cfg(feature = "runtime-vibeio")]
+          let file = vibeio::fs::File::open(page_path).await;
 
           let Ok(file) = file else {
             continue;
           };
 
           // Monoio's `File` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-          #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
+          #[cfg(any(
+            feature = "runtime-tokio",
+            feature = "runtime-vibeio",
+            all(feature = "runtime-monoio", unix)
+          ))]
           let metadata = file.metadata().await;
           #[cfg(all(feature = "runtime-monoio", windows))]
           let metadata = {
@@ -81,6 +89,8 @@ async fn generate_error_response(
 
           #[cfg(feature = "runtime-monoio")]
           let file_stream = MonoioFileStreamNoSpawn::new(file, None, content_length);
+          #[cfg(feature = "runtime-vibeio")]
+          let file_stream = FileStream::new(file, None, content_length);
           #[cfg(feature = "runtime-tokio")]
           let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 

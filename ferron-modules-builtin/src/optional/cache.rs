@@ -793,6 +793,9 @@ impl ModuleHandlers for CacheModuleHandlers {
       let stream_body = StreamBody::new(cached_stream.map_ok(Frame::data));
       let response_body = BodyExt::boxed(stream_body);
 
+      // Remove extensions from response parts (to prevent zerocopy from interfering with the cache)
+      response_parts.extensions.clear();
+
       response_parts
         .headers
         .insert(CACHE_HEADER_NAME, HeaderValue::from_static("MISS"));
