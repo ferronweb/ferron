@@ -31,6 +31,8 @@ async fn create_ferron_container(
 
 #[tokio::test]
 async fn test_http_auth_success() {
+  let _ = rustls::crypto::ring::default_provider().install_default();
+
   #[cfg(unix)]
   nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
@@ -91,6 +93,8 @@ async fn test_http_auth_success() {
 
 #[tokio::test]
 async fn test_http_auth_failure() {
+  let _ = rustls::crypto::ring::default_provider().install_default();
+
   #[cfg(unix)]
   nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 

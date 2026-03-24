@@ -31,6 +31,8 @@ async fn create_ferron_container(
 
 #[tokio::test]
 async fn test_config() {
+  let _ = rustls::crypto::ring::default_provider().install_default();
+
   // Set umask to 000 to ensure that the webroot directory is accessible to the container.
   #[cfg(unix)]
   nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());

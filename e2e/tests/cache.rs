@@ -31,6 +31,8 @@ async fn create_ferron_container(
 
 #[tokio::test]
 async fn test_cache_hit() {
+  let _ = rustls::crypto::ring::default_provider().install_default();
+
   // Set umask to 000 to ensure that the webroot directory is accessible to the container.
   #[cfg(unix)]
   nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
@@ -103,6 +105,8 @@ async fn test_cache_hit() {
 
 #[tokio::test]
 async fn test_cache_expiry() {
+  let _ = rustls::crypto::ring::default_provider().install_default();
+
   // Set umask to 000 to ensure that the webroot directory is accessible to the container.
   #[cfg(unix)]
   nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
@@ -177,6 +181,8 @@ async fn test_cache_expiry() {
 
 #[tokio::test]
 async fn test_cache_vary() {
+  let _ = rustls::crypto::ring::default_provider().install_default();
+
   // Set umask to 000 to ensure that the webroot directory is accessible to the container.
   #[cfg(unix)]
   nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());

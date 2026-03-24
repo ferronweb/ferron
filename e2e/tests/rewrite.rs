@@ -31,6 +31,8 @@ async fn create_ferron_container(
 
 #[tokio::test]
 async fn test_url_rewriting() {
+  let _ = rustls::crypto::ring::default_provider().install_default();
+
   #[cfg(unix)]
   nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 

@@ -34,6 +34,8 @@ async fn create_ferron_container(
 
 #[tokio::test]
 async fn test_dynamic_compression_gzip() {
+  let _ = rustls::crypto::ring::default_provider().install_default();
+
   #[cfg(unix)]
   nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
@@ -97,6 +99,8 @@ async fn test_dynamic_compression_gzip() {
 
 #[tokio::test]
 async fn test_dynamic_compression_deflate() {
+  let _ = rustls::crypto::ring::default_provider().install_default();
+
   #[cfg(unix)]
   nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
@@ -160,6 +164,8 @@ async fn test_dynamic_compression_deflate() {
 
 #[tokio::test]
 async fn test_dynamic_compression_brotli() {
+  let _ = rustls::crypto::ring::default_provider().install_default();
+
   #[cfg(unix)]
   nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
@@ -222,6 +228,8 @@ async fn test_dynamic_compression_brotli() {
 
 #[tokio::test]
 async fn test_dynamic_compression_zstd() {
+  let _ = rustls::crypto::ring::default_provider().install_default();
+
   #[cfg(unix)]
   nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
