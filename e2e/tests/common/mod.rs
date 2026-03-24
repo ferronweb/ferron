@@ -93,6 +93,7 @@ pub fn write_file(path: PathBuf, content: &[u8]) -> Result<(), std::io::Error> {
   let file = std::fs::OpenOptions::new()
     .write(true)
     .create(true)
+    .truncate(true)
     .mode(0o666)
     .open(path);
   #[cfg(unix)]
