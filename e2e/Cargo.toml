@@ -10,6 +10,8 @@ testcontainers = { version = "0.27.2", features = ["http_wait_plain", "reusable-
 tokio = { version = "1.50.0", features = ["full"] }
 flate2 = "1.1.9"
 password-auth = "1.0.0"
+brotli = "8.0.2"
+zstd = "0.13.3"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31.2", features = ["fs"] }
