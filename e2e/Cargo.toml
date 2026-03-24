@@ -2,6 +2,7 @@
 name = "e2e"
 version = "0.1.0"
 edition = "2024"
+build = "build.rs"
 
 [dependencies]
 reqwest = { version = "0.13.2", default-features = false, features = ["http2", "rustls-no-provider"] }
@@ -21,9 +22,15 @@ rustls-pki-types = "1.14.0"
 http = "1.4.0"
 tokio-tungstenite = "0.26.1"
 futures-util = "0.3.31"
+tonic = "0.14"
+prost = "0.14"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31.2", features = ["fs"] }
+
+[build-dependencies]
+tonic-build = "0.14"
+prost-build = "0.14"
 
 [[test]]
 name = "acme"
@@ -72,6 +79,10 @@ path = "tests/rewrite.rs"
 [[test]]
 name = "rproxy"
 path = "tests/rproxy.rs"
+
+[[test]]
+name = "rproxy_grpc"
+path = "tests/rproxy_grpc.rs"
 
 [[test]]
 name = "static"

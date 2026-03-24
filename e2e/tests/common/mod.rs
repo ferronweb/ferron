@@ -43,6 +43,15 @@ pub async fn build_backend_image() -> Result<GenericImage, TestcontainersError> 
   Ok(backend_image_built)
 }
 
+pub async fn build_backend_grpc_image() -> Result<GenericImage, TestcontainersError> {
+  let backend_grpc_image_built = GenericBuildableImage::new("e2e-test-backend-grpc", "latest")
+    .with_dockerfile(concat!(env!("CARGO_MANIFEST_DIR"), "/images/backend-grpc/Dockerfile"))
+    .with_file(concat!(env!("CARGO_MANIFEST_DIR"), "/images/backend-grpc"), ".")
+    .build_image()
+    .await?;
+  Ok(backend_grpc_image_built)
+}
+
 pub fn write_file(path: PathBuf, content: &[u8]) -> Result<(), std::io::Error> {
   #[cfg(unix)]
   let file = std::fs::OpenOptions::new()
