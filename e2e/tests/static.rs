@@ -47,6 +47,8 @@ struct StaticTestContext {
 
 impl StaticTestContext {
   async fn new() -> Self {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     #[cfg(unix)]
     nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o000).unwrap());
 
