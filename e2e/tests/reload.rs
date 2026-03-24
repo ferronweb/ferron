@@ -1,6 +1,9 @@
 #[cfg(unix)]
 use std::{fs::Permissions, os::unix::fs::PermissionsExt};
-use std::{io::Write, path::Path};
+use std::{
+  io::{Seek, SeekFrom, Write},
+  path::Path,
+};
 
 use testcontainers::{
   ContainerAsync, GenericImage, ImageExt, TestcontainersError,
@@ -95,6 +98,7 @@ async fn test_config_reload() {
   assert_eq!(response.text().await.unwrap(), "before reload");
 
   // Truncate the configuration file
+  config_file.as_file_mut().seek(SeekFrom::Start(0)).unwrap();
   config_file.as_file_mut().set_len(0).unwrap();
 
   // Update configuration to point to new webroot
