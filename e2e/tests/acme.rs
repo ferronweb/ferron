@@ -233,7 +233,7 @@ globals {{
   )
   .unwrap();
 
-  let network = "e2e-test-ferronacme";
+  let network = format!("e2e-test-ferronacme-{}", hostname);
 
   // 4. Start Pebble
   let _pebble = create_pebble_container(&network, pebble_config.path(), cert_dir.path())
