@@ -2,7 +2,7 @@ name: Cross-platform compilation test (Ferron 2.x with `vibeio`)
 
 on:
   push:
-    branches: ["feature/vibeio"]
+    branches: ["develop-2.x"]
     paths:
       - "Cargo.lock"
       - "Cargo.toml"
@@ -21,7 +21,7 @@ on:
       - "smoketest/**"
       - ".github/workflows/crossplatform-vibeio-v2.yml"
   pull_request:
-    branches: ["feature/vibeio"]
+    branches: ["develop-2.x"]
     paths:
       - "Cargo.lock"
       - "Cargo.toml"
