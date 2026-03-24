@@ -117,6 +117,9 @@ async fn test_config_reload() {
     .await
     .unwrap();
 
+  // Wait for reload to complete
+  tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
   // Test after reload
   let response = client
     .get(format!("http://localhost:{}/test.txt", port))
