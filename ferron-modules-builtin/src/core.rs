@@ -655,8 +655,7 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
-    if let Some(log_entries) = config.entries.get("log_json") {
-      used_properties.insert("log_json".to_string());
+    if let Some(log_entries) = get_entries_for_validation!("log_json", config, used_properties) {
       for log_entry in &log_entries.inner {
         for (prop_name, prop_value) in &log_entry.props {
           if !prop_value.is_string() {
