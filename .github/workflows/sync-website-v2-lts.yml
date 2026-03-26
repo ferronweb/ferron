@@ -32,12 +32,12 @@ jobs:
 
       - name: Sync website
         run: |
-          cat << EOF > website/changelogs/v2-lts.md
+          cat << EOF > website/src/content/changelogs/v2-lts.md
           ---
           subject: Ferron 2
           ---
           EOF
-          cat ferron/CHANGELOG.md | grep -vE '^# ' >> website/changelogs/v2-lts.md
+          cat ferron/CHANGELOG.md | grep -vE '^# ' >> website/src/content/changelogs/v2-lts.md
           cd website
           git config --local user.name "github-actions[bot]"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
