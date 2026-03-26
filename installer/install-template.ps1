@@ -42,7 +42,8 @@ if ($processor.Architecture -eq 5)
 # Select Ferron installation type
 Write-Host 'Select your Ferron installation type. Valid Ferron installation types:'
 Write-Host '0 - Latest stable version'
-Write-Host '1 - Install and update manually'
+Write-Host '1 - Latest LTS version'
+Write-Host '2 - Install and update manually'
 $ITP = Read-Host 'Your Ferron installation type'
 
 switch ($ITP)
@@ -51,6 +52,9 @@ switch ($ITP)
     { $installType = 'stable'
     }
     1
+    { $installType = 'lts'
+    }
+    2
     { $installType = 'manual'
     }
     default
@@ -79,6 +83,21 @@ if ($installType -eq "manual")
 } elseif ($INSTALLTYPE -eq "stable")
 {
     $ferronVersion = (Invoke-RestMethod -Uri "https://dl.ferron.sh/latest2.ferron").Trim()
+    if (-not $ferronVersion)
+    {
+        Write-Host "There was a problem while determining latest Ferron version!"
+        ExitWithCode -exitcode 1
+    }
+    $ferronZipArchive = "$env:SYSTEMDRIVE\ferron.zip"
+    Invoke-WebRequest -Uri "https://dl.ferron.sh/$ferronVersion/ferron-$ferronVersion-$triple.zip" -OutFile $ferronZipArchive
+    if (-not (Test-Path $ferronZipArchive))
+    {
+        Write-Host "There was a problem while downloading latest Ferron version!"
+        ExitWithCode -exitcode 1
+    }
+} elseif ($INSTALLTYPE -eq "lts")
+{
+    $ferronVersion = (Invoke-RestMethod -Uri "https://dl.ferron.sh/lts2.ferron").Trim()
     if (-not $ferronVersion)
     {
         Write-Host "There was a problem while determining latest Ferron version!"

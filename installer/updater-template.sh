@@ -208,12 +208,18 @@ download_ferron_zip() {
           TARGET_TRIPLE="${ARCH}-unknown-${OS}"
         fi
 
+        local FERRON_LATEST_FILE
+        if [ "$USE_LTS" = "1" ]; then
+          FERRON_LATEST_FILE="lts2.ferron"
+        else
+          FERRON_LATEST_FILE="latest2.ferron"
+        fi
         local FERRON_DOWNLOAD_COMMAND_AND_PARAMS
         if [ "$USE_WGET" = "1" ]; then
-          FERRON_VERSION="$(wget -qO- https://dl.ferron.sh/latest2.ferron)"
+          FERRON_VERSION="$(wget -qO- https://dl.ferron.sh/$FERRON_LATEST_FILE)"
           FERRON_DOWNLOAD_COMMAND_AND_PARAMS="wget -O-"
         elif [ "$USE_CURL" = "1" ]; then
-          FERRON_VERSION="$(curl -fsL https://dl.ferron.sh/latest2.ferron)"
+          FERRON_VERSION="$(curl -fsL https://dl.ferron.sh/$FERRON_LATEST_FILE)"
           FERRON_DOWNLOAD_COMMAND_AND_PARAMS="curl -fsSL"
         fi
         if [ "$FERRON_VERSION" = "" ]; then
@@ -276,8 +282,12 @@ print_welcome
 
 # Execute tasks
 do_task 'Checking prerequisites and installing required packages' check_prerequisities
-if [ "$INSTALLATION_CHANNEL" = "stable" ]; then
-  do_task 'Downloading Ferron ZIP archive' download_ferron_zip
+if [ "$INSTALLATION_CHANNEL" = "stable" ] || [ "$INSTALLATION_CHANNEL" = "lts" ]; then
+  if ["$INSTALLATION_CHANNEL" = "lts"]; then
+    USE_LTS=1 do_task 'Downloading Ferron ZIP archive' download_ferron_zip
+  else
+    do_task 'Downloading Ferron ZIP archive' download_ferron_zip
+  fi
   FERRON_CURRENT_VERSION="$(cat /etc/.ferron-installer.version)"
   if [ "$FERRON_CURRENT_VERSION" = "$FERRON_VERSION" ]; then
     rm -f $FERRON_ZIP_ARCHIVE

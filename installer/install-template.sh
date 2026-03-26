@@ -171,11 +171,23 @@ add_ferron_rpm_repo() {
 }
 
 install_debian_package() {
-    DEBIAN_FRONTEND=noninteractive apt install -y ferron || return 1
+    local FERRON_PACKAGE
+    if [ "$USE_LTS" = "1" ]; then
+      FERRON_PACKAGE="ferron-lts"
+    else
+      FERRON_PACKAGE="ferron"
+    fi
+    DEBIAN_FRONTEND=noninteractive apt install -y $FERRON_PACKAGE || return 1
 }
 
 install_rpm_package() {
-    yum -y install ferron || return 1
+    local FERRON_PACKAGE
+    if [ "$USE_LTS" = "1" ]; then
+      FERRON_PACKAGE="ferron-lts"
+    else
+      FERRON_PACKAGE="ferron"
+    fi
+    yum -y install $FERRON_PACKAGE || return 1
     systemctl enable ferron || true
     systemctl start ferron || true
 }
@@ -296,12 +308,18 @@ download_ferron_zip() {
           TARGET_TRIPLE="${ARCH}-unknown-${OS}"
         fi
 
+        local FERRON_LATEST_FILE
+        if [ "$USE_LTS" = "1" ]; then
+          FERRON_LATEST_FILE="lts2.ferron"
+        else
+          FERRON_LATEST_FILE="latest2.ferron"
+        fi
         local FERRON_DOWNLOAD_COMMAND_AND_PARAMS
         if [ "$USE_WGET" = "1" ]; then
-          FERRON_VERSION="$(wget -qO- https://dl.ferron.sh/latest2.ferron)"
+          FERRON_VERSION="$(wget -qO- https://dl.ferron.sh/$FERRON_LATEST_FILE)"
           FERRON_DOWNLOAD_COMMAND_AND_PARAMS="wget -O-"
         elif [ "$USE_CURL" = "1" ]; then
-          FERRON_VERSION="$(curl -fsL https://dl.ferron.sh/latest2.ferron)"
+          FERRON_VERSION="$(curl -fsL https://dl.ferron.sh/$FERRON_LATEST_FILE)"
           FERRON_DOWNLOAD_COMMAND_AND_PARAMS="curl -fsSL"
         fi
         if [ "$FERRON_VERSION" = "" ]; then
@@ -577,6 +595,7 @@ fi
 print_welcome
 
 # Execute tasks
+read_input 'Installation channel (`stable` for stable, `lts` for LTS, `manual` for manual installation from a ZIP archive)' INSTALLATION_CHANNEL
 do_task 'Checking prerequisites' check_prerequisities
 USE_DISTRO_PACKAGE="0"
 case "$DISTRO" in
@@ -585,7 +604,11 @@ case "$DISTRO" in
     case "$USE_DEBIAN_PACKAGE" in
       y|Y|yes|YES)
         do_task 'Adding Ferron repository' add_ferron_debian_repo
-        do_task 'Installing Ferron from a Debian package' install_debian_package
+        if [ "$INSTALLATION_CHANNEL" = "lts" ]; then
+            USE_LTS="1" do_task 'Installing Ferron from a Debian package' install_debian_package
+        else
+            do_task 'Installing Ferron from a Debian package' install_debian_package
+        fi
         USE_DISTRO_PACKAGE="1"
         ;;
       n|N|no|NO)
@@ -600,7 +623,11 @@ case "$DISTRO" in
     case "$USE_RPM_PACKAGE" in
       y|Y|yes|YES)
         do_task 'Adding Ferron repository' add_ferron_rpm_repo
-        do_task 'Installing Ferron from an RPM package' install_rpm_package
+        if [ "$INSTALLATION_CHANNEL" = "lts" ]; then
+            USE_LTS="1" do_task 'Installing Ferron from an RPM package' install_rpm_package
+        else
+            do_task 'Installing Ferron from an RPM package' install_rpm_package
+        fi
         USE_DISTRO_PACKAGE="1"
         ;;
       n|N|no|NO)
@@ -613,9 +640,10 @@ case "$DISTRO" in
 esac
 if [ "$USE_DISTRO_PACKAGE" != "1" ]; then
     do_task 'Installing required packages' install_required_packages
-    read_input 'Installation channel (`stable` for stable, `manual` for manual installation from a ZIP archive)' INSTALLATION_CHANNEL
     if [ "$INSTALLATION_CHANNEL" = "stable" ]; then
         do_task 'Downloading Ferron ZIP archive' download_ferron_zip
+    elif [ "$INSTALLATION_CHANNEL" = "lts" ]; then
+        USE_LTS="1" do_task 'Downloading Ferron ZIP archive' download_ferron_zip
     elif [ "$INSTALLATION_CHANNEL" = "manual" ]; then
         read_input 'Path to the Ferron ZIP archive' FERRON_ZIP_ARCHIVE
     else
