@@ -23,6 +23,40 @@ example.com {
 }
 ```
 
+## JSON-format access logs
+
+Use this when you need structured logs for easier parsing by log aggregation tools (for example, ELK Stack, Splunk, or cloud-native log processors).
+
+`log_json` directive is available in Ferron UNRELEASED or newer.
+
+```kdl
+globals {
+    log_date_format "%d/%b/%Y:%H:%M:%S %z"
+    log_json
+}
+
+example.com {
+    log "/var/log/ferron/example.com.access.log"
+    error_log "/var/log/ferron/example.com.error.log"
+}
+```
+
+This produces JSON objects with the following default fields: `timestamp`, `client_ip`, `auth_user`, `method`, `path_and_query`, `version`, `status_code`, `content_length`, `referer`, and `user_agent`. When `log_json` is set, `log_format` is ignored, while `log_date_format` still controls the `timestamp` field format.
+
+You can also add custom properties using placeholders:
+
+```kdl
+globals {
+    log_date_format "%d/%b/%Y:%H:%M:%S %z"
+    log_json request_id="{header:X-Request-Id}" request_target="{method} {path_and_query}"
+}
+
+example.com {
+    log "/var/log/ferron/example.com.access.log"
+    error_log "/var/log/ferron/example.com.error.log"
+}
+```
+
 ## Container-friendly logging to stdout/stderr
 
 Use this when running Ferron in containers (Docker, Kubernetes), where platform log collectors read process streams.
