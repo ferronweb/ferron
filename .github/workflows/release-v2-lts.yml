@@ -243,7 +243,7 @@ jobs:
           packaging/rpm/build.sh ${{ matrix.target }} ${{ env.FERRON_VERSION }} target/${{ matrix.target }}/release
 
           RPM_FILE_NAME_WO_RPM=$(ls dist/*.rpm | head -n 1 | sed -E 's|^dist/||' | sed -E 's/\.rpm$//')
-          RPM_PACKAGE_VERSION=$(echo $RPM_FILE_NAME_WO_RPM | cut -d'-' -f2)
+          RPM_PACKAGE_VERSION=$(echo $RPM_FILE_NAME_WO_RPM | cut -d'-' -f3)
           RPM_ARCHITECTURE=$(echo $RPM_FILE_NAME_WO_RPM | rev | cut -d'.' -f1 | rev)
           ssh ferron-servers "mkdir -p rpm || true"
           scp dist/${RPM_FILE_NAME_WO_RPM}.rpm ferron-servers:rpm/${RPM_FILE_NAME_WO_RPM}.rpm
