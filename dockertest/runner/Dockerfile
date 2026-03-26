@@ -31,7 +31,7 @@ RUN --mount=type=cache,sharing=private,target=/go/pkg/mod \
     CGO_ENABLED=0 go build -o /usr/local/bin/grpcurl ./cmd/grpcurl
 
 # Use Debian base image
-FROM debian:trixie
+FROM debian:trixie-20260316
 
 # Install necessary packages for the test runner
 RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
