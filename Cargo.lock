@@ -2867,9 +2867,9 @@ dependencies = [
 
 [[package]]
 name = "num-conv"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf97ec579c3c42f953ef76dbf8d55ac91fb219dde70e49aa4a6b7d74e9919050"
+checksum = "c6673768db2d862beb9b39a78fdcb1a69439615d5794a1be50caa9bc92c81967"
 
 [[package]]
 name = "num-integer"
@@ -4835,9 +4835,9 @@ dependencies = [
 
 [[package]]
 name = "vibeio-http"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c35c546af99dd6c7475195f7b1cadce57bb016782bee2ff187522640d5e8ef0"
+checksum = "a3163367d01fdad7cda38b84b9e69793da89d9208319db7125e84449ef3e2796"
 dependencies = [
  "bytes",
  "futures-util",
@@ -4851,6 +4851,7 @@ dependencies = [
  "kanal",
  "memchr",
  "oneshot",
+ "pin-project-lite",
  "send_wrapper",
  "tokio",
  "tokio-util",
