@@ -1,7 +1,7 @@
-Name:           ferron
+Name:           ferron-lts
 Version:        $VERSION
 Release:        1%{?dist}
-Summary:        A fast, modern, and easily configurable web server with automatic TLS.
+Summary:        A fast, modern, and easily configurable web server with automatic TLS (LTS version).
 
 License:        MIT
 URL:            https://ferron.sh
@@ -11,6 +11,7 @@ Requires:       ca-certificates
 Requires(post): systemd
 Requires(pre):  shadow-utils
 Requires(postun): systemd
+Conflicts:      ferron
 
 Provides:       webserver
 

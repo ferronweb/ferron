@@ -1,0 +1,47 @@
+name: Sync with Ferron website (Ferron 2.x LTS)
+
+on:
+  push:
+    branches: ["2.x-lts"]
+    paths:
+      - "docs/**"
+      - "CHANGELOG.md"
+      - ".github/workflows/sync-website-v2-lts.yml"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: 2.x
+          path: ferron
+
+      - name: Checkout Ferron website
+        uses: actions/checkout@v6
+        with:
+          repository: ferronweb/ferron.sh
+          token: ${{ secrets.GIT_TOKEN }}
+          ref: main
+          path: website
+
+      - name: Sync website
+        run: |
+          cat << EOF > website/changelogs/v2-lts.md
+          ---
+          subject: Ferron 2
+          ---
+          EOF
+          cat ferron/CHANGELOG.md | grep -vE '^# ' >> website/changelogs/v2-lts.md
+          cd website
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m 'chore: sync from https://github.com/ferronweb/ferron/tree/2.x-lts'
+          git push origin main

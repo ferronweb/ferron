@@ -78,7 +78,7 @@ sed -i "s/^Version: .*/Version: $DEB_VERSION/" $DEB_BUILD_DIRECTORY_NAME/DEBIAN/
 sed -i "s/^Architecture: .*/Architecture: $DEB_ARCHITECTURE/" $DEB_BUILD_DIRECTORY_NAME/DEBIAN/control
 
 # Build the Debian package
-dpkg-deb --root-owner-group --build $DEB_BUILD_DIRECTORY_NAME "$PROJECT_ROOT_DIR/dist/ferron_${DEB_VERSION}_${DEB_ARCHITECTURE}.deb"
+dpkg-deb --root-owner-group --build $DEB_BUILD_DIRECTORY_NAME "$PROJECT_ROOT_DIR/dist/ferron-lts_${DEB_VERSION}_${DEB_ARCHITECTURE}.deb"
 
 # Pop the working directory
 popd

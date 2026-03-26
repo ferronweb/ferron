@@ -1,9 +1,10 @@
-Package: ferron
+Package: ferron-lts
 Version: $VERSION
 Architecture: $ARCHITECTURE
 Essential: no
 Priority: optional
 Depends: libc6 (>= 2.31), ca-certificates
+Conflicts: ferron
 Maintainer: Dorian Niemiec
 Section: httpd
-Description: A fast, modern, and easily configurable web server with automatic TLS.
+Description: A fast, modern, and easily configurable web server with automatic TLS (LTS version).
