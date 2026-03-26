@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: 2.x
+          ref: 2.x-lts
           path: ferron
 
       - name: Checkout Ferron website
@@ -34,7 +34,7 @@ jobs:
         run: |
           cat << EOF > website/src/content/changelogs/v2-lts.md
           ---
-          subject: Ferron 2
+          subject: Ferron 2 LTS
           ---
           EOF
           cat ferron/CHANGELOG.md | grep -vE '^# ' >> website/src/content/changelogs/v2-lts.md
