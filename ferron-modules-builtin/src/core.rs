@@ -655,6 +655,19 @@ impl ModuleLoader for CoreModuleLoader {
       }
     };
 
+    if let Some(log_entries) = config.entries.get("log_json") {
+      used_properties.insert("log_json".to_string());
+      for log_entry in &log_entries.inner {
+        for (prop_name, prop_value) in &log_entry.props {
+          if !prop_value.is_string() {
+            Err(anyhow::anyhow!(
+              "The `log_json` configuration property prop `{prop_name}` must be a string"
+            ))?
+          }
+        }
+      }
+    };
+
     if let Some(entries) = get_entries_for_validation!("tls_client_certificate", config, used_properties) {
       for entry in &entries.inner {
         if entry.values.len() != 1 {

@@ -42,3 +42,5 @@ Ferron 2.0.0 and newer supports the following placeholders for access logs:
 - `{timestamp}` - the formatted timestamp of the entry
 - `{status_code}` - the HTTP status code of the response
 - `{content_length}` - the content length of the response (`-`, if not available)
+
+These placeholders can be used both in `log_format` and in `log_json` additional property templates.

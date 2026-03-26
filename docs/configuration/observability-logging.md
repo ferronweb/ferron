@@ -13,8 +13,10 @@ This page describes KDL directives for configuring Ferron logging outputs, forma
   - This directive specifies the date format (according to POSIX) for the access log file. Default: `"%d/%b/%Y:%H:%M:%S %z"`
 - `log_format <log_format: string>`
   - This directive specifies the entry format for the access log file. The placeholders can be found in the reference below the section specifying. Default: `"{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""` (Combined Log Format)
+- `log_json [<property_name>=<property_template: string>]...` (Ferron UNRELEASED or newer)
+  - This directive switches access logs to JSON output. The default JSON object contains `timestamp`, `client_ip`, `auth_user`, `method`, `path_and_query`, `version`, `status_code`, `content_length`, `referer`, and `user_agent`. Optional props add extra string properties whose values are rendered from access-log placeholders. If `log_json` is set, `log_format` is ignored, while `log_date_format` still controls the `timestamp` field. Default: disabled
 - `log <log_file_path: string>` (_logfile_ observability backend)
-  - This directive specifies the path to the access log file, which contains the HTTP response logs in Combined Log Format. This directive was a global and virtual host directive before Ferron 2.2.0. Default: none
+  - This directive specifies the path to the access log file, which contains the HTTP response logs in either text (Combined Log Format by default) or JSON format (Ferron UNRELEASED or newer) depending on the logging directives in use. This directive was a global and virtual host directive before Ferron 2.2.0. Default: none
 - `error_log <error_log_file_path: string>` (_logfile_ observability backend)
   - This directive specifies the path to the error log file. This directive was a global and virtual host directive before Ferron 2.2.0. Default: none
 - `otlp_no_verification [otlp_no_verification: bool]` (_otlp_ observability backend; Ferron 2.2.0 or newer)
@@ -49,7 +51,7 @@ This page describes KDL directives for configuring Ferron logging outputs, forma
 ```kdl
 * {
     log_date_format "%d/%b/%Y:%H:%M:%S %z"
-    log_format "{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\""
+    log_json request_id="{header:X-Request-Id}" request_target="{method} {path_and_query}"
 }
 
 example.com {
