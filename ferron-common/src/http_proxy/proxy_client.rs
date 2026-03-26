@@ -17,7 +17,9 @@ use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(feature = "runtime-vibeio")]
 use vibeio_hyper::{VibeioExecutor, VibeioIo};
 
-use super::{ConnectionPoolItem, DropGuard};
+use super::ConnectionPoolItem;
+#[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
+use super::DropGuard;
 use crate::http_proxy::send_request::{SendRequest, SendRequestWrapper};
 use crate::logging::ErrorLogger;
 use crate::modules::ResponseData;
