@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt::Display;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -67,7 +68,7 @@ pub struct ReloadableHandlerData {
   /// ACME TLS-ALPN-01 configurations
   pub acme_tls_alpn_01_configs: Arc<HashMap<u16, Arc<ServerConfig>>>,
   /// ACME HTTP-01 resolvers
-  pub acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
+  pub acme_http_01_resolvers: AcmeHttp01Resolvers,
   /// Server configurations
   pub configurations: Arc<ServerConfigurations>,
   /// TLS configurations
@@ -77,6 +78,8 @@ pub struct ReloadableHandlerData {
   /// Whether PROXY protocol is enabled
   pub enable_proxy_protocol: bool,
 }
+
+type AcmeHttp01Resolvers = Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>;
 
 /// Tokio local executor
 #[cfg(feature = "runtime-tokio")]
@@ -243,16 +246,7 @@ async fn http_handler_fn(
           let tcp_stream = match TcpStream::from_std(tcp_stream) {
             Ok(stream) => stream,
             Err(err) => {
-              for logging_tx in configurations
-                .find_global_configuration()
-                .as_ref()
-                .map_or(&vec![], |c| &c.observability.log_channels)
-              {
-                logging_tx
-                  .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
-                  .await
-                  .unwrap_or_default();
-              }
+              log_connection_accept_error(&configurations, err).await;
               return;
             }
           };
@@ -300,35 +294,225 @@ async fn http_handler_fn(
 }
 
 /// Enum for maybe TLS stream
-#[allow(clippy::large_enum_variant)]
 #[cfg(feature = "runtime-monoio")]
-enum MaybeTlsStream {
-  /// TLS stream
-  Tls(TlsStream<SendAsyncIo<TcpStreamPoll>>),
+type HttpTcpStream = SendAsyncIo<TcpStreamPoll>;
 
-  /// Plain TCP stream
-  Plain(SendAsyncIo<TcpStreamPoll>),
-}
+#[cfg(feature = "runtime-vibeio")]
+type HttpTcpStream = PollTcpStream;
+
+#[cfg(feature = "runtime-tokio")]
+type HttpTcpStream = TcpStream;
 
 /// Enum for maybe TLS stream
 #[allow(clippy::large_enum_variant)]
-#[cfg(feature = "runtime-vibeio")]
 enum MaybeTlsStream {
   /// TLS stream
-  Tls(TlsStream<PollTcpStream>),
+  Tls(TlsStream<HttpTcpStream>),
 
   /// Plain TCP stream
-  Plain(PollTcpStream),
+  Plain(HttpTcpStream),
 }
 
-#[allow(clippy::large_enum_variant)]
-#[cfg(feature = "runtime-tokio")]
-enum MaybeTlsStream {
-  /// TLS stream
-  Tls(TlsStream<TcpStream>),
+#[derive(Clone, Copy, Default)]
+struct Http2Settings {
+  initial_window_size: Option<u32>,
+  max_frame_size: Option<u32>,
+  max_concurrent_streams: Option<u32>,
+  max_header_list_size: Option<u32>,
+  enable_connect_protocol: bool,
+}
 
-  /// Plain TCP stream
-  Plain(TcpStream),
+#[inline]
+fn get_http2_settings(configurations: &ServerConfigurations) -> Http2Settings {
+  let global_configuration = configurations.find_global_configuration();
+
+  Http2Settings {
+    initial_window_size: global_configuration
+      .as_deref()
+      .and_then(|c| get_value!("h2_initial_window_size", c))
+      .and_then(|v| v.as_i128())
+      .map(|v| v as u32),
+    max_frame_size: global_configuration
+      .as_deref()
+      .and_then(|c| get_value!("h2_max_frame_size", c))
+      .and_then(|v| v.as_i128())
+      .map(|v| v as u32),
+    max_concurrent_streams: global_configuration
+      .as_deref()
+      .and_then(|c| get_value!("h2_max_concurrent_streams", c))
+      .and_then(|v| v.as_i128())
+      .map(|v| v as u32),
+    max_header_list_size: global_configuration
+      .as_deref()
+      .and_then(|c| get_value!("h2_max_header_list_size", c))
+      .and_then(|v| v.as_i128())
+      .map(|v| v as u32),
+    enable_connect_protocol: global_configuration
+      .as_deref()
+      .and_then(|c| get_value!("h2_enable_connect_protocol", c))
+      .and_then(|v| v.as_bool())
+      .unwrap_or(false),
+  }
+}
+
+#[inline]
+fn get_http3_port(http3_enabled: bool, server_address: SocketAddr) -> Option<u16> {
+  if http3_enabled {
+    Some(server_address.port())
+  } else {
+    None
+  }
+}
+
+#[inline]
+fn empty_acme_http_01_resolvers() -> AcmeHttp01Resolvers {
+  Arc::new(tokio::sync::RwLock::new(Vec::new()))
+}
+
+#[inline]
+async fn log_handler_error(configurations: &ServerConfigurations, message: impl Into<String>) {
+  let message = message.into();
+  let global_configuration = configurations.find_global_configuration();
+  let log_channels = global_configuration
+    .as_deref()
+    .map_or(&[][..], |c| c.observability.log_channels.as_slice());
+  for logging_tx in log_channels {
+    logging_tx
+      .send(LogMessage::new(message.clone(), true))
+      .await
+      .unwrap_or_default();
+  }
+}
+
+#[inline]
+async fn log_connection_accept_error(configurations: &ServerConfigurations, err: impl Display) {
+  log_handler_error(configurations, format!("Cannot accept a connection: {err}")).await;
+}
+
+#[inline]
+async fn log_http_connection_error(configurations: &ServerConfigurations, protocol: &str, err: impl Display) {
+  log_handler_error(configurations, format!("Error serving {protocol} connection: {err}")).await;
+}
+
+#[cfg(feature = "runtime-monoio")]
+#[inline]
+async fn convert_tcp_stream_for_runtime(
+  tcp_stream: TcpStream,
+  configurations: &Arc<ServerConfigurations>,
+) -> Option<HttpTcpStream> {
+  match tcp_stream.into_poll_io() {
+    Ok(stream) => Some(SendAsyncIo::new(stream)),
+    Err(err) => {
+      log_connection_accept_error(configurations, err).await;
+      None
+    }
+  }
+}
+
+#[cfg(feature = "runtime-vibeio")]
+#[inline]
+async fn convert_tcp_stream_for_runtime(
+  tcp_stream: TcpStream,
+  configurations: &Arc<ServerConfigurations>,
+) -> Option<HttpTcpStream> {
+  match tcp_stream.into_poll() {
+    Ok(stream) => Some(stream),
+    Err(err) => {
+      log_connection_accept_error(configurations, err).await;
+      None
+    }
+  }
+}
+
+#[cfg(feature = "runtime-tokio")]
+#[inline]
+async fn convert_tcp_stream_for_runtime(
+  tcp_stream: TcpStream,
+  _configurations: &Arc<ServerConfigurations>,
+) -> Option<HttpTcpStream> {
+  Some(tcp_stream)
+}
+
+#[inline]
+async fn maybe_read_proxy_protocol_header(
+  tcp_stream: HttpTcpStream,
+  enable_proxy_protocol: bool,
+  configurations: &Arc<ServerConfigurations>,
+) -> Option<(HttpTcpStream, Option<SocketAddr>, Option<SocketAddr>)> {
+  if !enable_proxy_protocol {
+    return Some((tcp_stream, None, None));
+  }
+
+  match read_proxy_header(tcp_stream).await {
+    Ok((stream, client_address, server_address)) => Some((stream, client_address, server_address)),
+    Err(err) => {
+      log_handler_error(configurations, format!("Error reading PROXY protocol header: {err}")).await;
+      None
+    }
+  }
+}
+
+#[inline]
+async fn maybe_accept_tls_stream(
+  tcp_stream: HttpTcpStream,
+  tls_config: Option<Arc<ServerConfig>>,
+  acme_tls_alpn_01_config: Option<Arc<ServerConfig>>,
+  configurations: &Arc<ServerConfigurations>,
+) -> Option<MaybeTlsStream> {
+  let Some(tls_config) = tls_config else {
+    return Some(MaybeTlsStream::Plain(tcp_stream));
+  };
+
+  let start_handshake = match LazyConfigAcceptor::new(Acceptor::default(), tcp_stream).await {
+    Ok(start_handshake) => start_handshake,
+    Err(err) => {
+      log_handler_error(configurations, format!("Error during TLS handshake: {err}")).await;
+      return None;
+    }
+  };
+
+  if let Some(acme_config) = acme_tls_alpn_01_config {
+    if start_handshake
+      .client_hello()
+      .alpn()
+      .into_iter()
+      .flatten()
+      .eq([ACME_TLS_ALPN_NAME])
+    {
+      if let Err(err) = start_handshake.into_stream(acme_config).await {
+        log_handler_error(configurations, format!("Error during TLS handshake: {err}")).await;
+      }
+      return None;
+    }
+  }
+
+  match start_handshake.into_stream(tls_config).await {
+    Ok(tls_stream) => Some(MaybeTlsStream::Tls(tls_stream)),
+    Err(err) => {
+      log_handler_error(configurations, format!("Error during TLS handshake: {err}")).await;
+      None
+    }
+  }
+}
+
+#[cfg(not(feature = "runtime-vibeio"))]
+#[inline]
+fn sanitize_http3_response_headers(response_headers: &mut hyper::HeaderMap) {
+  if let Ok(http_date) = httpdate::fmt_http_date(SystemTime::now()).try_into() {
+    response_headers.entry(hyper::header::DATE).or_insert(http_date);
+  }
+  for header in &HTTP3_INVALID_HEADERS {
+    response_headers.remove(header);
+  }
+  if let Some(connection_header) = response_headers
+    .remove(hyper::header::CONNECTION)
+    .as_ref()
+    .and_then(|v| v.to_str().ok())
+  {
+    for name in connection_header.split(',') {
+      response_headers.remove(name.trim());
+    }
+  }
 }
 
 /// HTTP/1.x and HTTP/2 handler function
@@ -343,136 +527,24 @@ async fn http_tcp_handler_fn(
   http3_enabled: bool,
   connection_reference: Arc<()>,
   acme_tls_alpn_01_config: Option<Arc<ServerConfig>>,
-  acme_http_01_resolvers: Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>,
+  acme_http_01_resolvers: AcmeHttp01Resolvers,
   enable_proxy_protocol: bool,
   shutdown_rx: CancellationToken,
   graceful_shutdown_token: Arc<CancellationToken>,
 ) {
   let _connection_reference = Arc::downgrade(&connection_reference);
-  #[cfg(feature = "runtime-monoio")]
-  let tcp_stream = match tcp_stream.into_poll_io() {
-    Ok(stream) => SendAsyncIo::new(stream),
-    Err(err) => {
-      for logging_tx in configurations
-        .find_global_configuration()
-        .as_ref()
-        .map_or(&vec![], |c| &c.observability.log_channels)
-      {
-        logging_tx
-          .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
-          .await
-          .unwrap_or_default();
-      }
-      return;
-    }
+  let Some(tcp_stream) = convert_tcp_stream_for_runtime(tcp_stream, &configurations).await else {
+    return;
   };
-  #[cfg(feature = "runtime-vibeio")]
-  let tcp_stream = match tcp_stream.into_poll() {
-    Ok(stream) => stream,
-    Err(err) => {
-      for logging_tx in configurations
-        .find_global_configuration()
-        .as_ref()
-        .map_or(&vec![], |c| &c.observability.log_channels)
-      {
-        logging_tx
-          .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
-          .await
-          .unwrap_or_default();
-      }
-      return;
-    }
+  let Some((tcp_stream, proxy_protocol_client_address, proxy_protocol_server_address)) =
+    maybe_read_proxy_protocol_header(tcp_stream, enable_proxy_protocol, &configurations).await
+  else {
+    return;
   };
-
-  // PROXY protocol header precedes TLS handshakes too...
-  let (tcp_stream, proxy_protocol_client_address, proxy_protocol_server_address) = if enable_proxy_protocol {
-    // Read and parse the PROXY protocol header
-    match read_proxy_header(tcp_stream).await {
-      Ok((tcp_stream, client_ip, server_ip)) => (tcp_stream, client_ip, server_ip),
-      Err(err) => {
-        for logging_tx in configurations
-          .find_global_configuration()
-          .as_ref()
-          .map_or(&vec![], |c| &c.observability.log_channels)
-        {
-          logging_tx
-            .send(LogMessage::new(
-              format!("Error reading PROXY protocol header: {err}"),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
-        }
-        return;
-      }
-    }
-  } else {
-    (tcp_stream, None, None)
-  };
-
-  let maybe_tls_stream = if let Some(tls_config) = tls_config {
-    let start_handshake = match LazyConfigAcceptor::new(Acceptor::default(), tcp_stream).await {
-      Ok(start_handshake) => start_handshake,
-      Err(err) => {
-        for logging_tx in configurations
-          .find_global_configuration()
-          .as_ref()
-          .map_or(&vec![], |c| &c.observability.log_channels)
-        {
-          logging_tx
-            .send(LogMessage::new(format!("Error during TLS handshake: {err}"), true))
-            .await
-            .unwrap_or_default();
-        }
-        return;
-      }
-    };
-
-    if let Some(acme_config) = acme_tls_alpn_01_config {
-      if start_handshake
-        .client_hello()
-        .alpn()
-        .into_iter()
-        .flatten()
-        .eq([ACME_TLS_ALPN_NAME])
-      {
-        if let Err(err) = start_handshake.into_stream(acme_config).await {
-          for logging_tx in configurations
-            .find_global_configuration()
-            .as_ref()
-            .map_or(&vec![], |c| &c.observability.log_channels)
-          {
-            logging_tx
-              .send(LogMessage::new(format!("Error during TLS handshake: {err}"), true))
-              .await
-              .unwrap_or_default();
-          }
-          return;
-        };
-        return;
-      }
-    }
-
-    let tls_stream = match start_handshake.into_stream(tls_config).await {
-      Ok(tls_stream) => tls_stream,
-      Err(err) => {
-        for logging_tx in configurations
-          .find_global_configuration()
-          .as_ref()
-          .map_or(&vec![], |c| &c.observability.log_channels)
-        {
-          logging_tx
-            .send(LogMessage::new(format!("Error during TLS handshake: {err}"), true))
-            .await
-            .unwrap_or_default();
-        }
-        return;
-      }
-    };
-
-    MaybeTlsStream::Tls(tls_stream)
-  } else {
-    MaybeTlsStream::Plain(tcp_stream)
+  let Some(maybe_tls_stream) =
+    maybe_accept_tls_stream(tcp_stream, tls_config, acme_tls_alpn_01_config, &configurations).await
+  else {
+    return;
   };
 
   if let MaybeTlsStream::Tls(tls_stream) = maybe_tls_stream {
@@ -489,45 +561,21 @@ async fn http_tcp_handler_fn(
 
       let mut h2_options = Http2Options::default();
       let http2_builder = h2_options.h2_builder();
-
-      let global_configuration = configurations.find_global_configuration();
-
-      if let Some(initial_window_size) = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("h2_initial_window_size", c))
-        .and_then(|v| v.as_i128())
-      {
-        http2_builder.initial_window_size(initial_window_size as u32);
+      let http2_settings = get_http2_settings(&configurations);
+      if let Some(initial_window_size) = http2_settings.initial_window_size {
+        http2_builder.initial_window_size(initial_window_size);
       }
-      if let Some(max_frame_size) = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("h2_max_frame_size", c))
-        .and_then(|v| v.as_i128())
-      {
-        http2_builder.max_frame_size(max_frame_size as u32);
+      if let Some(max_frame_size) = http2_settings.max_frame_size {
+        http2_builder.max_frame_size(max_frame_size);
       }
-      if let Some(max_concurrent_streams) = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("h2_max_concurrent_streams", c))
-        .and_then(|v| v.as_i128())
-      {
-        http2_builder.max_concurrent_streams(max_concurrent_streams as u32);
+      if let Some(max_concurrent_streams) = http2_settings.max_concurrent_streams {
+        http2_builder.max_concurrent_streams(max_concurrent_streams);
       }
-      if let Some(max_header_list_size) = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("h2_max_header_list_size", c))
-        .and_then(|v| v.as_i128())
-      {
-        http2_builder.max_header_list_size(max_header_list_size as u32);
+      if let Some(max_header_list_size) = http2_settings.max_header_list_size {
+        http2_builder.max_header_list_size(max_header_list_size);
       }
-      if let Some(enable_connect_protocol) = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("h2_enable_connect_protocol", c))
-        .and_then(|v| v.as_bool())
-      {
-        if enable_connect_protocol {
-          http2_builder.enable_connect_protocol();
-        }
+      if http2_settings.enable_connect_protocol {
+        http2_builder.enable_connect_protocol();
       }
 
       let configurations_clone = configurations.clone();
@@ -547,11 +595,7 @@ async fn http_tcp_handler_fn(
             server_address,
             true,
             configurations_clone.clone(),
-            if http3_enabled {
-              Some(server_address.port())
-            } else {
-              None
-            },
+            get_http3_port(http3_enabled, server_address),
             acme_http_01_resolvers.clone(),
             proxy_protocol_client_address,
             proxy_protocol_server_address,
@@ -578,16 +622,7 @@ async fn http_tcp_handler_fn(
         }
       };
       if let Err(err) = http_future_result {
-        for logging_tx in configurations
-          .find_global_configuration()
-          .as_ref()
-          .map_or(&vec![], |c| &c.observability.log_channels)
-        {
-          logging_tx
-            .send(LogMessage::new(format!("Error serving HTTPS connection: {err}"), true))
-            .await
-            .unwrap_or_default();
-        }
+        log_http_connection_error(&configurations, "HTTPS", err).await;
       }
     } else {
       use vibeio_http::{Http1Options, HttpProtocol};
@@ -610,11 +645,7 @@ async fn http_tcp_handler_fn(
               server_address,
               true,
               configurations_clone.clone(),
-              if http3_enabled {
-                Some(server_address.port())
-              } else {
-                None
-              },
+              get_http3_port(http3_enabled, server_address),
               acme_http_01_resolvers.clone(),
               proxy_protocol_client_address,
               proxy_protocol_server_address,
@@ -641,16 +672,7 @@ async fn http_tcp_handler_fn(
         }
       };
       if let Err(err) = http_future_result {
-        for logging_tx in configurations
-          .find_global_configuration()
-          .as_ref()
-          .map_or(&vec![], |c| &c.observability.log_channels)
-        {
-          logging_tx
-            .send(LogMessage::new(format!("Error serving HTTPS connection: {err}"), true))
-            .await
-            .unwrap_or_default();
-        }
+        log_http_connection_error(&configurations, "HTTPS", err).await;
       }
     }
 
@@ -673,44 +695,21 @@ async fn http_tcp_handler_fn(
         http2_builder
       };
 
-      let global_configuration = configurations.find_global_configuration();
-
-      if let Some(initial_window_size) = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("h2_initial_window_size", c))
-        .and_then(|v| v.as_i128())
-      {
-        http2_builder.initial_stream_window_size(initial_window_size as u32);
+      let http2_settings = get_http2_settings(&configurations);
+      if let Some(initial_window_size) = http2_settings.initial_window_size {
+        http2_builder.initial_stream_window_size(initial_window_size);
       }
-      if let Some(max_frame_size) = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("h2_max_frame_size", c))
-        .and_then(|v| v.as_i128())
-      {
-        http2_builder.max_frame_size(max_frame_size as u32);
+      if let Some(max_frame_size) = http2_settings.max_frame_size {
+        http2_builder.max_frame_size(max_frame_size);
       }
-      if let Some(max_concurrent_streams) = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("h2_max_concurrent_streams", c))
-        .and_then(|v| v.as_i128())
-      {
-        http2_builder.max_concurrent_streams(max_concurrent_streams as u32);
+      if let Some(max_concurrent_streams) = http2_settings.max_concurrent_streams {
+        http2_builder.max_concurrent_streams(max_concurrent_streams);
       }
-      if let Some(max_header_list_size) = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("h2_max_header_list_size", c))
-        .and_then(|v| v.as_i128())
-      {
-        http2_builder.max_header_list_size(max_header_list_size as u32);
+      if let Some(max_header_list_size) = http2_settings.max_header_list_size {
+        http2_builder.max_header_list_size(max_header_list_size);
       }
-      if let Some(enable_connect_protocol) = global_configuration
-        .as_deref()
-        .and_then(|c| get_value!("h2_enable_connect_protocol", c))
-        .and_then(|v| v.as_bool())
-      {
-        if enable_connect_protocol {
-          http2_builder.enable_connect_protocol();
-        }
+      if http2_settings.enable_connect_protocol {
+        http2_builder.enable_connect_protocol();
       }
 
       let configurations_clone = configurations.clone();
@@ -728,11 +727,7 @@ async fn http_tcp_handler_fn(
             server_address,
             true,
             configurations_clone.clone(),
-            if http3_enabled {
-              Some(server_address.port())
-            } else {
-              None
-            },
+            get_http3_port(http3_enabled, server_address),
             acme_http_01_resolvers.clone(),
             proxy_protocol_client_address,
             proxy_protocol_server_address,
@@ -758,19 +753,7 @@ async fn http_tcp_handler_fn(
         } else {
           &err
         };
-        for logging_tx in configurations
-          .find_global_configuration()
-          .as_ref()
-          .map_or(&vec![], |c| &c.observability.log_channels)
-        {
-          logging_tx
-            .send(LogMessage::new(
-              format!("Error serving HTTPS connection: {error_to_log}"),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
-        }
+        log_http_connection_error(&configurations, "HTTPS", error_to_log).await;
       }
     } else {
       #[cfg(feature = "runtime-monoio")]
@@ -811,11 +794,7 @@ async fn http_tcp_handler_fn(
               server_address,
               true,
               configurations_clone.clone(),
-              if http3_enabled {
-                Some(server_address.port())
-              } else {
-                None
-              },
+              get_http3_port(http3_enabled, server_address),
               acme_http_01_resolvers.clone(),
               proxy_protocol_client_address,
               proxy_protocol_server_address,
@@ -842,19 +821,7 @@ async fn http_tcp_handler_fn(
         } else {
           &err
         };
-        for logging_tx in configurations
-          .find_global_configuration()
-          .as_ref()
-          .map_or(&vec![], |c| &c.observability.log_channels)
-        {
-          logging_tx
-            .send(LogMessage::new(
-              format!("Error serving HTTPS connection: {error_to_log}"),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
-        }
+        log_http_connection_error(&configurations, "HTTPS", error_to_log).await;
       }
     }
   } else if let MaybeTlsStream::Plain(stream) = maybe_tls_stream {
@@ -881,11 +848,7 @@ async fn http_tcp_handler_fn(
           server_address,
           false,
           configurations_clone.clone(),
-          if http3_enabled {
-            Some(server_address.port())
-          } else {
-            None
-          },
+          get_http3_port(http3_enabled, server_address),
           acme_http_01_resolvers.clone(),
           proxy_protocol_client_address,
           proxy_protocol_server_address,
@@ -910,11 +873,7 @@ async fn http_tcp_handler_fn(
           server_address,
           true,
           configurations_clone.clone(),
-          if http3_enabled {
-            Some(server_address.port())
-          } else {
-            None
-          },
+          get_http3_port(http3_enabled, server_address),
           acme_http_01_resolvers.clone(),
           proxy_protocol_client_address,
           proxy_protocol_server_address,
@@ -940,16 +899,7 @@ async fn http_tcp_handler_fn(
         }
       };
       if let Err(err) = http_future_result {
-        for logging_tx in configurations
-          .find_global_configuration()
-          .as_ref()
-          .map_or(&vec![], |c| &c.observability.log_channels)
-        {
-          logging_tx
-            .send(LogMessage::new(format!("Error serving HTTP connection: {err}"), true))
-            .await
-            .unwrap_or_default();
-        }
+        log_http_connection_error(&configurations, "HTTP", err).await;
       }
     }
     #[cfg(not(feature = "runtime-vibeio"))]
@@ -994,11 +944,7 @@ async fn http_tcp_handler_fn(
               server_address,
               false,
               configurations_clone.clone(),
-              if http3_enabled {
-                Some(server_address.port())
-              } else {
-                None
-              },
+              get_http3_port(http3_enabled, server_address),
               acme_http_01_resolvers.clone(),
               proxy_protocol_client_address,
               proxy_protocol_server_address,
@@ -1025,19 +971,7 @@ async fn http_tcp_handler_fn(
         } else {
           &err
         };
-        for logging_tx in configurations
-          .find_global_configuration()
-          .as_ref()
-          .map_or(&vec![], |c| &c.observability.log_channels)
-        {
-          logging_tx
-            .send(LogMessage::new(
-              format!("Error serving HTTP connection: {error_to_log}"),
-              true,
-            ))
-            .await
-            .unwrap_or_default();
-        }
+        log_http_connection_error(&configurations, "HTTP", error_to_log).await;
       }
     }
   }
@@ -1078,7 +1012,7 @@ async fn http_quic_handler_fn(
               true,
               configurations_clone.clone(),
               None,
-              Arc::new(tokio::sync::RwLock::new(vec![])),
+              empty_acme_http_01_resolvers(),
               None,
               None,
             );
@@ -1104,29 +1038,11 @@ async fn http_quic_handler_fn(
         }
       };
       if let Err(err) = http_future_result {
-        for logging_tx in configurations
-          .find_global_configuration()
-          .as_ref()
-          .map_or(&vec![], |c| &c.observability.log_channels)
-        {
-          logging_tx
-            .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-            .await
-            .unwrap_or_default();
-        }
+        log_http_connection_error(&configurations, "HTTP/3", err).await;
       }
     }
     Err(err) => {
-      for logging_tx in configurations
-        .find_global_configuration()
-        .as_ref()
-        .map_or(&vec![], |c| &c.observability.log_channels)
-      {
-        logging_tx
-          .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
-          .await
-          .unwrap_or_default();
-      }
+      log_connection_accept_error(&configurations, err).await;
     }
   }
 }
@@ -1144,294 +1060,172 @@ async fn http_quic_handler_fn(
   shutdown_rx: CancellationToken,
   graceful_shutdown_token: Arc<CancellationToken>,
 ) {
-  match connection_attempt.await {
-    Ok(connection) => {
-      let connection_reference = Arc::downgrade(&connection_reference);
-      let mut h3_conn: h3::server::Connection<h3_quinn::Connection, Bytes> =
-        match h3::server::Connection::new(h3_quinn::Connection::new(connection)).await {
-          Ok(h3_conn) => h3_conn,
-          Err(err) => {
-            for logging_tx in configurations
-              .find_global_configuration()
-              .as_ref()
-              .map_or(&vec![], |c| &c.observability.log_channels)
-            {
-              logging_tx
-                .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                .await
-                .unwrap_or_default();
-            }
-            return;
-          }
-        };
+  let connection = match connection_attempt.await {
+    Ok(connection) => connection,
+    Err(err) => {
+      log_connection_accept_error(&configurations, err).await;
+      return;
+    }
+  };
 
-      loop {
-        match crate::runtime::select! {
-            biased;
+  let connection_reference = Arc::downgrade(&connection_reference);
+  let mut h3_conn: h3::server::Connection<h3_quinn::Connection, Bytes> =
+    match h3::server::Connection::new(h3_quinn::Connection::new(connection)).await {
+      Ok(h3_conn) => h3_conn,
+      Err(err) => {
+        log_http_connection_error(&configurations, "HTTP/3", err).await;
+        return;
+      }
+    };
 
-            _ = shutdown_rx.cancelled() => {
-              h3_conn.shutdown(0).await.unwrap_or_default();
+  loop {
+    match crate::runtime::select! {
+        biased;
+
+        _ = shutdown_rx.cancelled() => {
+          h3_conn.shutdown(0).await.unwrap_or_default();
+          return;
+        }
+        _ = graceful_shutdown_token.cancelled() => {
+          h3_conn.shutdown(0).await.unwrap_or_default();
+          return;
+        }
+        result = h3_conn.accept() => {
+          result
+        }
+    } {
+      Ok(Some(resolver)) => {
+        let configurations = configurations.clone();
+        let connection_reference = connection_reference.clone();
+        crate::runtime::spawn(async move {
+          let _connection_reference = connection_reference;
+          let (request, stream) = match resolver.resolve_request().await {
+            Ok(resolved) => resolved,
+            Err(err) => {
+              if !err.is_h3_no_error() {
+                log_http_connection_error(&configurations, "HTTP/3", err).await;
+              }
               return;
             }
-            _ = graceful_shutdown_token.cancelled() => {
-              h3_conn.shutdown(0).await.unwrap_or_default();
-              return;
-            }
-            result = h3_conn.accept() => {
-              result
-            }
-        } {
-          Ok(Some(resolver)) => {
-            let configurations = configurations.clone();
-            let connection_reference = connection_reference.clone();
-            crate::runtime::spawn(async move {
-              let _connection_reference = connection_reference;
-              let (request, stream) = match resolver.resolve_request().await {
-                Ok(resolved) => resolved,
-                Err(err) => {
-                  if !err.is_h3_no_error() {
-                    for logging_tx in configurations
-                      .find_global_configuration()
-                      .as_ref()
-                      .map_or(&vec![], |c| &c.observability.log_channels)
-                    {
-                      logging_tx
-                        .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                        .await
-                        .unwrap_or_default();
-                    }
-                  }
-                  return;
-                }
-              };
-              let (mut send, receive) = stream.split();
-              let request_body_stream =
-                futures_util::stream::unfold((receive, false), |(mut receive, mut is_body_finished)| async move {
-                  loop {
-                    if !is_body_finished {
-                      match receive.recv_data().await {
-                        Ok(Some(mut data)) => {
-                          return Some((Ok(Frame::data(data.copy_to_bytes(data.remaining()))), (receive, false)))
-                        }
-                        Ok(None) => is_body_finished = true,
-                        Err(err) => return Some((Err(std::io::Error::other(err.to_string())), (receive, false))),
-                      }
-                    } else {
-                      match receive.recv_trailers().await {
-                        Ok(Some(trailers)) => return Some((Ok(Frame::trailers(trailers)), (receive, true))),
-                        Ok(None) => {
-                          return None;
-                        }
-                        Err(err) => return Some((Err(std::io::Error::other(err.to_string())), (receive, true))),
-                      }
-                    }
-                  }
-                });
-              let request_body = BodyExt::boxed(StreamBody::new(request_body_stream));
-              let (request_parts, _) = request.into_parts();
-              let request = Request::from_parts(request_parts, request_body);
-              let mut response = match request_handler(
-                request,
-                client_address,
-                server_address,
-                true,
-                configurations.clone(),
-                None,
-                Arc::new(tokio::sync::RwLock::new(vec![])),
-                None,
-                None,
-              )
-              .await
-              {
-                Ok(response) => response,
-                Err(err) => {
-                  for logging_tx in configurations
-                    .find_global_configuration()
-                    .as_ref()
-                    .map_or(&vec![], |c| &c.observability.log_channels)
-                  {
-                    logging_tx
-                      .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                      .await
-                      .unwrap_or_default();
-                  }
-                  return;
-                }
-              };
-              let response_headers = response.headers_mut();
-              if let Ok(http_date) = httpdate::fmt_http_date(SystemTime::now()).try_into() {
-                response_headers.entry(hyper::header::DATE).or_insert(http_date);
-              }
-              for header in &HTTP3_INVALID_HEADERS {
-                response_headers.remove(header);
-              }
-              if let Some(connection_header) = response_headers
-                .remove(hyper::header::CONNECTION)
-                .as_ref()
-                .and_then(|v| v.to_str().ok())
-              {
-                for name in connection_header.split(',') {
-                  response_headers.remove(name.trim());
-                }
-              }
-              let (response_parts, mut response_body) = response.into_parts();
-              if let Err(err) = send.send_response(Response::from_parts(response_parts, ())).await {
-                if !err.is_h3_no_error() {
-                  for logging_tx in configurations
-                    .find_global_configuration()
-                    .as_ref()
-                    .map_or(&vec![], |c| &c.observability.log_channels)
-                  {
-                    logging_tx
-                      .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                      .await
-                      .unwrap_or_default();
-                  }
-                }
-                return;
-              }
-              let mut had_trailers = false;
-              while let Some(chunk) = response_body.frame().await {
-                match chunk {
-                  Ok(frame) => {
-                    if frame.is_data() {
-                      match frame.into_data() {
-                        Ok(data) => {
-                          if let Err(err) = send.send_data(data).await {
-                            if !err.is_h3_no_error() {
-                              for logging_tx in configurations
-                                .find_global_configuration()
-                                .as_ref()
-                                .map_or(&vec![], |c| &c.observability.log_channels)
-                              {
-                                logging_tx
-                                  .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                                  .await
-                                  .unwrap_or_default();
-                              }
-                            }
-                            return;
-                          }
-                        }
-                        Err(_) => {
-                          for logging_tx in configurations
-                            .find_global_configuration()
-                            .as_ref()
-                            .map_or(&vec![], |c| &c.observability.log_channels)
-                          {
-                            logging_tx
-                              .send(LogMessage::new(
-                                "Error serving HTTP/3 connection: the frame isn't really a data frame".to_string(),
-                                true,
-                              ))
-                              .await
-                              .unwrap_or_default();
-                          }
-                          return;
-                        }
-                      }
-                    } else if frame.is_trailers() {
-                      match frame.into_trailers() {
-                        Ok(trailers) => {
-                          had_trailers = true;
-                          if let Err(err) = send.send_trailers(trailers).await {
-                            if !err.is_h3_no_error() {
-                              for logging_tx in configurations
-                                .find_global_configuration()
-                                .as_ref()
-                                .map_or(&vec![], |c| &c.observability.log_channels)
-                              {
-                                logging_tx
-                                  .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                                  .await
-                                  .unwrap_or_default();
-                              }
-                            }
-                            return;
-                          }
-                        }
-                        Err(_) => {
-                          for logging_tx in configurations
-                            .find_global_configuration()
-                            .as_ref()
-                            .map_or(&vec![], |c| &c.observability.log_channels)
-                          {
-                            logging_tx
-                              .send(LogMessage::new(
-                                "Error serving HTTP/3 connection: the frame isn't really a trailers frame".to_string(),
-                                true,
-                              ))
-                              .await
-                              .unwrap_or_default();
-                          }
-                          return;
-                        }
-                      }
-                    }
-                  }
-                  Err(err) => {
-                    for logging_tx in configurations
-                      .find_global_configuration()
-                      .as_ref()
-                      .map_or(&vec![], |c| &c.observability.log_channels)
-                    {
-                      logging_tx
-                        .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                        .await
-                        .unwrap_or_default();
-                    }
+          };
 
-                    return;
-                  }
-                }
-              }
-              if !had_trailers {
-                if let Err(err) = send.finish().await {
-                  if !err.is_h3_no_error() {
-                    for logging_tx in configurations
-                      .find_global_configuration()
-                      .as_ref()
-                      .map_or(&vec![], |c| &c.observability.log_channels)
-                    {
-                      logging_tx
-                        .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                        .await
-                        .unwrap_or_default();
+          let (mut send, receive) = stream.split();
+          let request_body_stream =
+            futures_util::stream::unfold((receive, false), |(mut receive, mut is_body_finished)| async move {
+              loop {
+                if !is_body_finished {
+                  match receive.recv_data().await {
+                    Ok(Some(mut data)) => {
+                      return Some((Ok(Frame::data(data.copy_to_bytes(data.remaining()))), (receive, false)));
                     }
+                    Ok(None) => is_body_finished = true,
+                    Err(err) => return Some((Err(std::io::Error::other(err.to_string())), (receive, false))),
+                  }
+                } else {
+                  match receive.recv_trailers().await {
+                    Ok(Some(trailers)) => return Some((Ok(Frame::trailers(trailers)), (receive, true))),
+                    Ok(None) => return None,
+                    Err(err) => return Some((Err(std::io::Error::other(err.to_string())), (receive, true))),
                   }
                 }
               }
             });
-          }
-          Ok(None) => break,
-          Err(err) => {
+          let request_body = BodyExt::boxed(StreamBody::new(request_body_stream));
+          let (request_parts, _) = request.into_parts();
+          let request = Request::from_parts(request_parts, request_body);
+          let mut response = match request_handler(
+            request,
+            client_address,
+            server_address,
+            true,
+            configurations.clone(),
+            None,
+            empty_acme_http_01_resolvers(),
+            None,
+            None,
+          )
+          .await
+          {
+            Ok(response) => response,
+            Err(err) => {
+              log_http_connection_error(&configurations, "HTTP/3", err).await;
+              return;
+            }
+          };
+
+          sanitize_http3_response_headers(response.headers_mut());
+
+          let (response_parts, mut response_body) = response.into_parts();
+          if let Err(err) = send.send_response(Response::from_parts(response_parts, ())).await {
             if !err.is_h3_no_error() {
-              for logging_tx in configurations
-                .find_global_configuration()
-                .as_ref()
-                .map_or(&vec![], |c| &c.observability.log_channels)
-              {
-                logging_tx
-                  .send(LogMessage::new(format!("Error serving HTTP/3 connection: {err}"), true))
-                  .await
-                  .unwrap_or_default();
-              }
+              log_http_connection_error(&configurations, "HTTP/3", err).await;
             }
             return;
           }
-        }
+
+          let mut had_trailers = false;
+          while let Some(chunk) = response_body.frame().await {
+            match chunk {
+              Ok(frame) if frame.is_data() => match frame.into_data() {
+                Ok(data) => {
+                  if let Err(err) = send.send_data(data).await {
+                    if !err.is_h3_no_error() {
+                      log_http_connection_error(&configurations, "HTTP/3", err).await;
+                    }
+                    return;
+                  }
+                }
+                Err(_) => {
+                  log_handler_error(
+                    &configurations,
+                    "Error serving HTTP/3 connection: the frame isn't really a data frame",
+                  )
+                  .await;
+                  return;
+                }
+              },
+              Ok(frame) if frame.is_trailers() => match frame.into_trailers() {
+                Ok(trailers) => {
+                  had_trailers = true;
+                  if let Err(err) = send.send_trailers(trailers).await {
+                    if !err.is_h3_no_error() {
+                      log_http_connection_error(&configurations, "HTTP/3", err).await;
+                    }
+                    return;
+                  }
+                }
+                Err(_) => {
+                  log_handler_error(
+                    &configurations,
+                    "Error serving HTTP/3 connection: the frame isn't really a trailers frame",
+                  )
+                  .await;
+                  return;
+                }
+              },
+              Ok(_) => {}
+              Err(err) => {
+                log_http_connection_error(&configurations, "HTTP/3", err).await;
+                return;
+              }
+            }
+          }
+
+          if !had_trailers {
+            if let Err(err) = send.finish().await {
+              if !err.is_h3_no_error() {
+                log_http_connection_error(&configurations, "HTTP/3", err).await;
+              }
+            }
+          }
+        });
       }
-    }
-    Err(err) => {
-      for logging_tx in configurations
-        .find_global_configuration()
-        .as_ref()
-        .map_or(&vec![], |c| &c.observability.log_channels)
-      {
-        logging_tx
-          .send(LogMessage::new(format!("Cannot accept a connection: {err}"), true))
-          .await
-          .unwrap_or_default();
+      Ok(None) => break,
+      Err(err) => {
+        if !err.is_h3_no_error() {
+          log_http_connection_error(&configurations, "HTTP/3", err).await;
+        }
+        return;
       }
     }
   }
