@@ -3,6 +3,7 @@ mod config;
 mod handler;
 mod listener_handler_communication;
 mod listeners;
+mod panic;
 mod request_handler;
 mod runtime;
 mod setup;
@@ -22,7 +23,6 @@ use clap::Parser;
 use ferron_common::logging::{ErrorLogger, LogMessage};
 use ferron_common::{get_entry, get_value};
 use ferron_load_modules::{obtain_module_loaders, obtain_observability_backend_loaders};
-use human_panic::{setup_panic, Metadata};
 #[cfg(feature = "runtime-vibeio")]
 use malloc_best_effort::BEMalloc;
 #[cfg(not(feature = "runtime-vibeio"))]
@@ -45,6 +45,7 @@ use crate::config::ServerConfigurations;
 use crate::handler::{create_http_handler, ReloadableHandlerData};
 use crate::listener_handler_communication::ConnectionData;
 use crate::listeners::{create_quic_listener, create_tcp_listener};
+use crate::panic::install_panic_hook;
 use crate::setup::acme::background_acme_task;
 use crate::setup::cli::{Command, ConfigAdapter, FerronArgs, LogOutput};
 use crate::setup::ocsp::OcspStapler;
@@ -1012,9 +1013,7 @@ fn main() {
   BEMalloc::init();
 
   // Set the panic handler
-  setup_panic!(Metadata::new("Ferron", env!("CARGO_PKG_VERSION"))
-    .homepage("https://ferron.sh")
-    .support("- Send an email message to hello@ferron.sh"));
+  install_panic_hook();
 
   // Obtain the configuration adapters
   let (configuration_adapters, _all_adapters) = obtain_configuration_adapters();
