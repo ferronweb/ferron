@@ -9,6 +9,10 @@
 - DNSimple DNS provider for DNS-01 ACME challenges.
 - Support for JSON-format access logs.
 
+### Changed
+
+- Introduced a new, customized message displayed when the web server crashes.
+
 ### Fixed
 
 - `Server` and `Alt-Svc` (for HTTP/3) headers couldn't be modified or removed.
