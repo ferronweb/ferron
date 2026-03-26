@@ -4,7 +4,6 @@ on:
   push:
     branches: ["2.x-lts"]
     paths:
-      - "docs/**"
       - "CHANGELOG.md"
       - ".github/workflows/sync-website-v2-lts.yml"
   workflow_dispatch:
