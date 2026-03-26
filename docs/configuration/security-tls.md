@@ -204,21 +204,6 @@ auto_tls_challenge "dns-01" provider="digitalocean" oauth_token="your_token"
 
 - `oauth_token` - DigitalOcean OAuth token (required)
 
-### DNSimple (`dnsimple`)
-
-This DNS provider uses [DNSimple API](https://developer.dnsimple.com/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron UNRELEASED.
-
-#### Example directive specification
-
-```kdl
-auto_tls_challenge "dns-01" provider="dnsimple" oauth_token="your_oauth_token" account_id="your_account_id"
-```
-
-#### Additional props
-
-- `oauth_token` - DNSimple OAuth token (required)
-- `account_id` - DNSimple account ID (required)
-
 ### OVH (`ovh`)
 
 This DNS provider uses [OVH API](https://api.ovh.com/console/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.4.0.

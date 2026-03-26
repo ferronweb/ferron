@@ -6,8 +6,6 @@ mod cloudflare;
 mod desec;
 #[cfg(feature = "digitalocean")]
 mod digitalocean;
-#[cfg(feature = "dnsimple")]
-mod dnsimple;
 #[cfg(feature = "ovh")]
 mod ovh;
 #[cfg(feature = "porkbun")]
@@ -25,8 +23,6 @@ pub use cloudflare::*;
 pub use desec::*;
 #[cfg(feature = "digitalocean")]
 pub use digitalocean::*;
-#[cfg(feature = "dnsimple")]
-pub use dnsimple::*;
 #[cfg(feature = "ovh")]
 pub use ovh::*;
 #[cfg(feature = "porkbun")]

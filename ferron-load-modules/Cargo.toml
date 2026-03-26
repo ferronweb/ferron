@@ -24,7 +24,6 @@ ferron-dns-builtin = { workspace = true, features = [
     "cloudflare",
     "desec",
     "digitalocean",
-    "dnsimple",
     "ovh",
     "porkbun",
     "rfc2136",
