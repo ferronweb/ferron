@@ -27,7 +27,7 @@ example.com {
 
 Use this when you need structured logs for easier parsing by log aggregation tools (for example, ELK Stack, Splunk, or cloud-native log processors).
 
-`log_json` directive is available in Ferron UNRELEASED or newer.
+`log_json` directive is available in Ferron 2.7.0 or newer.
 
 ```kdl
 globals {
