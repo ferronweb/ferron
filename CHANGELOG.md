@@ -15,6 +15,7 @@
 
 ### Fixed
 
+- IP-based host blocks weren't applied correctly.
 - `Server` and `Alt-Svc` (for HTTP/3) headers couldn't be modified or removed.
 
 ## Ferron 2.6.0
