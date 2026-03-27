@@ -1,6 +1,6 @@
 [package]
 name = "ferron"
-version = "2.6.0"
+version = "2.7.0"
 edition = "2021"
 
 [dependencies]
@@ -12,7 +12,7 @@ ferron-load-modules = { workspace = true }
 anyhow = "1.0.98"
 arc-swap = "1.8.0"
 send_wrapper = { version = "0.6.0", optional = true, features = ["futures"] }
-human-panic = "2.0.2"
+backtrace = "0.3.76"
 hashlink = "0.11.0"
 chrono = "0.4.41"
 fancy-regex = "0.17.0"
@@ -22,7 +22,8 @@ urlencoding = "2.1.3"
 miette = { version = "7.6.0", features = ["fancy"] }
 
 # HTTP/Web Server Core
-hyper = { version = "1.6.0", features = ["full"] }
+vibeio-http = { version = "0.3.0", optional = true, features = ["h1", "h1-zerocopy", "h2", "h3"] }
+hyper = { version = "1.6.0", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1.13", features = ["client"] }
 h3 = "0.0.8"
 h3-quinn = "0.0.10"
@@ -95,12 +96,15 @@ monoio = { version = "0.2.4", optional = true, features = [
     "sync",
     "threadpool"
 ] }
+vibeio = { version = "0.2.5", optional = true }
 monoio-compat = { version = "0.2.2", optional = true, features = ["hyper"] }
 async-channel = "2.3.1"
 futures-util = { version = "0.3.31", features = ["sink"] }
 blocking = { version = "1.6.1", optional = true }
 tokio-util = "0.7.15"
 futures-executor = { version = "0.3.31", optional = true }
+tracing = { version = "*", default-features = false, features = ["max_level_off", "release_max_level_off"] }
+core_affinity = { version = "0.8.3", optional = true }
 
 # Data Handling & Serialization
 bytes = { version = "1.10.1" }
@@ -130,6 +134,7 @@ smallvec = { version = "1.15.0", features = [
     "union",
     "const_generics",
 ] }
+malloc-best-effort = { version = "0.1.4", optional = true }
 
 # Build information
 shadow-rs = { version = "1.2.0", default-features = false }
@@ -140,12 +145,12 @@ tempfile = "3.24.0"
 procfs = { version = "0.18.0", default-features = false }
 
 [target.'cfg(target_arch = "x86")'.dependencies]
-mimalloc = { workspace = true } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
+mimalloc = { workspace = true, optional = true } # Mimalloc v3 would use instructions unsupported by old 32-bit-only x86 CPUs
 
 [target.'cfg(not(target_arch = "x86"))'.dependencies]
-mimalloc = { workspace = true, features = ["v3"] }
+mimalloc = { workspace = true, optional = true, features = ["v3"] }
 
-[dev-dependencies]
+[target.'cfg(unix)'.dev-dependencies]
 shiba = { workspace = true }
 
 [build-dependencies]
@@ -157,20 +162,34 @@ shadow-rs = { version = "1.2.0", default-features = false, features = [
 [features]
 default = ["config-yaml-legacy", "runtime-monoio"]
 default-tokio = ["config-yaml-legacy", "runtime-tokio"]
+default-vibeio = ["config-yaml-legacy", "runtime-vibeio"]
 config-docker-auto = []
 config-yaml-legacy = ["ferron-yaml2kdl-core"]
 runtime-monoio = [
     "monoio",
     "monoio-compat",
+    "hyper/server",
     "blocking",
     "send_wrapper",
     "ferron-common/runtime-monoio",
     "ferron-load-modules/runtime-monoio",
+    "mimalloc",
 ]
 runtime-tokio = [
     "tokio/full",
     "futures-executor",
+    "hyper/server",
     "hyper-util/tokio",
     "ferron-common/runtime-tokio",
     "ferron-load-modules/runtime-tokio",
+    "mimalloc",
+]
+runtime-vibeio = [
+    "vibeio",
+    "vibeio-http",
+    "send_wrapper",
+    "core_affinity",
+    "ferron-common/runtime-vibeio",
+    "ferron-load-modules/runtime-vibeio",
+    "malloc-best-effort",
 ]

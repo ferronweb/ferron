@@ -1,10 +1,6 @@
 use std::future::Future;
-
-// Compilation errors
-#[cfg(all(feature = "runtime-monoio", feature = "runtime-tokio"))]
-compile_error!("Can't compile Ferron with both main runtimes enabled");
-#[cfg(not(any(feature = "runtime-monoio", feature = "runtime-tokio")))]
-compile_error!("Can't compile Ferron with no main runtimes enabled");
+#[cfg(feature = "runtime-vibeio")]
+use std::sync::LazyLock;
 
 /// A representation of an asynchronous runtime
 pub struct Runtime {
@@ -17,6 +13,8 @@ enum RuntimeInner {
   MonoioIouring(monoio::Runtime<monoio::time::TimeDriver<monoio::IoUringDriver>>),
   #[cfg(feature = "runtime-monoio")]
   MonoioLegacy(monoio::Runtime<monoio::time::TimeDriver<monoio::LegacyDriver>>),
+  #[cfg(feature = "runtime-vibeio")]
+  Custom(vibeio::Runtime),
   #[cfg(feature = "runtime-tokio")]
   Tokio(tokio::runtime::Runtime),
   TokioOnly(tokio::runtime::Runtime),
@@ -50,7 +48,30 @@ impl Runtime {
         }
       }
     }
-    #[cfg(not(all(feature = "runtime-monoio", target_os = "linux")))]
+    #[cfg(all(feature = "runtime-vibeio", target_os = "linux"))]
+    if enable_uring.is_none_or(|x| x) && vibeio::util::supports_io_uring() {
+      match vibeio::RuntimeBuilder::new()
+        .driver(vibeio::DriverKind::IoUring)
+        .enable_timer(true)
+        .blocking_pool(Box::new(BlockingThreadPool))
+        .build()
+      {
+        Ok(rt) => {
+          return Ok(Self {
+            inner: RuntimeInner::Custom(rt),
+            io_uring_enable_configured,
+          });
+        }
+        Err(e) => {
+          if enable_uring.is_some() {
+            Err(e)?;
+          } else {
+            io_uring_enable_configured = e.raw_os_error();
+          }
+        }
+      }
+    }
+    #[cfg(not(all(any(feature = "runtime-monoio", feature = "runtime-vibeio"), target_os = "linux")))]
     let _ = enable_uring;
 
     // `io_uring` is either disabled or not supported
@@ -63,6 +84,20 @@ impl Runtime {
     );
     #[cfg(feature = "runtime-tokio")]
     let rt_inner = RuntimeInner::Tokio(tokio::runtime::Builder::new_current_thread().enable_all().build()?);
+    #[cfg(feature = "runtime-vibeio")]
+    let rt_inner = {
+      #[cfg(unix)]
+      let driver_kind = vibeio::DriverKind::Mio;
+      #[cfg(windows)]
+      let driver_kind = vibeio::DriverKind::Iocp;
+      RuntimeInner::Custom(
+        vibeio::RuntimeBuilder::new()
+          .driver(driver_kind)
+          .enable_timer(true)
+          .blocking_pool(Box::new(BlockingThreadPool))
+          .build()?,
+      )
+    };
 
     Ok(Self {
       inner: rt_inner,
@@ -84,7 +119,7 @@ impl Runtime {
   }
 
   /// Run a future on the runtime
-  pub fn run(&mut self, fut: impl Future) {
+  pub fn run(&mut self, fut: impl Future + 'static) {
     match self.inner {
       #[cfg(all(feature = "runtime-monoio", target_os = "linux"))]
       RuntimeInner::MonoioIouring(ref mut rt) => rt.block_on(fut),
@@ -93,14 +128,19 @@ impl Runtime {
       #[cfg(feature = "runtime-tokio")]
       RuntimeInner::Tokio(ref mut rt) => rt.block_on(async move {
         let local_set = tokio::task::LocalSet::new();
-        local_set.run_until(fut).await
+        local_set.run_until(fut).await;
       }),
+      #[cfg(feature = "runtime-vibeio")]
+      RuntimeInner::Custom(ref mut rt) => rt.block_on(fut),
       RuntimeInner::TokioOnly(ref mut rt) => rt.block_on(fut),
     };
   }
 }
 
 pub use ferron_common::runtime::*;
+
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::blocking::DefaultBlockingThreadPool;
 
 /// A blocking thread pool for Monoio, implemented using `blocking` crate
 #[cfg(feature = "runtime-monoio")]
@@ -111,5 +151,21 @@ impl monoio::blocking::ThreadPool for BlockingThreadPool {
   #[inline]
   fn schedule_task(&self, task: monoio::blocking::BlockingTask) {
     blocking::unblock(move || task.run()).detach();
+  }
+}
+
+#[cfg(feature = "runtime-vibeio")]
+static GLOBAL_BLOCKING_POOL: LazyLock<DefaultBlockingThreadPool> =
+  LazyLock::new(|| DefaultBlockingThreadPool::with_max_threads(1536));
+
+/// A global blocking thread pool for `vibeio`
+#[cfg(feature = "runtime-vibeio")]
+struct BlockingThreadPool;
+
+#[cfg(feature = "runtime-vibeio")]
+impl vibeio::blocking::BlockingThreadPool for BlockingThreadPool {
+  #[inline]
+  fn spawn(&self, task: Box<dyn FnOnce() + Send + 'static>) {
+    GLOBAL_BLOCKING_POOL.spawn(task);
   }
 }

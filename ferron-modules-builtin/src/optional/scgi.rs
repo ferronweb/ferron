@@ -6,7 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
 use cegla_scgi::client::CgiBuilder;
-#[cfg(feature = "runtime-monoio")]
+#[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
 use ferron_common::util::SendAsyncIo;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
@@ -18,6 +18,8 @@ use monoio::net::TcpStream;
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::net::TcpStream;
 
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
@@ -33,6 +35,19 @@ pub struct CustomScgiRuntime;
 impl cegla_scgi::client::Runtime for CustomScgiRuntime {
   fn spawn(&self, future: impl std::future::Future + 'static) {
     monoio::spawn(async move {
+      future.await;
+    });
+  }
+}
+
+/// Custom runtime for `cegla-scgi`
+#[cfg(feature = "runtime-vibeio")]
+pub struct CustomScgiRuntime;
+
+#[cfg(feature = "runtime-vibeio")]
+impl cegla_scgi::client::Runtime for CustomScgiRuntime {
+  fn spawn(&self, future: impl std::future::Future + 'static) {
+    vibeio::spawn(async move {
       future.await;
     });
   }
@@ -168,6 +183,8 @@ impl ModuleHandlers for ScgiModuleHandlers {
           };
           #[cfg(feature = "runtime-tokio")]
           let canonicalize_result = tokio::fs::canonicalize(&wwwroot_unknown).await;
+          #[cfg(feature = "runtime-vibeio")]
+          let canonicalize_result = vibeio::fs::canonicalize(&wwwroot_unknown).await;
 
           match canonicalize_result {
             Ok(pathbuf) => pathbuf,
@@ -214,10 +231,21 @@ impl ModuleHandlers for ScgiModuleHandlers {
         };
         #[cfg(feature = "runtime-tokio")]
         let canonicalize_result = tokio::fs::canonicalize(&joined_pathbuf).await;
+        #[cfg(feature = "runtime-vibeio")]
+        let canonicalize_result = vibeio::fs::canonicalize(&joined_pathbuf).await;
 
         let canonical_joined_pathbuf = match canonicalize_result {
           Ok(pathbuf) => pathbuf,
-          Err(_) => joined_pathbuf.clone(),
+          Err(_) => {
+            // Failed to canonicalize the file path
+            return Ok(ResponseData {
+              request: Some(request),
+              response: None,
+              response_status: Some(StatusCode::FORBIDDEN),
+              response_headers: None,
+              new_remote_address: None,
+            });
+          }
         };
 
         // Webroot is already canonicalized, so no need to canonicalize it again
@@ -286,6 +314,11 @@ async fn execute_scgi_with_environment_variables(
   scgi_to: &str,
   additional_environment_variables: HashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
+  // Remove "Proxy" header from the request to prevent "httpoxy" vulnerability
+  request
+    .headers_mut()
+    .remove(hyper::header::HeaderName::from_static("proxy"));
+
   let request_data = request.extensions_mut().remove::<RequestData>();
 
   let original_request_uri = request_data
@@ -409,13 +442,13 @@ async fn execute_scgi(
   };
 
   let io = tokio::io::join(socket_reader, socket_writer);
-  #[cfg(feature = "runtime-monoio")]
+  #[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
   let io = SendAsyncIo::new(io);
 
   #[cfg(feature = "runtime-tokio")]
   let response =
     cegla_scgi::client::client_handle_scgi_send(request, tokio_cegla::TokioScgiRuntime, io, env_builder).await?;
-  #[cfg(feature = "runtime-monoio")]
+  #[cfg(any(feature = "runtime-monoio", feature = "runtime-vibeio"))]
   let response = cegla_scgi::client::client_handle_scgi(request, CustomScgiRuntime, io, env_builder).await?;
 
   let (parts, body) = response.into_parts();
@@ -436,6 +469,15 @@ async fn connect_tcp(addr: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn 
   socket.set_nodelay(true)?;
 
   let (socket_reader_set, socket_writer_set) = tokio::io::split(socket.into_poll_io()?);
+  Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
+}
+
+#[cfg(feature = "runtime-vibeio")]
+async fn connect_tcp(addr: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
+  let socket = TcpStream::connect(addr).await?;
+  socket.set_nodelay(true)?;
+
+  let (socket_reader_set, socket_writer_set) = tokio::io::split(socket.into_poll()?);
   Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
 }
 
@@ -468,6 +510,17 @@ async fn connect_unix(path: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn
 }
 
 #[allow(dead_code)]
+#[cfg(all(feature = "runtime-vibeio", unix))]
+async fn connect_unix(path: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
+  use vibeio::net::UnixStream;
+
+  let socket = UnixStream::connect(path).await?;
+
+  let (socket_reader_set, socket_writer_set) = tokio::io::split(socket.into_poll()?);
+  Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
+}
+
+#[allow(dead_code)]
 #[cfg(all(feature = "runtime-tokio", unix))]
 async fn connect_unix(
   path: &str,
@@ -487,7 +540,7 @@ async fn connect_unix(
 }
 
 #[allow(dead_code)]
-#[cfg(all(feature = "runtime-monoio", not(unix)))]
+#[cfg(all(any(feature = "runtime-monoio", feature = "runtime-vibeio"), not(unix)))]
 async fn connect_unix(
   _path: &str,
 ) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {

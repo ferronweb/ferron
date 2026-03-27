@@ -43,15 +43,16 @@ use crate::util::{
 ///
 /// It intentionally groups multiple maps and locks to avoid threading a large
 /// number of parameters through builder functions.
+#[allow(clippy::type_complexity)]
 pub struct TlsBuildContext {
-  pub tls_ports: HashMap<u16, CustomSniResolver>,
-  pub tls_port_locks: HashMap<u16, SniResolverLock>,
+  pub tls_ports: HashMap<(Option<IpAddr>, u16), CustomSniResolver>,
+  pub tls_port_locks: HashMap<(Option<IpAddr>, u16), SniResolverLock>,
   pub nonencrypted_ports: HashSet<u16>,
-  pub certified_keys_to_preload: HashMap<u16, Vec<Arc<CertifiedKey>>>,
-  pub used_sni_hostnames: HashSet<(u16, Option<String>)>,
-  pub automatic_tls_used_sni_hostnames: HashSet<(u16, Option<String>)>,
-  pub acme_tls_alpn_01_resolvers: HashMap<u16, TlsAlpn01Resolver>,
-  pub acme_tls_alpn_01_resolver_locks: HashMap<u16, Arc<RwLock<Vec<TlsAlpn01DataLock>>>>,
+  pub certified_keys_to_preload: HashMap<(Option<IpAddr>, u16), Vec<Arc<CertifiedKey>>>,
+  pub used_sni_hostnames: HashSet<((Option<IpAddr>, u16), Option<String>)>,
+  pub automatic_tls_used_sni_hostnames: HashSet<((Option<IpAddr>, u16), Option<String>)>,
+  pub acme_tls_alpn_01_resolvers: HashMap<(Option<IpAddr>, u16), TlsAlpn01Resolver>,
+  pub acme_tls_alpn_01_resolver_locks: HashMap<(Option<IpAddr>, u16), Arc<RwLock<Vec<TlsAlpn01DataLock>>>>,
   pub acme_http_01_resolvers: Arc<RwLock<Vec<Http01DataLock>>>,
   pub acme_configs: Vec<AcmeConfig>,
   pub acme_on_demand_configs: Vec<AcmeOnDemandConfig>,
@@ -109,12 +110,7 @@ pub fn resolve_sni_hostname(filters: &ServerConfigurationFilters) -> Option<Stri
       return Some("localhost".to_string());
     }
 
-    // !!! UNTESTED, many clients don't send SNI hostname when accessing via IP address anyway
-    match filters.ip {
-      Some(IpAddr::V4(addr)) => Some(addr.to_string()),
-      Some(IpAddr::V6(addr)) => Some(format!("[{addr}]")),
-      None => None,
-    }
+    None
   })
 }
 
@@ -124,10 +120,10 @@ pub fn resolve_sni_hostname(filters: &ServerConfigurationFilters) -> Option<Stri
 /// associated resolver lock and inserted into the context.
 ///
 /// Returns a mutable reference to the resolver for further configuration.
-fn ensure_tls_port_resolver(ctx: &mut TlsBuildContext, port: u16) -> &mut CustomSniResolver {
-  ctx.tls_ports.entry(port).or_insert_with(|| {
+fn ensure_tls_port_resolver(ctx: &mut TlsBuildContext, port: u16, ip: Option<IpAddr>) -> &mut CustomSniResolver {
+  ctx.tls_ports.entry((ip, port)).or_insert_with(|| {
     let list = Arc::new(RwLock::new(HostnameRadixTree::new()));
-    ctx.tls_port_locks.insert(port, list.clone());
+    ctx.tls_port_locks.insert((ip, port), list.clone());
     CustomSniResolver::with_resolvers(list)
   })
 }
@@ -144,6 +140,7 @@ pub fn handle_manual_tls(
   ctx: &mut TlsBuildContext,
   crypto_provider: &CryptoProvider,
   port: u16,
+  ip: Option<IpAddr>,
   sni_hostname: Option<String>,
   cert_path: &str,
   key_path: &str,
@@ -161,19 +158,19 @@ pub fn handle_manual_tls(
 
   ctx
     .certified_keys_to_preload
-    .entry(port)
+    .entry((ip, port))
     .or_default()
     .push(certified_key.clone());
 
   let resolver = Arc::new(OneCertifiedKeyResolver::new(certified_key));
-  let sni_resolver = ensure_tls_port_resolver(ctx, port);
+  let sni_resolver = ensure_tls_port_resolver(ctx, port, ip);
 
   match &sni_hostname {
     Some(host) => sni_resolver.load_host_resolver(host, resolver),
     None => sni_resolver.load_fallback_resolver(resolver),
   }
 
-  ctx.used_sni_hostnames.insert((port, sni_hostname));
+  ctx.used_sni_hostnames.insert(((ip, port), sni_hostname));
   Ok(())
 }
 
@@ -265,6 +262,7 @@ pub fn handle_automatic_tls(
   ctx: &mut TlsBuildContext,
   server: &ferron_common::config::ServerConfiguration,
   port: u16,
+  ip: Option<IpAddr>,
   sni_hostname: Option<String>,
   crypto_provider: Arc<CryptoProvider>,
   memory_acme_account_cache_data: Arc<RwLock<HashMap<String, Vec<u8>>>>,
@@ -274,21 +272,12 @@ pub fn handle_automatic_tls(
     .and_then(|v| v.as_bool())
     .unwrap_or(false);
 
-  // Reject IP-based identifiers
-  if let Some(host) = &sni_hostname {
-    if host.parse::<IpAddr>().is_ok() {
-      return Ok(Some(LogMessage::new(
-        format!(
-          "Ferron's automatic TLS functionality doesn't support IP address-based identifiers, \
-            skipping SNI host \"{host}\"..."
-        ),
-        true,
-      )));
-    }
-  }
-
   // Automatic TLS requires SNI unless global
-  if sni_hostname.is_none() && !server.filters.is_global() && !server.filters.is_global_non_host() {
+  if sni_hostname.is_none()
+    && !server.filters.is_global()
+    && !server.filters.is_global_non_host()
+    && server.filters.ip.is_none()
+  {
     return Ok(Some(LogMessage::new(
       "Skipping automatic TLS for a host without a SNI hostname...".to_string(),
       true,
@@ -337,17 +326,19 @@ pub fn handle_automatic_tls(
       ctx,
       server,
       port,
+      ip,
       sni_hostname,
       challenge_type,
       dns_provider,
       crypto_provider,
     )?;
-  } else if let Some(host) = sni_hostname {
+  } else {
     build_eager_acme(
       ctx,
       server,
       port,
-      host,
+      ip,
+      sni_hostname,
       challenge_type,
       dns_provider,
       crypto_provider,
@@ -363,10 +354,12 @@ pub fn handle_automatic_tls(
 /// On-demand ACME defers certificate issuance until a client connects and
 /// requests a hostname that does not yet have a certificate. This is typically
 /// used for wildcard or dynamic hostnames.
+#[allow(clippy::too_many_arguments)]
 fn build_on_demand_acme(
   ctx: &mut TlsBuildContext,
   server: &ferron_common::config::ServerConfiguration,
   port: u16,
+  ip: Option<IpAddr>,
   sni_hostname: Option<String>,
   challenge_type: ChallengeType,
   dns_provider: Option<Arc<dyn ferron_common::dns::DnsProvider + Send + Sync>>,
@@ -375,16 +368,18 @@ fn build_on_demand_acme(
   // TLS-ALPN-01 requires a dedicated resolver
   if challenge_type == ChallengeType::TlsAlpn01 {
     let resolver_list = Arc::new(RwLock::new(Vec::new()));
-    ctx.acme_tls_alpn_01_resolver_locks.insert(port, resolver_list.clone());
+    ctx
+      .acme_tls_alpn_01_resolver_locks
+      .insert((ip, port), resolver_list.clone());
 
     ctx
       .acme_tls_alpn_01_resolvers
-      .insert(port, TlsAlpn01Resolver::with_resolvers(resolver_list));
+      .insert((ip, port), TlsAlpn01Resolver::with_resolvers(resolver_list));
   }
 
   // Install fallback sender into SNI resolver
   let fallback_sender = ctx.acme_on_demand_tx.clone();
-  let sni_resolver = ensure_tls_port_resolver(ctx, port);
+  let sni_resolver = ensure_tls_port_resolver(ctx, port, ip);
   sni_resolver.load_fallback_sender(fallback_sender, port);
 
   let rustls_client_config =
@@ -407,12 +402,12 @@ fn build_on_demand_acme(
     cache_path: super::acme::resolve_acme_cache_path(server)?,
     sni_resolver_lock: ctx
       .tls_port_locks
-      .get(&port)
+      .get(&(ip, port))
       .cloned()
       .unwrap_or_else(|| Arc::new(RwLock::new(HostnameRadixTree::new()))),
     tls_alpn_01_resolver_lock: ctx
       .acme_tls_alpn_01_resolver_locks
-      .get(&port)
+      .get(&(ip, port))
       .cloned()
       .unwrap_or_else(|| Arc::new(RwLock::new(Vec::new()))),
     http_01_resolver_lock: ctx.acme_http_01_resolvers.clone(),
@@ -422,7 +417,7 @@ fn build_on_demand_acme(
   };
 
   ctx.acme_on_demand_configs.push(config);
-  ctx.automatic_tls_used_sni_hostnames.insert((port, None));
+  ctx.automatic_tls_used_sni_hostnames.insert(((ip, port), None));
 
   Ok(())
 }
@@ -437,7 +432,8 @@ fn build_eager_acme(
   ctx: &mut TlsBuildContext,
   server: &ferron_common::config::ServerConfiguration,
   port: u16,
-  sni_hostname: String,
+  ip: Option<IpAddr>,
+  sni_hostname: Option<String>,
   challenge_type: ChallengeType,
   dns_provider: Option<Arc<dyn ferron_common::dns::DnsProvider + Send + Sync>>,
   crypto_provider: Arc<CryptoProvider>,
@@ -447,9 +443,17 @@ fn build_eager_acme(
   let tls_alpn_01_data_lock = Arc::new(RwLock::new(None));
   let http_01_data_lock = Arc::new(RwLock::new(None));
 
+  let domain = if let Some(sni) = &sni_hostname {
+    sni.clone()
+  } else if let Some(ip) = ip {
+    ip.to_canonical().to_string()
+  } else {
+    return Ok(());
+  };
+
   let rustls_client_config =
     super::acme::build_rustls_client_config(server, crypto_provider).map_err(|e| anyhow::anyhow!(e))?;
-  let (account_cache_path, certificate_cache_path) = super::acme::resolve_cache_paths(server, port, &sni_hostname)?;
+  let (account_cache_path, certificate_cache_path) = super::acme::resolve_cache_paths(server, port, &domain)?;
 
   let save_paths = get_entry!("auto_tls_save_data", server).and_then(|e| {
     e.values
@@ -467,7 +471,7 @@ fn build_eager_acme(
 
   let acme_config = AcmeConfig {
     rustls_client_config,
-    domains: vec![sni_hostname.clone()],
+    domains: vec![domain],
     challenge_type: challenge_type.clone(),
     contact: get_entry!("auto_tls_contact", server)
       .and_then(|e| e.values.first())
@@ -511,9 +515,9 @@ fn build_eager_acme(
       ctx.acme_http_01_resolvers.blocking_write().push(http_01_data_lock);
     }
     ChallengeType::TlsAlpn01 => {
-      let resolver = ctx.acme_tls_alpn_01_resolvers.entry(port).or_insert_with(|| {
+      let resolver = ctx.acme_tls_alpn_01_resolvers.entry((ip, port)).or_insert_with(|| {
         let list = Arc::new(RwLock::new(Vec::new()));
-        ctx.acme_tls_alpn_01_resolver_locks.insert(port, list.clone());
+        ctx.acme_tls_alpn_01_resolver_locks.insert((ip, port), list.clone());
         TlsAlpn01Resolver::with_resolvers(list)
       });
 
@@ -524,10 +528,14 @@ fn build_eager_acme(
 
   // Install SNI resolver
   let acme_resolver = Arc::new(crate::acme::AcmeResolver::new(certified_key_lock));
-  let sni_resolver = ensure_tls_port_resolver(ctx, port);
-  sni_resolver.load_host_resolver(&sni_hostname, acme_resolver);
+  let sni_resolver = ensure_tls_port_resolver(ctx, port, ip);
+  if let Some(sni) = &sni_hostname {
+    sni_resolver.load_host_resolver(sni, acme_resolver);
+  } else {
+    sni_resolver.load_fallback_resolver(acme_resolver);
+  }
 
-  ctx.automatic_tls_used_sni_hostnames.insert((port, Some(sni_hostname)));
+  ctx.automatic_tls_used_sni_hostnames.insert(((ip, port), sni_hostname));
 
   Ok(())
 }

@@ -44,9 +44,9 @@ This page covers KDL directives for TLS configuration, certificate automation, a
 ### TLS/SSL & security
 
 - `tls <certificate_path: string> <private_key_path: string>`
-  - This directive specifies the path to the TLS certificate and private key. Note: Per-IP TLS certificates are not supported. TLS certificates are selected by hostname (SNI), not by destination IP address. Default: none
+  - This directive specifies the path to the TLS certificate and private key. Per-IP automatic TLS are supported in Ferron 2.7.0 and newer. Default: none
 - `auto_tls [enable_automatic_tls: bool]`
-  - This directive specifies whether automatic TLS is enabled. Note: Per-IP automatic TLS are not supported. TLS certificates are selected by hostname (SNI), not by destination IP address. Default: `auto_tls #true` when port isn't explicitly specified and if the hostname doesn't look like a local address (`127.0.0.1`, `::1`, `localhost`), otherwise `auto_tls #false`
+  - This directive specifies whether automatic TLS is enabled. Per-IP automatic TLS are supported in Ferron 2.7.0 and newer. Default: `auto_tls #true` when port isn't explicitly specified and if the hostname doesn't look like a local address (`127.0.0.1`, `::1`, `localhost`), otherwise `auto_tls #false`
 - `auto_tls_contact <auto_tls_contact: string|null>`
   - This directive specifies the email address used to register an ACME account for automatic TLS. Default: `auto_tls_contact #null`
 - `auto_tls_cache <auto_tls_cache: string|null>`
@@ -163,7 +163,7 @@ auto_tls_challenge "dns-01" provider="bunny" api_key="your_api_key"
 
 ### Cloudflare (`cloudflare`)
 
-This DNS provider uses [Cloudflare API](https://developers.cloudflare.com/api/resources/dns/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.0.0.
+This DNS provider uses [Cloudflare API](https://developers.cloudflare.com/api/resources/dns/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.0.0. To get `your_api_key` add a new token via [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens), using the "Edit zone DNS" template with "**Permissions**" of "Zone"→"DNS"→"Edit" and "**Zone Resources**" "Include"→"Specific zone"→"your custom domain".
 
 #### Example directive specification
 
@@ -203,6 +203,21 @@ auto_tls_challenge "dns-01" provider="digitalocean" oauth_token="your_token"
 #### Additional props
 
 - `oauth_token` - DigitalOcean OAuth token (required)
+
+### DNSimple (`dnsimple`)
+
+This DNS provider uses [DNSimple API](https://developer.dnsimple.com/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.7.0.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="dnsimple" oauth_token="your_oauth_token" account_id="your_account_id"
+```
+
+#### Additional props
+
+- `oauth_token` - DNSimple OAuth token (required)
+- `account_id` - DNSimple account ID (required)
 
 ### OVH (`ovh`)
 

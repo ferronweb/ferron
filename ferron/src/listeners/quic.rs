@@ -13,19 +13,19 @@
 //
 
 use std::error::Error;
-#[cfg(feature = "runtime-monoio")]
+#[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
 use std::fmt::Debug;
-#[cfg(feature = "runtime-monoio")]
+#[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
 use std::future::Future;
 use std::io;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
-#[cfg(feature = "runtime-monoio")]
+#[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
 use std::pin::Pin;
 use std::sync::Arc;
-#[cfg(feature = "runtime-monoio")]
+#[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
 use std::task::{Context, Poll};
 use std::time::Duration;
-#[cfg(feature = "runtime-monoio")]
+#[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
 use std::time::Instant;
 
 use async_channel::{Receiver, Sender};
@@ -33,12 +33,14 @@ use ferron_common::logging::LogMessage;
 #[cfg(feature = "runtime-monoio")]
 use monoio::time::Sleep;
 use quinn::crypto::rustls::QuicServerConfig;
-#[cfg(feature = "runtime-monoio")]
+#[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
 use quinn::{AsyncTimer, AsyncUdpSocket, Runtime};
 use rustls::ServerConfig;
-#[cfg(feature = "runtime-monoio")]
+#[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
 use send_wrapper::SendWrapper;
 use tokio_util::sync::CancellationToken;
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::time::Sleep;
 
 use crate::listener_handler_communication::{Connection, ConnectionData};
 
@@ -62,20 +64,50 @@ impl AsyncTimer for MonoioTimer {
   }
 }
 
+/// A timer for Quinn that utilizes `vibeio`'s timer.
+#[cfg(feature = "runtime-vibeio")]
+struct CustomAsyncTimer {
+  inner: SendWrapper<Pin<Box<Sleep>>>,
+}
+
+#[cfg(feature = "runtime-vibeio")]
+impl AsyncTimer for CustomAsyncTimer {
+  fn reset(mut self: Pin<&mut Self>, t: Instant) {
+    (*self.inner).as_mut().reset(t)
+  }
+
+  fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<()> {
+    (*self.inner).as_mut().poll(cx)
+  }
+}
+
+#[cfg(feature = "runtime-vibeio")]
+impl Debug for CustomAsyncTimer {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("CustomAsyncTimer").finish()
+  }
+}
+
 /// A runtime for Quinn that utilizes Tokio, if under Tokio runtime, and otherwise Monoio with async_io.
 #[derive(Debug)]
-#[cfg(feature = "runtime-monoio")]
+#[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
 struct EnterTokioRuntime;
 
-#[cfg(feature = "runtime-monoio")]
+#[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
 impl Runtime for EnterTokioRuntime {
   fn new_timer(&self, t: Instant) -> Pin<Box<dyn AsyncTimer>> {
     if tokio::runtime::Handle::try_current().is_ok() {
       Box::pin(tokio::time::sleep_until(t.into()))
     } else {
-      Box::pin(MonoioTimer {
+      #[cfg(feature = "runtime-monoio")]
+      let timer = Box::pin(MonoioTimer {
         inner: SendWrapper::new(Box::pin(monoio::time::sleep_until(t.into()))),
-      })
+      });
+      #[cfg(feature = "runtime-vibeio")]
+      let timer = Box::pin(CustomAsyncTimer {
+        inner: SendWrapper::new(Box::pin(vibeio::time::sleep_until(t))),
+      });
+      timer
     }
   }
 
@@ -83,7 +115,10 @@ impl Runtime for EnterTokioRuntime {
     if let Ok(handle) = tokio::runtime::Handle::try_current() {
       handle.spawn(future);
     } else {
+      #[cfg(feature = "runtime-monoio")]
       monoio::spawn(future);
+      #[cfg(feature = "runtime-vibeio")]
+      vibeio::spawn(future);
     }
   }
 
@@ -228,7 +263,7 @@ async fn quic_listener_fn(
     Err(err) => Err(anyhow::anyhow!("Cannot listen to HTTP/3 port: {err}"))?,
   };
   let endpoint = match quinn::Endpoint::new(quinn::EndpointConfig::default(), Some(server_config), udp_socket, {
-    #[cfg(feature = "runtime-monoio")]
+    #[cfg(any(feature = "runtime-vibeio", feature = "runtime-monoio"))]
     let runtime = Arc::new(EnterTokioRuntime);
     #[cfg(feature = "runtime-tokio")]
     let runtime = Arc::new(quinn::TokioRuntime);

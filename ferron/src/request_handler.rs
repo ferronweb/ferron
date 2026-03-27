@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -7,6 +8,8 @@ use async_channel::Sender;
 use chrono::{DateTime, Local};
 use ferron_common::logging::{ErrorLogger, LogMessage};
 use ferron_common::observability::{MetricsMultiSender, TraceSignal};
+#[cfg(feature = "runtime-vibeio")]
+use ferron_common::util::FileStream;
 use futures_util::stream::TryStreamExt;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
@@ -18,13 +21,13 @@ use tokio::io::BufReader;
 #[cfg(feature = "runtime-tokio")]
 use tokio_util::io::ReaderStream;
 
-use crate::config::{ServerConfiguration, ServerConfigurations};
+use crate::config::{ServerConfiguration, ServerConfigurationValue, ServerConfigurations};
 use crate::get_value;
 use crate::runtime::timeout;
 #[cfg(feature = "runtime-monoio")]
 use crate::util::MonoioFileStreamNoSpawn;
 use crate::util::{
-  generate_default_error_page, replace_header_placeholders, replace_log_placeholders, sanitize_url, SERVER_SOFTWARE,
+  generate_access_log_message, generate_default_error_page, replace_header_placeholders, sanitize_url, SERVER_SOFTWARE,
 };
 
 use ferron_common::modules::{ModuleHandlers, RequestData, SocketData};
@@ -59,13 +62,19 @@ async fn generate_error_response(
           let file = monoio::fs::File::open(page_path).await;
           #[cfg(feature = "runtime-tokio")]
           let file = tokio::fs::File::open(page_path).await;
+          #[cfg(feature = "runtime-vibeio")]
+          let file = vibeio::fs::File::open(page_path).await;
 
           let Ok(file) = file else {
             continue;
           };
 
           // Monoio's `File` doesn't expose `metadata()` on Windows, so we have to spawn a blocking task to obtain the metadata on this platform
-          #[cfg(any(feature = "runtime-tokio", all(feature = "runtime-monoio", unix)))]
+          #[cfg(any(
+            feature = "runtime-tokio",
+            feature = "runtime-vibeio",
+            all(feature = "runtime-monoio", unix)
+          ))]
           let metadata = file.metadata().await;
           #[cfg(all(feature = "runtime-monoio", windows))]
           let metadata = {
@@ -81,6 +90,8 @@ async fn generate_error_response(
 
           #[cfg(feature = "runtime-monoio")]
           let file_stream = MonoioFileStreamNoSpawn::new(file, None, content_length);
+          #[cfg(feature = "runtime-vibeio")]
+          let file_stream = FileStream::new(file, None, content_length);
           #[cfg(feature = "runtime-tokio")]
           let file_stream = ReaderStream::new(BufReader::with_capacity(12800, file));
 
@@ -114,7 +125,7 @@ async fn generate_error_response(
   response_builder.body(response_body).unwrap_or_default()
 }
 
-/// Sends a log message formatted according to the Combined Log Format
+/// Sends an access log message using either text or JSON formatting
 #[allow(clippy::too_many_arguments)]
 async fn log_access(
   loggers: &[Sender<LogMessage>],
@@ -125,20 +136,19 @@ async fn log_access(
   content_length: Option<u64>,
   date_format: Option<&str>,
   log_format: Option<&str>,
+  log_json_props: Option<&HashMap<String, ServerConfigurationValue>>,
 ) {
   let now: DateTime<Local> = Local::now();
   let formatted_time = now.format(date_format.unwrap_or("%d/%b/%Y:%H:%M:%S %z")).to_string();
-  let log_message_string = replace_log_placeholders(
-    log_format.unwrap_or(
-      "{client_ip} - {auth_user} [{timestamp}] \"{method} {path_and_query} {version}\" \
-       {status_code} {content_length} \"{header:Referer}\" \"{header:User-Agent}\"",
-    ),
+  let log_message_string = generate_access_log_message(
     request_parts,
     socket_data,
     auth_user,
     &formatted_time,
     status_code,
     content_length,
+    log_format,
+    log_json_props,
   );
   for logger in loggers {
     logger
@@ -302,17 +312,18 @@ async fn finalize_response_and_log(
   latest_auth_data: Option<&str>,
   date_format: Option<&str>,
   log_format: Option<&str>,
+  log_json_props: Option<&HashMap<String, ServerConfigurationValue>>,
 ) -> Response<BoxBody<Bytes, std::io::Error>> {
   let (mut response_parts, response_body) = response.into_parts();
 
+  add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
+  add_server_header(&mut response_parts);
   add_custom_headers(
     &mut response_parts,
     &headers_to_add,
     &headers_to_replace,
     &headers_to_remove,
   );
-  add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
-  add_server_header(&mut response_parts);
 
   let response = Response::from_parts(response_parts, response_body);
 
@@ -327,6 +338,7 @@ async fn finalize_response_and_log(
         extract_content_length(&response),
         date_format,
         log_format,
+        log_json_props,
       )
       .await;
     }
@@ -345,6 +357,7 @@ async fn finalize_basic_error_response(
   socket_data: &SocketData,
   date_format: Option<&str>,
   log_format: Option<&str>,
+  log_json_props: Option<&HashMap<String, ServerConfigurationValue>>,
 ) -> Response<BoxBody<Bytes, std::io::Error>> {
   let request_parts = Some(request_parts);
   finalize_response_and_log(
@@ -359,6 +372,7 @@ async fn finalize_basic_error_response(
     None,
     date_format,
     log_format,
+    log_json_props,
   )
   .await
 }
@@ -380,6 +394,7 @@ async fn execute_response_modifying_handlers(
   latest_auth_data: Option<&str>,
   date_format: Option<&str>,
   log_format: Option<&str>,
+  log_json_props: Option<&HashMap<String, ServerConfigurationValue>>,
   metrics_sender: MetricsMultiSender,
   metrics_enabled: bool,
   traces_senders: Vec<Sender<TraceSignal>>,
@@ -463,6 +478,7 @@ async fn execute_response_modifying_handlers(
           latest_auth_data,
           date_format,
           log_format,
+          log_json_props,
         )
         .await;
 
@@ -497,6 +513,7 @@ async fn finalize_with_modifying_handlers(
   latest_auth_data: Option<&str>,
   log_date_format: Option<&str>,
   log_format: Option<&str>,
+  log_json_props: Option<&HashMap<String, ServerConfigurationValue>>,
   metrics_sender: MetricsMultiSender,
   metrics_enabled: bool,
   traces_senders: Vec<Sender<TraceSignal>>,
@@ -505,14 +522,15 @@ async fn finalize_with_modifying_handlers(
   timeout_duration: Option<std::time::Duration>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, anyhow::Error> {
   let (mut response_parts, response_body) = response.into_parts();
+
+  add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
+  add_server_header(&mut response_parts);
   add_custom_headers(
     &mut response_parts,
     &headers_to_add,
     &headers_to_replace,
     &headers_to_remove,
   );
-  add_http3_alt_svc_header(&mut response_parts, http3_alt_port);
-  add_server_header(&mut response_parts);
 
   let response = Response::from_parts(response_parts, response_body);
 
@@ -530,6 +548,7 @@ async fn finalize_with_modifying_handlers(
     latest_auth_data,
     log_date_format,
     log_format,
+    log_json_props,
     metrics_sender,
     metrics_enabled,
     traces_senders,
@@ -550,6 +569,7 @@ async fn finalize_with_modifying_handlers(
           extract_content_length(&response),
           log_date_format,
           log_format,
+          log_json_props,
         )
         .await;
       }
@@ -648,6 +668,11 @@ pub async fn request_handler(
     .as_deref()
     .and_then(|c| get_value!("log_format", c))
     .and_then(|v| v.as_str());
+  let global_log_json = global_configuration
+    .as_deref()
+    .and_then(|c| c.entries.get("log_json"))
+    .and_then(|entries| entries.get_entry())
+    .map(|entry| entry.props.clone());
 
   // Request timeout
   let timeout_from_config = global_configuration
@@ -732,6 +757,7 @@ pub async fn request_handler(
                   &socket_data,
                   global_log_date_format,
                   global_log_format,
+                  global_log_json.as_ref(),
                 )
                 .await,
               );
@@ -759,6 +785,7 @@ pub async fn request_handler(
             &socket_data,
             global_log_date_format,
             global_log_format,
+            global_log_json.as_ref(),
           )
           .await,
         );
@@ -821,6 +848,7 @@ pub async fn request_handler(
           &socket_data,
           global_log_date_format,
           global_log_format,
+          global_log_json.as_ref(),
         )
         .await,
       );
@@ -849,6 +877,7 @@ pub async fn request_handler(
           &socket_data,
           global_log_date_format,
           global_log_format,
+          global_log_json.as_ref(),
         )
         .await,
       );
@@ -858,6 +887,11 @@ pub async fn request_handler(
   // Determine the log formats
   let mut log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
   let mut log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
+  let mut log_json_props = configuration
+    .entries
+    .get("log_json")
+    .and_then(|entries| entries.get_entry())
+    .map(|entry| entry.props.clone());
 
   // Clone the log request parts if logging is enabled and request parts are not already cloned
   if !configuration.observability.log_channels.is_empty() && log_request_parts.is_none() {
@@ -885,6 +919,11 @@ pub async fn request_handler(
                 configuration = new_config2;
                 log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
                 log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
+                log_json_props = configuration
+                  .entries
+                  .get("log_json")
+                  .and_then(|entries| entries.get_entry())
+                  .map(|entry| entry.props.clone());
               }
             }
             Ok(None) => {}
@@ -917,6 +956,7 @@ pub async fn request_handler(
                   None,
                   log_date_format,
                   log_format,
+                  log_json_props.as_ref(),
                 )
                 .await,
               );
@@ -951,6 +991,7 @@ pub async fn request_handler(
             None,
             log_date_format,
             log_format,
+            log_json_props.as_ref(),
           )
           .await,
         );
@@ -988,6 +1029,7 @@ pub async fn request_handler(
         None,
         log_date_format,
         log_format,
+        log_json_props.as_ref(),
       )
       .await,
     );
@@ -1023,6 +1065,7 @@ pub async fn request_handler(
                 None,
                 log_date_format,
                 log_format,
+                log_json_props.as_ref(),
               )
               .await,
             );
@@ -1184,6 +1227,7 @@ pub async fn request_handler(
               latest_auth_data.as_deref(),
               log_date_format,
               log_format,
+              log_json_props.as_ref(),
               metrics_sender,
               metrics_enabled,
               traces_senders,
@@ -1224,6 +1268,11 @@ pub async fn request_handler(
                     is_error_handler = true;
                     log_date_format = get_value!("log_date_format", configuration).and_then(|v| v.as_str());
                     log_format = get_value!("log_format", configuration).and_then(|v| v.as_str());
+                    log_json_props = configuration
+                      .entries
+                      .get("log_json")
+                      .and_then(|entries| entries.get_entry())
+                      .map(|entry| entry.props.clone());
                     error_logger = if !configuration.observability.log_channels.is_empty() {
                       ErrorLogger::new_multiple(configuration.observability.log_channels.clone())
                     } else {
@@ -1266,6 +1315,7 @@ pub async fn request_handler(
                 latest_auth_data.as_deref(),
                 log_date_format,
                 log_format,
+                log_json_props.as_ref(),
                 metrics_sender,
                 metrics_enabled,
                 traces_senders,
@@ -1316,6 +1366,7 @@ pub async fn request_handler(
           latest_auth_data.as_deref(),
           log_date_format,
           log_format,
+          log_json_props.as_ref(),
           metrics_sender,
           metrics_enabled,
           traces_senders,
@@ -1350,6 +1401,7 @@ pub async fn request_handler(
     latest_auth_data.as_deref(),
     log_date_format,
     log_format,
+    log_json_props.as_ref(),
     metrics_sender,
     metrics_enabled,
     traces_senders,

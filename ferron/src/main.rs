@@ -3,6 +3,7 @@ mod config;
 mod handler;
 mod listener_handler_communication;
 mod listeners;
+mod panic;
 mod request_handler;
 mod runtime;
 mod setup;
@@ -22,7 +23,9 @@ use clap::Parser;
 use ferron_common::logging::{ErrorLogger, LogMessage};
 use ferron_common::{get_entry, get_value};
 use ferron_load_modules::{obtain_module_loaders, obtain_observability_backend_loaders};
-use human_panic::{setup_panic, Metadata};
+#[cfg(feature = "runtime-vibeio")]
+use malloc_best_effort::BEMalloc;
+#[cfg(not(feature = "runtime-vibeio"))]
 use mimalloc::MiMalloc;
 use rustls::server::{ResolvesServerCert, WebPkiClientVerifier};
 use rustls::{RootCertStore, ServerConfig};
@@ -42,6 +45,7 @@ use crate::config::ServerConfigurations;
 use crate::handler::{create_http_handler, ReloadableHandlerData};
 use crate::listener_handler_communication::ConnectionData;
 use crate::listeners::{create_quic_listener, create_tcp_listener};
+use crate::panic::install_panic_hook;
 use crate::setup::acme::background_acme_task;
 use crate::setup::cli::{Command, ConfigAdapter, FerronArgs, LogOutput};
 use crate::setup::ocsp::OcspStapler;
@@ -52,9 +56,12 @@ use crate::setup::tls::{
 use crate::setup::tls_single::{init_crypto_provider, set_tls_version};
 use crate::util::{load_certs, MultiCancel};
 
-// Set the global allocator to use mimalloc for performance optimization
+#[cfg(not(feature = "runtime-vibeio"))]
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
+#[cfg(feature = "runtime-vibeio")]
+#[global_allocator]
+static GLOBAL: BEMalloc = BEMalloc::new();
 
 shadow!(build);
 
@@ -412,6 +419,7 @@ fn before_starting_server(
               &mut tls_build_ctx,
               server,
               https_port,
+              server.filters.ip,
               sni_hostname.clone(),
               crypto_provider.clone(),
               memory_acme_account_cache_data.clone(),
@@ -431,6 +439,7 @@ fn before_starting_server(
               &mut tls_build_ctx,
               &crypto_provider,
               https_port,
+              server.filters.ip,
               sni_hostname,
               cert,
               key,
@@ -461,7 +470,7 @@ fn before_starting_server(
         tls_build_ctx.nonencrypted_ports.clear();
       }
 
-      for tls_port in tls_build_ctx.tls_ports.keys() {
+      for (_, tls_port) in tls_build_ctx.tls_ports.keys() {
         if tls_build_ctx.nonencrypted_ports.contains(tls_port) {
           tls_build_ctx.nonencrypted_ports.remove(tls_port);
         }
@@ -553,14 +562,44 @@ fn before_starting_server(
         .nonencrypted_ports
         .iter()
         .map(|p| (*p, false))
-        .chain(tls_configs.keys().map(|p| (*p, true)))
+        .chain(tls_configs.keys().map(|p| (p.1, true)))
       {
         let socket_address = SocketAddr::new(listen_ip_addr, tcp_port);
         listened_socket_addresses.push((socket_address, encrypted));
       }
-      for (quic_port, quic_tls_config) in quic_tls_configs.into_iter() {
+      let mut quic_tls_configs_processed: HashMap<(Option<IpAddr>, u16), Arc<quinn::ServerConfig>> =
+        HashMap::with_capacity(quic_tls_configs.len());
+      let mut had_quic_ports = HashSet::new();
+      for ((quic_ip, quic_port), quic_tls_config) in quic_tls_configs.into_iter() {
+        let quic_tls_config2_option: Option<quinn::crypto::rustls::QuicServerConfig> =
+          quic_tls_config.clone().try_into().ok();
+        if let Some(quic_tls_config2) = quic_tls_config2_option {
+          quic_tls_configs_processed.insert(
+            (quic_ip, quic_port),
+            Arc::new(quinn::ServerConfig::with_crypto(Arc::new(quic_tls_config2))),
+          );
+        }
         let socket_address = SocketAddr::new(listen_ip_addr, quic_port);
-        quic_listened_socket_addresses.push((socket_address, quic_tls_config));
+        if quic_ip.is_none() {
+          if had_quic_ports.contains(&quic_port) {
+            quic_listened_socket_addresses.retain(|(sa, _)| sa != &socket_address);
+          }
+          quic_listened_socket_addresses.push((socket_address, quic_tls_config));
+          had_quic_ports.insert(quic_port);
+        } else if !had_quic_ports.contains(&quic_port) {
+          // Empty TLS server configuration
+          let tls_config2_option = rustls::ServerConfig::builder_with_provider(crypto_provider.clone())
+            .with_safe_default_protocol_versions()
+            .ok()
+            .map(|b| {
+              b.with_no_client_auth()
+                .with_cert_resolver(Arc::new(crate::util::CustomSniResolver::new()))
+            });
+          if let Some(quic_tls_config) = tls_config2_option {
+            quic_listened_socket_addresses.push((socket_address, Arc::new(quic_tls_config)));
+            had_quic_ports.insert(quic_port);
+          }
+        }
       }
 
       let enable_uring = global_configuration
@@ -702,6 +741,7 @@ fn before_starting_server(
         http3_enabled: !quic_listened_socket_addresses.is_empty(),
         acme_tls_alpn_01_configs: Arc::new(acme_tls_alpn_01_configs),
         acme_http_01_resolvers: tls_build_ctx.acme_http_01_resolvers,
+        quic_tls_configs: Arc::new(quic_tls_configs_processed),
         enable_proxy_protocol,
       };
       let reloadable_handler_data = if let Some(data) = SERVER_CONFIG_ARCSWAP.get().cloned() {
@@ -801,6 +841,31 @@ fn before_starting_server(
         // there would be a "deadlock" when shutting down handler threads, and they won't be able to shut down
         let multi_cancel = Arc::new(MultiCancel::new(available_parallelism.saturating_sub(1)));
 
+        #[cfg(feature = "runtime-vibeio")]
+        if let Some(core_ids) = core_affinity::get_core_ids() {
+          for core_id in core_ids {
+            handler_shutdown_channels.push(create_http_handler(
+              reloadable_handler_data.clone(),
+              listener_handler_rx.clone(),
+              enable_uring,
+              io_uring_disabled_tx.clone(),
+              multi_cancel.clone(),
+              Some(core_id),
+            )?);
+          }
+        } else {
+          for _ in 0..available_parallelism {
+            handler_shutdown_channels.push(create_http_handler(
+              reloadable_handler_data.clone(),
+              listener_handler_rx.clone(),
+              enable_uring,
+              io_uring_disabled_tx.clone(),
+              multi_cancel.clone(),
+              None,
+            )?);
+          }
+        }
+        #[cfg(not(feature = "runtime-vibeio"))]
         for _ in 0..available_parallelism {
           handler_shutdown_channels.push(create_http_handler(
             reloadable_handler_data.clone(),
@@ -977,10 +1042,11 @@ fn print_version() {
 
 /// The main entry point of the application
 fn main() {
+  #[cfg(feature = "runtime-vibeio")]
+  BEMalloc::init();
+
   // Set the panic handler
-  setup_panic!(Metadata::new("Ferron", env!("CARGO_PKG_VERSION"))
-    .homepage("https://ferron.sh")
-    .support("- Send an email message to hello@ferron.sh"));
+  install_panic_hook();
 
   // Obtain the configuration adapters
   let (configuration_adapters, _all_adapters) = obtain_configuration_adapters();

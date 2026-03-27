@@ -7,6 +7,7 @@
 /target/
 /build/prepare/target/
 /build/installer/target/
+/e2e/target/
 
 # Profiling data
 /perf.data
@@ -32,6 +33,9 @@ Thumbs.db
 /build/release*
 /dist
 
+# E2E tests
+/e2e/
+
 # Temporary files used by the editor
 *.swp
 *.swo
@@ -55,9 +59,6 @@ Dockerfile*
 
 # Packaging files (they're not needed when building a Docker image)
 /packaging/
-
-# Test suite files
-/dockertest/
 
 # GitHub-related files
 /.github/

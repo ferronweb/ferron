@@ -216,6 +216,7 @@ impl ModuleHandlers for ReplaceModuleHandlers {
       for replacer in self.replacers.iter() {
         replaced_response_body = replacer.wrap(replaced_response_body).boxed();
       }
+      replaced_response_parts.extensions.clear();
       let response = Response::from_parts(replaced_response_parts, replaced_response_body);
       Ok(response)
     } else {

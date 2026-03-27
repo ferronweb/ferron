@@ -147,7 +147,6 @@ For the reference of supported DNS providers and their configuration properties,
 - If you need wildcard certificates, use DNS-01 challenge; wildcard domains are ignored for TLS-ALPN-01 and HTTP-01.
 - Keep `auto_tls_cache` on persistent storage and ensure Ferron can read/write it, otherwise certificate renewals may fail or repeat unnecessarily.
 - For DNS-01 failures, verify provider credentials/props and allow time for DNS propagation before retrying.
-- Per-IP automatic TLS (and per-IP TLS certificates overall) are not supported. If you need per-IP TLS, consider using a separate Ferron instance per IP.
 
 ### Notes for on-demand mode
 

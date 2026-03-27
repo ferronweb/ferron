@@ -1,5 +1,0 @@
-:80 {
-  root "/var/www/ferron"
-  replace "World" "Ferron"
-  replace_filter_types "*"
-}

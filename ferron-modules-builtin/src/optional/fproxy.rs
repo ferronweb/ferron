@@ -19,12 +19,16 @@ use monoio_compat::hyper::MonoioIo;
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(feature = "runtime-tokio")]
 use tokio::net::TcpStream;
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::net::TcpStream;
 
 use ferron_common::config::ServerConfiguration;
 use ferron_common::get_entries_for_validation;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, ResponseData, SocketData};
 use ferron_common::util::ModuleCache;
+#[cfg(feature = "runtime-vibeio")]
+use vibeio_hyper::VibeioIo;
 
 /// A forward proxy fallback module loader
 pub struct ForwardProxyModuleLoader {
@@ -120,8 +124,22 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
     if is_connect_proxy_request {
       if let Some(connect_address) = request.uri().authority().map(|auth| auth.to_string()) {
         let error_logger = error_logger.clone();
+        #[cfg(feature = "runtime-vibeio")]
+        let upgrade_on = {
+          let mut request = request;
+          vibeio_http::prepare_upgrade(&mut request)
+        };
         ferron_common::runtime::spawn(async move {
-          match hyper::upgrade::on(request).await {
+          #[cfg(feature = "runtime-vibeio")]
+          let upgrade_on = (if let Some(upgraded_request) = upgrade_on {
+            upgraded_request.await
+          } else {
+            None
+          })
+          .ok_or(std::io::Error::other("vibeio HTTP upgrade failure"));
+          #[cfg(not(feature = "runtime-vibeio"))]
+          let upgrade_on = hyper::upgrade::on(request).await;
+          match upgrade_on {
             Ok(upgraded_request) => {
               let stream = match TcpStream::connect(connect_address).await {
                 Ok(stream) => stream,
@@ -152,11 +170,23 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
               };
               #[cfg(feature = "runtime-tokio")]
               let mut stream = stream;
+              #[cfg(feature = "runtime-vibeio")]
+              let mut stream = match stream.into_poll() {
+                Ok(stream) => stream,
+                Err(err) => {
+                  error_logger
+                    .log(&format!("Cannot convert the TCP stream into polled I/O: {err}"))
+                    .await;
+                  return;
+                }
+              };
 
               #[cfg(feature = "runtime-monoio")]
               let mut upgraded = MonoioIo::new(upgraded_request);
               #[cfg(feature = "runtime-tokio")]
               let mut upgraded = TokioIo::new(upgraded_request);
+              #[cfg(feature = "runtime-vibeio")]
+              let mut upgraded = upgraded_request;
 
               tokio::io::copy_bidirectional(&mut upgraded, &mut stream)
                 .await
@@ -288,6 +318,20 @@ impl ModuleHandlers for ForwardProxyModuleHandlers {
           });
         }
       };
+      #[cfg(feature = "runtime-vibeio")]
+      let stream = match stream.into_poll() {
+        Ok(stream) => stream,
+        Err(err) => {
+          error_logger.log(&format!("Bad gateway: {err}")).await;
+          return Ok(ResponseData {
+            request: None,
+            response: None,
+            response_status: Some(StatusCode::BAD_GATEWAY),
+            response_headers: None,
+            new_remote_address: None,
+          });
+        }
+      };
 
       let request_path = request_parts.uri.path();
 
@@ -327,6 +371,8 @@ async fn http_proxy(
   let io = MonoioIo::new(stream);
   #[cfg(feature = "runtime-tokio")]
   let io = TokioIo::new(stream);
+  #[cfg(feature = "runtime-vibeio")]
+  let io = VibeioIo::new(stream);
 
   let (mut sender, conn) = match hyper::client::conn::http1::handshake(io).await {
     Ok(data) => data,

@@ -23,6 +23,8 @@ use tokio::sync::RwLock;
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio_util::io::{SinkWriter, StreamReader};
 use tokio_util::sync::CancellationToken;
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::net::TcpStream;
 
 use crate::util::fcgi::{
   construct_fastcgi_name_value_pair, construct_fastcgi_record, FcgiDecodedData, FcgiDecoder, FcgiEncoder,
@@ -263,6 +265,8 @@ impl ModuleHandlers for FcgiModuleHandlers {
               };
               #[cfg(feature = "runtime-tokio")]
               let canonicalize_result = tokio::fs::canonicalize(&wwwroot_unknown).await;
+              #[cfg(feature = "runtime-vibeio")]
+              let canonicalize_result = vibeio::fs::canonicalize(&wwwroot_unknown).await;
 
               match canonicalize_result {
                 Ok(pathbuf) => pathbuf,
@@ -310,10 +314,21 @@ impl ModuleHandlers for FcgiModuleHandlers {
             };
             #[cfg(feature = "runtime-tokio")]
             let canonicalize_result = tokio::fs::canonicalize(&joined_pathbuf).await;
+            #[cfg(feature = "runtime-vibeio")]
+            let canonicalize_result = vibeio::fs::canonicalize(&joined_pathbuf).await;
 
             let canonical_joined_pathbuf = match canonicalize_result {
               Ok(pathbuf) => pathbuf,
-              Err(_) => joined_pathbuf.clone(),
+              Err(_) => {
+                // Failed to canonicalize the file path
+                return Ok(ResponseData {
+                  request: Some(request),
+                  response: None,
+                  response_status: Some(StatusCode::FORBIDDEN),
+                  response_headers: None,
+                  new_remote_address: None,
+                });
+              }
             };
 
             // Webroot is already canonicalized, so no need to canonicalize it again
@@ -368,6 +383,8 @@ impl ModuleHandlers for FcgiModuleHandlers {
               };
               #[cfg(feature = "runtime-tokio")]
               let canonicalize_result = tokio::fs::canonicalize(&wwwroot_unknown).await;
+              #[cfg(feature = "runtime-vibeio")]
+              let canonicalize_result = vibeio::fs::canonicalize(&wwwroot_unknown).await;
 
               match canonicalize_result {
                 Ok(pathbuf) => pathbuf,
@@ -414,6 +431,11 @@ impl ModuleHandlers for FcgiModuleHandlers {
                 use tokio::fs;
                 fs::metadata(&joined_pathbuf).await
               };
+              #[cfg(feature = "runtime-vibeio")]
+              let metadata = {
+                use vibeio::fs;
+                fs::metadata(&joined_pathbuf).await
+              };
               #[cfg(all(feature = "runtime-monoio", unix))]
               let metadata = {
                 use monoio::fs;
@@ -445,6 +467,11 @@ impl ModuleHandlers for FcgiModuleHandlers {
                       #[cfg(feature = "runtime-tokio")]
                       let temp_metadata = {
                         use tokio::fs;
+                        fs::metadata(&temp_joined_pathbuf).await
+                      };
+                      #[cfg(feature = "runtime-vibeio")]
+                      let temp_metadata = {
+                        use vibeio::fs;
                         fs::metadata(&temp_joined_pathbuf).await
                       };
                       #[cfg(all(feature = "runtime-monoio", unix))]
@@ -496,6 +523,11 @@ impl ModuleHandlers for FcgiModuleHandlers {
                       #[cfg(all(feature = "runtime-monoio", unix))]
                       let temp_metadata = {
                         use monoio::fs;
+                        fs::metadata(&temp_pathbuf).await
+                      };
+                      #[cfg(feature = "runtime-vibeio")]
+                      let temp_metadata = {
+                        use vibeio::fs;
                         fs::metadata(&temp_pathbuf).await
                       };
                       #[cfg(all(feature = "runtime-monoio", windows))]
@@ -630,6 +662,11 @@ async fn execute_fastcgi_with_environment_variables(
   fastcgi_to: &str,
   additional_environment_variables: HashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
+  // Remove "Proxy" header from the request to prevent "httpoxy" vulnerability
+  request
+    .headers_mut()
+    .remove(hyper::header::HeaderName::from_static("proxy"));
+
   let request_data = request.extensions_mut().remove::<RequestData>();
 
   let original_request_uri = request_data
@@ -885,6 +922,15 @@ async fn connect_tcp(addr: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn 
   Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
 }
 
+#[cfg(feature = "runtime-vibeio")]
+async fn connect_tcp(addr: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
+  let socket = TcpStream::connect(addr).await?;
+  socket.set_nodelay(true)?;
+
+  let (socket_reader_set, socket_writer_set) = tokio::io::split(socket.into_poll()?);
+  Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
+}
+
 #[cfg(feature = "runtime-tokio")]
 async fn connect_tcp(
   addr: &str,
@@ -914,6 +960,17 @@ async fn connect_unix(path: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn
 }
 
 #[allow(dead_code)]
+#[cfg(all(feature = "runtime-vibeio", unix))]
+async fn connect_unix(path: &str) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {
+  use vibeio::net::UnixStream;
+
+  let socket = UnixStream::connect(path).await?;
+
+  let (socket_reader_set, socket_writer_set) = tokio::io::split(socket.into_poll()?);
+  Ok((Box::new(socket_reader_set), Box::new(socket_writer_set)))
+}
+
+#[allow(dead_code)]
 #[cfg(all(feature = "runtime-tokio", unix))]
 async fn connect_unix(
   path: &str,
@@ -933,7 +990,7 @@ async fn connect_unix(
 }
 
 #[allow(dead_code)]
-#[cfg(all(feature = "runtime-monoio", not(unix)))]
+#[cfg(all(any(feature = "runtime-monoio", feature = "runtime-vibeio"), not(unix)))]
 async fn connect_unix(
   _path: &str,
 ) -> Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>), std::io::Error> {

@@ -6,7 +6,7 @@ if [ "$1" = "configure" ]; then
   useradd -d /var/lib/ferron -m -s /usr/sbin/nologin ferron || true
   chown -hR ferron:ferron /var/lib/ferron
 
-  if [ -z "$2"]; then
+  if [ -z "$2" ]; then
     # Copy over the default Ferron directory
     if ! [ -e /var/www/ferron ]; then
       mkdir -p /var/www

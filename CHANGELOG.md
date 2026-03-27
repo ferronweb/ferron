@@ -1,5 +1,27 @@
 # Ferron 2 change log
 
+## Ferron 2.7.0
+
+**Released in March 27, 2026**
+
+### Added
+
+- DNSimple DNS provider for DNS-01 ACME challenges.
+- Support for IP-based TLS certificates.
+- Support for JSON-format access logs.
+
+### Changed
+
+- Introduced a new, customized message displayed when the web server crashes.
+
+### Fixed
+
+- A large enough PROXY v2 header could crash the web server, if the PROXY protocol is enabled.
+- IP-based host blocks weren't applied correctly.
+- Path traversal might have been possible if URL sanitizer is disabled and the path canonicalization failed.
+- `Server` and `Alt-Svc` (for HTTP/3) headers couldn't be modified or removed.
+- The `Proxy` header was passed when using CGI, FastCGI or SCGI (see https://httpoxy.org/).
+
 ## Ferron 2.6.0
 
 **Released in March 10, 2026**

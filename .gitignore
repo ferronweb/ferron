@@ -2,6 +2,7 @@
 /target/
 /build/prepare/target/
 /build/installer/target/
+/e2e/target/
 
 # Profiling data
 /perf.data

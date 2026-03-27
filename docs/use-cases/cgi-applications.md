@@ -50,6 +50,29 @@ example.com {
 }
 ```
 
+## FastCGI with fcgiwrap
+
+Alternatively, you can use [fcgiwrap](https://github.com/gnosek/fcgiwrap) to run CGI applications over the FastCGI protocol. This allows you to serve CGI scripts using the FastCGI module, which can be useful for unifying backend configurations or integrating with existing FastCGI setups.
+
+To use fcgiwrap, ensure it is installed and running, then configure your site as follows:
+
+```kdl
+// Example configuration for fcgiwrap.
+example.com {
+    root "/var/www/html"
+
+    // Specify extensions to handle via FastCGI
+    fcgi_extension ".cgi" ".sh"
+
+    // Connect to the fcgiwrap socket (adjust path for your system)
+    // On Debian/Ubuntu, this is often unix:///var/run/fcgiwrap.socket
+    fcgi "unix:///run/fcgiwrap.socket"
+
+    // Optional: Set environment variables if required by your scripts
+    fcgi_environment "MY_APP_MODE" "production"
+}
+```
+
 ## Notes and troubleshooting
 
 - If a script is downloaded instead of executed, verify `cgi` is enabled and the script extension is listed in `cgi_extension` (when outside `cgi-bin`).

@@ -126,7 +126,7 @@ where
 
   // Switch to dynamic buffer if header is too long; v2 has no maximum length
   if full_length > READ_BUFFER_LEN {
-    let mut dynamic_buffer = Vec::with_capacity(full_length);
+    let mut dynamic_buffer = vec![0u8; full_length];
     dynamic_buffer.extend_from_slice(&buffer[..V2_MINIMUM_LEN]);
 
     // Read the remaining header length

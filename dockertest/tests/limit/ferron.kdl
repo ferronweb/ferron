@@ -1,4 +1,0 @@
-:80 {
-  root "/var/www/ferron"
-  limit rate=2 burst=2
-}

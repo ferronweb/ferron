@@ -21,12 +21,16 @@ use tokio::process::Command;
 use tokio::sync::RwLock;
 #[cfg(feature = "runtime-monoio")]
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, FuturesAsyncWriteCompatExt};
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::fs;
 
 use ferron_common::config::ServerConfiguration;
 use ferron_common::logging::ErrorLogger;
 use ferron_common::modules::{Module, ModuleHandlers, ModuleLoader, RequestData, ResponseData, SocketData};
 use ferron_common::util::{ModuleCache, TtlCache, SERVER_SOFTWARE};
 use ferron_common::{get_entries, get_entries_for_validation, get_entry, get_value};
+#[cfg(feature = "runtime-vibeio")]
+use vibeio::util::AsyncWrap;
 
 /// Custom runtime for `cegla-cgi`
 #[cfg(feature = "runtime-monoio")]
@@ -91,6 +95,102 @@ impl cegla_cgi::client::SendChild for CustomCgiChild {
 
   fn try_status(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
     self.inner.try_status()
+  }
+}
+
+/// Custom runtime for `cegla-cgi`
+#[cfg(feature = "runtime-vibeio")]
+pub struct CustomCgiRuntime;
+
+/// Custom child process for `cegla-cgi`
+#[cfg(feature = "runtime-vibeio")]
+pub struct CustomCgiChild {
+  inner: vibeio::process::Child,
+}
+
+#[cfg(feature = "runtime-vibeio")]
+impl cegla_cgi::client::Runtime for CustomCgiRuntime {
+  type Child = CustomCgiChild;
+
+  fn spawn(&self, future: impl std::future::Future + 'static) {
+    vibeio::spawn(async move {
+      future.await;
+    });
+  }
+
+  fn start_child(
+    &self,
+    cmd: &std::ffi::OsStr,
+    args: &[&std::ffi::OsStr],
+    env: CgiEnvironment,
+    cwd: Option<PathBuf>,
+  ) -> Result<Self::Child, std::io::Error> {
+    let mut command = vibeio::process::Command::new(cmd);
+    command
+      .stdin(Stdio::piped())
+      .stdout(Stdio::piped())
+      .stderr(Stdio::piped())
+      .envs(env)
+      .args(args);
+    if let Some(cwd) = cwd {
+      command.current_dir(cwd);
+    }
+    Ok(CustomCgiChild {
+      inner: command.spawn()?,
+    })
+  }
+}
+
+#[cfg(feature = "runtime-vibeio")]
+impl cegla_cgi::client::Child for CustomCgiChild {
+  type Stdin = AsyncWrap<vibeio::process::ChildStdin>;
+  type Stdout = AsyncWrap<vibeio::process::ChildStdout>;
+  type Stderr = AsyncWrap<vibeio::process::ChildStderr>;
+
+  fn stdin(&mut self) -> Option<Self::Stdin> {
+    self.inner.stdin.take().map(AsyncWrap::new)
+  }
+
+  fn stdout(&mut self) -> Option<Self::Stdout> {
+    self.inner.stdout.take().map(AsyncWrap::new)
+  }
+
+  fn stderr(&mut self) -> Option<Self::Stderr> {
+    self.inner.stderr.take().map(AsyncWrap::new)
+  }
+
+  fn try_status(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+    self.inner.try_wait()
+  }
+}
+
+#[cfg(feature = "runtime-vibeio")]
+struct SendWrapBody<B> {
+  inner: send_wrapper::SendWrapper<std::pin::Pin<Box<B>>>,
+}
+
+#[cfg(feature = "runtime-vibeio")]
+impl<B> SendWrapBody<B> {
+  fn new(inner: B) -> Self {
+    Self {
+      inner: send_wrapper::SendWrapper::new(Box::pin(inner)),
+    }
+  }
+}
+
+#[cfg(feature = "runtime-vibeio")]
+impl<B> hyper::body::Body for SendWrapBody<B>
+where
+  B: hyper::body::Body + 'static,
+{
+  type Data = B::Data;
+  type Error = B::Error;
+
+  fn poll_frame(
+    mut self: std::pin::Pin<&mut Self>,
+    cx: &mut std::task::Context<'_>,
+  ) -> std::task::Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
+    self.inner.as_mut().poll_frame(cx)
   }
 }
 
@@ -287,7 +387,7 @@ impl ModuleHandlers for CgiModuleHandlers {
                 "Can't spawn a blocking task to obtain the canonical webroot path",
               )))
           };
-          #[cfg(feature = "runtime-tokio")]
+          #[cfg(any(feature = "runtime-tokio", feature = "runtime-vibeio"))]
           let canonicalize_result = fs::canonicalize(&wwwroot_unknown).await;
 
           match canonicalize_result {
@@ -341,12 +441,21 @@ impl ModuleHandlers for CgiModuleHandlers {
                   "Can't spawn a blocking task to obtain the canonical file path",
                 )))
             };
-            #[cfg(feature = "runtime-tokio")]
+            #[cfg(any(feature = "runtime-tokio", feature = "runtime-vibeio"))]
             let canonicalize_result = fs::canonicalize(&joined_pathbuf).await;
 
             let canonical_joined_pathbuf = match canonicalize_result {
               Ok(pathbuf) => pathbuf,
-              Err(_) => joined_pathbuf.clone(),
+              Err(_) => {
+                // Failed to canonicalize the file path
+                return Ok(ResponseData {
+                  request: Some(request),
+                  response: None,
+                  response_status: Some(StatusCode::FORBIDDEN),
+                  response_headers: None,
+                  new_remote_address: None,
+                });
+              }
             };
 
             // Webroot is already canonicalized, so no need to canonicalize it again
@@ -370,6 +479,11 @@ impl ModuleHandlers for CgiModuleHandlers {
           #[cfg(feature = "runtime-tokio")]
           let metadata = {
             use tokio::fs;
+            fs::metadata(&joined_pathbuf).await
+          };
+          #[cfg(feature = "runtime-vibeio")]
+          let metadata = {
+            use vibeio::fs;
             fs::metadata(&joined_pathbuf).await
           };
           #[cfg(all(feature = "runtime-monoio", unix))]
@@ -419,6 +533,11 @@ impl ModuleHandlers for CgiModuleHandlers {
                   #[cfg(all(feature = "runtime-monoio", unix))]
                   let temp_metadata = {
                     use monoio::fs;
+                    fs::metadata(&temp_joined_pathbuf).await
+                  };
+                  #[cfg(feature = "runtime-vibeio")]
+                  let temp_metadata = {
+                    use vibeio::fs;
                     fs::metadata(&temp_joined_pathbuf).await
                   };
                   #[cfg(all(feature = "runtime-monoio", windows))]
@@ -475,6 +594,11 @@ impl ModuleHandlers for CgiModuleHandlers {
                   #[cfg(all(feature = "runtime-monoio", unix))]
                   let temp_metadata = {
                     use monoio::fs;
+                    fs::metadata(&temp_pathbuf).await
+                  };
+                  #[cfg(feature = "runtime-vibeio")]
+                  let temp_metadata = {
+                    use vibeio::fs;
                     fs::metadata(&temp_pathbuf).await
                   };
                   #[cfg(all(feature = "runtime-monoio", windows))]
@@ -633,6 +757,11 @@ async fn execute_cgi_with_environment_variables(
   cgi_interpreters: HashMap<String, Vec<String>>,
   additional_environment_variables: HashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
+  // Remove "Proxy" header from the request to prevent "httpoxy" vulnerability
+  request
+    .headers_mut()
+    .remove(hyper::header::HeaderName::from_static("proxy"));
+
   let request_data = request.extensions_mut().remove::<RequestData>();
 
   let original_request_uri = request_data
@@ -720,12 +849,21 @@ async fn execute_cgi(
   let runtime = tokio_cegla::TokioCgiRuntime;
   #[cfg(feature = "runtime-monoio")]
   let runtime = CustomCgiRuntime;
+  #[cfg(feature = "runtime-vibeio")]
+  let runtime = CustomCgiRuntime;
 
+  #[cfg(not(feature = "runtime-vibeio"))]
   let (response, stderr, exit_code_option) =
     cegla_cgi::client::execute_cgi_send(request, runtime, cmd, &args, env_builder, Some(execute_dir_pathbuf)).await?;
+  #[cfg(feature = "runtime-vibeio")]
+  let (response, stderr, exit_code_option) =
+    cegla_cgi::client::execute_cgi(request, runtime, cmd, &args, env_builder, Some(execute_dir_pathbuf)).await?;
 
   let (parts, body) = response.into_parts();
+  #[cfg(not(feature = "runtime-vibeio"))]
   let response = Response::from_parts(parts, body.boxed());
+  #[cfg(feature = "runtime-vibeio")]
+  let response = Response::from_parts(parts, SendWrapBody::new(body).boxed());
 
   if let Some(exit_code) = exit_code_option {
     if !exit_code.success() {
@@ -820,6 +958,62 @@ async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dy
         let buf = read_result.1.freeze();
 
         shebang_bytes_read += shebang_bytes_read;
+        if let Some(index) = memchr::memchr(b'\n', &buf) {
+          shebang_line_bytes.extend_from_slice(&buf[..index + 1]);
+          break;
+        } else if let Some(index) = memchr::memchr(b'\r', &buf) {
+          shebang_line_bytes.extend_from_slice(&buf[..index + 1]);
+          break;
+        } else {
+          shebang_line_bytes.extend_from_slice(&buf);
+        }
+      }
+      let shebang_line = String::from_utf8_lossy(&shebang_line_bytes);
+
+      let mut command_begin: Vec<String> = shebang_line[2..]
+        .replace("\r", "")
+        .replace("\n", "")
+        .split(" ")
+        .map(|s| s.to_owned())
+        .collect();
+      command_begin.push(execute_pathbuf.to_string_lossy().to_string());
+      Ok(command_begin)
+    }
+    _ => {
+      // It's not executable
+      Err(anyhow::anyhow!("The CGI program is not executable"))?
+    }
+  }
+}
+
+#[allow(dead_code)]
+#[cfg(all(feature = "runtime-vibeio", not(unix)))]
+async fn get_executable(execute_pathbuf: &PathBuf) -> Result<Vec<String>, Box<dyn Error + Send + Sync>> {
+  let magic_signature_buffer = vec![0u8; 2].into_boxed_slice();
+  let open_file = fs::File::open(&execute_pathbuf).await?;
+  let open_file_result = open_file.read_exact_at(magic_signature_buffer, 0).await;
+  if open_file_result.0.is_err() {
+    Err(anyhow::anyhow!("Failed to read the CGI program signature"))?
+  }
+
+  match Bytes::from_owner(open_file_result.1).as_ref() {
+    b"PE" => {
+      // Windows executables
+      let executable_params_vector = vec![execute_pathbuf.to_string_lossy().to_string()];
+      Ok(executable_params_vector)
+    }
+    b"#!" => {
+      // Scripts with a shebang line
+      let mut shebang_line_bytes = Vec::new();
+      let mut shebang_bytes_read = 0;
+      loop {
+        let buf = vec![0u8; 1024].into_boxed_slice();
+        let read_result = open_file.read_at(buf, shebang_bytes_read).await;
+        let read = read_result.0?;
+        let mut buf = Bytes::from_owner(read_result.1);
+        buf.truncate(read);
+
+        shebang_bytes_read += read as u64;
         if let Some(index) = memchr::memchr(b'\n', &buf) {
           shebang_line_bytes.extend_from_slice(&buf[..index + 1]);
           break;
