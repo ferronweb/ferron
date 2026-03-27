@@ -295,6 +295,11 @@ async fn execute_scgi_with_environment_variables(
   scgi_to: &str,
   additional_environment_variables: HashMap<String, String>,
 ) -> Result<ResponseData, Box<dyn Error + Send + Sync>> {
+  // Remove "Proxy" header from the request to prevent "httpoxy" vulnerability
+  request
+    .headers_mut()
+    .remove(hyper::header::HeaderName::from_static("proxy"));
+
   let request_data = request.extensions_mut().remove::<RequestData>();
 
   let original_request_uri = request_data
