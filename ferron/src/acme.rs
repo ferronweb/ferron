@@ -800,7 +800,7 @@ impl ResolvesServerCert for TlsAlpn01Resolver {
         let resolver_data = futures_executor::block_on(async { resolver_lock.read().await }).clone();
         if let Some(resolver_data) = resolver_data {
           let (cert, host) = resolver_data;
-          if host == hostname {
+          if host.parse::<IpAddr>().is_ok() || host == hostname {
             return Some(cert);
           }
         }

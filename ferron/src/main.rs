@@ -419,6 +419,7 @@ fn before_starting_server(
               &mut tls_build_ctx,
               server,
               https_port,
+              server.filters.ip,
               sni_hostname.clone(),
               crypto_provider.clone(),
               memory_acme_account_cache_data.clone(),
@@ -438,6 +439,7 @@ fn before_starting_server(
               &mut tls_build_ctx,
               &crypto_provider,
               https_port,
+              server.filters.ip,
               sni_hostname,
               cert,
               key,
@@ -468,7 +470,7 @@ fn before_starting_server(
         tls_build_ctx.nonencrypted_ports.clear();
       }
 
-      for tls_port in tls_build_ctx.tls_ports.keys() {
+      for (_, tls_port) in tls_build_ctx.tls_ports.keys() {
         if tls_build_ctx.nonencrypted_ports.contains(tls_port) {
           tls_build_ctx.nonencrypted_ports.remove(tls_port);
         }
@@ -560,14 +562,44 @@ fn before_starting_server(
         .nonencrypted_ports
         .iter()
         .map(|p| (*p, false))
-        .chain(tls_configs.keys().map(|p| (*p, true)))
+        .chain(tls_configs.keys().map(|p| (p.1, true)))
       {
         let socket_address = SocketAddr::new(listen_ip_addr, tcp_port);
         listened_socket_addresses.push((socket_address, encrypted));
       }
-      for (quic_port, quic_tls_config) in quic_tls_configs.into_iter() {
+      let mut quic_tls_configs_processed: HashMap<(Option<IpAddr>, u16), Arc<quinn::ServerConfig>> =
+        HashMap::with_capacity(quic_tls_configs.len());
+      let mut had_quic_ports = HashSet::new();
+      for ((quic_ip, quic_port), quic_tls_config) in quic_tls_configs.into_iter() {
+        let quic_tls_config2_option: Option<quinn::crypto::rustls::QuicServerConfig> =
+          quic_tls_config.clone().try_into().ok();
+        if let Some(quic_tls_config2) = quic_tls_config2_option {
+          quic_tls_configs_processed.insert(
+            (quic_ip, quic_port),
+            Arc::new(quinn::ServerConfig::with_crypto(Arc::new(quic_tls_config2))),
+          );
+        }
         let socket_address = SocketAddr::new(listen_ip_addr, quic_port);
-        quic_listened_socket_addresses.push((socket_address, quic_tls_config));
+        if quic_ip.is_none() {
+          if had_quic_ports.contains(&quic_port) {
+            quic_listened_socket_addresses.retain(|(sa, _)| sa != &socket_address);
+          }
+          quic_listened_socket_addresses.push((socket_address, quic_tls_config));
+          had_quic_ports.insert(quic_port);
+        } else if !had_quic_ports.contains(&quic_port) {
+          // Empty TLS server configuration
+          let tls_config2_option = rustls::ServerConfig::builder_with_provider(crypto_provider.clone())
+            .with_safe_default_protocol_versions()
+            .ok()
+            .map(|b| {
+              b.with_no_client_auth()
+                .with_cert_resolver(Arc::new(crate::util::CustomSniResolver::new()))
+            });
+          if let Some(quic_tls_config) = tls_config2_option {
+            quic_listened_socket_addresses.push((socket_address, Arc::new(quic_tls_config)));
+            had_quic_ports.insert(quic_port);
+          }
+        }
       }
 
       let enable_uring = global_configuration
@@ -709,6 +741,7 @@ fn before_starting_server(
         http3_enabled: !quic_listened_socket_addresses.is_empty(),
         acme_tls_alpn_01_configs: Arc::new(acme_tls_alpn_01_configs),
         acme_http_01_resolvers: tls_build_ctx.acme_http_01_resolvers,
+        quic_tls_configs: Arc::new(quic_tls_configs_processed),
         enable_proxy_protocol,
       };
       let reloadable_handler_data = if let Some(data) = SERVER_CONFIG_ARCSWAP.get().cloned() {

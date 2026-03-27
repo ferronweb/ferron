@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 #[cfg(not(feature = "runtime-vibeio"))]
@@ -64,19 +64,22 @@ static HTTP3_INVALID_HEADERS: [hyper::header::HeaderName; 5] = [
 ];
 
 /// A struct holding reloadable data for handler threads
+#[allow(clippy::type_complexity)]
 pub struct ReloadableHandlerData {
   /// ACME TLS-ALPN-01 configurations
-  pub acme_tls_alpn_01_configs: Arc<HashMap<u16, Arc<ServerConfig>>>,
+  pub acme_tls_alpn_01_configs: Arc<HashMap<(Option<IpAddr>, u16), Arc<ServerConfig>>>,
   /// ACME HTTP-01 resolvers
   pub acme_http_01_resolvers: AcmeHttp01Resolvers,
   /// Server configurations
   pub configurations: Arc<ServerConfigurations>,
   /// TLS configurations
-  pub tls_configs: Arc<HashMap<u16, Arc<ServerConfig>>>,
+  pub tls_configs: Arc<HashMap<(Option<IpAddr>, u16), Arc<ServerConfig>>>,
   /// Whether HTTP/3 is enabled
   pub http3_enabled: bool,
   /// Whether PROXY protocol is enabled
   pub enable_proxy_protocol: bool,
+  /// QUIC TLS configurations
+  pub quic_tls_configs: Arc<HashMap<(Option<IpAddr>, u16), Arc<quinn::ServerConfig>>>,
 }
 
 type AcmeHttp01Resolvers = Arc<tokio::sync::RwLock<Vec<crate::acme::Http01DataLock>>>;
@@ -208,7 +211,9 @@ async fn http_handler_fn(
       acme_tls_alpn_01_configs,
       acme_http_01_resolvers,
       enable_proxy_protocol,
+      quic_tls_configs,
     } = &**reloadable_data.load();
+    let quic_tls_configs = quic_tls_configs.clone();
     let configurations = configurations.clone();
     let tls_config = if matches!(
       conn_data.connection,
@@ -216,7 +221,13 @@ async fn http_handler_fn(
     ) {
       None
     } else {
-      tls_configs.get(&conn_data.server_address.port()).cloned()
+      tls_configs
+        .get(&(
+          Some(conn_data.server_address.ip().to_canonical()),
+          conn_data.server_address.port(),
+        ))
+        .cloned()
+        .or_else(|| tls_configs.get(&(None, conn_data.server_address.port())).cloned())
     };
     let acme_tls_alpn_01_config = if matches!(
       conn_data.connection,
@@ -224,7 +235,17 @@ async fn http_handler_fn(
     ) {
       None
     } else {
-      acme_tls_alpn_01_configs.get(&conn_data.server_address.port()).cloned()
+      acme_tls_alpn_01_configs
+        .get(&(
+          Some(conn_data.server_address.ip().to_canonical()),
+          conn_data.server_address.port(),
+        ))
+        .cloned()
+        .or_else(|| {
+          acme_tls_alpn_01_configs
+            .get(&(None, conn_data.server_address.port()))
+            .cloned()
+        })
     };
     let acme_http_01_resolvers = acme_http_01_resolvers.clone();
     let connections_references_cloned = connections_references.clone();
@@ -273,6 +294,7 @@ async fn http_handler_fn(
             conn_data.client_address,
             conn_data.server_address,
             configurations,
+            quic_tls_configs,
             connections_references_cloned,
             shutdown_rx_clone,
             graceful_shutdown_token,
@@ -981,69 +1003,93 @@ async fn http_tcp_handler_fn(
 #[inline]
 #[cfg(feature = "runtime-vibeio")]
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 async fn http_quic_handler_fn(
   connection_attempt: quinn::Incoming,
   client_address: SocketAddr,
   server_address: SocketAddr,
   configurations: Arc<ServerConfigurations>,
+  quic_tls_configs: Arc<HashMap<(Option<IpAddr>, u16), Arc<quinn::ServerConfig>>>,
   connection_reference: Arc<()>,
   shutdown_rx: CancellationToken,
   graceful_shutdown_token: Arc<CancellationToken>,
 ) {
   use vibeio_http::{Http3Options, HttpProtocol};
-  match connection_attempt.await {
-    Ok(connection) => {
-      let _connection_reference = Arc::downgrade(&connection_reference);
-      let configurations_clone = configurations.clone();
-      let graceful_shutdown_token2 = CancellationToken::new();
-      let mut http_future = Box::pin(
-        vibeio_http::Http3::new(h3_quinn::Connection::new(connection), Http3Options::default())
-          .graceful_shutdown_token(graceful_shutdown_token2.clone())
-          .handle(move |request: Request<vibeio_http::Incoming>| {
-            let (request_parts, request_body) = request.into_parts();
-            let request = Request::from_parts(
-              request_parts,
-              request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
-            );
-            let fut = request_handler(
-              request,
-              client_address,
-              server_address,
-              true,
-              configurations_clone.clone(),
-              None,
-              empty_acme_http_01_resolvers(),
-              None,
-              None,
-            );
-            let connection_reference = connection_reference.clone();
-            async move {
-              let r = fut.await.map_err(|e| std::io::Error::other(e.to_string()));
-              drop(connection_reference);
-              r
-            }
-          }),
-      );
-      let http_future_result = crate::runtime::select! {
-        result = &mut http_future => {
-          result
+
+  let connection = if let Some(tls_config) = quic_tls_configs
+    .get(&(Some(server_address.ip().to_canonical()), server_address.port()))
+    .cloned()
+    .or_else(|| quic_tls_configs.get(&(None, server_address.port())).cloned())
+  {
+    match connection_attempt.accept_with(tls_config) {
+      Ok(connecting) => match connecting.await {
+        Ok(connection) => connection,
+        Err(err) => {
+          log_connection_accept_error(&configurations, err).await;
+          return;
         }
-        _ = shutdown_rx.cancelled() => {
-            graceful_shutdown_token2.cancel();
-            http_future.await
-        }
-        _ = graceful_shutdown_token.cancelled() => {
-            graceful_shutdown_token2.cancel();
-          http_future.await
-        }
-      };
-      if let Err(err) = http_future_result {
-        log_http_connection_error(&configurations, "HTTP/3", err).await;
+      },
+      Err(err) => {
+        log_connection_accept_error(&configurations, err).await;
+        return;
       }
     }
-    Err(err) => {
-      log_connection_accept_error(&configurations, err).await;
+  } else {
+    match connection_attempt.await {
+      Ok(connection) => connection,
+      Err(err) => {
+        log_connection_accept_error(&configurations, err).await;
+        return;
+      }
     }
+  };
+
+  let _connection_reference = Arc::downgrade(&connection_reference);
+  let configurations_clone = configurations.clone();
+  let graceful_shutdown_token2 = CancellationToken::new();
+  let mut http_future = Box::pin(
+    vibeio_http::Http3::new(h3_quinn::Connection::new(connection), Http3Options::default())
+      .graceful_shutdown_token(graceful_shutdown_token2.clone())
+      .handle(move |request: Request<vibeio_http::Incoming>| {
+        let (request_parts, request_body) = request.into_parts();
+        let request = Request::from_parts(
+          request_parts,
+          request_body.map_err(|e| std::io::Error::other(e.to_string())).boxed(),
+        );
+        let fut = request_handler(
+          request,
+          client_address,
+          server_address,
+          true,
+          configurations_clone.clone(),
+          None,
+          empty_acme_http_01_resolvers(),
+          None,
+          None,
+        );
+        let connection_reference = connection_reference.clone();
+        async move {
+          let r = fut.await.map_err(|e| std::io::Error::other(e.to_string()));
+          drop(connection_reference);
+          r
+        }
+      }),
+  );
+  let http_future_result = crate::runtime::select! {
+    result = &mut http_future => {
+      result
+    }
+    _ = shutdown_rx.cancelled() => {
+        graceful_shutdown_token2.cancel();
+        http_future.await
+    }
+    _ = graceful_shutdown_token.cancelled() => {
+        graceful_shutdown_token2.cancel();
+      http_future.await
+    }
+  };
+  if let Err(err) = http_future_result {
+    log_http_connection_error(&configurations, "HTTP/3", err).await;
   }
 }
 
@@ -1051,20 +1097,42 @@ async fn http_quic_handler_fn(
 #[cfg(not(feature = "runtime-vibeio"))]
 #[inline]
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 async fn http_quic_handler_fn(
   connection_attempt: quinn::Incoming,
   client_address: SocketAddr,
   server_address: SocketAddr,
   configurations: Arc<ServerConfigurations>,
+  quic_tls_configs: Arc<HashMap<(Option<IpAddr>, u16), Arc<quinn::ServerConfig>>>,
   connection_reference: Arc<()>,
   shutdown_rx: CancellationToken,
   graceful_shutdown_token: Arc<CancellationToken>,
 ) {
-  let connection = match connection_attempt.await {
-    Ok(connection) => connection,
-    Err(err) => {
-      log_connection_accept_error(&configurations, err).await;
-      return;
+  let connection = if let Some(tls_config) = quic_tls_configs
+    .get(&(Some(server_address.ip().to_canonical()), server_address.port()))
+    .cloned()
+    .or_else(|| quic_tls_configs.get(&(None, server_address.port())).cloned())
+  {
+    match connection_attempt.accept_with(tls_config) {
+      Ok(connecting) => match connecting.await {
+        Ok(connection) => connection,
+        Err(err) => {
+          log_connection_accept_error(&configurations, err).await;
+          return;
+        }
+      },
+      Err(err) => {
+        log_connection_accept_error(&configurations, err).await;
+        return;
+      }
+    }
+  } else {
+    match connection_attempt.await {
+      Ok(connection) => connection,
+      Err(err) => {
+        log_connection_accept_error(&configurations, err).await;
+        return;
+      }
     }
   };
 

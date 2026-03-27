@@ -7,6 +7,7 @@
 ### Added
 
 - DNSimple DNS provider for DNS-01 ACME challenges.
+- Support for IP-based TLS certificates.
 - Support for JSON-format access logs.
 
 ### Changed
