@@ -1,12 +1,12 @@
 mod anti_xss;
 mod config_macros;
+mod config_placeholders;
 mod default_html_page;
 #[cfg(feature = "runtime-vibeio")]
 mod file_stream;
 mod header_placeholders;
 mod ip_blocklist;
 mod is_localhost;
-mod lookup_env_var;
 mod match_hostname;
 mod match_location;
 mod module_cache;
@@ -24,12 +24,12 @@ mod sizify;
 mod ttl_cache;
 
 pub use anti_xss::*;
+pub use config_placeholders::*;
 #[cfg(feature = "runtime-vibeio")]
 pub use file_stream::*;
 pub use header_placeholders::*;
 pub use ip_blocklist::*;
 pub use is_localhost::*;
-pub use lookup_env_var::*;
 pub use match_hostname::*;
 pub use match_location::*;
 pub use module_cache::*;
