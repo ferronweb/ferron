@@ -7,7 +7,7 @@ use std::{
   str::FromStr,
 };
 
-use ferron_common::{observability::ObservabilityBackendChannels, util::lookup_env_value};
+use ferron_common::{observability::ObservabilityBackendChannels, util::replace_placeholders};
 use glob::glob;
 use kdl::{KdlDocument, KdlNode, KdlValue};
 
@@ -24,7 +24,7 @@ fn kdl_node_to_configuration_entry(kdl_node: &KdlNode) -> ServerConfigurationEnt
   for kdl_entry in kdl_node.iter() {
     let value = match kdl_entry.value().to_owned() {
       KdlValue::String(value) => {
-        let resolved_value = lookup_env_value(value).expect("Failed to resolve environment variable in configuration");
+        let resolved_value = replace_placeholders(&value).expect("Failed to resolve environment variable in configuration");
         ServerConfigurationValue::String(resolved_value)
       }
       KdlValue::Integer(value) => ServerConfigurationValue::Integer(value),
