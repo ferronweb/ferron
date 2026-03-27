@@ -319,7 +319,16 @@ impl ModuleHandlers for FcgiModuleHandlers {
 
             let canonical_joined_pathbuf = match canonicalize_result {
               Ok(pathbuf) => pathbuf,
-              Err(_) => joined_pathbuf.clone(),
+              Err(_) => {
+                // Failed to canonicalize the file path
+                return Ok(ResponseData {
+                  request: Some(request),
+                  response: None,
+                  response_status: Some(StatusCode::FORBIDDEN),
+                  response_headers: None,
+                  new_remote_address: None,
+                });
+              }
             };
 
             // Webroot is already canonicalized, so no need to canonicalize it again
