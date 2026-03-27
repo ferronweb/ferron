@@ -451,7 +451,7 @@ impl ModuleHandlers for CgiModuleHandlers {
                 return Ok(ResponseData {
                   request: Some(request),
                   response: None,
-                  response_status: Some(StatusCode::FORBIDDEN),
+                  response_status: Some(StatusCode::NOT_FOUND),
                   response_headers: None,
                   new_remote_address: None,
                 });

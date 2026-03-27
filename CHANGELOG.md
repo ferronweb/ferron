@@ -1,5 +1,13 @@
 # Ferron 2 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Fixed
+
+- 403 Forbidden responses were returned when URL sanitizer was disabled, even when it should have returned 404 Not Found.
+
 ## Ferron 2.7.0
 
 **Released in March 27, 2026**
