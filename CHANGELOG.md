@@ -16,6 +16,7 @@
 
 ### Fixed
 
+- A large enough PROXY v2 header could crash the web server, if the PROXY protocol is enabled.
 - IP-based host blocks weren't applied correctly.
 - `Server` and `Alt-Svc` (for HTTP/3) headers couldn't be modified or removed.
 
