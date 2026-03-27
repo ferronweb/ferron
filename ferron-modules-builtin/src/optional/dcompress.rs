@@ -362,7 +362,7 @@ impl ModuleHandlers for DynamicCompressionModuleHandlers {
         .insert(header::CONTENT_ENCODING, algorithm_str.parse()?);
 
       let (mut response_parts, response_body) = response.into_parts();
-      let mut remove_extensions = false;
+      let mut remove_extensions = true;
 
       // Create the appropriate response body based on compression method
       let boxed_body = match used_compression {
