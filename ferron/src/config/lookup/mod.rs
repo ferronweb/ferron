@@ -28,7 +28,7 @@ fn convert_filters_to_node_key(filters: &ServerConfigurationFilters) -> Vec<Conf
       node_key.push(ConfigFilterTreeSingleKey::Port(port));
     }
 
-    if let Some(ip) = filters.ip {
+    if let Some(ip) = filters.ip.map(|c| c.to_canonical()) {
       if ip.is_loopback() {
         node_key.push(ConfigFilterTreeSingleKey::IsLocalhost);
       } else {
@@ -201,7 +201,7 @@ impl ServerConfigurations {
     let mut node_key = Vec::new();
     node_key.push(ConfigFilterTreeSingleKey::IsHostConfiguration);
     node_key.push(ConfigFilterTreeSingleKey::Port(socket_data.local_addr.port()));
-    let local_ip = socket_data.local_addr.ip();
+    let local_ip = socket_data.local_addr.ip().to_canonical();
     if local_ip.is_loopback() {
       node_key.push(ConfigFilterTreeSingleKey::IsLocalhost);
     } else {
