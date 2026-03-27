@@ -128,7 +128,7 @@ impl Runtime {
       #[cfg(feature = "runtime-tokio")]
       RuntimeInner::Tokio(ref mut rt) => rt.block_on(async move {
         let local_set = tokio::task::LocalSet::new();
-        local_set.run_until(future).await;
+        local_set.run_until(fut).await;
       }),
       #[cfg(feature = "runtime-vibeio")]
       RuntimeInner::Custom(ref mut rt) => rt.block_on(fut),
