@@ -15,8 +15,10 @@ pub fn replace_placeholders(input: &str) -> Result<String> {
     let mut output = String::new();
     let mut cursor = 0;
 
-    loop {
-        let start_rel = match input[cursor..].find('{') {
+    while cursor < input.len() {
+        let next = input[cursor..].find('{');
+
+        let start_rel = match next {
             Some(pos) => pos,
             None => {
                 output.push_str(&input[cursor..]);
@@ -25,6 +27,17 @@ pub fn replace_placeholders(input: &str) -> Result<String> {
         };
 
         let start = cursor + start_rel;
+
+        // Check if escaped: "\{"
+        if start > 0 && input.as_bytes()[start - 1] == b'\\' {
+            // push everything before the backslash
+            output.push_str(&input[cursor..start - 1]);
+            // push literal '{'
+            output.push('{');
+
+            cursor = start + 1;
+            continue;
+        }
 
         let end_rel = match input[start + 1..].find('}') {
             Some(pos) => pos,
@@ -38,19 +51,16 @@ pub fn replace_placeholders(input: &str) -> Result<String> {
 
         let placeholder = &input[start + 1..end];
 
-        // Split into kind:value
         if let Some((kind, value)) = placeholder.split_once(':') {
             match resolve_placeholder(kind, value)? {
                 Some(resolved) => output.push_str(&resolved),
                 None => {
-                    // Unknown kind → keep original
                     output.push('{');
                     output.push_str(placeholder);
                     output.push('}');
                 }
             }
         } else {
-            // No ':' → not a structured placeholder, keep as-is
             output.push('{');
             output.push_str(placeholder);
             output.push('}');
@@ -75,9 +85,11 @@ mod tests {
 
     #[test]
     fn env_var_exists() {
-        let result = resolve_placeholder("env", "HOME");
+        env::set_var("TEST_ENV_EXISTS", "value");
+
+        let result = resolve_placeholder("env", "TEST_ENV_EXISTS");
         assert!(result.is_ok());
-        assert!(result.unwrap().is_some());
+        assert_eq!(result.unwrap(), Some("value".to_string()));
     }
 
     #[test]
@@ -90,10 +102,11 @@ mod tests {
 
     #[test]
     fn single_env_placeholder() {
-        let result = replace_placeholders("{env:HOME}");
+        env::set_var("TEST_HOME", "/home/test");
+
+        let result = replace_placeholders("{env:TEST_HOME}");
         assert!(result.is_ok());
-        let value = result.unwrap();
-        assert!(!value.contains("{env:"));
+        assert_eq!(result.unwrap(), "/home/test");
     }
 
     #[test]
@@ -105,17 +118,17 @@ mod tests {
 
     #[test]
     fn interpolate_env_with_suffix() {
-        let result = replace_placeholders("{env:HOME}/src/modules");
+        env::set_var("TEST_HOME", "/home/test");
+
+        let result = replace_placeholders("{env:TEST_HOME}/src/modules");
         assert!(result.is_ok());
-        let value = result.unwrap();
-        assert!(value.ends_with("/src/modules"));
-        assert!(!value.contains("{env:"));
+        assert_eq!(result.unwrap(), "/home/test/src/modules");
     }
 
     #[test]
     fn interpolate_multiple_env_values() {
-        std::env::set_var("TEST_HOME", "/home/test");
-        std::env::set_var("TEST_USER", "user");
+        env::set_var("TEST_HOME", "/home/test");
+        env::set_var("TEST_USER", "user");
 
         let input = "prefix_{env:TEST_HOME}_middle_{env:TEST_USER}_suffix";
         let result = replace_placeholders(input).unwrap();
@@ -123,8 +136,6 @@ mod tests {
         let expected = "prefix_/home/test_middle_user_suffix";
         assert_eq!(result, expected);
     }
-
-    
 
     #[test]
     fn plain_string_passthrough() {
@@ -136,21 +147,21 @@ mod tests {
 
     #[test]
     fn missing_closing_brace() {
-        let result = replace_placeholders("{env:HOME");
+        let result = replace_placeholders("{env:TEST_HOME");
         assert!(result.is_err());
     }
 
     #[test]
     fn nonexistent_env_var() {
         let result =
-            replace_placeholders("{env:NONEXISTENT_VAR_THAT_SHOULD_NOT_EXIST}");
+            replace_placeholders("{env:THIS_SHOULD_NOT_EXIST_123}");
         assert!(result.is_err());
     }
 
     #[test]
     fn nonexistent_env_var_in_interpolation() {
         let result =
-            replace_placeholders("prefix_{env:NONEXISTENT_VAR}_suffix");
+            replace_placeholders("prefix_{env:THIS_SHOULD_NOT_EXIST_456}_suffix");
         assert!(result.is_err());
     }
 
@@ -159,5 +170,45 @@ mod tests {
         let result = replace_placeholders("{justtext}");
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "{justtext}");
+    }
+
+    #[test]
+    fn escaped_open_brace() {
+        // No env needed — should NOT resolve
+        let result = replace_placeholders(r"\{env:TEST_HOME}").unwrap();
+        assert_eq!(result, "{env:TEST_HOME}");
+    }
+
+    #[test]
+    fn escaped_brace_with_text() {
+        let result = replace_placeholders(r"prefix_\{env:TEST_HOME}_suffix").unwrap();
+        assert_eq!(result, "prefix_{env:TEST_HOME}_suffix");
+    }
+
+    #[test]
+    fn escaped_and_real_placeholder() {
+        std::env::set_var("TEST_HOME_ESC", "/home/test");
+
+        let input = r"\{env:TEST_HOME_ESC}_{env:TEST_HOME_ESC}";
+        let result = replace_placeholders(input).unwrap();
+
+        assert_eq!(result, "{env:TEST_HOME_ESC}_/home/test");
+    }
+
+    #[test]
+    fn double_escape_sequence() {
+        std::env::set_var("TEST_HOME_ESC2", "/home/test");
+
+        // "\\{" → literal "\" + "{"
+        let result = replace_placeholders(r"\\{env:TEST_HOME_ESC2}").unwrap();
+
+        // First "\" is literal, then placeholder is evaluated
+        assert_eq!(result, r"\/home/test");
+    }
+
+    #[test]
+    fn escaped_non_placeholder() {
+        let result = replace_placeholders(r"\{justtext}").unwrap();
+        assert_eq!(result, "{justtext}");
     }
 }
