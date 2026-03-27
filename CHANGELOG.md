@@ -6,6 +6,7 @@
 
 ### Fixed
 
+- A large enough PROXY v2 header could crash the web server, if the PROXY protocol is enabled.
 - IP-based host blocks weren't applied correctly.
 
 ## Ferron 2.6.1 LTS
