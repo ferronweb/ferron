@@ -1,8 +1,8 @@
 # Ferron 2 LTS change log
 
-## Ferron UNRELEASED LTS
+## Ferron 2.6.2 LTS
 
-**Not yet released**
+**Released in March 27, 2026**
 
 ### Fixed
 
