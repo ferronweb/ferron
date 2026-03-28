@@ -1,20 +1,20 @@
 //! Global registry for Ferron
 //!
-//! Provides centralized registration of modules and stages with trait-object based
-//! entries. Modules are the primary unit, while stages can be registered for specific
-//! context types and ordered using DAG-based topological sort.
+//! Provides centralized registration of stages with trait-object based
+//! entries. Stages can be registered for specific context types and ordered
+//! using DAG-based topological sort.
 //!
 //! The registry supports:
-//! - Modules: Server implementations (HTTP, TCP, etc.) that run independently
 //! - Stages: Pipeline components for specific context types with ordering constraints
+//!
+//! There are also modules, which are server implementations (HTTP, TCP, etc.) that
+//! can run independently.
 
 use std::any::{Any, TypeId};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-
-use crate::Module;
 
 /// Constraint for stage ordering
 #[derive(Clone, Debug)]
@@ -206,16 +206,14 @@ impl<C: 'static> TypedStageRegistry<C> {
     }
 }
 
-/// Unified registry that holds modules and type-specific stage registries
+/// Registry that holds type-specific stage registries
 ///
-/// - Modules are server implementations that run independently
 /// - Stage registries are per-context-type and support DAG-based ordering
 ///
 /// Example usage:
 /// - HTTP module uses `StageRegistry<HttpContext>` for ordered pipeline
 /// - TCP module might not use stages at all, just run a server directly
 pub struct Registry {
-    modules: RwLock<Vec<Arc<dyn Module>>>,
     stage_registries: RwLock<HashMap<TypeId, Arc<dyn AnyStageRegistry>>>,
 }
 
@@ -228,17 +226,8 @@ impl Default for Registry {
 impl Registry {
     pub fn new() -> Self {
         Self {
-            modules: RwLock::new(Vec::new()),
             stage_registries: RwLock::new(HashMap::new()),
         }
-    }
-
-    /// Register a module
-    pub fn register_module<M>(&self, module: M)
-    where
-        M: Module + 'static,
-    {
-        self.modules.write().push(Arc::new(module));
     }
 
     /// Register a stage for a specific context type
@@ -286,21 +275,6 @@ impl Registry {
                 .map(|typed| typed.get_registry())
         })
     }
-
-    /// Get all registered modules
-    pub fn modules(&self) -> Vec<Arc<dyn Module>> {
-        self.modules.read().iter().cloned().collect()
-    }
-
-    /// Get the number of registered modules
-    pub fn len(&self) -> usize {
-        self.modules.read().len()
-    }
-
-    /// Check if the registry is empty (no modules)
-    pub fn is_empty(&self) -> bool {
-        self.modules.read().is_empty()
-    }
 }
 
 /// Builder for creating a Registry with a fluent API
@@ -318,27 +292,6 @@ impl RegistryBuilder {
     pub fn new() -> Self {
         let registry = Arc::new(Registry::new());
         Self { registry }
-    }
-
-    /// Register a module
-    pub fn with_module<M>(self, module: M) -> Self
-    where
-        M: Module + 'static,
-    {
-        self.registry.register_module(module);
-        self
-    }
-
-    /// Register multiple modules
-    pub fn with_modules<M, I>(self, modules: I) -> Self
-    where
-        M: Module + 'static,
-        I: IntoIterator<Item = M>,
-    {
-        for module in modules {
-            self.registry.register_module(module);
-        }
-        self
     }
 
     /// Register a stage for a specific context type
@@ -365,36 +318,6 @@ mod tests {
     use super::*;
     use crate::pipeline::{PipelineError, Stage};
     use async_trait::async_trait;
-    use std::any::Any;
-
-    struct TestModule {
-        name: String,
-    }
-
-    impl TestModule {
-        fn new(name: &str) -> Self {
-            Self {
-                name: name.to_string(),
-            }
-        }
-    }
-
-    impl Module for TestModule {
-        fn name(&self) -> &str {
-            &self.name
-        }
-
-        fn as_any(&self) -> &dyn Any {
-            self
-        }
-
-        fn start(
-            &self,
-            _runtime: &mut crate::runtime::Runtime,
-        ) -> Result<(), Box<dyn std::error::Error>> {
-            Ok(())
-        }
-    }
 
     #[test]
     fn test_stage_registry_ordering() {
@@ -452,15 +375,6 @@ mod tests {
     }
 
     #[test]
-    fn test_module_registry() {
-        let registry = Registry::new();
-        registry.register_module(TestModule::new("test"));
-
-        assert_eq!(registry.len(), 1);
-        assert!(!registry.is_empty());
-    }
-
-    #[test]
     fn test_builder() {
         struct LoggingStage;
         #[async_trait]
@@ -474,12 +388,9 @@ mod tests {
         }
 
         let registry = RegistryBuilder::new()
-            .with_module(TestModule::new("test1"))
-            .with_module(TestModule::new("test2"))
             .with_stage::<(), _>(|| Arc::new(LoggingStage))
             .build();
 
-        assert_eq!(registry.len(), 2);
         let stage_registry = registry.get_stage_registry::<()>();
         assert!(stage_registry.is_some());
         assert_eq!(stage_registry.unwrap().len(), 1);

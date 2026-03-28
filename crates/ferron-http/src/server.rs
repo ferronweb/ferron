@@ -16,12 +16,12 @@ pub struct BasicHttpModule {
 }
 
 impl BasicHttpModule {
-    /// Create a new HTTP module with the given pipeline
+    /*/// Create a new HTTP module with the given pipeline
     pub fn new(pipeline: Pipeline<HttpContext>) -> Self {
         Self {
             pipeline: Arc::new(pipeline),
         }
-    }
+    }*/
 
     /// Create an HTTP module from a registry by building a pipeline from registered stages
     ///

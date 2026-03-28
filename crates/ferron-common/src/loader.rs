@@ -7,5 +7,10 @@ pub trait ModuleLoader {
     }
 
     #[allow(unused_variables)]
-    fn register_modules(&mut self, registry: &crate::registry::Registry) {}
+    fn register_modules(
+        &mut self,
+        registry: &crate::registry::Registry,
+        modules: &mut Vec<Box<dyn crate::Module>>,
+    ) {
+    }
 }
