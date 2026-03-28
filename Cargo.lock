@@ -69,8 +69,10 @@ dependencies = [
  "async-trait",
  "ferron-core",
  "ferron-module-api",
+ "ferron-registry",
  "ferron-runtime",
  "http",
+ "parking_lot",
  "tokio",
 ]
 

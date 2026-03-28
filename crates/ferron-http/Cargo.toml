@@ -7,7 +7,9 @@ edition = "2021"
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
 http = "1"
+parking_lot = "0.12"
 
 ferron-core = { path = "../ferron-core" }
 ferron-runtime = { path = "../ferron-runtime" }
 ferron-module-api = { path = "../ferron-module-api" }
+ferron-registry = { path = "../ferron-registry" }

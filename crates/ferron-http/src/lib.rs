@@ -7,8 +7,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 use ferron_core::http::HttpContext;
-use ferron_module_api::{HttpModule, Module, ProvidesHttp, ProvidesServer, ServerModule};
+use ferron_module_api::{Module, ProvidesServer, ServerModule};
 use ferron_runtime::pipeline::{Pipeline, Stage};
+use ferron_runtime::StageConstraint;
 
 // =====================
 // Logging Stage
@@ -16,8 +17,22 @@ use ferron_runtime::pipeline::{Pipeline, Stage};
 
 pub struct LoggingStage;
 
+impl Default for LoggingStage {
+    fn default() -> Self {
+        Self
+    }
+}
+
 #[async_trait]
 impl Stage<HttpContext> for LoggingStage {
+    fn name(&self) -> &str {
+        "logging"
+    }
+
+    fn constraints(&self) -> Vec<StageConstraint> {
+        vec![StageConstraint::Before("hello".to_string())]
+    }
+
     async fn run(&self, ctx: &mut HttpContext) {
         println!("--> {}", ctx.req.uri().path());
     }
@@ -29,8 +44,22 @@ impl Stage<HttpContext> for LoggingStage {
 
 pub struct HelloStage;
 
+impl Default for HelloStage {
+    fn default() -> Self {
+        Self
+    }
+}
+
 #[async_trait]
 impl Stage<HttpContext> for HelloStage {
+    fn name(&self) -> &str {
+        "hello"
+    }
+
+    fn constraints(&self) -> Vec<StageConstraint> {
+        vec![StageConstraint::Before("not_found".to_string())]
+    }
+
     async fn run(&self, ctx: &mut HttpContext) {
         if ctx.req.uri().path() == "/" {
             ctx.res = http::Response::builder()
@@ -47,8 +76,18 @@ impl Stage<HttpContext> for HelloStage {
 
 pub struct NotFoundStage;
 
+impl Default for NotFoundStage {
+    fn default() -> Self {
+        Self
+    }
+}
+
 #[async_trait]
 impl Stage<HttpContext> for NotFoundStage {
+    fn name(&self) -> &str {
+        "not_found"
+    }
+
     async fn run(&self, ctx: &mut HttpContext) {
         if ctx.res.body().is_empty() {
             ctx.res = http::Response::builder()
@@ -63,23 +102,16 @@ impl Stage<HttpContext> for NotFoundStage {
 // Module Implementation
 // =====================
 
-pub struct BasicHttpModuleBuilder;
-
-impl HttpModule for BasicHttpModuleBuilder {
-    fn register(&self, pipeline: Pipeline<HttpContext>) -> Pipeline<HttpContext> {
-        pipeline
-            .add_stage(Arc::new(LoggingStage))
-            .add_stage(Arc::new(HelloStage))
-            .add_stage(Arc::new(NotFoundStage))
-    }
-}
-
 pub struct BasicHttpModule {
     pipeline: Arc<Pipeline<HttpContext>>,
 }
 
 impl BasicHttpModule {
-    pub fn new(pipeline: Pipeline<HttpContext>) -> Self {
+    pub fn from_registry(registry: &ferron_registry::Registry) -> Self {
+        let pipeline = registry
+            .get_stage_registry::<ferron_core::http::HttpContext>()
+            .expect("HTTP stage registry not found")
+            .build_all();
         Self {
             pipeline: Arc::new(pipeline),
         }
@@ -88,7 +120,7 @@ impl BasicHttpModule {
 
 impl Module for BasicHttpModule {
     fn name(&self) -> &str {
-        "basic_http"
+        "http"
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -106,6 +138,7 @@ impl ServerModule for BasicHttpModule {
             println!("HTTP server listening on 127.0.0.1:8080");
 
             loop {
+                // TODO: proper HTTP implementation
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let pipeline = pipeline.clone();
 
@@ -148,21 +181,6 @@ fn parse_path(req: &str) -> String {
         .and_then(|line| line.split_whitespace().nth(1))
         .unwrap_or("/")
         .to_string()
-}
-
-impl HttpModule for BasicHttpModule {
-    fn register(&self, pipeline: Pipeline<HttpContext>) -> Pipeline<HttpContext> {
-        pipeline
-            .add_stage(Arc::new(LoggingStage))
-            .add_stage(Arc::new(HelloStage))
-            .add_stage(Arc::new(NotFoundStage))
-    }
-}
-
-impl ProvidesHttp for BasicHttpModule {
-    fn http(&self) -> Option<&dyn HttpModule> {
-        Some(self)
-    }
 }
 
 impl ProvidesServer for BasicHttpModule {

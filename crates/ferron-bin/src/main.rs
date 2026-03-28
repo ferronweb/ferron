@@ -1,34 +1,27 @@
-use ferron_core::http::HttpContext;
 use ferron_http::{BasicHttpModule, HelloStage, LoggingStage, NotFoundStage};
-use ferron_registry::ModuleRegistryBuilder;
-use ferron_runtime::pipeline::Pipeline;
+use ferron_module_api::ProvidesServer;
+use ferron_registry::RegistryBuilder;
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
     // =====================
-    // Create module registry with pre-loaded stages and modules
+    // Create registry with pre-loaded stages
     // =====================
+    // Stages define their own names and constraints via the Stage trait
 
-    let registry = ModuleRegistryBuilder::new()
-        // Pre-load HTTP stages
-        .with_http_stage("logging", || Arc::new(LoggingStage))
-        .with_http_stage("hello", || Arc::new(HelloStage))
-        .with_http_stage("not_found", || Arc::new(NotFoundStage))
-        // Register modules (pipeline will be built from registered stages)
-        .with_module({
-            // Build pipeline from pre-loaded stages
-            let pipeline = Pipeline::<HttpContext>::new();
-            BasicHttpModule::new(pipeline)
-        })
+    let registry = RegistryBuilder::new()
+        // Register stages (names and constraints defined in the stage structs)
+        .with_stage::<ferron_core::http::HttpContext, _>(|| Arc::new(LoggingStage::default()))
+        .with_stage::<ferron_core::http::HttpContext, _>(|| Arc::new(HelloStage::default()))
+        .with_stage::<ferron_core::http::HttpContext, _>(|| Arc::new(NotFoundStage::default()))
         .build();
 
-    // =====================
-    // Orchestrate: build pipelines and start all servers
-    // =====================
+    // Create the HTTP module from the registry (pipeline is built from registered stages)
+    let http_module = BasicHttpModule::from_registry(&registry);
 
-    let handles = registry.orchestrate();
-
-    // Wait forever
-    futures_util::future::join_all(handles).await;
+    // Start all server modules
+    if let Some(server) = http_module.server() {
+        server.start().await;
+    }
 }
