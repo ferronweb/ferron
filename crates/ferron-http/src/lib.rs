@@ -4,6 +4,7 @@
 //! ready-to-use HTTP module implementations.
 
 use async_trait::async_trait;
+use ferron_common::runtime::Runtime;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -164,48 +165,57 @@ impl Module for BasicHttpModule {
         self
     }
 
-    fn start(&self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
         let pipeline = self.pipeline.clone();
 
-        Box::pin(async move {
-            let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:8080")?;
 
-            println!("HTTP server listening on 127.0.0.1:8080");
+        println!("HTTP server listening on 127.0.0.1:8080");
 
-            loop {
-                let (mut socket, _) = listener.accept().await.unwrap();
-                let pipeline = pipeline.clone();
+        runtime.spawn_primary_task(move || {
+            let new_listener_result = listener.try_clone();
+            let pipeline = pipeline.clone();
+            Box::pin(async move {
+                let new_listener = new_listener_result.unwrap();
+                new_listener.set_nonblocking(true).unwrap();
+                let listener = tokio::net::TcpListener::from_std(new_listener).unwrap();
+                loop {
+                    let (mut socket, _) = listener.accept().await.unwrap();
+                    let pipeline = pipeline.clone();
 
-                tokio::spawn(async move {
-                    let mut buf = [0; 1024];
-                    let n = socket.read(&mut buf).await.unwrap();
+                    tokio::spawn(async move {
+                        let mut buf = [0; 1024];
+                        let n = socket.read(&mut buf).await.unwrap();
 
-                    if n == 0 {
-                        return;
-                    }
+                        if n == 0 {
+                            return;
+                        }
 
-                    let req_str = String::from_utf8_lossy(&buf[..n]);
-                    let path = parse_path(&req_str);
+                        let req_str = String::from_utf8_lossy(&buf[..n]);
+                        let path = parse_path(&req_str);
 
-                    let req = Request::builder().uri(path).body(Vec::new()).unwrap();
+                        let req = Request::builder().uri(path).body(Vec::new()).unwrap();
 
-                    let mut ctx = HttpContext::new(req);
+                        let mut ctx = HttpContext::new(req);
 
-                    pipeline.execute(&mut ctx).await;
+                        pipeline.execute(&mut ctx).await;
 
-                    let res = ctx.res;
+                        let res = ctx.res;
 
-                    let response = format!(
-                        "HTTP/1.1 {} OK\r\nContent-Length: {}\r\n\r\n{}",
-                        res.status().as_u16(),
-                        res.body().len(),
-                        String::from_utf8_lossy(res.body())
-                    );
+                        let response = format!(
+                            "HTTP/1.1 {} OK\r\nContent-Length: {}\r\n\r\n{}",
+                            res.status().as_u16(),
+                            res.body().len(),
+                            String::from_utf8_lossy(res.body())
+                        );
 
-                    let _ = socket.write_all(response.as_bytes()).await;
-                });
-            }
-        })
+                        let _ = socket.write_all(response.as_bytes()).await;
+                    });
+                }
+            })
+        });
+
+        Ok(())
     }
 }
 

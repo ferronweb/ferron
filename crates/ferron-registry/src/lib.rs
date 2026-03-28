@@ -380,8 +380,11 @@ mod tests {
             self
         }
 
-        fn start(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
-            Box::pin(async {})
+        fn start(
+            &self,
+            _runtime: &mut ferron_common::runtime::Runtime,
+        ) -> Result<(), Box<dyn std::error::Error>> {
+            Ok(())
         }
     }
 
