@@ -16,14 +16,7 @@ pub struct BasicHttpModule {
 }
 
 impl BasicHttpModule {
-    /*/// Create a new HTTP module with the given pipeline
-    pub fn new(pipeline: Pipeline<HttpContext>) -> Self {
-        Self {
-            pipeline: Arc::new(pipeline),
-        }
-    }*/
-
-    /// Create an HTTP module from a registry by building a pipeline from registered stages
+    /// Create an HTTP module from a registry and configuration by building a pipeline from registered stages
     ///
     /// This method retrieves the HTTP stage registry and builds an ordered pipeline
     /// using DAG-based topological sort based on stage constraints (Before/After).
@@ -32,11 +25,16 @@ impl BasicHttpModule {
     ///
     /// Panics if the HTTP stage registry is not found. This should only happen
     /// if the registry was not properly initialized with HTTP stages.
-    pub fn from_registry(registry: &ferron_common::registry::Registry) -> Self {
+    pub fn new(
+        registry: &ferron_common::registry::Registry,
+        port_config: ferron_common::config::ServerConfigurationPort,
+        global_config: Arc<ferron_common::config::ServerConfigurationBlock>,
+    ) -> Self {
         let pipeline = registry
             .get_stage_registry::<HttpContext>()
             .expect("HTTP stage registry not found")
             .build_all();
+        // TODO: process configuration
         Self {
             pipeline: Arc::new(pipeline),
         }

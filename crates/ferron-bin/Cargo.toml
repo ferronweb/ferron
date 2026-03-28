@@ -9,3 +9,5 @@ http = "1"
 
 ferron-common = { path = "../ferron-common" }
 ferron-http = { path = "../ferron-http" }
+ferron-config = { path = "../ferron-config" }
+anyhow = "1.0.102"

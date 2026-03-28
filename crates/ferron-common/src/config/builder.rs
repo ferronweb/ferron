@@ -61,11 +61,18 @@ impl ServerConfigurationBuilder {
             .global_config
             .expect("global_config must be set before building ServerConfiguration");
 
-        let ports = self
-            .ports
-            .into_iter()
-            .map(|(protocol, builder)| (protocol, builder.build()))
-            .collect();
+        let mut ports: std::collections::BTreeMap<String, Vec<ServerConfigurationPort>> =
+            std::collections::BTreeMap::new();
+        for port in self.ports {
+            match ports.entry(port.0) {
+                std::collections::btree_map::Entry::Occupied(mut e) => {
+                    e.get_mut().push(port.1.build());
+                }
+                std::collections::btree_map::Entry::Vacant(e) => {
+                    e.insert(vec![port.1.build()]);
+                }
+            }
+        }
 
         ServerConfiguration {
             global_config,
@@ -79,11 +86,18 @@ impl ServerConfigurationBuilder {
             .global_config
             .ok_or(ServerConfigurationBuilderError::MissingGlobalConfig)?;
 
-        let ports = self
-            .ports
-            .into_iter()
-            .map(|(protocol, builder)| (protocol, builder.build()))
-            .collect();
+        let mut ports: std::collections::BTreeMap<String, Vec<ServerConfigurationPort>> =
+            std::collections::BTreeMap::new();
+        for port in self.ports {
+            match ports.entry(port.0) {
+                std::collections::btree_map::Entry::Occupied(mut e) => {
+                    e.get_mut().push(port.1.build());
+                }
+                std::collections::btree_map::Entry::Vacant(e) => {
+                    e.insert(vec![port.1.build()]);
+                }
+            }
+        }
 
         Ok(ServerConfiguration {
             global_config,

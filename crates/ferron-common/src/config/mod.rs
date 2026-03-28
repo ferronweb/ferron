@@ -20,7 +20,7 @@ pub struct ServerConfigurationSpan {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfiguration {
     pub global_config: Arc<ServerConfigurationBlock>,
-    pub ports: BTreeMap<String, ServerConfigurationPort>, // the key would be the protocol name
+    pub ports: BTreeMap<String, Vec<ServerConfigurationPort>>, // the key would be the protocol name
 }
 
 /*

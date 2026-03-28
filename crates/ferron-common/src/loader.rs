@@ -22,6 +22,7 @@ pub trait ModuleLoader {
         &mut self,
         registry: &crate::registry::Registry,
         modules: &mut Vec<Arc<dyn crate::Module>>,
+        config: &mut crate::config::ServerConfiguration,
     ) {
     }
 }

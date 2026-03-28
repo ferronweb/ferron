@@ -8,7 +8,7 @@ use crate::config::ServerConfiguration;
 pub trait ConfigurationWatcher: Send + Sync {
     /// Watches for changes in the configuration.
     /// This function should block until the configuration changes.
-    async fn watch(self) -> Result<(), Box<dyn std::error::Error>>;
+    async fn watch(&mut self) -> Result<(), Box<dyn std::error::Error>>;
 }
 
 pub trait ConfigurationAdapter {
@@ -16,7 +16,7 @@ pub trait ConfigurationAdapter {
     /// Returns the server configuration and a watcher that will watch for changes in the configuration.
     fn adapt(
         &self,
-        params: &mut HashMap<String, String>,
+        params: &HashMap<String, String>,
     ) -> Result<(ServerConfiguration, Box<dyn ConfigurationWatcher>), Box<dyn std::error::Error>>;
 
     /// The file extensions that this adapter can handle (if configuration adapter is file-based).
