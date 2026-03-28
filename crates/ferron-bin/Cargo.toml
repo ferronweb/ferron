@@ -7,9 +7,7 @@ edition = "2021"
 tokio = { version = "1", features = ["full"] }
 http = "1"
 
-ferron-core = { path = "../ferron-core" }
 ferron-runtime = { path = "../ferron-runtime" }
 ferron-module-api = { path = "../ferron-module-api" }
 ferron-http = { path = "../ferron-http" }
 ferron-registry = { path = "../ferron-registry" }
-futures-util = "0.3.32"

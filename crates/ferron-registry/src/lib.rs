@@ -1,10 +1,12 @@
 //! Global registry for Ferron
 //!
 //! Provides centralized registration of modules and stages with trait-object based
-//! entries and DAG-based ordering for stages.
+//! entries. Modules are the primary unit, while stages can be registered for specific
+//! context types and ordered using DAG-based topological sort.
 //!
-//! The registry supports multiple context types (HTTP, TCP, etc.) through type-specific
-//! sub-registries.
+//! The registry supports:
+//! - Modules: Server implementations (HTTP, TCP, etc.) that run independently
+//! - Stages: Pipeline components for specific context types with ordering constraints
 
 use std::any::{Any, TypeId};
 use std::collections::{HashMap, HashSet};
@@ -12,6 +14,7 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
+pub use ferron_module_api::Module;
 pub use ferron_runtime::StageConstraint;
 
 /// A stage factory that can create stage instances
@@ -24,6 +27,9 @@ pub struct StageEntry<C> {
 }
 
 /// Generic registry for stages with DAG-based ordering
+///
+/// This allows modules that need ordered pipelines (like HTTP) to register stages
+/// with constraints (Before/After) and have them automatically ordered.
 pub struct StageRegistry<C> {
     stages: RwLock<Vec<StageEntry<C>>>,
 }
@@ -193,11 +199,16 @@ impl<C: 'static> TypedStageRegistry<C> {
 }
 
 /// Unified registry that holds modules and type-specific stage registries
+///
+/// - Modules are server implementations that run independently
+/// - Stage registries are per-context-type and support DAG-based ordering
+///
+/// Example usage:
+/// - HTTP module uses `StageRegistry<HttpContext>` for ordered pipeline
+/// - TCP module might not use stages at all, just run a server directly
 pub struct Registry {
-    modules: RwLock<Vec<Arc<dyn ferron_module_api::FerronModule>>>,
+    modules: RwLock<Vec<Arc<dyn Module>>>,
     stage_registries: RwLock<HashMap<TypeId, Arc<dyn AnyStageRegistry>>>,
-    /// Shared reference to self for module access
-    self_ref: RwLock<Option<Arc<Registry>>>,
 }
 
 impl Default for Registry {
@@ -211,30 +222,21 @@ impl Registry {
         Self {
             modules: RwLock::new(Vec::new()),
             stage_registries: RwLock::new(HashMap::new()),
-            self_ref: RwLock::new(None),
         }
-    }
-
-    /// Set the self-reference for module access
-    pub fn set_self_ref(self: &Arc<Self>) {
-        let mut lock = self.self_ref.write();
-        *lock = Some(Arc::clone(self));
-    }
-
-    /// Get the registry reference (for modules to access)
-    pub fn get_instance() -> Option<Arc<Registry>> {
-        None
     }
 
     /// Register a module
     pub fn register_module<M>(&self, module: M)
     where
-        M: ferron_module_api::FerronModule + 'static,
+        M: Module + 'static,
     {
         self.modules.write().push(Arc::new(module));
     }
 
     /// Register a stage for a specific context type
+    ///
+    /// This allows modules to define ordered pipelines using DAG-based sorting.
+    /// For example, HTTP modules can register stages with Before/After constraints.
     pub fn register_stage<C, F>(&self, factory: F)
     where
         C: 'static,
@@ -260,6 +262,8 @@ impl Registry {
     }
 
     /// Get the stage registry for a specific context type
+    ///
+    /// Modules can use this to retrieve their stage registry and build ordered pipelines.
     pub fn get_stage_registry<C>(&self) -> Option<Arc<StageRegistry<C>>>
     where
         C: 'static,
@@ -276,7 +280,7 @@ impl Registry {
     }
 
     /// Get all registered modules
-    pub fn modules(&self) -> Vec<Arc<dyn ferron_module_api::FerronModule>> {
+    pub fn modules(&self) -> Vec<Arc<dyn Module>> {
         self.modules.read().iter().cloned().collect()
     }
 
@@ -311,7 +315,7 @@ impl RegistryBuilder {
     /// Register a module
     pub fn with_module<M>(self, module: M) -> Self
     where
-        M: ferron_module_api::FerronModule + 'static,
+        M: Module + 'static,
     {
         self.registry.register_module(module);
         self
@@ -320,7 +324,7 @@ impl RegistryBuilder {
     /// Register multiple modules
     pub fn with_modules<M, I>(self, modules: I) -> Self
     where
-        M: ferron_module_api::FerronModule + 'static,
+        M: Module + 'static,
         I: IntoIterator<Item = M>,
     {
         for module in modules {
@@ -330,6 +334,9 @@ impl RegistryBuilder {
     }
 
     /// Register a stage for a specific context type
+    ///
+    /// Stages are used by modules to build ordered pipelines.
+    /// For example, HTTP stages are registered and then used by BasicHttpModule.
     pub fn with_stage<C, F>(self, factory: F) -> Self
     where
         C: 'static,
@@ -349,7 +356,6 @@ impl RegistryBuilder {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use ferron_module_api::{Module, ProvidesServer, ServerModule};
     use ferron_runtime::pipeline::Stage;
     use std::any::Any;
 
@@ -373,11 +379,9 @@ mod tests {
         fn as_any(&self) -> &dyn Any {
             self
         }
-    }
 
-    impl ProvidesServer for TestModule {
-        fn server(&self) -> Option<&dyn ServerModule> {
-            None
+        fn start(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
+            Box::pin(async {})
         }
     }
 
@@ -387,35 +391,35 @@ mod tests {
 
         struct HelloStage;
         #[async_trait]
-        impl Stage<ferron_core::http::HttpContext> for HelloStage {
+        impl Stage<()> for HelloStage {
             fn name(&self) -> &str {
                 "hello"
             }
-            async fn run(&self, _ctx: &mut ferron_core::http::HttpContext) {}
+            async fn run(&self, _ctx: &mut ()) {}
         }
 
         struct LoggingStage;
         #[async_trait]
-        impl Stage<ferron_core::http::HttpContext> for LoggingStage {
+        impl Stage<()> for LoggingStage {
             fn name(&self) -> &str {
                 "logging"
             }
             fn constraints(&self) -> Vec<StageConstraint> {
                 vec![StageConstraint::Before("hello".to_string())]
             }
-            async fn run(&self, _ctx: &mut ferron_core::http::HttpContext) {}
+            async fn run(&self, _ctx: &mut ()) {}
         }
 
         struct NotFoundStage;
         #[async_trait]
-        impl Stage<ferron_core::http::HttpContext> for NotFoundStage {
+        impl Stage<()> for NotFoundStage {
             fn name(&self) -> &str {
                 "not_found"
             }
             fn constraints(&self) -> Vec<StageConstraint> {
                 vec![StageConstraint::After("hello".to_string())]
             }
-            async fn run(&self, _ctx: &mut ferron_core::http::HttpContext) {}
+            async fn run(&self, _ctx: &mut ()) {}
         }
 
         // Register stages with constraints: logging -> hello -> not_found
@@ -426,8 +430,6 @@ mod tests {
         let _pipeline = registry.build_all();
 
         // Verify order by checking stage names in execution order
-        // The pipeline should have stages in order: logging, hello, not_found
-        // We can't directly inspect the pipeline, but we can test the ordering logic
         let ordered = registry.get_ordered_factories();
         assert_eq!(ordered.len(), 3);
     }
@@ -445,22 +447,22 @@ mod tests {
     fn test_builder() {
         struct LoggingStage;
         #[async_trait]
-        impl Stage<ferron_core::http::HttpContext> for LoggingStage {
+        impl Stage<()> for LoggingStage {
             fn name(&self) -> &str {
                 "logging"
             }
-            async fn run(&self, _ctx: &mut ferron_core::http::HttpContext) {}
+            async fn run(&self, _ctx: &mut ()) {}
         }
 
         let registry = RegistryBuilder::new()
             .with_module(TestModule::new("test1"))
             .with_module(TestModule::new("test2"))
-            .with_stage::<ferron_core::http::HttpContext, _>(|| Arc::new(LoggingStage))
+            .with_stage::<(), _>(|| Arc::new(LoggingStage))
             .build();
 
         assert_eq!(registry.len(), 2);
-        let http_registry = registry.get_stage_registry::<ferron_core::http::HttpContext>();
-        assert!(http_registry.is_some());
-        assert_eq!(http_registry.unwrap().len(), 1);
+        let stage_registry = registry.get_stage_registry::<()>();
+        assert!(stage_registry.is_some());
+        assert_eq!(stage_registry.unwrap().len(), 1);
     }
 }

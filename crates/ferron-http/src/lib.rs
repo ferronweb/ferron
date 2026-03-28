@@ -1,15 +1,41 @@
+//! HTTP types and server implementation for Ferron
+//!
+//! This crate provides HTTP-specific types including HttpContext and
+//! ready-to-use HTTP module implementations.
+
 use async_trait::async_trait;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use http::{Request, Response};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
-use ferron_core::http::HttpContext;
-use ferron_module_api::{Module, ProvidesServer, ServerModule};
+use ferron_module_api::Module;
 use ferron_runtime::pipeline::{Pipeline, Stage};
 use ferron_runtime::StageConstraint;
+
+// =====================
+// HTTP Context
+// =====================
+
+type HttpRequest = Request<Vec<u8>>;
+type HttpResponse = Response<Vec<u8>>;
+
+pub struct HttpContext {
+    pub req: HttpRequest,
+    pub res: HttpResponse,
+}
+
+impl HttpContext {
+    pub fn new(req: HttpRequest) -> Self {
+        Self {
+            req,
+            res: Response::builder().status(200).body(Vec::new()).unwrap(),
+        }
+    }
+}
 
 // =====================
 // Logging Stage
@@ -62,7 +88,7 @@ impl Stage<HttpContext> for HelloStage {
 
     async fn run(&self, ctx: &mut HttpContext) {
         if ctx.req.uri().path() == "/" {
-            ctx.res = http::Response::builder()
+            ctx.res = Response::builder()
                 .status(200)
                 .body(b"Hello from Ferron 3".to_vec())
                 .unwrap();
@@ -90,7 +116,7 @@ impl Stage<HttpContext> for NotFoundStage {
 
     async fn run(&self, ctx: &mut HttpContext) {
         if ctx.res.body().is_empty() {
-            ctx.res = http::Response::builder()
+            ctx.res = Response::builder()
                 .status(404)
                 .body(b"Not Found".to_vec())
                 .unwrap();
@@ -107,9 +133,20 @@ pub struct BasicHttpModule {
 }
 
 impl BasicHttpModule {
+    /// Create a new HTTP module with the given pipeline
+    pub fn new(pipeline: Pipeline<HttpContext>) -> Self {
+        Self {
+            pipeline: Arc::new(pipeline),
+        }
+    }
+
+    /// Create an HTTP module from a registry by building a pipeline from registered stages
+    ///
+    /// This method retrieves the HTTP stage registry and builds an ordered pipeline
+    /// using DAG-based topological sort based on stage constraints (Before/After).
     pub fn from_registry(registry: &ferron_registry::Registry) -> Self {
         let pipeline = registry
-            .get_stage_registry::<ferron_core::http::HttpContext>()
+            .get_stage_registry::<HttpContext>()
             .expect("HTTP stage registry not found")
             .build_all();
         Self {
@@ -126,9 +163,7 @@ impl Module for BasicHttpModule {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-}
 
-impl ServerModule for BasicHttpModule {
     fn start(&self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         let pipeline = self.pipeline.clone();
 
@@ -138,7 +173,6 @@ impl ServerModule for BasicHttpModule {
             println!("HTTP server listening on 127.0.0.1:8080");
 
             loop {
-                // TODO: proper HTTP implementation
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let pipeline = pipeline.clone();
 
@@ -153,7 +187,7 @@ impl ServerModule for BasicHttpModule {
                     let req_str = String::from_utf8_lossy(&buf[..n]);
                     let path = parse_path(&req_str);
 
-                    let req = http::Request::builder().uri(path).body(Vec::new()).unwrap();
+                    let req = Request::builder().uri(path).body(Vec::new()).unwrap();
 
                     let mut ctx = HttpContext::new(req);
 
@@ -181,10 +215,4 @@ fn parse_path(req: &str) -> String {
         .and_then(|line| line.split_whitespace().nth(1))
         .unwrap_or("/")
         .to_string()
-}
-
-impl ProvidesServer for BasicHttpModule {
-    fn server(&self) -> Option<&dyn ServerModule> {
-        Some(self)
-    }
 }
