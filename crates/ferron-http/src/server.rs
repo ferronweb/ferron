@@ -27,6 +27,11 @@ impl BasicHttpModule {
     ///
     /// This method retrieves the HTTP stage registry and builds an ordered pipeline
     /// using DAG-based topological sort based on stage constraints (Before/After).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the HTTP stage registry is not found. This should only happen
+    /// if the registry was not properly initialized with HTTP stages.
     pub fn from_registry(registry: &ferron_common::registry::Registry) -> Self {
         let pipeline = registry
             .get_stage_registry::<HttpContext>()
@@ -58,16 +63,31 @@ impl Module for BasicHttpModule {
             let new_listener_result = listener.try_clone();
             let pipeline = pipeline.clone();
             Box::pin(async move {
-                let new_listener = new_listener_result.unwrap();
-                new_listener.set_nonblocking(true).unwrap();
-                let listener = tokio::net::TcpListener::from_std(new_listener).unwrap();
+                let Ok(new_listener) = new_listener_result else {
+                    eprintln!("Failed to clone listener");
+                    return;
+                };
+                if let Err(e) = new_listener.set_nonblocking(true) {
+                    eprintln!("Failed to set listener non-blocking: {}", e);
+                    return;
+                }
+                let Ok(listener) = tokio::net::TcpListener::from_std(new_listener) else {
+                    eprintln!("Failed to convert listener to tokio");
+                    return;
+                };
                 loop {
-                    let (mut socket, _) = listener.accept().await.unwrap();
+                    let Ok((mut socket, _)) = listener.accept().await else {
+                        eprintln!("Failed to accept connection");
+                        continue;
+                    };
                     let pipeline = pipeline.clone();
 
                     tokio::spawn(async move {
                         let mut buf = [0; 1024];
-                        let n = socket.read(&mut buf).await.unwrap();
+                        let Ok(n) = socket.read(&mut buf).await else {
+                            eprintln!("Failed to read from socket");
+                            return;
+                        };
 
                         if n == 0 {
                             return;
@@ -76,7 +96,10 @@ impl Module for BasicHttpModule {
                         let req_str = String::from_utf8_lossy(&buf[..n]);
                         let path = parse_path(&req_str);
 
-                        let req = Request::builder().uri(path).body(Vec::new()).unwrap();
+                        let Ok(req) = Request::builder().uri(path).body(Vec::new()) else {
+                            eprintln!("Failed to build request");
+                            return;
+                        };
 
                         let mut ctx = HttpContext::new(req);
 

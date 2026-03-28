@@ -60,7 +60,12 @@ impl Runtime {
         }
 
         for thread in threads {
-            thread.join().unwrap();
+            thread.join().map_err(|e| {
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Thread panicked: {:?}", e),
+                )
+            })?;
         }
 
         Ok(())

@@ -14,7 +14,10 @@ impl HttpContext {
     pub fn new(req: HttpRequest) -> Self {
         Self {
             req,
-            res: Response::builder().status(200).body(Vec::new()).unwrap(),
+            res: Response::builder()
+                .status(200)
+                .body(Vec::new())
+                .expect("Failed to build default response"),
         }
     }
 }

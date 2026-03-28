@@ -6,7 +6,7 @@ use ferron_http::{BasicHttpModuleLoader, HttpContext};
 use std::sync::Arc;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut loaders = vec![BasicHttpModuleLoader];
     let mut registry_builder = RegistryBuilder::new();
 
@@ -19,14 +19,16 @@ async fn main() {
         loader.register_modules(&registry);
     }
 
-    let mut runtime = Runtime::new().expect("Failed to create runtime"); // TODO: proper error handling
+    let mut runtime = Runtime::new()?;
 
     // Start all modules
     for module in registry.modules() {
         println!("Starting module: {}", module.name());
-        module.start(&mut runtime).expect("Failed to start module");
+        module.start(&mut runtime)?;
     }
 
     // Run the runtime
-    runtime.run().expect("Failed to run runtime");
+    runtime.run()?;
+
+    Ok(())
 }

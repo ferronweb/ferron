@@ -30,7 +30,7 @@ impl Stage<HttpContext> for HelloStage {
             ctx.res = Response::builder()
                 .status(200)
                 .body(b"Hello from Ferron 3".to_vec())
-                .unwrap();
+                .expect("Failed to build 200 response");
         }
         Ok(true)
     }

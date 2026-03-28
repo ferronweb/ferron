@@ -129,13 +129,14 @@ impl<C> StageRegistry<C> {
 
             if let Some(neighbors) = graph.get(&node) {
                 for &neighbor in neighbors {
-                    let deg = in_degree.get_mut(&neighbor).unwrap();
-                    *deg -= 1;
-                    if *deg == 0 {
-                        queue.push(neighbor);
-                        queue.sort_by(|&a, &b| {
-                            stage_instances[a].name().cmp(stage_instances[b].name())
-                        });
+                    if let Some(deg) = in_degree.get_mut(&neighbor) {
+                        *deg -= 1;
+                        if *deg == 0 {
+                            queue.push(neighbor);
+                            queue.sort_by(|&a, &b| {
+                                stage_instances[a].name().cmp(stage_instances[b].name())
+                            });
+                        }
                     }
                 }
             }

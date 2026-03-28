@@ -25,7 +25,7 @@ impl Stage<HttpContext> for NotFoundStage {
             ctx.res = Response::builder()
                 .status(404)
                 .body(b"Not Found".to_vec())
-                .unwrap();
+                .expect("Failed to build 404 response");
         }
         Ok(true)
     }
