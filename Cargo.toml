@@ -3,6 +3,5 @@ resolver = "2"
 members = [
     "crates/ferron-common",
     "crates/ferron-http",
-    "crates/ferron-registry",
     "crates/ferron-bin",
 ]

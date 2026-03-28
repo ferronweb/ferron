@@ -1,30 +1,23 @@
+use ferron_common::loader::ModuleLoader;
+use ferron_common::registry::RegistryBuilder;
 use ferron_common::runtime::Runtime;
-use ferron_http::HttpContext;
 use ferron_http::{BasicHttpModule, HelloStage, LoggingStage, NotFoundStage};
-use ferron_registry::RegistryBuilder;
+use ferron_http::{BasicHttpModuleLoader, HttpContext};
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
-    // =====================
-    // Create registry with stages and modules
-    // =====================
-    // Stages define their own names and constraints via the Stage trait.
-    // The HTTP module will build an ordered pipeline from registered stages
-    // using DAG-based topological sort.
+    let mut loaders = vec![BasicHttpModuleLoader];
+    let mut registry_builder = RegistryBuilder::new();
 
-    let registry = RegistryBuilder::new()
-        // Register stages (names and constraints defined in the stage structs)
-        // Order will be determined by constraints: logging -> hello -> not_found
-        .with_stage::<HttpContext, _>(|| Arc::new(LoggingStage::default()))
-        .with_stage::<HttpContext, _>(|| Arc::new(HelloStage::default()))
-        .with_stage::<HttpContext, _>(|| Arc::new(NotFoundStage::default()))
-        .build();
+    for loader in &mut loaders {
+        registry_builder = loader.register_stages(registry_builder);
+    }
 
-    // Create the HTTP module from the registry
-    // The module builds its pipeline from the registered stages using DAG ordering
-    let http_module = BasicHttpModule::from_registry(&registry);
-    registry.register_module(http_module);
+    let registry = registry_builder.build();
+    for loader in &mut loaders {
+        loader.register_modules(&registry);
+    }
 
     let mut runtime = Runtime::new().expect("Failed to create runtime"); // TODO: proper error handling
 

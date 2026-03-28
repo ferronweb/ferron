@@ -9,4 +9,3 @@ http = "1"
 
 ferron-common = { path = "../ferron-common" }
 ferron-http = { path = "../ferron-http" }
-ferron-registry = { path = "../ferron-registry" }

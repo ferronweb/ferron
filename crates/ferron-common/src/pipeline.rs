@@ -44,7 +44,7 @@ pub trait Stage<C>: Send + Sync {
     /// Returns Err to terminate with an error
     async fn run(&self, ctx: &mut C) -> Result<bool, PipelineError>;
 
-    /// Inverse operation for rollback/undo functionality
+    /// Inverse operation for this stage
     /// Returns Err to terminate the inverse operation
     async fn run_inverse(&self, _ctx: &mut C) -> Result<(), PipelineError> {
         Ok(())

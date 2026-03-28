@@ -4,6 +4,7 @@
 //! ready-to-use HTTP module implementations.
 
 use async_trait::async_trait;
+use ferron_common::loader::ModuleLoader;
 use ferron_common::runtime::Runtime;
 use std::future::Future;
 use std::pin::Pin;
@@ -148,7 +149,7 @@ impl BasicHttpModule {
     ///
     /// This method retrieves the HTTP stage registry and builds an ordered pipeline
     /// using DAG-based topological sort based on stage constraints (Before/After).
-    pub fn from_registry(registry: &ferron_registry::Registry) -> Self {
+    pub fn from_registry(registry: &ferron_common::registry::Registry) -> Self {
         let pipeline = registry
             .get_stage_registry::<HttpContext>()
             .expect("HTTP stage registry not found")
@@ -230,4 +231,27 @@ fn parse_path(req: &str) -> String {
         .and_then(|line| line.split_whitespace().nth(1))
         .unwrap_or("/")
         .to_string()
+}
+
+// =====================
+// Loader Implementation
+// =====================
+
+pub struct BasicHttpModuleLoader;
+
+impl ModuleLoader for BasicHttpModuleLoader {
+    fn register_stages(
+        &mut self,
+        registry: ferron_common::registry::RegistryBuilder,
+    ) -> ferron_common::registry::RegistryBuilder {
+        registry
+            .with_stage::<HttpContext, _>(|| Arc::new(LoggingStage::default()))
+            .with_stage::<HttpContext, _>(|| Arc::new(HelloStage::default()))
+            .with_stage::<HttpContext, _>(|| Arc::new(NotFoundStage::default()))
+    }
+
+    fn register_modules(&mut self, registry: &ferron_common::registry::Registry) {
+        let http_module = BasicHttpModule::from_registry(&registry);
+        registry.register_module(http_module);
+    }
 }
