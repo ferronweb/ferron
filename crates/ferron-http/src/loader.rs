@@ -32,10 +32,12 @@ impl ModuleLoader for BasicHttpModuleLoader {
         modules: &mut Vec<Arc<dyn ferron_common::Module>>,
         config: &mut ferron_common::config::ServerConfiguration,
     ) {
+        let mut new_cache = HashMap::new();
         if let Some(port_config) = config.ports.remove("http") {
             for port_config in port_config {
-                if let Some(_cached) = self.cache.get(&port_config.port) {
+                if let Some(cached) = self.cache.get(&port_config.port) {
                     // TODO: reload configuration in existing HTTP server
+                    new_cache.insert(port_config.port, cached.clone());
                 } else {
                     let port = port_config.port;
                     let http_module = Arc::new(BasicHttpModule::new(
@@ -44,9 +46,10 @@ impl ModuleLoader for BasicHttpModuleLoader {
                         config.global_config.clone(),
                     ));
                     modules.push(http_module.clone());
-                    self.cache.insert(port, http_module);
+                    new_cache.insert(port, http_module);
                 }
             }
         }
+        self.cache = new_cache;
     }
 }

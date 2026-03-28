@@ -124,6 +124,8 @@ impl Module for BasicHttpModule {
     }
 }
 
+// TODO: cancel HTTP task when module is dropped.
+
 fn parse_path(req: &str) -> String {
     req.lines()
         .next()
