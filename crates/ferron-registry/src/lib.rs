@@ -356,7 +356,7 @@ impl RegistryBuilder {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use ferron_common::pipeline::Stage;
+    use ferron_common::pipeline::{PipelineError, Stage};
     use std::any::Any;
 
     struct TestModule {
@@ -398,7 +398,9 @@ mod tests {
             fn name(&self) -> &str {
                 "hello"
             }
-            async fn run(&self, _ctx: &mut ()) {}
+            async fn run(&self, _ctx: &mut ()) -> Result<bool, PipelineError> {
+                Ok(true)
+            }
         }
 
         struct LoggingStage;
@@ -410,7 +412,9 @@ mod tests {
             fn constraints(&self) -> Vec<StageConstraint> {
                 vec![StageConstraint::Before("hello".to_string())]
             }
-            async fn run(&self, _ctx: &mut ()) {}
+            async fn run(&self, _ctx: &mut ()) -> Result<bool, PipelineError> {
+                Ok(true)
+            }
         }
 
         struct NotFoundStage;
@@ -422,7 +426,9 @@ mod tests {
             fn constraints(&self) -> Vec<StageConstraint> {
                 vec![StageConstraint::After("hello".to_string())]
             }
-            async fn run(&self, _ctx: &mut ()) {}
+            async fn run(&self, _ctx: &mut ()) -> Result<bool, PipelineError> {
+                Ok(true)
+            }
         }
 
         // Register stages with constraints: logging -> hello -> not_found
@@ -454,7 +460,9 @@ mod tests {
             fn name(&self) -> &str {
                 "logging"
             }
-            async fn run(&self, _ctx: &mut ()) {}
+            async fn run(&self, _ctx: &mut ()) -> Result<bool, PipelineError> {
+                Ok(true)
+            }
         }
 
         let registry = RegistryBuilder::new()

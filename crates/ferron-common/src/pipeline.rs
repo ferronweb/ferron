@@ -3,6 +3,32 @@ use std::sync::Arc;
 
 use crate::StageConstraint;
 
+/// Error type for pipeline execution
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PipelineError {
+    /// Stage requested pipeline termination
+    Terminated,
+    /// Custom error from a stage
+    Custom(String),
+}
+
+impl PipelineError {
+    pub fn custom(msg: impl Into<String>) -> Self {
+        PipelineError::Custom(msg.into())
+    }
+}
+
+impl std::fmt::Display for PipelineError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PipelineError::Terminated => write!(f, "pipeline terminated by stage"),
+            PipelineError::Custom(msg) => write!(f, "pipeline error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for PipelineError {}
+
 #[async_trait]
 pub trait Stage<C>: Send + Sync {
     /// Returns the name of this stage
@@ -14,7 +40,15 @@ pub trait Stage<C>: Send + Sync {
     }
 
     /// Execute the stage with the given context
-    async fn run(&self, ctx: &mut C);
+    /// Returns Ok(true) to continue pipeline, Ok(false) to terminate gracefully
+    /// Returns Err to terminate with an error
+    async fn run(&self, ctx: &mut C) -> Result<bool, PipelineError>;
+
+    /// Inverse operation for rollback/undo functionality
+    /// Returns Err to terminate the inverse operation
+    async fn run_inverse(&self, _ctx: &mut C) -> Result<(), PipelineError> {
+        Ok(())
+    }
 }
 
 pub struct Pipeline<C> {
@@ -39,9 +73,22 @@ impl<C> Pipeline<C> {
         self
     }
 
-    pub async fn execute(&self, ctx: &mut C) {
+    /// Execute the pipeline, stopping early if a stage returns Ok(false) or Err
+    pub async fn execute(&self, ctx: &mut C) -> Result<(), PipelineError> {
+        let mut executed_stages = vec![];
         for stage in &self.stages {
-            stage.run(ctx).await;
+            executed_stages.push(stage);
+            match stage.run(ctx).await {
+                Ok(true) => continue,
+                Ok(false) => break,
+                Err(e) => return Err(e),
+            }
         }
+
+        // Execute inverse operations in reverse order, stopping on error
+        for stage in executed_stages.iter().rev() {
+            stage.run_inverse(ctx).await?;
+        }
+        Ok(())
     }
 }

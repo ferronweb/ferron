@@ -13,7 +13,7 @@ use http::{Request, Response};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
-use ferron_common::pipeline::{Pipeline, Stage};
+use ferron_common::pipeline::{Pipeline, PipelineError, Stage};
 use ferron_common::Module;
 use ferron_common::StageConstraint;
 
@@ -60,8 +60,9 @@ impl Stage<HttpContext> for LoggingStage {
         vec![StageConstraint::Before("hello".to_string())]
     }
 
-    async fn run(&self, ctx: &mut HttpContext) {
+    async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         println!("--> {}", ctx.req.uri().path());
+        Ok(true)
     }
 }
 
@@ -87,13 +88,14 @@ impl Stage<HttpContext> for HelloStage {
         vec![StageConstraint::Before("not_found".to_string())]
     }
 
-    async fn run(&self, ctx: &mut HttpContext) {
+    async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         if ctx.req.uri().path() == "/" {
             ctx.res = Response::builder()
                 .status(200)
                 .body(b"Hello from Ferron 3".to_vec())
                 .unwrap();
         }
+        Ok(true)
     }
 }
 
@@ -115,13 +117,14 @@ impl Stage<HttpContext> for NotFoundStage {
         "not_found"
     }
 
-    async fn run(&self, ctx: &mut HttpContext) {
+    async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         if ctx.res.body().is_empty() {
             ctx.res = Response::builder()
                 .status(404)
                 .body(b"Not Found".to_vec())
                 .unwrap();
         }
+        Ok(true)
     }
 }
 
@@ -198,7 +201,9 @@ impl Module for BasicHttpModule {
 
                         let mut ctx = HttpContext::new(req);
 
-                        pipeline.execute(&mut ctx).await;
+                        if let Err(e) = pipeline.execute(&mut ctx).await {
+                            eprintln!("Pipeline execution error: {}", e);
+                        }
 
                         let res = ctx.res;
 
