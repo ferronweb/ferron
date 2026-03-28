@@ -1,0 +1,104 @@
+// TODO: wire up the configuration-related structs
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::{BTreeMap, HashMap},
+    net::IpAddr,
+    sync::Arc,
+};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfigurationSpan {
+    pub line: usize,
+    pub column: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfiguration {
+    pub global_config: Arc<ServerConfigurationBlock>,
+    pub ports: BTreeMap<String, ServerConfigurationPort>, // the key would be the protocol name
+}
+
+/*
+Host configuration
+ |
+ +-- Port/IP (TCP)
+ +-- Port/IP (HTTP)
+     |
+     +- Host/Location/Conditional
+        |
+        +- Error
+ */
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfigurationPort {
+    pub port: u16,
+    pub hosts: Vec<(ServerConfigurationHostFilters, ServerConfigurationBlock)>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfigurationHostFilters {
+    pub ip: Option<IpAddr>,
+    pub host: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfigurationBlock {
+    pub directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
+    pub matchers: HashMap<String, Vec<ServerConfigurationMatcher>>,
+    pub span: Option<ServerConfigurationSpan>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfigurationDirectiveEntry {
+    pub args: Vec<ServerConfigurationValue>,
+    pub children: Option<ServerConfigurationBlock>,
+    pub span: Option<ServerConfigurationSpan>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ServerConfigurationValue {
+    String(String, Option<ServerConfigurationSpan>),
+    Number(i64, Option<ServerConfigurationSpan>),
+    Float(f64, Option<ServerConfigurationSpan>),
+    Boolean(bool, Option<ServerConfigurationSpan>),
+    InterpolatedString(
+        Vec<ServerConfigurationInterpolatedStringPart>,
+        Option<ServerConfigurationSpan>,
+    ),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ServerConfigurationInterpolatedStringPart {
+    String(String),
+    Variable(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfigurationMatcher {
+    pub exprs: Vec<ServerConfigurationMatcherExpr>,
+    pub span: Option<ServerConfigurationSpan>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfigurationMatcherExpr {
+    pub left: ServerConfigurationMatcherOperand,
+    pub right: ServerConfigurationMatcherOperand,
+    pub op: ServerConfigurationMatcherOperator,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ServerConfigurationMatcherOperand {
+    Identifier(String, ServerConfigurationSpan),
+    String(String, ServerConfigurationSpan),
+    Integer(i64, ServerConfigurationSpan),
+    Float(f64, ServerConfigurationSpan),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ServerConfigurationMatcherOperator {
+    Eq,
+    NotEq,
+    Regex,
+    NotRegex,
+    In,
+}
