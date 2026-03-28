@@ -1,0 +1,8 @@
+[package]
+name = "ferron-module-api"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ferron-core = { path = "../ferron-core" }
+ferron-runtime = { path = "../ferron-runtime" }

@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/ferron-core",
+    "crates/ferron-runtime",
+    "crates/ferron-module-api",
+    "crates/ferron-http",
+    "crates/ferron-bin",
+]
