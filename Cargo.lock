@@ -48,6 +48,7 @@ dependencies = [
  "ferron-core",
  "ferron-http",
  "ferron-module-api",
+ "ferron-registry",
  "ferron-runtime",
  "futures-util",
  "http",
@@ -79,6 +80,18 @@ version = "0.1.0"
 dependencies = [
  "ferron-core",
  "ferron-runtime",
+]
+
+[[package]]
+name = "ferron-registry"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "ferron-core",
+ "ferron-module-api",
+ "ferron-runtime",
+ "parking_lot",
+ "tokio",
 ]
 
 [[package]]
