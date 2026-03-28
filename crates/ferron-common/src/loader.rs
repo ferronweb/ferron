@@ -1,4 +1,15 @@
+use std::collections::HashMap;
+
+use crate::config::adapter::ConfigurationAdapter;
+
 pub trait ModuleLoader {
+    #[allow(unused_variables)]
+    fn register_configuration_adapters(
+        &mut self,
+        registry: &mut HashMap<&'static str, Box<dyn ConfigurationAdapter>>,
+    ) {
+    }
+
     fn register_stages(
         &mut self,
         registry: crate::registry::RegistryBuilder,

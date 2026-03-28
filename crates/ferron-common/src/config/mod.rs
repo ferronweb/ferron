@@ -1,4 +1,9 @@
 // TODO: wire up the configuration-related structs
+pub mod adapter;
+mod builder;
+
+pub use builder::*;
+
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -88,10 +93,10 @@ pub struct ServerConfigurationMatcherExpr {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerConfigurationMatcherOperand {
-    Identifier(String, ServerConfigurationSpan),
-    String(String, ServerConfigurationSpan),
-    Integer(i64, ServerConfigurationSpan),
-    Float(f64, ServerConfigurationSpan),
+    Identifier(String, Option<ServerConfigurationSpan>),
+    String(String, Option<ServerConfigurationSpan>),
+    Integer(i64, Option<ServerConfigurationSpan>),
+    Float(f64, Option<ServerConfigurationSpan>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
