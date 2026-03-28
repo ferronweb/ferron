@@ -14,12 +14,12 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-pub use ferron_module_api::Module;
-pub use ferron_runtime::StageConstraint;
+pub use ferron_common::Module;
+pub use ferron_common::StageConstraint;
 
 /// A stage factory that can create stage instances
 pub type StageFactory<C> =
-    Arc<dyn Fn() -> Arc<dyn ferron_runtime::pipeline::Stage<C>> + Send + Sync>;
+    Arc<dyn Fn() -> Arc<dyn ferron_common::pipeline::Stage<C>> + Send + Sync>;
 
 /// Entry for a registered stage (generic over context type)
 pub struct StageEntry<C> {
@@ -50,7 +50,7 @@ impl<C> StageRegistry<C> {
     /// Register a stage factory
     pub fn register<F>(&self, factory: F)
     where
-        F: Fn() -> Arc<dyn ferron_runtime::pipeline::Stage<C>> + Send + Sync + 'static,
+        F: Fn() -> Arc<dyn ferron_common::pipeline::Stage<C>> + Send + Sync + 'static,
     {
         self.stages.write().push(StageEntry {
             factory: Arc::new(factory),
@@ -146,13 +146,13 @@ impl<C> StageRegistry<C> {
     }
 
     /// Build a pipeline with all registered stages in topologically sorted order
-    pub fn build_all(&self) -> ferron_runtime::pipeline::Pipeline<C>
+    pub fn build_all(&self) -> ferron_common::pipeline::Pipeline<C>
     where
         C: 'static,
     {
         let factories = self.get_ordered_factories();
 
-        let mut pipeline = ferron_runtime::pipeline::Pipeline::new();
+        let mut pipeline = ferron_common::pipeline::Pipeline::new();
 
         for factory in factories {
             let stage = factory();
@@ -240,7 +240,7 @@ impl Registry {
     pub fn register_stage<C, F>(&self, factory: F)
     where
         C: 'static,
-        F: Fn() -> Arc<dyn ferron_runtime::pipeline::Stage<C>> + Send + Sync + 'static,
+        F: Fn() -> Arc<dyn ferron_common::pipeline::Stage<C>> + Send + Sync + 'static,
     {
         let type_id = TypeId::of::<C>();
 
@@ -340,7 +340,7 @@ impl RegistryBuilder {
     pub fn with_stage<C, F>(self, factory: F) -> Self
     where
         C: 'static,
-        F: Fn() -> Arc<dyn ferron_runtime::pipeline::Stage<C>> + Send + Sync + 'static,
+        F: Fn() -> Arc<dyn ferron_common::pipeline::Stage<C>> + Send + Sync + 'static,
     {
         self.registry.register_stage::<C, F>(factory);
         self
@@ -356,7 +356,7 @@ impl RegistryBuilder {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use ferron_runtime::pipeline::Stage;
+    use ferron_common::pipeline::Stage;
     use std::any::Any;
 
     struct TestModule {

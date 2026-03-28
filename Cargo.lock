@@ -45,12 +45,18 @@ dependencies = [
 name = "ferron-bin"
 version = "0.1.0"
 dependencies = [
+ "ferron-common",
  "ferron-http",
- "ferron-module-api",
  "ferron-registry",
- "ferron-runtime",
  "http",
  "tokio",
+]
+
+[[package]]
+name = "ferron-common"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
 ]
 
 [[package]]
@@ -58,19 +64,11 @@ name = "ferron-http"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "ferron-module-api",
+ "ferron-common",
  "ferron-registry",
- "ferron-runtime",
  "http",
  "parking_lot",
  "tokio",
-]
-
-[[package]]
-name = "ferron-module-api"
-version = "0.1.0"
-dependencies = [
- "ferron-runtime",
 ]
 
 [[package]]
@@ -78,16 +76,8 @@ name = "ferron-registry"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "ferron-module-api",
- "ferron-runtime",
+ "ferron-common",
  "parking_lot",
-]
-
-[[package]]
-name = "ferron-runtime"
-version = "0.1.0"
-dependencies = [
- "async-trait",
 ]
 
 [[package]]

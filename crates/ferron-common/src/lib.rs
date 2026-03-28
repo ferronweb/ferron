@@ -1,3 +1,8 @@
+pub mod pipeline;
+pub mod registry;
+
+pub use registry::StageConstraint;
+
 use std::any::Any;
 use std::future::Future;
 use std::pin::Pin;

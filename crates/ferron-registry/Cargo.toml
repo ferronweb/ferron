@@ -7,5 +7,4 @@ edition = "2021"
 async-trait = "0.1"
 parking_lot = "0.12"
 
-ferron-module-api = { path = "../ferron-module-api" }
-ferron-runtime = { path = "../ferron-runtime" }
+ferron-common = { path = "../ferron-common" }

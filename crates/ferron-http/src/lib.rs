@@ -12,9 +12,9 @@ use http::{Request, Response};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
-use ferron_module_api::Module;
-use ferron_runtime::pipeline::{Pipeline, Stage};
-use ferron_runtime::StageConstraint;
+use ferron_common::pipeline::{Pipeline, Stage};
+use ferron_common::Module;
+use ferron_common::StageConstraint;
 
 // =====================
 // HTTP Context

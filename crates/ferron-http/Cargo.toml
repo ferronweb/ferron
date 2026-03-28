@@ -9,6 +9,5 @@ tokio = { version = "1", features = ["full"] }
 http = "1"
 parking_lot = "0.12"
 
-ferron-runtime = { path = "../ferron-runtime" }
-ferron-module-api = { path = "../ferron-module-api" }
+ferron-common = { path = "../ferron-common" }
 ferron-registry = { path = "../ferron-registry" }
