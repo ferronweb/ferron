@@ -11,6 +11,7 @@ use crate::context::HttpContext;
 use crate::server::BasicHttpModule;
 use crate::stages::{HelloStage, LoggingStage, NotFoundStage};
 
+// TODO: "cache" modules in the loader for graceful reloads
 pub struct BasicHttpModuleLoader;
 
 impl ModuleLoader for BasicHttpModuleLoader {
@@ -21,8 +22,8 @@ impl ModuleLoader for BasicHttpModuleLoader {
             .with_stage::<HttpContext, _>(|| Arc::new(NotFoundStage::default()))
     }
 
-    fn register_modules(&mut self, registry: &Registry, modules: &mut Vec<Box<dyn Module>>) {
+    fn register_modules(&mut self, registry: &Registry, modules: &mut Vec<Arc<dyn Module>>) {
         let http_module = BasicHttpModule::from_registry(&registry);
-        modules.push(Box::new(http_module));
+        modules.push(Arc::new(http_module));
     }
 }

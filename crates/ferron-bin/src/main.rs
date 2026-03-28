@@ -27,13 +27,14 @@ fn load_modules(
     mut loaders: Vec<Box<dyn ModuleLoader>>,
     registry: Arc<Registry>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let mut runtime = Runtime::new()?;
+
+    // TODO: Graceful reload loop begin
     let mut modules = Vec::new();
 
     for loader in &mut loaders {
         loader.register_modules(&registry, &mut modules);
     }
-
-    let mut runtime = Runtime::new()?;
 
     // Start all modules
     for module in modules {
@@ -43,6 +44,7 @@ fn load_modules(
 
     // Run the runtime
     runtime.run()?;
+    // TODO: Graceful reload loop end
 
     Ok(())
 }

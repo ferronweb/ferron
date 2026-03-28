@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::config::adapter::ConfigurationAdapter;
 
@@ -21,7 +21,7 @@ pub trait ModuleLoader {
     fn register_modules(
         &mut self,
         registry: &crate::registry::Registry,
-        modules: &mut Vec<Box<dyn crate::Module>>,
+        modules: &mut Vec<Arc<dyn crate::Module>>,
     ) {
     }
 }
