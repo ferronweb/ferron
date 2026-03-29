@@ -1,8 +1,8 @@
 //! Logging stage
 
 use async_trait::async_trait;
-use ferron_common::pipeline::{PipelineError, Stage};
-use ferron_common::StageConstraint;
+use ferron_core::StageConstraint;
+use ferron_core::pipeline::{PipelineError, Stage};
 
 use crate::context::HttpContext;
 

@@ -6,4 +6,4 @@ edition = "2024"
 [dependencies]
 async-trait = "0.1.89"
 
-ferron-common = { path = "../ferron-common" }
+ferron-core = { path = "../../core" }

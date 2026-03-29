@@ -9,4 +9,4 @@ tokio = { version = "1", features = ["full"] }
 http = "1"
 parking_lot = "0.12"
 
-ferron-common = { path = "../ferron-common" }
+ferron-core = { path = "../../core" }

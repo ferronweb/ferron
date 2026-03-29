@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use ferron_common::{
+use ferron_core::{
     config::{ServerConfigurationBlock, ServerConfigurationPort, adapter::ConfigurationAdapter},
     loader::ModuleLoader,
 };
@@ -20,13 +20,13 @@ impl ConfigurationAdapter for BlankConfigurationAdapter {
         _params: &std::collections::HashMap<String, String>,
     ) -> Result<
         (
-            ferron_common::config::ServerConfiguration,
-            Box<dyn ferron_common::config::adapter::ConfigurationWatcher>,
+            ferron_core::config::ServerConfiguration,
+            Box<dyn ferron_core::config::adapter::ConfigurationWatcher>,
         ),
         Box<dyn std::error::Error>,
     > {
         Ok((
-            ferron_common::config::ServerConfigurationBuilder::new()
+            ferron_core::config::ServerConfigurationBuilder::new()
                 .global_config(ServerConfigurationBlock {
                     directives: HashMap::new(),
                     matchers: HashMap::new(),
@@ -48,7 +48,7 @@ impl ConfigurationAdapter for BlankConfigurationAdapter {
 struct BlankConfigurationWatcher;
 
 #[async_trait]
-impl ferron_common::config::adapter::ConfigurationWatcher for BlankConfigurationWatcher {
+impl ferron_core::config::adapter::ConfigurationWatcher for BlankConfigurationWatcher {
     async fn watch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         std::future::pending().await
     }

@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use ferron_common::loader::ModuleLoader;
-use ferron_common::registry::RegistryBuilder;
+use ferron_core::loader::ModuleLoader;
+use ferron_core::registry::RegistryBuilder;
 
 use crate::context::HttpContext;
 use crate::server::BasicHttpModule;
@@ -25,9 +25,9 @@ impl ModuleLoader for BasicHttpModuleLoader {
 
     fn register_modules(
         &mut self,
-        registry: &ferron_common::registry::Registry,
-        modules: &mut Vec<Arc<dyn ferron_common::Module>>,
-        config: &mut ferron_common::config::ServerConfiguration,
+        registry: &ferron_core::registry::Registry,
+        modules: &mut Vec<Arc<dyn ferron_core::Module>>,
+        config: &mut ferron_core::config::ServerConfiguration,
     ) {
         let mut new_cache = HashMap::new();
         if let Some(port_config) = config.ports.remove("http") {

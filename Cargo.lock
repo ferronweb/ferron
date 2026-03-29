@@ -48,19 +48,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferron-bin"
+name = "ferron"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ferron-common",
  "ferron-config",
+ "ferron-core",
  "ferron-http",
  "http",
  "tokio",
 ]
 
 [[package]]
-name = "ferron-common"
+name = "ferron-config"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "ferron-core",
+]
+
+[[package]]
+name = "ferron-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -70,19 +78,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferron-config"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "ferron-common",
-]
-
-[[package]]
 name = "ferron-http"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "ferron-common",
+ "ferron-core",
  "http",
  "parking_lot",
  "tokio",

@@ -5,9 +5,9 @@ use std::sync::Arc;
 use http::Request;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use ferron_common::pipeline::Pipeline;
-use ferron_common::runtime::Runtime;
-use ferron_common::Module;
+use ferron_core::Module;
+use ferron_core::pipeline::Pipeline;
+use ferron_core::runtime::Runtime;
 
 use crate::context::HttpContext;
 
@@ -26,9 +26,9 @@ impl BasicHttpModule {
     /// Panics if the HTTP stage registry is not found. This should only happen
     /// if the registry was not properly initialized with HTTP stages.
     pub fn new(
-        registry: &ferron_common::registry::Registry,
-        port_config: ferron_common::config::ServerConfigurationPort,
-        global_config: Arc<ferron_common::config::ServerConfigurationBlock>,
+        registry: &ferron_core::registry::Registry,
+        port_config: ferron_core::config::ServerConfigurationPort,
+        global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
     ) -> Self {
         let pipeline = registry
             .get_stage_registry::<HttpContext>()

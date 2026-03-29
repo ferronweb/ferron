@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/ferron-common",
-    "crates/ferron-http",
-    "crates/ferron-bin", "crates/ferron-config",
+    "bin",
+    "core",
+    "modules/*"
 ]

@@ -1,7 +1,7 @@
 //! 404 Not Found stage
 
 use async_trait::async_trait;
-use ferron_common::pipeline::{PipelineError, Stage};
+use ferron_core::pipeline::{PipelineError, Stage};
 use http::Response;
 
 use crate::context::HttpContext;

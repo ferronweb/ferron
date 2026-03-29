@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use ferron_common::config::adapter::ConfigurationAdapter;
-use ferron_common::loader::ModuleLoader;
-use ferron_common::registry::{Registry, RegistryBuilder};
-use ferron_common::runtime::Runtime;
 use ferron_config::BlankConfigurationAdapterModuleLoader;
+use ferron_core::config::adapter::ConfigurationAdapter;
+use ferron_core::loader::ModuleLoader;
+use ferron_core::registry::{Registry, RegistryBuilder};
+use ferron_core::runtime::Runtime;
 use ferron_http::BasicHttpModuleLoader;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

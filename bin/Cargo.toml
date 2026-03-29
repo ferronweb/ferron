@@ -1,0 +1,13 @@
+[package]
+name = "ferron"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+http = "1"
+
+ferron-core = { path = "../core" }
+ferron-http = { path = "../modules/http" }
+ferron-config = { path = "../modules/config" }
+anyhow = "1.0.102"
