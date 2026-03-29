@@ -16,6 +16,28 @@ pub struct BasicHttpModuleLoader {
 }
 
 impl ModuleLoader for BasicHttpModuleLoader {
+    fn register_per_protocol_configuration_blocks<'a>(
+        &mut self,
+        config: &'a ferron_core::config::ServerConfiguration,
+        registry: &mut HashMap<
+            &'static str,
+            Vec<(String, &'a ferron_core::config::ServerConfigurationBlock)>,
+        >,
+    ) {
+        let mut blocks = Vec::new();
+        if let Some(ports) = config.ports.get("http") {
+            for port in ports {
+                for (_filters, host) in &port.hosts {
+                    // TODO: more sophisticated block naming based on filters
+                    blocks.push((format!("port {}", port.port), host));
+                }
+            }
+        }
+        registry.insert("http", blocks);
+    }
+
+    // TODO: configuration validators
+
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         registry
             .with_stage::<HttpContext, _>(|| Arc::new(LoggingStage::default()))

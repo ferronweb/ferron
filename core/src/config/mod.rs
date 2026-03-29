@@ -1,6 +1,7 @@
 // TODO: wire up the configuration-related structs
 pub mod adapter;
 mod builder;
+pub mod validator;
 
 pub use builder::*;
 
