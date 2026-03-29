@@ -52,7 +52,7 @@ impl Runtime {
     {
         let task_factory = Arc::new(task_factory);
         for channel in &self.primary_task_channels {
-            channel.send(task_factory.clone());
+            let _ = channel.send(task_factory.clone());
         }
     }
 

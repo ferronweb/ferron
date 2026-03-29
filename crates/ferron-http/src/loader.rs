@@ -4,15 +4,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use ferron_common::loader::ModuleLoader;
-use ferron_common::registry::Registry;
 use ferron_common::registry::RegistryBuilder;
-use ferron_common::Module;
 
 use crate::context::HttpContext;
 use crate::server::BasicHttpModule;
 use crate::stages::{HelloStage, LoggingStage, NotFoundStage};
 
-// TODO: "cache" modules in the loader for graceful reloads
 #[derive(Default)]
 pub struct BasicHttpModuleLoader {
     cache: HashMap<u16, Arc<BasicHttpModule>>,
