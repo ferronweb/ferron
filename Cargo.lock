@@ -880,12 +880,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "cegla"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e067be7ec4478b48c52d43f2f8643f4846570bfa37c514a3c9bbd18bbd66fed1"
+dependencies = [
+ "bytes",
+ "futures-util",
+ "hashlink",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "httparse",
+ "memchr",
+ "smallvec",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "cegla-cgi"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4379fdfb08f3fecd557169d18a8cf4b5950c62850e07b803f63d06a00a08cc45"
 dependencies = [
- "cegla",
+ "cegla 0.1.2",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "cegla-cgi"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e78cee263dc8e1a7b40ee728af69f74b1fe0adee88832c1da70a9dc7974f4fbe"
+dependencies = [
+ "cegla 0.2.0",
  "http 1.4.0",
  "http-body 1.0.1",
  "tokio",
@@ -898,7 +930,21 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08e9ecc40f12e626331b0270c92ea83de78d63f4259613659ef637229d0d7d79"
 dependencies = [
- "cegla",
+ "cegla 0.1.2",
+ "hashlink",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "cegla-scgi"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26da87ce3376ac4ec31b869df5f978da6320892cc6e9978b9f8a673cc61c1e01"
+dependencies = [
+ "cegla 0.2.0",
  "hashlink",
  "http 1.4.0",
  "http-body 1.0.1",
@@ -1526,9 +1572,9 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
- "cegla",
- "cegla-cgi",
- "cegla-scgi",
+ "cegla 0.1.2",
+ "cegla-cgi 0.1.2",
+ "cegla-scgi 0.1.2",
  "chrono",
  "cidr",
  "fancy-regex",
@@ -4390,12 +4436,12 @@ dependencies = [
 
 [[package]]
 name = "tokio-cegla"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c49da70a28bdf9cb11dfe21d9b94fecf925a0354ed981740a73f78dfb25bc96d"
+checksum = "f26e8158745893f4eda92e69cab6b1793cc9d75f4b6f8cf232abb095d13690df"
 dependencies = [
- "cegla-cgi",
- "cegla-scgi",
+ "cegla-cgi 0.2.0",
+ "cegla-scgi 0.2.0",
  "tokio",
 ]
 
