@@ -16,7 +16,6 @@ pub enum LogLevel {
     Warn = 1,
     Info = 2,
     Debug = 3,
-    Trace = 4,
 }
 
 impl LogLevel {
@@ -26,7 +25,6 @@ impl LogLevel {
             LogLevel::Warn => "WARN",
             LogLevel::Info => "INFO",
             LogLevel::Debug => "DEBUG",
-            LogLevel::Trace => "TRACE",
         }
     }
 }
@@ -243,7 +241,6 @@ pub fn max_level() -> LogLevel {
             1 => Some(LogLevel::Warn),
             2 => Some(LogLevel::Info),
             3 => Some(LogLevel::Debug),
-            4 => Some(LogLevel::Trace),
             _ => None,
         })
         .unwrap_or(LogLevel::Error)
@@ -297,13 +294,5 @@ macro_rules! log_debug {
 macro_rules! log_warn {
     ($($arg:tt)*) => {
         $crate::logging::log($crate::logging::LogLevel::Warn, &format!($($arg)*));
-    };
-}
-
-/// Logging macro for trace-level messages
-#[macro_export]
-macro_rules! log_trace {
-    ($($arg:tt)*) => {
-        $crate::logging::log($crate::logging::LogLevel::Trace, &format!($($arg)*));
     };
 }
