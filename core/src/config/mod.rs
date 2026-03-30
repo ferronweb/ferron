@@ -15,6 +15,7 @@ use std::{
 pub struct ServerConfigurationSpan {
     pub line: usize,
     pub column: usize,
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -193,8 +193,8 @@ impl ServerConfigurationBlockBuilder {
     }
 
     /// Sets the span information for this block.
-    pub fn span(mut self, line: usize, column: usize) -> Self {
-        self.span = Some(ServerConfigurationSpan { line, column });
+    pub fn span(mut self, line: usize, column: usize, file: Option<String>) -> Self {
+        self.span = Some(ServerConfigurationSpan { line, column, file });
         self
     }
 
@@ -381,8 +381,8 @@ impl ServerConfigurationMatcherBuilder {
     }
 
     /// Sets the span information for this matcher.
-    pub fn span(mut self, line: usize, column: usize) -> Self {
-        self.span = Some(ServerConfigurationSpan { line, column });
+    pub fn span(mut self, line: usize, column: usize, file: Option<String>) -> Self {
+        self.span = Some(ServerConfigurationSpan { line, column, file });
         self
     }
 
@@ -470,7 +470,14 @@ impl ServerConfigurationValueBuilder {
         line: usize,
         column: usize,
     ) -> ServerConfigurationValue {
-        ServerConfigurationValue::String(s.into(), Some(ServerConfigurationSpan { line, column }))
+        ServerConfigurationValue::String(
+            s.into(),
+            Some(ServerConfigurationSpan {
+                line,
+                column,
+                file: None,
+            }),
+        )
     }
 
     /// Creates a number value.
@@ -480,7 +487,14 @@ impl ServerConfigurationValueBuilder {
 
     /// Creates a number value with span information.
     pub fn number_with_span(n: i64, line: usize, column: usize) -> ServerConfigurationValue {
-        ServerConfigurationValue::Number(n, Some(ServerConfigurationSpan { line, column }))
+        ServerConfigurationValue::Number(
+            n,
+            Some(ServerConfigurationSpan {
+                line,
+                column,
+                file: None,
+            }),
+        )
     }
 
     /// Creates a float value.
@@ -490,7 +504,14 @@ impl ServerConfigurationValueBuilder {
 
     /// Creates a float value with span information.
     pub fn float_with_span(f: f64, line: usize, column: usize) -> ServerConfigurationValue {
-        ServerConfigurationValue::Float(f, Some(ServerConfigurationSpan { line, column }))
+        ServerConfigurationValue::Float(
+            f,
+            Some(ServerConfigurationSpan {
+                line,
+                column,
+                file: None,
+            }),
+        )
     }
 
     /// Creates a boolean value.
@@ -500,7 +521,14 @@ impl ServerConfigurationValueBuilder {
 
     /// Creates a boolean value with span information.
     pub fn boolean_with_span(b: bool, line: usize, column: usize) -> ServerConfigurationValue {
-        ServerConfigurationValue::Boolean(b, Some(ServerConfigurationSpan { line, column }))
+        ServerConfigurationValue::Boolean(
+            b,
+            Some(ServerConfigurationSpan {
+                line,
+                column,
+                file: None,
+            }),
+        )
     }
 }
 
@@ -535,7 +563,11 @@ mod tests {
 
     #[test]
     fn test_matcher_builder() {
-        let span = ServerConfigurationSpan { line: 1, column: 0 };
+        let span = ServerConfigurationSpan {
+            line: 1,
+            column: 0,
+            file: None,
+        };
 
         let matcher = ServerConfigurationMatcherBuilder::new()
             .expr_eq(

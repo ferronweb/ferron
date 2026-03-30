@@ -25,6 +25,9 @@ use cli::WinServiceCommands;
 
 fn main() {
     if let Err(e) = main_inner() {
+        if !ferron_core::logging::is_init() {
+            let _ = ferron_core::logging::init_stdio_logger(LogLevel::Error);
+        }
         if ferron_core::logging::is_init() {
             ferron_core::log_error!("{}", e);
         } else {
@@ -280,6 +283,25 @@ fn load_config_adapters(
     })
 }
 
+fn format_location(
+    block_name: Option<&str>,
+    span: Option<&ferron_core::config::ServerConfigurationSpan>,
+) -> String {
+    let mut location = String::new();
+    if let Some(name) = block_name {
+        location.push_str(&format!("block '{}'", name));
+    } else {
+        location.push_str("global configuration");
+    }
+    if let Some(span) = span {
+        if let Some(file) = &span.file {
+            location.push_str(&format!(" in file '{}'", file));
+        }
+        location.push_str(&format!(" at line {}", span.line));
+        location.push_str(&format!(", column {}", span.column));
+    }
+    location
+}
 /// Run global and per-protocol configuration validators
 fn run_configuration_validators(
     loaders: &mut [Box<dyn ModuleLoader>],
@@ -293,12 +315,20 @@ fn run_configuration_validators(
     // Run global validators
     let mut unused_global_directives = HashSet::new();
     for validator in global_validator_registry {
-        // TODO: better configuration validation error reporting (specify which directive is invalid and where in the configuration file)
-        validator.validate_block(&config.global_config, &mut unused_global_directives)?;
+        validator
+            .validate_block(&config.global_config, &mut unused_global_directives)
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Invalid configuration ({}): {e}",
+                    format_location(None, config.global_config.span.as_ref())
+                )
+            })?;
     }
     for directive in unused_global_directives {
-        // TODO: specify where are the unused directives in the configuration file
-        log_warn!("Unused global directive: {}", directive);
+        log_warn!(
+            "Unused directive ({}): {directive}",
+            format_location(None, config.global_config.span.as_ref())
+        );
     }
 
     // Run per-protocol validators
@@ -308,13 +338,28 @@ fn run_configuration_validators(
     }
     for (protocol, blocks) in &config_blocks_registry {
         if let Some(validator) = per_protocol_validator_registry.get(protocol) {
-            let mut unused_directives = HashSet::new();
             for block in blocks {
-                validator.validate_block(block.1, &mut unused_directives)?;
-            }
-            for directive in unused_directives {
-                // TODO: specify where are the unused directives in the configuration file
-                log_warn!("Unused directive in protocol {}: {}", protocol, directive);
+                let mut unused_directives = HashSet::new();
+                validator
+                    .validate_block(block.1, &mut unused_directives)
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "Invalid configuration ({}): {e}",
+                            format_location(
+                                Some(&format!("{protocol} {}", block.0)),
+                                config.global_config.span.as_ref()
+                            )
+                        )
+                    })?;
+                for directive in unused_directives {
+                    log_warn!(
+                        "Unused directive ({}): {directive}",
+                        format_location(
+                            Some(&format!("{protocol} {}", block.0)),
+                            config.global_config.span.as_ref()
+                        )
+                    );
+                }
             }
         }
     }
