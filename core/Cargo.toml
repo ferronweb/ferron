@@ -11,6 +11,7 @@ serde = { version = "1.0.228", features = ["derive", "rc"] }
 arc-swap = "1.9.0"
 tokio-util = "0.7.18"
 anyhow = "1.0"
+chrono = "0.4"
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.7"

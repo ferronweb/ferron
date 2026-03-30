@@ -11,7 +11,7 @@ use ferron_core::logging::LogLevel;
 use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
-use ferron_core::{log_info, log_warn};
+use ferron_core::{log_debug, log_info, log_warn};
 use ferron_http::BasicHttpModuleLoader;
 
 mod cli;
@@ -500,7 +500,7 @@ fn load_modules(
 
         // Start all modules
         for module in modules {
-            log_info!("Starting module: {}", module.name());
+            log_debug!("Starting module: {}", module.name());
             module.start(&mut runtime)?;
         }
 

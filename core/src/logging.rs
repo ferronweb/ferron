@@ -4,6 +4,7 @@
 //! logs to the Windows Event Log when running as a Windows service, or to
 //! stdout/stderr when running as a regular console application.
 
+use std::io::IsTerminal;
 use std::sync::{atomic::AtomicUsize, atomic::Ordering};
 
 #[cfg(windows)]
@@ -25,6 +26,15 @@ impl LogLevel {
             LogLevel::Warn => "WARN",
             LogLevel::Info => "INFO",
             LogLevel::Debug => "DEBUG",
+        }
+    }
+
+    fn color_code(&self) -> &'static str {
+        match self {
+            LogLevel::Error => "\x1b[31m", // Red
+            LogLevel::Warn => "\x1b[33m",  // Yellow
+            LogLevel::Info => "\x1b[36m",  // Cyan
+            LogLevel::Debug => "\x1b[35m", // Magenta
         }
     }
 }
@@ -106,6 +116,7 @@ impl Drop for WindowsEventSource {
 pub struct AppLogger {
     backend: LoggerBackend,
     max_level: AtomicUsize,
+    is_tty: bool,
     #[cfg(windows)]
     event_source: Mutex<Option<WindowsEventSource>>,
 }
@@ -135,9 +146,15 @@ pub fn is_init() -> bool {
 
 /// Initialize the logger with the specified backend
 pub fn init(backend: LoggerBackend, level: LogLevel) -> anyhow::Result<()> {
+    let is_tty = if !matches!(backend, LoggerBackend::Stdio) {
+        false
+    } else {
+        std::io::stdout().is_terminal()
+    };
     let logger = Box::new(AppLogger {
         backend,
         max_level: AtomicUsize::new(level as usize),
+        is_tty,
         #[cfg(windows)]
         event_source: Mutex::new(None),
     });
@@ -157,6 +174,7 @@ pub fn init_service_logger(service_name: &str, level: LogLevel) -> anyhow::Resul
     let logger = Box::new(AppLogger {
         backend: LoggerBackend::EventLog,
         max_level: AtomicUsize::new(level as usize),
+        is_tty: false, // Windows Event Log isn't a TTY
         event_source: Mutex::new(Some(WindowsEventSource::new(service_name)?)),
     });
 
@@ -171,9 +189,11 @@ pub fn init_service_logger(service_name: &str, level: LogLevel) -> anyhow::Resul
 
 /// Initialize logger for console application (uses stdout/stderr)
 pub fn init_stdio_logger(level: LogLevel) -> anyhow::Result<()> {
+    let is_tty = std::io::stdout().is_terminal();
     let logger = Box::new(AppLogger {
         backend: LoggerBackend::Stdio,
         max_level: AtomicUsize::new(level as usize),
+        is_tty,
         #[cfg(windows)]
         event_source: Mutex::new(None),
     });
@@ -193,8 +213,21 @@ impl AppLogger {
             return;
         }
 
-        // TODO: also format the date/time
-        let formatted = format!("[{}] {}", level.as_str(), message);
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+        let formatted = if self.is_tty {
+            let color = level.color_code();
+            let reset = "\x1b[0m";
+            format!(
+                "{}[{} {}]{} {}",
+                color,
+                timestamp,
+                level.as_str(),
+                reset,
+                message
+            )
+        } else {
+            format!("[{} {}] {}", timestamp, level.as_str(), message)
+        };
 
         match self.backend {
             LoggerBackend::Stdio => {
