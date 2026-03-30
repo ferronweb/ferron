@@ -11,6 +11,7 @@ use ferron_core::logging::LogLevel;
 use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
+use ferron_core::{log_info, log_warn};
 use ferron_http::BasicHttpModuleLoader;
 
 mod cli;
@@ -298,7 +299,7 @@ fn run_configuration_validators(
     }
     for directive in unused_global_directives {
         // TODO: specify where are the unused directives in the configuration file
-        println!("Warning: unused global directive: {}", directive);
+        log_warn!("Unused global directive: {}", directive);
     }
 
     // Run per-protocol validators
@@ -314,10 +315,7 @@ fn run_configuration_validators(
             }
             for directive in unused_directives {
                 // TODO: specify where are the unused directives in the configuration file
-                println!(
-                    "Warning: unused directive in protocol {}: {}",
-                    protocol, directive
-                );
+                log_warn!("Unused directive in protocol {}: {}", protocol, directive);
             }
         }
     }
@@ -502,7 +500,7 @@ fn load_modules(
 
         // Start all modules
         for module in modules {
-            println!("Starting module: {}", module.name());
+            log_info!("Starting module: {}", module.name());
             module.start(&mut runtime)?;
         }
 

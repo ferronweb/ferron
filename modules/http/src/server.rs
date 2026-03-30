@@ -7,7 +7,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
-use ferron_core::Module;
+use ferron_core::{log_error, log_info, Module};
 
 use crate::context::HttpContext;
 
@@ -55,27 +55,27 @@ impl Module for BasicHttpModule {
 
         let listener = std::net::TcpListener::bind("127.0.0.1:8080")?;
 
-        println!("HTTP server listening on 127.0.0.1:8080");
+        log_info!("HTTP server listening on 127.0.0.1:8080");
 
         runtime.spawn_primary_task(move || {
             let new_listener_result = listener.try_clone();
             let pipeline = pipeline.clone();
             Box::pin(async move {
                 let Ok(new_listener) = new_listener_result else {
-                    eprintln!("Failed to clone listener");
+                    log_error!("Failed to clone listener");
                     return;
                 };
                 if let Err(e) = new_listener.set_nonblocking(true) {
-                    eprintln!("Failed to set listener non-blocking: {}", e);
+                    log_error!("Failed to set listener non-blocking: {}", e);
                     return;
                 }
                 let Ok(listener) = tokio::net::TcpListener::from_std(new_listener) else {
-                    eprintln!("Failed to convert listener to tokio");
+                    log_error!("Failed to convert listener to tokio");
                     return;
                 };
                 loop {
                     let Ok((mut socket, _)) = listener.accept().await else {
-                        eprintln!("Failed to accept connection");
+                        log_error!("Failed to accept connection");
                         continue;
                     };
                     let pipeline = pipeline.clone();
@@ -83,7 +83,7 @@ impl Module for BasicHttpModule {
                     tokio::spawn(async move {
                         let mut buf = [0; 1024];
                         let Ok(n) = socket.read(&mut buf).await else {
-                            eprintln!("Failed to read from socket");
+                            log_error!("Failed to read from socket");
                             return;
                         };
 
@@ -95,14 +95,14 @@ impl Module for BasicHttpModule {
                         let path = parse_path(&req_str);
 
                         let Ok(req) = Request::builder().uri(path).body(Vec::new()) else {
-                            eprintln!("Failed to build request");
+                            log_error!("Failed to build request");
                             return;
                         };
 
                         let mut ctx = HttpContext::new(req);
 
                         if let Err(e) = pipeline.execute(&mut ctx).await {
-                            eprintln!("Pipeline execution error: {}", e);
+                            log_error!("Pipeline execution error: {}", e);
                         }
 
                         let res = ctx.res;

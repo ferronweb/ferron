@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use ferron_core::pipeline::{PipelineError, Stage};
-use ferron_core::StageConstraint;
+use ferron_core::{log_info, StageConstraint};
 
 use crate::context::HttpContext;
 
@@ -25,7 +25,7 @@ impl Stage<HttpContext> for LoggingStage {
     }
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        println!("--> {}", ctx.req.uri().path());
+        log_info!("--> {}", ctx.req.uri().path());
         Ok(true)
     }
 }
