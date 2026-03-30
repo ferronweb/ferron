@@ -13,6 +13,7 @@ use crate::context::HttpContext;
 
 pub struct BasicHttpModule {
     pipeline: Arc<Pipeline<HttpContext>>,
+    cancel_token: Arc<tokio_util::sync::CancellationToken>,
 }
 
 impl BasicHttpModule {
@@ -37,6 +38,7 @@ impl BasicHttpModule {
         // TODO: process configuration
         Self {
             pipeline: Arc::new(pipeline),
+            cancel_token: Arc::new(tokio_util::sync::CancellationToken::new()),
         }
     }
 }
@@ -57,7 +59,12 @@ impl Module for BasicHttpModule {
 
         log_info!("HTTP server listening on 127.0.0.1:8080");
 
+        let cancel_token = self.cancel_token.clone();
+
+        // TODO: replace with proper HTTP server implementation
+        //       use RELOAD_TOKEN from the core for config reloads
         runtime.spawn_primary_task(move || {
+            let cancel_token = cancel_token.clone();
             let new_listener_result = listener.try_clone();
             let pipeline = pipeline.clone();
             Box::pin(async move {
@@ -74,7 +81,13 @@ impl Module for BasicHttpModule {
                     return;
                 };
                 loop {
-                    let Ok((mut socket, _)) = listener.accept().await else {
+                    let accept_result = tokio::select! {
+                        res = listener.accept() => res,
+                        _ = cancel_token.cancelled() => {
+                            return;
+                        }
+                    };
+                    let Ok((mut socket, _)) = accept_result else {
                         log_error!("Failed to accept connection");
                         continue;
                     };
@@ -124,7 +137,11 @@ impl Module for BasicHttpModule {
     }
 }
 
-// TODO: cancel HTTP task when module is dropped.
+impl Drop for BasicHttpModule {
+    fn drop(&mut self) {
+        self.cancel_token.cancel();
+    }
+}
 
 fn parse_path(req: &str) -> String {
     req.lines()

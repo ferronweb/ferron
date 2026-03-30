@@ -260,6 +260,7 @@ dependencies = [
  "http",
  "parking_lot",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
