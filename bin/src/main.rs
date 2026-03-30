@@ -295,6 +295,7 @@ fn run_configuration_validators(
     // Run global validators
     let mut unused_global_directives = HashSet::new();
     for validator in global_validator_registry {
+        // TODO: better configuration validation error reporting (specify which directive is invalid and where in the configuration file)
         validator.validate_block(&config.global_config, &mut unused_global_directives)?;
     }
     for directive in unused_global_directives {
@@ -438,7 +439,9 @@ fn validate(
         loader.register_global_configuration_validators(&mut global_validator_registry);
     }
 
-    let (config, _) = config_adapter.adapt(&config_adapter_params)?;
+    let (config, _) = config_adapter
+        .adapt(&config_adapter_params)
+        .map_err(|e| anyhow::anyhow!("Failed to load configuration: {e}"))?;
 
     run_configuration_validators(
         &mut loaders,
@@ -461,7 +464,9 @@ fn adapt(
         ..
     } = load_config_adapters(config_path, config_params, config_adapter)?;
 
-    let (config, _) = config_adapter.adapt(&config_adapter_params)?;
+    let (config, _) = config_adapter
+        .adapt(&config_adapter_params)
+        .map_err(|e| anyhow::anyhow!("Failed to load configuration: {e}"))?;
     let json = serde_json::to_string_pretty(&config)?;
     println!("{}", json);
 
@@ -482,7 +487,9 @@ fn load_modules(
     let mut runtime = Runtime::new()?;
 
     loop {
-        let (mut config, mut watcher) = config_adapter.adapt(&config_adapter_params)?;
+        let (mut config, mut watcher) = config_adapter
+            .adapt(&config_adapter_params)
+            .map_err(|e| anyhow::anyhow!("Failed to load configuration: {e}"))?;
 
         let mut modules = Vec::new();
 
@@ -522,7 +529,10 @@ fn load_modules(
         })?;
 
         if shutdown {
+            log_info!("Shutting down the server...");
             return Ok(());
+        } else {
+            log_info!("Reloading configuration...");
         }
     }
 }

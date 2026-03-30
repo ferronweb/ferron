@@ -180,13 +180,13 @@ pub fn setup_signal_handlers() -> Result<()> {
         for signal in signals.forever() {
             match signal {
                 SIGINT => {
-                    log_info!("Received SIGINT, initiating graceful shutdown");
+                    log_debug!("Received SIGINT, initiating graceful shutdown");
                     SHUTDOWN_TOKEN
                         .swap(Arc::new(tokio_util::sync::CancellationToken::new()))
                         .cancel();
                 }
                 SIGHUP => {
-                    log_info!("Received SIGHUP, initiating configuration reload");
+                    log_debug!("Received SIGHUP, initiating configuration reload");
                     RELOAD_TOKEN
                         .swap(Arc::new(tokio_util::sync::CancellationToken::new()))
                         .cancel();

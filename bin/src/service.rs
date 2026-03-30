@@ -71,7 +71,7 @@ fn run_service_impl() -> Result<(), Box<dyn std::error::Error>> {
     let event_handler = move |control_event| -> ServiceControlHandlerResult {
         match control_event {
             ServiceControl::Stop => {
-                ferron_core::log_info!("Service stop signal received");
+                ferron_core::log_debug!("Service stop signal received");
                 ferron_core::shutdown::SHUTDOWN_TOKEN
                     .swap(Arc::new(tokio_util::sync::CancellationToken::new()))
                     .cancel();
@@ -79,7 +79,7 @@ fn run_service_impl() -> Result<(), Box<dyn std::error::Error>> {
             }
             ServiceControl::ParamChange => {
                 // Treat parameter change as a config reload signal
-                ferron_core::log_info!("Service config reload signal received (ParamChange)");
+                ferron_core::log_debug!("Service config reload signal received (ParamChange)");
                 ferron_core::shutdown::RELOAD_TOKEN
                     .swap(Arc::new(tokio_util::sync::CancellationToken::new()))
                     .cancel();
