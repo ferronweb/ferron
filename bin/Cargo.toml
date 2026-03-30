@@ -22,3 +22,7 @@ windows = { version = "0.58", features = [
     "Win32_System_EventLog",
     "Win32_Security",
 ] }
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", features = ["fs", "signal", "process"] }
+signal-hook = "0.4"

@@ -1,5 +1,4 @@
 // TODO: replace "println!" and "eprintln!" with custom logging macro usage
-// TODO: map SHUTDOWN_TOKEN to SIGINT, and RELOAD_TOKEN to SIGHUP on Unix-like systems
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -15,6 +14,9 @@ use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_http::BasicHttpModuleLoader;
 
 mod service;
+
+#[cfg(unix)]
+mod daemon;
 
 #[derive(Parser)]
 #[command(name = "ferron")]
@@ -49,6 +51,29 @@ enum Commands {
         #[cfg(windows)]
         #[arg(long = "service")]
         service: bool,
+    },
+    /// Runs the web server as a Unix daemon (Unix only)
+    #[cfg(unix)]
+    Daemon {
+        /// Path to the configuration file
+        #[arg(short = 'c', long = "config")]
+        config_path: Option<String>,
+
+        /// Configuration parameters in key=value;key2=value2 format
+        #[arg(long = "config-params")]
+        config_params: Option<String>,
+
+        /// Configuration adapter name
+        #[arg(long = "config-adapter")]
+        config_adapter: Option<String>,
+
+        /// Enable verbose (debug) logging
+        #[arg(long = "verbose", short = 'v')]
+        verbose: bool,
+
+        /// Path to the PID file
+        #[arg(long = "pid-file")]
+        pid_file: Option<String>,
     },
     /// Validates the web server configuration
     Validate {
@@ -122,8 +147,18 @@ fn parse_config_params(params_str: &str) -> HashMap<String, String> {
     params
 }
 
-// TODO: report errors into the console
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
+    if let Err(e) = main_inner() {
+        if ferron_core::logging::is_init() {
+            ferron_core::log_error!("{}", e);
+        } else {
+            eprintln!("Error: {}", e);
+        }
+        std::process::exit(1);
+    }
+}
+
+fn main_inner() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -138,6 +173,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(not(windows))]
             let service = false;
             run(config_path, config_params, config_adapter, verbose, service)?;
+        }
+        #[cfg(unix)]
+        Commands::Daemon {
+            config_path,
+            config_params,
+            config_adapter,
+            verbose,
+            pid_file,
+        } => {
+            run_daemon(
+                config_path,
+                config_params,
+                config_adapter,
+                verbose,
+                pid_file,
+            )?;
         }
         Commands::Validate {
             config_path,
@@ -158,6 +209,90 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             winservice(subcommand)?;
         }
     }
+
+    Ok(())
+}
+
+#[cfg(unix)]
+fn run_daemon(
+    config_path: Option<String>,
+    config_params: Option<String>,
+    config_adapter: Option<String>,
+    verbose: bool,
+    pid_file: Option<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use ferron_core::log_info;
+    use ferron_core::logging::LogLevel;
+
+    // Initialize stdio logger for validation phase (before daemonizing)
+    let log_level = if verbose {
+        LogLevel::Debug
+    } else {
+        LogLevel::Info
+    };
+
+    if !ferron_core::logging::is_init() {
+        ferron_core::logging::init_stdio_logger(log_level)?;
+    }
+
+    // First, validate the configuration before daemonizing
+    log_info!("Validating configuration before daemonizing...");
+    validate(
+        config_path.clone(),
+        config_params.clone(),
+        config_adapter.clone(),
+    )?;
+    log_info!("Configuration validation successful");
+
+    // Check if an existing daemon is already running (if PID file is specified)
+    if let Some(ref pid_path) = pid_file {
+        if daemon::check_pid_file(pid_path)? {
+            return Err(
+                format!("Daemon is already running (PID file exists: {})", pid_path).into(),
+            );
+        }
+    }
+
+    // Daemonize the process
+    log_info!("Daemonizing process...");
+    let is_daemon = daemon::daemonize()?;
+
+    if !is_daemon {
+        // This is the parent process, exit gracefully
+        log_info!("Parent process exiting, daemon started in background");
+        return Ok(());
+    }
+
+    // This is the daemon process
+
+    // Re-initialize logger after daemonizing (stdout/stderr are now /dev/null)
+    // For a daemon, we might want to log to syslog or a file, but for now we'll
+    // keep the stdio logger (which will write to /dev/null)
+    ferron_core::logging::init_stdio_logger(log_level)?;
+
+    // Write PID file if specified
+    if let Some(ref pid_path) = pid_file {
+        daemon::write_pid_file(pid_path)?;
+
+        // Set up cleanup on shutdown
+        let pid_path = pid_path.clone();
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let shutdown_token = SHUTDOWN_TOKEN.load();
+                shutdown_token.cancelled().await;
+                let _ = daemon::remove_pid_file(&pid_path);
+            });
+        });
+    }
+
+    // Set up signal handlers
+    daemon::setup_signal_handlers()?;
+    log_info!("Signal handlers installed (SIGINT -> shutdown, SIGHUP -> reload)");
+
+    // Now run the server with the same configuration
+    log_info!("Starting web server as daemon...");
+    run(config_path, config_params, config_adapter, verbose, false)?;
 
     Ok(())
 }
@@ -248,6 +383,9 @@ pub(crate) fn run(
         ferron_core::logging::init_stdio_logger(log_level)?;
     }
 
+    #[cfg(unix)]
+    let _ = daemon::setup_signal_handlers();
+
     let mut loaders: Vec<Box<dyn ModuleLoader>> = get_loaders();
 
     let mut config_registry = HashMap::new();
@@ -305,13 +443,84 @@ pub(crate) fn run(
 }
 
 fn validate(
-    _config_path: Option<String>,
-    _config_params: Option<String>,
-    _config_adapter: Option<String>,
+    config_path: Option<String>,
+    config_params: Option<String>,
+    config_adapter: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Validating configuration...");
-    // TODO: implement configuration validation
-    println!("Configuration validation TODO");
+    let mut loaders: Vec<Box<dyn ModuleLoader>> = get_loaders();
+
+    let mut config_registry = HashMap::new();
+    let mut global_validator_registry = Vec::new();
+    let mut per_protocol_validator_registry = HashMap::new();
+    for loader in &mut loaders {
+        loader.register_per_protocol_configuration_validators(&mut per_protocol_validator_registry);
+        loader.register_global_configuration_validators(&mut global_validator_registry);
+        loader.register_configuration_adapters(&mut config_registry);
+    }
+
+    let mut config_adapter_name = config_adapter.as_deref();
+    let mut config_adapter_params = config_params
+        .map(|s| parse_config_params(&s))
+        .unwrap_or_default();
+    if let Some(path) = config_path {
+        // Determine configuration adapter based on file extension if not specified
+        if config_adapter_name.is_none() {
+            if let Some(ext) = std::path::Path::new(&path)
+                .extension()
+                .and_then(|s| s.to_str())
+            {
+                for (name, adapter) in &config_registry {
+                    if adapter.file_extension().iter().any(|e| e == &ext) {
+                        config_adapter_name = Some(name);
+                        break;
+                    }
+                }
+            }
+        }
+
+        config_adapter_params.insert("file".to_string(), path);
+    }
+    let config_adapter_name = config_adapter_name.ok_or(anyhow::anyhow!(
+        "Configuration adapter not specified and could not be determined from file extension"
+    ))?;
+
+    let config_adapter = config_registry
+        .get(config_adapter_name)
+        .ok_or(anyhow::anyhow!("Configuration adapter not found"))?;
+
+    let (config, _) = config_adapter.adapt(&config_adapter_params)?;
+
+    // Run global validators
+    let mut unused_global_directives = HashSet::new();
+    for validator in &global_validator_registry {
+        validator.validate_block(&config.global_config, &mut unused_global_directives)?;
+    }
+    for directive in unused_global_directives {
+        // TODO: specify where are the unused directives in the configuration file
+        println!("Warning: unused global directive: {}", directive);
+    }
+
+    // Run per-protocol validators
+    let mut config_blocks_registry = HashMap::new();
+    for loader in &mut loaders {
+        loader.register_per_protocol_configuration_blocks(&config, &mut config_blocks_registry);
+    }
+    for (protocol, blocks) in &config_blocks_registry {
+        if let Some(validator) = per_protocol_validator_registry.get(protocol) {
+            let mut unused_directives = HashSet::new();
+            for block in blocks {
+                validator.validate_block(block.1, &mut unused_directives)?;
+            }
+            for directive in unused_directives {
+                // TODO: specify where are the unused directives in the configuration file
+                println!(
+                    "Warning: unused directive in protocol {}: {}",
+                    protocol, directive
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 
