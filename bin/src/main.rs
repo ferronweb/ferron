@@ -222,6 +222,109 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
     ]
 }
 
+/// Helper struct to hold configuration loading results
+struct ConfigLoadResult {
+    loaders: Vec<Box<dyn ModuleLoader>>,
+    config_adapter: Box<dyn ConfigurationAdapter>,
+    config_adapter_params: HashMap<String, String>,
+}
+
+/// Load configuration adapters from loaders and resolve the appropriate adapter
+fn load_config_adapters(
+    config_path: Option<String>,
+    config_params: Option<String>,
+    config_adapter_name: Option<String>,
+) -> Result<ConfigLoadResult, Box<dyn std::error::Error>> {
+    let mut loaders: Vec<Box<dyn ModuleLoader>> = get_loaders();
+
+    let mut config_registry: HashMap<&'static str, Box<dyn ConfigurationAdapter>> = HashMap::new();
+    for loader in &mut loaders {
+        loader.register_configuration_adapters(&mut config_registry);
+    }
+
+    let mut adapter_name = config_adapter_name;
+    let mut adapter_params = config_params
+        .map(|s| parse_config_params(&s))
+        .unwrap_or_default();
+
+    if let Some(path) = config_path {
+        // Determine configuration adapter based on file extension if not specified
+        if adapter_name.is_none() {
+            if let Some(ext) = std::path::Path::new(&path)
+                .extension()
+                .and_then(|s| s.to_str())
+            {
+                for (name, adapter) in &config_registry {
+                    if adapter.file_extension().iter().any(|e| e == &ext) {
+                        adapter_name = Some(name.to_string());
+                        break;
+                    }
+                }
+            }
+        }
+
+        adapter_params.insert("file".to_string(), path);
+    }
+
+    let adapter_name = adapter_name.ok_or(anyhow::anyhow!(
+        "Configuration adapter not specified and could not be determined from file extension"
+    ))?;
+
+    let config_adapter = config_registry
+        .remove(adapter_name.as_str())
+        .ok_or(anyhow::anyhow!("Configuration adapter not found"))?;
+
+    Ok(ConfigLoadResult {
+        loaders,
+        config_adapter,
+        config_adapter_params: adapter_params,
+    })
+}
+
+/// Run global and per-protocol configuration validators
+fn run_configuration_validators(
+    loaders: &mut [Box<dyn ModuleLoader>],
+    config: &ferron_core::config::ServerConfiguration,
+    global_validator_registry: &[Box<dyn ferron_core::config::validator::ConfigurationValidator>],
+    per_protocol_validator_registry: &HashMap<
+        &'static str,
+        Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+    >,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Run global validators
+    let mut unused_global_directives = HashSet::new();
+    for validator in global_validator_registry {
+        validator.validate_block(&config.global_config, &mut unused_global_directives)?;
+    }
+    for directive in unused_global_directives {
+        // TODO: specify where are the unused directives in the configuration file
+        println!("Warning: unused global directive: {}", directive);
+    }
+
+    // Run per-protocol validators
+    let mut config_blocks_registry = HashMap::new();
+    for loader in loaders {
+        loader.register_per_protocol_configuration_blocks(config, &mut config_blocks_registry);
+    }
+    for (protocol, blocks) in &config_blocks_registry {
+        if let Some(validator) = per_protocol_validator_registry.get(protocol) {
+            let mut unused_directives = HashSet::new();
+            for block in blocks {
+                validator.validate_block(block.1, &mut unused_directives)?;
+            }
+            for directive in unused_directives {
+                // TODO: specify where are the unused directives in the configuration file
+                println!(
+                    "Warning: unused directive in protocol {}: {}",
+                    protocol, directive
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub(crate) fn run(
     config_path: Option<String>,
     config_params: Option<String>,
@@ -324,79 +427,27 @@ fn validate(
     config_params: Option<String>,
     config_adapter: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut loaders: Vec<Box<dyn ModuleLoader>> = get_loaders();
+    let ConfigLoadResult {
+        mut loaders,
+        config_adapter,
+        config_adapter_params,
+    } = load_config_adapters(config_path, config_params, config_adapter)?;
 
-    let mut config_registry = HashMap::new();
     let mut global_validator_registry = Vec::new();
     let mut per_protocol_validator_registry = HashMap::new();
     for loader in &mut loaders {
         loader.register_per_protocol_configuration_validators(&mut per_protocol_validator_registry);
         loader.register_global_configuration_validators(&mut global_validator_registry);
-        loader.register_configuration_adapters(&mut config_registry);
     }
-
-    let mut config_adapter_name = config_adapter.as_deref();
-    let mut config_adapter_params = config_params
-        .map(|s| parse_config_params(&s))
-        .unwrap_or_default();
-    if let Some(path) = config_path {
-        // Determine configuration adapter based on file extension if not specified
-        if config_adapter_name.is_none() {
-            if let Some(ext) = std::path::Path::new(&path)
-                .extension()
-                .and_then(|s| s.to_str())
-            {
-                for (name, adapter) in &config_registry {
-                    if adapter.file_extension().iter().any(|e| e == &ext) {
-                        config_adapter_name = Some(name);
-                        break;
-                    }
-                }
-            }
-        }
-
-        config_adapter_params.insert("file".to_string(), path);
-    }
-    let config_adapter_name = config_adapter_name.ok_or(anyhow::anyhow!(
-        "Configuration adapter not specified and could not be determined from file extension"
-    ))?;
-
-    let config_adapter = config_registry
-        .get(config_adapter_name)
-        .ok_or(anyhow::anyhow!("Configuration adapter not found"))?;
 
     let (config, _) = config_adapter.adapt(&config_adapter_params)?;
 
-    // Run global validators
-    let mut unused_global_directives = HashSet::new();
-    for validator in &global_validator_registry {
-        validator.validate_block(&config.global_config, &mut unused_global_directives)?;
-    }
-    for directive in unused_global_directives {
-        // TODO: specify where are the unused directives in the configuration file
-        println!("Warning: unused global directive: {}", directive);
-    }
-
-    // Run per-protocol validators
-    let mut config_blocks_registry = HashMap::new();
-    for loader in &mut loaders {
-        loader.register_per_protocol_configuration_blocks(&config, &mut config_blocks_registry);
-    }
-    for (protocol, blocks) in &config_blocks_registry {
-        if let Some(validator) = per_protocol_validator_registry.get(protocol) {
-            let mut unused_directives = HashSet::new();
-            for block in blocks {
-                validator.validate_block(block.1, &mut unused_directives)?;
-            }
-            for directive in unused_directives {
-                // TODO: specify where are the unused directives in the configuration file
-                println!(
-                    "Warning: unused directive in protocol {}: {}",
-                    protocol, directive
-                );
-            }
-        }
-    }
+    run_configuration_validators(
+        &mut loaders,
+        &config,
+        &global_validator_registry,
+        &per_protocol_validator_registry,
+    )?;
 
     Ok(())
 }
@@ -406,46 +457,11 @@ fn adapt(
     config_params: Option<String>,
     config_adapter: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut loaders: Vec<Box<dyn ModuleLoader>> = get_loaders();
-
-    let mut config_registry = HashMap::new();
-    let mut global_validator_registry = Vec::new();
-    let mut per_protocol_validator_registry = HashMap::new();
-    for loader in &mut loaders {
-        loader.register_per_protocol_configuration_validators(&mut per_protocol_validator_registry);
-        loader.register_global_configuration_validators(&mut global_validator_registry);
-        loader.register_configuration_adapters(&mut config_registry);
-    }
-
-    let mut config_adapter_name = config_adapter.as_deref();
-    let mut config_adapter_params = config_params
-        .map(|s| parse_config_params(&s))
-        .unwrap_or_default();
-    if let Some(path) = config_path {
-        // Determine configuration adapter based on file extension if not specified
-        if config_adapter_name.is_none() {
-            if let Some(ext) = std::path::Path::new(&path)
-                .extension()
-                .and_then(|s| s.to_str())
-            {
-                for (name, adapter) in &config_registry {
-                    if adapter.file_extension().iter().any(|e| e == &ext) {
-                        config_adapter_name = Some(name);
-                        break;
-                    }
-                }
-            }
-        }
-
-        config_adapter_params.insert("file".to_string(), path);
-    }
-    let config_adapter_name = config_adapter_name.ok_or(anyhow::anyhow!(
-        "Configuration adapter not specified and could not be determined from file extension"
-    ))?;
-
-    let config_adapter = config_registry
-        .get(config_adapter_name)
-        .ok_or(anyhow::anyhow!("Configuration adapter not found"))?;
+    let ConfigLoadResult {
+        config_adapter,
+        config_adapter_params,
+        ..
+    } = load_config_adapters(config_path, config_params, config_adapter)?;
 
     let (config, _) = config_adapter.adapt(&config_adapter_params)?;
     let json = serde_json::to_string_pretty(&config)?;
@@ -470,36 +486,15 @@ fn load_modules(
     loop {
         let (mut config, mut watcher) = config_adapter.adapt(&config_adapter_params)?;
 
-        let mut config_blocks_registry = HashMap::new();
         let mut modules = Vec::new();
 
-        // configuration validation
-        let mut unused_global_directives = HashSet::new();
-        for validator in &global_validator_registry {
-            validator.validate_block(&config.global_config, &mut unused_global_directives)?;
-        }
-        for directive in unused_global_directives {
-            // TODO: specify where are the unused directives in the configuration file
-            println!("Warning: unused global directive: {}", directive);
-        }
-        for loader in &mut loaders {
-            loader.register_per_protocol_configuration_blocks(&config, &mut config_blocks_registry);
-        }
-        for (protocol, blocks) in &config_blocks_registry {
-            if let Some(validator) = per_protocol_validator_registry.get(protocol) {
-                let mut unused_directives = HashSet::new();
-                for block in blocks {
-                    validator.validate_block(block.1, &mut unused_directives)?;
-                }
-                for directive in unused_directives {
-                    // TODO: specify where are the unused directives in the configuration file
-                    println!(
-                        "Warning: unused directive in protocol {}: {}",
-                        protocol, directive
-                    );
-                }
-            }
-        }
+        // Configuration validation
+        run_configuration_validators(
+            &mut loaders,
+            &config,
+            &global_validator_registry,
+            &per_protocol_validator_registry,
+        )?;
 
         for loader in &mut loaders {
             loader.register_modules(&registry, &mut modules, &mut config);
