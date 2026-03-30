@@ -1,5 +1,3 @@
-// TODO: replace "println!" and "eprintln!" with custom logging macro usage
-
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 

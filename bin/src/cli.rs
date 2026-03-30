@@ -10,7 +10,6 @@ pub struct Cli {
     pub command: Commands,
 }
 
-// TODO: `ferron service` subcommand for Unix-like systems
 #[derive(Subcommand)]
 pub enum Commands {
     /// Starts the web server
