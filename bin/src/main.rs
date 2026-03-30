@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use ferron_config::BlankConfigurationAdapterModuleLoader;
 use ferron_core::config::adapter::ConfigurationAdapter;
 use ferron_core::loader::ModuleLoader;
@@ -13,139 +13,16 @@ use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_http::BasicHttpModuleLoader;
 
+mod cli;
 mod service;
 
 #[cfg(unix)]
 mod daemon;
 
-#[derive(Parser)]
-#[command(name = "ferron")]
-#[command(about = "Ferron web server CLI", long_about = None)]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-// TODO: `ferron service` subcommand for Unix-like systems
-#[derive(Subcommand)]
-enum Commands {
-    /// Starts the web server
-    Run {
-        /// Path to the configuration file
-        #[arg(short = 'c', long = "config")]
-        config_path: Option<String>,
-
-        /// Configuration parameters in key=value;key2=value2 format
-        #[arg(long = "config-params")]
-        config_params: Option<String>,
-
-        /// Configuration adapter name
-        #[arg(long = "config-adapter")]
-        config_adapter: Option<String>,
-
-        /// Enable verbose (debug) logging
-        #[arg(long = "verbose", short = 'v')]
-        verbose: bool,
-
-        /// Run as a Windows service (Windows only)
-        #[cfg(windows)]
-        #[arg(long = "service")]
-        service: bool,
-    },
-    /// Runs the web server as a Unix daemon (Unix only)
-    #[cfg(unix)]
-    Daemon {
-        /// Path to the configuration file
-        #[arg(short = 'c', long = "config")]
-        config_path: Option<String>,
-
-        /// Configuration parameters in key=value;key2=value2 format
-        #[arg(long = "config-params")]
-        config_params: Option<String>,
-
-        /// Configuration adapter name
-        #[arg(long = "config-adapter")]
-        config_adapter: Option<String>,
-
-        /// Enable verbose (debug) logging
-        #[arg(long = "verbose", short = 'v')]
-        verbose: bool,
-
-        /// Path to the PID file
-        #[arg(long = "pid-file")]
-        pid_file: Option<String>,
-    },
-    /// Validates the web server configuration
-    Validate {
-        /// Path to the configuration file
-        #[arg(short = 'c', long = "config")]
-        config_path: Option<String>,
-
-        /// Configuration parameters in key=value;key2=value2 format
-        #[arg(long = "config-params")]
-        config_params: Option<String>,
-
-        /// Configuration adapter name
-        #[arg(long = "config-adapter")]
-        config_adapter: Option<String>,
-    },
-    /// Translates the web server configuration into JSON representation
-    Adapt {
-        /// Path to the configuration file
-        #[arg(short = 'c', long = "config")]
-        config_path: Option<String>,
-
-        /// Configuration parameters in key=value;key2=value2 format
-        #[arg(long = "config-params")]
-        config_params: Option<String>,
-
-        /// Configuration adapter name
-        #[arg(long = "config-adapter")]
-        config_adapter: Option<String>,
-    },
-    /// Windows service management (Windows only)
-    #[cfg(windows)]
-    #[command(name = "winservice")]
-    WinService {
-        #[command(subcommand)]
-        subcommand: WinServiceCommands,
-    },
-}
+use cli::{parse_config_params, Cli, Commands};
 
 #[cfg(windows)]
-#[derive(Subcommand)]
-enum WinServiceCommands {
-    /// Install the Windows service
-    Install {
-        /// Path to the configuration file
-        #[arg(short = 'c', long = "config")]
-        config_path: Option<String>,
-
-        /// Configuration parameters in key=value;key2=value2 format
-        #[arg(long = "config-params")]
-        config_params: Option<String>,
-
-        /// Configuration adapter name
-        #[arg(long = "config-adapter")]
-        config_adapter: Option<String>,
-
-        /// Enable verbose (debug) logging
-        #[arg(long = "verbose", short = 'v')]
-        verbose: bool,
-    },
-    /// Uninstall the Windows service
-    Uninstall,
-}
-
-fn parse_config_params(params_str: &str) -> HashMap<String, String> {
-    let mut params = HashMap::new();
-    for pair in params_str.split(';') {
-        if let Some((key, value)) = pair.split_once('=') {
-            params.insert(key.trim().to_string(), value.trim().to_string());
-        }
-    }
-    params
-}
+use cli::WinServiceCommands;
 
 fn main() {
     if let Err(e) = main_inner() {
