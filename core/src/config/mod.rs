@@ -11,14 +11,14 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationSpan {
     pub line: usize,
     pub column: usize,
     pub file: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfiguration {
     pub global_config: Arc<ServerConfigurationBlock>,
     pub ports: BTreeMap<String, Vec<ServerConfigurationPort>>, // the key would be the protocol name
@@ -35,26 +35,26 @@ Host configuration
         +- Error
  */
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationPort {
     pub port: u16,
     pub hosts: Vec<(ServerConfigurationHostFilters, ServerConfigurationBlock)>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationHostFilters {
     pub ip: Option<IpAddr>,
     pub host: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationBlock {
     pub directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
     pub matchers: HashMap<String, Vec<ServerConfigurationMatcher>>,
     pub span: Option<ServerConfigurationSpan>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationDirectiveEntry {
     pub args: Vec<ServerConfigurationValue>,
     pub children: Option<ServerConfigurationBlock>,
@@ -79,7 +79,7 @@ pub enum ServerConfigurationInterpolatedStringPart {
     Variable(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationMatcher {
     pub exprs: Vec<ServerConfigurationMatcherExpr>,
     pub span: Option<ServerConfigurationSpan>,

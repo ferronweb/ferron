@@ -27,11 +27,18 @@ impl ConfigurationAdapter for BlankConfigurationAdapter {
     > {
         Ok((
             ferron_core::config::ServerConfigurationBuilder::new()
-                .global_config(ServerConfigurationBlock {
-                    directives: HashMap::new(),
-                    matchers: HashMap::new(),
-                    span: None,
-                })
+                .global_config(ferron_core::config::ServerConfigurationBlockBuilder::new().directive("runtime", ferron_core::config::ServerConfigurationDirectiveEntry {
+                    args: vec![],
+                    children: Some(ferron_core::config::ServerConfigurationBlockBuilder::new().directive(
+                        "io_uring",
+                        ferron_core::config::ServerConfigurationDirectiveEntry {
+                            args: vec![ferron_core::config::ServerConfigurationValue::Boolean(true, None)],
+                            children: None,
+                            ..Default::default()
+                        },
+                    ).build()),
+                    ..Default::default()
+                }).build())
                 .port(
                     "http",
                     ServerConfigurationPort {

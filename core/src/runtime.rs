@@ -1,5 +1,9 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
+use crate::log_warn;
+
+static IO_URING_FAILED_WARNING_LOGGED: std::sync::Once = std::sync::Once::new();
+
 pub struct Runtime {
     primary_task_channels: Vec<
         tokio::sync::mpsc::UnboundedSender<
@@ -10,7 +14,7 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    pub fn new() -> Result<Self, std::io::Error> {
+    pub fn new(io_uring_enabled: bool) -> Result<Self, std::io::Error> {
         // Spawn multiple threads (as many threads as available parallelism
         let available_parallelism = std::thread::available_parallelism()?.get();
         let mut primary_task_channels = Vec::with_capacity(available_parallelism);
@@ -21,12 +25,22 @@ impl Runtime {
             >();
             std::thread::spawn(move || {
                 // TODO: option to enable/disable `io_uring` support in vibeio
+                let use_io_uring = io_uring_enabled && vibeio::util::supports_io_uring();
                 let rt = vibeio::RuntimeBuilder::new()
                     .enable_timer(true)
                     .build()
                     .expect("failed to create vibeio runtime for primary tasks");
 
                 rt.block_on(async move {
+                    if use_io_uring && !vibeio::util::supports_completion() {
+                        IO_URING_FAILED_WARNING_LOGGED.call_once(|| {
+                            log_warn!(
+                                "io_uring is enabled in configuration and \
+                                 supported on this system, but failed to \
+                                 initialize io_uring; falling back to epoll"
+                            );
+                        });
+                    }
                     while let Some(task_factory) = rx.recv().await {
                         vibeio::spawn((task_factory.as_ref())());
                     }

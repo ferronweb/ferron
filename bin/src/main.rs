@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use ferron_config::BlankConfigurationAdapterModuleLoader;
+use ferron_core::builtin::BuiltinModuleLoader;
 use ferron_core::config::adapter::ConfigurationAdapter;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::logging::LogLevel;
@@ -219,6 +220,7 @@ fn winservice(subcommand: WinServiceCommands) -> Result<(), Box<dyn std::error::
 
 fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
     vec![
+        Box::new(BuiltinModuleLoader::default()),
         Box::new(BasicHttpModuleLoader::default()),
         Box::new(BlankConfigurationAdapterModuleLoader),
     ]
@@ -313,10 +315,10 @@ fn run_configuration_validators(
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Run global validators
-    let mut unused_global_directives = HashSet::new();
+    let mut used_global_directives = HashSet::new();
     for validator in global_validator_registry {
         validator
-            .validate_block(&config.global_config, &mut unused_global_directives)
+            .validate_block(&config.global_config, &mut used_global_directives)
             .map_err(|e| {
                 anyhow::anyhow!(
                     "Invalid configuration ({}): {e}",
@@ -324,6 +326,13 @@ fn run_configuration_validators(
                 )
             })?;
     }
+    let unused_global_directives: Vec<String> = config
+        .global_config
+        .directives
+        .keys()
+        .filter(|d| !used_global_directives.contains(*d))
+        .cloned()
+        .collect();
     for directive in unused_global_directives {
         log_warn!(
             "Unused directive ({}): {directive}",
@@ -339,9 +348,9 @@ fn run_configuration_validators(
     for (protocol, blocks) in &config_blocks_registry {
         if let Some(validator) = per_protocol_validator_registry.get(protocol) {
             for block in blocks {
-                let mut unused_directives = HashSet::new();
+                let mut used_directives = HashSet::new();
                 validator
-                    .validate_block(block.1, &mut unused_directives)
+                    .validate_block(block.1, &mut used_directives)
                     .map_err(|e| {
                         anyhow::anyhow!(
                             "Invalid configuration ({}): {e}",
@@ -351,6 +360,13 @@ fn run_configuration_validators(
                             )
                         )
                     })?;
+                let unused_directives: Vec<String> = block
+                    .1
+                    .directives
+                    .keys()
+                    .filter(|d| !used_directives.contains(*d))
+                    .cloned()
+                    .collect();
                 for directive in unused_directives {
                     log_warn!(
                         "Unused directive ({}): {directive}",
@@ -527,8 +543,7 @@ fn load_modules(
         Box<dyn ferron_core::config::validator::ConfigurationValidator>,
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // TODO: dynamic runtime settings, including whether to enable/disable `io_uring`
-    let mut runtime = Runtime::new()?;
+    let mut runtime = None;
 
     loop {
         let (mut config, mut watcher) = config_adapter
@@ -544,6 +559,38 @@ fn load_modules(
             &global_validator_registry,
             &per_protocol_validator_registry,
         )?;
+
+        let io_uring_enabled = config
+            .global_config
+            .directives
+            .get("runtime")
+            .and_then(|d| d.last())
+            .and_then(|d| {
+                d.children.as_ref().and_then(|c| {
+                    c.directives.get("io_uring").and_then(|d| {
+                        d.iter().find_map(|d| {
+                            if d.args.len() == 1 {
+                                if let ferron_core::config::ServerConfigurationValue::Boolean(
+                                    value,
+                                    _,
+                                ) = &d.args[0]
+                                {
+                                    return Some(*value);
+                                }
+                            }
+                            None
+                        })
+                    })
+                })
+            })
+            .unwrap_or(true);
+
+        if runtime.is_none() {
+            runtime = Some(Runtime::new(io_uring_enabled)?);
+        }
+        let mut runtime = runtime
+            .take()
+            .expect("runtime should be initialized at this point");
 
         for loader in &mut loaders {
             loader.register_modules(&registry, &mut modules, &mut config);
