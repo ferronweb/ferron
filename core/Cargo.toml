@@ -8,3 +8,14 @@ async-trait = "0.1"
 parking_lot = "0.12"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0.228", features = ["derive", "rc"] }
+arc-swap = "1.9.0"
+tokio-util = "0.7.18"
+anyhow = "1.0"
+
+[target.'cfg(windows)'.dependencies]
+windows-service = "0.7"
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_System_EventLog",
+    "Win32_Security",
+] }

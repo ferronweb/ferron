@@ -5,9 +5,9 @@ use std::sync::Arc;
 use http::Request;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use ferron_core::Module;
 use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
+use ferron_core::Module;
 
 use crate::context::HttpContext;
 

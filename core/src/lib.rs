@@ -1,9 +1,11 @@
 pub mod config;
 pub mod loader;
+pub mod logging;
 pub mod observability;
 pub mod pipeline;
 pub mod registry;
 pub mod runtime;
+pub mod shutdown;
 
 pub use registry::StageConstraint;
 

@@ -5,3 +5,6 @@ members = [
     "core",
     "modules/*"
 ]
+exclude = [
+    "network-server-windows-service-2"
+]

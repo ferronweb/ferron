@@ -1,8 +1,8 @@
 //! Hello handler stage
 
 use async_trait::async_trait;
-use ferron_core::StageConstraint;
 use ferron_core::pipeline::{PipelineError, Stage};
+use ferron_core::StageConstraint;
 use http::Response;
 
 use crate::context::HttpContext;
