@@ -560,6 +560,7 @@ fn load_modules(
             &per_protocol_validator_registry,
         )?;
 
+        // TODO: use layered configuration struct instead of manually obtaining configuration values for runtime
         let io_uring_enabled = config
             .global_config
             .directives
