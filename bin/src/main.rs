@@ -66,17 +66,29 @@ fn load_modules(
         let mut modules = Vec::new();
 
         // configuration validation
-        // TODO: used directives and error reporting for invalid directives
+        let mut unused_global_directives = HashSet::new();
         for validator in &global_validator_registry {
-            validator.validate_block(&config.global_config, &mut HashSet::new())?;
+            validator.validate_block(&config.global_config, &mut unused_global_directives)?;
+        }
+        for directive in unused_global_directives {
+            // TODO: specify where are the unused directives in the configuration file
+            println!("Warning: unused global directive: {}", directive);
         }
         for loader in &mut loaders {
             loader.register_per_protocol_configuration_blocks(&config, &mut config_blocks_registry);
         }
         for (protocol, blocks) in &config_blocks_registry {
             if let Some(validator) = per_protocol_validator_registry.get(protocol) {
+                let mut unused_directives = HashSet::new();
                 for block in blocks {
-                    validator.validate_block(block.1, &mut HashSet::new())?;
+                    validator.validate_block(block.1, &mut unused_directives)?;
+                }
+                for directive in unused_directives {
+                    // TODO: specify where are the unused directives in the configuration file
+                    println!(
+                        "Warning: unused directive in protocol {}: {}",
+                        protocol, directive
+                    );
                 }
             }
         }
