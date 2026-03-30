@@ -1,5 +1,6 @@
-pub mod builtin;
+#[macro_use]
 pub mod config;
+pub mod builtin;
 pub mod loader;
 pub mod logging;
 pub mod observability;

@@ -1,4 +1,4 @@
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 
 use arc_swap::ArcSwap;
 use tokio_util::sync::CancellationToken;

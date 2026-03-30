@@ -1,5 +1,6 @@
 pub mod adapter;
 mod builder;
+pub mod macros;
 pub mod validator;
 
 pub use builder::*;
