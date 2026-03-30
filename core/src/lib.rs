@@ -1,5 +1,6 @@
 pub mod config;
 pub mod loader;
+pub mod observability;
 pub mod pipeline;
 pub mod registry;
 pub mod runtime;
