@@ -16,23 +16,20 @@ impl Runtime {
         let mut primary_task_channels = Vec::with_capacity(available_parallelism);
 
         for _ in 0..available_parallelism {
-            // TODO: replace Tokio with `vibeio`...
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()?;
-
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<
                 Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send + Sync + 'static>,
             >();
             std::thread::spawn(move || {
+                // TODO: option to enable/disable `io_uring` support in vibeio
+                let rt = vibeio::RuntimeBuilder::new()
+                    .enable_timer(true)
+                    .build()
+                    .expect("failed to create vibeio runtime for primary tasks");
+
                 rt.block_on(async move {
-                    tokio::task::LocalSet::new()
-                        .run_until(async move {
-                            while let Some(task_factory) = rx.recv().await {
-                                tokio::task::spawn_local((task_factory.as_ref())());
-                            }
-                        })
-                        .await;
+                    while let Some(task_factory) = rx.recv().await {
+                        vibeio::spawn((task_factory.as_ref())());
+                    }
                 });
             });
             primary_task_channels.push(tx);

@@ -527,6 +527,7 @@ fn load_modules(
         Box<dyn ferron_core::config::validator::ConfigurationValidator>,
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // TODO: dynamic runtime settings, including whether to enable/disable `io_uring`
     let mut runtime = Runtime::new()?;
 
     loop {

@@ -76,7 +76,7 @@ impl Module for BasicHttpModule {
                     log_error!("Failed to set listener non-blocking: {}", e);
                     return;
                 }
-                let Ok(listener) = tokio::net::TcpListener::from_std(new_listener) else {
+                let Ok(listener) = vibeio::net::TcpListener::from_std(new_listener) else {
                     log_error!("Failed to convert listener to tokio");
                     return;
                 };
@@ -87,13 +87,19 @@ impl Module for BasicHttpModule {
                             return;
                         }
                     };
-                    let Ok((mut socket, _)) = accept_result else {
+                    let Ok((socket, _)) = accept_result else {
                         log_error!("Failed to accept connection");
                         continue;
                     };
                     let pipeline = pipeline.clone();
 
-                    tokio::spawn(async move {
+                    let _ = socket.set_nodelay(true);
+                    let Ok(mut socket) = socket.into_poll() else {
+                        log_error!("Failed to convert socket to poll-based I/O");
+                        continue;
+                    };
+
+                    vibeio::spawn(async move {
                         let mut buf = [0; 1024];
                         let Ok(n) = socket.read(&mut buf).await else {
                             log_error!("Failed to read from socket");
