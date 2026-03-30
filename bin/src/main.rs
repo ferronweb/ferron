@@ -240,6 +240,8 @@ pub(crate) fn run(
                 .map_err(|e| e.into());
         }
     }
+    #[cfg(not(windows))]
+    let _ = service; // silence unused variable warning
 
     if !ferron_core::logging::is_init() {
         // Initialize stdio logger for console mode
