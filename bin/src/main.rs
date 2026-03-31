@@ -5,6 +5,7 @@ use clap::Parser;
 use ferron_config::BlankConfigurationAdapterModuleLoader;
 use ferron_core::builtin::BuiltinModuleLoader;
 use ferron_core::config::adapter::ConfigurationAdapter;
+use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::logging::LogLevel;
 use ferron_core::registry::{Registry, RegistryBuilder};
@@ -560,30 +561,11 @@ fn load_modules(
             &per_protocol_validator_registry,
         )?;
 
-        // TODO: use layered configuration struct instead of manually obtaining configuration values for runtime
-        let io_uring_enabled = config
-            .global_config
-            .directives
-            .get("runtime")
-            .and_then(|d| d.last())
-            .and_then(|d| {
-                d.children.as_ref().and_then(|c| {
-                    c.directives.get("io_uring").and_then(|d| {
-                        d.iter().find_map(|d| {
-                            if d.args.len() == 1 {
-                                if let ferron_core::config::ServerConfigurationValue::Boolean(
-                                    value,
-                                    _,
-                                ) = &d.args[0]
-                                {
-                                    return Some(*value);
-                                }
-                            }
-                            None
-                        })
-                    })
-                })
-            })
+        let mut layered_config = LayeredConfiguration::new();
+        layered_config.add_layer(config.global_config.clone());
+        let io_uring_enabled = layered_config
+            .get_entry("runtime", false)
+            .and_then(|d| d.children.as_ref().map(|c| c.get_flag("io_uring")))
             .unwrap_or(true);
 
         if runtime.is_none() {

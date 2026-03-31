@@ -1,5 +1,6 @@
 pub mod adapter;
 mod builder;
+pub mod layer;
 pub mod macros;
 pub mod validator;
 
@@ -55,11 +56,42 @@ pub struct ServerConfigurationBlock {
     pub span: Option<ServerConfigurationSpan>,
 }
 
+impl ServerConfigurationBlock {
+    pub fn get_value(&self, directive: &str) -> Option<&ServerConfigurationValue> {
+        self.directives
+            .get(directive)
+            .and_then(|entries| entries.first())
+            .and_then(|entry| entry.args.first())
+    }
+
+    pub fn get_flag(&self, directive: &str) -> bool {
+        if let Some(v) = self.get_value(directive) {
+            v.as_boolean().unwrap_or(true)
+        } else {
+            false
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationDirectiveEntry {
     pub args: Vec<ServerConfigurationValue>,
     pub children: Option<ServerConfigurationBlock>,
     pub span: Option<ServerConfigurationSpan>,
+}
+
+impl ServerConfigurationDirectiveEntry {
+    pub fn get_value(&self) -> Option<&ServerConfigurationValue> {
+        self.args.first()
+    }
+
+    pub fn get_flag(&self) -> bool {
+        if let Some(ServerConfigurationValue::Boolean(value, _)) = self.args.first() {
+            *value
+        } else {
+            true
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,6 +104,65 @@ pub enum ServerConfigurationValue {
         Vec<ServerConfigurationInterpolatedStringPart>,
         Option<ServerConfigurationSpan>,
     ),
+}
+
+impl ServerConfigurationValue {
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            ServerConfigurationValue::String(s, _) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn as_string_with_interpolations(
+        &self,
+        variables: &HashMap<String, String>,
+    ) -> Option<String> {
+        match self {
+            ServerConfigurationValue::String(s, _) => Some(s.clone()),
+            ServerConfigurationValue::InterpolatedString(parts, _) => {
+                let mut result = String::new();
+                for part in parts {
+                    match part {
+                        ServerConfigurationInterpolatedStringPart::String(s) => result.push_str(s),
+                        ServerConfigurationInterpolatedStringPart::Variable(var) => {
+                            if let Some(value) = variables.get(var) {
+                                result.push_str(value);
+                            } else {
+                                result.push_str(&format!("{{{{{}}}}}", var));
+                            }
+                        }
+                    }
+                }
+                Some(result)
+            }
+            _ => None,
+        }
+    }
+
+    pub fn as_number(&self) -> Option<i64> {
+        if let ServerConfigurationValue::Number(n, _) = self {
+            Some(*n)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_float(&self) -> Option<f64> {
+        if let ServerConfigurationValue::Float(f, _) = self {
+            Some(*f)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_boolean(&self) -> Option<bool> {
+        if let ServerConfigurationValue::Boolean(b, _) = self {
+            Some(*b)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
