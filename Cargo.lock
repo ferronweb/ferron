@@ -277,6 +277,7 @@ dependencies = [
 name = "ferron-http"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "ferron-core",
  "http",

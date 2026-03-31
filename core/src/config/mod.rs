@@ -52,7 +52,7 @@ pub struct ServerConfigurationHostFilters {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationBlock {
     pub directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
-    pub matchers: HashMap<String, Vec<ServerConfigurationMatcher>>,
+    pub matchers: HashMap<String, ServerConfigurationMatcher>,
     pub span: Option<ServerConfigurationSpan>,
 }
 
@@ -177,22 +177,45 @@ pub struct ServerConfigurationMatcher {
     pub span: Option<ServerConfigurationSpan>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationMatcherExpr {
     pub left: ServerConfigurationMatcherOperand,
     pub right: ServerConfigurationMatcherOperand,
     pub op: ServerConfigurationMatcherOperator,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Serialize, Deserialize)]
 pub enum ServerConfigurationMatcherOperand {
-    Identifier(String, Option<ServerConfigurationSpan>),
-    String(String, Option<ServerConfigurationSpan>),
-    Integer(i64, Option<ServerConfigurationSpan>),
-    Float(f64, Option<ServerConfigurationSpan>),
+    Identifier(String),
+    String(String),
+    Integer(i64),
+    Float(f64),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl Eq for ServerConfigurationMatcherOperand {}
+
+impl Ord for ServerConfigurationMatcherOperand {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use ServerConfigurationMatcherOperand::*;
+        match (self, other) {
+            (Identifier(a), Identifier(b)) => a.cmp(b),
+            (String(a), String(b)) => a.cmp(b),
+            (Integer(a), Integer(b)) => a.cmp(b),
+            // For floats, we need to handle NaN values which do not have a total ordering
+            (Float(a), Float(b)) => a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal),
+
+            // Define an arbitrary but consistent ordering between different types
+            (Identifier(_), _) => std::cmp::Ordering::Less,
+            (String(_), Identifier(_)) => std::cmp::Ordering::Greater,
+            (String(_), _) => std::cmp::Ordering::Less,
+            (Integer(_), Identifier(_) | String(_)) => std::cmp::Ordering::Greater,
+            (Integer(_), Float(_)) => std::cmp::Ordering::Less,
+            (Float(_), Identifier(_) | String(_) | Integer(_)) => std::cmp::Ordering::Greater,
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Serialize, Deserialize)]
 pub enum ServerConfigurationMatcherOperator {
     Eq,
     NotEq,

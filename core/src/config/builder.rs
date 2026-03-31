@@ -275,15 +275,11 @@ impl ServerConfigurationBlockBuilder {
         name: impl Into<String>,
         identifier: impl Into<String>,
         value: impl Into<String>,
-        span: ServerConfigurationSpan,
     ) -> Self {
         let matcher = ServerConfigurationMatcher {
             exprs: vec![ServerConfigurationMatcherExpr {
-                left: ServerConfigurationMatcherOperand::Identifier(
-                    identifier.into(),
-                    Some(span.clone()),
-                ),
-                right: ServerConfigurationMatcherOperand::String(value.into(), Some(span)),
+                left: ServerConfigurationMatcherOperand::Identifier(identifier.into()),
+                right: ServerConfigurationMatcherOperand::String(value.into()),
                 op: ServerConfigurationMatcherOperator::Eq,
             }],
             span: None,
@@ -303,10 +299,7 @@ impl ServerConfigurationBlockBuilder {
 
         let mut matchers_map = std::collections::HashMap::new();
         for (name, matcher) in self.matchers {
-            matchers_map
-                .entry(name)
-                .or_insert_with(Vec::new)
-                .push(matcher);
+            matchers_map.entry(name).or_insert(matcher);
         }
 
         ServerConfigurationBlock {
@@ -393,48 +386,30 @@ impl ServerConfigurationMatcherBuilder {
     }
 
     /// Adds an equality expression.
-    pub fn expr_eq(
-        mut self,
-        identifier: impl Into<String>,
-        value: impl Into<String>,
-        span_l: Option<ServerConfigurationSpan>,
-        span_r: Option<ServerConfigurationSpan>,
-    ) -> Self {
+    pub fn expr_eq(mut self, identifier: impl Into<String>, value: impl Into<String>) -> Self {
         self.exprs.push(ServerConfigurationMatcherExpr {
-            left: ServerConfigurationMatcherOperand::Identifier(identifier.into(), span_l),
-            right: ServerConfigurationMatcherOperand::String(value.into(), span_r),
+            left: ServerConfigurationMatcherOperand::Identifier(identifier.into()),
+            right: ServerConfigurationMatcherOperand::String(value.into()),
             op: ServerConfigurationMatcherOperator::Eq,
         });
         self
     }
 
     /// Adds a not-equal expression.
-    pub fn expr_not_eq(
-        mut self,
-        identifier: impl Into<String>,
-        value: impl Into<String>,
-        span_l: Option<ServerConfigurationSpan>,
-        span_r: Option<ServerConfigurationSpan>,
-    ) -> Self {
+    pub fn expr_not_eq(mut self, identifier: impl Into<String>, value: impl Into<String>) -> Self {
         self.exprs.push(ServerConfigurationMatcherExpr {
-            left: ServerConfigurationMatcherOperand::Identifier(identifier.into(), span_l),
-            right: ServerConfigurationMatcherOperand::String(value.into(), span_r),
+            left: ServerConfigurationMatcherOperand::Identifier(identifier.into()),
+            right: ServerConfigurationMatcherOperand::String(value.into()),
             op: ServerConfigurationMatcherOperator::NotEq,
         });
         self
     }
 
     /// Adds a regex expression.
-    pub fn expr_regex(
-        mut self,
-        identifier: impl Into<String>,
-        pattern: impl Into<String>,
-        span_l: Option<ServerConfigurationSpan>,
-        span_r: Option<ServerConfigurationSpan>,
-    ) -> Self {
+    pub fn expr_regex(mut self, identifier: impl Into<String>, pattern: impl Into<String>) -> Self {
         self.exprs.push(ServerConfigurationMatcherExpr {
-            left: ServerConfigurationMatcherOperand::Identifier(identifier.into(), span_l),
-            right: ServerConfigurationMatcherOperand::String(pattern.into(), span_r),
+            left: ServerConfigurationMatcherOperand::Identifier(identifier.into()),
+            right: ServerConfigurationMatcherOperand::String(pattern.into()),
             op: ServerConfigurationMatcherOperator::Regex,
         });
         self
@@ -563,20 +538,9 @@ mod tests {
 
     #[test]
     fn test_matcher_builder() {
-        let span = ServerConfigurationSpan {
-            line: 1,
-            column: 0,
-            file: None,
-        };
-
         let matcher = ServerConfigurationMatcherBuilder::new()
-            .expr_eq(
-                "host",
-                "example.com",
-                Some(span.clone()),
-                Some(span.clone()),
-            )
-            .expr_not_eq("path", "/admin", Some(span.clone()), Some(span.clone()))
+            .expr_eq("host", "example.com")
+            .expr_not_eq("path", "/admin")
             .build();
 
         assert_eq!(matcher.exprs.len(), 2);
