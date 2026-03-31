@@ -51,7 +51,7 @@ pub struct ServerConfigurationHostFilters {
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationBlock {
-    pub directives: HashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
+    pub directives: Arc<HashMap<String, Vec<ServerConfigurationDirectiveEntry>>>,
     pub matchers: HashMap<String, ServerConfigurationMatcher>,
     pub span: Option<ServerConfigurationSpan>,
 }

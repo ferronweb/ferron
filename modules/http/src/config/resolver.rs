@@ -166,8 +166,9 @@ impl Stage1IpResolver {
         if let Some(hosts) = self.resolve(ip, &mut location_path) {
             // Add the default host configuration if available
             if let Some(default_host) = hosts.get(&None) {
+                // Clone the Arc (cheap - just increments ref count)
                 let block = ServerConfigurationBlock {
-                    directives: default_host.directives.clone(),
+                    directives: Arc::clone(&default_host.directives),
                     matchers: HashMap::new(),
                     span: None,
                 };
@@ -645,8 +646,9 @@ impl Stage2RadixResolver {
         if let Some(host) = hostname {
             for config in self.resolve_hostname(host, &mut location_path) {
                 // Convert PreparedHostConfigurationBlock to ServerConfigurationBlock
+                // Clone the Arc (cheap - just increments ref count, no HashMap clone)
                 let block = ServerConfigurationBlock {
-                    directives: config.directives.clone(),
+                    directives: Arc::clone(&config.directives),
                     matchers: HashMap::new(),
                     span: None,
                 };
@@ -657,7 +659,7 @@ impl Stage2RadixResolver {
         // Resolve location paths
         for config in self.resolve_location(path, base_config, &mut location_path) {
             let block = ServerConfigurationBlock {
-                directives: config.directives.clone(),
+                directives: Arc::clone(&config.directives),
                 matchers: HashMap::new(),
                 span: None,
             };
@@ -667,7 +669,7 @@ impl Stage2RadixResolver {
         // Resolve conditionals
         for config in self.resolve_conditionals(variables, &mut location_path) {
             let block = ServerConfigurationBlock {
-                directives: config.directives.clone(),
+                directives: Arc::clone(&config.directives),
                 matchers: HashMap::new(),
                 span: None,
             };
@@ -745,8 +747,9 @@ impl Stage3ErrorResolver {
         let mut layered_config = base_config.unwrap_or_else(|| LayeredConfiguration::new());
 
         if let Some(config) = self.resolve(error_code, &mut location_path) {
+            // Clone the Arc (cheap - just increments ref count)
             let block = ServerConfigurationBlock {
-                directives: config.directives.clone(),
+                directives: Arc::clone(&config.directives),
                 matchers: HashMap::new(),
                 span: None,
             };
@@ -984,7 +987,7 @@ mod tests {
 
     fn create_test_block() -> PreparedHostConfigurationBlock {
         PreparedHostConfigurationBlock {
-            directives: HashMap::new(),
+            directives: Arc::new(HashMap::new()),
             matches: Vec::new(),
             error_config: Vec::new(),
         }
@@ -1107,20 +1110,26 @@ mod tests {
 
         // Setup Stage 1
         let mut hosts = HashMap::new();
-        let mut host_block = create_test_block();
-        host_block
-            .directives
-            .insert("stage1_directive".to_string(), vec![]);
+        let mut directives1 = HashMap::new();
+        directives1.insert("stage1_directive".to_string(), vec![]);
+        let host_block = PreparedHostConfigurationBlock {
+            directives: Arc::new(directives1),
+            matches: Vec::new(),
+            error_config: Vec::new(),
+        };
         hosts.insert(Some("example.com".to_string()), host_block);
         resolver
             .stage1()
             .register_ip("127.0.0.1".parse().unwrap(), hosts);
 
         // Setup Stage 2
-        let mut host_block2 = create_test_block();
-        host_block2
-            .directives
-            .insert("stage2_directive".to_string(), vec![]);
+        let mut directives2 = HashMap::new();
+        directives2.insert("stage2_directive".to_string(), vec![]);
+        let host_block2 = PreparedHostConfigurationBlock {
+            directives: Arc::new(directives2),
+            matches: Vec::new(),
+            error_config: Vec::new(),
+        };
         resolver
             .stage2()
             .insert_host(vec!["com", "example"], Arc::new(host_block2), 10);
@@ -1160,7 +1169,7 @@ mod tests {
         // Setup Stage 1
         let mut hosts = HashMap::new();
         let host_block = PreparedHostConfigurationBlock {
-            directives: HashMap::new(),
+            directives: Arc::new(HashMap::new()),
             matches: Vec::new(),
             error_config: Vec::new(),
         };
@@ -1228,7 +1237,7 @@ mod tests {
                     host: Some("example.com".to_string()),
                 },
                 ServerConfigurationBlock {
-                    directives: HashMap::new(),
+                    directives: Arc::new(HashMap::new()),
                     matchers: HashMap::new(),
                     span: None,
                 },

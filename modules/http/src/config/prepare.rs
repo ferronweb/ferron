@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::IpAddr};
+use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationHostFilters,
@@ -11,7 +11,7 @@ pub type PreparedConfiguration =
 
 #[derive(Debug, Clone)]
 pub struct PreparedHostConfigurationBlock {
-    pub directives: std::collections::HashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
+    pub directives: Arc<std::collections::HashMap<String, Vec<ServerConfigurationDirectiveEntry>>>,
     pub matches: Vec<PreparedHostConfigurationMatch>,
     pub error_config: Vec<PreparedHostConfigurationErrorConfig>,
 }
@@ -65,14 +65,17 @@ pub fn prepare_host_config(
 pub fn prepare_host_block(
     config: ferron_core::config::ServerConfigurationBlock,
 ) -> Result<PreparedHostConfigurationBlock, Box<dyn std::error::Error>> {
+    // Unwrap the Arc or clone if shared
+    let mut directives = Arc::try_unwrap(config.directives).unwrap_or_else(|arc| (*arc).clone());
+
     let mut block = PreparedHostConfigurationBlock {
-        directives: config.directives,
+        directives: Arc::new(HashMap::new()), // Placeholder, will be set at the end
         matches: Vec::new(),
         error_config: Vec::new(),
     };
 
     // Matches (locations)
-    if let Some(entries) = block.directives.remove("location") {
+    if let Some(entries) = directives.remove("location") {
         for entry in entries {
             if let Some(ferron_core::config::ServerConfigurationValue::String(location, _)) =
                 entry.args.first()
@@ -92,16 +95,20 @@ pub fn prepare_host_block(
                         PreparedHostConfigurationMatcher::Location(ref loc) if loc == location
                     )
                 }) {
-                    // Merge duplicate location blocks by concatenating their directives and matches
-                    matches
-                        .config
-                        .directives
-                        .extend(matches_one.config.directives);
+                    // Merge duplicate location blocks
+                    let mut new_directives = (*matches.config.directives).clone();
+                    for (k, v) in matches_one.config.directives.iter() {
+                        new_directives
+                            .entry(k.clone())
+                            .or_insert_with(Vec::new)
+                            .extend(v.iter().cloned());
+                    }
                     matches.config.matches.extend(matches_one.config.matches);
                     matches
                         .config
                         .error_config
                         .extend(matches_one.config.error_config);
+                    matches.config.directives = Arc::new(new_directives);
                 } else {
                     block.matches.push(matches_one);
                 }
@@ -110,7 +117,7 @@ pub fn prepare_host_block(
     }
 
     // Matches (if conditional)
-    if let Some(entries) = block.directives.remove("if") {
+    if let Some(entries) = directives.remove("if") {
         for entry in entries {
             if let Some(ferron_core::config::ServerConfigurationValue::String(matcher, _)) =
                 entry.args.first()
@@ -131,22 +138,25 @@ pub fn prepare_host_block(
                     )?,
                 };
 
-                if let Some(matches) = block.matches.iter_mut().find(|m| {
-                    matches!(
-                        m.matcher,
-                        ref cond if cond == &matches_one.matcher
-                    )
-                }) {
-                    // Merge duplicate location blocks by concatenating their directives and matches
-                    matches
-                        .config
-                        .directives
-                        .extend(matches_one.config.directives);
+                if let Some(matches) = block
+                    .matches
+                    .iter_mut()
+                    .find(|m| matches!(m.matcher, ref cond if cond == &matches_one.matcher))
+                {
+                    // Merge duplicate blocks
+                    let mut new_directives = (*matches.config.directives).clone();
+                    for (k, v) in matches_one.config.directives.iter() {
+                        new_directives
+                            .entry(k.clone())
+                            .or_insert_with(Vec::new)
+                            .extend(v.iter().cloned());
+                    }
                     matches.config.matches.extend(matches_one.config.matches);
                     matches
                         .config
                         .error_config
                         .extend(matches_one.config.error_config);
+                    matches.config.directives = Arc::new(new_directives);
                 } else {
                     block.matches.push(matches_one);
                 }
@@ -155,7 +165,7 @@ pub fn prepare_host_block(
     }
 
     // Matches (if_not conditional)
-    if let Some(entries) = block.directives.remove("if_not") {
+    if let Some(entries) = directives.remove("if_not") {
         for entry in entries {
             if let Some(ferron_core::config::ServerConfigurationValue::String(matcher, _)) =
                 entry.args.first()
@@ -176,22 +186,25 @@ pub fn prepare_host_block(
                     )?,
                 };
 
-                if let Some(matches) = block.matches.iter_mut().find(|m| {
-                    matches!(
-                        m.matcher,
-                        ref cond if cond == &matches_one.matcher
-                    )
-                }) {
-                    // Merge duplicate location blocks by concatenating their directives and matches
-                    matches
-                        .config
-                        .directives
-                        .extend(matches_one.config.directives);
+                if let Some(matches) = block
+                    .matches
+                    .iter_mut()
+                    .find(|m| matches!(m.matcher, ref cond if cond == &matches_one.matcher))
+                {
+                    // Merge duplicate blocks
+                    let mut new_directives = (*matches.config.directives).clone();
+                    for (k, v) in matches_one.config.directives.iter() {
+                        new_directives
+                            .entry(k.clone())
+                            .or_insert_with(Vec::new)
+                            .extend(v.iter().cloned());
+                    }
                     matches.config.matches.extend(matches_one.config.matches);
                     matches
                         .config
                         .error_config
                         .extend(matches_one.config.error_config);
+                    matches.config.directives = Arc::new(new_directives);
                 } else {
                     block.matches.push(matches_one);
                 }
@@ -200,7 +213,7 @@ pub fn prepare_host_block(
     }
 
     // Error configs
-    if let Some(entries) = block.directives.remove("handle_error") {
+    if let Some(entries) = directives.remove("handle_error") {
         for entry in entries {
             let error_code = entry.args.first().and_then(|arg| {
                 if let ferron_core::config::ServerConfigurationValue::Number(code, _) = arg {
@@ -222,21 +235,28 @@ pub fn prepare_host_block(
                 .iter_mut()
                 .find(|e| e.error_code == error_code)
             {
-                // Merge duplicate error configs by concatenating their directives and matches
-                existing
-                    .config
-                    .directives
-                    .extend(error_config.config.directives);
+                // Merge duplicate error configs
+                let mut new_directives = (*existing.config.directives).clone();
+                for (k, v) in error_config.config.directives.iter() {
+                    new_directives
+                        .entry(k.clone())
+                        .or_insert_with(Vec::new)
+                        .extend(v.iter().cloned());
+                }
                 existing.config.matches.extend(error_config.config.matches);
                 existing
                     .config
                     .error_config
                     .extend(error_config.config.error_config);
+                existing.config.directives = Arc::new(new_directives);
             } else {
                 block.error_config.push(error_config);
             }
         }
     }
+
+    // Set the final directives (wrapped in Arc)
+    block.directives = Arc::new(directives);
 
     Ok(block)
 }
@@ -266,7 +286,7 @@ mod tests {
         }
 
         ServerConfigurationBlock {
-            directives: directive_map,
+            directives: Arc::new(directive_map),
             matchers: HashMap::new(),
             span: None,
         }
@@ -300,7 +320,7 @@ mod tests {
     #[test]
     fn test_empty_block() {
         let block = ServerConfigurationBlock {
-            directives: HashMap::new(),
+            directives: Arc::new(HashMap::new()),
             matchers: HashMap::new(),
             span: None,
         };
@@ -505,12 +525,8 @@ mod tests {
             None,
         )]);
 
-        let mut block = ServerConfigurationBlock {
-            directives: HashMap::new(),
-            matchers,
-            span: None,
-        };
-        block.directives.insert(
+        let mut directives_map = HashMap::new();
+        directives_map.insert(
             "if".to_string(),
             vec![ServerConfigurationDirectiveEntry {
                 args: vec![create_string_value("is_mobile")],
@@ -518,6 +534,11 @@ mod tests {
                 span: None,
             }],
         );
+        let block = ServerConfigurationBlock {
+            directives: Arc::new(directives_map),
+            matchers,
+            span: None,
+        };
 
         let result = prepare_host_block(block).unwrap();
 
@@ -563,12 +584,8 @@ mod tests {
             None,
         )]);
 
-        let mut block = ServerConfigurationBlock {
-            directives: HashMap::new(),
-            matchers,
-            span: None,
-        };
-        block.directives.insert(
+        let mut directives_map = HashMap::new();
+        directives_map.insert(
             "if_not".to_string(),
             vec![ServerConfigurationDirectiveEntry {
                 args: vec![create_string_value("is_bot")],
@@ -576,6 +593,11 @@ mod tests {
                 span: None,
             }],
         );
+        let block = ServerConfigurationBlock {
+            directives: Arc::new(directives_map),
+            matchers,
+            span: None,
+        };
 
         let result = prepare_host_block(block).unwrap();
 
@@ -609,12 +631,8 @@ mod tests {
             None,
         )]);
 
-        let mut block = ServerConfigurationBlock {
-            directives: HashMap::new(),
-            matchers,
-            span: None,
-        };
-        block.directives.insert(
+        let mut directives_map = HashMap::new();
+        directives_map.insert(
             "location".to_string(),
             vec![ServerConfigurationDirectiveEntry {
                 args: vec![create_string_value("/")],
@@ -622,7 +640,7 @@ mod tests {
                 span: None,
             }],
         );
-        block.directives.insert(
+        directives_map.insert(
             "if".to_string(),
             vec![ServerConfigurationDirectiveEntry {
                 args: vec![create_string_value("is_secure")],
@@ -630,6 +648,11 @@ mod tests {
                 span: None,
             }],
         );
+        let block = ServerConfigurationBlock {
+            directives: Arc::new(directives_map),
+            matchers,
+            span: None,
+        };
 
         let result = prepare_host_block(block).unwrap();
 
@@ -983,12 +1006,8 @@ mod tests {
             create_matcher("test", vec![create_eq_expr("foo", "bar")]),
         );
 
-        let mut block = ServerConfigurationBlock {
-            directives: HashMap::new(),
-            matchers,
-            span: None,
-        };
-        block.directives.insert(
+        let mut directives_map = HashMap::new();
+        directives_map.insert(
             "if".to_string(),
             vec![ServerConfigurationDirectiveEntry {
                 args: vec![create_string_value("test")],
@@ -996,6 +1015,11 @@ mod tests {
                 span: None,
             }],
         );
+        let block = ServerConfigurationBlock {
+            directives: Arc::new(directives_map),
+            matchers,
+            span: None,
+        };
 
         let result = prepare_host_block(block);
 
@@ -1014,12 +1038,8 @@ mod tests {
             create_matcher("test", vec![create_eq_expr("foo", "bar")]),
         );
 
-        let mut block = ServerConfigurationBlock {
-            directives: HashMap::new(),
-            matchers,
-            span: None,
-        };
-        block.directives.insert(
+        let mut directives_map = HashMap::new();
+        directives_map.insert(
             "if_not".to_string(),
             vec![ServerConfigurationDirectiveEntry {
                 args: vec![create_string_value("test")],
@@ -1027,6 +1047,11 @@ mod tests {
                 span: None,
             }],
         );
+        let block = ServerConfigurationBlock {
+            directives: Arc::new(directives_map),
+            matchers,
+            span: None,
+        };
 
         let result = prepare_host_block(block);
 

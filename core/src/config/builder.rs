@@ -303,7 +303,7 @@ impl ServerConfigurationBlockBuilder {
         }
 
         ServerConfigurationBlock {
-            directives: directives_map,
+            directives: Arc::new(directives_map),
             matchers: matchers_map,
             span: self.span,
         }
