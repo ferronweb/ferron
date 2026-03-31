@@ -21,3 +21,5 @@ pub trait Module: Send + Sync {
         runtime: &mut crate::runtime::Runtime,
     ) -> Result<(), Box<dyn std::error::Error>>;
 }
+
+pub use registry::{Provider, ProviderRegistry, ProviderSubTrait};

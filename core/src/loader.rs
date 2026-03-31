@@ -46,6 +46,14 @@ pub trait ModuleLoader {
     }
 
     #[allow(unused_variables)]
+    fn register_providers(
+        &mut self,
+        registry: crate::registry::RegistryBuilder,
+    ) -> crate::registry::RegistryBuilder {
+        registry
+    }
+
+    #[allow(unused_variables)]
     fn register_modules(
         &mut self,
         registry: &crate::registry::Registry,

@@ -1,11 +1,12 @@
 //! Global registry for Ferron
 //!
-//! Provides centralized registration of stages with trait-object based
+//! Provides centralized registration of stages and providers with trait-object based
 //! entries. Stages can be registered for specific context types and ordered
 //! using DAG-based topological sort.
 //!
 //! The registry supports:
 //! - Stages: Pipeline components for specific context types with ordering constraints
+//! - Providers: Categorized components (e.g., DNS, cache) identified by category and name
 //!
 //! There are also modules, which are server implementations (HTTP, TCP, etc.) that
 //! can run independently.
@@ -15,6 +16,140 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use parking_lot::RwLock;
+
+/// A provider that can be looked up by category and name
+pub trait Provider: Send + Sync {
+    /// Get the provider category (e.g., "DNS", "cache", "storage")
+    fn category(&self) -> &str;
+
+    /// Get the provider name within its category
+    fn name(&self) -> &str;
+
+    /// Get the provider as Any for downcasting
+    fn as_any(&self) -> &dyn Any;
+}
+
+/// A provider sub-trait that extends the base Provider trait
+///
+/// Use this trait to create categorized provider types (e.g., DnsProvider, CacheProvider)
+/// that can have their own type-erased registries.
+pub trait ProviderSubTrait: Provider {
+    /// Get the sub-trait category (e.g., "DNS", "cache")
+    fn sub_category(&self) -> &str;
+}
+
+/// A factory for creating provider instances
+pub type ProviderFactory<P> = Arc<dyn Fn() -> Arc<P> + Send + Sync>;
+
+/// Entry for a registered provider
+pub struct ProviderEntry<P> {
+    pub factory: ProviderFactory<P>,
+}
+
+/// Registry for providers organized by name
+///
+/// Providers are grouped by category and can be looked up by name.
+/// This registry is type-erased and supports provider sub-traits.
+pub struct ProviderRegistry<P> {
+    providers: RwLock<Vec<ProviderEntry<P>>>,
+}
+
+impl<P: ProviderSubTrait + 'static> Default for ProviderRegistry<P> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<P: ProviderSubTrait + 'static> ProviderRegistry<P> {
+    pub fn new() -> Self {
+        Self {
+            providers: RwLock::new(Vec::new()),
+        }
+    }
+
+    /// Register a provider factory
+    pub fn register<F>(&self, factory: F)
+    where
+        F: Fn() -> Arc<P> + Send + Sync + 'static,
+    {
+        self.providers.write().push(ProviderEntry {
+            factory: Arc::new(factory),
+        });
+    }
+
+    /// Get a provider by name
+    pub fn get(&self, name: &str) -> Option<Arc<P>> {
+        let providers = self.providers.read();
+        for entry in providers.iter() {
+            let instance = (entry.factory)();
+            if instance.name() == name {
+                return Some(instance);
+            }
+        }
+        None
+    }
+
+    /// Get all providers in this registry
+    pub fn get_all(&self) -> Vec<Arc<P>> {
+        let providers = self.providers.read();
+        providers.iter().map(|e| (e.factory)()).collect()
+    }
+
+    /// Get providers by category
+    pub fn get_by_category(&self, category: &str) -> Vec<Arc<P>> {
+        let providers = self.providers.read();
+        providers
+            .iter()
+            .map(|e| (e.factory)())
+            .filter(|p| p.category() == category)
+            .collect()
+    }
+
+    /// Get providers by sub-category
+    pub fn get_by_sub_category(&self, sub_category: &str) -> Vec<Arc<P>> {
+        let providers = self.providers.read();
+        providers
+            .iter()
+            .map(|e| (e.factory)())
+            .filter(|p| p.sub_category() == sub_category)
+            .collect()
+    }
+
+    /// Get the number of registered providers
+    pub fn len(&self) -> usize {
+        self.providers.read().len()
+    }
+
+    /// Check if the registry is empty
+    pub fn is_empty(&self) -> bool {
+        self.providers.read().is_empty()
+    }
+}
+
+/// Type-erased provider registry storage
+trait AnyProviderRegistry: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
+}
+
+struct TypedProviderRegistry<P: 'static> {
+    registry: Arc<ProviderRegistry<P>>,
+}
+
+impl<P: 'static> AnyProviderRegistry for TypedProviderRegistry<P> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl<P: 'static> TypedProviderRegistry<P> {
+    fn new(registry: Arc<ProviderRegistry<P>>) -> Self {
+        Self { registry }
+    }
+
+    fn get_registry(&self) -> Arc<ProviderRegistry<P>> {
+        Arc::clone(&self.registry)
+    }
+}
 
 /// Constraint for stage ordering
 #[derive(Clone, Debug)]
@@ -209,12 +344,15 @@ impl<C: 'static> TypedStageRegistry<C> {
 /// Registry that holds type-specific stage registries
 ///
 /// - Stage registries are per-context-type and support DAG-based ordering
+/// - Provider registries for typed provider access (e.g., DnsProvider, CacheProvider)
 ///
 /// Example usage:
 /// - HTTP module uses `StageRegistry<HttpContext>` for ordered pipeline
 /// - TCP module might not use stages at all, just run a server directly
+/// - DNS module uses `ProviderRegistry<DnsProvider>` for DNS providers
 pub struct Registry {
     stage_registries: RwLock<HashMap<TypeId, Arc<dyn AnyStageRegistry>>>,
+    provider_registries: RwLock<HashMap<TypeId, Arc<dyn AnyProviderRegistry>>>,
 }
 
 impl Default for Registry {
@@ -227,6 +365,7 @@ impl Registry {
     pub fn new() -> Self {
         Self {
             stage_registries: RwLock::new(HashMap::new()),
+            provider_registries: RwLock::new(HashMap::new()),
         }
     }
 
@@ -275,6 +414,52 @@ impl Registry {
                 .map(|typed| typed.get_registry())
         })
     }
+
+    /// Register a provider
+    ///
+    /// This allows modules to define typed provider registries.
+    /// For example, DNS providers can be registered with `ProviderRegistry<DnsProvider>`.
+    pub fn register_provider<P, F>(&self, factory: F)
+    where
+        P: ProviderSubTrait + 'static,
+        F: Fn() -> Arc<P> + Send + Sync + 'static,
+    {
+        let type_id = TypeId::of::<P>();
+
+        let mut registries = self.provider_registries.write();
+
+        // Check if registry exists for this type
+        if let Some(erased) = registries.get(&type_id) {
+            if let Some(typed) = erased.as_any().downcast_ref::<TypedProviderRegistry<P>>() {
+                typed.get_registry().register(factory);
+                return;
+            }
+        }
+
+        // Create new registry for this type
+        let registry = Arc::new(ProviderRegistry::<P>::new());
+        registry.register(factory);
+
+        registries.insert(type_id, Arc::new(TypedProviderRegistry::new(registry)));
+    }
+
+    /// Get the provider registry for a specific provider type
+    ///
+    /// Modules can use this to retrieve their typed provider registry.
+    pub fn get_provider_registry<P>(&self) -> Option<Arc<ProviderRegistry<P>>>
+    where
+        P: ProviderSubTrait + 'static,
+    {
+        let type_id = TypeId::of::<P>();
+        let registries = self.provider_registries.read();
+
+        registries.get(&type_id).and_then(|erased| {
+            erased
+                .as_any()
+                .downcast_ref::<TypedProviderRegistry<P>>()
+                .map(|typed| typed.get_registry())
+        })
+    }
 }
 
 /// Builder for creating a Registry with a fluent API
@@ -304,6 +489,19 @@ impl RegistryBuilder {
         F: Fn() -> Arc<dyn crate::pipeline::Stage<C>> + Send + Sync + 'static,
     {
         self.registry.register_stage::<C, F>(factory);
+        self
+    }
+
+    /// Register a provider
+    ///
+    /// Providers are typed providers (e.g., DnsProvider, CacheProvider)
+    /// that can be retrieved with their specific trait methods.
+    pub fn with_provider<P, F>(self, factory: F) -> Self
+    where
+        P: ProviderSubTrait + 'static,
+        F: Fn() -> Arc<P> + Send + Sync + 'static,
+    {
+        self.registry.register_provider::<P, F>(factory);
         self
     }
 
@@ -394,5 +592,174 @@ mod tests {
         let stage_registry = registry.get_stage_registry::<()>();
         assert!(stage_registry.is_some());
         assert_eq!(stage_registry.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_provider_registry() {
+        use crate::registry::{Provider, ProviderSubTrait};
+
+        struct DnsProviderImpl {
+            name: String,
+        }
+
+        impl Provider for DnsProviderImpl {
+            fn category(&self) -> &str {
+                "DNS"
+            }
+
+            fn name(&self) -> &str {
+                &self.name
+            }
+
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
+
+        impl ProviderSubTrait for DnsProviderImpl {
+            fn sub_category(&self) -> &str {
+                "dns"
+            }
+        }
+
+        impl DnsProviderImpl {
+            fn resolve(&self, _domain: &str) -> Result<String, String> {
+                Ok("127.0.0.1".to_string())
+            }
+        }
+
+        let registry = ProviderRegistry::<DnsProviderImpl>::new();
+
+        registry.register(|| {
+            Arc::new(DnsProviderImpl {
+                name: "cloudflare".to_string(),
+            })
+        });
+
+        registry.register(|| {
+            Arc::new(DnsProviderImpl {
+                name: "google".to_string(),
+            })
+        });
+
+        // Test get by name
+        let dns = registry.get("cloudflare");
+        assert!(dns.is_some());
+        assert_eq!(dns.unwrap().name(), "cloudflare");
+
+        // Test get all
+        let all = registry.get_all();
+        assert_eq!(all.len(), 2);
+
+        // Test get by category
+        let by_cat = registry.get_by_category("DNS");
+        assert_eq!(by_cat.len(), 2);
+
+        // Test get by sub-category
+        let by_sub_cat = registry.get_by_sub_category("dns");
+        assert_eq!(by_sub_cat.len(), 2);
+
+        // Test len
+        assert_eq!(registry.len(), 2);
+    }
+
+    #[test]
+    fn test_provider_registry_via_main_registry() {
+        use crate::registry::{Provider, ProviderSubTrait};
+
+        struct TestDnsProvider {
+            name: String,
+        }
+
+        impl Provider for TestDnsProvider {
+            fn category(&self) -> &str {
+                "DNS"
+            }
+
+            fn name(&self) -> &str {
+                &self.name
+            }
+
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
+
+        impl ProviderSubTrait for TestDnsProvider {
+            fn sub_category(&self) -> &str {
+                "test-dns"
+            }
+        }
+
+        impl TestDnsProvider {
+            fn resolve(&self, _domain: &str) -> Result<String, String> {
+                Ok("192.168.1.1".to_string())
+            }
+        }
+
+        let registry = Registry::new();
+
+        registry.register_provider::<TestDnsProvider, _>(|| {
+            Arc::new(TestDnsProvider {
+                name: "default".to_string(),
+            })
+        });
+
+        let dns_registry = registry.get_provider_registry::<TestDnsProvider>();
+        assert!(dns_registry.is_some());
+
+        let dns = dns_registry.unwrap().get("default");
+        assert!(dns.is_some());
+        assert_eq!(dns.unwrap().resolve("example.com").unwrap(), "192.168.1.1");
+    }
+
+    #[test]
+    fn test_registry_builder_with_provider() {
+        use crate::registry::{Provider, ProviderSubTrait};
+
+        struct CacheProviderImpl {
+            name: String,
+        }
+
+        impl Provider for CacheProviderImpl {
+            fn category(&self) -> &str {
+                "cache"
+            }
+
+            fn name(&self) -> &str {
+                &self.name
+            }
+
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
+
+        impl ProviderSubTrait for CacheProviderImpl {
+            fn sub_category(&self) -> &str {
+                "memory"
+            }
+        }
+
+        impl CacheProviderImpl {
+            fn get(&self, _key: &str) -> Option<String> {
+                Some("cached_value".to_string())
+            }
+        }
+
+        let registry = RegistryBuilder::new()
+            .with_provider::<CacheProviderImpl, _>(|| {
+                Arc::new(CacheProviderImpl {
+                    name: "redis".to_string(),
+                })
+            })
+            .build();
+
+        let cache_registry = registry.get_provider_registry::<CacheProviderImpl>();
+        assert!(cache_registry.is_some());
+
+        let cache = cache_registry.unwrap().get("redis");
+        assert!(cache.is_some());
+        assert_eq!(cache.unwrap().get("key"), Some("cached_value".to_string()));
     }
 }
