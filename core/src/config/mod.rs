@@ -39,7 +39,7 @@ Host configuration
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationPort {
-    pub port: u16,
+    pub port: Option<u16>,
     pub hosts: Vec<(ServerConfigurationHostFilters, ServerConfigurationBlock)>,
 }
 

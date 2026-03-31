@@ -139,8 +139,8 @@ pub struct ServerConfigurationPortBuilder {
 }
 
 impl ServerConfigurationPortBuilder {
-    /// Creates a new [`ServerConfigurationPortBuilder`] with the specified port number.
-    pub fn new(port: u16) -> Self {
+    /// Creates a new [`ServerConfigurationPortBuilder`] with an optional port number.
+    pub fn new(port: Option<u16>) -> Self {
         Self {
             inner: ServerConfigurationPort {
                 port,
@@ -521,7 +521,7 @@ mod tests {
             )
             .port_with_builder(
                 "http",
-                ServerConfigurationPortBuilder::new(8080).host(
+                ServerConfigurationPortBuilder::new(Some(8080)).host(
                     ServerConfigurationHostFiltersBuilder::new()
                         .host("example.com")
                         .build(),

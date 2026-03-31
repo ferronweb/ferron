@@ -29,7 +29,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
             for port in ports {
                 for (_filters, host) in &port.hosts {
                     // TODO: more sophisticated block naming based on filters
-                    blocks.push((format!("port {}", port.port), host));
+                    blocks.push((format!("port {}", port.port.unwrap_or(80)), host));
                 }
             }
         }
@@ -54,11 +54,12 @@ impl ModuleLoader for BasicHttpModuleLoader {
         let mut new_cache = HashMap::new();
         if let Some(port_config) = config.ports.remove("http") {
             for port_config in port_config {
-                if let Some(cached) = self.cache.get(&port_config.port) {
-                    // TODO: reload configuration in existing HTTP server
-                    new_cache.insert(port_config.port, cached.clone());
+                // TODO: automatic TLS by default
+                //       also, determine whether to enable port 443, for example when TLS is enabled by default
+                let port = port_config.port.unwrap_or(80);
+                if let Some(cached) = self.cache.get(&port) {
+                    new_cache.insert(port, cached.clone());
                 } else {
-                    let port = port_config.port;
                     let http_module = Arc::new(BasicHttpModule::new(
                         registry,
                         port_config,

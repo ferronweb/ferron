@@ -1232,7 +1232,7 @@ mod tests {
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
 
         let port = ServerConfigurationPort {
-            port: 80,
+            port: Some(80),
             hosts: vec![(
                 ServerConfigurationHostFilters {
                     ip: Some(ip),

@@ -42,7 +42,7 @@ impl ConfigurationAdapter for BlankConfigurationAdapter {
                 .port(
                     "http",
                     ServerConfigurationPort {
-                        port: 8080,
+                        port: Some(8080),
                         hosts: vec![],
                     },
                 )

@@ -816,7 +816,7 @@ mod tests {
     #[test]
     fn test_prepare_host_config_empty() {
         let port = ServerConfigurationPort {
-            port: 80,
+            port: Some(80),
             hosts: vec![],
         };
 
@@ -833,7 +833,7 @@ mod tests {
         )]);
 
         let port = ServerConfigurationPort {
-            port: 80,
+            port: Some(80),
             hosts: vec![(
                 ServerConfigurationHostFilters {
                     ip: None,
@@ -868,7 +868,7 @@ mod tests {
         )]);
 
         let port = ServerConfigurationPort {
-            port: 80,
+            port: Some(80),
             hosts: vec![
                 (
                     ServerConfigurationHostFilters {
@@ -907,7 +907,7 @@ mod tests {
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
 
         let port = ServerConfigurationPort {
-            port: 80,
+            port: Some(80),
             hosts: vec![(
                 ServerConfigurationHostFilters {
                     ip: Some(ip),
@@ -943,7 +943,7 @@ mod tests {
         )]);
 
         let port = ServerConfigurationPort {
-            port: 80,
+            port: Some(80),
             hosts: vec![
                 (
                     ServerConfigurationHostFilters {
