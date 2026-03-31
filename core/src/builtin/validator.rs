@@ -7,10 +7,13 @@ impl crate::config::validator::ConfigurationValidator for BuiltinGlobalConfigura
         &self,
         config: &crate::config::ServerConfigurationBlock,
         used_directives: &mut std::collections::HashSet<String>,
+        is_global: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        validate_directive!(config, used_directives, runtime, no_args, {
-            validate_nested!(runtime, "io_uring", args(1) => ServerConfigurationValue::Boolean(_, _));
-        });
+        if is_global {
+            validate_directive!(config, used_directives, runtime, no_args, {
+                validate_nested!(runtime, "io_uring", args(1) => ServerConfigurationValue::Boolean(_, _));
+            });
+        }
 
         Ok(())
     }

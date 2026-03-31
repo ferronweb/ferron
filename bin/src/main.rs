@@ -319,7 +319,7 @@ fn run_configuration_validators(
     let mut used_global_directives = HashSet::new();
     for validator in global_validator_registry {
         validator
-            .validate_block(&config.global_config, &mut used_global_directives)
+            .validate_block(&config.global_config, &mut used_global_directives, true)
             .map_err(|e| {
                 anyhow::anyhow!(
                     "Invalid configuration ({}): {e}",
@@ -351,7 +351,7 @@ fn run_configuration_validators(
             for block in blocks {
                 let mut used_directives = HashSet::new();
                 validator
-                    .validate_block(block.1, &mut used_directives)
+                    .validate_block(block.1, &mut used_directives, false)
                     .map_err(|e| {
                         anyhow::anyhow!(
                             "Invalid configuration ({}): {e}",

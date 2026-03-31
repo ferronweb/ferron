@@ -4,5 +4,6 @@ pub trait ConfigurationValidator {
         &self,
         config: &crate::config::ServerConfigurationBlock,
         used_directives: &mut std::collections::HashSet<String>,
+        is_global: bool,
     ) -> Result<(), Box<dyn std::error::Error>>;
 }
