@@ -1,10 +1,12 @@
 //! 404 Not Found stage
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use http::Response;
+use http_body_util::{BodyExt, Full};
 
-use crate::context::HttpContext;
+use crate::context::{HttpContext, HttpResponse};
 
 pub struct NotFoundStage;
 
@@ -21,12 +23,16 @@ impl Stage<HttpContext> for NotFoundStage {
     }
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        if ctx.res.body().is_empty() {
-            ctx.res = Response::builder()
+        ctx.res = Some(HttpResponse::Custom(
+            Response::builder()
                 .status(404)
-                .body(b"Not Found".to_vec())
-                .expect("Failed to build 404 response");
-        }
+                .body(
+                    Full::new(Bytes::from_static(b"Not Found"))
+                        .map_err(|e| match e {})
+                        .boxed_unsync(),
+                )
+                .expect("Failed to build 404 response"),
+        ));
         Ok(true)
     }
 }

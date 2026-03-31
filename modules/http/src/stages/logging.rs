@@ -25,7 +25,9 @@ impl Stage<HttpContext> for LoggingStage {
     }
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        log_info!("--> {}", ctx.req.uri().path());
+        if let Some(req) = &ctx.req {
+            log_info!("--> {}", req.uri().path());
+        }
         Ok(true)
     }
 }

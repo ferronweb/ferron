@@ -13,3 +13,5 @@ parking_lot = "0.12"
 ferron-core = { path = "../../core" }
 tokio-util = "0.7.18"
 anyhow = "1.0.102"
+http-body-util = "0.1.3"
+bytes = "1.11.1"

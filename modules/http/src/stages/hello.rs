@@ -1,11 +1,13 @@
 //! Hello handler stage
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use http::Response;
+use http_body_util::{BodyExt, Full};
 
-use crate::context::HttpContext;
+use crate::context::{HttpContext, HttpResponse};
 
 pub struct HelloStage;
 
@@ -26,11 +28,18 @@ impl Stage<HttpContext> for HelloStage {
     }
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        if ctx.req.uri().path() == "/" {
-            ctx.res = Response::builder()
-                .status(200)
-                .body(b"Hello from Ferron 3".to_vec())
-                .expect("Failed to build 200 response");
+        if ctx.req.as_ref().is_some_and(|r| r.uri().path() == "/") {
+            ctx.res = Some(HttpResponse::Custom(
+                Response::builder()
+                    .status(200)
+                    .body(
+                        Full::new(Bytes::from_static(b"Hello from Ferron 3"))
+                            .map_err(|e| match e {})
+                            .boxed_unsync(),
+                    )
+                    .expect("Failed to build 200 response"),
+            ));
+            return Ok(false);
         }
         Ok(true)
     }

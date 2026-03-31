@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use http::Request;
+use http_body_util::BodyExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use ferron_core::pipeline::Pipeline;
@@ -113,27 +114,58 @@ impl Module for BasicHttpModule {
                         let req_str = String::from_utf8_lossy(&buf[..n]);
                         let path = parse_path(&req_str);
 
-                        let Ok(req) = Request::builder().uri(path).body(Vec::new()) else {
+                        let Ok(req) = Request::builder().uri(path).body(
+                            http_body_util::Empty::<bytes::Bytes>::new()
+                                .map_err(|e| match e {})
+                                .boxed_unsync(),
+                        ) else {
                             log_error!("Failed to build request");
                             return;
                         };
 
-                        let mut ctx = HttpContext::new(req);
+                        let mut ctx = HttpContext {
+                            events: ferron_core::observability::CompositeEventSink::new(vec![]),
+                            req: Some(req),
+                            res: None,
+                        };
 
                         if let Err(e) = pipeline.execute(&mut ctx).await {
                             log_error!("Pipeline execution error: {}", e);
                         }
 
-                        let res = ctx.res;
+                        let crate::context::HttpResponse::Custom(res) =
+                            ctx.res.unwrap_or_else(|| {
+                                crate::context::HttpResponse::Custom(
+                                    http::Response::builder()
+                                        .status(500)
+                                        .body(
+                                            http_body_util::Full::new(bytes::Bytes::from_static(
+                                                b"Internal Server Error",
+                                            ))
+                                            .map_err(|e| match e {})
+                                            .boxed_unsync(),
+                                        )
+                                        .expect("Failed to build 500 response"),
+                                )
+                            })
+                        else {
+                            todo!("Handle non-custom responses (e.g. built-in errors, aborts)");
+                        };
 
-                        let response = format!(
-                            "HTTP/1.1 {} OK\r\nContent-Length: {}\r\n\r\n{}",
-                            res.status().as_u16(),
-                            res.body().len(),
-                            String::from_utf8_lossy(res.body())
-                        );
-
+                        let response = format!("HTTP/1.1 {} OK\r\n\r\n", res.status().as_u16());
                         let _ = socket.write_all(response.as_bytes()).await;
+                        let mut body = res.into_body();
+                        while let Some(chunk_result) = body.frame().await {
+                            let Some(chunk) = chunk_result.ok().and_then(|c| c.into_data().ok())
+                            else {
+                                log_error!("Failed to read response body chunk");
+                                break;
+                            };
+                            if let Err(e) = socket.write_all(&chunk).await {
+                                log_error!("Failed to write response body chunk: {}", e);
+                                break;
+                            }
+                        }
                     });
                 }
             })

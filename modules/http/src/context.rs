@@ -1,23 +1,18 @@
 //! HTTP context types
 
-use http::{Request, Response};
+use ferron_core::observability::CompositeEventSink;
+use http::{HeaderMap, Request, Response};
+use http_body_util::combinators::UnsyncBoxBody;
 
-type HttpRequest = Request<Vec<u8>>;
-type HttpResponse = Response<Vec<u8>>;
-
-pub struct HttpContext {
-    pub req: HttpRequest,
-    pub res: HttpResponse,
+pub type HttpRequest = Request<UnsyncBoxBody<bytes::Bytes, std::io::Error>>;
+pub enum HttpResponse {
+    Custom(Response<UnsyncBoxBody<bytes::Bytes, std::io::Error>>),
+    BuiltinError(u16, Option<HeaderMap>),
+    Abort,
 }
 
-impl HttpContext {
-    pub fn new(req: HttpRequest) -> Self {
-        Self {
-            req,
-            res: Response::builder()
-                .status(200)
-                .body(Vec::new())
-                .expect("Failed to build default response"),
-        }
-    }
+pub struct HttpContext {
+    pub req: Option<HttpRequest>,
+    pub res: Option<HttpResponse>,
+    pub events: CompositeEventSink,
 }
