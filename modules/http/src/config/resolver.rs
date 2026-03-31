@@ -617,6 +617,7 @@ impl Stage2RadixResolver {
     ) -> Option<String> {
         match operand {
             ServerConfigurationMatcherOperand::Identifier(name) => {
+                // TODO: obtain variables from HTTP request data
                 variables.get(name).cloned().or_else(|| Some(name.clone()))
             }
             ServerConfigurationMatcherOperand::String(s) => Some(s.clone()),
