@@ -14,7 +14,7 @@ impl Default for LoggingStage {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Stage<HttpContext> for LoggingStage {
     fn name(&self) -> &str {
         "logging"

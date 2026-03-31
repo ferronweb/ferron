@@ -522,7 +522,7 @@ mod tests {
         let registry = StageRegistry::new();
 
         struct HelloStage;
-        #[async_trait]
+        #[async_trait(?Send)]
         impl Stage<()> for HelloStage {
             fn name(&self) -> &str {
                 "hello"
@@ -533,7 +533,7 @@ mod tests {
         }
 
         struct LoggingStage;
-        #[async_trait]
+        #[async_trait(?Send)]
         impl Stage<()> for LoggingStage {
             fn name(&self) -> &str {
                 "logging"
@@ -547,7 +547,7 @@ mod tests {
         }
 
         struct NotFoundStage;
-        #[async_trait]
+        #[async_trait(?Send)]
         impl Stage<()> for NotFoundStage {
             fn name(&self) -> &str {
                 "not_found"
@@ -575,7 +575,7 @@ mod tests {
     #[test]
     fn test_builder() {
         struct LoggingStage;
-        #[async_trait]
+        #[async_trait(?Send)]
         impl Stage<()> for LoggingStage {
             fn name(&self) -> &str {
                 "logging"

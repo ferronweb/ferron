@@ -29,7 +29,7 @@ impl std::fmt::Display for PipelineError {
 
 impl std::error::Error for PipelineError {}
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait Stage<C>: Send + Sync {
     /// Returns the name of this stage
     fn name(&self) -> &str;

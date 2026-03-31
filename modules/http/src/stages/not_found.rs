@@ -14,7 +14,7 @@ impl Default for NotFoundStage {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Stage<HttpContext> for NotFoundStage {
     fn name(&self) -> &str {
         "not_found"

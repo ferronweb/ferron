@@ -15,7 +15,7 @@ impl Default for HelloStage {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Stage<HttpContext> for HelloStage {
     fn name(&self) -> &str {
         "hello"
