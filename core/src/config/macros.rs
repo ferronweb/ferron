@@ -88,18 +88,18 @@ macro_rules! validate_directive {
 /// ```
 #[macro_export]
 macro_rules! validate_args {
-    ($directive:expr, [$pattern:pat]) => {
-        if !matches!($directive.args[0], $pattern) {
+    ($directive:expr, [$pattern:pat $(if $guard:expr)?]) => {
+        if !matches!($directive.args[0], $pattern $(if $guard)?) {
             return Err("Invalid directive: argument type mismatch at position 0".into());
         }
     };
 
-    ($directive:expr, [$($pattern:pat),+]) => {
+    ($directive:expr, [$($pattern:pat $(if $guard:expr)?),+]) => {
         $(
-            if !matches!($directive.args[$crate::validate_args!(@idx $pattern)], $pattern) {
+            if !matches!($directive.args[$crate::validate_args!(@idx $pattern $(if $guard)?)], $pattern $(if $guard)?) {
                 return Err(format!(
                     "Invalid directive: argument type mismatch at position {}",
-                    $crate::validate_args!(@idx $pattern)
+                    $crate::validate_args!(@idx $pattern $(if $guard)?)
                 ).into());
             }
         )+
@@ -126,7 +126,7 @@ macro_rules! validate_args {
 #[macro_export]
 macro_rules! validate_nested {
     // Single subdirective with arg count and type pattern
-    ($block:expr, $name:literal, args($count:expr) => $pattern:pat) => {
+    ($block:expr, $name:literal, args($count:expr) => $pattern:pat $(if $guard:expr)?) => {
         if let Some(directives) = $block.directives.get($name) {
             for directive in directives {
                 if directive.args.len() != $count {
@@ -135,7 +135,7 @@ macro_rules! validate_nested {
                         stringify!($block), $count, $name, directive.args.len()
                     ).into());
                 }
-                if !matches!(directive.args[0], $pattern) {
+                if !matches!(directive.args[0], $pattern $(if $guard)?) {
                     return Err(format!(
                         "Invalid directive '{}': invalid type for '{}' subdirective",
                         stringify!($block), $name
