@@ -1,7 +1,7 @@
-mod context;
 mod event;
+mod provider;
 mod sink;
 
-pub use context::*;
 pub use event::*;
+pub use provider::*;
 pub use sink::*;
