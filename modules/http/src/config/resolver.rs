@@ -1069,14 +1069,14 @@ impl ThreeStageResolver {
     }
 
     /// Create a resolver from prepared configuration
-    pub fn from_prepared(prepared: &PreparedConfiguration) -> Self {
+    pub fn from_prepared(prepared: PreparedConfiguration) -> Self {
         let mut resolver = Self::new();
 
         for (ip_opt, hosts) in prepared {
             if let Some(ip) = ip_opt {
-                resolver.stage1_ip.register_ip(*ip, hosts.clone());
+                resolver.stage1_ip.register_ip(ip, hosts);
             } else {
-                resolver.stage1_ip.set_default(hosts.clone());
+                resolver.stage1_ip.set_default(hosts);
             }
         }
 
@@ -1577,7 +1577,7 @@ mod tests {
         };
 
         let prepared = super::super::prepare::prepare_host_config(port).unwrap();
-        let resolver = ThreeStageResolver::from_prepared(&prepared);
+        let resolver = ThreeStageResolver::from_prepared(prepared);
 
         assert!(resolver.resolve_stage1(ip).is_some());
     }

@@ -576,7 +576,7 @@ fn load_modules(
             .expect("runtime should be initialized at this point");
 
         for loader in &mut loaders {
-            loader.register_modules(&registry, &mut modules, &mut config);
+            loader.register_modules(&registry, &mut modules, &mut config)?;
         }
 
         // Start all modules

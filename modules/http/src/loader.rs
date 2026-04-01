@@ -50,7 +50,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
         registry: &ferron_core::registry::Registry,
         modules: &mut Vec<Arc<dyn ferron_core::Module>>,
         config: &mut ferron_core::config::ServerConfiguration,
-    ) {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut new_cache = HashMap::new();
         if let Some(port_config) = config.ports.remove("http") {
             for port_config in port_config {
@@ -64,12 +64,14 @@ impl ModuleLoader for BasicHttpModuleLoader {
                         registry,
                         port_config,
                         config.global_config.clone(),
-                    ));
+                        port,
+                    )?);
                     modules.push(http_module.clone());
                     new_cache.insert(port, http_module);
                 }
             }
         }
         self.cache = new_cache;
+        Ok(())
     }
 }
