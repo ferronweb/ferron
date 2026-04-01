@@ -7,7 +7,7 @@ use tokio_rustls::StartHandshake;
 use vibeio::net::PollTcpStream;
 
 pub struct TcpTlsContext {
-    pub config: ServerConfigurationBlock,
+    pub config: Arc<ServerConfigurationBlock>,
     pub resolver: Option<Arc<dyn TcpTlsResolver>>,
 }
 
