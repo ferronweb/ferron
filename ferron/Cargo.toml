@@ -23,7 +23,7 @@ miette = { version = "7.6.0", features = ["fancy"] }
 
 # HTTP/Web Server Core
 vibeio-http = { version = "0.3.0", optional = true, features = ["h1", "h1-zerocopy", "h2", "h3"] }
-hyper = { version = "1.6.0", features = ["client", "http1", "http2"] }
+hyper = { version = "1.9.0", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1.13", features = ["client"] }
 h3 = "0.0.8"
 h3-quinn = "0.0.10"
