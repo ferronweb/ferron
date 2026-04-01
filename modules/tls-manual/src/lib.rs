@@ -21,6 +21,10 @@ impl TcpTlsResolver for TcpTlsManualResolver {
     ) -> Result<Option<TlsStream<PollTcpStream>>, std::io::Error> {
         Ok(Some(io.into_stream(self.config.clone()).await?))
     }
+
+    fn get_tls_config(&self) -> Arc<ServerConfig> {
+        self.config.clone()
+    }
 }
 
 pub struct TcpTlsManualProvider;

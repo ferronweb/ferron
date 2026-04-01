@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use ferron_core::config::ServerConfigurationBlock;
+use rustls::ServerConfig;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::StartHandshake;
 use vibeio::net::PollTcpStream;
@@ -16,4 +17,6 @@ pub trait TcpTlsResolver {
         &self,
         io: StartHandshake<PollTcpStream>,
     ) -> Result<Option<TlsStream<PollTcpStream>>, std::io::Error>;
+
+    fn get_tls_config(&self) -> Arc<ServerConfig>;
 }
