@@ -43,7 +43,7 @@ pub struct ServerConfigurationPort {
     pub hosts: Vec<(ServerConfigurationHostFilters, ServerConfigurationBlock)>,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ServerConfigurationHostFilters {
     pub ip: Option<IpAddr>,
     pub host: Option<String>,
