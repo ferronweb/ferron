@@ -114,10 +114,7 @@ impl ServerConfigurationValue {
         }
     }
 
-    pub fn as_string_with_interpolations(
-        &self,
-        variables: &HashMap<String, String>,
-    ) -> Option<String> {
+    pub fn as_string_with_interpolations(&self, variables: &impl Variables) -> Option<String> {
         match self {
             ServerConfigurationValue::String(s, _) => Some(s.clone()),
             ServerConfigurationValue::InterpolatedString(parts, _) => {
@@ -126,8 +123,8 @@ impl ServerConfigurationValue {
                     match part {
                         ServerConfigurationInterpolatedStringPart::String(s) => result.push_str(s),
                         ServerConfigurationInterpolatedStringPart::Variable(var) => {
-                            if let Some(value) = variables.get(var) {
-                                result.push_str(value);
+                            if let Some(value) = variables.resolve(var) {
+                                result.push_str(&value);
                             } else {
                                 result.push_str(&format!("{{{{{}}}}}", var));
                             }
@@ -223,4 +220,14 @@ pub enum ServerConfigurationMatcherOperator {
     Regex,
     NotRegex,
     In,
+}
+
+pub trait Variables {
+    fn resolve(&self, name: &str) -> Option<String>;
+}
+
+impl Variables for HashMap<String, String> {
+    fn resolve(&self, name: &str) -> Option<String> {
+        self.get(name).cloned()
+    }
 }

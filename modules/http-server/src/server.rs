@@ -135,6 +135,7 @@ impl Module for BasicHttpModule {
                                 events: ferron_observability::CompositeEventSink::new(vec![]),
                                 req: Some(req),
                                 res: None,
+                                variables: std::collections::HashMap::new(),
                             };
 
                             if let Err(e) = pipeline.execute(&mut ctx).await {

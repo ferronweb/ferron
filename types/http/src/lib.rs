@@ -1,5 +1,8 @@
 //! HTTP context types
 
+pub mod variables;
+
+use ferron_core::config::Variables;
 use ferron_observability::CompositeEventSink;
 use http::{HeaderMap, Request, Response};
 use http_body_util::combinators::UnsyncBoxBody;
@@ -15,4 +18,15 @@ pub struct HttpContext {
     pub req: Option<HttpRequest>,
     pub res: Option<HttpResponse>,
     pub events: CompositeEventSink,
+    pub variables: std::collections::HashMap<String, String>,
+}
+
+impl Variables for HttpContext {
+    fn resolve(&self, key: &str) -> Option<String> {
+        if let Some(req) = &self.req {
+            variables::resolve_variable(key, req, &self.variables)
+        } else {
+            self.variables.resolve(key)
+        }
+    }
 }

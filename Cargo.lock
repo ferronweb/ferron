@@ -398,6 +398,7 @@ name = "ferron-http"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "ferron-core",
  "ferron-observability",
  "http",
  "http-body-util",

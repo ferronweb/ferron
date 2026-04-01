@@ -18,8 +18,8 @@ use ferron_core::config::{
     layer::LayeredConfiguration, ServerConfigurationBlock, ServerConfigurationMatcherExpr,
     ServerConfigurationMatcherOperand, ServerConfigurationMatcherOperator,
 };
-
-use crate::util::variables::resolve_variable;
+use ferron_http::variables::resolve_variable;
+use ferron_http::HttpRequest;
 
 use super::prepare::{
     PreparedConfiguration, PreparedHostConfigurationBlock, PreparedHostConfigurationErrorConfig,
@@ -27,7 +27,7 @@ use super::prepare::{
 };
 
 /// Variables that can be used in conditional matching
-pub type ResolverVariables = (http::request::Parts, HashMap<String, String>);
+pub type ResolverVariables = (HttpRequest, HashMap<String, String>);
 
 /// Represents a resolved location path through the configuration tree
 #[derive(Debug, Clone, Default)]
@@ -1247,6 +1247,8 @@ impl Default for ThreeStageResolver {
 
 #[cfg(test)]
 mod tests {
+    use http_body_util::{BodyExt, Empty};
+
     use super::*;
     use std::net::Ipv4Addr;
 
@@ -1344,7 +1346,10 @@ mod tests {
         resolver.insert_host(vec!["com", "example"], Arc::clone(&config), 10);
 
         let base_block = create_test_block();
-        let variables = (http::Request::new(()).into_parts().0, HashMap::new());
+        let variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
         let (layered_config, path) =
             resolver.resolve(Some("example.com"), "/api", &base_block, &variables, None);
 
@@ -1408,7 +1413,10 @@ mod tests {
             .get(&Some("example.com".to_string()))
             .unwrap();
 
-        let variables = (http::Request::new(()).into_parts().0, HashMap::new());
+        let variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
         let (config2, _) = resolver.resolve_stage2_layered(
             Some("example.com"),
             "/api",
@@ -1442,7 +1450,10 @@ mod tests {
             .register_ip("127.0.0.1".parse().unwrap(), hosts);
 
         // Full resolution
-        let variables = (http::Request::new(()).into_parts().0, HashMap::new());
+        let variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
         let result = resolver.resolve(
             "127.0.0.1".parse().unwrap(),
             "example.com",
@@ -1474,7 +1485,10 @@ mod tests {
         };
         resolver.insert_if_conditional(vec![expr], config, 10);
 
-        let mut variables = (http::Request::new(()).into_parts().0, HashMap::new());
+        let mut variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
         variables.1.insert("method".to_string(), "GET".to_string());
 
         let mut path = ResolvedLocationPath::new();
@@ -1896,7 +1910,10 @@ mod tests {
         });
 
         // Resolve
-        let variables = (http::Request::new(()).into_parts().0, HashMap::new());
+        let variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
         let (layered, path) = resolver.resolve(
             Some("example.com"),
             "/api/users",
