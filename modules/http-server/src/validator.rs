@@ -15,7 +15,7 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             args(1) => [ServerConfigurationValue::Boolean(_, _)]
             | args(2) => [ServerConfigurationValue::String(_, _), ServerConfigurationValue::String(_, _)],
             {
-            validate_nested!(tls, "provider", args(1) => ServerConfigurationValue::String(_, _));
+            validate_nested!(tls, provider, args(1) => ServerConfigurationValue::String(_, _));
         });
 
         Ok(())
