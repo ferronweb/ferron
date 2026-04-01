@@ -16,7 +16,9 @@ pub trait TcpTlsResolver {
     async fn handshake(
         &self,
         io: StartHandshake<PollTcpStream>,
-    ) -> Result<Option<TlsStream<PollTcpStream>>, std::io::Error>;
+    ) -> Result<Option<TlsStream<PollTcpStream>>, std::io::Error> {
+        Ok(Some(io.into_stream(self.get_tls_config()).await?))
+    }
 
     fn get_tls_config(&self) -> Arc<ServerConfig>;
 }

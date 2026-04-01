@@ -15,13 +15,6 @@ pub struct TcpTlsManualResolver {
 
 #[async_trait::async_trait(?Send)]
 impl TcpTlsResolver for TcpTlsManualResolver {
-    async fn handshake(
-        &self,
-        io: StartHandshake<PollTcpStream>,
-    ) -> Result<Option<TlsStream<PollTcpStream>>, std::io::Error> {
-        Ok(Some(io.into_stream(self.config.clone()).await?))
-    }
-
     fn get_tls_config(&self) -> Arc<ServerConfig> {
         self.config.clone()
     }
