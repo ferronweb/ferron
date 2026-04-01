@@ -63,6 +63,7 @@ impl Module for BasicHttpModule {
         for port in ports {
             let pipeline = self.pipeline.clone();
 
+            // TODO: listen address
             let addr = SocketAddr::from((Ipv6Addr::UNSPECIFIED, port));
             let listener = std::net::TcpListener::bind(addr)?;
 
