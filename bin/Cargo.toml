@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["rt"] }
-http = "1"
 clap = { version = "4", features = ["derive"] }
 serde_json = "1"
 tokio-util = "0.7.18"
@@ -17,11 +16,6 @@ anyhow = "1.0.102"
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8"
-windows = { version = "0.62", features = [
-    "Win32_Foundation",
-    "Win32_System_EventLog",
-    "Win32_Security",
-] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["fs", "signal", "process"] }

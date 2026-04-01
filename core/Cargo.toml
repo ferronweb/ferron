@@ -15,8 +15,7 @@ chrono = "0.4"
 vibeio = { version = "0.2.6", default-features = false, features = ["time"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-service = "0.7"
-windows = { version = "0.58", features = [
+windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_System_EventLog",
     "Win32_Security",
