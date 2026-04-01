@@ -83,7 +83,7 @@ impl WindowsEventSource {
             LogLevel::Error => EVENTLOG_ERROR_TYPE,
             LogLevel::Warn => EVENTLOG_WARNING_TYPE,
             LogLevel::Info => EVENTLOG_INFORMATION_TYPE,
-            LogLevel::Debug | LogLevel::Trace => EVENTLOG_AUDIT_SUCCESS,
+            LogLevel::Debug => EVENTLOG_AUDIT_SUCCESS,
         };
 
         let message_wide: Vec<u16> = message.encode_utf16().chain(Some(0)).collect();

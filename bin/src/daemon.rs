@@ -7,6 +7,7 @@
 
 use std::fs::{self, File};
 use std::io::Write;
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -90,12 +91,15 @@ fn close_standard_fds() -> Result<()> {
         open("/dev/null", OFlag::O_RDWR, Mode::empty()).context("Failed to open /dev/null")?;
 
     // Redirect stdin, stdout, stderr to /dev/null
-    dup2(devnull, 0).context("Failed to redirect stdin")?;
-    dup2(devnull, 1).context("Failed to redirect stdout")?;
-    dup2(devnull, 2).context("Failed to redirect stderr")?;
+    dup2(&devnull, &mut (unsafe { OwnedFd::from_raw_fd(0) }))
+        .context("Failed to redirect stdin")?;
+    dup2(&devnull, &mut (unsafe { OwnedFd::from_raw_fd(1) }))
+        .context("Failed to redirect stdout")?;
+    dup2(&devnull, &mut (unsafe { OwnedFd::from_raw_fd(2) }))
+        .context("Failed to redirect stderr")?;
 
     // Close the original fd if it's not 0, 1, or 2
-    if devnull > 2 {
+    if devnull.as_raw_fd() > 2 {
         close(devnull).ok();
     }
 
