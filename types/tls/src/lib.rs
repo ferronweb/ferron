@@ -1,15 +1,17 @@
+use std::sync::Arc;
+
 use ferron_core::config::ServerConfigurationBlock;
 use tokio_rustls::TlsStream;
+use vibeio::net::PollTcpStream;
 
-pub trait TlsResolver {
-    fn handshake<Io>(&self, io: Io) -> Result<Option<TlsStream<Io>>, std::io::Error>
-    where
-        Io: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static;
+pub struct TcpTlsContext {
+    pub config: ServerConfigurationBlock,
+    pub resolver: Option<Arc<dyn TcpTlsResolver>>,
 }
 
-pub trait TlsProvider {
-    fn resolver(
+pub trait TcpTlsResolver {
+    fn handshake(
         &self,
-        parameters: &ServerConfigurationBlock,
-    ) -> Result<impl TlsResolver, Box<dyn std::error::Error>>;
+        io: PollTcpStream,
+    ) -> Result<Option<TlsStream<PollTcpStream>>, std::io::Error>;
 }
