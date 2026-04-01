@@ -221,7 +221,7 @@ fn winservice(subcommand: WinServiceCommands) -> Result<(), Box<dyn std::error::
 
 fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
     vec![
-        Box::new(BuiltinModuleLoader::default()),
+        Box::new(BuiltinModuleLoader),
         Box::new(BasicHttpModuleLoader::default()),
         Box::new(BlankConfigurationAdapterModuleLoader),
     ]

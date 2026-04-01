@@ -220,7 +220,7 @@ impl<C> StageRegistry<C> {
         // Initialize all nodes
         for i in 0..stage_instances.len() {
             in_degree.entry(i).or_insert(0);
-            graph.entry(i).or_insert_with(HashSet::new);
+            graph.entry(i).or_default();
         }
 
         // Build edges based on constraints
@@ -623,6 +623,7 @@ mod tests {
         }
 
         impl DnsProviderImpl {
+            #[allow(dead_code)]
             fn resolve(&self, _domain: &str) -> Result<String, String> {
                 Ok("127.0.0.1".to_string())
             }

@@ -184,6 +184,7 @@ pub struct ServerConfigurationMatcherExpr {
     pub op: ServerConfigurationMatcherOperator,
 }
 
+#[allow(clippy::derive_ord_xor_partial_ord)]
 #[derive(Debug, PartialEq, PartialOrd, Clone, Serialize, Deserialize)]
 pub enum ServerConfigurationMatcherOperand {
     Identifier(String),

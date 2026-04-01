@@ -4,6 +4,7 @@ use crate::log_warn;
 
 static IO_URING_FAILED_WARNING_LOGGED: std::sync::Once = std::sync::Once::new();
 
+#[allow(clippy::type_complexity)]
 pub struct Runtime {
     primary_task_channels: Vec<
         tokio::sync::mpsc::UnboundedSender<

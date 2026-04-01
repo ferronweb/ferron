@@ -178,7 +178,7 @@ pub fn setup_signal_handlers() -> Result<()> {
     use signal_hook::consts::signal::{SIGHUP, SIGINT};
     use signal_hook::iterator::Signals;
 
-    let mut signals = Signals::new(&[SIGINT, SIGHUP])
+    let mut signals = Signals::new([SIGINT, SIGHUP])
         .context("Failed to set up signal handlers for SIGINT and SIGHUP")?;
     std::thread::spawn(move || {
         for signal in signals.forever() {

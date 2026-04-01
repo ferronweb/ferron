@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+#[derive(Clone, Default)]
 pub struct LayeredConfiguration {
     pub layers: Vec<Arc<crate::config::ServerConfigurationBlock>>,
 }

@@ -51,16 +51,9 @@ pub trait Stage<C>: Send + Sync {
     }
 }
 
+#[derive(Clone, Default)]
 pub struct Pipeline<C> {
     stages: Vec<Arc<dyn Stage<C>>>,
-}
-
-impl<C> Clone for Pipeline<C> {
-    fn clone(&self) -> Self {
-        Self {
-            stages: self.stages.clone(),
-        }
-    }
 }
 
 impl<C> Pipeline<C> {
