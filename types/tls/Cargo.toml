@@ -1,0 +1,11 @@
+[package]
+name = "ferron-tls"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rustls = { version = "0.23.37", default-features = false }
+tokio = "1.50.0"
+tokio-rustls = { version = "0.26.4", default-features = false }
+
+ferron-core = { path = "../../core" }
