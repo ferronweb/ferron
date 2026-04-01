@@ -6,5 +6,6 @@ mod config;
 mod loader;
 mod server;
 mod stages;
+mod validator;
 
 pub use loader::BasicHttpModuleLoader;

@@ -9,6 +9,7 @@ use ferron_http::HttpContext;
 
 use crate::server::BasicHttpModule;
 use crate::stages::{HelloStage, LoggingStage, NotFoundStage};
+use crate::validator::HttpConfigurationValidator;
 
 #[derive(Default)]
 pub struct BasicHttpModuleLoader {
@@ -36,7 +37,12 @@ impl ModuleLoader for BasicHttpModuleLoader {
         registry.insert("http", blocks);
     }
 
-    // TODO: configuration validators
+    fn register_global_configuration_validators(
+        &mut self,
+        registry: &mut Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
+    ) {
+        registry.push(Box::new(HttpConfigurationValidator));
+    }
 
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         registry

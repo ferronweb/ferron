@@ -49,6 +49,23 @@
 /// validate_directive!(config, used, timeout, optional args(1) => [ServerConfigurationValue::Number(_, _)], {
 ///     // only runs if directive exists and has correct arg type
 /// });
+///
+/// // Multiple variations with "or" - directive can have one of several signatures
+/// validate_directive!(config, used, value,
+///     args(1) => [ServerConfigurationValue::Number(_, _)]
+///     | args(2) => [ServerConfigurationValue::String(_, _), ServerConfigurationValue::Number(_, _)]
+///     | args(3) => [ServerConfigurationValue::String(_, _), ServerConfigurationValue::String(_, _), ServerConfigurationValue::Boolean(_, _)]
+/// , {
+///     // runs if directive matches any of the signatures
+/// });
+///
+/// // "Or" operator with optional directive
+/// validate_directive!(config, used, setting, optional
+///     args(1) => [ServerConfigurationValue::Boolean(_, _)]
+///     | args(2) => [ServerConfigurationValue::String(_, _), ServerConfigurationValue::Number(_, _)]
+/// , {
+///     // only runs if directive exists and matches one of the signatures
+/// });
 /// ```
 #[macro_export]
 macro_rules! validate_directive {
@@ -158,6 +175,72 @@ macro_rules! validate_directive {
     // Optional directive with optional args
     ($config:expr, $used:expr, $name:ident, optional args(?), $body:block) => {
         $crate::validate_directive!(@inner_optional $config, $used, $name, any, $body)
+    };
+
+    // Multiple variations with "or" operator - required directive
+    ($config:expr, $used:expr, $name:ident, args($count1:expr) => [$($pattern1:pat),+] $(| args($countN:expr) => [$($patternN:pat),+])+ , $body:block) => {
+        if let Some(directives) = $config.directives.get(stringify!($name)) {
+            $used.insert(stringify!($name).to_string());
+            for directive in directives {
+                let mut matched = false;
+                // Check first variation
+                if directive.args.len() == $count1 {
+                    if $crate::validate_args!(@check directive, [$($pattern1),+]) {
+                        matched = true;
+                    }
+                }
+                // Check remaining variations
+                $(
+                    if !matched && directive.args.len() == $countN {
+                        if $crate::validate_args!(@check directive, [$($patternN),+]) {
+                            matched = true;
+                        }
+                    }
+                )+
+                if !matched {
+                    return Err(format!(
+                        "Invalid directive '{}': argument count or type mismatch (expected one of the valid signatures)",
+                        stringify!($name)
+                    ).into());
+                }
+                let $name = directive.children.as_ref()
+                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                $body
+            }
+        }
+    };
+
+    // Multiple variations with "or" operator - optional directive
+    ($config:expr, $used:expr, $name:ident, optional args($count1:expr) => [$($pattern1:pat),+] $(| args($countN:expr) => [$($patternN:pat),+])+ , $body:block) => {
+        if let Some(directives) = $config.directives.get(stringify!($name)) {
+            $used.insert(stringify!($name).to_string());
+            for directive in directives {
+                let mut matched = false;
+                // Check first variation
+                if directive.args.len() == $count1 {
+                    if $crate::validate_args!(@check directive, [$($pattern1),+]) {
+                        matched = true;
+                    }
+                }
+                // Check remaining variations
+                $(
+                    if !matched && directive.args.len() == $countN {
+                        if $crate::validate_args!(@check directive, [$($patternN),+]) {
+                            matched = true;
+                        }
+                    }
+                )+
+                if !matched {
+                    return Err(format!(
+                        "Invalid directive '{}': argument count or type mismatch (expected one of the valid signatures)",
+                        stringify!($name)
+                    ).into());
+                }
+                let $name = directive.children.as_ref()
+                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                $body
+            }
+        }
     };
 
     // Internal implementation for required directives - exact count without patterns
@@ -278,8 +361,8 @@ macro_rules! validate_directive {
             for directive in directives {
                 if !$range.contains(&directive.args.len()) {
                     return Err(format!(
-                        "Invalid directive '{}': expected {} argument(s), got {}",
-                        stringify!($name), $range, directive.args.len()
+                        "Invalid directive '{}': expected {}-{} argument(s), got {}",
+                        stringify!($name), $range.min().unwrap_or(0), $range.max().unwrap_or(0), directive.args.len()
                     ).into());
                 }
                 let $name = directive.children.as_ref()
@@ -296,8 +379,8 @@ macro_rules! validate_directive {
             for directive in directives {
                 if !$range.contains(&directive.args.len()) {
                     return Err(format!(
-                        "Invalid directive '{}': expected {} argument(s), got {}",
-                        stringify!($name), $range, directive.args.len()
+                        "Invalid directive '{}': expected {}-{} argument(s), got {}",
+                        stringify!($name), $range.min().unwrap_or(0), $range.max().unwrap_or(0), directive.args.len()
                     ).into());
                 }
                 $crate::validate_args!(directive, [$($pattern),+]);
@@ -496,33 +579,72 @@ macro_rules! validate_directive {
 /// # Usage
 ///
 /// ```ignore
+/// // Single argument type
 /// validate_args!(directive, [ServerConfigurationValue::String(_, _)]);
+///
+/// // Multiple argument types (positional)
 /// validate_args!(directive, [
 ///     ServerConfigurationValue::String(_, _),
 ///     ServerConfigurationValue::Number(_, _)
 /// ]);
+///
+/// // "Or" pattern - argument can be one of multiple types
+/// validate_args!(directive, [
+///     ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::String(_, _)
+/// ]);
+///
+/// // Multiple arguments with "or" patterns
+/// validate_args!(directive, [
+///     ServerConfigurationValue::String(_, _) | ServerConfigurationValue::Ident(_, _),
+///     ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Boolean(_, _)
+/// ]);
 /// ```
 #[macro_export]
 macro_rules! validate_args {
+    // Single pattern (may include "or" patterns like Type1 | Type2)
     ($directive:expr, [$pattern:pat $(if $guard:expr)?]) => {
         if !matches!($directive.args[0], $pattern $(if $guard)?) {
             return Err("Invalid directive: argument type mismatch at position 0".into());
         }
     };
 
+    // Multiple patterns - use internal helper with counter
     ($directive:expr, [$($pattern:pat $(if $guard:expr)?),+]) => {
-        $(
-            if !matches!($directive.args[$crate::validate_args!(@idx $pattern $(if $guard)?)], $pattern $(if $guard)?) {
-                return Err(format!(
-                    "Invalid directive: argument type mismatch at position {}",
-                    $crate::validate_args!(@idx $pattern $(if $guard)?)
-                ).into());
-            }
-        )+
+        $crate::validate_args!(@multi $directive, 0, [$($pattern $(if $guard)?),+])
     };
 
-    (@idx $p:pat) => {
-        0
+    // Internal: process multiple patterns with index counter
+    (@multi $directive:expr, $idx:expr, [$pattern:pat $(if $guard:expr)?]) => {
+        if !matches!($directive.args[$idx], $pattern $(if $guard)?) {
+            return Err(format!(
+                "Invalid directive: argument type mismatch at position {}",
+                $idx
+            ).into());
+        }
+    };
+
+    (@multi $directive:expr, $idx:expr, [$pattern:pat $(if $guard:expr)?, $($rest:tt)+]) => {
+        if !matches!($directive.args[$idx], $pattern $(if $guard)?) {
+            return Err(format!(
+                "Invalid directive: argument type mismatch at position {}",
+                $idx
+            ).into());
+        }
+        $crate::validate_args!(@multi $directive, $idx + 1, [$($rest)+])
+    };
+
+    // Check helper - returns true if patterns match, false otherwise (for use in "or" variations)
+    (@check $directive:expr, [$($pattern:pat $(if $guard:expr)?),+]) => {
+        $crate::validate_args!(@check_impl $directive, 0, [$($pattern $(if $guard)?),+])
+    };
+
+    (@check_impl $directive:expr, $idx:expr, [$pattern:pat $(if $guard:expr)?]) => {
+        matches!($directive.args[$idx], $pattern $(if $guard)?)
+    };
+
+    (@check_impl $directive:expr, $idx:expr, [$pattern:pat $(if $guard:expr)?, $($rest:tt)+]) => {
+        matches!($directive.args[$idx], $pattern $(if $guard)?) &&
+        $crate::validate_args!(@check_impl $directive, $idx + 1, [$($rest)+])
     };
 }
 
@@ -532,31 +654,163 @@ macro_rules! validate_args {
 ///
 /// ```ignore
 /// // Single subdirective with exact arg count and type pattern
-/// validate_nested!(block, io_uring, args(1) => ServerConfigurationValue::Boolean(_, _));
+/// validate_nested!(block, io_uring, args(1) => [ServerConfigurationValue::Boolean(_, _)]);
 ///
-/// // Subdirective with minimum arg count and type pattern
-/// validate_nested!(block, options, args(min = 1) => ServerConfigurationValue::String(_, _));
+/// // Subdirective with multiple argument types (positional)
+/// validate_nested!(block, options, args(2) => [
+///     ServerConfigurationValue::String(_, _),
+///     ServerConfigurationValue::Number(_, _)
+/// ]);
 ///
-/// // Subdirective with maximum arg count and type pattern
-/// validate_nested!(block, flags, args(max = 3) => ServerConfigurationValue::Boolean(_, _));
+/// // Subdirective with "or" pattern - argument can be one of multiple types
+/// validate_nested!(block, value, args(1) => [
+///     ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::String(_, _)
+/// ]);
 ///
-/// // Subdirective with arg range and type pattern
-/// validate_nested!(block, range, args(min = 1, max = 4) => ServerConfigurationValue::Number(_, _));
+/// // Subdirective with minimum arg count and type patterns
+/// validate_nested!(block, items, args(min = 1) => [ServerConfigurationValue::String(_, _)]);
+///
+/// // Subdirective with maximum arg count and type patterns
+/// validate_nested!(block, flags, args(max = 3) => [ServerConfigurationValue::Boolean(_, _)]);
+///
+/// // Subdirective with arg range and type patterns
+/// validate_nested!(block, range, args(min = 1, max = 4) => [ServerConfigurationValue::Number(_, _)]);
 ///
 /// // Subdirective with any number of args and type pattern
-/// validate_nested!(block, items, args(?) => ServerConfigurationValue::String(_, _));
+/// validate_nested!(block, items, args(?) => [ServerConfigurationValue::String(_, _)]);
 ///
 /// // Subdirective with nested block for deeper nesting
 /// validate_nested!(block, pool, {
-///     validate_nested!(pool, size, args(1) => ServerConfigurationValue::Number(_, _));
+///     validate_nested!(pool, size, args(1) => [ServerConfigurationValue::Number(_, _)]);
 /// });
 ///
 /// // Subdirective with just existence check
 /// validate_nested!(block, debug);
+///
+/// // Multiple variations with "or" - subdirective can have one of several signatures
+/// validate_nested!(block, value,
+///     args(1) => [ServerConfigurationValue::Number(_, _)]
+///     | args(2) => [ServerConfigurationValue::String(_, _), ServerConfigurationValue::Number(_, _)]
+///     | args(3) => [ServerConfigurationValue::String(_, _), ServerConfigurationValue::String(_, _), ServerConfigurationValue::Boolean(_, _)]
+/// );
+///
+/// // Optional subdirective - no error if missing
+/// validate_nested!(block, debug, optional);
+///
+/// // Optional subdirective with argument validation
+/// validate_nested!(block, setting, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+///
+/// // Optional subdirective with multiple variations
+/// validate_nested!(block, value, optional
+///     args(1) => [ServerConfigurationValue::Number(_, _)]
+///     | args(2) => [ServerConfigurationValue::String(_, _), ServerConfigurationValue::Number(_, _)]
+/// );
 /// ```
 #[macro_export]
 macro_rules! validate_nested {
-    // Single subdirective with exact arg count and type pattern
+    // Single subdirective with exact arg count and type patterns (array syntax)
+    ($block:expr, $name:literal, args($count:expr) => [$($pattern:pat $(if $guard:expr)?),+]) => {
+        if let Some(directives) = $block.directives.get($name) {
+            for directive in directives {
+                if directive.args.len() != $count {
+                    return Err(format!(
+                        "Invalid directive '{}': expected {} argument(s) in '{}' subdirective, got {}",
+                        stringify!($block), $count, $name, directive.args.len()
+                    ).into());
+                }
+                $crate::validate_nested!(@check_args directive, [$($pattern $(if $guard)?),+], $name);
+            }
+        }
+    };
+
+    // Single subdirective with minimum arg count and type patterns (array syntax)
+    ($block:expr, $name:literal, args(min = $min:expr) => [$($pattern:pat $(if $guard:expr)?),+]) => {
+        if let Some(directives) = $block.directives.get($name) {
+            for directive in directives {
+                if directive.args.len() < $min {
+                    return Err(format!(
+                        "Invalid directive '{}': expected at least {} argument(s) in '{}' subdirective, got {}",
+                        stringify!($block), $min, $name, directive.args.len()
+                    ).into());
+                }
+                $crate::validate_nested!(@check_args directive, [$($pattern $(if $guard)?),+], $name);
+            }
+        }
+    };
+
+    // Single subdirective with maximum arg count and type patterns (array syntax)
+    ($block:expr, $name:literal, args(max = $max:expr) => [$($pattern:pat $(if $guard:expr)?),+]) => {
+        if let Some(directives) = $block.directives.get($name) {
+            for directive in directives {
+                if directive.args.len() > $max {
+                    return Err(format!(
+                        "Invalid directive '{}': expected at most {} argument(s) in '{}' subdirective, got {}",
+                        stringify!($block), $max, $name, directive.args.len()
+                    ).into());
+                }
+                $crate::validate_nested!(@check_args directive, [$($pattern $(if $guard)?),+], $name);
+            }
+        }
+    };
+
+    // Single subdirective with arg range and type patterns (array syntax)
+    ($block:expr, $name:literal, args($range:expr) => [$($pattern:pat $(if $guard:expr)?),+]) => {
+        if let Some(directives) = $block.directives.get($name) {
+            for directive in directives {
+                if !$range.contains(&directive.args.len()) {
+                    return Err(format!(
+                        "Invalid directive '{}': expected {} argument(s) in '{}' subdirective, got {}",
+                        stringify!($block), $range, $name, directive.args.len()
+                    ).into());
+                }
+                $crate::validate_nested!(@check_args directive, [$($pattern $(if $guard)?),+], $name);
+            }
+        }
+    };
+
+    // Single subdirective with any number of args and type patterns (array syntax)
+    ($block:expr, $name:literal, args(?) => [$($pattern:pat $(if $guard:expr)?),+]) => {
+        if let Some(directives) = $block.directives.get($name) {
+            for directive in directives {
+                $crate::validate_nested!(@check_args directive, [$($pattern $(if $guard)?),+], $name);
+            }
+        }
+    };
+
+    // Internal helper to check argument types
+    (@check_args $directive:ident, [$pattern:pat $(if $guard:expr)?], $subdirective_name:literal) => {
+        if !matches!($directive.args[0], $pattern $(if $guard)?) {
+            return Err(format!(
+                "Invalid directive '{}': invalid type for '{}' subdirective at position 0",
+                stringify!($block), $subdirective_name
+            ).into());
+        }
+    };
+
+    (@check_args $directive:ident, [$($pattern:pat $(if $guard:expr)?),+], $subdirective_name:literal) => {
+        $crate::validate_nested!(@check_args_impl $directive, 0, [$($pattern $(if $guard)?),+], $subdirective_name)
+    };
+
+    (@check_args_impl $directive:ident, $idx:expr, [$pattern:pat $(if $guard:expr)?], $subdirective_name:literal) => {
+        if !matches!($directive.args[$idx], $pattern $(if $guard)?) {
+            return Err(format!(
+                "Invalid directive '{}': invalid type for '{}' subdirective at position {}",
+                stringify!($block), $subdirective_name, $idx
+            ).into());
+        }
+    };
+
+    (@check_args_impl $directive:ident, $idx:expr, [$pattern:pat $(if $guard:expr)?, $($rest:tt)+], $subdirective_name:literal) => {
+        if !matches!($directive.args[$idx], $pattern $(if $guard)?) {
+            return Err(format!(
+                "Invalid directive '{}': invalid type for '{}' subdirective at position {}",
+                stringify!($block), $subdirective_name, $idx
+            ).into());
+        }
+        $crate::validate_nested!(@check_args_impl $directive, $idx + 1, [$($rest)+], $subdirective_name)
+    };
+
+    // Legacy syntax - single pattern without array (for backwards compatibility)
     ($block:expr, $name:literal, args($count:expr) => $pattern:pat $(if $guard:expr)?) => {
         if let Some(directives) = $block.directives.get($name) {
             for directive in directives {
@@ -576,7 +830,6 @@ macro_rules! validate_nested {
         }
     };
 
-    // Single subdirective with minimum arg count and type pattern
     ($block:expr, $name:literal, args(min = $min:expr) => $pattern:pat $(if $guard:expr)?) => {
         if let Some(directives) = $block.directives.get($name) {
             for directive in directives {
@@ -596,7 +849,6 @@ macro_rules! validate_nested {
         }
     };
 
-    // Single subdirective with maximum arg count and type pattern
     ($block:expr, $name:literal, args(max = $max:expr) => $pattern:pat $(if $guard:expr)?) => {
         if let Some(directives) = $block.directives.get($name) {
             for directive in directives {
@@ -616,7 +868,6 @@ macro_rules! validate_nested {
         }
     };
 
-    // Single subdirective with arg range and type pattern
     ($block:expr, $name:literal, args($range:expr) => $pattern:pat $(if $guard:expr)?) => {
         if let Some(directives) = $block.directives.get($name) {
             for directive in directives {
@@ -636,7 +887,6 @@ macro_rules! validate_nested {
         }
     };
 
-    // Single subdirective with any number of args and type pattern
     ($block:expr, $name:literal, args(?) => $pattern:pat $(if $guard:expr)?) => {
         if let Some(directives) = $block.directives.get($name) {
             for directive in directives {
@@ -666,6 +916,154 @@ macro_rules! validate_nested {
         if let Some(directives) = $block.directives.get($name) {
             let _ = directives;
         }
+    };
+
+    // Optional subdirective - no error if missing, no args
+    ($block:expr, $name:literal, optional) => {
+        if let Some(directives) = $block.directives.get($name) {
+            let _ = directives;
+        }
+    };
+
+    // Optional subdirective with exact arg count and type patterns
+    ($block:expr, $name:literal, optional args($count:expr) => [$($pattern:pat $(if $guard:expr)?),+]) => {
+        if let Some(directives) = $block.directives.get($name) {
+            for directive in directives {
+                if directive.args.len() != $count {
+                    return Err(format!(
+                        "Invalid directive '{}': expected {} argument(s) in '{}' subdirective, got {}",
+                        stringify!($block), $count, $name, directive.args.len()
+                    ).into());
+                }
+                $crate::validate_nested!(@check_args directive, [$($pattern $(if $guard)?),+], $name);
+            }
+        }
+    };
+
+    // Optional subdirective with minimum arg count and type patterns
+    ($block:expr, $name:literal, optional args(min = $min:expr) => [$($pattern:pat $(if $guard:expr)?),+]) => {
+        if let Some(directives) = $block.directives.get($name) {
+            for directive in directives {
+                if directive.args.len() < $min {
+                    return Err(format!(
+                        "Invalid directive '{}': expected at least {} argument(s) in '{}' subdirective, got {}",
+                        stringify!($block), $min, $name, directive.args.len()
+                    ).into());
+                }
+                $crate::validate_nested!(@check_args directive, [$($pattern $(if $guard)?),+], $name);
+            }
+        }
+    };
+
+    // Optional subdirective with maximum arg count and type patterns
+    ($block:expr, $name:literal, optional args(max = $max:expr) => [$($pattern:pat $(if $guard:expr)?),+]) => {
+        if let Some(directives) = $block.directives.get($name) {
+            for directive in directives {
+                if directive.args.len() > $max {
+                    return Err(format!(
+                        "Invalid directive '{}': expected at most {} argument(s) in '{}' subdirective, got {}",
+                        stringify!($block), $max, $name, directive.args.len()
+                    ).into());
+                }
+                $crate::validate_nested!(@check_args directive, [$($pattern $(if $guard)?),+], $name);
+            }
+        }
+    };
+
+    // Optional subdirective with arg range and type patterns
+    ($block:expr, $name:literal, optional args($range:expr) => [$($pattern:pat $(if $guard:expr)?),+]) => {
+        if let Some(directives) = $block.directives.get($name) {
+            for directive in directives {
+                if !$range.contains(&directive.args.len()) {
+                    return Err(format!(
+                        "Invalid directive '{}': expected {} argument(s) in '{}' subdirective, got {}",
+                        stringify!($block), $range, $name, directive.args.len()
+                    ).into());
+                }
+                $crate::validate_nested!(@check_args directive, [$($pattern $(if $guard)?),+], $name);
+            }
+        }
+    };
+
+    // Optional subdirective with any number of args and type patterns
+    ($block:expr, $name:literal, optional args(?) => [$($pattern:pat $(if $guard:expr)?),+]) => {
+        if let Some(directives) = $block.directives.get($name) {
+            for directive in directives {
+                $crate::validate_nested!(@check_args directive, [$($pattern $(if $guard)?),+], $name);
+            }
+        }
+    };
+
+    // Optional subdirective with multiple variations
+    ($block:expr, $name:literal, optional args($count1:expr) => [$($pattern1:pat),+] $(| args($countN:expr) => [$($patternN:pat),+])+) => {
+        if let Some(directives) = $block.directives.get($name) {
+            for directive in directives {
+                let mut matched = false;
+                // Check first variation
+                if directive.args.len() == $count1 {
+                    if $crate::validate_nested!(@check_bool directive, [$($pattern1),+]) {
+                        matched = true;
+                    }
+                }
+                // Check remaining variations
+                $(
+                    if !matched && directive.args.len() == $countN {
+                        if $crate::validate_nested!(@check_bool directive, [$($patternN),+]) {
+                            matched = true;
+                        }
+                    }
+                )+
+                if !matched {
+                    return Err(format!(
+                        "Invalid directive '{}': argument count or type mismatch in '{}' subdirective (expected one of the valid signatures)",
+                        stringify!($block), $name
+                    ).into());
+                }
+            }
+        }
+    };
+
+    // Multiple variations with "or" operator - subdirective can have one of several signatures
+    ($block:expr, $name:literal, args($count1:expr) => [$($pattern1:pat),+] $(| args($countN:expr) => [$($patternN:pat),+])+) => {
+        if let Some(directives) = $block.directives.get($name) {
+            for directive in directives {
+                let mut matched = false;
+                // Check first variation
+                if directive.args.len() == $count1 {
+                    if $crate::validate_nested!(@check_bool directive, [$($pattern1),+]) {
+                        matched = true;
+                    }
+                }
+                // Check remaining variations
+                $(
+                    if !matched && directive.args.len() == $countN {
+                        if $crate::validate_nested!(@check_bool directive, [$($patternN),+]) {
+                            matched = true;
+                        }
+                    }
+                )+
+                if !matched {
+                    return Err(format!(
+                        "Invalid directive '{}': argument count or type mismatch in '{}' subdirective (expected one of the valid signatures)",
+                        stringify!($block), $name
+                    ).into());
+                }
+            }
+        }
+    };
+
+    // Boolean check helper - returns true if patterns match (for use in "or" variations)
+    (@check_bool $directive:ident, [$($pattern:pat $(if $guard:expr)?),+]) => {
+        $crate::validate_nested!(@check_bool_impl $directive, 0, [$($pattern $(if $guard)?),+])
+    };
+
+    (@check_bool_impl $directive:ident, $idx:expr, [$pattern:pat $(if $guard:expr)?]) => {
+        matches!($directive.args[$idx], $pattern $(if $guard)?)
+    };
+
+    (@check_bool_impl $directive:ident, $idx:expr, [$pattern:pat $(if $guard:expr)?, $($rest:tt)+]) => {
+        matches!($directive.args[$idx], $pattern $(if $guard)?) &&
+        $crate::validate_nested!(@check_bool_impl $directive, $idx + 1, [$($rest)+])
     };
 }
 
