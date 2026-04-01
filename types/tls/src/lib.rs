@@ -6,6 +6,7 @@ use tokio_rustls::server::TlsStream;
 use tokio_rustls::StartHandshake;
 use vibeio::net::PollTcpStream;
 
+// TODO: support OCSP stapling via "ocsp" field
 pub struct TcpTlsContext {
     pub config: Arc<ServerConfigurationBlock>,
     pub resolver: Option<Arc<dyn TcpTlsResolver>>,
