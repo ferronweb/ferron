@@ -3,7 +3,8 @@ resolver = "2"
 members = [
     "bin",
     "core",
-    "modules/*"
+    "modules/*",
+    "types/*",
 ]
 exclude = [
     "network-server-windows-service-2"

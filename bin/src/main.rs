@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use clap::Parser;
-use ferron_config::BlankConfigurationAdapterModuleLoader;
+use ferron_config_blank::BlankConfigurationAdapterModuleLoader;
 use ferron_core::builtin::BuiltinModuleLoader;
 use ferron_core::config::adapter::ConfigurationAdapter;
 use ferron_core::config::layer::LayeredConfiguration;
@@ -12,7 +12,7 @@ use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_core::{log_debug, log_info, log_warn};
-use ferron_http::BasicHttpModuleLoader;
+use ferron_http_server::BasicHttpModuleLoader;
 
 mod cli;
 mod service;

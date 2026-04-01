@@ -358,9 +358,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "ferron-config",
+ "ferron-config-blank",
  "ferron-core",
- "ferron-http",
+ "ferron-http-server",
  "nix",
  "serde_json",
  "signal-hook",
@@ -370,7 +370,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferron-config"
+name = "ferron-config-blank"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -397,17 +397,36 @@ dependencies = [
 name = "ferron-http"
 version = "0.1.0"
 dependencies = [
+ "bytes",
+ "ferron-observability",
+ "http",
+ "http-body-util",
+]
+
+[[package]]
+name = "ferron-http-server"
+version = "0.1.0"
+dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
  "criterion",
  "ferron-core",
+ "ferron-http",
+ "ferron-observability",
  "http",
  "http-body-util",
  "parking_lot",
  "tokio",
  "tokio-util",
  "vibeio",
+]
+
+[[package]]
+name = "ferron-observability"
+version = "0.1.0"
+dependencies = [
+ "ferron-core",
 ]
 
 [[package]]

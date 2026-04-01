@@ -3,8 +3,7 @@
 use async_trait::async_trait;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::{log_info, StageConstraint};
-
-use crate::context::HttpContext;
+use ferron_http::HttpContext;
 
 pub struct LoggingStage;
 

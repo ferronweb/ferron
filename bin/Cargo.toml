@@ -10,8 +10,8 @@ serde_json = "1"
 tokio-util = "0.7.18"
 
 ferron-core = { path = "../core" }
-ferron-http = { path = "../modules/http" }
-ferron-config = { path = "../modules/config" }
+ferron-http-server = { path = "../modules/http-server" }
+ferron-config-blank = { path = "../modules/config-blank" }
 anyhow = "1.0.102"
 
 [target.'cfg(windows)'.dependencies]

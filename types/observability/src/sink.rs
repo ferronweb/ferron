@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::observability::Event;
+use crate::Event;
 
 pub trait EventSink: Send + Sync {
     fn emit(&self, event: Event);

@@ -1,5 +1,5 @@
 [package]
-name = "ferron-http"
+name = "ferron-http-server"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,14 +10,16 @@ bench = []
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "macros"] }
 vibeio = { version = "0.2.6", default-features = false }
-http = "1"
 parking_lot = "0.12"
-
-ferron-core = { path = "../../core" }
-tokio-util = "0.7.18"
-anyhow = "1.0.102"
+http = "1"
 http-body-util = "0.1.3"
 bytes = "1.11.1"
+tokio-util = "0.7.18"
+anyhow = "1.0.102"
+
+ferron-core = { path = "../../core" }
+ferron-observability = { path = "../../types/observability" }
+ferron-http = { path = "../../types/http" }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }

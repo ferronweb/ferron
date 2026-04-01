@@ -1,9 +1,7 @@
 use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
 use ferron_core::config::{
-    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationHostFilters,
-    ServerConfigurationMatcher, ServerConfigurationMatcherExpr, ServerConfigurationMatcherOperand,
-    ServerConfigurationMatcherOperator, ServerConfigurationPort, ServerConfigurationValue,
+    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationMatcherExpr,
 };
 
 pub type PreparedConfiguration =
@@ -264,6 +262,12 @@ pub fn prepare_host_block(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ferron_core::config::{
+        ServerConfigurationBlock, ServerConfigurationDirectiveEntry,
+        ServerConfigurationHostFilters, ServerConfigurationMatcher, ServerConfigurationMatcherExpr,
+        ServerConfigurationMatcherOperand, ServerConfigurationMatcherOperator,
+        ServerConfigurationPort, ServerConfigurationValue,
+    };
 
     // Helper functions to create test configuration blocks
     fn create_block_with_directives(

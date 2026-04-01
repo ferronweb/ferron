@@ -10,9 +10,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
 use ferron_core::{log_error, log_info, Module};
+use ferron_http::HttpContext;
 
 use crate::config::{prepare_host_config, ThreeStageResolver};
-use crate::context::HttpContext;
 
 pub struct BasicHttpModule {
     pipeline: Arc<Pipeline<HttpContext>>,
@@ -132,7 +132,7 @@ impl Module for BasicHttpModule {
                             };
 
                             let mut ctx = HttpContext {
-                                events: ferron_core::observability::CompositeEventSink::new(vec![]),
+                                events: ferron_observability::CompositeEventSink::new(vec![]),
                                 req: Some(req),
                                 res: None,
                             };
@@ -141,9 +141,9 @@ impl Module for BasicHttpModule {
                                 log_error!("Pipeline execution error: {}", e);
                             }
 
-                            let crate::context::HttpResponse::Custom(res) =
+                            let ferron_http::HttpResponse::Custom(res) =
                                 ctx.res.unwrap_or_else(|| {
-                                    crate::context::HttpResponse::Custom(
+                                    ferron_http::HttpResponse::Custom(
                                         http::Response::builder()
                                             .status(500)
                                             .body(

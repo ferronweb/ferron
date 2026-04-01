@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;
+use ferron_http::HttpContext;
 
-use crate::context::HttpContext;
 use crate::server::BasicHttpModule;
 use crate::stages::{HelloStage, LoggingStage, NotFoundStage};
 

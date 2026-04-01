@@ -3,7 +3,6 @@ pub mod config;
 pub mod builtin;
 pub mod loader;
 pub mod logging;
-pub mod observability;
 pub mod pipeline;
 pub mod registry;
 pub mod runtime;

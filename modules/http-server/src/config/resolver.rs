@@ -19,7 +19,7 @@ use ferron_core::config::{
     ServerConfigurationMatcherOperand, ServerConfigurationMatcherOperator,
 };
 
-use crate::{config::prepare_host_config, util::variables::resolve_variable};
+use crate::util::variables::resolve_variable;
 
 use super::prepare::{
     PreparedConfiguration, PreparedHostConfigurationBlock, PreparedHostConfigurationErrorConfig,

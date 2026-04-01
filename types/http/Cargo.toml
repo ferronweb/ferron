@@ -1,0 +1,11 @@
+[package]
+name = "ferron-http"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+http = "1"
+http-body-util = "0.1.3"
+bytes = "1.11.1"
+
+ferron-observability = { path = "../../types/observability" }

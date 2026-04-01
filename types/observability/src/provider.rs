@@ -1,7 +1,5 @@
-use crate::{
-    observability::{Event, EventSink},
-    Provider,
-};
+use crate::{Event, EventSink};
+use ferron_core::Provider;
 
 pub trait ObservabilityProvider: Provider {
     fn emit(&self, event: Event);

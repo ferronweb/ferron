@@ -4,10 +4,9 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
+use ferron_http::{HttpContext, HttpResponse};
 use http::Response;
 use http_body_util::{BodyExt, Full};
-
-use crate::context::{HttpContext, HttpResponse};
 
 pub struct HelloStage;
 

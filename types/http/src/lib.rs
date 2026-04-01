@@ -1,6 +1,6 @@
 //! HTTP context types
 
-use ferron_core::observability::CompositeEventSink;
+use ferron_observability::CompositeEventSink;
 use http::{HeaderMap, Request, Response};
 use http_body_util::combinators::UnsyncBoxBody;
 
