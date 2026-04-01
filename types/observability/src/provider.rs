@@ -1,12 +1,13 @@
 use crate::{Event, EventSink};
-use ferron_core::Provider;
+use ferron_core::providers::Provider;
 
-pub trait ObservabilityProvider: Provider {
-    fn emit(&self, event: Event);
+pub struct ObservabilityContext {
+    pub event: Event,
 }
 
-impl EventSink for dyn ObservabilityProvider {
+impl EventSink for dyn Provider<ObservabilityContext> {
     fn emit(&self, event: Event) {
-        ObservabilityProvider::emit(self, event)
+        let mut ctx = ObservabilityContext { event };
+        let _ = self.execute(&mut ctx);
     }
 }

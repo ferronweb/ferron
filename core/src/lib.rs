@@ -4,6 +4,7 @@ pub mod builtin;
 pub mod loader;
 pub mod logging;
 pub mod pipeline;
+pub mod providers;
 pub mod registry;
 pub mod runtime;
 pub mod shutdown;
@@ -20,5 +21,3 @@ pub trait Module: Send + Sync {
         runtime: &mut crate::runtime::Runtime,
     ) -> Result<(), Box<dyn std::error::Error>>;
 }
-
-pub use registry::{Provider, ProviderRegistry, ProviderSubTrait};

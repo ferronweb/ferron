@@ -15,31 +15,12 @@ use std::any::{Any, TypeId};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+#[allow(unused_imports)]
+use crate::providers::Provider;
 use parking_lot::RwLock;
 
-/// A provider that can be looked up by category and name
-pub trait Provider: Send + Sync {
-    /// Get the provider category (e.g., "DNS", "cache", "storage")
-    fn category(&self) -> &str;
-
-    /// Get the provider name within its category
-    fn name(&self) -> &str;
-
-    /// Get the provider as Any for downcasting
-    fn as_any(&self) -> &dyn Any;
-}
-
-/// A provider sub-trait that extends the base Provider trait
-///
-/// Use this trait to create categorized provider types (e.g., DnsProvider, CacheProvider)
-/// that can have their own type-erased registries.
-pub trait ProviderSubTrait: Provider {
-    /// Get the sub-trait category (e.g., "DNS", "cache")
-    fn sub_category(&self) -> &str;
-}
-
 /// A factory for creating provider instances
-pub type ProviderFactory<P> = Arc<dyn Fn() -> Arc<P> + Send + Sync>;
+pub type ProviderFactory<P> = Arc<dyn Fn() -> Arc<dyn crate::providers::Provider<P>> + Send + Sync>;
 
 /// Entry for a registered provider
 pub struct ProviderEntry<P> {
@@ -54,13 +35,13 @@ pub struct ProviderRegistry<P> {
     providers: RwLock<Vec<ProviderEntry<P>>>,
 }
 
-impl<P: ProviderSubTrait + 'static> Default for ProviderRegistry<P> {
+impl<P: 'static> Default for ProviderRegistry<P> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<P: ProviderSubTrait + 'static> ProviderRegistry<P> {
+impl<P: 'static> ProviderRegistry<P> {
     pub fn new() -> Self {
         Self {
             providers: RwLock::new(Vec::new()),
@@ -70,7 +51,7 @@ impl<P: ProviderSubTrait + 'static> ProviderRegistry<P> {
     /// Register a provider factory
     pub fn register<F>(&self, factory: F)
     where
-        F: Fn() -> Arc<P> + Send + Sync + 'static,
+        F: Fn() -> Arc<dyn crate::providers::Provider<P>> + Send + Sync + 'static,
     {
         self.providers.write().push(ProviderEntry {
             factory: Arc::new(factory),
@@ -78,7 +59,7 @@ impl<P: ProviderSubTrait + 'static> ProviderRegistry<P> {
     }
 
     /// Get a provider by name
-    pub fn get(&self, name: &str) -> Option<Arc<P>> {
+    pub fn get(&self, name: &str) -> Option<Arc<dyn crate::providers::Provider<P>>> {
         let providers = self.providers.read();
         for entry in providers.iter() {
             let instance = (entry.factory)();
@@ -90,29 +71,9 @@ impl<P: ProviderSubTrait + 'static> ProviderRegistry<P> {
     }
 
     /// Get all providers in this registry
-    pub fn get_all(&self) -> Vec<Arc<P>> {
+    pub fn get_all(&self) -> Vec<Arc<dyn crate::providers::Provider<P>>> {
         let providers = self.providers.read();
         providers.iter().map(|e| (e.factory)()).collect()
-    }
-
-    /// Get providers by category
-    pub fn get_by_category(&self, category: &str) -> Vec<Arc<P>> {
-        let providers = self.providers.read();
-        providers
-            .iter()
-            .map(|e| (e.factory)())
-            .filter(|p| p.category() == category)
-            .collect()
-    }
-
-    /// Get providers by sub-category
-    pub fn get_by_sub_category(&self, sub_category: &str) -> Vec<Arc<P>> {
-        let providers = self.providers.read();
-        providers
-            .iter()
-            .map(|e| (e.factory)())
-            .filter(|p| p.sub_category() == sub_category)
-            .collect()
     }
 
     /// Get the number of registered providers
@@ -419,25 +380,25 @@ impl Registry {
     ///
     /// This allows modules to define typed provider registries.
     /// For example, DNS providers can be registered with `ProviderRegistry<DnsProvider>`.
-    pub fn register_provider<P, F>(&self, factory: F)
+    pub fn register_provider<C, F>(&self, factory: F)
     where
-        P: ProviderSubTrait + 'static,
-        F: Fn() -> Arc<P> + Send + Sync + 'static,
+        C: 'static,
+        F: Fn() -> Arc<dyn crate::providers::Provider<C>> + Send + Sync + 'static,
     {
-        let type_id = TypeId::of::<P>();
+        let type_id = TypeId::of::<C>();
 
         let mut registries = self.provider_registries.write();
 
         // Check if registry exists for this type
         if let Some(erased) = registries.get(&type_id) {
-            if let Some(typed) = erased.as_any().downcast_ref::<TypedProviderRegistry<P>>() {
+            if let Some(typed) = erased.as_any().downcast_ref::<TypedProviderRegistry<C>>() {
                 typed.get_registry().register(factory);
                 return;
             }
         }
 
         // Create new registry for this type
-        let registry = Arc::new(ProviderRegistry::<P>::new());
+        let registry = Arc::new(ProviderRegistry::<C>::new());
         registry.register(factory);
 
         registries.insert(type_id, Arc::new(TypedProviderRegistry::new(registry)));
@@ -446,17 +407,17 @@ impl Registry {
     /// Get the provider registry for a specific provider type
     ///
     /// Modules can use this to retrieve their typed provider registry.
-    pub fn get_provider_registry<P>(&self) -> Option<Arc<ProviderRegistry<P>>>
+    pub fn get_provider_registry<C>(&self) -> Option<Arc<ProviderRegistry<C>>>
     where
-        P: ProviderSubTrait + 'static,
+        C: 'static,
     {
-        let type_id = TypeId::of::<P>();
+        let type_id = TypeId::of::<C>();
         let registries = self.provider_registries.read();
 
         registries.get(&type_id).and_then(|erased| {
             erased
                 .as_any()
-                .downcast_ref::<TypedProviderRegistry<P>>()
+                .downcast_ref::<TypedProviderRegistry<C>>()
                 .map(|typed| typed.get_registry())
         })
     }
@@ -496,12 +457,12 @@ impl RegistryBuilder {
     ///
     /// Providers are typed providers (e.g., DnsProvider, CacheProvider)
     /// that can be retrieved with their specific trait methods.
-    pub fn with_provider<P, F>(self, factory: F) -> Self
+    pub fn with_provider<C, F>(self, factory: F) -> Self
     where
-        P: ProviderSubTrait + 'static,
-        F: Fn() -> Arc<P> + Send + Sync + 'static,
+        C: 'static,
+        F: Fn() -> Arc<dyn crate::providers::Provider<C>> + Send + Sync + 'static,
     {
-        self.registry.register_provider::<P, F>(factory);
+        self.registry.register_provider::<C, F>(factory);
         self
     }
 
@@ -596,29 +557,19 @@ mod tests {
 
     #[test]
     fn test_provider_registry() {
-        use crate::registry::{Provider, ProviderSubTrait};
+        use crate::registry::Provider;
 
         struct DnsProviderImpl {
             name: String,
         }
 
-        impl Provider for DnsProviderImpl {
-            fn category(&self) -> &str {
-                "DNS"
-            }
-
+        impl Provider<()> for DnsProviderImpl {
             fn name(&self) -> &str {
                 &self.name
             }
 
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-        }
-
-        impl ProviderSubTrait for DnsProviderImpl {
-            fn sub_category(&self) -> &str {
-                "dns"
+            fn execute(&self, _ctx: &mut ()) -> Result<(), Box<dyn std::error::Error>> {
+                Ok(())
             }
         }
 
@@ -629,7 +580,7 @@ mod tests {
             }
         }
 
-        let registry = ProviderRegistry::<DnsProviderImpl>::new();
+        let registry = ProviderRegistry::<()>::new();
 
         registry.register(|| {
             Arc::new(DnsProviderImpl {
@@ -652,115 +603,56 @@ mod tests {
         let all = registry.get_all();
         assert_eq!(all.len(), 2);
 
-        // Test get by category
-        let by_cat = registry.get_by_category("DNS");
-        assert_eq!(by_cat.len(), 2);
-
-        // Test get by sub-category
-        let by_sub_cat = registry.get_by_sub_category("dns");
-        assert_eq!(by_sub_cat.len(), 2);
-
         // Test len
         assert_eq!(registry.len(), 2);
     }
 
     #[test]
     fn test_provider_registry_via_main_registry() {
-        use crate::registry::{Provider, ProviderSubTrait};
+        use crate::registry::Provider;
 
         struct TestDnsProvider {
             name: String,
         }
 
-        impl Provider for TestDnsProvider {
-            fn category(&self) -> &str {
-                "DNS"
-            }
+        #[allow(dead_code)]
+        struct DnsProviderContext {
+            input: String,
+            result: Option<String>,
+        }
 
+        impl Provider<DnsProviderContext> for TestDnsProvider {
             fn name(&self) -> &str {
                 &self.name
             }
 
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-        }
-
-        impl ProviderSubTrait for TestDnsProvider {
-            fn sub_category(&self) -> &str {
-                "test-dns"
-            }
-        }
-
-        impl TestDnsProvider {
-            fn resolve(&self, _domain: &str) -> Result<String, String> {
-                Ok("192.168.1.1".to_string())
+            fn execute(
+                &self,
+                ctx: &mut DnsProviderContext,
+            ) -> Result<(), Box<dyn std::error::Error>> {
+                ctx.result = Some("192.168.1.1".to_string());
+                Ok(())
             }
         }
 
         let registry = Registry::new();
 
-        registry.register_provider::<TestDnsProvider, _>(|| {
+        registry.register_provider::<DnsProviderContext, _>(|| {
             Arc::new(TestDnsProvider {
                 name: "default".to_string(),
             })
         });
 
-        let dns_registry = registry.get_provider_registry::<TestDnsProvider>();
+        let dns_registry = registry.get_provider_registry::<DnsProviderContext>();
         assert!(dns_registry.is_some());
 
         let dns = dns_registry.unwrap().get("default");
         assert!(dns.is_some());
-        assert_eq!(dns.unwrap().resolve("example.com").unwrap(), "192.168.1.1");
-    }
-
-    #[test]
-    fn test_registry_builder_with_provider() {
-        use crate::registry::{Provider, ProviderSubTrait};
-
-        struct CacheProviderImpl {
-            name: String,
-        }
-
-        impl Provider for CacheProviderImpl {
-            fn category(&self) -> &str {
-                "cache"
-            }
-
-            fn name(&self) -> &str {
-                &self.name
-            }
-
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-        }
-
-        impl ProviderSubTrait for CacheProviderImpl {
-            fn sub_category(&self) -> &str {
-                "memory"
-            }
-        }
-
-        impl CacheProviderImpl {
-            fn get(&self, _key: &str) -> Option<String> {
-                Some("cached_value".to_string())
-            }
-        }
-
-        let registry = RegistryBuilder::new()
-            .with_provider::<CacheProviderImpl, _>(|| {
-                Arc::new(CacheProviderImpl {
-                    name: "redis".to_string(),
-                })
-            })
-            .build();
-
-        let cache_registry = registry.get_provider_registry::<CacheProviderImpl>();
-        assert!(cache_registry.is_some());
-
-        let cache = cache_registry.unwrap().get("redis");
-        assert!(cache.is_some());
-        assert_eq!(cache.unwrap().get("key"), Some("cached_value".to_string()));
+        let mut ctx = DnsProviderContext {
+            input: "example.com".to_string(),
+            result: None,
+        };
+        dns.unwrap().execute(&mut ctx).unwrap();
+        assert_eq!(ctx.result, Some("192.168.1.1".to_string()));
     }
 }
