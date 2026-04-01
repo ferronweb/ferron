@@ -24,6 +24,7 @@ use cli::{parse_config_params, Cli, Commands};
 
 #[cfg(windows)]
 use cli::WinServiceCommands;
+use ferron_tls_manual::TlsManualModuleLoader;
 
 fn main() {
     if let Err(e) = main_inner() {
@@ -224,6 +225,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(BuiltinModuleLoader),
         Box::new(BasicHttpModuleLoader::default()),
         Box::new(BlankConfigurationAdapterModuleLoader),
+        Box::new(TlsManualModuleLoader),
     ]
 }
 

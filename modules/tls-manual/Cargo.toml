@@ -1,13 +1,14 @@
 [package]
-name = "ferron-tls"
+name = "ferron-tls-manual"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 async-trait = "0.1"
-rustls = { version = "0.23.37", default-features = false }
+rustls = { version = "0.23.37", default-features = false, features = ["tls12", "std", "aws_lc_rs"] }
 vibeio = { version = "0.2.6", default-features = false }
-tokio = "1.50.0"
 tokio-rustls = { version = "0.26.4", default-features = false }
 
 ferron-core = { path = "../../core" }
+ferron-tls = { path = "../../types/tls" }
+rustls-pki-types = "1.14.0"

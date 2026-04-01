@@ -20,10 +20,6 @@ pub fn resolve_variable(
             http::Version::HTTP_3 => "HTTP/3.0".to_string(),
             _ => "unknown".to_string(),
         }),
-        n if n.starts_with("env.") => {
-            let env_name = n.trim_start_matches("env.");
-            std::env::var(env_name).ok()
-        }
         n if n.starts_with("request.header.") => {
             let header_name = n
                 .trim_start_matches("request.header.")

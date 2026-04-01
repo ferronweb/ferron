@@ -123,7 +123,14 @@ impl ServerConfigurationValue {
                     match part {
                         ServerConfigurationInterpolatedStringPart::String(s) => result.push_str(s),
                         ServerConfigurationInterpolatedStringPart::Variable(var) => {
-                            if let Some(value) = variables.resolve(var) {
+                            if let Some(env_var) = var.strip_prefix("env.") {
+                                let env_var_name = &env_var;
+                                if let Ok(env_value) = std::env::var(env_var_name) {
+                                    result.push_str(&env_value);
+                                } else {
+                                    result.push_str(&format!("{{{{{}}}}}", var));
+                                }
+                            } else if let Some(value) = variables.resolve(var) {
                                 result.push_str(&value);
                             } else {
                                 result.push_str(&format!("{{{{{}}}}}", var));
