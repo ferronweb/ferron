@@ -123,7 +123,8 @@ impl CompiledMatcherExpr {
     pub fn new(expr: ServerConfigurationMatcherExpr) -> Result<Self, String> {
         let compiled_regex = if matches!(
             expr.op,
-            ServerConfigurationMatcherOperator::Regex | ServerConfigurationMatcherOperator::NotRegex
+            ServerConfigurationMatcherOperator::Regex
+                | ServerConfigurationMatcherOperator::NotRegex
         ) {
             // Extract the regex pattern from the right operand
             let pattern = match &expr.right {
@@ -623,14 +624,12 @@ impl Stage2RadixResolver {
         config: Arc<PreparedHostConfigurationBlock>,
         priority: u32,
     ) -> Result<(), String> {
-        let compiled: Result<Vec<_>, _> = exprs
-            .into_iter()
-            .map(CompiledMatcherExpr::new)
-            .collect();
+        let compiled: Result<Vec<_>, _> = exprs.into_iter().map(CompiledMatcherExpr::new).collect();
 
         match compiled {
             Ok(compiled_exprs) => {
-                self.if_conditionals.push((compiled_exprs, config, priority));
+                self.if_conditionals
+                    .push((compiled_exprs, config, priority));
                 Ok(())
             }
             Err(e) => Err(e),
@@ -652,14 +651,12 @@ impl Stage2RadixResolver {
         config: Arc<PreparedHostConfigurationBlock>,
         priority: u32,
     ) -> Result<(), String> {
-        let compiled: Result<Vec<_>, _> = exprs
-            .into_iter()
-            .map(CompiledMatcherExpr::new)
-            .collect();
+        let compiled: Result<Vec<_>, _> = exprs.into_iter().map(CompiledMatcherExpr::new).collect();
 
         match compiled {
             Ok(compiled_exprs) => {
-                self.if_not_conditionals.push((compiled_exprs, config, priority));
+                self.if_not_conditionals
+                    .push((compiled_exprs, config, priority));
                 Ok(())
             }
             Err(e) => Err(e),
@@ -1608,7 +1605,9 @@ mod tests {
             right: ServerConfigurationMatcherOperand::String("GET".to_string()),
             op: ServerConfigurationMatcherOperator::Eq,
         };
-        resolver.insert_if_conditional(vec![expr], config, 10).expect("Valid conditional");
+        resolver
+            .insert_if_conditional(vec![expr], config, 10)
+            .expect("Valid conditional");
 
         let mut variables = (
             http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
@@ -2079,14 +2078,18 @@ mod tests {
             right: ServerConfigurationMatcherOperand::String(r"^/api/.*".to_string()),
             op: ServerConfigurationMatcherOperator::Regex,
         };
-        resolver.insert_if_conditional(vec![regex_expr], Arc::clone(&config), 10).expect("Valid regex");
+        resolver
+            .insert_if_conditional(vec![regex_expr], Arc::clone(&config), 10)
+            .expect("Valid regex");
 
         // Create variables with matching path
         let mut variables = (
             http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
             HashMap::new(),
         );
-        variables.1.insert("path".to_string(), "/api/users".to_string());
+        variables
+            .1
+            .insert("path".to_string(), "/api/users".to_string());
 
         let mut path = ResolvedLocationPath::new();
         let configs = resolver.resolve_conditionals(&variables, &mut path);
@@ -2099,13 +2102,18 @@ mod tests {
             http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
             HashMap::new(),
         );
-        variables2.1.insert("path".to_string(), "/static/file.js".to_string());
+        variables2
+            .1
+            .insert("path".to_string(), "/static/file.js".to_string());
 
         let mut path2 = ResolvedLocationPath::new();
         let configs2 = resolver.resolve_conditionals(&variables2, &mut path2);
 
         // Should not match
-        assert!(configs2.is_empty(), "Regex pattern should not match /static/file.js");
+        assert!(
+            configs2.is_empty(),
+            "Regex pattern should not match /static/file.js"
+        );
     }
 
     #[test]
@@ -2124,33 +2132,45 @@ mod tests {
             right: ServerConfigurationMatcherOperand::String(r"^/admin/.*".to_string()),
             op: ServerConfigurationMatcherOperator::NotRegex,
         };
-        resolver.insert_if_conditional(vec![not_regex_expr], Arc::clone(&config), 10).expect("Valid regex");
+        resolver
+            .insert_if_conditional(vec![not_regex_expr], Arc::clone(&config), 10)
+            .expect("Valid regex");
 
         // Create variables with non-admin path (should match)
         let mut variables = (
             http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
             HashMap::new(),
         );
-        variables.1.insert("path".to_string(), "/public/page".to_string());
+        variables
+            .1
+            .insert("path".to_string(), "/public/page".to_string());
 
         let mut path = ResolvedLocationPath::new();
         let configs = resolver.resolve_conditionals(&variables, &mut path);
 
         // Should match (path does NOT match admin pattern)
-        assert!(!configs.is_empty(), "NotRegex should match paths that don't match the pattern");
+        assert!(
+            !configs.is_empty(),
+            "NotRegex should match paths that don't match the pattern"
+        );
 
         // Create variables with admin path (should not match)
         let mut variables2 = (
             http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
             HashMap::new(),
         );
-        variables2.1.insert("path".to_string(), "/admin/dashboard".to_string());
+        variables2
+            .1
+            .insert("path".to_string(), "/admin/dashboard".to_string());
 
         let mut path2 = ResolvedLocationPath::new();
         let configs2 = resolver.resolve_conditionals(&variables2, &mut path2);
 
         // Should not match (path DOES match admin pattern)
-        assert!(configs2.is_empty(), "NotRegex should not match paths that match the pattern");
+        assert!(
+            configs2.is_empty(),
+            "NotRegex should not match paths that match the pattern"
+        );
     }
 
     #[test]
@@ -2162,7 +2182,10 @@ mod tests {
         };
 
         let compiled = CompiledMatcherExpr::new(expr).expect("Should compile valid regex");
-        assert!(compiled.compiled_regex.is_some(), "Regex should be compiled");
+        assert!(
+            compiled.compiled_regex.is_some(),
+            "Regex should be compiled"
+        );
 
         // Test with invalid regex pattern
         let invalid_expr = ServerConfigurationMatcherExpr {
@@ -2191,29 +2214,40 @@ mod tests {
             right: ServerConfigurationMatcherOperand::String(r"^(?!.*admin).*api.*".to_string()),
             op: ServerConfigurationMatcherOperator::Regex,
         };
-        resolver.insert_if_conditional(vec![lookahead_expr], config, 10).expect("Valid regex");
+        resolver
+            .insert_if_conditional(vec![lookahead_expr], config, 10)
+            .expect("Valid regex");
 
         // Should match
         let mut variables = (
             http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
             HashMap::new(),
         );
-        variables.1.insert("path".to_string(), "/api/users".to_string());
+        variables
+            .1
+            .insert("path".to_string(), "/api/users".to_string());
 
         let mut path = ResolvedLocationPath::new();
         let configs = resolver.resolve_conditionals(&variables, &mut path);
-        assert!(!configs.is_empty(), "Should match path with api but not admin");
+        assert!(
+            !configs.is_empty(),
+            "Should match path with api but not admin"
+        );
 
         // Should not match (contains admin)
         let mut variables2 = (
             http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
             HashMap::new(),
         );
-        variables2.1.insert("path".to_string(), "/admin/api/users".to_string());
+        variables2
+            .1
+            .insert("path".to_string(), "/admin/api/users".to_string());
 
         let mut path2 = ResolvedLocationPath::new();
         let configs2 = resolver.resolve_conditionals(&variables2, &mut path2);
-        assert!(configs2.is_empty(), "Should not match path containing admin");
+        assert!(
+            configs2.is_empty(),
+            "Should not match path containing admin"
+        );
     }
 }
-

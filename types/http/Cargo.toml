@@ -7,6 +7,7 @@ edition = "2021"
 http = "1"
 http-body-util = "0.1.3"
 bytes = "1.11.1"
+vibeio = { version = "0.2.6", default-features = false, features = ["fs"] }
 
 ferron-observability = { path = "../../types/observability" }
 ferron-core = { path = "../../core" }

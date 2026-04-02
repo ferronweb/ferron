@@ -84,4 +84,31 @@ impl<C> Pipeline<C> {
         }
         Ok(())
     }
+
+    pub async fn execute_without_inverse<'a>(
+        &'a self,
+        ctx: &mut C,
+    ) -> Result<Vec<&'a Arc<dyn Stage<C>>>, PipelineError> {
+        let mut executed_stages = vec![];
+        for stage in &self.stages {
+            executed_stages.push(stage);
+            match stage.run(ctx).await {
+                Ok(true) => continue,
+                Ok(false) => break,
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(executed_stages)
+    }
+
+    pub async fn execute_inverse<'a>(
+        &'a self,
+        ctx: &mut C,
+        executed_stages: Vec<&'a Arc<dyn Stage<C>>>,
+    ) -> Result<(), PipelineError> {
+        for stage in executed_stages.iter().rev() {
+            stage.run_inverse(ctx).await?;
+        }
+        Ok(())
+    }
 }

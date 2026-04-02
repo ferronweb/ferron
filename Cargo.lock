@@ -503,6 +503,7 @@ dependencies = [
  "ferron-observability",
  "http",
  "http-body-util",
+ "vibeio",
 ]
 
 [[package]]
@@ -851,9 +852,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.183"
+version = "0.2.184"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5b646652bf6661599e1da8901b3b9522896f01e736bad5f723fe7a3a27f899d"
+checksum = "48f5d2a454e16a5ea0f4ced81bd44e4cfc7bd3a507b61887c99fd3538b28e4af"
 
 [[package]]
 name = "lock_api"
@@ -1372,9 +1373,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "vibeio"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d5b44e953b7f31cd083e16b3350234b6723c4ca4a70a522821ba8e7fffea16b"
+checksum = "388fef37de48f0eaeb9212ba7d7bfa0be13f3834bbadb29bbd7b7f9c778ace44"
 dependencies = [
  "crossbeam-queue",
  "futures-util",

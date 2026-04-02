@@ -6,7 +6,7 @@ use std::sync::Arc;
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_core::{config::ServerConfigurationBlock, pipeline::Pipeline};
-use ferron_http::HttpContext;
+use ferron_http::{HttpContext, HttpFileContext};
 use ferron_observability::{EventSink, ObservabilityContext, ObservabilityProviderEventSink};
 use ferron_tls::TcpTlsContext;
 use parking_lot::Mutex;
@@ -183,6 +183,7 @@ fn resolve_http_connection_options(
 
 pub struct BasicHttpModule {
     pipeline: Arc<Pipeline<HttpContext>>,
+    file_pipeline: Arc<Pipeline<HttpFileContext>>,
     global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
     config_resolver: Arc<crate::config::ThreeStageResolver>,
     tls_resolver: Option<Arc<self::tls_resolve::TlsResolverRadixTree>>,
@@ -380,8 +381,13 @@ impl BasicHttpModule {
             .get_stage_registry::<HttpContext>()
             .expect("HTTP stage registry not found")
             .build_all();
+        let file_pipeline = registry
+            .get_stage_registry::<HttpFileContext>()
+            .map(|registry| registry.build_all())
+            .unwrap_or_else(Pipeline::new);
         Ok(Self {
             pipeline: Arc::new(pipeline),
+            file_pipeline: Arc::new(file_pipeline),
             global_config,
             config_resolver: Arc::new(ThreeStageResolver::from_prepared(prepare_host_config(
                 port_config,
@@ -416,10 +422,12 @@ impl Module for BasicHttpModule {
         };
         for port in ports {
             let pipeline = self.pipeline.clone();
+            let file_pipeline = self.file_pipeline.clone();
             let listener_options = resolve_tcp_listener_options(&self.global_config, port)?;
             let listener = tcp::TcpListenerHandle::new(
                 listener_options,
                 pipeline,
+                file_pipeline,
                 runtime,
                 self.config_resolver.clone(),
                 self.tls_resolver.clone(),

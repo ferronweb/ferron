@@ -33,3 +33,11 @@ impl Variables for HttpContext {
         }
     }
 }
+
+pub struct HttpFileContext {
+    pub http: HttpContext,
+    pub metadata: vibeio::fs::Metadata,
+    pub file_path: std::path::PathBuf,
+    pub path_info: Option<String>, // For example, "/test" in "/index.php/test"
+    pub file_root: std::path::PathBuf,
+}

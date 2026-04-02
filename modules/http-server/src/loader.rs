@@ -5,10 +5,12 @@ use std::sync::Arc;
 
 use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;
-use ferron_http::HttpContext;
+use ferron_http::{HttpContext, HttpFileContext};
 
 use crate::server::BasicHttpModule;
-use crate::stages::{HelloStage, LoggingStage, NotFoundStage};
+use crate::stages::{
+    DirectoryIndexStage, HelloStage, LoggingStage, NotFoundStage, StaticFileStage,
+};
 use crate::validator::HttpConfigurationValidator;
 
 #[derive(Default)]
@@ -49,6 +51,8 @@ impl ModuleLoader for BasicHttpModuleLoader {
             .with_stage::<HttpContext, _>(|| Arc::new(LoggingStage::default()))
             .with_stage::<HttpContext, _>(|| Arc::new(HelloStage::default()))
             .with_stage::<HttpContext, _>(|| Arc::new(NotFoundStage::default()))
+            .with_stage::<HttpFileContext, _>(|| Arc::new(DirectoryIndexStage::default()))
+            .with_stage::<HttpFileContext, _>(|| Arc::new(StaticFileStage::default()))
     }
 
     fn register_modules(

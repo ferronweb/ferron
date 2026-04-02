@@ -9,3 +9,6 @@ members = [
 exclude = [
     "network-server-windows-service-2"
 ]
+
+[profile.dev]
+overflow-checks = false

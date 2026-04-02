@@ -10,7 +10,7 @@ use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::RELOAD_TOKEN;
 use ferron_core::{log_error, log_info};
-use ferron_http::HttpContext;
+use ferron_http::{HttpContext, HttpFileContext};
 use ferron_observability::{CompositeEventSink, Event, EventSink, LogEvent, LogLevel};
 use http::Request;
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt};
@@ -109,6 +109,7 @@ impl TcpListenerHandle {
     pub fn new(
         options: TcpListenerOptions,
         pipeline: Arc<Pipeline<HttpContext>>,
+        file_pipeline: Arc<Pipeline<HttpFileContext>>,
         runtime: &mut Runtime,
         config_resolver: Arc<ThreeStageResolver>,
         tls_resolver: Option<Arc<TlsResolverRadixTree>>,
@@ -125,6 +126,7 @@ impl TcpListenerHandle {
         let cancel_token = Arc::new(CancellationToken::new());
 
         let pipeline_clone = pipeline.clone();
+        let file_pipeline_clone = file_pipeline.clone();
         let cancel_token_clone = cancel_token.clone();
 
         runtime.spawn_primary_task(move || {
@@ -139,6 +141,7 @@ impl TcpListenerHandle {
                 .map(CompositeEventSink::new)
                 .unwrap_or(CompositeEventSink::new(vec![]));
             let pipeline = pipeline_clone.clone();
+            let file_pipeline = file_pipeline_clone.clone();
             Box::pin(async move {
                 let Ok(new_listener) = new_listener_result else {
                     log_error!("Failed to clone listener");
@@ -192,6 +195,7 @@ impl TcpListenerHandle {
                     };
 
                     let pipeline = pipeline.clone();
+                    let file_pipeline = file_pipeline.clone();
                     let config_resolver = config_resolver.clone();
                     let tls_resolver = tls_resolver.clone();
                     let http_connection_options_resolver =
@@ -264,6 +268,7 @@ impl TcpListenerHandle {
                                         handle_http2_connection(
                                             tls_stream,
                                             pipeline,
+                                            file_pipeline,
                                             config_resolver,
                                             local_addr.ip(),
                                             hinted_hostname,
@@ -277,6 +282,7 @@ impl TcpListenerHandle {
                                         handle_http1_connection(
                                             tls_stream,
                                             pipeline,
+                                            file_pipeline,
                                             config_resolver,
                                             local_addr.ip(),
                                             hinted_hostname,
@@ -311,6 +317,7 @@ impl TcpListenerHandle {
                             handle_http1_connection(
                                 socket,
                                 pipeline,
+                                file_pipeline,
                                 config_resolver,
                                 local_addr.ip(),
                                 None,
@@ -375,6 +382,7 @@ fn build_tcp_listener(
 async fn handle_http1_connection<S>(
     socket: S,
     pipeline: Arc<Pipeline<HttpContext>>,
+    file_pipeline: Arc<Pipeline<HttpFileContext>>,
     config_resolver: Arc<ThreeStageResolver>,
     local_ip: IpAddr,
     hinted_hostname: Option<String>,
@@ -393,6 +401,7 @@ async fn handle_http1_connection<S>(
             .graceful_shutdown_token(graceful_shutdown.clone())
             .handle(build_request_handler(
                 pipeline,
+                file_pipeline,
                 config_resolver,
                 local_ip,
                 hinted_hostname,
@@ -424,6 +433,7 @@ async fn handle_http1_connection<S>(
 async fn handle_http2_connection<S>(
     socket: S,
     pipeline: Arc<Pipeline<HttpContext>>,
+    file_pipeline: Arc<Pipeline<HttpFileContext>>,
     config_resolver: Arc<ThreeStageResolver>,
     local_ip: IpAddr,
     hinted_hostname: Option<String>,
@@ -441,6 +451,7 @@ async fn handle_http2_connection<S>(
             .graceful_shutdown_token(graceful_shutdown.clone())
             .handle(build_request_handler(
                 pipeline,
+                file_pipeline,
                 config_resolver,
                 local_ip,
                 hinted_hostname,
@@ -496,6 +507,7 @@ fn build_http2_options(connection_options: &HttpConnectionOptions) -> Http2Optio
 
 fn build_request_handler(
     pipeline: Arc<Pipeline<HttpContext>>,
+    file_pipeline: Arc<Pipeline<HttpFileContext>>,
     config_resolver: Arc<ThreeStageResolver>,
     local_ip: IpAddr,
     hinted_hostname: Option<String>,
@@ -505,6 +517,7 @@ fn build_request_handler(
 ) -> impl Fn(Request<vibeio_http::Incoming>) -> RequestHandlerFuture {
     move |request: Request<vibeio_http::Incoming>| {
         let pipeline = pipeline.clone();
+        let file_pipeline = file_pipeline.clone();
         let config_resolver = config_resolver.clone();
         let hinted_hostname = hinted_hostname.clone();
         let observability_resolver = observability_resolver.clone();
@@ -522,6 +535,7 @@ fn build_request_handler(
             request_handler(
                 request,
                 pipeline,
+                file_pipeline,
                 config_resolver,
                 local_ip,
                 hostname,
