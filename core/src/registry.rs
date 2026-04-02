@@ -34,12 +34,14 @@ pub struct ProviderRegistry<P> {
 }
 
 impl<P: 'static> Default for ProviderRegistry<P> {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl<P: 'static> ProviderRegistry<P> {
+    #[inline]
     pub fn new() -> Self {
         Self {
             providers: RwLock::new(Vec::new()),
@@ -75,11 +77,13 @@ impl<P: 'static> ProviderRegistry<P> {
     }
 
     /// Get the number of registered providers
+    #[inline]
     pub fn len(&self) -> usize {
         self.providers.read().len()
     }
 
     /// Check if the registry is empty
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.providers.read().is_empty()
     }
@@ -101,10 +105,12 @@ impl<P: 'static> AnyProviderRegistry for TypedProviderRegistry<P> {
 }
 
 impl<P: 'static> TypedProviderRegistry<P> {
+    #[inline]
     fn new(registry: Arc<ProviderRegistry<P>>) -> Self {
         Self { registry }
     }
 
+    #[inline]
     fn get_registry(&self) -> Arc<ProviderRegistry<P>> {
         Arc::clone(&self.registry)
     }
@@ -136,12 +142,14 @@ pub struct StageRegistry<C> {
 }
 
 impl<C> Default for StageRegistry<C> {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl<C> StageRegistry<C> {
+    #[inline]
     pub fn new() -> Self {
         Self {
             stages: RwLock::new(Vec::new()),
@@ -265,11 +273,13 @@ impl<C> StageRegistry<C> {
     }
 
     /// Get the number of registered stages
+    #[inline]
     pub fn len(&self) -> usize {
         self.stages.read().len()
     }
 
     /// Check if the registry is empty
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.stages.read().is_empty()
     }
@@ -291,10 +301,12 @@ impl<C: 'static> AnyStageRegistry for TypedStageRegistry<C> {
 }
 
 impl<C: 'static> TypedStageRegistry<C> {
+    #[inline]
     fn new(registry: Arc<StageRegistry<C>>) -> Self {
         Self { registry }
     }
 
+    #[inline]
     fn get_registry(&self) -> Arc<StageRegistry<C>> {
         Arc::clone(&self.registry)
     }
@@ -315,12 +327,14 @@ pub struct Registry {
 }
 
 impl Default for Registry {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl Registry {
+    #[inline]
     pub fn new() -> Self {
         Self {
             stage_registries: RwLock::new(HashMap::new()),
@@ -427,12 +441,14 @@ pub struct RegistryBuilder {
 }
 
 impl Default for RegistryBuilder {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl RegistryBuilder {
+    #[inline]
     pub fn new() -> Self {
         let registry = Arc::new(Registry::new());
         Self { registry }
@@ -465,6 +481,7 @@ impl RegistryBuilder {
     }
 
     /// Build the registry
+    #[inline]
     pub fn build(self) -> Arc<Registry> {
         self.registry
     }

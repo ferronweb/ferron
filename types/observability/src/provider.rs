@@ -19,6 +19,7 @@ pub struct ObservabilityProviderEventSink {
 }
 
 impl ObservabilityProviderEventSink {
+    #[inline]
     pub fn new(inner: Arc<dyn Provider<ObservabilityContext>>) -> Self {
         Self { inner }
     }

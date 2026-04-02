@@ -20,6 +20,7 @@ use crate::{
 mod tcp;
 mod tls_resolve;
 
+#[inline]
 fn format_location(
     block_name: Option<&str>,
     span: Option<&ferron_core::config::ServerConfigurationSpan>,
@@ -40,6 +41,7 @@ fn format_location(
     location
 }
 
+#[inline]
 fn tcp_config(global_config: &ServerConfigurationBlock) -> Option<&ServerConfigurationBlock> {
     global_config
         .directives
@@ -104,6 +106,7 @@ fn resolve_tcp_listener_options(
     })
 }
 
+#[inline]
 fn http_config(config: &ServerConfigurationBlock) -> Option<&ServerConfigurationBlock> {
     config
         .directives

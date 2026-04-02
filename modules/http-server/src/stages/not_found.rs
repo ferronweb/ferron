@@ -7,6 +7,7 @@ use ferron_http::{HttpContext, HttpResponse};
 pub struct NotFoundStage;
 
 impl Default for NotFoundStage {
+    #[inline]
     fn default() -> Self {
         Self
     }
@@ -14,6 +15,7 @@ impl Default for NotFoundStage {
 
 #[async_trait(?Send)]
 impl Stage<HttpContext> for NotFoundStage {
+    #[inline]
     fn name(&self) -> &str {
         "not_found"
     }

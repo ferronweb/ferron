@@ -13,12 +13,14 @@ pub enum PipelineError {
 }
 
 impl PipelineError {
+    #[inline]
     pub fn custom(msg: impl Into<String>) -> Self {
         PipelineError::Custom(msg.into())
     }
 }
 
 impl std::fmt::Display for PipelineError {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PipelineError::Terminated => write!(f, "pipeline terminated by stage"),
@@ -35,6 +37,7 @@ pub trait Stage<C>: Send + Sync {
     fn name(&self) -> &str;
 
     /// Returns the ordering constraints for this stage
+    #[inline]
     fn constraints(&self) -> Vec<StageConstraint> {
         Vec::new()
     }
@@ -46,6 +49,7 @@ pub trait Stage<C>: Send + Sync {
 
     /// Inverse operation for this stage
     /// Returns Err to terminate the inverse operation
+    #[inline]
     async fn run_inverse(&self, _ctx: &mut C) -> Result<(), PipelineError> {
         Ok(())
     }
@@ -57,10 +61,12 @@ pub struct Pipeline<C> {
 }
 
 impl<C> Pipeline<C> {
+    #[inline]
     pub fn new() -> Self {
         Self { stages: vec![] }
     }
 
+    #[inline]
     pub fn add_stage(mut self, stage: Arc<dyn Stage<C>>) -> Self {
         self.stages.push(stage);
         self

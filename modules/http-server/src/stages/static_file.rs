@@ -12,6 +12,7 @@ use http_body_util::{BodyExt, Empty, Full};
 pub struct StaticFileStage;
 
 impl Default for StaticFileStage {
+    #[inline]
     fn default() -> Self {
         Self
     }
@@ -19,6 +20,7 @@ impl Default for StaticFileStage {
 
 #[async_trait(?Send)]
 impl Stage<HttpFileContext> for StaticFileStage {
+    #[inline]
     fn name(&self) -> &str {
         "static_file"
     }

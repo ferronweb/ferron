@@ -8,6 +8,7 @@ use ferron_http::HttpContext;
 pub struct LoggingStage;
 
 impl Default for LoggingStage {
+    #[inline]
     fn default() -> Self {
         Self
     }
@@ -15,10 +16,12 @@ impl Default for LoggingStage {
 
 #[async_trait(?Send)]
 impl Stage<HttpContext> for LoggingStage {
+    #[inline]
     fn name(&self) -> &str {
         "logging"
     }
 
+    #[inline]
     fn constraints(&self) -> Vec<StageConstraint> {
         vec![StageConstraint::Before("hello".to_string())]
     }

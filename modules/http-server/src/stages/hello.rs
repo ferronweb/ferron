@@ -11,6 +11,7 @@ use http_body_util::{BodyExt, Full};
 pub struct HelloStage;
 
 impl Default for HelloStage {
+    #[inline]
     fn default() -> Self {
         Self
     }
@@ -18,10 +19,12 @@ impl Default for HelloStage {
 
 #[async_trait(?Send)]
 impl Stage<HttpContext> for HelloStage {
+    #[inline]
     fn name(&self) -> &str {
         "hello"
     }
 
+    #[inline]
     fn constraints(&self) -> Vec<StageConstraint> {
         vec![StageConstraint::Before("not_found".to_string())]
     }

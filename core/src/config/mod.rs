@@ -57,6 +57,7 @@ pub struct ServerConfigurationBlock {
 }
 
 impl ServerConfigurationBlock {
+    #[inline]
     pub fn get_value(&self, directive: &str) -> Option<&ServerConfigurationValue> {
         self.directives
             .get(directive)
@@ -64,6 +65,7 @@ impl ServerConfigurationBlock {
             .and_then(|entry| entry.args.first())
     }
 
+    #[inline]
     pub fn get_flag(&self, directive: &str) -> bool {
         if let Some(v) = self.get_value(directive) {
             v.as_boolean().unwrap_or(true)
@@ -81,10 +83,12 @@ pub struct ServerConfigurationDirectiveEntry {
 }
 
 impl ServerConfigurationDirectiveEntry {
+    #[inline]
     pub fn get_value(&self) -> Option<&ServerConfigurationValue> {
         self.args.first()
     }
 
+    #[inline]
     pub fn get_flag(&self) -> bool {
         if let Some(ServerConfigurationValue::Boolean(value, _)) = self.args.first() {
             *value
@@ -107,6 +111,7 @@ pub enum ServerConfigurationValue {
 }
 
 impl ServerConfigurationValue {
+    #[inline]
     pub fn as_str(&self) -> Option<&str> {
         match self {
             ServerConfigurationValue::String(s, _) => Some(s),
@@ -144,6 +149,7 @@ impl ServerConfigurationValue {
         }
     }
 
+    #[inline]
     pub fn as_number(&self) -> Option<i64> {
         if let ServerConfigurationValue::Number(n, _) = self {
             Some(*n)
@@ -152,6 +158,7 @@ impl ServerConfigurationValue {
         }
     }
 
+    #[inline]
     pub fn as_float(&self) -> Option<f64> {
         if let ServerConfigurationValue::Float(f, _) = self {
             Some(*f)
@@ -160,6 +167,7 @@ impl ServerConfigurationValue {
         }
     }
 
+    #[inline]
     pub fn as_boolean(&self) -> Option<bool> {
         if let ServerConfigurationValue::Boolean(b, _) = self {
             Some(*b)
@@ -234,6 +242,7 @@ pub trait Variables {
 }
 
 impl Variables for HashMap<String, String> {
+    #[inline]
     fn resolve(&self, name: &str) -> Option<String> {
         self.get(name).cloned()
     }

@@ -30,6 +30,7 @@ impl ConfigurationAdapter for JsonConfigurationAdapter {
         ))
     }
 
+    #[inline]
     fn file_extension(&self) -> Vec<&'static str> {
         vec!["json"]
     }

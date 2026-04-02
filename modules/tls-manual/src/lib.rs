@@ -12,6 +12,7 @@ pub struct TcpTlsManualResolver {
 
 #[async_trait::async_trait(?Send)]
 impl TcpTlsResolver for TcpTlsManualResolver {
+    #[inline]
     fn get_tls_config(&self) -> Arc<ServerConfig> {
         self.config.clone()
     }

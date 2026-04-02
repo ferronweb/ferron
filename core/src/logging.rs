@@ -20,6 +20,7 @@ pub enum LogLevel {
 }
 
 impl LogLevel {
+    #[inline]
     fn as_str(&self) -> &'static str {
         match self {
             LogLevel::Error => "ERROR",
@@ -29,6 +30,7 @@ impl LogLevel {
         }
     }
 
+    #[inline]
     fn color_code(&self) -> &'static str {
         match self {
             LogLevel::Error => "\x1b[31m", // Red
@@ -140,6 +142,7 @@ fn get_logger() -> Option<&'static AppLogger> {
 }
 
 /// Check if a logger is initialized
+#[inline]
 pub fn is_init() -> bool {
     get_logger().is_some()
 }
@@ -254,6 +257,7 @@ impl AppLogger {
         let _ = stderr().flush();
     }
 
+    #[inline]
     fn set_max_level(&self, level: LogLevel) {
         self.max_level.store(level as usize, Ordering::Relaxed);
     }
@@ -267,6 +271,7 @@ pub fn set_max_level(level: LogLevel) {
 }
 
 /// Get the current maximum log level
+#[inline]
 pub fn max_level() -> LogLevel {
     get_logger()
         .and_then(|logger| match logger.max_level.load(Ordering::Relaxed) {
@@ -280,11 +285,13 @@ pub fn max_level() -> LogLevel {
 }
 
 /// Check if a log level is enabled
+#[inline]
 pub fn enabled(level: LogLevel) -> bool {
     level <= max_level()
 }
 
 /// Internal log function used by macros
+#[inline]
 pub fn log(level: LogLevel, message: &str) {
     if let Some(logger) = get_logger() {
         logger.log(level, message);
@@ -292,6 +299,7 @@ pub fn log(level: LogLevel, message: &str) {
 }
 
 /// Flush the logger
+#[inline]
 pub fn flush() {
     if let Some(logger) = get_logger() {
         logger.flush();

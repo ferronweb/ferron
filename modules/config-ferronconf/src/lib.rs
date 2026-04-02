@@ -28,6 +28,7 @@ use ferronconf::{
 struct FerronConfConfigurationAdapter;
 
 impl FerronConfConfigurationAdapter {
+    #[inline]
     pub fn new() -> Self {
         Self
     }
@@ -61,6 +62,7 @@ impl ConfigurationAdapter for FerronConfConfigurationAdapter {
         ))
     }
 
+    #[inline]
     fn file_extension(&self) -> Vec<&'static str> {
         vec!["conf"]
     }
@@ -85,6 +87,7 @@ struct TranslationScope {
 }
 
 impl TranslationScope {
+    #[inline]
     fn extend(&self, local: TranslationScope) -> Self {
         let mut matchers = self.matchers.clone();
         matchers.extend(local.matchers);
@@ -104,6 +107,7 @@ struct MergedBlock {
 }
 
 impl MergedBlock {
+    #[inline]
     fn new(span: Option<ServerConfigurationSpan>) -> Self {
         Self {
             directives: HashMap::new(),
@@ -112,6 +116,7 @@ impl MergedBlock {
         }
     }
 
+    #[inline]
     fn push_directive(
         &mut self,
         name: impl Into<String>,
@@ -135,6 +140,7 @@ impl MergedBlock {
         }
     }
 
+    #[inline]
     fn into_block(self) -> ServerConfigurationBlock {
         ServerConfigurationBlock {
             directives: Arc::new(self.directives),
@@ -145,6 +151,7 @@ impl MergedBlock {
 }
 
 impl From<ServerConfigurationBlock> for MergedBlock {
+    #[inline]
     fn from(block: ServerConfigurationBlock) -> Self {
         Self {
             directives: Arc::try_unwrap(block.directives).unwrap_or_else(|arc| (*arc).clone()),
@@ -681,6 +688,7 @@ fn value_to_plain_string(value: &Value, file: &Path, context: &str) -> anyhow::R
     }
 }
 
+#[inline]
 fn span_from(file: &Path, line: usize, column: usize) -> ServerConfigurationSpan {
     ServerConfigurationSpan {
         line,
@@ -689,6 +697,7 @@ fn span_from(file: &Path, line: usize, column: usize) -> ServerConfigurationSpan
     }
 }
 
+#[inline]
 fn format_source_location(file: &Path, line: usize, column: usize) -> String {
     format!(
         "file '{}' at line {}, column {}",

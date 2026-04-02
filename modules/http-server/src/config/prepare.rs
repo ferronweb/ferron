@@ -54,7 +54,7 @@ pub fn prepare_host_config(
 
         result
             .entry(ip)
-            .or_insert_with(HashMap::new)
+            .or_default()
             .insert(hostname, prepared_config);
     }
     Ok(result)

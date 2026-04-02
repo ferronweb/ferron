@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::HttpRequest;
 
+#[inline]
 pub fn resolve_variable(
     name: &str,
     request: &HttpRequest,

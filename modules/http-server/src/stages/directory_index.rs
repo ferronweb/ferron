@@ -10,6 +10,7 @@ use ferron_http::{HttpFileContext, HttpResponse};
 pub struct DirectoryIndexStage;
 
 impl Default for DirectoryIndexStage {
+    #[inline]
     fn default() -> Self {
         Self
     }
@@ -17,10 +18,12 @@ impl Default for DirectoryIndexStage {
 
 #[async_trait(?Send)]
 impl Stage<HttpFileContext> for DirectoryIndexStage {
+    #[inline]
     fn name(&self) -> &str {
         "directory_index"
     }
 
+    #[inline]
     fn constraints(&self) -> Vec<StageConstraint> {
         vec![StageConstraint::Before("static_file".to_string())]
     }

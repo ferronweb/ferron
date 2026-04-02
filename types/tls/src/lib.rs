@@ -15,6 +15,7 @@ pub struct TcpTlsContext<'a> {
 
 #[async_trait::async_trait(?Send)]
 pub trait TcpTlsResolver: Send + Sync {
+    #[inline]
     async fn handshake(
         &self,
         io: StartHandshake<PollTcpStream>,

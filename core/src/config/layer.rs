@@ -6,14 +6,17 @@ pub struct LayeredConfiguration {
 }
 
 impl LayeredConfiguration {
+    #[inline]
     pub fn new() -> Self {
         Self { layers: Vec::new() }
     }
 
+    #[inline]
     pub fn add_layer(&mut self, layer: Arc<crate::config::ServerConfigurationBlock>) {
         self.layers.push(layer);
     }
 
+    #[inline]
     pub fn get_entries<'a>(
         &'a self,
         directive: &str,
@@ -31,6 +34,7 @@ impl LayeredConfiguration {
         entries
     }
 
+    #[inline]
     pub fn get_entry<'a>(
         &'a self,
         directive: &str,
@@ -40,6 +44,7 @@ impl LayeredConfiguration {
         entries.pop()
     }
 
+    #[inline]
     pub fn get_value(
         &self,
         directive: &str,
@@ -52,6 +57,7 @@ impl LayeredConfiguration {
         }
     }
 
+    #[inline]
     pub fn get_flag(&self, directive: &str, inherit: bool) -> bool {
         if let Some(entry) = self.get_entry(directive, inherit) {
             if let Some(crate::config::ServerConfigurationValue::Boolean(value, _)) =

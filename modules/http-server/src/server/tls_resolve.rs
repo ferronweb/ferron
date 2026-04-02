@@ -17,6 +17,7 @@ pub enum RadixKey {
 
 impl RadixKey {
     /// Returns the sort order for this key type (lower = closer to root).
+    #[inline]
     #[allow(dead_code)]
     fn order(&self) -> u8 {
         match self {
@@ -70,6 +71,7 @@ struct RadixNode<T> {
 }
 
 impl<T> RadixNode<T> {
+    #[inline]
     fn new(edge: Vec<u8>) -> Self {
         Self {
             edge,
@@ -78,6 +80,7 @@ impl<T> RadixNode<T> {
         }
     }
 
+    #[inline]
     fn with_data(edge: Vec<u8>, data: T) -> Self {
         Self {
             edge,
@@ -120,6 +123,7 @@ pub struct RadixTree<T> {
 
 impl<T: Clone> RadixTree<T> {
     /// Creates a new empty radix tree.
+    #[inline]
     pub fn new() -> Self {
         Self {
             root: RadixNode::new(Vec::new()),
@@ -134,11 +138,13 @@ impl<T: Clone> RadixTree<T> {
     }
 
     /// Gets the root (default) data, if set.
+    #[inline]
     pub fn root_data(&self) -> Option<T> {
         self.root.data.clone()
     }
 
     /// Clears the root (default) data.
+    #[inline]
     pub fn clear_root_data(&mut self) {
         self.root.data = None;
     }

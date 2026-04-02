@@ -130,6 +130,7 @@ fn run_service_impl() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[inline]
 fn parse_config_params(params_str: &str) -> HashMap<String, String> {
     let mut params = HashMap::new();
     for pair in params_str.split(';') {
@@ -144,6 +145,7 @@ use ferron_core::registry::RegistryBuilder;
 
 /// Check if running as a Windows service
 #[cfg(windows)]
+#[inline]
 pub fn is_running_as_service() -> bool {
     std::env::var("WINDOWS_SERVICE")
         .map(|v| v == "1")
@@ -157,6 +159,7 @@ pub fn run_service() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[cfg(not(windows))]
+#[inline]
 pub fn is_running_as_service() -> bool {
     false
 }

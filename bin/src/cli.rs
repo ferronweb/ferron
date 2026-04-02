@@ -120,6 +120,7 @@ pub enum WinServiceCommands {
     Uninstall,
 }
 
+#[inline]
 pub fn parse_config_params(params_str: &str) -> HashMap<String, String> {
     let mut params = HashMap::new();
     for pair in params_str.split(';') {

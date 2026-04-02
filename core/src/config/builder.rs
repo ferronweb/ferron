@@ -14,6 +14,7 @@ pub struct ServerConfigurationBuilder {
 
 impl ServerConfigurationBuilder {
     /// Creates a new [`ServerConfigurationBuilder`] with default values.
+    #[inline]
     pub fn new() -> Self {
         Self {
             global_config: None,
@@ -28,12 +29,14 @@ impl ServerConfigurationBuilder {
     }
 
     /// Sets the global configuration block from an [`Arc`].
+    #[inline]
     pub fn global_config_arc(mut self, config: Arc<ServerConfigurationBlock>) -> Self {
         self.global_config = Some(config);
         self
     }
 
     /// Adds a port configuration to the builder.
+    #[inline]
     pub fn port(mut self, protocol: impl Into<String>, port: ServerConfigurationPort) -> Self {
         self.ports.insert(
             protocol.into(),
@@ -43,6 +46,7 @@ impl ServerConfigurationBuilder {
     }
 
     /// Adds a port configuration using a builder.
+    #[inline]
     pub fn port_with_builder(
         mut self,
         protocol: impl Into<String>,
@@ -107,6 +111,7 @@ impl ServerConfigurationBuilder {
 }
 
 impl Default for ServerConfigurationBuilder {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -140,6 +145,7 @@ pub struct ServerConfigurationPortBuilder {
 
 impl ServerConfigurationPortBuilder {
     /// Creates a new [`ServerConfigurationPortBuilder`] with an optional port number.
+    #[inline]
     pub fn new(port: Option<u16>) -> Self {
         Self {
             inner: ServerConfigurationPort {
@@ -170,6 +176,7 @@ impl ServerConfigurationPortBuilder {
     }
 
     /// Builds the [`ServerConfigurationPort`].
+    #[inline]
     pub fn build(self) -> ServerConfigurationPort {
         self.inner
     }
@@ -184,6 +191,7 @@ pub struct ServerConfigurationBlockBuilder {
 
 impl ServerConfigurationBlockBuilder {
     /// Creates a new [`ServerConfigurationBlockBuilder`] with default values.
+    #[inline]
     pub fn new() -> Self {
         Self {
             directives: Vec::new(),
@@ -199,12 +207,14 @@ impl ServerConfigurationBlockBuilder {
     }
 
     /// Sets the span from an existing [`ServerConfigurationSpan`].
+    #[inline]
     pub fn span_opt(mut self, span: Option<ServerConfigurationSpan>) -> Self {
         self.span = span;
         self
     }
 
     /// Adds a directive to this block.
+    #[inline]
     pub fn directive(
         mut self,
         name: impl Into<String>,
@@ -264,6 +274,7 @@ impl ServerConfigurationBlockBuilder {
     }
 
     /// Adds a matcher to this block.
+    #[inline]
     pub fn matcher(mut self, name: impl Into<String>, matcher: ServerConfigurationMatcher) -> Self {
         self.matchers.push((name.into(), matcher));
         self
@@ -311,6 +322,7 @@ impl ServerConfigurationBlockBuilder {
 }
 
 impl Default for ServerConfigurationBlockBuilder {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -324,6 +336,7 @@ pub struct ServerConfigurationHostFiltersBuilder {
 
 impl ServerConfigurationHostFiltersBuilder {
     /// Creates a new [`ServerConfigurationHostFiltersBuilder`] with default values.
+    #[inline]
     pub fn new() -> Self {
         Self {
             ip: None,
@@ -332,18 +345,21 @@ impl ServerConfigurationHostFiltersBuilder {
     }
 
     /// Sets the IP address filter.
+    #[inline]
     pub fn ip(mut self, ip: IpAddr) -> Self {
         self.ip = Some(ip);
         self
     }
 
     /// Sets the host name filter.
+    #[inline]
     pub fn host(mut self, host: impl Into<String>) -> Self {
         self.host = Some(host.into());
         self
     }
 
     /// Builds the [`ServerConfigurationHostFilters`].
+    #[inline]
     pub fn build(self) -> ServerConfigurationHostFilters {
         ServerConfigurationHostFilters {
             ip: self.ip,
@@ -353,6 +369,7 @@ impl ServerConfigurationHostFiltersBuilder {
 }
 
 impl Default for ServerConfigurationHostFiltersBuilder {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -366,6 +383,7 @@ pub struct ServerConfigurationMatcherBuilder {
 
 impl ServerConfigurationMatcherBuilder {
     /// Creates a new [`ServerConfigurationMatcherBuilder`] with default values.
+    #[inline]
     pub fn new() -> Self {
         Self {
             exprs: Vec::new(),
@@ -374,18 +392,21 @@ impl ServerConfigurationMatcherBuilder {
     }
 
     /// Sets the span information for this matcher.
+    #[inline]
     pub fn span(mut self, line: usize, column: usize, file: Option<String>) -> Self {
         self.span = Some(ServerConfigurationSpan { line, column, file });
         self
     }
 
     /// Adds an expression to this matcher.
+    #[inline]
     pub fn expr(mut self, expr: ServerConfigurationMatcherExpr) -> Self {
         self.exprs.push(expr);
         self
     }
 
     /// Adds an equality expression.
+    #[inline]
     pub fn expr_eq(mut self, identifier: impl Into<String>, value: impl Into<String>) -> Self {
         self.exprs.push(ServerConfigurationMatcherExpr {
             left: ServerConfigurationMatcherOperand::Identifier(identifier.into()),
@@ -396,6 +417,7 @@ impl ServerConfigurationMatcherBuilder {
     }
 
     /// Adds a not-equal expression.
+    #[inline]
     pub fn expr_not_eq(mut self, identifier: impl Into<String>, value: impl Into<String>) -> Self {
         self.exprs.push(ServerConfigurationMatcherExpr {
             left: ServerConfigurationMatcherOperand::Identifier(identifier.into()),
@@ -406,6 +428,7 @@ impl ServerConfigurationMatcherBuilder {
     }
 
     /// Adds a regex expression.
+    #[inline]
     pub fn expr_regex(mut self, identifier: impl Into<String>, pattern: impl Into<String>) -> Self {
         self.exprs.push(ServerConfigurationMatcherExpr {
             left: ServerConfigurationMatcherOperand::Identifier(identifier.into()),
@@ -416,6 +439,7 @@ impl ServerConfigurationMatcherBuilder {
     }
 
     /// Builds the [`ServerConfigurationMatcher`].
+    #[inline]
     pub fn build(self) -> ServerConfigurationMatcher {
         ServerConfigurationMatcher {
             exprs: self.exprs,
@@ -425,6 +449,7 @@ impl ServerConfigurationMatcherBuilder {
 }
 
 impl Default for ServerConfigurationMatcherBuilder {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -435,6 +460,7 @@ pub struct ServerConfigurationValueBuilder;
 
 impl ServerConfigurationValueBuilder {
     /// Creates a string value.
+    #[inline]
     pub fn string(s: impl Into<String>) -> ServerConfigurationValue {
         ServerConfigurationValue::String(s.into(), None)
     }
@@ -456,6 +482,7 @@ impl ServerConfigurationValueBuilder {
     }
 
     /// Creates a number value.
+    #[inline]
     pub fn number(n: i64) -> ServerConfigurationValue {
         ServerConfigurationValue::Number(n, None)
     }
@@ -473,6 +500,7 @@ impl ServerConfigurationValueBuilder {
     }
 
     /// Creates a float value.
+    #[inline]
     pub fn float(f: f64) -> ServerConfigurationValue {
         ServerConfigurationValue::Float(f, None)
     }
@@ -490,6 +518,7 @@ impl ServerConfigurationValueBuilder {
     }
 
     /// Creates a boolean value.
+    #[inline]
     pub fn boolean(b: bool) -> ServerConfigurationValue {
         ServerConfigurationValue::Boolean(b, None)
     }
