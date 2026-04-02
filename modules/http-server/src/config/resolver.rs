@@ -106,17 +106,20 @@ impl ResolutionResult {
 /// A matcher expression with pre-compiled regex patterns for efficient evaluation.
 ///
 /// This struct caches compiled regex patterns to avoid recompiling them on every evaluation.
+/// Regexes are compiled at configuration insertion time, not at evaluation time.
 /// Only Regex and NotRegex operations use compiled patterns; other operators work with string values.
 #[derive(Debug, Clone)]
 pub struct CompiledMatcherExpr {
     /// The original matcher expression
     pub expr: ServerConfigurationMatcherExpr,
-    /// Compiled regex for the right operand if it's a Regex operation
+    /// Compiled regex for the right operand if it's a Regex/NotRegex operation with a static pattern
     pub compiled_regex: Option<Arc<Regex>>,
 }
 
 impl CompiledMatcherExpr {
     /// Create a new compiled matcher expression, pre-compiling regex if needed
+    ///
+    /// Returns `Err` if regex compilation fails at insertion time.
     pub fn new(expr: ServerConfigurationMatcherExpr) -> Result<Self, String> {
         let compiled_regex = if matches!(
             expr.op,
@@ -124,21 +127,22 @@ impl CompiledMatcherExpr {
         ) {
             // Extract the regex pattern from the right operand
             let pattern = match &expr.right {
-                ServerConfigurationMatcherOperand::String(s) => s.clone(),
+                ServerConfigurationMatcherOperand::String(s) => Some(s.clone()),
                 ServerConfigurationMatcherOperand::Identifier(_name) => {
-                    // For identifiers, we'll compile at runtime since the value is dynamic
-                    return Ok(Self {
-                        expr,
-                        compiled_regex: None,
-                    });
+                    // For identifiers, pattern is dynamic; will be compiled at runtime
+                    None
                 }
-                ServerConfigurationMatcherOperand::Integer(n) => n.to_string(),
-                ServerConfigurationMatcherOperand::Float(f) => f.to_string(),
+                ServerConfigurationMatcherOperand::Integer(n) => Some(n.to_string()),
+                ServerConfigurationMatcherOperand::Float(f) => Some(f.to_string()),
             };
 
-            match Regex::new(&pattern) {
-                Ok(regex) => Some(Arc::new(regex)),
-                Err(e) => return Err(format!("Invalid regex pattern '{}': {}", pattern, e)),
+            if let Some(pattern) = pattern {
+                match Regex::new(&pattern) {
+                    Ok(regex) => Some(Arc::new(regex)),
+                    Err(e) => return Err(format!("Invalid regex pattern '{}': {}", pattern, e)),
+                }
+            } else {
+                None
             }
         } else {
             None
@@ -373,15 +377,15 @@ impl RadixNode {
 pub struct Stage2RadixResolver {
     /// The radix tree for hostname matching
     host_tree: RadixNode,
-    /// Conditional configurations (IfConditional)
+    /// Conditional configurations (IfConditional) with pre-compiled regexes
     if_conditionals: Vec<(
-        Vec<ServerConfigurationMatcherExpr>,
+        Vec<CompiledMatcherExpr>,
         Arc<PreparedHostConfigurationBlock>,
         u32,
     )>,
-    /// Conditional configurations (IfNotConditional)
+    /// Conditional configurations (IfNotConditional) with pre-compiled regexes
     if_not_conditionals: Vec<(
-        Vec<ServerConfigurationMatcherExpr>,
+        Vec<CompiledMatcherExpr>,
         Arc<PreparedHostConfigurationBlock>,
         u32,
     )>,
@@ -605,23 +609,61 @@ impl Stage2RadixResolver {
     }
 
     /// Insert a conditional configuration (if directive)
+    ///
+    /// # Arguments
+    /// * `exprs` - Conditional expressions (regexes will be compiled here)
+    /// * `config` - Configuration block to associate
+    /// * `priority` - Match priority (higher = more specific)
+    ///
+    /// # Returns
+    /// `Err` if any regex pattern in the expressions is invalid
     pub fn insert_if_conditional(
         &mut self,
         exprs: Vec<ServerConfigurationMatcherExpr>,
         config: Arc<PreparedHostConfigurationBlock>,
         priority: u32,
-    ) {
-        self.if_conditionals.push((exprs, config, priority));
+    ) -> Result<(), String> {
+        let compiled: Result<Vec<_>, _> = exprs
+            .into_iter()
+            .map(CompiledMatcherExpr::new)
+            .collect();
+
+        match compiled {
+            Ok(compiled_exprs) => {
+                self.if_conditionals.push((compiled_exprs, config, priority));
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Insert a negative conditional configuration (if_not directive)
+    ///
+    /// # Arguments
+    /// * `exprs` - Conditional expressions (regexes will be compiled here)
+    /// * `config` - Configuration block to associate
+    /// * `priority` - Match priority (higher = more specific)
+    ///
+    /// # Returns
+    /// `Err` if any regex pattern in the expressions is invalid
     pub fn insert_if_not_conditional(
         &mut self,
         exprs: Vec<ServerConfigurationMatcherExpr>,
         config: Arc<PreparedHostConfigurationBlock>,
         priority: u32,
-    ) {
-        self.if_not_conditionals.push((exprs, config, priority));
+    ) -> Result<(), String> {
+        let compiled: Result<Vec<_>, _> = exprs
+            .into_iter()
+            .map(CompiledMatcherExpr::new)
+            .collect();
+
+        match compiled {
+            Ok(compiled_exprs) => {
+                self.if_not_conditionals.push((compiled_exprs, config, priority));
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Resolve hostname and return matching configurations
@@ -857,7 +899,10 @@ impl Stage2RadixResolver {
         for (exprs, config, priority) in &self.if_conditionals {
             if self.evaluate_conditions(exprs, variables) {
                 configs.push((*priority, Arc::clone(config)));
-                location_path.conditionals.extend(exprs.clone());
+                // Extract original expressions for tracking
+                let orig_exprs: Vec<ServerConfigurationMatcherExpr> =
+                    exprs.iter().map(|e| e.expr.clone()).collect();
+                location_path.conditionals.extend(orig_exprs);
             }
         }
 
@@ -866,7 +911,9 @@ impl Stage2RadixResolver {
             if !self.evaluate_conditions(exprs, variables) {
                 configs.push((*priority, Arc::clone(config)));
                 // For if_not, we still track the conditionals that were NOT matched
-                location_path.conditionals.extend(exprs.clone());
+                let orig_exprs: Vec<ServerConfigurationMatcherExpr> =
+                    exprs.iter().map(|e| e.expr.clone()).collect();
+                location_path.conditionals.extend(orig_exprs);
             }
         }
 
@@ -877,7 +924,7 @@ impl Stage2RadixResolver {
     /// Evaluate conditional expressions with given variables
     fn evaluate_conditions(
         &self,
-        exprs: &[ServerConfigurationMatcherExpr],
+        exprs: &[CompiledMatcherExpr],
         variables: &ResolverVariables,
     ) -> bool {
         // All expressions must match (AND logic)
@@ -889,9 +936,10 @@ impl Stage2RadixResolver {
     /// Evaluate a single conditional expression with given variables
     fn evaluate_condition(
         &self,
-        expr: &ServerConfigurationMatcherExpr,
+        compiled_expr: &CompiledMatcherExpr,
         variables: &ResolverVariables,
     ) -> bool {
+        let expr = &compiled_expr.expr;
         let left_val = self.get_operand_value(&expr.left, variables);
         let right_val = self.get_operand_value(&expr.right, variables);
 
@@ -899,20 +947,40 @@ impl Stage2RadixResolver {
             ServerConfigurationMatcherOperator::Eq => left_val == right_val,
             ServerConfigurationMatcherOperator::NotEq => left_val != right_val,
             ServerConfigurationMatcherOperator::Regex => {
-                if let (Some(left), Some(right)) = (left_val, right_val) {
-                    match Regex::new(&right) {
-                        Ok(regex) => regex.is_match(&left).unwrap_or(false),
-                        Err(_) => false, // Invalid regex pattern fails gracefully
+                if let Some(left) = left_val {
+                    // Use pre-compiled regex if available
+                    if let Some(regex) = &compiled_expr.compiled_regex {
+                        regex.is_match(&left).unwrap_or(false)
+                    } else {
+                        // Compile at runtime only if pattern is dynamic (from identifier)
+                        if let Some(right) = right_val {
+                            match Regex::new(&right) {
+                                Ok(regex) => regex.is_match(&left).unwrap_or(false),
+                                Err(_) => false, // Invalid regex pattern fails gracefully
+                            }
+                        } else {
+                            false
+                        }
                     }
                 } else {
                     false
                 }
             }
             ServerConfigurationMatcherOperator::NotRegex => {
-                if let (Some(left), Some(right)) = (left_val, right_val) {
-                    match Regex::new(&right) {
-                        Ok(regex) => !regex.is_match(&left).unwrap_or(false),
-                        Err(_) => true, // Invalid regex pattern treated as non-matching
+                if let Some(left) = left_val {
+                    // Use pre-compiled regex if available
+                    if let Some(regex) = &compiled_expr.compiled_regex {
+                        !regex.is_match(&left).unwrap_or(false)
+                    } else {
+                        // Compile at runtime only if pattern is dynamic (from identifier)
+                        if let Some(right) = right_val {
+                            match Regex::new(&right) {
+                                Ok(regex) => !regex.is_match(&left).unwrap_or(false),
+                                Err(_) => true, // Invalid regex pattern treated as non-matching
+                            }
+                        } else {
+                            true
+                        }
                     }
                 } else {
                     true
@@ -1540,7 +1608,7 @@ mod tests {
             right: ServerConfigurationMatcherOperand::String("GET".to_string()),
             op: ServerConfigurationMatcherOperator::Eq,
         };
-        resolver.insert_if_conditional(vec![expr], config, 10);
+        resolver.insert_if_conditional(vec![expr], config, 10).expect("Valid conditional");
 
         let mut variables = (
             http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
@@ -2011,7 +2079,7 @@ mod tests {
             right: ServerConfigurationMatcherOperand::String(r"^/api/.*".to_string()),
             op: ServerConfigurationMatcherOperator::Regex,
         };
-        resolver.insert_if_conditional(vec![regex_expr], Arc::clone(&config), 10);
+        resolver.insert_if_conditional(vec![regex_expr], Arc::clone(&config), 10).expect("Valid regex");
 
         // Create variables with matching path
         let mut variables = (
@@ -2056,7 +2124,7 @@ mod tests {
             right: ServerConfigurationMatcherOperand::String(r"^/admin/.*".to_string()),
             op: ServerConfigurationMatcherOperator::NotRegex,
         };
-        resolver.insert_if_conditional(vec![not_regex_expr], Arc::clone(&config), 10);
+        resolver.insert_if_conditional(vec![not_regex_expr], Arc::clone(&config), 10).expect("Valid regex");
 
         // Create variables with non-admin path (should match)
         let mut variables = (
@@ -2123,7 +2191,7 @@ mod tests {
             right: ServerConfigurationMatcherOperand::String(r"^(?!.*admin).*api.*".to_string()),
             op: ServerConfigurationMatcherOperator::Regex,
         };
-        resolver.insert_if_conditional(vec![lookahead_expr], config, 10);
+        resolver.insert_if_conditional(vec![lookahead_expr], config, 10).expect("Valid regex");
 
         // Should match
         let mut variables = (
