@@ -98,8 +98,7 @@ impl BasicHttpModule {
                                     tls_resolver.insert_ip(ip, tls_resolver_sub);
                                 }
                                 (None, None) => {
-                                    // Ignore this case,
-                                    // as it is not possible to have a host config without a host or ip
+                                    tls_resolver.set_root_resolver(tls_resolver_sub);
                                 }
                             }
                         }

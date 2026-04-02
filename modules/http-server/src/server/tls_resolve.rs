@@ -92,7 +92,8 @@ impl RadixNode {
 /// A compressed radix tree for storing and looking up TLS resolvers.
 ///
 /// The tree organizes resolvers in a hierarchy:
-/// - Root level: IPv4/IPv6 address octets
+/// - Root level: Default/fallback resolver
+/// - First level: IPv4/IPv6 address octets
 /// - Second level: Hostname segments (reversed for suffix matching)
 /// - Third level: Wildcard entries
 ///
@@ -106,6 +107,9 @@ impl RadixNode {
 ///
 /// let mut tree = TlsResolverRadixTree::new();
 ///
+/// // Set default resolver (root level)
+/// tree.set_root_resolver(default_resolver.clone());
+///
 /// // Insert by IP only
 /// tree.insert_ip(IpAddr::from([127, 0, 0, 1]), resolver.clone());
 ///
@@ -115,7 +119,7 @@ impl RadixNode {
 /// // Insert by both IP and hostname (most specific)
 /// tree.insert_ip_and_hostname(IpAddr::from([127, 0, 0, 1]), "localhost", resolver.clone(), false);
 ///
-/// // Lookup will return the most specific match
+/// // Lookup will return the most specific match, or root resolver as fallback
 /// tree.lookup_ip_and_hostname(IpAddr::from([127, 0, 0, 1]), "localhost");
 /// ```
 pub struct TlsResolverRadixTree {
@@ -128,6 +132,23 @@ impl TlsResolverRadixTree {
         Self {
             root: RadixNode::new(Vec::new()),
         }
+    }
+
+    /// Sets the root (default) resolver.
+    ///
+    /// This resolver is returned as a fallback when no other match is found.
+    pub fn set_root_resolver(&mut self, resolver: Arc<dyn TcpTlsResolver>) {
+        self.root.resolver = Some(resolver);
+    }
+
+    /// Gets the root (default) resolver, if set.
+    pub fn root_resolver(&self) -> Option<Arc<dyn TcpTlsResolver>> {
+        self.root.resolver.clone()
+    }
+
+    /// Clears the root (default) resolver.
+    pub fn clear_root_resolver(&mut self) {
+        self.root.resolver = None;
     }
 
     /// Inserts a resolver into the tree at the specified path.
@@ -259,9 +280,11 @@ impl TlsResolverRadixTree {
     /// Looks up a resolver by path components.
     ///
     /// Returns the resolver at the highest (most specific) level found during traversal.
+    /// If no match is found and a root resolver is set, returns the root resolver as fallback.
     pub fn lookup(&self, path: &[RadixKey]) -> Option<Arc<dyn TcpTlsResolver>> {
         let mut current = &self.root;
-        let mut best_match: Option<Arc<dyn TcpTlsResolver>> = None;
+        // Start with root resolver as the initial best match (fallback)
+        let mut best_match: Option<Arc<dyn TcpTlsResolver>> = self.root.resolver.clone();
 
         for key in path {
             let bytes = key.to_bytes();
@@ -742,6 +765,89 @@ mod tests {
         tree.insert_ip(ip, resolver.clone());
 
         let found = tree.lookup_ip(ip);
+        assert!(found.is_some());
+    }
+
+    #[test]
+    fn test_root_resolver() {
+        let mut tree = TlsResolverRadixTree::new();
+        let root_resolver = Arc::new(MockResolver {
+            name: "root-resolver".to_string(),
+        });
+
+        // Initially no root resolver
+        assert!(tree.root_resolver().is_none());
+
+        // Set root resolver
+        tree.set_root_resolver(root_resolver.clone());
+        assert!(tree.root_resolver().is_some());
+
+        // Lookup with no matches should return root resolver
+        let ip = IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4));
+        let found = tree.lookup_ip(ip);
+        assert!(found.is_some());
+
+        // Hostname lookup with no matches should return root resolver
+        let found = tree.lookup_hostname("nonexistent.com");
+        assert!(found.is_some());
+    }
+
+    #[test]
+    fn test_root_resolver_with_specific_matches() {
+        let mut tree = TlsResolverRadixTree::new();
+        let root_resolver = Arc::new(MockResolver {
+            name: "root-resolver".to_string(),
+        });
+        let specific_resolver = Arc::new(MockResolver {
+            name: "specific-resolver".to_string(),
+        });
+
+        tree.set_root_resolver(root_resolver.clone());
+
+        let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        tree.insert_ip(ip, specific_resolver.clone());
+
+        // Lookup for specific IP should return specific resolver (not root)
+        let found = tree.lookup_ip(ip);
+        assert!(found.is_some());
+
+        // Lookup for different IP should return root resolver
+        let other_ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
+        let found = tree.lookup_ip(other_ip);
+        assert!(found.is_some());
+    }
+
+    #[test]
+    fn test_clear_root_resolver() {
+        let mut tree = TlsResolverRadixTree::new();
+        let root_resolver = Arc::new(MockResolver {
+            name: "root-resolver".to_string(),
+        });
+
+        tree.set_root_resolver(root_resolver.clone());
+        assert!(tree.root_resolver().is_some());
+
+        tree.clear_root_resolver();
+        assert!(tree.root_resolver().is_none());
+
+        // Lookup should now return None
+        let ip = IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4));
+        let found = tree.lookup_ip(ip);
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn test_lookup_ip_and_hostname_with_root_fallback() {
+        let mut tree = TlsResolverRadixTree::new();
+        let root_resolver = Arc::new(MockResolver {
+            name: "root-resolver".to_string(),
+        });
+
+        tree.set_root_resolver(root_resolver.clone());
+
+        // No specific resolvers inserted
+        let ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
+        let found = tree.lookup_ip_and_hostname(ip, "example.com");
         assert!(found.is_some());
     }
 }
