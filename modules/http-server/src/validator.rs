@@ -18,6 +18,12 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             validate_nested!(tls, provider, args(1) => ServerConfigurationValue::String(_, _));
         });
 
+        validate_directive!(config, used_directives, observability, optional
+            args(1) => [ServerConfigurationValue::Boolean(_, _)],
+            {
+            validate_nested!(observability, provider, args(1) => ServerConfigurationValue::String(_, _));
+        });
+
         Ok(())
     }
 }

@@ -6,6 +6,7 @@ pub trait EventSink: Send + Sync {
     fn emit(&self, event: Event);
 }
 
+#[derive(Clone)]
 pub struct CompositeEventSink {
     sinks: Vec<Arc<dyn EventSink>>,
 }

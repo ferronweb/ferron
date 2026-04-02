@@ -2,13 +2,16 @@
 
 use std::sync::Arc;
 
+use ferron_core::providers::Provider;
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_core::{config::ServerConfigurationBlock, pipeline::Pipeline};
 use ferron_http::HttpContext;
+use ferron_observability::{EventSink, ObservabilityContext, ObservabilityProviderEventSink};
 use ferron_tls::TcpTlsContext;
 use parking_lot::Mutex;
 
+use crate::server::tls_resolve::RadixTree;
 use crate::{
     config::{prepare_host_config, ThreeStageResolver},
     server::tls_resolve::TlsResolverRadixTree,
@@ -42,6 +45,7 @@ pub struct BasicHttpModule {
     global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
     config_resolver: Arc<crate::config::ThreeStageResolver>,
     tls_resolver: Option<Arc<self::tls_resolve::TlsResolverRadixTree>>,
+    observability_resolver: Arc<self::tls_resolve::RadixTree<Vec<Arc<dyn EventSink>>>>,
     listeners: Mutex<Vec<tcp::TcpListenerHandle>>,
     port: u16,
 }
@@ -53,8 +57,8 @@ impl BasicHttpModule {
         global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
         port: u16,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        // TODO: insert specific TLS resolvers
         let mut enable_tls = false;
+        let mut observability_resolver = RadixTree::new();
         let mut tls_resolver = TlsResolverRadixTree::new();
         for host_config in &port_config.hosts {
             if let Some(tls) = host_config.1.directives.get("tls") {
@@ -137,6 +141,70 @@ impl BasicHttpModule {
                     }
                 }
             }
+            if let Some(observability) = host_config.1.directives.get("observability") {
+                let mut observability_to_insert: Vec<Arc<dyn EventSink>> = Vec::new();
+                for observability1 in observability {
+                    // TODO: implicit automatic TLS
+                    if observability1
+                        .args
+                        .first()
+                        .and_then(|a| a.as_boolean())
+                        .unwrap_or(true)
+                    {
+                        let observability_provider_name = observability1
+                            .children
+                            .as_ref()
+                            .and_then(|c| c.get_value("provider"))
+                            .ok_or(anyhow::anyhow!(
+                                "Observability provider not specified ({})",
+                                format_location(None, observability1.span.as_ref())
+                            ))?
+                            .as_str()
+                            .ok_or(anyhow::anyhow!(
+                                "Observability provider must be a string ({})",
+                                format_location(None, observability1.span.as_ref())
+                            ))?;
+
+                        if let Some(observability_registry) =
+                            registry.get_provider_registry::<ObservabilityContext>()
+                        {
+                            let observability_provider = observability_registry
+                                .get(observability_provider_name)
+                                .ok_or(anyhow::anyhow!(
+                                    "Observability provider not found ({})",
+                                    format_location(None, observability1.span.as_ref())
+                                ))?;
+
+                            observability_to_insert.push(Arc::new(
+                                ObservabilityProviderEventSink::new(observability_provider),
+                            ));
+                        }
+                    }
+                }
+                match (&host_config.0.host, host_config.0.ip) {
+                    (Some(host), Some(ip)) => {
+                        observability_resolver.insert_ip_and_hostname(
+                            ip,
+                            host,
+                            observability_to_insert,
+                            false,
+                        );
+                    }
+                    (Some(host), None) => {
+                        observability_resolver.insert_hostname(
+                            host,
+                            observability_to_insert,
+                            false,
+                        );
+                    }
+                    (None, Some(ip)) => {
+                        observability_resolver.insert_ip(ip, observability_to_insert);
+                    }
+                    (None, None) => {
+                        observability_resolver.set_root_data(observability_to_insert);
+                    }
+                }
+            }
         }
         let pipeline = registry
             .get_stage_registry::<HttpContext>()
@@ -153,6 +221,7 @@ impl BasicHttpModule {
             } else {
                 None
             },
+            observability_resolver: Arc::new(observability_resolver),
             listeners: Mutex::new(Vec::new()),
             port,
         })
@@ -176,8 +245,13 @@ impl Module for BasicHttpModule {
         };
         for port in ports {
             let pipeline = self.pipeline.clone();
-            let listener =
-                tcp::TcpListenerHandle::new(port, pipeline, runtime, self.tls_resolver.clone())?;
+            let listener = tcp::TcpListenerHandle::new(
+                port,
+                pipeline,
+                runtime,
+                self.tls_resolver.clone(),
+                self.observability_resolver.clone(),
+            )?;
             self.listeners.lock().push(listener);
             // TODO: QUIC
         }

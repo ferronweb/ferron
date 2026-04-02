@@ -3,7 +3,12 @@
 use std::net::{Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 
+use ferron_core::providers::Provider;
 use ferron_core::runtime::Runtime;
+use ferron_observability::{
+    CompositeEventSink, Event, EventSink, LogEvent, LogLevel, ObservabilityContext,
+    ObservabilityProviderEventSink,
+};
 use http::Request;
 use http_body_util::BodyExt;
 use rustls::server::Acceptor;
@@ -13,7 +18,7 @@ use ferron_core::pipeline::Pipeline;
 use ferron_core::{log_error, log_info};
 use ferron_http::HttpContext;
 
-use crate::server::tls_resolve::TlsResolverRadixTree;
+use crate::server::tls_resolve::{RadixTree, TlsResolverRadixTree};
 
 pub struct TcpListenerHandle {
     cancel_token: Arc<tokio_util::sync::CancellationToken>,
@@ -25,6 +30,7 @@ impl TcpListenerHandle {
         pipeline: Arc<Pipeline<HttpContext>>,
         runtime: &mut Runtime,
         tls_resolver: Option<Arc<TlsResolverRadixTree>>,
+        observability_resolver: Arc<super::tls_resolve::RadixTree<Vec<Arc<dyn EventSink>>>>,
     ) -> Result<Self, std::io::Error> {
         // TODO: listen address
         let addr = SocketAddr::from((Ipv6Addr::UNSPECIFIED, port));
@@ -43,6 +49,11 @@ impl TcpListenerHandle {
             let new_listener_result = listener.try_clone();
             let cancel_token = cancel_token_clone.clone();
             let tls_resolver = tls_resolver.clone();
+            let observability_resolver = observability_resolver.clone();
+            let global_observability = observability_resolver
+                .root_data()
+                .map(CompositeEventSink::new)
+                .unwrap_or(CompositeEventSink::new(vec![]));
             let pipeline = pipeline_clone.clone();
             Box::pin(async move {
                 let Ok(new_listener) = new_listener_result else {
@@ -66,28 +77,45 @@ impl TcpListenerHandle {
                         }
                     };
                     let Ok((socket, _)) = accept_result else {
-                        log_error!("Failed to accept connection");
+                        global_observability.emit(Event::Log(LogEvent {
+                            level: LogLevel::Error,
+                            message: "Failed to accept connection".to_string(),
+                            target: "ferron-http-server",
+                        }));
                         continue;
                     };
                     let _ = socket.set_nodelay(true);
                     let Ok(socket) = socket.into_poll() else {
-                        log_error!("Failed to convert socket to poll-based I/O");
+                        global_observability.emit(Event::Log(LogEvent {
+                            level: LogLevel::Error,
+                            message: "Failed to convert socket to poll-based I/O".to_string(),
+                            target: "ferron-http-server",
+                        }));
                         return;
                     };
 
                     let pipeline = pipeline.clone();
                     let tls_resolver = tls_resolver.clone();
+                    let global_observability = global_observability.clone();
                     vibeio::spawn(async move {
                         if let Some(tls_resolver) = tls_resolver {
                             let Ok(local_addr) = socket.local_addr() else {
-                                log_error!("Failed to get local address");
+                                global_observability.emit(Event::Log(LogEvent {
+                                    level: LogLevel::Error,
+                                    message: "Failed to get local address".to_string(),
+                                    target: "ferron-http-server",
+                                }));
                                 return;
                             };
                             let Ok(start_handshake) =
                                 tokio_rustls::LazyConfigAcceptor::new(Acceptor::default(), socket)
                                     .await
                             else {
-                                log_error!("TLS handshake failed");
+                                global_observability.emit(Event::Log(LogEvent {
+                                    level: LogLevel::Error,
+                                    message: "Failed to start TLS handshake".to_string(),
+                                    target: "ferron-http-server",
+                                }));
                                 return;
                             };
                             let resolver =
@@ -100,9 +128,14 @@ impl TcpListenerHandle {
                                 let Ok(tls_stream_option) =
                                     resolver.handshake(start_handshake).await
                                 else {
-                                    log_error!("TLS handshake failed");
+                                    global_observability.emit(Event::Log(LogEvent {
+                                        level: LogLevel::Error,
+                                        message: "Failed to start TLS handshake".to_string(),
+                                        target: "ferron-http-server",
+                                    }));
                                     return;
                                 };
+                                // TODO: per IP and host observability
                                 if let Some(tls_stream) = tls_stream_option {
                                     handle_http(tls_stream, pipeline).await;
                                 }
