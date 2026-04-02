@@ -398,6 +398,8 @@ dependencies = [
  "anyhow",
  "clap",
  "ferron-config-blank",
+ "ferron-config-ferronconf",
+ "ferron-config-json",
  "ferron-core",
  "ferron-http-server",
  "ferron-observability-consolelog",
@@ -416,6 +418,26 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "ferron-core",
+]
+
+[[package]]
+name = "ferron-config-ferronconf"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "ferron-core",
+ "ferronconf",
+]
+
+[[package]]
+name = "ferron-config-json"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "ferron-core",
+ "serde_json",
 ]
 
 [[package]]
@@ -506,6 +528,14 @@ dependencies = [
  "rustls-pki-types",
  "tokio-rustls",
  "vibeio",
+]
+
+[[package]]
+name = "ferronconf"
+version = "0.1.0"
+dependencies = [
+ "indenter",
+ "reiterator",
 ]
 
 [[package]]
@@ -658,6 +688,12 @@ checksum = "f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f"
 dependencies = [
  "cc",
 ]
+
+[[package]]
+name = "indenter"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "964de6e86d545b246d84badc0fef527924ace5134f30641c203ef52ba83f58d5"
 
 [[package]]
 name = "io-uring"
@@ -942,6 +978,12 @@ name = "regex-syntax"
 version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
+
+[[package]]
+name = "reiterator"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "028b23ade895f2751497651053218787cb377043c8555175f97ea433253e4605"
 
 [[package]]
 name = "ring"

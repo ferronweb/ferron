@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use clap::Parser;
 use ferron_config_blank::BlankConfigurationAdapterModuleLoader;
+use ferron_config_ferronconf::FerronConfConfigurationAdapterModuleLoader;
+use ferron_config_json::JsonConfigurationAdapterModuleLoader;
 use ferron_core::builtin::BuiltinModuleLoader;
 use ferron_core::config::adapter::ConfigurationAdapter;
 use ferron_core::config::layer::LayeredConfiguration;
@@ -226,6 +228,8 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(BuiltinModuleLoader),
         Box::new(BasicHttpModuleLoader::default()),
         Box::new(BlankConfigurationAdapterModuleLoader),
+        Box::new(JsonConfigurationAdapterModuleLoader),
+        Box::new(FerronConfConfigurationAdapterModuleLoader),
         Box::new(TlsManualModuleLoader),
         Box::new(ConsoleObservabilityModuleLoader),
     ]
@@ -256,22 +260,24 @@ fn load_config_adapters(
         .map(|s| parse_config_params(&s))
         .unwrap_or_default();
 
-    if let Some(path) = config_path {
-        // Determine configuration adapter based on file extension if not specified
-        if adapter_name.is_none() {
-            if let Some(ext) = std::path::Path::new(&path)
-                .extension()
-                .and_then(|s| s.to_str())
-            {
-                for (name, adapter) in &config_registry {
-                    if adapter.file_extension().iter().any(|e| e == &ext) {
-                        adapter_name = Some(name.to_string());
-                        break;
-                    }
+    let path = config_path.unwrap_or("./ferron.conf".to_string());
+
+    // Determine configuration adapter based on file extension if not specified
+    if adapter_name.is_none() {
+        if let Some(ext) = std::path::Path::new(&path)
+            .extension()
+            .and_then(|s| s.to_str())
+        {
+            for (name, adapter) in &config_registry {
+                if adapter.file_extension().iter().any(|e| e == &ext) {
+                    adapter_name = Some(name.to_string());
+                    break;
                 }
             }
         }
+    }
 
+    if adapter_params.is_empty() {
         adapter_params.insert("file".to_string(), path);
     }
 
@@ -448,24 +454,28 @@ pub(crate) fn run(
     let mut config_adapter_params = config_params
         .map(|s| parse_config_params(&s))
         .unwrap_or_default();
-    if let Some(path) = config_path {
-        // Determine configuration adapter based on file extension if not specified
-        if config_adapter_name.is_none() {
-            if let Some(ext) = std::path::Path::new(&path)
-                .extension()
-                .and_then(|s| s.to_str())
-            {
-                for (name, adapter) in &config_registry {
-                    if adapter.file_extension().iter().any(|e| e == &ext) {
-                        config_adapter_name = Some(name);
-                        break;
-                    }
+
+    let path = config_path.unwrap_or("./ferron.conf".to_string());
+
+    // Determine configuration adapter based on file extension if not specified
+    if config_adapter_name.is_none() {
+        if let Some(ext) = std::path::Path::new(&path)
+            .extension()
+            .and_then(|s| s.to_str())
+        {
+            for (name, adapter) in &config_registry {
+                if adapter.file_extension().iter().any(|e| e == &ext) {
+                    config_adapter_name = Some(name);
+                    break;
                 }
             }
         }
+    }
 
+    if config_adapter_params.is_empty() {
         config_adapter_params.insert("file".to_string(), path);
     }
+
     let config_adapter_name = config_adapter_name.ok_or(anyhow::anyhow!(
         "Configuration adapter not specified and could not be determined from file extension"
     ))?;

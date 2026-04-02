@@ -8,12 +8,6 @@ use ferron_core::{
 
 struct BlankConfigurationAdapter;
 
-impl BlankConfigurationAdapter {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
 impl ConfigurationAdapter for BlankConfigurationAdapter {
     fn adapt(
         &self,

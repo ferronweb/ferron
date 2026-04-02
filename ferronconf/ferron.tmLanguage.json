@@ -1,0 +1,171 @@
+{
+  "name": "ferron.conf",
+  "scopeName": "source.ferron",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#match-block" },
+    { "include": "#snippet-block" },
+    { "include": "#host-block" },
+    { "include": "#global-block" },
+    { "include": "#directive" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.number-sign.ferron",
+      "match": "#.*$"
+    },
+
+    "boolean": {
+      "name": "constant.language.boolean.ferron",
+      "match": "\\b(true|false)\\b"
+    },
+
+    "number": {
+      "name": "constant.numeric.ferron",
+      "match": "\\b-?\\d+(?:\\.\\d+)?\\b"
+    },
+
+    "operator": {
+      "name": "keyword.operator.ferron",
+      "match": "==|!=|!~|~|\\bin\\b"
+    },
+
+    "string": {
+      "patterns": [
+        { "include": "#quoted-string" },
+        { "include": "#bare-string" }
+      ]
+    },
+
+    "quoted-string": {
+      "name": "string.quoted.double.ferron",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.ferron",
+          "match": "\\\\."
+        },
+        {
+          "include": "#interpolation"
+        }
+      ]
+    },
+
+    "bare-string": {
+      "name": "string.unquoted.ferron",
+      "match": "[A-Za-z0-9_\\-\\.:/\\*\\+]+"
+    },
+
+    "interpolation": {
+      "name": "meta.interpolation.ferron",
+      "begin": "\\{\\{",
+      "end": "\\}\\}",
+      "patterns": [
+        {
+          "name": "variable.other.ferron",
+          "match": "[A-Za-z][A-Za-z0-9_\\-]*(?:\\.[A-Za-z][A-Za-z0-9_\\-]*)*"
+        }
+      ]
+    },
+
+    "identifier": {
+      "name": "entity.name.directive.ferron",
+      "match": "\\b[A-Za-z][A-Za-z0-9_-]*\\b"
+    },
+
+    "directive": {
+      "begin": "\\b([A-Za-z][A-Za-z0-9_-]*)\\b",
+      "beginCaptures": {
+        "1": { "name": "entity.name.directive.ferron" }
+      },
+      "end": "(?=\\{(?!\\{)|$)",
+      "patterns": [
+        { "include": "#number" },
+        { "include": "#boolean" },
+        { "include": "#string" },
+        { "include": "#interpolation" }
+      ]
+    },
+
+    "block": {
+      "name": "meta.block.ferron",
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.block.begin.ferron" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.block.end.ferron" }
+      },
+      "patterns": [
+        { "include": "#comment" },
+        { "include": "#directive" },
+        { "include": "#match-block" },
+        { "include": "#snippet-block" },
+        { "include": "#block" }
+      ]
+    },
+
+    "host-block": {
+      "begin": "^(\\s*)(?!match\\s+|snippet\\s+)((?:(?:[A-Za-z0-9_\\-\\.:]+\\s+)?[A-Za-z0-9_\\-\\.:\\[\\]*]+(?:\\s*,\\s*)?)*)\\s*(?=\\{)",
+      "beginCaptures": {
+        "2": { "name": "entity.name.host.ferron" }
+      },
+      "end": "(?<=\\})",
+      "patterns": [{ "include": "#block" }]
+    },
+
+    "global-block": {
+      "name": "meta.global.ferron",
+      "begin": "^\\s*\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.block.begin.ferron" }
+      },
+      "end": "^\\s*\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.block.end.ferron" }
+      },
+      "patterns": [
+        { "include": "#directive" },
+        { "include": "#block" },
+        { "include": "#comment" }
+      ]
+    },
+
+    "snippet-block": {
+      "begin": "\\b(snippet)\\s+([A-Za-z][A-Za-z0-9_-]*)\\s*(?=\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.snippet.ferron" },
+        "2": { "name": "entity.name.snippet.ferron" }
+      },
+      "end": "(?<=\\})",
+      "patterns": [{ "include": "#block" }]
+    },
+
+    "match-block": {
+      "begin": "\\b(match)\\s+([A-Za-z][A-Za-z0-9_-]*)\\s*(?=\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.match.ferron" },
+        "2": { "name": "entity.name.matcher.ferron" }
+      },
+      "end": "(?<=\\})",
+      "patterns": [
+        {
+          "name": "meta.matcher.expression.ferron",
+          "patterns": [
+            { "include": "#identifier-path" },
+            { "include": "#operator" },
+            { "include": "#string" },
+            { "include": "#number" }
+          ]
+        }
+      ]
+    },
+
+    "identifier-path": {
+      "name": "variable.other.property.ferron",
+      "match": "[A-Za-z][A-Za-z0-9_-]*(?:\\.[A-Za-z][A-Za-z0-9_-]*)+"
+    }
+  }
+}

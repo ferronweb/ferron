@@ -1,0 +1,13 @@
+[package]
+name = "ferron-config-ferronconf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.89"
+anyhow = "1"
+
+ferron-core = { path = "../../core" }
+
+# TODO: switch to a version from "crates.io" once published
+ferronconf = { path = "../../ferronconf" }

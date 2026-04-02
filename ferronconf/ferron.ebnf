@@ -1,0 +1,103 @@
+/* whitespace would be discarded by a lexer */
+
+config          ::= statement* EOF
+
+statement       ::= directive
+                  | host-block
+                  | match-block
+                  | global-block
+                  | snippet-block
+
+directive       ::= identifier value* block?
+
+block           ::= '{' statement* '}'
+
+host-block      ::= host-pattern ( ',' host-pattern )* block
+                  /* only allowed at top level */
+
+global-block    ::= block
+                  /* only allowed at top level */
+
+snippet-block   ::= 'snippet' identifier block
+
+match-block     ::= 'match' identifier matcher-block
+
+matcher-block   ::= '{' matcher-expression* '}'
+
+matcher-expression
+                ::= operand operator operand
+
+operand         ::= identifier-path
+                  | string
+                  | number
+
+value           ::= string
+                  | number
+                  | boolean
+                  | interpolation
+
+interpolation   ::= '{{' identifier-path '}}'
+
+identifier-path ::= identifier ( '.' identifier )*
+
+operator        ::= '=='
+                  | '!='
+                  | '~'
+                  | '!~'
+                  | 'in'
+
+host-pattern    ::= protocol? host ( ':' port )?
+
+protocol        ::= identifier | bare-string
+
+host            ::= '*'
+                  | hostname
+                  | ipv4
+                  | '[' ipv6 ']'
+
+hostname        ::= host-label ( '.' host-label )*
+
+host-label      ::= identifier
+                  | '*'
+
+ipv4            ::= dec-octet '.' dec-octet '.' dec-octet '.' dec-octet
+dec-octet       ::= DIGIT+   /* validated 0–255 by parser */
+
+ipv6            ::= ipv6-hex ( ':' ipv6-hex )*  /* validated by parser */
+ipv6-hex         ::= ( DIGIT | [A-Fa-f] )*
+
+port            ::= DIGIT+
+
+string          ::= quoted-string
+                  | bare-string
+
+quoted-string   ::= '"' quoted-char* '"'
+
+quoted-char     ::= [^"\\]
+                  | '\\' .
+
+bare-string     ::= bare-char+
+
+bare-char       ::= ALPHA
+                  | DIGIT
+                  | '_'
+                  | '-'
+                  | '.'
+                  | ':'
+                  | '/'
+                  | '*'
+                  | '+'
+
+identifier      ::= ALPHA ( ALPHA | DIGIT | '_' | '-' )*
+
+boolean         ::= 'true'
+                  | 'false'
+
+number          ::= '-'? DIGIT+ ( '.' DIGIT+ )?
+
+/* comments are skipped only between statements; comments inside `match` blocks are not accepted. */
+comment         ::= '#' comment-char*
+comment-char    ::= . - ( '\r' | '\n' )
+
+ALPHA           ::= [A-Za-z]
+DIGIT           ::= [0-9]

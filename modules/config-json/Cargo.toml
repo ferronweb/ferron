@@ -1,0 +1,11 @@
+[package]
+name = "ferron-config-json"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.89"
+anyhow = "1"
+serde_json = "1"
+
+ferron-core = { path = "../../core" }
