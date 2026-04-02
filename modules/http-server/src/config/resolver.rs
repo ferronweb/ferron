@@ -1176,6 +1176,7 @@ impl Default for Stage3ErrorResolver {
 /// Combines all three resolver stages into a unified configuration resolver
 #[derive(Debug)]
 pub struct ThreeStageResolver {
+    global: Option<Arc<ServerConfigurationBlock>>,
     stage1_ip: Stage1IpResolver,
     stage2_radix: Stage2RadixResolver,
     stage3_error: Stage3ErrorResolver,
@@ -1184,6 +1185,7 @@ pub struct ThreeStageResolver {
 impl ThreeStageResolver {
     pub fn new() -> Self {
         Self {
+            global: None,
             stage1_ip: Stage1IpResolver::new(),
             stage2_radix: Stage2RadixResolver::new(),
             stage3_error: Stage3ErrorResolver::new(),
@@ -1202,6 +1204,16 @@ impl ThreeStageResolver {
             }
         }
 
+        resolver
+    }
+
+    /// Create a resolver from prepared configuration and global configuration
+    pub fn from_prepared_with_global(
+        prepared: PreparedConfiguration,
+        global: Arc<ServerConfigurationBlock>,
+    ) -> Self {
+        let mut resolver = Self::from_prepared(prepared);
+        resolver.global = Some(global);
         resolver
     }
 
@@ -1266,6 +1278,9 @@ impl ThreeStageResolver {
 
         // Merge Stage 2 results
         let mut layered_config = LayeredConfiguration::new();
+        if let Some(global) = self.global.clone() {
+            layered_config.add_layer(global);
+        }
         for layer in stage2_config.layers {
             layered_config.add_layer(layer);
         }
@@ -1394,6 +1409,9 @@ impl ThreeStageResolver {
 
         // Merge Stage 2 results
         let mut layered_config = LayeredConfiguration::new();
+        if let Some(global) = self.global.clone() {
+            layered_config.add_layer(global);
+        }
         for layer in stage2_config.layers {
             layered_config.add_layer(layer);
         }
@@ -1848,7 +1866,7 @@ mod tests {
         assert_eq!(root.children.len(), 2);
 
         // Each child should have its own wildcard
-        for (key, node) in &root.children {
+        for (_key, node) in &root.children {
             assert_eq!(node.keys.len(), 1);
             assert!(node.wildcard_child.is_some());
             assert_eq!(node.wildcard_child.as_ref().unwrap().keys.len(), 1);

@@ -391,10 +391,11 @@ impl BasicHttpModule {
         Ok(Self {
             pipeline: Arc::new(pipeline),
             file_pipeline: Arc::new(file_pipeline),
-            global_config,
-            config_resolver: Arc::new(ThreeStageResolver::from_prepared(prepare_host_config(
-                port_config,
-            )?)),
+            global_config: global_config.clone(),
+            config_resolver: Arc::new(ThreeStageResolver::from_prepared_with_global(
+                prepare_host_config(port_config)?,
+                global_config,
+            )),
             tls_resolver: if enable_tls {
                 Some(Arc::new(tls_resolver))
             } else {
