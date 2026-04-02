@@ -29,4 +29,3 @@ The HTTP host scope also has control directives that affect request matching and
 
 - Where validation and runtime behavior differ, the directive pages call that out explicitly.
 - `handle_error` is parsed and prepared, but it is not currently applied by the HTTP request handler.
-- `~` and `!~` in matchers are substring checks today, not regular expressions.
