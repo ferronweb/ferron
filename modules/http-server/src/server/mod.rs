@@ -145,7 +145,7 @@ impl Module for BasicHttpModule {
         };
         for port in ports {
             let pipeline = self.pipeline.clone();
-            let listener = tcp::TcpListenerHandle::new(port, pipeline)?;
+            let listener = tcp::TcpListenerHandle::new(port, pipeline, runtime)?;
             self.listeners.lock().push(listener);
             // TODO: QUIC
         }

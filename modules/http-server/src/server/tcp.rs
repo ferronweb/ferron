@@ -3,6 +3,7 @@
 use std::net::{Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 
+use ferron_core::runtime::Runtime;
 use http::Request;
 use http_body_util::BodyExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -16,7 +17,11 @@ pub struct TcpListenerHandle {
 }
 
 impl TcpListenerHandle {
-    pub fn new(port: u16, pipeline: Arc<Pipeline<HttpContext>>) -> Result<Self, std::io::Error> {
+    pub fn new(
+        port: u16,
+        pipeline: Arc<Pipeline<HttpContext>>,
+        runtime: &mut Runtime,
+    ) -> Result<Self, std::io::Error> {
         // TODO: listen address
         let addr = SocketAddr::from((Ipv6Addr::UNSPECIFIED, port));
         let listener = std::net::TcpListener::bind(addr)?;
@@ -30,7 +35,7 @@ impl TcpListenerHandle {
 
         // TODO: replace with proper HTTP server implementation
         //       use RELOAD_TOKEN from the core for config reloads
-        vibeio::spawn(async move {
+        runtime.spawn_primary_task(move || {
             let new_listener_result = listener.try_clone();
             let pipeline = pipeline_clone.clone();
             let cancel_token = cancel_token_clone.clone();
