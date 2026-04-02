@@ -24,6 +24,7 @@ use cli::{parse_config_params, Cli, Commands};
 
 #[cfg(windows)]
 use cli::WinServiceCommands;
+use ferron_observability_consolelog::ConsoleObservabilityModuleLoader;
 use ferron_tls_manual::TlsManualModuleLoader;
 
 fn main() {
@@ -226,6 +227,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(BasicHttpModuleLoader::default()),
         Box::new(BlankConfigurationAdapterModuleLoader),
         Box::new(TlsManualModuleLoader),
+        Box::new(ConsoleObservabilityModuleLoader),
     ]
 }
 

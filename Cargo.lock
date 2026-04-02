@@ -400,6 +400,7 @@ dependencies = [
  "ferron-config-blank",
  "ferron-core",
  "ferron-http-server",
+ "ferron-observability-consolelog",
  "ferron-tls-manual",
  "nix",
  "serde_json",
@@ -471,6 +472,14 @@ name = "ferron-observability"
 version = "0.1.0"
 dependencies = [
  "ferron-core",
+]
+
+[[package]]
+name = "ferron-observability-consolelog"
+version = "0.1.0"
+dependencies = [
+ "ferron-core",
+ "ferron-observability",
 ]
 
 [[package]]

@@ -1,0 +1,8 @@
+[package]
+name = "ferron-observability-consolelog"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ferron-observability = { path = "../../types/observability" }
+ferron-core = { path = "../../core" }

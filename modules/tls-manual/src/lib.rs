@@ -5,9 +5,6 @@ use ferron_core::providers::Provider;
 use ferron_tls::{TcpTlsContext, TcpTlsResolver};
 use rustls::ServerConfig;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
-use tokio_rustls::StartHandshake;
-use tokio_rustls::server::TlsStream;
-use vibeio::net::PollTcpStream;
 
 pub struct TcpTlsManualResolver {
     config: Arc<ServerConfig>,
