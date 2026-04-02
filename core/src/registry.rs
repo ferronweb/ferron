@@ -15,7 +15,6 @@ use std::any::{Any, TypeId};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use crate::providers::Provider;
 use parking_lot::RwLock;
 
 /// A factory for creating provider instances
@@ -556,7 +555,7 @@ mod tests {
 
     #[test]
     fn test_provider_registry() {
-        use crate::registry::Provider;
+        use crate::providers::Provider;
 
         struct DnsProviderImpl {
             name: String,
@@ -608,7 +607,7 @@ mod tests {
 
     #[test]
     fn test_provider_registry_via_main_registry() {
-        use crate::registry::Provider;
+        use crate::providers::Provider;
 
         struct TestDnsProvider {
             name: String,
