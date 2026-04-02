@@ -2,8 +2,6 @@ use std::collections::BTreeMap;
 use std::net::IpAddr;
 use std::sync::Arc;
 
-use ferron_tls::TcpTlsResolver;
-
 /// Key types for the radix tree, ordered from root to leaf.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RadixKey {
@@ -17,6 +15,7 @@ pub enum RadixKey {
 
 impl RadixKey {
     /// Returns the sort order for this key type (lower = closer to root).
+    #[allow(dead_code)]
     fn order(&self) -> u8 {
         match self {
             RadixKey::IpOctet(_) => 0,
@@ -39,6 +38,7 @@ impl RadixKey {
     }
 
     /// Parses bytes back into a key.
+    #[allow(dead_code)]
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.is_empty() {
             return None;
@@ -54,45 +54,38 @@ impl RadixKey {
     }
 }
 
-/// A compressed radix tree node for TLS resolver lookup.
-///
-/// The tree stores resolvers at nodes and supports lookup by:
-/// 1. IPv4/IPv6 address octet (e.g., "127" from "127.0.0.1")
-/// 2. Hostname segment (e.g., "com", "example" from "example.com")
-/// 3. Hostname wildcard ("*" for "*.example.com")
-///
-/// Lookup returns the resolver at the highest (most specific) level found.
-struct RadixNode {
+/// A compressed radix tree node for generic data lookup.
+struct RadixNode<T> {
     /// Compressed edge label leading to this node
     edge: Vec<u8>,
-    /// Resolver stored at this node (if any)
-    resolver: Option<Arc<dyn TcpTlsResolver>>,
+    /// Data stored at this node (if any)
+    data: Option<T>,
     /// Child nodes (BTreeMap for ordered traversal)
-    children: BTreeMap<Vec<u8>, RadixNode>,
+    children: BTreeMap<Vec<u8>, RadixNode<T>>,
 }
 
-impl RadixNode {
+impl<T> RadixNode<T> {
     fn new(edge: Vec<u8>) -> Self {
         Self {
             edge,
-            resolver: None,
+            data: None,
             children: BTreeMap::new(),
         }
     }
 
-    fn with_resolver(edge: Vec<u8>, resolver: Arc<dyn TcpTlsResolver>) -> Self {
+    fn with_data(edge: Vec<u8>, data: T) -> Self {
         Self {
             edge,
-            resolver: Some(resolver),
+            data: Some(data),
             children: BTreeMap::new(),
         }
     }
 }
 
-/// A compressed radix tree for storing and looking up TLS resolvers.
+/// A compressed radix tree for storing and looking up generic data.
 ///
-/// The tree organizes resolvers in a hierarchy:
-/// - Root level: Default/fallback resolver
+/// The tree organizes data in a hierarchy:
+/// - Root level: Default/fallback data
 /// - First level: IPv4/IPv6 address octets
 /// - Second level: Hostname segments (reversed for suffix matching)
 /// - Third level: Wildcard entries
@@ -104,29 +97,23 @@ impl RadixNode {
 ///
 /// ```rust,ignore
 /// use std::net::IpAddr;
+/// use std::sync::Arc;
 ///
-/// let mut tree = TlsResolverRadixTree::new();
-///
-/// // Set default resolver (root level)
+/// // With Arc<dyn Trait>
+/// let mut tree: RadixTree<Arc<dyn TcpTlsResolver>> = RadixTree::new();
 /// tree.set_root_resolver(default_resolver.clone());
-///
-/// // Insert by IP only
 /// tree.insert_ip(IpAddr::from([127, 0, 0, 1]), resolver.clone());
 ///
-/// // Insert by hostname only
-/// tree.insert_hostname("example.com", resolver.clone(), false);
-///
-/// // Insert by both IP and hostname (most specific)
-/// tree.insert_ip_and_hostname(IpAddr::from([127, 0, 0, 1]), "localhost", resolver.clone(), false);
-///
-/// // Lookup will return the most specific match, or root resolver as fallback
-/// tree.lookup_ip_and_hostname(IpAddr::from([127, 0, 0, 1]), "localhost");
+/// // With simple values
+/// let mut tree: RadixTree<String> = RadixTree::new();
+/// tree.set_root_data("default".to_string());
+/// tree.insert_hostname("example.com", "example".to_string(), false);
 /// ```
-pub struct TlsResolverRadixTree {
-    root: RadixNode,
+pub struct RadixTree<T> {
+    root: RadixNode<T>,
 }
 
-impl TlsResolverRadixTree {
+impl<T: Clone> RadixTree<T> {
     /// Creates a new empty radix tree.
     pub fn new() -> Self {
         Self {
@@ -134,31 +121,31 @@ impl TlsResolverRadixTree {
         }
     }
 
-    /// Sets the root (default) resolver.
+    /// Sets the root (default) data.
     ///
-    /// This resolver is returned as a fallback when no other match is found.
-    pub fn set_root_resolver(&mut self, resolver: Arc<dyn TcpTlsResolver>) {
-        self.root.resolver = Some(resolver);
+    /// This data is returned as a fallback when no other match is found.
+    pub fn set_root_data(&mut self, data: T) {
+        self.root.data = Some(data);
     }
 
-    /// Gets the root (default) resolver, if set.
-    pub fn root_resolver(&self) -> Option<Arc<dyn TcpTlsResolver>> {
-        self.root.resolver.clone()
+    /// Gets the root (default) data, if set.
+    pub fn root_data(&self) -> Option<T> {
+        self.root.data.clone()
     }
 
-    /// Clears the root (default) resolver.
-    pub fn clear_root_resolver(&mut self) {
-        self.root.resolver = None;
+    /// Clears the root (default) data.
+    pub fn clear_root_data(&mut self) {
+        self.root.data = None;
     }
 
-    /// Inserts a resolver into the tree at the specified path.
+    /// Inserts data into the tree at the specified path.
     ///
     /// The path components are ordered from root to leaf:
     /// - For IP-based: `[IpOctet(127), IpOctet(0), IpOctet(0), IpOctet(1)]`
     /// - For hostname: `[HostSegment("com"), HostSegment("example")]` (reversed)
     /// - For wildcard: `[HostWildcard, HostSegment("com"), HostSegment("example")]`
     /// - For combined IP+hostname: IP octets followed by hostname segments
-    pub fn insert(&mut self, path: &[RadixKey], resolver: Arc<dyn TcpTlsResolver>) {
+    pub fn insert(&mut self, path: &[RadixKey], data: T) {
         let mut current = &mut self.root;
 
         for (i, key) in path.iter().enumerate() {
@@ -181,9 +168,9 @@ impl TlsResolverRadixTree {
                     let child_edge = child.edge.clone();
 
                     if child_edge == bytes {
-                        // Exact match - update resolver if this is the last segment
+                        // Exact match - update data if this is the last segment
                         if is_last {
-                            child.resolver = Some(resolver.clone());
+                            child.data = Some(data.clone());
                         }
                         child
                     } else if child_edge.starts_with(&bytes) {
@@ -192,14 +179,14 @@ impl TlsResolverRadixTree {
                         child.edge = bytes.clone();
 
                         if is_last {
-                            child.resolver = Some(resolver.clone());
+                            child.data = Some(data.clone());
                         }
 
                         // Create new child for the remaining edge
                         let existing_children = std::mem::take(&mut child.children);
                         let new_child = RadixNode {
                             edge: remaining.clone(),
-                            resolver: None,
+                            data: None,
                             children: existing_children,
                         };
 
@@ -209,13 +196,13 @@ impl TlsResolverRadixTree {
                         // Existing child edge is a prefix of new bytes
                         // Need to traverse deeper or create intermediate node
                         let remaining = &bytes[child_edge.len()..];
-                        Self::insert_into_child(child, remaining, is_last, &resolver);
+                        Self::insert_into_child(child, remaining, is_last, &data);
                         child
                     }
                 } else {
                     // No matching child - create new node
                     let new_node = if is_last {
-                        RadixNode::with_resolver(bytes.clone(), resolver.clone())
+                        RadixNode::with_data(bytes.clone(), data.clone())
                     } else {
                         RadixNode::new(bytes.clone())
                     };
@@ -229,11 +216,11 @@ impl TlsResolverRadixTree {
     }
 
     fn insert_into_child<'a>(
-        child: &'a mut RadixNode,
+        child: &'a mut RadixNode<T>,
         remaining: &[u8],
         is_last: bool,
-        resolver: &Arc<dyn TcpTlsResolver>,
-    ) -> &'a mut RadixNode {
+        data: &T,
+    ) -> &'a mut RadixNode<T> {
         let mut current = child;
         let mut offset = 0;
 
@@ -243,7 +230,7 @@ impl TlsResolverRadixTree {
             if edge.is_empty() {
                 current.edge = remaining[offset..].to_vec();
                 if is_last && offset + edge.len() >= remaining.len() {
-                    current.resolver = Some(resolver.clone());
+                    current.data = Some(data.clone());
                 }
                 break;
             }
@@ -262,7 +249,7 @@ impl TlsResolverRadixTree {
                 current = next_child;
             } else {
                 let new_node = if is_last {
-                    RadixNode::with_resolver(remaining[offset..].to_vec(), resolver.clone())
+                    RadixNode::with_data(remaining[offset..].to_vec(), data.clone())
                 } else {
                     RadixNode::new(remaining[offset..].to_vec())
                 };
@@ -277,14 +264,14 @@ impl TlsResolverRadixTree {
         current
     }
 
-    /// Looks up a resolver by path components.
+    /// Looks up data by path components.
     ///
-    /// Returns the resolver at the highest (most specific) level found during traversal.
-    /// If no match is found and a root resolver is set, returns the root resolver as fallback.
-    pub fn lookup(&self, path: &[RadixKey]) -> Option<Arc<dyn TcpTlsResolver>> {
+    /// Returns the data at the highest (most specific) level found during traversal.
+    /// If no match is found and root data is set, returns the root data as fallback.
+    pub fn lookup(&self, path: &[RadixKey]) -> Option<T> {
         let mut current = &self.root;
-        // Start with root resolver as the initial best match (fallback)
-        let mut best_match: Option<Arc<dyn TcpTlsResolver>> = self.root.resolver.clone();
+        // Start with root data as the initial best match (fallback)
+        let mut best_match: Option<T> = self.root.data.clone();
 
         for key in path {
             let bytes = key.to_bytes();
@@ -304,9 +291,9 @@ impl TlsResolverRadixTree {
                 }
 
                 if let Some((child, exact)) = found_child {
-                    // Check if this node has a resolver
-                    if child.resolver.is_some() {
-                        best_match = child.resolver.clone();
+                    // Check if this node has data
+                    if child.data.is_some() {
+                        best_match = child.data.clone();
                     }
 
                     if exact {
@@ -326,8 +313,8 @@ impl TlsResolverRadixTree {
             }
         }
 
-        // Check final node for resolver
-        current.resolver.clone().or(best_match)
+        // Check final node for data
+        current.data.clone().or(best_match)
     }
 
     /// Converts an IP address to a path of IP octet keys.
@@ -363,80 +350,69 @@ impl TlsResolverRadixTree {
         segments
     }
 
-    /// Inserts a resolver for an IP address.
+    /// Inserts data for an IP address.
     ///
     /// For IPv4, all 4 octets are used. For IPv6, all 16 bytes are used.
-    pub fn insert_ip(&mut self, ip: IpAddr, resolver: Arc<dyn TcpTlsResolver>) {
+    pub fn insert_ip(&mut self, ip: IpAddr, data: T) {
         let path = Self::ip_to_path(ip);
-        self.insert(&path, resolver);
+        self.insert(&path, data);
     }
 
-    /// Inserts a resolver for a partial IP address prefix.
+    /// Inserts data for a partial IP address prefix.
     ///
     /// Useful for matching ranges like `127.x.x.x` or `192.168.x.x`.
-    pub fn insert_ip_prefix(&mut self, prefix: &[u8], resolver: Arc<dyn TcpTlsResolver>) {
+    pub fn insert_ip_prefix(&mut self, prefix: &[u8], data: T) {
         let path: Vec<RadixKey> = prefix.iter().copied().map(RadixKey::IpOctet).collect();
-        self.insert(&path, resolver);
+        self.insert(&path, data);
     }
 
-    /// Inserts a resolver for a hostname (with optional wildcard).
+    /// Inserts data for a hostname (with optional wildcard).
     ///
-    /// If `wildcard` is true, the resolver will match `*.hostname`.
-    pub fn insert_hostname(
-        &mut self,
-        hostname: &str,
-        resolver: Arc<dyn TcpTlsResolver>,
-        wildcard: bool,
-    ) {
+    /// If `wildcard` is true, the data will match `*.hostname`.
+    pub fn insert_hostname(&mut self, hostname: &str, data: T, wildcard: bool) {
         let path = Self::hostname_to_path(hostname, wildcard);
-        self.insert(&path, resolver);
+        self.insert(&path, data);
     }
 
-    /// Inserts a resolver for both an IP address and hostname.
+    /// Inserts data for both an IP address and hostname.
     ///
     /// This creates a more specific path: IP octets followed by hostname segments.
-    /// The resolver will only match when both the IP and hostname match.
+    /// The data will only match when both the IP and hostname match.
     ///
     /// # Arguments
     ///
     /// * `ip` - IP address
     /// * `hostname` - Hostname (e.g., `"localhost"`)
-    /// * `resolver` - The TLS resolver to store
+    /// * `data` - The data to store
     /// * `wildcard` - If true, matches subdomains (e.g., `*.example.com`)
-    pub fn insert_ip_and_hostname(
-        &mut self,
-        ip: IpAddr,
-        hostname: &str,
-        resolver: Arc<dyn TcpTlsResolver>,
-        wildcard: bool,
-    ) {
+    pub fn insert_ip_and_hostname(&mut self, ip: IpAddr, hostname: &str, data: T, wildcard: bool) {
         let mut path = Self::ip_to_path(ip);
         path.extend(Self::hostname_to_path(hostname, wildcard));
-        self.insert(&path, resolver);
+        self.insert(&path, data);
     }
 
-    /// Looks up a resolver by IP address.
-    pub fn lookup_ip(&self, ip: IpAddr) -> Option<Arc<dyn TcpTlsResolver>> {
+    /// Looks up data by IP address.
+    pub fn lookup_ip(&self, ip: IpAddr) -> Option<T> {
         let path = Self::ip_to_path(ip);
         self.lookup(&path)
     }
 
-    /// Looks up a resolver by IP address prefix.
-    pub fn lookup_ip_prefix(&self, prefix: &[u8]) -> Option<Arc<dyn TcpTlsResolver>> {
+    /// Looks up data by IP address prefix.
+    pub fn lookup_ip_prefix(&self, prefix: &[u8]) -> Option<T> {
         let path: Vec<RadixKey> = prefix.iter().copied().map(RadixKey::IpOctet).collect();
         self.lookup(&path)
     }
 
-    /// Looks up a resolver by hostname.
+    /// Looks up data by hostname.
     ///
     /// Attempts to find the most specific match, checking:
     /// 1. Exact hostname match
     /// 2. Wildcard match for parent domain
-    pub fn lookup_hostname(&self, hostname: &str) -> Option<Arc<dyn TcpTlsResolver>> {
+    pub fn lookup_hostname(&self, hostname: &str) -> Option<T> {
         // Try exact match first
         let exact_path = Self::hostname_to_path(hostname, false);
-        if let Some(resolver) = self.lookup(&exact_path) {
-            return Some(resolver);
+        if let Some(data) = self.lookup(&exact_path) {
+            return Some(data);
         }
 
         // Try wildcard match (add "*" at the beginning of reversed segments)
@@ -444,7 +420,7 @@ impl TlsResolverRadixTree {
         self.lookup(&wildcard_path)
     }
 
-    /// Looks up a resolver by both IP address and hostname.
+    /// Looks up data by both IP address and hostname.
     ///
     /// Attempts to find the most specific match in this order:
     /// 1. Exact IP + exact hostname match
@@ -458,31 +434,27 @@ impl TlsResolverRadixTree {
     ///
     /// # Returns
     ///
-    /// The most specific resolver found, or `None` if no match.
-    pub fn lookup_ip_and_hostname(
-        &self,
-        ip: IpAddr,
-        hostname: &str,
-    ) -> Option<Arc<dyn TcpTlsResolver>> {
+    /// The most specific data found, or `None` if no match.
+    pub fn lookup_ip_and_hostname(&self, ip: IpAddr, hostname: &str) -> Option<T> {
         // Build full path: IP octets + hostname segments
         let mut full_path = Self::ip_to_path(ip);
         full_path.extend(Self::hostname_to_path(hostname, false));
 
         // Try exact IP + exact hostname
-        if let Some(resolver) = self.lookup(&full_path) {
-            return Some(resolver);
+        if let Some(data) = self.lookup(&full_path) {
+            return Some(data);
         }
 
         // Try exact IP + wildcard hostname
         let mut wildcard_path = Self::ip_to_path(ip);
         wildcard_path.extend(Self::hostname_to_path(hostname, true));
-        if let Some(resolver) = self.lookup(&wildcard_path) {
-            return Some(resolver);
+        if let Some(data) = self.lookup(&wildcard_path) {
+            return Some(data);
         }
 
         // Fall back to IP-only lookup
-        if let Some(resolver) = self.lookup_ip(ip) {
-            return Some(resolver);
+        if let Some(data) = self.lookup_ip(ip) {
+            return Some(data);
         }
 
         // Fall back to hostname-only lookup
@@ -490,74 +462,54 @@ impl TlsResolverRadixTree {
     }
 }
 
-impl Default for TlsResolverRadixTree {
+impl<T: Clone> Default for RadixTree<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
+// Type alias for the common TLS resolver use case
+pub type TlsResolverRadixTree = RadixTree<Arc<dyn ferron_tls::TcpTlsResolver>>;
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::net::Ipv4Addr;
-    use std::sync::Arc;
-
-    struct MockResolver {
-        #[allow(dead_code)]
-        name: String,
-    }
-
-    #[async_trait::async_trait(?Send)]
-    impl TcpTlsResolver for MockResolver {
-        fn get_tls_config(&self) -> Arc<rustls::ServerConfig> {
-            unimplemented!()
-        }
-    }
 
     #[test]
     fn test_insert_and_lookup_ip() {
-        let mut tree = TlsResolverRadixTree::new();
-        let resolver = Arc::new(MockResolver {
-            name: "127-0-0-1-resolver".to_string(),
-        });
+        let mut tree = RadixTree::new();
+        tree.insert_ip(
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            "127-resolver".to_string(),
+        );
 
-        let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        tree.insert_ip(ip, resolver.clone());
-
-        let found = tree.lookup_ip(ip);
+        let found = tree.lookup_ip(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "127-resolver");
 
-        let other_ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
-        let not_found = tree.lookup_ip(other_ip);
+        let not_found = tree.lookup_ip(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)));
         assert!(not_found.is_none());
     }
 
     #[test]
     fn test_insert_ip_prefix() {
-        let mut tree = TlsResolverRadixTree::new();
-        let resolver = Arc::new(MockResolver {
-            name: "127-prefix-resolver".to_string(),
-        });
+        let mut tree = RadixTree::new();
+        tree.insert_ip_prefix(&[127], "127-prefix".to_string());
 
-        // Insert prefix for 127.x.x.x
-        tree.insert_ip_prefix(&[127], resolver.clone());
-
-        let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
         let found = tree.lookup_ip_prefix(&[127]);
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "127-prefix");
     }
 
     #[test]
     fn test_insert_and_lookup_hostname() {
-        let mut tree = TlsResolverRadixTree::new();
-        let resolver = Arc::new(MockResolver {
-            name: "example-com-resolver".to_string(),
-        });
-
-        tree.insert_hostname("example.com", resolver.clone(), false);
+        let mut tree = RadixTree::new();
+        tree.insert_hostname("example.com", "example-com".to_string(), false);
 
         let found = tree.lookup_hostname("example.com");
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "example-com");
 
         let not_found = tree.lookup_hostname("test.com");
         assert!(not_found.is_none());
@@ -565,76 +517,50 @@ mod tests {
 
     #[test]
     fn test_wildcard_lookup() {
-        let mut tree = TlsResolverRadixTree::new();
-        let resolver = Arc::new(MockResolver {
-            name: "wildcard-example-com".to_string(),
-        });
+        let mut tree = RadixTree::new();
+        tree.insert_hostname("example.com", "wildcard-example-com".to_string(), true);
 
-        tree.insert_hostname("example.com", resolver.clone(), true);
-
-        // Wildcard should match subdomains
         let found = tree.lookup_hostname("sub.example.com");
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "wildcard-example-com");
     }
 
     #[test]
     fn test_hierarchy_priority() {
-        let mut tree = TlsResolverRadixTree::new();
+        let mut tree = RadixTree::new();
 
-        let com_resolver = Arc::new(MockResolver {
-            name: "com-resolver".to_string(),
-        });
-        let example_com_resolver = Arc::new(MockResolver {
-            name: "example-com-resolver".to_string(),
-        });
+        tree.insert_hostname("com", "com-resolver".to_string(), false);
+        tree.insert_hostname("example.com", "example-com-resolver".to_string(), false);
 
-        tree.insert_hostname("com", com_resolver.clone(), false);
-        tree.insert_hostname("example.com", example_com_resolver.clone(), false);
-
-        // Should return the most specific match
         let found = tree.lookup_hostname("example.com");
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "example-com-resolver");
     }
 
     #[test]
     fn test_mixed_ip_and_hostname() {
-        let mut tree = TlsResolverRadixTree::new();
+        let mut tree = RadixTree::new();
 
-        let ip_resolver = Arc::new(MockResolver {
-            name: "ip-127-resolver".to_string(),
-        });
-        let hostname_resolver = Arc::new(MockResolver {
-            name: "localhost-resolver".to_string(),
-        });
+        tree.insert_ip(
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            "ip-127".to_string(),
+        );
+        tree.insert_hostname("localhost", "localhost".to_string(), false);
 
-        let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        tree.insert_ip(ip, ip_resolver.clone());
-        tree.insert_hostname("localhost", hostname_resolver.clone(), false);
-
-        assert!(tree.lookup_ip(ip).is_some());
+        assert!(tree
+            .lookup_ip(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)))
+            .is_some());
         assert!(tree.lookup_hostname("localhost").is_some());
     }
 
     #[test]
     fn test_btree_ordering() {
-        let mut tree = TlsResolverRadixTree::new();
+        let mut tree = RadixTree::new();
 
-        // Insert in non-alphabetical order
-        let resolver_z = Arc::new(MockResolver {
-            name: "z-resolver".to_string(),
-        });
-        let resolver_a = Arc::new(MockResolver {
-            name: "a-resolver".to_string(),
-        });
-        let resolver_m = Arc::new(MockResolver {
-            name: "m-resolver".to_string(),
-        });
+        tree.insert_hostname("z.com", "z-resolver".to_string(), false);
+        tree.insert_hostname("a.com", "a-resolver".to_string(), false);
+        tree.insert_hostname("m.com", "m-resolver".to_string(), false);
 
-        tree.insert_hostname("z.com", resolver_z.clone(), false);
-        tree.insert_hostname("a.com", resolver_a.clone(), false);
-        tree.insert_hostname("m.com", resolver_m.clone(), false);
-
-        // All should be findable
         assert!(tree.lookup_hostname("z.com").is_some());
         assert!(tree.lookup_hostname("a.com").is_some());
         assert!(tree.lookup_hostname("m.com").is_some());
@@ -642,90 +568,61 @@ mod tests {
 
     #[test]
     fn test_insert_ip_and_hostname() {
-        let mut tree = TlsResolverRadixTree::new();
-        let resolver = Arc::new(MockResolver {
-            name: "127-0-0-1-localhost-resolver".to_string(),
-        });
-
+        let mut tree = RadixTree::new();
         let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        tree.insert_ip_and_hostname(ip, "localhost", resolver.clone(), false);
+        tree.insert_ip_and_hostname(ip, "localhost", "combined".to_string(), false);
 
-        // Should find the combined match
         let found = tree.lookup_ip_and_hostname(ip, "localhost");
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "combined");
 
-        // IP-only should not find the combined resolver
         let ip_only = tree.lookup_ip(ip);
         assert!(ip_only.is_none());
 
-        // Hostname-only should not find the combined resolver
         let hostname_only = tree.lookup_hostname("localhost");
         assert!(hostname_only.is_none());
     }
 
     #[test]
     fn test_ip_and_hostname_with_wildcard() {
-        let mut tree = TlsResolverRadixTree::new();
-        let resolver = Arc::new(MockResolver {
-            name: "127-wildcard-example-com".to_string(),
-        });
-
+        let mut tree = RadixTree::new();
         let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        tree.insert_ip_and_hostname(ip, "example.com", resolver.clone(), true);
+        tree.insert_ip_and_hostname(ip, "example.com", "wildcard".to_string(), true);
 
-        // Should match IP + subdomain
         let found = tree.lookup_ip_and_hostname(ip, "sub.example.com");
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "wildcard");
     }
 
     #[test]
     fn test_lookup_fallback_order() {
-        let mut tree = TlsResolverRadixTree::new();
-
-        let ip_resolver = Arc::new(MockResolver {
-            name: "ip-only-resolver".to_string(),
-        });
-        let hostname_resolver = Arc::new(MockResolver {
-            name: "hostname-only-resolver".to_string(),
-        });
+        let mut tree = RadixTree::new();
 
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
-        tree.insert_ip(ip, ip_resolver.clone());
-        tree.insert_hostname("example.com", hostname_resolver.clone(), false);
+        tree.insert_ip(ip, "ip-only".to_string());
+        tree.insert_hostname("example.com", "hostname-only".to_string(), false);
 
-        // Combined lookup should fall back to IP-only when no combined match
         let found = tree.lookup_ip_and_hostname(ip, "example.com");
         assert!(found.is_some());
     }
 
     #[test]
     fn test_combined_more_specific_than_separate() {
-        let mut tree = TlsResolverRadixTree::new();
-
-        let ip_resolver = Arc::new(MockResolver {
-            name: "ip-resolver".to_string(),
-        });
-        let hostname_resolver = Arc::new(MockResolver {
-            name: "hostname-resolver".to_string(),
-        });
-        let combined_resolver = Arc::new(MockResolver {
-            name: "combined-resolver".to_string(),
-        });
+        let mut tree = RadixTree::new();
 
         let ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
         let ip_prefix = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 0));
-        tree.insert_ip(ip_prefix, ip_resolver.clone());
-        tree.insert_hostname("example.com", hostname_resolver.clone(), false);
-        tree.insert_ip_and_hostname(ip, "example.com", combined_resolver.clone(), false);
+        tree.insert_ip(ip_prefix, "ip-resolver".to_string());
+        tree.insert_hostname("example.com", "hostname-resolver".to_string(), false);
+        tree.insert_ip_and_hostname(ip, "example.com", "combined-resolver".to_string(), false);
 
-        // Combined lookup should return the combined resolver (most specific)
         let found = tree.lookup_ip_and_hostname(ip, "example.com");
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "combined-resolver");
     }
 
     #[test]
     fn test_key_type_ordering() {
-        // Verify that key types are ordered correctly
         let ip_key = RadixKey::IpOctet(127);
         let host_key = RadixKey::HostSegment("com".to_string());
         let wildcard_key = RadixKey::HostWildcard;
@@ -738,17 +635,14 @@ mod tests {
 
     #[test]
     fn test_key_serialization() {
-        // Test IP octet
         let ip_key = RadixKey::IpOctet(127);
         let bytes = ip_key.to_bytes();
         assert_eq!(RadixKey::from_bytes(&bytes), Some(ip_key));
 
-        // Test host segment
         let host_key = RadixKey::HostSegment("example".to_string());
         let bytes = host_key.to_bytes();
         assert_eq!(RadixKey::from_bytes(&bytes), Some(host_key));
 
-        // Test wildcard
         let wildcard_key = RadixKey::HostWildcard;
         let bytes = wildcard_key.to_bytes();
         assert_eq!(RadixKey::from_bytes(&bytes), Some(wildcard_key));
@@ -756,81 +650,62 @@ mod tests {
 
     #[test]
     fn test_ipv6_support() {
-        let mut tree = TlsResolverRadixTree::new();
-        let resolver = Arc::new(MockResolver {
-            name: "ipv6-localhost".to_string(),
-        });
-
+        let mut tree = RadixTree::new();
         let ip = IpAddr::V6("::1".parse().unwrap());
-        tree.insert_ip(ip, resolver.clone());
+        tree.insert_ip(ip, "ipv6-localhost".to_string());
 
         let found = tree.lookup_ip(ip);
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "ipv6-localhost");
     }
 
     #[test]
-    fn test_root_resolver() {
-        let mut tree = TlsResolverRadixTree::new();
-        let root_resolver = Arc::new(MockResolver {
-            name: "root-resolver".to_string(),
-        });
+    fn test_root_data() {
+        let mut tree = RadixTree::new();
 
-        // Initially no root resolver
-        assert!(tree.root_resolver().is_none());
+        assert!(tree.root_data().is_none());
 
-        // Set root resolver
-        tree.set_root_resolver(root_resolver.clone());
-        assert!(tree.root_resolver().is_some());
+        tree.set_root_data("root-resolver".to_string());
+        assert!(tree.root_data().is_some());
+        assert_eq!(tree.root_data().unwrap(), "root-resolver");
 
-        // Lookup with no matches should return root resolver
         let ip = IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4));
         let found = tree.lookup_ip(ip);
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "root-resolver");
 
-        // Hostname lookup with no matches should return root resolver
         let found = tree.lookup_hostname("nonexistent.com");
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "root-resolver");
     }
 
     #[test]
-    fn test_root_resolver_with_specific_matches() {
-        let mut tree = TlsResolverRadixTree::new();
-        let root_resolver = Arc::new(MockResolver {
-            name: "root-resolver".to_string(),
-        });
-        let specific_resolver = Arc::new(MockResolver {
-            name: "specific-resolver".to_string(),
-        });
-
-        tree.set_root_resolver(root_resolver.clone());
+    fn test_root_data_with_specific_matches() {
+        let mut tree = RadixTree::new();
+        tree.set_root_data("root-resolver".to_string());
 
         let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        tree.insert_ip(ip, specific_resolver.clone());
+        tree.insert_ip(ip, "specific-resolver".to_string());
 
-        // Lookup for specific IP should return specific resolver (not root)
         let found = tree.lookup_ip(ip);
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "specific-resolver");
 
-        // Lookup for different IP should return root resolver
         let other_ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
         let found = tree.lookup_ip(other_ip);
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "root-resolver");
     }
 
     #[test]
-    fn test_clear_root_resolver() {
-        let mut tree = TlsResolverRadixTree::new();
-        let root_resolver = Arc::new(MockResolver {
-            name: "root-resolver".to_string(),
-        });
+    fn test_clear_root_data() {
+        let mut tree = RadixTree::new();
+        tree.set_root_data("root-resolver".to_string());
+        assert!(tree.root_data().is_some());
 
-        tree.set_root_resolver(root_resolver.clone());
-        assert!(tree.root_resolver().is_some());
+        tree.clear_root_data();
+        assert!(tree.root_data().is_none());
 
-        tree.clear_root_resolver();
-        assert!(tree.root_resolver().is_none());
-
-        // Lookup should now return None
         let ip = IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4));
         let found = tree.lookup_ip(ip);
         assert!(found.is_none());
@@ -838,16 +713,12 @@ mod tests {
 
     #[test]
     fn test_lookup_ip_and_hostname_with_root_fallback() {
-        let mut tree = TlsResolverRadixTree::new();
-        let root_resolver = Arc::new(MockResolver {
-            name: "root-resolver".to_string(),
-        });
+        let mut tree = RadixTree::new();
+        tree.set_root_data("root-resolver".to_string());
 
-        tree.set_root_resolver(root_resolver.clone());
-
-        // No specific resolvers inserted
         let ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
         let found = tree.lookup_ip_and_hostname(ip, "example.com");
         assert!(found.is_some());
+        assert_eq!(found.unwrap(), "root-resolver");
     }
 }

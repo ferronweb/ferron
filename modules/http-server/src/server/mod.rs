@@ -100,7 +100,7 @@ impl BasicHttpModule {
                                     tls_resolver.insert_ip(ip, tls_resolver_sub);
                                 }
                                 (None, None) => {
-                                    tls_resolver.set_root_resolver(tls_resolver_sub);
+                                    tls_resolver.set_root_data(tls_resolver_sub);
                                 }
                             }
                         }
