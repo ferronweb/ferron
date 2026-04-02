@@ -386,7 +386,8 @@ async fn handle_http1_connection<S>(
 ) where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
-    let graceful_shutdown = &**RELOAD_TOKEN.load();
+    let reload_token = &**RELOAD_TOKEN.load();
+    let graceful_shutdown = CancellationToken::new();
     let mut connection_future = Box::pin(
         Http1::new(socket, build_http1_options(&connection_options))
             .graceful_shutdown_token(graceful_shutdown.clone())
@@ -403,6 +404,10 @@ async fn handle_http1_connection<S>(
     let connection_result = tokio::select! {
         result = &mut connection_future => result,
         _ = shutdown_token.cancelled() => {
+            graceful_shutdown.cancel();
+            connection_future.await
+        }
+        _ = reload_token.cancelled() => {
             graceful_shutdown.cancel();
             connection_future.await
         }
@@ -429,7 +434,8 @@ async fn handle_http2_connection<S>(
 ) where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
-    let graceful_shutdown = &**RELOAD_TOKEN.load();
+    let reload_token = &**RELOAD_TOKEN.load();
+    let graceful_shutdown = CancellationToken::new();
     let mut connection_future = Box::pin(
         Http2::new(socket, build_http2_options(&connection_options))
             .graceful_shutdown_token(graceful_shutdown.clone())
@@ -446,6 +452,10 @@ async fn handle_http2_connection<S>(
     let connection_result = tokio::select! {
         result = &mut connection_future => result,
         _ = shutdown_token.cancelled() => {
+            graceful_shutdown.cancel();
+            connection_future.await
+        }
+        _ = reload_token.cancelled() => {
             graceful_shutdown.cancel();
             connection_future.await
         }
