@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use ferron_core::{
-    config::{ServerConfigurationPort, adapter::ConfigurationAdapter},
+    config::{adapter::ConfigurationAdapter, ServerConfigurationPort},
     loader::ModuleLoader,
 };
 
