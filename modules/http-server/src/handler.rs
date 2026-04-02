@@ -26,6 +26,7 @@ struct ResolvedHttpFile {
 #[derive(Debug)]
 enum FilePipelineExecutionError {
     Forbidden,
+    BadRequest,
     Io(io::Error),
     Pipeline(PipelineError),
 }
@@ -89,6 +90,9 @@ pub async fn request_handler(
                 Err(FilePipelineExecutionError::Forbidden) => {
                     ctx.res = Some(HttpResponse::BuiltinError(403, None));
                 }
+                Err(FilePipelineExecutionError::BadRequest) => {
+                    ctx.res = Some(HttpResponse::BuiltinError(400, None));
+                }
                 Err(FilePipelineExecutionError::Io(error)) => {
                     emit_error(&events, format!("HTTP file resolution error: {error}"));
                     ctx.res = Some(HttpResponse::BuiltinError(500, None));
@@ -140,6 +144,9 @@ pub async fn request_handler(
                                 Err(FilePipelineExecutionError::Forbidden) => {
                                     ctx.res = Some(HttpResponse::BuiltinError(403, None));
                                 }
+                                Err(FilePipelineExecutionError::BadRequest) => {
+                                    ctx.res = Some(HttpResponse::BuiltinError(400, None));
+                                }
                                 Err(FilePipelineExecutionError::Io(error)) => {
                                     emit_error(
                                         &events,
@@ -188,13 +195,16 @@ async fn execute_http_file_pipeline(
     ctx: &mut HttpContext,
     file_pipeline: &Pipeline<HttpFileContext>,
 ) -> Result<(), FilePipelineExecutionError> {
-    let Some(request_path) = ctx
+    let Some(request_path_encoded) = ctx
         .req
         .as_ref()
         .map(|request| request.uri().path().to_string())
     else {
         return Ok(());
     };
+    let request_path = urlencoding::decode(&request_path_encoded)
+        .map_err(|_| FilePipelineExecutionError::BadRequest)?
+        .to_string();
     let Some(root_path) = resolve_webroot(ctx)? else {
         return Ok(());
     };
