@@ -3,7 +3,6 @@
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 
-use ferron_core::providers::Provider;
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_core::{config::ServerConfigurationBlock, pipeline::Pipeline};
@@ -105,11 +104,89 @@ fn resolve_tcp_listener_options(
     })
 }
 
+fn http_config(config: &ServerConfigurationBlock) -> Option<&ServerConfigurationBlock> {
+    config
+        .directives
+        .get("http")
+        .and_then(|entries| entries.first())
+        .and_then(|entry| entry.children.as_ref())
+}
+
+fn resolve_http_u32(
+    http_config: Option<&ServerConfigurationBlock>,
+    directive: &str,
+) -> anyhow::Result<Option<u32>> {
+    let Some(value) = http_config.and_then(|config| config.get_value(directive)) else {
+        return Ok(None);
+    };
+
+    let Some(size) = value.as_number() else {
+        anyhow::bail!("http.{directive} must be a number");
+    };
+
+    Ok(Some(u32::try_from(size).map_err(|_| {
+        anyhow::anyhow!("http.{directive} must be a non-negative integer")
+    })?))
+}
+
+fn resolve_http_protocols(
+    http_config: Option<&ServerConfigurationBlock>,
+) -> anyhow::Result<tcp::HttpProtocols> {
+    let Some(protocols_entry) = http_config
+        .and_then(|config| config.directives.get("protocols"))
+        .and_then(|entries| entries.first())
+    else {
+        return Ok(tcp::HttpProtocols::default());
+    };
+
+    let mut protocols = tcp::HttpProtocols::empty();
+    for value in &protocols_entry.args {
+        let protocol = value
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("http.protocols values must be strings"))?;
+        match protocol {
+            "h1" => protocols.http1 = true,
+            "h2" => protocols.http2 = true,
+            unsupported => anyhow::bail!("Unsupported HTTP protocol '{unsupported}'"),
+        }
+    }
+
+    if !protocols.http1 && !protocols.http2 {
+        anyhow::bail!("http.protocols must enable at least one supported protocol");
+    }
+
+    Ok(protocols)
+}
+
+fn resolve_http_connection_options(
+    config: &ServerConfigurationBlock,
+) -> anyhow::Result<tcp::HttpConnectionOptions> {
+    let http_config = http_config(config);
+    Ok(tcp::HttpConnectionOptions {
+        protocols: resolve_http_protocols(http_config)?,
+        h1_enable_early_hints: http_config
+            .and_then(|config| config.get_value("h1_enable_early_hints"))
+            .and_then(|value| value.as_boolean())
+            .unwrap_or(false),
+        h2: tcp::Http2Settings {
+            initial_window_size: resolve_http_u32(http_config, "h2_initial_window_size")?,
+            max_frame_size: resolve_http_u32(http_config, "h2_max_frame_size")?,
+            max_concurrent_streams: resolve_http_u32(http_config, "h2_max_concurrent_streams")?,
+            max_header_list_size: resolve_http_u32(http_config, "h2_max_header_list_size")?,
+            enable_connect_protocol: http_config
+                .and_then(|config| config.get_value("h2_enable_connect_protocol"))
+                .and_then(|value| value.as_boolean())
+                .unwrap_or(false),
+        },
+    })
+}
+
 pub struct BasicHttpModule {
     pipeline: Arc<Pipeline<HttpContext>>,
     global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
     config_resolver: Arc<crate::config::ThreeStageResolver>,
     tls_resolver: Option<Arc<self::tls_resolve::TlsResolverRadixTree>>,
+    http_connection_options_resolver: Arc<self::tls_resolve::RadixTree<tcp::HttpConnectionOptions>>,
     observability_resolver: Arc<self::tls_resolve::RadixTree<Vec<Arc<dyn EventSink>>>>,
     listeners: Mutex<Vec<tcp::TcpListenerHandle>>,
     port: u16,
@@ -123,9 +200,35 @@ impl BasicHttpModule {
         port: u16,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut enable_tls = false;
+        let mut http_connection_options_resolver = RadixTree::new();
         let mut observability_resolver = RadixTree::new();
         let mut tls_resolver = TlsResolverRadixTree::new();
         for host_config in &port_config.hosts {
+            let http_connection_options = resolve_http_connection_options(&host_config.1)?;
+            match (&host_config.0.host, host_config.0.ip) {
+                (Some(host), Some(ip)) => {
+                    http_connection_options_resolver.insert_ip_and_hostname(
+                        ip,
+                        host,
+                        http_connection_options.clone(),
+                        false,
+                    );
+                }
+                (Some(host), None) => {
+                    http_connection_options_resolver.insert_hostname(
+                        host,
+                        http_connection_options.clone(),
+                        false,
+                    );
+                }
+                (None, Some(ip)) => {
+                    http_connection_options_resolver.insert_ip(ip, http_connection_options.clone());
+                }
+                (None, None) => {
+                    http_connection_options_resolver.set_root_data(http_connection_options.clone());
+                }
+            }
+
             if let Some(tls) = host_config.1.directives.get("tls") {
                 for tls1 in tls {
                     // TODO: implicit automatic TLS
@@ -172,8 +275,10 @@ impl BasicHttpModule {
                                         &tls1.children.as_ref().expect("TLS config not found")
                                     )
                                 },
-                                // TODO: ALPN
-                                alpn: None,
+                                alpn: {
+                                    let alpn_protocols = http_connection_options.alpn_protocols();
+                                    (!alpn_protocols.is_empty()).then_some(alpn_protocols)
+                                },
                                 resolver: None,
                             };
                             tls_provider.execute(&mut tls_resolver_ctx)?;
@@ -286,6 +391,7 @@ impl BasicHttpModule {
             } else {
                 None
             },
+            http_connection_options_resolver: Arc::new(http_connection_options_resolver),
             observability_resolver: Arc::new(observability_resolver),
             listeners: Mutex::new(Vec::new()),
             port,
@@ -315,7 +421,9 @@ impl Module for BasicHttpModule {
                 listener_options,
                 pipeline,
                 runtime,
+                self.config_resolver.clone(),
                 self.tls_resolver.clone(),
+                self.http_connection_options_resolver.clone(),
                 self.observability_resolver.clone(),
             )?;
             self.listeners.lock().push(listener);
@@ -351,9 +459,25 @@ mod tests {
         }
     }
 
+    fn http_directive(children: ServerConfigurationBlock) -> ServerConfigurationDirectiveEntry {
+        ServerConfigurationDirectiveEntry {
+            args: vec![],
+            children: Some(children),
+            span: None,
+        }
+    }
+
     fn number_directive(value: i64) -> ServerConfigurationDirectiveEntry {
         ServerConfigurationDirectiveEntry {
             args: vec![ServerConfigurationValueBuilder::number(value)],
+            children: None,
+            span: None,
+        }
+    }
+
+    fn boolean_directive(value: bool) -> ServerConfigurationDirectiveEntry {
+        ServerConfigurationDirectiveEntry {
+            args: vec![ServerConfigurationValueBuilder::boolean(value)],
             children: None,
             span: None,
         }
@@ -409,5 +533,75 @@ mod tests {
             error.to_string(),
             "tcp.send_buf must be a non-negative integer"
         );
+    }
+
+    #[test]
+    fn http_connection_options_default_to_h1_and_h2() {
+        let config = ServerConfigurationBlockBuilder::new().build();
+
+        let options = resolve_http_connection_options(&config).unwrap();
+
+        assert_eq!(options.protocols, tcp::HttpProtocols::default());
+        assert_eq!(
+            options.alpn_protocols(),
+            vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()]
+        );
+        assert!(!options.h1_enable_early_hints);
+        assert_eq!(options.h2, tcp::Http2Settings::default());
+    }
+
+    #[test]
+    fn http_connection_options_read_protocols_and_h2_settings() {
+        let http_block = ServerConfigurationBlockBuilder::new()
+            .directive_str("protocols", vec!["h1"])
+            .directive("h1_enable_early_hints", boolean_directive(true))
+            .directive("h2_initial_window_size", number_directive(65_535))
+            .directive("h2_max_frame_size", number_directive(32_768))
+            .directive("h2_max_concurrent_streams", number_directive(128))
+            .directive("h2_max_header_list_size", number_directive(16_384))
+            .directive("h2_enable_connect_protocol", boolean_directive(true))
+            .build();
+        let config = ServerConfigurationBlockBuilder::new()
+            .directive("http", http_directive(http_block))
+            .build();
+
+        let options = resolve_http_connection_options(&config).unwrap();
+
+        assert_eq!(
+            options.protocols,
+            tcp::HttpProtocols {
+                http1: true,
+                http2: false,
+            }
+        );
+        assert_eq!(
+            options.alpn_protocols(),
+            vec![b"http/1.1".to_vec(), b"http/1.0".to_vec()]
+        );
+        assert!(options.h1_enable_early_hints);
+        assert_eq!(
+            options.h2,
+            tcp::Http2Settings {
+                initial_window_size: Some(65_535),
+                max_frame_size: Some(32_768),
+                max_concurrent_streams: Some(128),
+                max_header_list_size: Some(16_384),
+                enable_connect_protocol: true,
+            }
+        );
+    }
+
+    #[test]
+    fn http_connection_options_reject_unknown_protocols() {
+        let http_block = ServerConfigurationBlockBuilder::new()
+            .directive_str("protocols", vec!["h3"])
+            .build();
+        let config = ServerConfigurationBlockBuilder::new()
+            .directive("http", http_directive(http_block))
+            .build();
+
+        let error = resolve_http_connection_options(&config).unwrap_err();
+
+        assert_eq!(error.to_string(), "Unsupported HTTP protocol 'h3'");
     }
 }

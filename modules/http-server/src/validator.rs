@@ -1,6 +1,4 @@
-use ferron_core::{
-    config::ServerConfigurationValue, validate_args, validate_directive, validate_nested,
-};
+use ferron_core::{config::ServerConfigurationValue, validate_directive, validate_nested};
 
 pub struct HttpConfigurationValidator;
 
@@ -22,6 +20,20 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             args(1) => [ServerConfigurationValue::Boolean(_, _)],
             {
             validate_nested!(observability, provider, args(1) => ServerConfigurationValue::String(_, _));
+        });
+
+        validate_directive!(config, used_directives, http, no_args, {
+            validate_nested!(http, protocols, args(*) => [ServerConfigurationValue::String(_, _)]);
+
+            // HTTP/1.x settings
+            validate_nested!(http, h1_enable_early_hints, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+
+            // HTTP/2 settings
+            validate_nested!(http, h2_initial_window_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, h2_max_frame_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, h2_max_concurrent_streams, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, h2_max_header_list_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(http, h2_enable_connect_protocol, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
         });
 
         Ok(())

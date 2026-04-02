@@ -2,23 +2,30 @@
 
 use std::io;
 use std::net::{IpAddr, SocketAddr};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ferron_core::runtime::Runtime;
-use ferron_observability::{CompositeEventSink, Event, EventSink, LogEvent, LogLevel};
-use http::Request;
-use http_body_util::BodyExt;
-use rustls::server::Acceptor;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
 use ferron_core::pipeline::Pipeline;
+use ferron_core::runtime::Runtime;
+use ferron_core::shutdown::RELOAD_TOKEN;
 use ferron_core::{log_error, log_info};
 use ferron_http::HttpContext;
+use ferron_observability::{CompositeEventSink, Event, EventSink, LogEvent, LogLevel};
+use http::Request;
+use http_body_util::{combinators::UnsyncBoxBody, BodyExt};
+use rustls::server::Acceptor;
+use tokio_util::sync::CancellationToken;
+use vibeio_http::{Http1, Http1Options, Http2, Http2Options, HttpProtocol};
 
+use crate::config::ThreeStageResolver;
+use crate::handler::request_handler;
 use crate::server::tls_resolve::{RadixTree, TlsResolverRadixTree};
 
 const LOG_TARGET: &str = "ferron-http-server";
+type ResponseBody = UnsyncBoxBody<bytes::Bytes, io::Error>;
+type RequestHandlerFuture =
+    Pin<Box<dyn std::future::Future<Output = Result<http::Response<ResponseBody>, io::Error>>>>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct TcpListenerOptions {
@@ -27,8 +34,75 @@ pub(crate) struct TcpListenerOptions {
     pub recv_buffer_size: Option<usize>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct HttpProtocols {
+    pub http1: bool,
+    pub http2: bool,
+}
+
+impl HttpProtocols {
+    pub const fn empty() -> Self {
+        Self {
+            http1: false,
+            http2: false,
+        }
+    }
+
+    pub const fn supports_http1(self) -> bool {
+        self.http1
+    }
+
+    #[allow(dead_code)]
+    pub const fn supports_http2(self) -> bool {
+        self.http2
+    }
+
+    pub fn alpn_protocols(self) -> Vec<Vec<u8>> {
+        let mut protocols = Vec::new();
+        if self.http2 {
+            protocols.push(b"h2".to_vec());
+        }
+        if self.http1 {
+            protocols.push(b"http/1.1".to_vec());
+            protocols.push(b"http/1.0".to_vec());
+        }
+        protocols
+    }
+}
+
+impl Default for HttpProtocols {
+    fn default() -> Self {
+        Self {
+            http1: true,
+            http2: true,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct Http2Settings {
+    pub initial_window_size: Option<u32>,
+    pub max_frame_size: Option<u32>,
+    pub max_concurrent_streams: Option<u32>,
+    pub max_header_list_size: Option<u32>,
+    pub enable_connect_protocol: bool,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct HttpConnectionOptions {
+    pub protocols: HttpProtocols,
+    pub h1_enable_early_hints: bool,
+    pub h2: Http2Settings,
+}
+
+impl HttpConnectionOptions {
+    pub fn alpn_protocols(&self) -> Vec<Vec<u8>> {
+        self.protocols.alpn_protocols()
+    }
+}
+
 pub struct TcpListenerHandle {
-    cancel_token: Arc<tokio_util::sync::CancellationToken>,
+    cancel_token: Arc<CancellationToken>,
 }
 
 impl TcpListenerHandle {
@@ -36,8 +110,10 @@ impl TcpListenerHandle {
         options: TcpListenerOptions,
         pipeline: Arc<Pipeline<HttpContext>>,
         runtime: &mut Runtime,
+        config_resolver: Arc<ThreeStageResolver>,
         tls_resolver: Option<Arc<TlsResolverRadixTree>>,
-        observability_resolver: Arc<super::tls_resolve::RadixTree<Vec<Arc<dyn EventSink>>>>,
+        http_connection_options_resolver: Arc<RadixTree<HttpConnectionOptions>>,
+        observability_resolver: Arc<RadixTree<Vec<Arc<dyn EventSink>>>>,
     ) -> Result<Self, std::io::Error> {
         let listener = build_tcp_listener(
             options.address,
@@ -46,17 +122,17 @@ impl TcpListenerHandle {
 
         log_info!("HTTP server listening on {}", options.address);
 
-        let cancel_token = Arc::new(tokio_util::sync::CancellationToken::new());
+        let cancel_token = Arc::new(CancellationToken::new());
 
         let pipeline_clone = pipeline.clone();
         let cancel_token_clone = cancel_token.clone();
 
-        // TODO: replace with proper HTTP server implementation
-        //       use RELOAD_TOKEN from the core for config reloads
         runtime.spawn_primary_task(move || {
             let new_listener_result = listener.try_clone();
             let cancel_token = cancel_token_clone.clone();
+            let config_resolver = config_resolver.clone();
             let tls_resolver = tls_resolver.clone();
+            let http_connection_options_resolver = http_connection_options_resolver.clone();
             let observability_resolver = observability_resolver.clone();
             let global_observability = observability_resolver
                 .root_data()
@@ -65,7 +141,6 @@ impl TcpListenerHandle {
             let pipeline = pipeline_clone.clone();
             Box::pin(async move {
                 let Ok(new_listener) = new_listener_result else {
-                    // TODO: logging providers
                     log_error!("Failed to clone listener");
                     return;
                 };
@@ -93,7 +168,7 @@ impl TcpListenerHandle {
                         Err(err) => {
                             emit_error(
                                 &global_observability,
-                                format!("Failed to accept connection: {}", err),
+                                format!("Failed to accept connection: {err}"),
                             );
                             #[cfg(unix)]
                             if err.raw_os_error() == Some(24) {
@@ -117,9 +192,13 @@ impl TcpListenerHandle {
                     };
 
                     let pipeline = pipeline.clone();
+                    let config_resolver = config_resolver.clone();
                     let tls_resolver = tls_resolver.clone();
+                    let http_connection_options_resolver =
+                        http_connection_options_resolver.clone();
                     let observability_resolver = observability_resolver.clone();
                     let global_observability = global_observability.clone();
+                    let connection_cancel_token = cancel_token.clone();
                     vibeio::spawn(async move {
                         let Ok(local_addr) = socket.local_addr() else {
                             emit_error(&global_observability, "Failed to get local address");
@@ -144,6 +223,13 @@ impl TcpListenerHandle {
                                 .client_hello()
                                 .server_name()
                                 .map(std::borrow::ToOwned::to_owned);
+                            let hinted_hostname =
+                                sni.as_deref().and_then(normalize_host_for_lookup);
+                            let connection_options = resolve_http_connection_options(
+                                &http_connection_options_resolver,
+                                local_addr.ip(),
+                                hinted_hostname.as_deref(),
+                            );
                             let resolver = if let Some(sni) = sni.as_deref() {
                                 tls_resolver.lookup_ip_and_hostname(local_addr.ip(), sni)
                             } else {
@@ -156,7 +242,7 @@ impl TcpListenerHandle {
                                     let tls_observability = resolve_observability_sink(
                                         &observability_resolver,
                                         Some(local_addr.ip()),
-                                        sni.as_deref(),
+                                        hinted_hostname.as_deref(),
                                         &ip_observability,
                                     );
                                     emit_error(&tls_observability, "Failed to start TLS handshake");
@@ -165,29 +251,74 @@ impl TcpListenerHandle {
                                 let tls_observability = resolve_observability_sink(
                                     &observability_resolver,
                                     Some(local_addr.ip()),
-                                    sni.as_deref(),
+                                    hinted_hostname.as_deref(),
                                     &ip_observability,
                                 );
                                 if let Some(tls_stream) = tls_stream_option {
-                                    handle_http(
-                                        tls_stream,
-                                        pipeline,
-                                        local_addr.ip(),
-                                        sni,
-                                        observability_resolver,
-                                        tls_observability,
-                                    )
-                                    .await;
+                                    let negotiated_protocol = tls_stream
+                                        .get_ref()
+                                        .1
+                                        .alpn_protocol()
+                                        .map(|protocol| protocol.to_vec());
+                                    if negotiated_protocol.as_deref() == Some(b"h2".as_slice()) {
+                                        handle_http2_connection(
+                                            tls_stream,
+                                            pipeline,
+                                            config_resolver,
+                                            local_addr.ip(),
+                                            hinted_hostname,
+                                            connection_options,
+                                            observability_resolver,
+                                            tls_observability,
+                                            connection_cancel_token.as_ref().clone(),
+                                        )
+                                        .await;
+                                    } else if connection_options.protocols.supports_http1() {
+                                        handle_http1_connection(
+                                            tls_stream,
+                                            pipeline,
+                                            config_resolver,
+                                            local_addr.ip(),
+                                            hinted_hostname,
+                                            true,
+                                            connection_options,
+                                            observability_resolver,
+                                            tls_observability,
+                                            connection_cancel_token.as_ref().clone(),
+                                        )
+                                        .await;
+                                    } else {
+                                        emit_error(
+                                            &tls_observability,
+                                            "TLS connection did not negotiate a supported HTTP protocol",
+                                        );
+                                    }
                                 }
                             }
                         } else {
-                            handle_http(
-                                socket,
-                                pipeline,
+                            let connection_options = resolve_http_connection_options(
+                                &http_connection_options_resolver,
                                 local_addr.ip(),
                                 None,
+                            );
+                            if !connection_options.protocols.supports_http1() {
+                                emit_error(
+                                    &ip_observability,
+                                    "Plain TCP listener requires HTTP/1.x support",
+                                );
+                                return;
+                            }
+                            handle_http1_connection(
+                                socket,
+                                pipeline,
+                                config_resolver,
+                                local_addr.ip(),
+                                None,
+                                false,
+                                connection_options,
                                 observability_resolver,
                                 ip_observability,
+                                connection_cancel_token.as_ref().clone(),
                             )
                             .await;
                         }
@@ -241,96 +372,171 @@ fn build_tcp_listener(
     Ok(listener_socket.into())
 }
 
-async fn handle_http<S>(
-    mut socket: S,
+async fn handle_http1_connection<S>(
+    socket: S,
     pipeline: Arc<Pipeline<HttpContext>>,
+    config_resolver: Arc<ThreeStageResolver>,
     local_ip: IpAddr,
     hinted_hostname: Option<String>,
+    is_tls: bool,
+    connection_options: HttpConnectionOptions,
     observability_resolver: Arc<RadixTree<Vec<Arc<dyn EventSink>>>>,
     default_observability: CompositeEventSink,
+    shutdown_token: CancellationToken,
 ) where
-    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
-    let mut buf = [0; 1024];
-    let Ok(n) = socket.read(&mut buf).await else {
-        emit_error(&default_observability, "Failed to read from socket");
-        return;
-    };
-
-    if n == 0 {
-        return;
-    }
-
-    let req_str = String::from_utf8_lossy(&buf[..n]);
-    let host = parse_host(&req_str).or(hinted_hostname);
-    let request_observability = resolve_observability_sink(
-        &observability_resolver,
-        Some(local_ip),
-        host.as_deref(),
-        &default_observability,
+    let graceful_shutdown = &**RELOAD_TOKEN.load();
+    let mut connection_future = Box::pin(
+        Http1::new(socket, build_http1_options(&connection_options))
+            .graceful_shutdown_token(graceful_shutdown.clone())
+            .handle(build_request_handler(
+                pipeline,
+                config_resolver,
+                local_ip,
+                hinted_hostname,
+                is_tls,
+                observability_resolver,
+                default_observability.clone(),
+            )),
     );
-    let path = parse_path(&req_str);
-
-    let Ok(req) = Request::builder().uri(path).body(
-        http_body_util::Empty::<bytes::Bytes>::new()
-            .map_err(|e| match e {})
-            .boxed_unsync(),
-    ) else {
-        emit_error(&request_observability, "Failed to build request");
-        return;
-    };
-
-    let mut ctx = HttpContext {
-        events: request_observability.clone(),
-        req: Some(req),
-        res: None,
-        variables: std::collections::HashMap::new(),
-    };
-
-    if let Err(e) = pipeline.execute(&mut ctx).await {
-        emit_error(
-            &request_observability,
-            format!("Pipeline execution error: {}", e),
-        );
-    }
-
-    let ferron_http::HttpResponse::Custom(res) = ctx.res.unwrap_or_else(|| {
-        ferron_http::HttpResponse::Custom(
-            http::Response::builder()
-                .status(500)
-                .body(
-                    http_body_util::Full::new(bytes::Bytes::from_static(b"Internal Server Error"))
-                        .map_err(|e| match e {})
-                        .boxed_unsync(),
-                )
-                .expect("Failed to build 500 response"),
-        )
-    }) else {
-        todo!("Handle non-custom responses (e.g. built-in errors, aborts)");
-    };
-
-    let response = format!("HTTP/1.1 {} OK\r\n\r\n", res.status().as_u16());
-    if let Err(e) = socket.write_all(response.as_bytes()).await {
-        emit_error(
-            &request_observability,
-            format!("Failed to write response head: {}", e),
-        );
-        return;
-    }
-    let mut body = res.into_body();
-    while let Some(chunk_result) = body.frame().await {
-        let Some(chunk) = chunk_result.ok().and_then(|c| c.into_data().ok()) else {
-            emit_error(&request_observability, "Failed to read response body chunk");
-            break;
-        };
-        if let Err(e) = socket.write_all(&chunk).await {
-            emit_error(
-                &request_observability,
-                format!("Failed to write response body chunk: {}", e),
-            );
-            break;
+    let connection_result = tokio::select! {
+        result = &mut connection_future => result,
+        _ = shutdown_token.cancelled() => {
+            graceful_shutdown.cancel();
+            connection_future.await
         }
+    };
+
+    if let Err(error) = connection_result {
+        emit_error(
+            &default_observability,
+            format!("HTTP/1 connection error: {error}"),
+        );
     }
+}
+
+async fn handle_http2_connection<S>(
+    socket: S,
+    pipeline: Arc<Pipeline<HttpContext>>,
+    config_resolver: Arc<ThreeStageResolver>,
+    local_ip: IpAddr,
+    hinted_hostname: Option<String>,
+    connection_options: HttpConnectionOptions,
+    observability_resolver: Arc<RadixTree<Vec<Arc<dyn EventSink>>>>,
+    default_observability: CompositeEventSink,
+    shutdown_token: CancellationToken,
+) where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
+{
+    let graceful_shutdown = &**RELOAD_TOKEN.load();
+    let mut connection_future = Box::pin(
+        Http2::new(socket, build_http2_options(&connection_options))
+            .graceful_shutdown_token(graceful_shutdown.clone())
+            .handle(build_request_handler(
+                pipeline,
+                config_resolver,
+                local_ip,
+                hinted_hostname,
+                true,
+                observability_resolver,
+                default_observability.clone(),
+            )),
+    );
+    let connection_result = tokio::select! {
+        result = &mut connection_future => result,
+        _ = shutdown_token.cancelled() => {
+            graceful_shutdown.cancel();
+            connection_future.await
+        }
+    };
+
+    if let Err(error) = connection_result {
+        emit_error(
+            &default_observability,
+            format!("HTTP/2 connection error: {error}"),
+        );
+    }
+}
+
+fn build_http1_options(connection_options: &HttpConnectionOptions) -> Http1Options {
+    Http1Options::default().enable_early_hints(connection_options.h1_enable_early_hints)
+}
+
+fn build_http2_options(connection_options: &HttpConnectionOptions) -> Http2Options {
+    let mut options = Http2Options::default();
+    let builder = options.h2_builder();
+    if let Some(initial_window_size) = connection_options.h2.initial_window_size {
+        builder.initial_window_size(initial_window_size);
+    }
+    if let Some(max_frame_size) = connection_options.h2.max_frame_size {
+        builder.max_frame_size(max_frame_size);
+    }
+    if let Some(max_concurrent_streams) = connection_options.h2.max_concurrent_streams {
+        builder.max_concurrent_streams(max_concurrent_streams);
+    }
+    if let Some(max_header_list_size) = connection_options.h2.max_header_list_size {
+        builder.max_header_list_size(max_header_list_size);
+    }
+    if connection_options.h2.enable_connect_protocol {
+        builder.enable_connect_protocol();
+    }
+    options
+}
+
+fn build_request_handler(
+    pipeline: Arc<Pipeline<HttpContext>>,
+    config_resolver: Arc<ThreeStageResolver>,
+    local_ip: IpAddr,
+    hinted_hostname: Option<String>,
+    is_tls: bool,
+    observability_resolver: Arc<RadixTree<Vec<Arc<dyn EventSink>>>>,
+    default_observability: CompositeEventSink,
+) -> impl Fn(Request<vibeio_http::Incoming>) -> RequestHandlerFuture {
+    move |request: Request<vibeio_http::Incoming>| {
+        let pipeline = pipeline.clone();
+        let config_resolver = config_resolver.clone();
+        let hinted_hostname = hinted_hostname.clone();
+        let observability_resolver = observability_resolver.clone();
+        let default_observability = default_observability.clone();
+        Box::pin(async move {
+            let hostname = request_hostname_for_lookup(&request, hinted_hostname.as_deref());
+            let request_observability = resolve_observability_sink(
+                &observability_resolver,
+                Some(local_ip),
+                hostname.as_deref(),
+                &default_observability,
+            );
+            let (parts, body) = request.into_parts();
+            let request = Request::from_parts(parts, body.boxed_unsync());
+            request_handler(
+                request,
+                pipeline,
+                config_resolver,
+                local_ip,
+                hostname,
+                is_tls,
+                request_observability,
+            )
+            .await
+        })
+    }
+}
+
+fn resolve_http_connection_options(
+    resolver: &RadixTree<HttpConnectionOptions>,
+    ip: IpAddr,
+    hostname: Option<&str>,
+) -> HttpConnectionOptions {
+    let normalized_hostname = hostname.and_then(normalize_host_for_lookup);
+    match normalized_hostname.as_deref() {
+        Some(hostname) => resolver
+            .lookup_ip_and_hostname(ip, hostname)
+            .or_else(|| resolver.lookup_ip(ip)),
+        None => resolver.lookup_ip(ip),
+    }
+    .or_else(|| resolver.root_data())
+    .unwrap_or_default()
 }
 
 fn resolve_observability_sink(
@@ -352,36 +558,31 @@ fn resolve_observability_sink(
         .unwrap_or_else(|| fallback.clone())
 }
 
+fn request_hostname_for_lookup<B>(
+    request: &Request<B>,
+    hinted_hostname: Option<&str>,
+) -> Option<String> {
+    request
+        .headers()
+        .get(http::header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .and_then(normalize_host_for_lookup)
+        .or_else(|| {
+            request
+                .uri()
+                .authority()
+                .map(|authority| authority.as_str())
+                .and_then(normalize_host_for_lookup)
+        })
+        .or_else(|| hinted_hostname.map(std::borrow::ToOwned::to_owned))
+}
+
 fn emit_error(observability: &CompositeEventSink, message: impl Into<String>) {
     observability.emit(Event::Log(LogEvent {
         level: LogLevel::Error,
         message: message.into(),
         target: LOG_TARGET,
     }));
-}
-
-fn parse_path(req: &str) -> String {
-    req.lines()
-        .next()
-        .and_then(|line| line.split_whitespace().nth(1))
-        .unwrap_or("/")
-        .to_string()
-}
-
-fn parse_host(req: &str) -> Option<String> {
-    for line in req.lines().skip(1) {
-        let line = line.trim_end_matches('\r');
-        if line.is_empty() {
-            break;
-        }
-        let Some((name, value)) = line.split_once(':') else {
-            continue;
-        };
-        if name.trim().eq_ignore_ascii_case("host") {
-            return normalize_host_for_lookup(value);
-        }
-    }
-    None
 }
 
 fn normalize_host_for_lookup(host: &str) -> Option<String> {

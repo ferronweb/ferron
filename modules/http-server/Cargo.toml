@@ -10,6 +10,7 @@ bench = []
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "macros"] }
 vibeio = { version = "0.2.6", default-features = false }
+vibeio-http = { version = "0.3.0", default-features = false, features = ["h1", "h2"] }
 parking_lot = "0.12"
 http = "1"
 http-body-util = "0.1.3"

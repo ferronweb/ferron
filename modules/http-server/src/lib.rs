@@ -3,6 +3,7 @@ pub mod config;
 #[cfg(not(any(test, feature = "bench")))]
 mod config;
 
+mod handler;
 mod loader;
 mod server;
 mod stages;
