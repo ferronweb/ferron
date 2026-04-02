@@ -58,10 +58,7 @@ pub async fn request_handler(
 
     if let Err(error) = pipeline.execute(&mut ctx).await {
         emit_error(&events, format!("Pipeline execution error: {error}"));
-        return Ok(text_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            b"Internal Server Error",
-        ));
+        ctx.res = Some(HttpResponse::BuiltinError(500, None));
     }
 
     Ok(
@@ -70,7 +67,7 @@ pub async fn request_handler(
             HttpResponse::BuiltinError(status, headers) => {
                 builtin_error_response(status, headers.as_ref())
             }
-            HttpResponse::Abort => empty_response(StatusCode::NO_CONTENT),
+            HttpResponse::Abort => return Err(io::Error::other("Aborted")),
         },
     )
 }
@@ -93,6 +90,7 @@ fn build_resolver_request(request: &HttpRequest) -> Result<HttpRequest, io::Erro
         .map_err(|error| io::Error::other(error.to_string()))
 }
 
+// TODO: improved built-in error responses
 fn builtin_error_response(status: u16, headers: Option<&HeaderMap>) -> Response<ResponseBody> {
     let status = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
     let body = status.canonical_reason().unwrap_or("Error");
@@ -112,17 +110,6 @@ fn builtin_error_response(status: u16, headers: Option<&HeaderMap>) -> Response<
         .unwrap_or_else(|_| {
             text_response(StatusCode::INTERNAL_SERVER_ERROR, b"Internal Server Error")
         })
-}
-
-fn empty_response(status: StatusCode) -> Response<ResponseBody> {
-    Response::builder()
-        .status(status)
-        .body(
-            http_body_util::Empty::<Bytes>::new()
-                .map_err(|e| match e {})
-                .boxed_unsync(),
-        )
-        .expect("failed to build empty response")
 }
 
 fn text_response(status: StatusCode, body: &'static [u8]) -> Response<ResponseBody> {
