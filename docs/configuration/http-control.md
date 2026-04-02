@@ -45,7 +45,7 @@ example.com {
 
 See also:
 
-- [Conditionals And Variables](/home/dorian/Projects/titanium/docs/configuration/conditionals.md)
+- [Conditionals And Variables](./conditionals.md)
 
 ## `if_not`
 
@@ -64,7 +64,7 @@ example.com {
 
 See also:
 
-- [Conditionals And Variables](/home/dorian/Projects/titanium/docs/configuration/conditionals.md)
+- [Conditionals And Variables](./conditionals.md)
 
 ## `handle_error`
 

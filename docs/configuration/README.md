@@ -5,11 +5,11 @@ It is split by topic and by scope so the directive reference is easier to scan.
 
 ## Reference Map
 
-- [Syntax And File Structure](/home/dorian/Projects/titanium/docs/configuration/syntax.md)
-- [Conditionals And Variables](/home/dorian/Projects/titanium/docs/configuration/conditionals.md)
-- [Global Directives](/home/dorian/Projects/titanium/docs/configuration/global.md)
-- [HTTP Host Directives](/home/dorian/Projects/titanium/docs/configuration/http-host.md)
-- [HTTP Control Directives](/home/dorian/Projects/titanium/docs/configuration/http-control.md)
+- [Syntax And File Structure](./syntax.md)
+- [Conditionals And Variables](./conditionals.md)
+- [Global Directives](./global.md)
+- [HTTP Host Directives](./http-host.md)
+- [HTTP Control Directives](./http-control.md)
 
 ## Scopes
 

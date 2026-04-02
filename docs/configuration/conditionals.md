@@ -65,5 +65,5 @@ For startup-only TLS settings such as `cert` and `key`, the bundled manual TLS p
 
 ## Related Directives
 
-- [`if`](/home/dorian/Projects/titanium/docs/configuration/http-control.md#if)
-- [`if_not`](/home/dorian/Projects/titanium/docs/configuration/http-control.md#if_not)
+- [`if`](./http-control.md#if)
+- [`if_not`](./http-control.md#if_not)

@@ -107,5 +107,5 @@ Important behavior:
 
 See also:
 
-- [Conditionals And Variables](/home/dorian/Projects/titanium/docs/configuration/conditionals.md)
-- [HTTP Control Directives](/home/dorian/Projects/titanium/docs/configuration/http-control.md)
+- [Conditionals And Variables](./conditionals.md)
+- [HTTP Control Directives](./http-control.md)
