@@ -31,31 +31,33 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
         // TODO: configure TLS crypto provider
         let provider = rustls::crypto::aws_lc_rs::default_provider();
         // TODO: mTLS
-        let config = Arc::new(
-            rustls::ServerConfig::builder_with_provider(Arc::new(provider))
-                .with_safe_default_protocol_versions()?
-                .with_no_client_auth()
-                .with_single_cert(
-                    load_certs(
-                        ctx.config
-                            .get_value("cert")
-                            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                            .as_deref()
-                            .ok_or(std::io::Error::other(
-                                "'cert' TLS parameter missing or invalid",
-                            ))?,
-                    )?,
-                    load_private_key(
-                        ctx.config
-                            .get_value("key")
-                            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                            .as_deref()
-                            .ok_or(std::io::Error::other(
-                                "'key' TLS parameter missing or invalid",
-                            ))?,
-                    )?,
+        let mut config = rustls::ServerConfig::builder_with_provider(Arc::new(provider))
+            .with_safe_default_protocol_versions()?
+            .with_no_client_auth()
+            .with_single_cert(
+                load_certs(
+                    ctx.config
+                        .get_value("cert")
+                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                        .as_deref()
+                        .ok_or(std::io::Error::other(
+                            "'cert' TLS parameter missing or invalid",
+                        ))?,
                 )?,
-        );
+                load_private_key(
+                    ctx.config
+                        .get_value("key")
+                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                        .as_deref()
+                        .ok_or(std::io::Error::other(
+                            "'key' TLS parameter missing or invalid",
+                        ))?,
+                )?,
+            )?;
+        if let Some(alpn_protocols) = ctx.alpn.as_ref() {
+            config.alpn_protocols = alpn_protocols.clone();
+        }
+        let config = Arc::new(config);
 
         ctx.resolver = Some(Arc::new(TcpTlsManualResolver { config }));
 
