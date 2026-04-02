@@ -25,7 +25,7 @@ impl TryFrom<ServerConfigurationBlock> for PreparedHostConfigurationBlock {
 #[derive(Debug, Clone)]
 pub struct PreparedHostConfigurationMatch {
     pub matcher: PreparedHostConfigurationMatcher,
-    pub config: PreparedHostConfigurationBlock,
+    pub config: Arc<PreparedHostConfigurationBlock>,
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone)]
@@ -80,11 +80,11 @@ pub fn prepare_host_block(
             {
                 let matches_one = PreparedHostConfigurationMatch {
                     matcher: PreparedHostConfigurationMatcher::Location(location.clone()),
-                    config: prepare_host_block(
+                    config: Arc::new(prepare_host_block(
                         entry
                             .children
                             .ok_or(anyhow::anyhow!("Location directive must have a block"))?,
-                    )?,
+                    )?),
                 };
 
                 if let Some(matches) = block.matches.iter_mut().find(|m| {
@@ -101,12 +101,15 @@ pub fn prepare_host_block(
                             .or_insert_with(Vec::new)
                             .extend(v.iter().cloned());
                     }
-                    matches.config.matches.extend(matches_one.config.matches);
-                    matches
-                        .config
+                    let mut matches_config = (&*matches.config).clone();
+                    matches_config
+                        .matches
+                        .extend(matches_one.config.matches.clone());
+                    matches_config
                         .error_config
-                        .extend(matches_one.config.error_config);
-                    matches.config.directives = Arc::new(new_directives);
+                        .extend(matches_one.config.error_config.clone());
+                    matches_config.directives = Arc::new(new_directives);
+                    matches.config = Arc::new(matches_config);
                 } else {
                     block.matches.push(matches_one);
                 }
@@ -129,11 +132,11 @@ pub fn prepare_host_block(
                             .ok_or(anyhow::anyhow!("Undefined matcher '{}'", matcher))?
                             .exprs,
                     ),
-                    config: prepare_host_block(
+                    config: Arc::new(prepare_host_block(
                         entry
                             .children
                             .ok_or(anyhow::anyhow!("Location directive must have a block"))?,
-                    )?,
+                    )?),
                 };
 
                 if let Some(matches) = block
@@ -149,12 +152,15 @@ pub fn prepare_host_block(
                             .or_insert_with(Vec::new)
                             .extend(v.iter().cloned());
                     }
-                    matches.config.matches.extend(matches_one.config.matches);
-                    matches
-                        .config
+                    let mut matches_config = (&*matches.config).clone();
+                    matches_config
+                        .matches
+                        .extend(matches_one.config.matches.clone());
+                    matches_config
                         .error_config
-                        .extend(matches_one.config.error_config);
-                    matches.config.directives = Arc::new(new_directives);
+                        .extend(matches_one.config.error_config.clone());
+                    matches_config.directives = Arc::new(new_directives);
+                    matches.config = Arc::new(matches_config);
                 } else {
                     block.matches.push(matches_one);
                 }
@@ -177,11 +183,11 @@ pub fn prepare_host_block(
                             .ok_or(anyhow::anyhow!("Undefined matcher '{}'", matcher))?
                             .exprs,
                     ),
-                    config: prepare_host_block(
+                    config: Arc::new(prepare_host_block(
                         entry
                             .children
                             .ok_or(anyhow::anyhow!("Location directive must have a block"))?,
-                    )?,
+                    )?),
                 };
 
                 if let Some(matches) = block
@@ -197,12 +203,15 @@ pub fn prepare_host_block(
                             .or_insert_with(Vec::new)
                             .extend(v.iter().cloned());
                     }
-                    matches.config.matches.extend(matches_one.config.matches);
-                    matches
-                        .config
+                    let mut matches_config = (&*matches.config).clone();
+                    matches_config
+                        .matches
+                        .extend(matches_one.config.matches.clone());
+                    matches_config
                         .error_config
-                        .extend(matches_one.config.error_config);
-                    matches.config.directives = Arc::new(new_directives);
+                        .extend(matches_one.config.error_config.clone());
+                    matches_config.directives = Arc::new(new_directives);
+                    matches.config = Arc::new(matches_config);
                 } else {
                     block.matches.push(matches_one);
                 }

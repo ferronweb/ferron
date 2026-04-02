@@ -820,17 +820,18 @@ impl Stage2RadixResolver {
 
     /// Resolve location path and return matching configurations
     ///
-    /// This performs a prefix-based search through the location matches
+    /// This performs a prefix-based search through the location matches.
+    /// Uses Arc::clone() for zero-copy sharing of the base configuration.
     pub fn resolve_location(
         &self,
         path: &str,
-        base_config: &PreparedHostConfigurationBlock,
+        base_config: Arc<PreparedHostConfigurationBlock>,
         location_path: &mut ResolvedLocationPath,
     ) -> Vec<Arc<PreparedHostConfigurationBlock>> {
         let mut configs = Vec::new();
 
-        // First, add the base configuration
-        configs.push((0u32, Arc::new(base_config.clone())));
+        // First, add the base configuration (zero-copy Arc clone)
+        configs.push((0u32, Arc::clone(&base_config)));
 
         // Find matching location directives
         for location_match in &base_config.matches {
@@ -840,7 +841,7 @@ impl Stage2RadixResolver {
                 if self.location_matches(path, location_path_str) {
                     // Calculate priority based on specificity (longer path = more specific)
                     let priority = location_path_str.len() as u32;
-                    configs.push((priority, Arc::new(location_match.config.clone())));
+                    configs.push((priority, Arc::clone(&location_match.config)));
 
                     // Update location path
                     location_path.path_segments = location_path_str
@@ -1022,7 +1023,7 @@ impl Stage2RadixResolver {
         &self,
         hostname: Option<&str>,
         path: &str,
-        base_config: &PreparedHostConfigurationBlock,
+        base_config: Arc<PreparedHostConfigurationBlock>,
         variables: &ResolverVariables,
         layered_config: Option<LayeredConfiguration>,
     ) -> (LayeredConfiguration, ResolvedLocationPath) {
@@ -1043,8 +1044,8 @@ impl Stage2RadixResolver {
             }
         }
 
-        // Resolve location paths
-        for config in self.resolve_location(path, base_config, &mut location_path) {
+        // Resolve location paths (zero-copy Arc clone)
+        for config in self.resolve_location(path, Arc::clone(&base_config), &mut location_path) {
             let block = ServerConfigurationBlock {
                 directives: Arc::clone(&config.directives),
                 matchers: HashMap::new(),
@@ -1077,50 +1078,561 @@ impl Default for Stage2RadixResolver {
 // Stage 3: Error Configuration Resolution
 // ============================================================================
 
-/// Stage 3 resolver: Error configuration lookup
+/// Error configuration scope - composable and extensible
 ///
-/// Uses a HashMap for O(1) error code lookups.
+/// Supports any combination of IP, hostname, and path scoping.
+/// Resolution order: most specific (all fields set) → least specific (global)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ErrorConfigScope {
+    pub ip: Option<IpAddr>,
+    pub hostname: Option<String>,
+    pub path: Option<String>,
+    pub error_code: Option<u16>, // None = default fallback
+}
+
+impl ErrorConfigScope {
+    /// Create a global error code scope
+    pub fn global(code: u16) -> Self {
+        Self {
+            ip: None,
+            hostname: None,
+            path: None,
+            error_code: Some(code),
+        }
+    }
+
+    /// Create an IP-specific error code scope
+    pub fn ip(ip: IpAddr, code: u16) -> Self {
+        Self {
+            ip: Some(ip),
+            hostname: None,
+            path: None,
+            error_code: Some(code),
+        }
+    }
+
+    /// Create a hostname-specific error code scope (supports wildcards like *.example.com)
+    pub fn hostname(hostname: impl Into<String>, code: u16) -> Self {
+        Self {
+            ip: None,
+            hostname: Some(hostname.into()),
+            path: None,
+            error_code: Some(code),
+        }
+    }
+
+    /// Create a path-specific error code scope
+    pub fn path(path: impl Into<String>, code: u16) -> Self {
+        Self {
+            ip: None,
+            hostname: None,
+            path: Some(path.into()),
+            error_code: Some(code),
+        }
+    }
+
+    /// Create IP + hostname combination
+    pub fn ip_hostname(ip: IpAddr, hostname: impl Into<String>, code: u16) -> Self {
+        Self {
+            ip: Some(ip),
+            hostname: Some(hostname.into()),
+            path: None,
+            error_code: Some(code),
+        }
+    }
+
+    /// Create IP + path combination
+    pub fn ip_path(ip: IpAddr, path: impl Into<String>, code: u16) -> Self {
+        Self {
+            ip: Some(ip),
+            hostname: None,
+            path: Some(path.into()),
+            error_code: Some(code),
+        }
+    }
+
+    /// Create hostname + path combination
+    pub fn hostname_path(hostname: impl Into<String>, path: impl Into<String>, code: u16) -> Self {
+        Self {
+            ip: None,
+            hostname: Some(hostname.into()),
+            path: Some(path.into()),
+            error_code: Some(code),
+        }
+    }
+
+    /// Create IP + hostname + path combination (most specific)
+    pub fn ip_hostname_path(
+        ip: IpAddr,
+        hostname: impl Into<String>,
+        path: impl Into<String>,
+        code: u16,
+    ) -> Self {
+        Self {
+            ip: Some(ip),
+            hostname: Some(hostname.into()),
+            path: Some(path.into()),
+            error_code: Some(code),
+        }
+    }
+
+    /// Create global default scope
+    pub fn global_default() -> Self {
+        Self {
+            ip: None,
+            hostname: None,
+            path: None,
+            error_code: None,
+        }
+    }
+
+    /// Create hostname-specific default scope
+    pub fn hostname_default(hostname: impl Into<String>) -> Self {
+        Self {
+            ip: None,
+            hostname: Some(hostname.into()),
+            path: None,
+            error_code: None,
+        }
+    }
+
+    /// Create IP-specific default scope
+    pub fn ip_default(ip: IpAddr) -> Self {
+        Self {
+            ip: Some(ip),
+            hostname: None,
+            path: None,
+            error_code: None,
+        }
+    }
+
+    /// Create path-specific default scope
+    pub fn path_default(path: impl Into<String>) -> Self {
+        Self {
+            ip: None,
+            hostname: None,
+            path: Some(path.into()),
+            error_code: None,
+        }
+    }
+
+    /// Create IP + hostname default scope
+    pub fn ip_hostname_default(ip: IpAddr, hostname: impl Into<String>) -> Self {
+        Self {
+            ip: Some(ip),
+            hostname: Some(hostname.into()),
+            path: None,
+            error_code: None,
+        }
+    }
+
+    /// Create IP + path default scope
+    pub fn ip_path_default(ip: IpAddr, path: impl Into<String>) -> Self {
+        Self {
+            ip: Some(ip),
+            hostname: None,
+            path: Some(path.into()),
+            error_code: None,
+        }
+    }
+
+    /// Create hostname + path default scope
+    pub fn hostname_path_default(hostname: impl Into<String>, path: impl Into<String>) -> Self {
+        Self {
+            ip: None,
+            hostname: Some(hostname.into()),
+            path: Some(path.into()),
+            error_code: None,
+        }
+    }
+
+    /// Create IP + hostname + path default scope
+    pub fn ip_hostname_path_default(
+        ip: IpAddr,
+        hostname: impl Into<String>,
+        path: impl Into<String>,
+    ) -> Self {
+        Self {
+            ip: Some(ip),
+            hostname: Some(hostname.into()),
+            path: Some(path.into()),
+            error_code: None,
+        }
+    }
+}
+
+/// Stage 3 resolver: Error configuration lookup with scoped support
+///
+/// Uses a single HashMap with composable ErrorConfigScope keys.
+/// Supports any combination of IP, hostname, and path scoping.
+/// Resolution order: most specific → least specific (global default)
 #[derive(Debug, Clone)]
 pub struct Stage3ErrorResolver {
-    /// Maps error codes to configuration blocks
-    error_map: HashMap<u16, Arc<PreparedHostConfigurationBlock>>,
-    /// Default error configuration (no specific code)
-    default: Option<Arc<PreparedHostConfigurationBlock>>,
+    /// Single map for all error configurations keyed by scope
+    configs: HashMap<ErrorConfigScope, Arc<PreparedHostConfigurationBlock>>,
 }
 
 impl Stage3ErrorResolver {
     pub fn new() -> Self {
         Self {
-            error_map: HashMap::new(),
-            default: None,
+            configs: HashMap::new(),
         }
     }
 
-    /// Register an error configuration
+    /// Register an error configuration for a specific scope
+    pub fn register(
+        &mut self,
+        scope: ErrorConfigScope,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        self.configs.insert(scope, config);
+    }
+
+    /// Register a global error configuration
     pub fn register_error(&mut self, code: u16, config: Arc<PreparedHostConfigurationBlock>) {
-        self.error_map.insert(code, config);
+        self.configs.insert(ErrorConfigScope::global(code), config);
     }
 
-    /// Set the default error configuration
+    /// Register a hostname-specific error configuration (supports wildcards like *.example.com)
+    pub fn register_hostname_error(
+        &mut self,
+        hostname: &str,
+        code: u16,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        self.configs
+            .insert(ErrorConfigScope::hostname(hostname, code), config);
+    }
+
+    /// Register an IP-specific error configuration
+    pub fn register_ip_error(
+        &mut self,
+        ip: IpAddr,
+        code: u16,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        self.configs.insert(ErrorConfigScope::ip(ip, code), config);
+    }
+
+    /// Register a path-specific error configuration
+    pub fn register_path_error(
+        &mut self,
+        path_prefix: &str,
+        code: u16,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        self.configs
+            .insert(ErrorConfigScope::path(path_prefix, code), config);
+    }
+
+    /// Register an IP + hostname combination error configuration
+    pub fn register_ip_hostname_error(
+        &mut self,
+        ip: IpAddr,
+        hostname: &str,
+        code: u16,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        self.configs
+            .insert(ErrorConfigScope::ip_hostname(ip, hostname, code), config);
+    }
+
+    /// Register a hostname + path combination error configuration
+    pub fn register_hostname_path_error(
+        &mut self,
+        hostname: &str,
+        path: &str,
+        code: u16,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        self.configs.insert(
+            ErrorConfigScope::hostname_path(hostname, path, code),
+            config,
+        );
+    }
+
+    /// Register an IP + hostname + path combination error configuration (most specific)
+    pub fn register_ip_hostname_path_error(
+        &mut self,
+        ip: IpAddr,
+        hostname: &str,
+        path: &str,
+        code: u16,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        self.configs.insert(
+            ErrorConfigScope::ip_hostname_path(ip, hostname, path, code),
+            config,
+        );
+    }
+
+    /// Set the default error configuration (global fallback)
     pub fn set_default(&mut self, config: Arc<PreparedHostConfigurationBlock>) {
-        self.default = Some(config);
+        self.configs
+            .insert(ErrorConfigScope::global_default(), config);
     }
 
-    /// Resolve error configuration by code
+    /// Set a hostname-specific default error configuration
+    pub fn set_hostname_default(
+        &mut self,
+        hostname: &str,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        self.configs
+            .insert(ErrorConfigScope::hostname_default(hostname), config);
+    }
+
+    /// Set an IP-specific default error configuration
+    pub fn set_ip_default(&mut self, ip: IpAddr, config: Arc<PreparedHostConfigurationBlock>) {
+        self.configs
+            .insert(ErrorConfigScope::ip_default(ip), config);
+    }
+
+    /// Set a path-specific default error configuration
+    pub fn set_path_default(
+        &mut self,
+        path_prefix: &str,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        self.configs
+            .insert(ErrorConfigScope::path_default(path_prefix), config);
+    }
+
+    /// Set an IP + hostname default error configuration
+    pub fn set_ip_hostname_default(
+        &mut self,
+        ip: IpAddr,
+        hostname: &str,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        self.configs
+            .insert(ErrorConfigScope::ip_hostname_default(ip, hostname), config);
+    }
+
+    /// Set a hostname + path default error configuration
+    pub fn set_hostname_path_default(
+        &mut self,
+        hostname: &str,
+        path: &str,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        self.configs.insert(
+            ErrorConfigScope::hostname_path_default(hostname, path),
+            config,
+        );
+    }
+
+    /// Set an IP + hostname + path default error configuration
+    pub fn set_ip_hostname_path_default(
+        &mut self,
+        ip: IpAddr,
+        hostname: &str,
+        path: &str,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        self.configs.insert(
+            ErrorConfigScope::ip_hostname_path_default(ip, hostname, path),
+            config,
+        );
+    }
+
+    /// Resolve error configuration by code (global only - legacy method)
     pub fn resolve(
         &self,
         error_code: u16,
         location_path: &mut ResolvedLocationPath,
     ) -> Option<Arc<PreparedHostConfigurationBlock>> {
         location_path.error_key = Some(error_code);
-
-        self.error_map
-            .get(&error_code)
+        self.configs
+            .get(&ErrorConfigScope::global(error_code))
             .cloned()
-            .or_else(|| self.default.clone())
+            .or_else(|| {
+                self.configs
+                    .get(&ErrorConfigScope::global_default())
+                    .cloned()
+            })
     }
 
-    /// Resolve error configuration and create a layered configuration
+    /// Generate all possible scopes from most specific to least specific
+    fn generate_scopes(
+        error_code: u16,
+        hostname: Option<&str>,
+        ip: Option<IpAddr>,
+        path_segments: Option<&[String]>,
+    ) -> Vec<ErrorConfigScope> {
+        let mut scopes = Vec::with_capacity(8);
+        let path_str = path_segments.map(|s| s.join("/"));
+
+        // 1. Most specific: IP + Hostname + Path
+        if ip.is_some() && hostname.is_some() && path_str.is_some() {
+            scopes.push(ErrorConfigScope::ip_hostname_path(
+                ip.unwrap(),
+                hostname.unwrap(),
+                path_str.as_ref().unwrap().clone(),
+                error_code,
+            ));
+        }
+        // 2. IP + Hostname
+        if ip.is_some() && hostname.is_some() {
+            scopes.push(ErrorConfigScope::ip_hostname(
+                ip.unwrap(),
+                hostname.unwrap(),
+                error_code,
+            ));
+        }
+        // 3. Hostname + Path
+        if hostname.is_some() && path_str.is_some() {
+            scopes.push(ErrorConfigScope::hostname_path(
+                hostname.unwrap(),
+                path_str.as_ref().unwrap().clone(),
+                error_code,
+            ));
+        }
+        // 4. IP + Path
+        if ip.is_some() && path_str.is_some() {
+            scopes.push(ErrorConfigScope::ip_path(
+                ip.unwrap(),
+                path_str.as_ref().unwrap().clone(),
+                error_code,
+            ));
+        }
+        // 5. Path only
+        if path_str.is_some() {
+            scopes.push(ErrorConfigScope::path(
+                path_str.as_ref().unwrap().clone(),
+                error_code,
+            ));
+        }
+        // 6. Hostname only
+        if hostname.is_some() {
+            scopes.push(ErrorConfigScope::hostname(hostname.unwrap(), error_code));
+        }
+        // 7. IP only
+        if ip.is_some() {
+            scopes.push(ErrorConfigScope::ip(ip.unwrap(), error_code));
+        }
+        // 8. Global (least specific)
+        scopes.push(ErrorConfigScope::global(error_code));
+        scopes
+    }
+
+    /// Generate all default scopes from most specific to least specific
+    fn generate_default_scopes(
+        hostname: Option<&str>,
+        ip: Option<IpAddr>,
+        path_segments: Option<&[String]>,
+    ) -> Vec<ErrorConfigScope> {
+        let mut scopes = Vec::with_capacity(8);
+        let path_str = path_segments.map(|s| s.join("/"));
+
+        // 1. Most specific: IP + Hostname + Path default
+        if ip.is_some() && hostname.is_some() && path_str.is_some() {
+            scopes.push(ErrorConfigScope::ip_hostname_path_default(
+                ip.unwrap(),
+                hostname.unwrap(),
+                path_str.as_ref().unwrap().clone(),
+            ));
+        }
+        // 2. IP + Hostname default
+        if ip.is_some() && hostname.is_some() {
+            scopes.push(ErrorConfigScope::ip_hostname_default(
+                ip.unwrap(),
+                hostname.unwrap(),
+            ));
+        }
+        // 3. Hostname + Path default
+        if hostname.is_some() && path_str.is_some() {
+            scopes.push(ErrorConfigScope::hostname_path_default(
+                hostname.unwrap(),
+                path_str.as_ref().unwrap().clone(),
+            ));
+        }
+        // 4. IP + Path default
+        if ip.is_some() && path_str.is_some() {
+            scopes.push(ErrorConfigScope::ip_path_default(
+                ip.unwrap(),
+                path_str.as_ref().unwrap().clone(),
+            ));
+        }
+        // 5. Path default
+        if path_str.is_some() {
+            scopes.push(ErrorConfigScope::path_default(
+                path_str.as_ref().unwrap().clone(),
+            ));
+        }
+        // 6. Hostname default
+        if hostname.is_some() {
+            scopes.push(ErrorConfigScope::hostname_default(hostname.unwrap()));
+        }
+        // 7. IP default
+        if ip.is_some() {
+            scopes.push(ErrorConfigScope::ip_default(ip.unwrap()));
+        }
+        // 8. Global default (least specific)
+        scopes.push(ErrorConfigScope::global_default());
+        scopes
+    }
+
+    /// Resolve error configuration with scoped lookup
+    ///
+    /// Resolution order (most specific to least specific):
+    /// 1. IP + Hostname + Path + ErrorCode
+    /// 2. IP + Hostname + ErrorCode
+    /// 3. Hostname + Path + ErrorCode
+    /// 4. IP + Path + ErrorCode
+    /// 5. Path + ErrorCode
+    /// 6. Hostname + ErrorCode
+    /// 7. IP + ErrorCode
+    /// 8. Global ErrorCode
+    /// 9-16. Same combinations for defaults (error_code = None)
+    pub fn resolve_scoped(
+        &self,
+        error_code: u16,
+        hostname: Option<&str>,
+        ip: Option<IpAddr>,
+        path_segments: Option<&[String]>,
+        location_path: &mut ResolvedLocationPath,
+    ) -> Option<Arc<PreparedHostConfigurationBlock>> {
+        location_path.error_key = Some(error_code);
+
+        // Generate all possible scopes from most to least specific
+        let scopes = Self::generate_scopes(error_code, hostname, ip, path_segments);
+
+        // Try each scope in order
+        for scope in scopes {
+            if let Some(config) = self.configs.get(&scope) {
+                return Some(config.clone());
+            }
+        }
+
+        // Try defaults (same order, but error_code = None)
+        let default_scopes = Self::generate_default_scopes(hostname, ip, path_segments);
+        for scope in default_scopes {
+            if let Some(config) = self.configs.get(&scope) {
+                return Some(config.clone());
+            }
+        }
+
+        None
+    }
+
+    /// Resolve default error configuration with scoped lookup
+    pub fn resolve_default_scoped(
+        &self,
+        hostname: Option<&str>,
+        ip: Option<IpAddr>,
+        path_segments: Option<&[String]>,
+    ) -> Option<Arc<PreparedHostConfigurationBlock>> {
+        let default_scopes = Self::generate_default_scopes(hostname, ip, path_segments);
+        for scope in default_scopes {
+            if let Some(config) = self.configs.get(&scope) {
+                return Some(config.clone());
+            }
+        }
+        None
+    }
+
+    /// Resolve error configuration and create a layered configuration (global only - legacy)
     ///
     /// # Arguments
     /// * `error_code` - Error code to resolve
@@ -1135,6 +1647,47 @@ impl Stage3ErrorResolver {
 
         if let Some(config) = self.resolve(error_code, &mut location_path) {
             // Clone the Arc (cheap - just increments ref count)
+            let block = ServerConfigurationBlock {
+                directives: Arc::clone(&config.directives),
+                matchers: HashMap::new(),
+                span: None,
+            };
+            layered_config.add_layer(Arc::new(block));
+        }
+
+        (layered_config, location_path)
+    }
+
+    /// Resolve error configuration with scoped lookup and create a layered configuration
+    ///
+    /// This method properly chains Stage 3 on top of Stage 2's base configuration.
+    ///
+    /// # Arguments
+    /// * `error_code` - Error code to resolve
+    /// * `hostname` - Optional hostname for scoped lookup
+    /// * `ip` - Optional IP for scoped lookup
+    /// * `path_segments` - Optional path segments for scoped lookup
+    /// * `base_config` - Base layered configuration from Stage 2
+    pub fn resolve_layered_scoped(
+        &self,
+        error_code: u16,
+        hostname: Option<&str>,
+        ip: Option<IpAddr>,
+        path_segments: Option<&[String]>,
+        base_config: Option<LayeredConfiguration>,
+    ) -> (LayeredConfiguration, ResolvedLocationPath) {
+        let mut location_path = ResolvedLocationPath::new();
+        let mut layered_config = base_config.unwrap_or_else(|| LayeredConfiguration::new());
+
+        // Try to resolve specific error code first
+        let error_config =
+            self.resolve_scoped(error_code, hostname, ip, path_segments, &mut location_path);
+
+        // If no specific error config found, try default (also scoped)
+        let error_config =
+            error_config.or_else(|| self.resolve_default_scoped(hostname, ip, path_segments));
+
+        if let Some(config) = error_config {
             let block = ServerConfigurationBlock {
                 directives: Arc::clone(&config.directives),
                 matchers: HashMap::new(),
@@ -1272,9 +1825,11 @@ impl ThreeStageResolver {
             .or_else(|| host_configs.get(&None))?;
 
         // Stage 2: Hostname, path, and conditional resolution (passing Stage 1's config)
+        // Wrap in Arc for zero-copy sharing
+        let host_config_arc = Arc::new(host_config.clone());
         let (stage2_config, stage2_path) =
             self.stage2_radix
-                .resolve(Some(hostname), path, host_config, variables, None);
+                .resolve(Some(hostname), path, host_config_arc, variables, None);
 
         // Merge Stage 2 results
         let mut layered_config = LayeredConfiguration::new();
@@ -1320,13 +1875,13 @@ impl ThreeStageResolver {
     /// # Arguments
     /// * `hostname` - Request hostname to resolve
     /// * `path` - Request path to resolve
-    /// * `base_config` - The base prepared host configuration block
+    /// * `base_config` - The base prepared host configuration block (Arc for zero-copy sharing)
     /// * `variables` - Variables for conditional evaluation
     pub fn resolve_stage2(
         &self,
         hostname: Option<&str>,
         path: &str,
-        base_config: &PreparedHostConfigurationBlock,
+        base_config: Arc<PreparedHostConfigurationBlock>,
         variables: &ResolverVariables,
     ) -> (LayeredConfiguration, ResolvedLocationPath) {
         self.stage2_radix
@@ -1338,14 +1893,14 @@ impl ThreeStageResolver {
     /// # Arguments
     /// * `hostname` - Request hostname to resolve
     /// * `path` - Request path to resolve
-    /// * `base_config` - The base prepared host configuration block
+    /// * `base_config` - The base prepared host configuration block (Arc for zero-copy sharing)
     /// * `variables` - Variables for conditional evaluation
     /// * `layered_config` - Optional base layered configuration to add layers to
     pub fn resolve_stage2_layered(
         &self,
         hostname: Option<&str>,
         path: &str,
-        base_config: &PreparedHostConfigurationBlock,
+        base_config: Arc<PreparedHostConfigurationBlock>,
         variables: &ResolverVariables,
         layered_config: Option<LayeredConfiguration>,
     ) -> (LayeredConfiguration, ResolvedLocationPath) {
@@ -1403,9 +1958,11 @@ impl ThreeStageResolver {
             .or_else(|| host_configs.get(&None))?;
 
         // Stage 2: Hostname, path, and conditional resolution (passing Stage 1's config)
+        // Wrap in Arc for zero-copy sharing
+        let host_config_arc = Arc::new(host_config.clone());
         let (stage2_config, stage2_path) =
             self.stage2_radix
-                .resolve(Some(hostname), "/", host_config, variables, None);
+                .resolve(Some(hostname), "/", host_config_arc, variables, None);
 
         // Merge Stage 2 results
         let mut layered_config = LayeredConfiguration::new();
@@ -1431,6 +1988,75 @@ impl ThreeStageResolver {
         }
 
         Some(ResolutionResult::new(layered_config, location_path))
+    }
+
+    /// Resolve error configuration with full Stage 2 → Stage 3 chaining
+    ///
+    /// This method properly chains Stage 3 on top of Stage 2's base configuration,
+    /// using scoped error resolution based on hostname, IP, and path context.
+    ///
+    /// Resolution order for error configs (most specific to least specific):
+    /// 1. Path-specific error config
+    /// 2. Hostname-specific error config
+    /// 3. IP-specific error config
+    /// 4. Global error config
+    /// 5. Scoped default (path → hostname → IP → global)
+    ///
+    /// # Arguments
+    /// * `ip` - Client IP address for Stage 1
+    /// * `hostname` - Request hostname for Stage 2
+    /// * `error_code` - Error code for Stage 3
+    /// * `variables` - Variables for conditional evaluation
+    pub fn resolve_error_scoped(
+        &self,
+        ip: IpAddr,
+        hostname: &str,
+        error_code: u16,
+        variables: &ResolverVariables,
+    ) -> Option<ResolutionResult> {
+        let mut location_path = ResolvedLocationPath::new();
+
+        // Stage 1: IP-based resolution
+        let host_configs = self.stage1_ip.resolve(ip, &mut location_path)?;
+
+        // Get the host-specific configuration
+        let host_config = host_configs
+            .get(&Some(hostname.to_string()))
+            .or_else(|| host_configs.get(&None))?;
+
+        // Stage 2: Hostname, path, and conditional resolution (passing Stage 1's config)
+        // Wrap in Arc for zero-copy sharing
+        let host_config_arc = Arc::new(host_config.clone());
+        let (stage2_config, stage2_path) =
+            self.stage2_radix
+                .resolve(Some(hostname), "/", host_config_arc, variables, None);
+
+        // Merge Stage 2 results
+        let mut layered_config = LayeredConfiguration::new();
+        if let Some(global) = self.global.clone() {
+            layered_config.add_layer(global);
+        }
+        for layer in stage2_config.layers {
+            layered_config.add_layer(layer);
+        }
+        location_path.hostname_segments = stage2_path.hostname_segments;
+        location_path.path_segments = stage2_path.path_segments;
+        location_path.conditionals = stage2_path.conditionals;
+
+        // Stage 3: Error configuration resolution with full scoping
+        // Pass hostname, IP, and path_segments for scoped lookup
+        let (error_layered_config, error_path) = self.stage3_error.resolve_layered_scoped(
+            error_code,
+            Some(hostname),
+            Some(ip),
+            Some(&location_path.path_segments),
+            Some(layered_config),
+        );
+
+        // Merge error path info
+        location_path.error_key = error_path.error_key;
+
+        Some(ResolutionResult::new(error_layered_config, location_path))
     }
 }
 
@@ -1545,8 +2171,13 @@ mod tests {
             http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
             HashMap::new(),
         );
-        let (layered_config, path) =
-            resolver.resolve(Some("example.com"), "/api", &base_block, &variables, None);
+        let (layered_config, path) = resolver.resolve(
+            Some("example.com"),
+            "/api",
+            Arc::new(base_block),
+            &variables,
+            None,
+        );
 
         assert!(!path.hostname_segments.is_empty());
         assert!(layered_config.layers.len() >= 1);
@@ -1615,7 +2246,7 @@ mod tests {
         let (config2, _) = resolver.resolve_stage2_layered(
             Some("example.com"),
             "/api",
-            host_block,
+            Arc::new(host_block.clone()),
             &variables,
             Some(config1),
         );
@@ -2072,11 +2703,11 @@ mod tests {
         );
         base_block.matches.push(PreparedHostConfigurationMatch {
             matcher: PreparedHostConfigurationMatcher::Location("/api".to_string()),
-            config: PreparedHostConfigurationBlock {
+            config: Arc::new(PreparedHostConfigurationBlock {
                 directives: Arc::new(loc_cfg),
                 matches: Vec::new(),
                 error_config: Vec::new(),
-            },
+            }),
         });
 
         // Conditional matcher: if method == GET
@@ -2099,11 +2730,11 @@ mod tests {
         );
         base_block.matches.push(PreparedHostConfigurationMatch {
             matcher: PreparedHostConfigurationMatcher::IfConditional(vec![expr]),
-            config: PreparedHostConfigurationBlock {
+            config: Arc::new(PreparedHostConfigurationBlock {
                 directives: Arc::new(cond_cfg),
                 matches: Vec::new(),
                 error_config: Vec::new(),
-            },
+            }),
         });
 
         // Resolve
@@ -2114,7 +2745,7 @@ mod tests {
         let (layered, path) = resolver.resolve(
             Some("example.com"),
             "/api/users",
-            &base_block,
+            Arc::new(base_block),
             &variables,
             None,
         );
@@ -3009,6 +3640,211 @@ mod tests {
         }
         if let Some(ServerConfigurationValue::String(val, _)) = error_val2 {
             assert_eq!(val, "global_404", "IP2 should have global error config");
+        }
+    }
+
+    /// Test Stage 2 → Stage 3 scoped chaining with hostname-specific error configs
+    /// Demonstrates that error configs can now be scoped to specific hostnames
+    #[test]
+    fn test_stage2_to_stage3_scoped_chaining() {
+        use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
+
+        let mut resolver = ThreeStageResolver::new();
+
+        // Setup: Two hostnames with different error configs for the same error code
+        // api.com -> 404 -> "api_custom_404"
+        // web.com -> 404 -> "web_custom_404"
+
+        // Stage 1: Both IPs have their respective hostnames
+        let mut hosts = HashMap::new();
+
+        let mut api_directives = HashMap::new();
+        api_directives.insert(
+            "host".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String("api".to_string(), None)],
+                children: None,
+                span: None,
+            }],
+        );
+        hosts.insert(
+            Some("api.com".to_string()),
+            PreparedHostConfigurationBlock {
+                directives: Arc::new(api_directives),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            },
+        );
+
+        let mut web_directives = HashMap::new();
+        web_directives.insert(
+            "host".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String("web".to_string(), None)],
+                children: None,
+                span: None,
+            }],
+        );
+        hosts.insert(
+            Some("web.com".to_string()),
+            PreparedHostConfigurationBlock {
+                directives: Arc::new(web_directives),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            },
+        );
+
+        resolver
+            .stage1()
+            .register_ip("192.168.1.1".parse().unwrap(), hosts);
+
+        // Stage 2: Hostname-specific configs
+        let mut api_stage2 = HashMap::new();
+        api_stage2.insert(
+            "stage2".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "api_stage2".to_string(),
+                    None,
+                )],
+                children: None,
+                span: None,
+            }],
+        );
+        resolver.stage2().insert_host(
+            vec!["com", "api"],
+            Arc::new(PreparedHostConfigurationBlock {
+                directives: Arc::new(api_stage2),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            }),
+            10,
+        );
+
+        let mut web_stage2 = HashMap::new();
+        web_stage2.insert(
+            "stage2".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "web_stage2".to_string(),
+                    None,
+                )],
+                children: None,
+                span: None,
+            }],
+        );
+        resolver.stage2().insert_host(
+            vec!["com", "web"],
+            Arc::new(PreparedHostConfigurationBlock {
+                directives: Arc::new(web_stage2),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            }),
+            10,
+        );
+
+        // Stage 3: HOSTNAME-SPECIFIC error configs (new feature!)
+        let mut api_error = HashMap::new();
+        api_error.insert(
+            "error_type".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "api_404".to_string(),
+                    None,
+                )],
+                children: None,
+                span: None,
+            }],
+        );
+        resolver.stage3().register_hostname_error(
+            "api.com",
+            404,
+            Arc::new(PreparedHostConfigurationBlock {
+                directives: Arc::new(api_error),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            }),
+        );
+
+        let mut web_error = HashMap::new();
+        web_error.insert(
+            "error_type".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "web_404".to_string(),
+                    None,
+                )],
+                children: None,
+                span: None,
+            }],
+        );
+        resolver.stage3().register_hostname_error(
+            "web.com",
+            404,
+            Arc::new(PreparedHostConfigurationBlock {
+                directives: Arc::new(web_error),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            }),
+        );
+
+        let variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+
+        // Use the new resolve_error_scoped method
+        let result_api = resolver.resolve_error_scoped(
+            "192.168.1.1".parse().unwrap(),
+            "api.com",
+            404,
+            &variables,
+        );
+
+        let result_web = resolver.resolve_error_scoped(
+            "192.168.1.1".parse().unwrap(),
+            "web.com",
+            404,
+            &variables,
+        );
+
+        assert!(result_api.is_some(), "API should resolve");
+        assert!(result_web.is_some(), "Web should resolve");
+
+        let result_api = result_api.unwrap();
+        let result_web = result_web.unwrap();
+
+        // Verify Stage 1 + Stage 2 directives
+        let api_host = result_api.configuration.get_value("host", true);
+        let web_host = result_web.configuration.get_value("host", true);
+
+        if let Some(ServerConfigurationValue::String(val, _)) = api_host {
+            assert_eq!(val, "api");
+        }
+        if let Some(ServerConfigurationValue::String(val, _)) = web_host {
+            assert_eq!(val, "web");
+        }
+
+        // Verify Stage 2 directives
+        let api_s2 = result_api.configuration.get_value("stage2", true);
+        let web_s2 = result_web.configuration.get_value("stage2", true);
+
+        if let Some(ServerConfigurationValue::String(val, _)) = api_s2 {
+            assert_eq!(val, "api_stage2");
+        }
+        if let Some(ServerConfigurationValue::String(val, _)) = web_s2 {
+            assert_eq!(val, "web_stage2");
+        }
+
+        // Verify Stage 3 HOSTNAME-SPECIFIC error configs (this is the new feature!)
+        let api_err = result_api.configuration.get_value("error_type", true);
+        let web_err = result_web.configuration.get_value("error_type", true);
+
+        if let Some(ServerConfigurationValue::String(val, _)) = api_err {
+            assert_eq!(val, "api_404", "API should have hostname-specific error");
+        }
+        if let Some(ServerConfigurationValue::String(val, _)) = web_err {
+            assert_eq!(val, "web_404", "Web should have hostname-specific error");
         }
     }
 }
