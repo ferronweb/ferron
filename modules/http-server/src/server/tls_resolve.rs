@@ -144,6 +144,7 @@ impl<T: Clone> RadixTree<T> {
     }
 
     /// Clears the root (default) data.
+    #[allow(dead_code)]
     #[inline]
     pub fn clear_root_data(&mut self) {
         self.root.data = None;
@@ -372,6 +373,7 @@ impl<T: Clone> RadixTree<T> {
     /// Inserts data for a partial IPv4 address prefix.
     ///
     /// Useful for matching ranges like `127.x.x.x` or `192.168.x.x`.
+    #[allow(dead_code)]
     pub fn insert_ipv4_prefix(&mut self, prefix: &[u8], data: T) {
         let path: Vec<RadixKey> = prefix.iter().copied().map(RadixKey::IpV4Octet).collect();
         self.insert(&path, data);
@@ -380,6 +382,7 @@ impl<T: Clone> RadixTree<T> {
     /// Inserts data for a partial IPv6 address prefix.
     ///
     /// Useful for matching ranges like `2001:db8::/32`.
+    #[allow(dead_code)]
     pub fn insert_ipv6_prefix(&mut self, prefix: &[u8], data: T) {
         let path: Vec<RadixKey> = prefix.iter().copied().map(RadixKey::IpV6Octet).collect();
         self.insert(&path, data);
@@ -417,12 +420,14 @@ impl<T: Clone> RadixTree<T> {
     }
 
     /// Looks up data by IPv4 address prefix.
+    #[allow(dead_code)]
     pub fn lookup_ipv4_prefix(&self, prefix: &[u8]) -> Option<T> {
         let path: Vec<RadixKey> = prefix.iter().copied().map(RadixKey::IpV4Octet).collect();
         self.lookup(&path)
     }
 
     /// Looks up data by IPv6 address prefix.
+    #[allow(dead_code)]
     pub fn lookup_ipv6_prefix(&self, prefix: &[u8]) -> Option<T> {
         let path: Vec<RadixKey> = prefix.iter().copied().map(RadixKey::IpV6Octet).collect();
         self.lookup(&path)
