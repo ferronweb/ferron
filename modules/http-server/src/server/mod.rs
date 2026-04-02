@@ -39,12 +39,12 @@ impl BasicHttpModule {
         for host_config in &port_config.hosts {
             if let Some(tls) = host_config.1.directives.get("tls") {
                 for tls1 in tls {
-                    // TODO: implicit automatic TLS
+                    // TODO: implicit automatic TLS, better error reporting
                     if tls1
                         .args
                         .first()
-                        .map(|a| a.as_boolean().unwrap_or(true))
-                        .unwrap_or(false)
+                        .and_then(|a| a.as_boolean())
+                        .unwrap_or(true)
                     {
                         enable_tls = true;
                         let tls_provider_name = tls1
@@ -146,7 +146,8 @@ impl Module for BasicHttpModule {
         };
         for port in ports {
             let pipeline = self.pipeline.clone();
-            let listener = tcp::TcpListenerHandle::new(port, pipeline, runtime)?;
+            let listener =
+                tcp::TcpListenerHandle::new(port, pipeline, runtime, self.tls_resolver.clone())?;
             self.listeners.lock().push(listener);
             // TODO: QUIC
         }

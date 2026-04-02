@@ -461,6 +461,7 @@ dependencies = [
  "parking_lot",
  "rustls",
  "tokio",
+ "tokio-rustls",
  "tokio-util",
  "vibeio",
 ]

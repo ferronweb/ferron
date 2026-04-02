@@ -438,6 +438,7 @@ pub(crate) fn run(
         loader.register_global_configuration_validators(&mut global_validator_registry);
         loader.register_configuration_adapters(&mut config_registry);
         registry_builder = loader.register_stages(registry_builder);
+        registry_builder = loader.register_providers(registry_builder);
     }
     let registry = registry_builder.build();
 
