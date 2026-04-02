@@ -1,7 +1,9 @@
 //! TCP listener and connection handling
 
-use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+use std::io;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
+use std::time::Duration;
 
 use ferron_core::runtime::Runtime;
 use ferron_observability::{CompositeEventSink, Event, EventSink, LogEvent, LogLevel};
@@ -18,23 +20,31 @@ use crate::server::tls_resolve::{RadixTree, TlsResolverRadixTree};
 
 const LOG_TARGET: &str = "ferron-http-server";
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct TcpListenerOptions {
+    pub address: SocketAddr,
+    pub send_buffer_size: Option<usize>,
+    pub recv_buffer_size: Option<usize>,
+}
+
 pub struct TcpListenerHandle {
     cancel_token: Arc<tokio_util::sync::CancellationToken>,
 }
 
 impl TcpListenerHandle {
     pub fn new(
-        port: u16,
+        options: TcpListenerOptions,
         pipeline: Arc<Pipeline<HttpContext>>,
         runtime: &mut Runtime,
         tls_resolver: Option<Arc<TlsResolverRadixTree>>,
         observability_resolver: Arc<super::tls_resolve::RadixTree<Vec<Arc<dyn EventSink>>>>,
     ) -> Result<Self, std::io::Error> {
-        // TODO: listen address
-        let addr = SocketAddr::from((Ipv6Addr::UNSPECIFIED, port));
-        let listener = std::net::TcpListener::bind(addr)?;
+        let listener = build_tcp_listener(
+            options.address,
+            (options.send_buffer_size, options.recv_buffer_size),
+        )?;
 
-        log_info!("HTTP server listening on {}", addr);
+        log_info!("HTTP server listening on {}", options.address);
 
         let cancel_token = Arc::new(tokio_util::sync::CancellationToken::new());
 
@@ -59,14 +69,12 @@ impl TcpListenerHandle {
                     log_error!("Failed to clone listener");
                     return;
                 };
-                if let Err(e) = new_listener.set_nonblocking(true) {
-                    log_error!("Failed to set listener non-blocking: {}", e);
-                    return;
-                }
                 let Ok(listener) = vibeio::net::TcpListener::from_std(new_listener) else {
-                    log_error!("Failed to convert listener to tokio");
+                    log_error!("Failed to convert listener to vibeio");
                     return;
                 };
+                #[cfg(unix)]
+                let mut handle_exhaustion_backoff = Duration::from_millis(10);
                 loop {
                     let accept_result = tokio::select! {
                         res = listener.accept() => res,
@@ -74,9 +82,30 @@ impl TcpListenerHandle {
                             return;
                         }
                     };
-                    let Ok((socket, _)) = accept_result else {
-                        emit_error(&global_observability, "Failed to accept connection");
-                        continue;
+                    let (socket, _) = match accept_result {
+                        Ok(socket) => {
+                            #[cfg(unix)]
+                            {
+                                handle_exhaustion_backoff = Duration::from_millis(10);
+                            }
+                            socket
+                        }
+                        Err(err) => {
+                            emit_error(
+                                &global_observability,
+                                format!("Failed to accept connection: {}", err),
+                            );
+                            #[cfg(unix)]
+                            if err.raw_os_error() == Some(24) {
+                                vibeio::time::sleep(handle_exhaustion_backoff).await;
+                                handle_exhaustion_backoff =
+                                    handle_exhaustion_backoff.saturating_mul(2);
+                                if handle_exhaustion_backoff > Duration::from_secs(1) {
+                                    handle_exhaustion_backoff = Duration::from_secs(1);
+                                }
+                            }
+                            continue;
+                        }
                     };
                     let _ = socket.set_nodelay(true);
                     let Ok(socket) = socket.into_poll() else {
@@ -84,7 +113,7 @@ impl TcpListenerHandle {
                             &global_observability,
                             "Failed to convert socket to poll-based I/O",
                         );
-                        return;
+                        continue;
                     };
 
                     let pipeline = pipeline.clone();
@@ -173,6 +202,43 @@ impl TcpListenerHandle {
     pub fn cancel(&self) {
         self.cancel_token.cancel();
     }
+}
+
+fn build_tcp_listener(
+    address: SocketAddr,
+    tcp_buffer_sizes: (Option<usize>, Option<usize>),
+) -> Result<std::net::TcpListener, io::Error> {
+    let listener_socket = socket2::Socket::new(
+        if address.is_ipv6() {
+            socket2::Domain::IPV6
+        } else {
+            socket2::Domain::IPV4
+        },
+        socket2::Type::STREAM,
+        Some(socket2::Protocol::TCP),
+    )?;
+
+    listener_socket
+        .set_reuse_address(!cfg!(windows))
+        .unwrap_or_default();
+    if let Some(send_buffer_size) = tcp_buffer_sizes.0 {
+        listener_socket
+            .set_send_buffer_size(send_buffer_size)
+            .unwrap_or_default();
+    }
+    if let Some(recv_buffer_size) = tcp_buffer_sizes.1 {
+        listener_socket
+            .set_recv_buffer_size(recv_buffer_size)
+            .unwrap_or_default();
+    }
+    if address.is_ipv6() {
+        listener_socket.set_only_v6(false).unwrap_or_default();
+    }
+
+    listener_socket.bind(&address.into())?;
+    listener_socket.listen(1024)?;
+
+    Ok(listener_socket.into())
 }
 
 async fn handle_http<S>(

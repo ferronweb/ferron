@@ -13,6 +13,12 @@ impl crate::config::validator::ConfigurationValidator for BuiltinGlobalConfigura
             validate_directive!(config, used_directives, runtime, no_args, {
                 validate_nested!(runtime, io_uring, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
             });
+
+            validate_directive!(config, used_directives, tcp, no_args, {
+                validate_nested!(tcp, listen, args(1) => [ServerConfigurationValue::String(_, _)]);
+                validate_nested!(tcp, send_buf, args(1) => [ServerConfigurationValue::Number(_, _)]);
+                validate_nested!(tcp, recv_buf, args(1) => [ServerConfigurationValue::Number(_, _)]);
+            });
         }
 
         Ok(())

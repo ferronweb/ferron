@@ -1,5 +1,6 @@
 //! HTTP server implementation
 
+use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 
 use ferron_core::providers::Provider;
@@ -38,6 +39,70 @@ fn format_location(
         location.push_str(&format!(", column {}", span.column));
     }
     location
+}
+
+fn tcp_config(global_config: &ServerConfigurationBlock) -> Option<&ServerConfigurationBlock> {
+    global_config
+        .directives
+        .get("tcp")
+        .and_then(|entries| entries.first())
+        .and_then(|entry| entry.children.as_ref())
+}
+
+fn resolve_tcp_buffer_size(
+    tcp_config: Option<&ServerConfigurationBlock>,
+    directive: &str,
+) -> anyhow::Result<Option<usize>> {
+    let Some(value) = tcp_config.and_then(|config| config.get_value(directive)) else {
+        return Ok(None);
+    };
+
+    let Some(size) = value.as_number() else {
+        anyhow::bail!("tcp.{directive} must be a number");
+    };
+
+    Ok(Some(usize::try_from(size).map_err(|_| {
+        anyhow::anyhow!("tcp.{directive} must be a non-negative integer")
+    })?))
+}
+
+fn resolve_tcp_listener_options(
+    global_config: &ServerConfigurationBlock,
+    port: u16,
+) -> anyhow::Result<tcp::TcpListenerOptions> {
+    let tcp_config = tcp_config(global_config);
+    let address = match tcp_config.and_then(|config| config.get_value("listen")) {
+        Some(value) => {
+            let listen = value
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("tcp.listen must be a string"))?;
+
+            if let Ok(address) = listen.parse::<SocketAddr>() {
+                if address.port() != port {
+                    anyhow::bail!(
+                        "tcp.listen address port {} does not match the configured HTTP port {}",
+                        address.port(),
+                        port
+                    );
+                }
+                address
+            } else {
+                SocketAddr::new(
+                    listen
+                        .parse::<IpAddr>()
+                        .map_err(|_| anyhow::anyhow!("Invalid tcp.listen address '{listen}'"))?,
+                    port,
+                )
+            }
+        }
+        None => SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port),
+    };
+
+    Ok(tcp::TcpListenerOptions {
+        address,
+        send_buffer_size: resolve_tcp_buffer_size(tcp_config, "send_buf")?,
+        recv_buffer_size: resolve_tcp_buffer_size(tcp_config, "recv_buf")?,
+    })
 }
 
 pub struct BasicHttpModule {
@@ -245,8 +310,9 @@ impl Module for BasicHttpModule {
         };
         for port in ports {
             let pipeline = self.pipeline.clone();
+            let listener_options = resolve_tcp_listener_options(&self.global_config, port)?;
             let listener = tcp::TcpListenerHandle::new(
-                port,
+                listener_options,
                 pipeline,
                 runtime,
                 self.tls_resolver.clone(),
@@ -265,5 +331,83 @@ impl Drop for BasicHttpModule {
         for listener in &*self.listeners.lock() {
             listener.cancel();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ferron_core::config::{
+        ServerConfigurationBlock, ServerConfigurationBlockBuilder,
+        ServerConfigurationDirectiveEntry, ServerConfigurationValueBuilder,
+    };
+
+    use super::*;
+
+    fn tcp_directive(children: ServerConfigurationBlock) -> ServerConfigurationDirectiveEntry {
+        ServerConfigurationDirectiveEntry {
+            args: vec![],
+            children: Some(children),
+            span: None,
+        }
+    }
+
+    fn number_directive(value: i64) -> ServerConfigurationDirectiveEntry {
+        ServerConfigurationDirectiveEntry {
+            args: vec![ServerConfigurationValueBuilder::number(value)],
+            children: None,
+            span: None,
+        }
+    }
+
+    #[test]
+    fn tcp_listener_options_use_dual_stack_defaults() {
+        let global_config = ServerConfigurationBlockBuilder::new().build();
+
+        let options = resolve_tcp_listener_options(&global_config, 8080).unwrap();
+
+        assert_eq!(
+            options.address,
+            SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 8080)
+        );
+        assert_eq!(options.send_buffer_size, None);
+        assert_eq!(options.recv_buffer_size, None);
+    }
+
+    #[test]
+    fn tcp_listener_options_read_ip_and_buffer_sizes() {
+        let tcp_block = ServerConfigurationBlockBuilder::new()
+            .directive_str("listen", vec!["127.0.0.1"])
+            .directive("send_buf", number_directive(65536))
+            .directive("recv_buf", number_directive(131072))
+            .build();
+        let global_config = ServerConfigurationBlockBuilder::new()
+            .directive("tcp", tcp_directive(tcp_block))
+            .build();
+
+        let options = resolve_tcp_listener_options(&global_config, 8080).unwrap();
+
+        assert_eq!(
+            options.address,
+            SocketAddr::new(IpAddr::from([127, 0, 0, 1]), 8080)
+        );
+        assert_eq!(options.send_buffer_size, Some(65536));
+        assert_eq!(options.recv_buffer_size, Some(131072));
+    }
+
+    #[test]
+    fn tcp_listener_options_reject_negative_buffer_sizes() {
+        let tcp_block = ServerConfigurationBlockBuilder::new()
+            .directive("send_buf", number_directive(-1))
+            .build();
+        let global_config = ServerConfigurationBlockBuilder::new()
+            .directive("tcp", tcp_directive(tcp_block))
+            .build();
+
+        let error = resolve_tcp_listener_options(&global_config, 8080).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "tcp.send_buf must be a non-negative integer"
+        );
     }
 }
