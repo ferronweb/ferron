@@ -175,6 +175,7 @@ pub async fn request_handler(
         match ctx.res.unwrap_or(HttpResponse::BuiltinError(404, None)) {
             HttpResponse::Custom(response) => response,
             HttpResponse::BuiltinError(status, headers) => {
+                // TODO: support custom error pages
                 builtin_error_response(status, headers.as_ref())
             }
             HttpResponse::Abort => return Err(io::Error::other("Aborted")),
