@@ -40,7 +40,7 @@ pub async fn request_handler(
     is_tls: bool,
     events: CompositeEventSink,
 ) -> Result<Response<ResponseBody>, io::Error> {
-    // TODO: remodel the pipeline handler
+    // TODO: support error configurations
     let mut variables = HashMap::new();
     if let Some(hostname) = hostname.as_ref() {
         variables.insert("request.host".to_string(), hostname.clone());
