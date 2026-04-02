@@ -276,7 +276,7 @@ impl BasicHttpModule {
                                         &ServerConfigurationBlock,
                                         &'static ServerConfigurationBlock,
                                     >(
-                                        &tls1.children.as_ref().expect("TLS config not found")
+                                        tls1.children.as_ref().expect("TLS config not found")
                                     )
                                 },
                                 alpn: {

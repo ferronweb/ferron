@@ -101,7 +101,7 @@ pub fn prepare_host_block(
                             .or_insert_with(Vec::new)
                             .extend(v.iter().cloned());
                     }
-                    let mut matches_config = (&*matches.config).clone();
+                    let mut matches_config = (*matches.config).clone();
                     matches_config
                         .matches
                         .extend(matches_one.config.matches.clone());
@@ -152,7 +152,7 @@ pub fn prepare_host_block(
                             .or_insert_with(Vec::new)
                             .extend(v.iter().cloned());
                     }
-                    let mut matches_config = (&*matches.config).clone();
+                    let mut matches_config = (*matches.config).clone();
                     matches_config
                         .matches
                         .extend(matches_one.config.matches.clone());
@@ -203,7 +203,7 @@ pub fn prepare_host_block(
                             .or_insert_with(Vec::new)
                             .extend(v.iter().cloned());
                     }
-                    let mut matches_config = (&*matches.config).clone();
+                    let mut matches_config = (*matches.config).clone();
                     matches_config
                         .matches
                         .extend(matches_one.config.matches.clone());
@@ -979,8 +979,8 @@ mod tests {
 
         assert_eq!(result.len(), 2);
 
-        for (_, host_configs) in &result {
-            for (_, config) in host_configs {
+        for host_configs in result.values() {
+            for config in host_configs.values() {
                 assert_eq!(config.matches.len(), 1);
                 match &config.matches[0].matcher {
                     PreparedHostConfigurationMatcher::Location(path) => {

@@ -48,11 +48,11 @@ impl ModuleLoader for BasicHttpModuleLoader {
 
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         registry
-            .with_stage::<HttpContext, _>(|| Arc::new(LoggingStage::default()))
-            .with_stage::<HttpContext, _>(|| Arc::new(HelloStage::default()))
-            .with_stage::<HttpContext, _>(|| Arc::new(NotFoundStage::default()))
-            .with_stage::<HttpFileContext, _>(|| Arc::new(DirectoryIndexStage::default()))
-            .with_stage::<HttpFileContext, _>(|| Arc::new(StaticFileStage::default()))
+            .with_stage::<HttpContext, _>(|| Arc::new(LoggingStage))
+            .with_stage::<HttpContext, _>(|| Arc::new(HelloStage))
+            .with_stage::<HttpContext, _>(|| Arc::new(NotFoundStage))
+            .with_stage::<HttpFileContext, _>(|| Arc::new(DirectoryIndexStage))
+            .with_stage::<HttpFileContext, _>(|| Arc::new(StaticFileStage))
     }
 
     fn register_modules(

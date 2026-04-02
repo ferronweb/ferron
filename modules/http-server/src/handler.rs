@@ -30,6 +30,7 @@ enum FilePipelineExecutionError {
     Pipeline(PipelineError),
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn request_handler(
     request: HttpRequest,
     pipeline: Arc<Pipeline<HttpContext>>,

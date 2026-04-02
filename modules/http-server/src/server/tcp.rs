@@ -106,6 +106,7 @@ pub struct TcpListenerHandle {
 }
 
 impl TcpListenerHandle {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         options: TcpListenerOptions,
         pipeline: Arc<Pipeline<HttpContext>>,
@@ -379,6 +380,7 @@ fn build_tcp_listener(
     Ok(listener_socket.into())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_http1_connection<S>(
     socket: S,
     pipeline: Arc<Pipeline<HttpContext>>,
@@ -430,6 +432,7 @@ async fn handle_http1_connection<S>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_http2_connection<S>(
     socket: S,
     pipeline: Arc<Pipeline<HttpContext>>,
@@ -505,6 +508,7 @@ fn build_http2_options(connection_options: &HttpConnectionOptions) -> Http2Optio
     options
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_request_handler(
     pipeline: Arc<Pipeline<HttpContext>>,
     file_pipeline: Arc<Pipeline<HttpFileContext>>,

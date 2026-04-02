@@ -11,6 +11,7 @@
 
 use std::{
     collections::{BTreeMap, HashMap},
+    fmt,
     net::IpAddr,
     sync::Arc,
 };
@@ -50,9 +51,10 @@ impl ResolvedLocationPath {
     pub fn new() -> Self {
         Self::default()
     }
+}
 
-    /// Returns a human-readable representation of the path
-    pub fn to_string(&self) -> String {
+impl fmt::Display for ResolvedLocationPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut parts = Vec::new();
 
         if let Some(ip) = self.ip {
@@ -76,9 +78,9 @@ impl ResolvedLocationPath {
         }
 
         if parts.is_empty() {
-            "root".to_string()
+            write!(f, "root")
         } else {
-            parts.join(" > ")
+            write!(f, "{}", parts.join(" > "))
         }
     }
 }
@@ -222,7 +224,7 @@ impl Stage1IpResolver {
         base_config: Option<LayeredConfiguration>,
     ) -> (LayeredConfiguration, ResolvedLocationPath) {
         let mut location_path = ResolvedLocationPath::new();
-        let mut layered_config = base_config.unwrap_or_else(|| LayeredConfiguration::new());
+        let mut layered_config = base_config.unwrap_or_default();
 
         if let Some(hosts) = self.resolve(ip, &mut location_path) {
             // Add the default host configuration if available
@@ -263,7 +265,7 @@ pub enum RadixKey {
 }
 
 /// Node data stored in the radix tree
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct RadixNodeData {
     /// Configuration block at this node
     pub config: Option<Arc<PreparedHostConfigurationBlock>>,
@@ -271,16 +273,6 @@ pub struct RadixNodeData {
     pub is_terminal: bool,
     /// Priority for matching (higher = more specific)
     pub priority: u32,
-}
-
-impl Default for RadixNodeData {
-    fn default() -> Self {
-        Self {
-            config: None,
-            is_terminal: false,
-            priority: 0,
-        }
-    }
 }
 
 /// A node in the radix tree.
@@ -428,10 +420,10 @@ impl Stage2RadixResolver {
             // Check if current node has compressed keys that match our path
             if !current.keys.is_empty() {
                 // Try to match the current segment against the first key
-                let first_key_matches = current.keys.first().map_or(
-                    false,
-                    |k| matches!(k, RadixKey::HostSegment(s) if s == segment),
-                );
+                let first_key_matches = current
+                    .keys
+                    .first()
+                    .is_some_and(|k| matches!(k, RadixKey::HostSegment(s) if s == segment));
 
                 if first_key_matches {
                     segment_idx += 1;
@@ -479,8 +471,7 @@ impl Stage2RadixResolver {
                         // If the child has compressed keys starting with next_segment,
                         // we need to split them (the child was created by our split above)
                         if child.keys.len() > 1 {
-                            let first_key_matches = child.keys.first().map_or(
-                                false,
+                            let first_key_matches = child.keys.first().is_some_and(
                                 |k| matches!(k, RadixKey::HostSegment(s) if s == next_segment),
                             );
                             if first_key_matches {
@@ -548,10 +539,10 @@ impl Stage2RadixResolver {
 
             // Check if current node has compressed keys that match our path
             if !current.keys.is_empty() {
-                let first_key_matches = current.keys.first().map_or(
-                    false,
-                    |k| matches!(k, RadixKey::HostSegment(s) if s == segment),
-                );
+                let first_key_matches = current
+                    .keys
+                    .first()
+                    .is_some_and(|k| matches!(k, RadixKey::HostSegment(s) if s == segment));
 
                 if first_key_matches {
                     segment_idx += 1;
@@ -1029,7 +1020,7 @@ impl Stage2RadixResolver {
         layered_config: Option<LayeredConfiguration>,
     ) -> (LayeredConfiguration, ResolvedLocationPath) {
         let mut location_path = ResolvedLocationPath::new();
-        let mut layered_config = layered_config.unwrap_or_else(|| LayeredConfiguration::new());
+        let mut layered_config = layered_config.unwrap_or_default();
 
         // Resolve hostname
         if let Some(host) = hostname {
@@ -1465,52 +1456,41 @@ impl Stage3ErrorResolver {
         let path_str = path_segments.map(|s| s.join("/"));
 
         // 1. Most specific: IP + Hostname + Path
-        if ip.is_some() && hostname.is_some() && path_str.is_some() {
+        if let (Some(ip), Some(hostname), Some(path)) = (ip, hostname, &path_str) {
             scopes.push(ErrorConfigScope::ip_hostname_path(
-                ip.unwrap(),
-                hostname.unwrap(),
-                path_str.as_ref().unwrap().clone(),
+                ip,
+                hostname,
+                path.clone(),
                 error_code,
             ));
         }
         // 2. IP + Hostname
-        if ip.is_some() && hostname.is_some() {
-            scopes.push(ErrorConfigScope::ip_hostname(
-                ip.unwrap(),
-                hostname.unwrap(),
-                error_code,
-            ));
+        if let (Some(ip), Some(hostname)) = (ip, hostname) {
+            scopes.push(ErrorConfigScope::ip_hostname(ip, hostname, error_code));
         }
         // 3. Hostname + Path
-        if hostname.is_some() && path_str.is_some() {
+        if let (Some(hostname), Some(path)) = (hostname, &path_str) {
             scopes.push(ErrorConfigScope::hostname_path(
-                hostname.unwrap(),
-                path_str.as_ref().unwrap().clone(),
+                hostname,
+                path.clone(),
                 error_code,
             ));
         }
         // 4. IP + Path
-        if ip.is_some() && path_str.is_some() {
-            scopes.push(ErrorConfigScope::ip_path(
-                ip.unwrap(),
-                path_str.as_ref().unwrap().clone(),
-                error_code,
-            ));
+        if let (Some(ip), Some(path)) = (ip, &path_str) {
+            scopes.push(ErrorConfigScope::ip_path(ip, path.clone(), error_code));
         }
         // 5. Path only
-        if path_str.is_some() {
-            scopes.push(ErrorConfigScope::path(
-                path_str.as_ref().unwrap().clone(),
-                error_code,
-            ));
+        if let Some(path) = &path_str {
+            scopes.push(ErrorConfigScope::path(path.clone(), error_code));
         }
         // 6. Hostname only
-        if hostname.is_some() {
-            scopes.push(ErrorConfigScope::hostname(hostname.unwrap(), error_code));
+        if let Some(hostname) = hostname {
+            scopes.push(ErrorConfigScope::hostname(hostname, error_code));
         }
         // 7. IP only
-        if ip.is_some() {
-            scopes.push(ErrorConfigScope::ip(ip.unwrap(), error_code));
+        if let Some(ip) = ip {
+            scopes.push(ErrorConfigScope::ip(ip, error_code));
         }
         // 8. Global (least specific)
         scopes.push(ErrorConfigScope::global(error_code));
@@ -1527,47 +1507,39 @@ impl Stage3ErrorResolver {
         let path_str = path_segments.map(|s| s.join("/"));
 
         // 1. Most specific: IP + Hostname + Path default
-        if ip.is_some() && hostname.is_some() && path_str.is_some() {
+        if let (Some(ip), Some(hostname), Some(path)) = (ip, hostname, &path_str) {
             scopes.push(ErrorConfigScope::ip_hostname_path_default(
-                ip.unwrap(),
-                hostname.unwrap(),
-                path_str.as_ref().unwrap().clone(),
+                ip,
+                hostname,
+                path.clone(),
             ));
         }
         // 2. IP + Hostname default
-        if ip.is_some() && hostname.is_some() {
-            scopes.push(ErrorConfigScope::ip_hostname_default(
-                ip.unwrap(),
-                hostname.unwrap(),
-            ));
+        if let (Some(ip), Some(hostname)) = (ip, hostname) {
+            scopes.push(ErrorConfigScope::ip_hostname_default(ip, hostname));
         }
         // 3. Hostname + Path default
-        if hostname.is_some() && path_str.is_some() {
+        if let (Some(hostname), Some(path)) = (hostname, &path_str) {
             scopes.push(ErrorConfigScope::hostname_path_default(
-                hostname.unwrap(),
-                path_str.as_ref().unwrap().clone(),
+                hostname,
+                path.clone(),
             ));
         }
         // 4. IP + Path default
-        if ip.is_some() && path_str.is_some() {
-            scopes.push(ErrorConfigScope::ip_path_default(
-                ip.unwrap(),
-                path_str.as_ref().unwrap().clone(),
-            ));
+        if let (Some(ip), Some(path)) = (ip, &path_str) {
+            scopes.push(ErrorConfigScope::ip_path_default(ip, path.clone()));
         }
         // 5. Path default
-        if path_str.is_some() {
-            scopes.push(ErrorConfigScope::path_default(
-                path_str.as_ref().unwrap().clone(),
-            ));
+        if let Some(path) = &path_str {
+            scopes.push(ErrorConfigScope::path_default(path.clone()));
         }
         // 6. Hostname default
-        if hostname.is_some() {
-            scopes.push(ErrorConfigScope::hostname_default(hostname.unwrap()));
+        if let Some(hostname) = hostname {
+            scopes.push(ErrorConfigScope::hostname_default(hostname));
         }
         // 7. IP default
-        if ip.is_some() {
-            scopes.push(ErrorConfigScope::ip_default(ip.unwrap()));
+        if let Some(ip) = ip {
+            scopes.push(ErrorConfigScope::ip_default(ip));
         }
         // 8. Global default (least specific)
         scopes.push(ErrorConfigScope::global_default());
@@ -1586,6 +1558,7 @@ impl Stage3ErrorResolver {
     /// 7. IP + ErrorCode
     /// 8. Global ErrorCode
     /// 9-16. Same combinations for defaults (error_code = None)
+    #[allow(clippy::doc_lazy_continuation)]
     pub fn resolve_scoped(
         &self,
         error_code: u16,
@@ -1644,7 +1617,7 @@ impl Stage3ErrorResolver {
         base_config: Option<LayeredConfiguration>,
     ) -> (LayeredConfiguration, ResolvedLocationPath) {
         let mut location_path = ResolvedLocationPath::new();
-        let mut layered_config = base_config.unwrap_or_else(|| LayeredConfiguration::new());
+        let mut layered_config = base_config.unwrap_or_default();
 
         if let Some(config) = self.resolve(error_code, &mut location_path) {
             // Clone the Arc (cheap - just increments ref count)
@@ -1678,7 +1651,7 @@ impl Stage3ErrorResolver {
         base_config: Option<LayeredConfiguration>,
     ) -> (LayeredConfiguration, ResolvedLocationPath) {
         let mut location_path = ResolvedLocationPath::new();
-        let mut layered_config = base_config.unwrap_or_else(|| LayeredConfiguration::new());
+        let mut layered_config = base_config.unwrap_or_default();
 
         // Try to resolve specific error code first
         let error_config =
@@ -2247,7 +2220,7 @@ mod tests {
         );
 
         assert!(!path.hostname_segments.is_empty());
-        assert!(layered_config.layers.len() >= 1);
+        assert!(!layered_config.layers.is_empty());
     }
 
     #[test]
@@ -2564,7 +2537,7 @@ mod tests {
         assert_eq!(root.children.len(), 2);
 
         // Each child should have its own wildcard
-        for (_key, node) in &root.children {
+        for node in root.children.values() {
             assert_eq!(node.keys.len(), 1);
             assert!(node.wildcard_child.is_some());
             assert_eq!(node.wildcard_child.as_ref().unwrap().keys.len(), 1);

@@ -25,6 +25,12 @@ use ferronconf::{
     StringPart, Value,
 };
 
+/// Type alias for grouped port configuration to reduce type complexity
+type GroupedPorts = BTreeMap<
+    String,
+    BTreeMap<Option<u16>, Vec<(ServerConfigurationHostFilters, ServerConfigurationBlock)>>,
+>;
+
 struct FerronConfConfigurationAdapter;
 
 impl FerronConfConfigurationAdapter {
@@ -252,8 +258,10 @@ fn extract_top_level_include_path(directive: &Directive, file: &Path) -> anyhow:
 
 fn translate_configuration(statements: &[SourceStatement]) -> anyhow::Result<ServerConfiguration> {
     let top_scope = collect_top_level_scope(statements)?;
-    let mut global = MergedBlock::default();
-    global.matchers = top_scope.matchers.clone();
+    let mut global = MergedBlock {
+        matchers: top_scope.matchers.clone(),
+        ..Default::default()
+    };
 
     let mut hosts = BTreeMap::<HostMergeKey, MergedBlock>::new();
 
@@ -314,10 +322,7 @@ fn translate_configuration(statements: &[SourceStatement]) -> anyhow::Result<Ser
         }
     }
 
-    let mut grouped_ports: BTreeMap<
-        String,
-        BTreeMap<Option<u16>, Vec<(ServerConfigurationHostFilters, ServerConfigurationBlock)>>,
-    > = BTreeMap::new();
+    let mut grouped_ports: GroupedPorts = BTreeMap::new();
 
     for (key, block) in hosts {
         grouped_ports
