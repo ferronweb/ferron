@@ -14,6 +14,7 @@ use std::{
     sync::Arc,
 };
 
+use fancy_regex::Regex;
 use ferron_core::config::{
     layer::LayeredConfiguration, ServerConfigurationBlock, ServerConfigurationMatcherExpr,
     ServerConfigurationMatcherOperand, ServerConfigurationMatcherOperator,
@@ -95,6 +96,58 @@ impl ResolutionResult {
             configuration,
             location_path,
         }
+    }
+}
+
+// ============================================================================
+// Regex Matching Utilities
+// ============================================================================
+
+/// A matcher expression with pre-compiled regex patterns for efficient evaluation.
+///
+/// This struct caches compiled regex patterns to avoid recompiling them on every evaluation.
+/// Only Regex and NotRegex operations use compiled patterns; other operators work with string values.
+#[derive(Debug, Clone)]
+pub struct CompiledMatcherExpr {
+    /// The original matcher expression
+    pub expr: ServerConfigurationMatcherExpr,
+    /// Compiled regex for the right operand if it's a Regex operation
+    pub compiled_regex: Option<Arc<Regex>>,
+}
+
+impl CompiledMatcherExpr {
+    /// Create a new compiled matcher expression, pre-compiling regex if needed
+    pub fn new(expr: ServerConfigurationMatcherExpr) -> Result<Self, String> {
+        let compiled_regex = if matches!(
+            expr.op,
+            ServerConfigurationMatcherOperator::Regex | ServerConfigurationMatcherOperator::NotRegex
+        ) {
+            // Extract the regex pattern from the right operand
+            let pattern = match &expr.right {
+                ServerConfigurationMatcherOperand::String(s) => s.clone(),
+                ServerConfigurationMatcherOperand::Identifier(_name) => {
+                    // For identifiers, we'll compile at runtime since the value is dynamic
+                    return Ok(Self {
+                        expr,
+                        compiled_regex: None,
+                    });
+                }
+                ServerConfigurationMatcherOperand::Integer(n) => n.to_string(),
+                ServerConfigurationMatcherOperand::Float(f) => f.to_string(),
+            };
+
+            match Regex::new(&pattern) {
+                Ok(regex) => Some(Arc::new(regex)),
+                Err(e) => return Err(format!("Invalid regex pattern '{}': {}", pattern, e)),
+            }
+        } else {
+            None
+        };
+
+        Ok(Self {
+            expr,
+            compiled_regex,
+        })
     }
 }
 
@@ -846,19 +899,23 @@ impl Stage2RadixResolver {
             ServerConfigurationMatcherOperator::Eq => left_val == right_val,
             ServerConfigurationMatcherOperator::NotEq => left_val != right_val,
             ServerConfigurationMatcherOperator::Regex => {
-                // TODO: use `fancy-regex`
-                if let (Some(l), Some(r)) = (left_val, right_val) {
-                    l.contains(&r)
+                if let (Some(left), Some(right)) = (left_val, right_val) {
+                    match Regex::new(&right) {
+                        Ok(regex) => regex.is_match(&left).unwrap_or(false),
+                        Err(_) => false, // Invalid regex pattern fails gracefully
+                    }
                 } else {
                     false
                 }
             }
             ServerConfigurationMatcherOperator::NotRegex => {
-                // TODO: use `fancy-regex`
-                if let (Some(l), Some(r)) = (left_val, right_val) {
-                    !l.contains(&r)
+                if let (Some(left), Some(right)) = (left_val, right_val) {
+                    match Regex::new(&right) {
+                        Ok(regex) => !regex.is_match(&left).unwrap_or(false),
+                        Err(_) => true, // Invalid regex pattern treated as non-matching
+                    }
                 } else {
-                    false
+                    true
                 }
             }
             ServerConfigurationMatcherOperator::In => {
@@ -1937,4 +1994,158 @@ mod tests {
             layered.layers.len()
         );
     }
+
+    #[test]
+    fn test_regex_matcher_expr_matching() {
+        use ferron_core::config::{
+            ServerConfigurationMatcherExpr, ServerConfigurationMatcherOperand,
+            ServerConfigurationMatcherOperator,
+        };
+
+        let mut resolver = Stage2RadixResolver::new();
+        let config = Arc::new(create_test_block());
+
+        // Create a regex matcher: if path matches /api/.*
+        let regex_expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::Identifier("path".to_string()),
+            right: ServerConfigurationMatcherOperand::String(r"^/api/.*".to_string()),
+            op: ServerConfigurationMatcherOperator::Regex,
+        };
+        resolver.insert_if_conditional(vec![regex_expr], Arc::clone(&config), 10);
+
+        // Create variables with matching path
+        let mut variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+        variables.1.insert("path".to_string(), "/api/users".to_string());
+
+        let mut path = ResolvedLocationPath::new();
+        let configs = resolver.resolve_conditionals(&variables, &mut path);
+
+        // Should match
+        assert!(!configs.is_empty(), "Regex pattern should match /api/users");
+
+        // Create variables with non-matching path
+        let mut variables2 = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+        variables2.1.insert("path".to_string(), "/static/file.js".to_string());
+
+        let mut path2 = ResolvedLocationPath::new();
+        let configs2 = resolver.resolve_conditionals(&variables2, &mut path2);
+
+        // Should not match
+        assert!(configs2.is_empty(), "Regex pattern should not match /static/file.js");
+    }
+
+    #[test]
+    fn test_not_regex_matcher_expr() {
+        use ferron_core::config::{
+            ServerConfigurationMatcherExpr, ServerConfigurationMatcherOperand,
+            ServerConfigurationMatcherOperator,
+        };
+
+        let mut resolver = Stage2RadixResolver::new();
+        let config = Arc::new(create_test_block());
+
+        // Create a NOT regex matcher: if path does not match /admin/.*
+        let not_regex_expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::Identifier("path".to_string()),
+            right: ServerConfigurationMatcherOperand::String(r"^/admin/.*".to_string()),
+            op: ServerConfigurationMatcherOperator::NotRegex,
+        };
+        resolver.insert_if_conditional(vec![not_regex_expr], Arc::clone(&config), 10);
+
+        // Create variables with non-admin path (should match)
+        let mut variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+        variables.1.insert("path".to_string(), "/public/page".to_string());
+
+        let mut path = ResolvedLocationPath::new();
+        let configs = resolver.resolve_conditionals(&variables, &mut path);
+
+        // Should match (path does NOT match admin pattern)
+        assert!(!configs.is_empty(), "NotRegex should match paths that don't match the pattern");
+
+        // Create variables with admin path (should not match)
+        let mut variables2 = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+        variables2.1.insert("path".to_string(), "/admin/dashboard".to_string());
+
+        let mut path2 = ResolvedLocationPath::new();
+        let configs2 = resolver.resolve_conditionals(&variables2, &mut path2);
+
+        // Should not match (path DOES match admin pattern)
+        assert!(configs2.is_empty(), "NotRegex should not match paths that match the pattern");
+    }
+
+    #[test]
+    fn test_compiled_matcher_expr_creation() {
+        let expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::String("test".to_string()),
+            right: ServerConfigurationMatcherOperand::String(r"^test$".to_string()),
+            op: ServerConfigurationMatcherOperator::Regex,
+        };
+
+        let compiled = CompiledMatcherExpr::new(expr).expect("Should compile valid regex");
+        assert!(compiled.compiled_regex.is_some(), "Regex should be compiled");
+
+        // Test with invalid regex pattern
+        let invalid_expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::String("test".to_string()),
+            right: ServerConfigurationMatcherOperand::String("(?P<invalid".to_string()), // Invalid group
+            op: ServerConfigurationMatcherOperator::Regex,
+        };
+
+        let result = CompiledMatcherExpr::new(invalid_expr);
+        assert!(result.is_err(), "Should fail on invalid regex pattern");
+    }
+
+    #[test]
+    fn test_fancy_regex_features() {
+        use ferron_core::config::{
+            ServerConfigurationMatcherExpr, ServerConfigurationMatcherOperand,
+            ServerConfigurationMatcherOperator,
+        };
+
+        let mut resolver = Stage2RadixResolver::new();
+        let config = Arc::new(create_test_block());
+
+        // Use fancy regex with lookahead: match paths containing "api" but not "admin"
+        let lookahead_expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::Identifier("path".to_string()),
+            right: ServerConfigurationMatcherOperand::String(r"^(?!.*admin).*api.*".to_string()),
+            op: ServerConfigurationMatcherOperator::Regex,
+        };
+        resolver.insert_if_conditional(vec![lookahead_expr], config, 10);
+
+        // Should match
+        let mut variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+        variables.1.insert("path".to_string(), "/api/users".to_string());
+
+        let mut path = ResolvedLocationPath::new();
+        let configs = resolver.resolve_conditionals(&variables, &mut path);
+        assert!(!configs.is_empty(), "Should match path with api but not admin");
+
+        // Should not match (contains admin)
+        let mut variables2 = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+        variables2.1.insert("path".to_string(), "/admin/api/users".to_string());
+
+        let mut path2 = ResolvedLocationPath::new();
+        let configs2 = resolver.resolve_conditionals(&variables2, &mut path2);
+        assert!(configs2.is_empty(), "Should not match path containing admin");
+    }
 }
+

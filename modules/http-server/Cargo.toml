@@ -20,6 +20,7 @@ anyhow = "1.0.102"
 rustls = { version = "0.23.37", default-features = false, features = ["std"] }
 tokio-rustls = { version = "0.26.4", default-features = false }
 socket2 = "0.6.3"
+fancy-regex = "0.17"
 
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
