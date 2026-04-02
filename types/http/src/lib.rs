@@ -22,6 +22,7 @@ pub struct HttpContext {
     pub configuration: LayeredConfiguration,
     pub hostname: Option<String>,
     pub variables: std::collections::HashMap<String, String>,
+    pub previous_error: Option<u16>,
 }
 
 impl Variables for HttpContext {

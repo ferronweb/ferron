@@ -40,7 +40,6 @@ pub async fn request_handler(
     is_tls: bool,
     events: CompositeEventSink,
 ) -> Result<Response<ResponseBody>, io::Error> {
-    // TODO: support error configurations
     let mut variables = HashMap::new();
     if let Some(hostname) = hostname.as_ref() {
         variables.insert("request.host".to_string(), hostname.clone());
@@ -70,6 +69,7 @@ pub async fn request_handler(
         configuration: resolution.configuration,
         hostname,
         variables,
+        previous_error: None,
     };
 
     let executed_stages = match pipeline.execute_without_inverse(&mut ctx).await {
@@ -102,6 +102,72 @@ pub async fn request_handler(
         if let Err(error) = pipeline.execute_inverse(&mut ctx, executed_stages).await {
             emit_error(&events, format!("Pipeline execution error: {error}"));
             ctx.res = Some(HttpResponse::BuiltinError(500, None));
+        }
+    }
+
+    // Handle error configurations for 4xx and 5xx responses
+    if let Some(HttpResponse::BuiltinError(status, _)) = ctx.res {
+        if status >= 400 {
+            ctx.previous_error = Some(status);
+            // Rebuild the resolver request from the current request in context
+            if let Some(ref req) = ctx.req {
+                let error_resolver_request = build_resolver_request(req)?;
+                let error_resolution = config_resolver.resolve_error(
+                    local_ip,
+                    ctx.hostname.as_deref().unwrap_or(""),
+                    status,
+                    &(error_resolver_request, ctx.variables.clone()),
+                );
+                if let Some(error_resolution) = error_resolution {
+                    ctx.configuration = error_resolution.configuration;
+                    ctx.res = None;
+
+                    let executed_stages = match pipeline.execute_without_inverse(&mut ctx).await {
+                        Ok(executed_stages) => Some(executed_stages),
+                        Err(error) => {
+                            emit_error(&events, format!("Error pipeline execution error: {error}"));
+                            ctx.res = Some(HttpResponse::BuiltinError(500, None));
+                            None
+                        }
+                    };
+
+                    if let Some(executed_stages) = executed_stages {
+                        if ctx.res.is_none() {
+                            match execute_http_file_pipeline(&mut ctx, file_pipeline.as_ref()).await
+                            {
+                                Ok(()) => {}
+                                Err(FilePipelineExecutionError::Forbidden) => {
+                                    ctx.res = Some(HttpResponse::BuiltinError(403, None));
+                                }
+                                Err(FilePipelineExecutionError::Io(error)) => {
+                                    emit_error(
+                                        &events,
+                                        format!("Error HTTP file resolution error: {error}"),
+                                    );
+                                    ctx.res = Some(HttpResponse::BuiltinError(500, None));
+                                }
+                                Err(FilePipelineExecutionError::Pipeline(error)) => {
+                                    emit_error(
+                                        &events,
+                                        format!("Error pipeline execution error: {error}"),
+                                    );
+                                    ctx.res = Some(HttpResponse::BuiltinError(500, None));
+                                }
+                            }
+                        }
+
+                        if let Err(error) =
+                            pipeline.execute_inverse(&mut ctx, executed_stages).await
+                        {
+                            emit_error(
+                                &events,
+                                format!("Error pipeline inverse execution error: {error}"),
+                            );
+                            ctx.res = Some(HttpResponse::BuiltinError(500, None));
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -148,6 +214,7 @@ async fn execute_http_file_pipeline(
         configuration: ctx.configuration.clone(),
         hostname: ctx.hostname.clone(),
         variables: HashMap::new(),
+        previous_error: None,
     };
     let http_ctx = std::mem::replace(ctx, placeholder);
     let mut file_ctx = HttpFileContext {

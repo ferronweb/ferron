@@ -1359,6 +1359,61 @@ impl ThreeStageResolver {
         self.stage3_error
             .resolve_layered(error_code, layered_config)
     }
+
+    /// Resolve error configuration for a specific error code
+    ///
+    /// This method resolves through all stages (IP, hostname/path, error) and applies
+    /// the error configuration layer on top of the base configuration.
+    ///
+    /// # Arguments
+    /// * `ip` - Client IP address for Stage 1
+    /// * `hostname` - Request hostname for Stage 2
+    /// * `error_code` - Error code for Stage 3
+    /// * `variables` - Variables for conditional evaluation
+    pub fn resolve_error(
+        &self,
+        ip: IpAddr,
+        hostname: &str,
+        error_code: u16,
+        variables: &ResolverVariables,
+    ) -> Option<ResolutionResult> {
+        let mut location_path = ResolvedLocationPath::new();
+
+        // Stage 1: IP-based resolution
+        let host_configs = self.stage1_ip.resolve(ip, &mut location_path)?;
+
+        // Get the host-specific configuration
+        let host_config = host_configs
+            .get(&Some(hostname.to_string()))
+            .or_else(|| host_configs.get(&None))?;
+
+        // Stage 2: Hostname, path, and conditional resolution (passing Stage 1's config)
+        let (stage2_config, stage2_path) =
+            self.stage2_radix
+                .resolve(Some(hostname), "/", host_config, variables, None);
+
+        // Merge Stage 2 results
+        let mut layered_config = LayeredConfiguration::new();
+        for layer in stage2_config.layers {
+            layered_config.add_layer(layer);
+        }
+        location_path.hostname_segments = stage2_path.hostname_segments;
+        location_path.path_segments = stage2_path.path_segments;
+        location_path.conditionals = stage2_path.conditionals;
+
+        // Stage 3: Error configuration resolution
+        let error_config = self.stage3_error.resolve(error_code, &mut location_path);
+        if let Some(error_block) = error_config {
+            let block = ServerConfigurationBlock {
+                directives: Arc::clone(&error_block.directives),
+                matchers: HashMap::new(),
+                span: None,
+            };
+            layered_config.add_layer(Arc::new(block));
+        }
+
+        Some(ResolutionResult::new(layered_config, location_path))
+    }
 }
 
 impl Default for ThreeStageResolver {
