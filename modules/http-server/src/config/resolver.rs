@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! 3-Stage Configuration Resolver
 //!
 //! This module provides a modular configuration resolution system with three independent stages:
@@ -1746,14 +1747,80 @@ impl ThreeStageResolver {
     }
 
     /// Create a resolver from prepared configuration
+    ///
+    /// Populates all three stages:
+    /// - Stage 1: IP-based host configuration mapping
+    /// - Stage 2: Hostname radix tree with location/conditional matchers
+    /// - Stage 3: Error configuration lookup (with scoped support from nested configs)
     pub fn from_prepared(prepared: PreparedConfiguration) -> Self {
         let mut resolver = Self::new();
 
         for (ip_opt, hosts) in prepared {
+            // Stage 1: Register IP -> hosts mapping
             if let Some(ip) = ip_opt {
-                resolver.stage1_ip.register_ip(ip, hosts);
+                resolver.stage1_ip.register_ip(ip, hosts.clone());
             } else {
-                resolver.stage1_ip.set_default(hosts);
+                resolver.stage1_ip.set_default(hosts.clone());
+            }
+
+            // Stage 2 & 3: Register hostname configs and error configs
+            for (hostname_opt, host_block) in hosts {
+                // Stage 2: Insert hostname into radix tree
+                if let Some(hostname) = hostname_opt {
+                    // Parse hostname into segments (reversed: com, example, ...)
+                    let segments: Vec<&str> = hostname.split('.').rev().collect();
+                    let host_arc = Arc::new(host_block.clone());
+                    resolver.stage2_radix.insert_host(segments, host_arc, 10);
+
+                    // Stage 3: Register host-level error configs (hostname scope)
+                    for error_config in &host_block.error_config {
+                        let config = Arc::new(error_config.config.clone());
+                        if let Some(code) = error_config.error_code {
+                            resolver
+                                .stage3_error
+                                .register_hostname_error(&hostname, code, config);
+                        } else {
+                            resolver
+                                .stage3_error
+                                .set_hostname_default(&hostname, config);
+                        }
+                    }
+
+                    // Stage 3: Register location match error configs (hostname + path scope)
+                    for location_match in &host_block.matches {
+                        if let PreparedHostConfigurationMatcher::Location(ref path_pattern) =
+                            location_match.matcher
+                        {
+                            for error_config in &location_match.config.error_config {
+                                let config = Arc::new(error_config.config.clone());
+                                if let Some(code) = error_config.error_code {
+                                    resolver.stage3_error.register_hostname_path_error(
+                                        &hostname,
+                                        path_pattern,
+                                        code,
+                                        config,
+                                    );
+                                } else {
+                                    resolver.stage3_error.set_hostname_path_default(
+                                        &hostname,
+                                        path_pattern,
+                                        config,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Default host (no hostname) - register as global
+                    for error_config in &host_block.error_config {
+                        let config = Arc::new(error_config.config.clone());
+                        if let Some(code) = error_config.error_code {
+                            resolver.stage3_error.register_error(code, config);
+                        } else {
+                            resolver.stage3_error.set_default(config);
+                        }
+                    }
+                }
             }
         }
 
