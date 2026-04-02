@@ -13,6 +13,7 @@ impl Provider<ObservabilityContext> for ConsoleObservabilityProvider {
     }
 
     fn execute(&self, ctx: &mut ObservabilityContext) -> Result<(), Box<dyn std::error::Error>> {
+        // TODO: offload the logging into a secondary runtime to avoid blocking the main runtime
         match &ctx.event {
             ferron_observability::Event::Access(ae) => log_info!("{}", ae.message),
             ferron_observability::Event::Log(le) => match le.level {
