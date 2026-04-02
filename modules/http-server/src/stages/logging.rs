@@ -2,8 +2,9 @@
 
 use async_trait::async_trait;
 use ferron_core::pipeline::{PipelineError, Stage};
-use ferron_core::{log_info, StageConstraint};
+use ferron_core::StageConstraint;
 use ferron_http::HttpContext;
+use ferron_observability::{AccessEvent, Event};
 
 pub struct LoggingStage;
 
@@ -28,7 +29,9 @@ impl Stage<HttpContext> for LoggingStage {
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         if let Some(req) = &ctx.req {
-            log_info!("--> {}", req.uri().path());
+            ctx.events.emit(Event::Access(AccessEvent {
+                message: format!("--> {}", req.uri().path()),
+            }));
         }
         Ok(true)
     }
