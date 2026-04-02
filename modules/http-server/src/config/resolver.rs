@@ -2305,4 +2305,692 @@ mod tests {
             "Should not match path containing admin"
         );
     }
+
+    // ========================================================================
+    // Configuration Chaining Tests - Multiple Branches Isolation
+    // ========================================================================
+
+    /// Test that configurations from unrelated IP branches don't leak
+    #[test]
+    fn test_branch_isolation_ip_level() {
+        let mut resolver = ThreeStageResolver::new();
+
+        // Setup two different IP branches with distinct configurations
+        let mut hosts_ip1 = HashMap::new();
+        let mut directives_ip1 = HashMap::new();
+        directives_ip1.insert("ip1_directive".to_string(), vec![]);
+        let host_block_ip1 = PreparedHostConfigurationBlock {
+            directives: Arc::new(directives_ip1),
+            matches: Vec::new(),
+            error_config: Vec::new(),
+        };
+        hosts_ip1.insert(None, host_block_ip1);
+        resolver
+            .stage1()
+            .register_ip("192.168.1.1".parse().unwrap(), hosts_ip1);
+
+        let mut hosts_ip2 = HashMap::new();
+        let mut directives_ip2 = HashMap::new();
+        directives_ip2.insert("ip2_directive".to_string(), vec![]);
+        let host_block_ip2 = PreparedHostConfigurationBlock {
+            directives: Arc::new(directives_ip2),
+            matches: Vec::new(),
+            error_config: Vec::new(),
+        };
+        hosts_ip2.insert(None, host_block_ip2);
+        resolver
+            .stage1()
+            .register_ip("192.168.1.2".parse().unwrap(), hosts_ip2);
+
+        // Resolve for IP1 and IP2 - should remain isolated
+        let (config1, path1) =
+            resolver.resolve_stage1_layered("192.168.1.1".parse().unwrap(), None);
+        let (config2, path2) =
+            resolver.resolve_stage1_layered("192.168.1.2".parse().unwrap(), None);
+
+        assert_eq!(path1.ip, Some("192.168.1.1".parse().unwrap()));
+        assert_eq!(path2.ip, Some("192.168.1.2".parse().unwrap()));
+        assert_eq!(config1.layers.len(), 1);
+        assert_eq!(config2.layers.len(), 1);
+        assert_ne!(path1.ip, path2.ip);
+    }
+
+    /// Test that configurations from unrelated hostname branches don't leak
+    #[test]
+    fn test_branch_isolation_hostname_level() {
+        let mut resolver = Stage2RadixResolver::new();
+
+        let config_example = Arc::new(create_test_block());
+        let config_other = Arc::new(create_test_block());
+
+        resolver.insert_host(vec!["com", "example"], Arc::clone(&config_example), 10);
+        resolver.insert_host(vec!["com", "other"], Arc::clone(&config_other), 10);
+
+        let mut path_example = ResolvedLocationPath::new();
+        let configs_example = resolver.resolve_hostname("example.com", &mut path_example);
+        assert_eq!(configs_example.len(), 1);
+        assert_eq!(path_example.hostname_segments, vec!["example", "com"]);
+
+        let mut path_other = ResolvedLocationPath::new();
+        let configs_other = resolver.resolve_hostname("other.com", &mut path_other);
+        assert_eq!(configs_other.len(), 1);
+        assert_eq!(path_other.hostname_segments, vec!["other", "com"]);
+        assert_ne!(path_example.hostname_segments, path_other.hostname_segments);
+    }
+
+    /// Test full three-stage chaining with multiple IP branches
+    #[test]
+    fn test_chained_resolution_ip_branch_isolation() {
+        let mut resolver = ThreeStageResolver::new();
+
+        // Setup IP branch 1: 192.168.1.1 -> example.com
+        let mut hosts_ip1 = HashMap::new();
+        let mut directives_ip1 = HashMap::new();
+        directives_ip1.insert("ip1_layer".to_string(), vec![]);
+        let host_block_ip1 = PreparedHostConfigurationBlock {
+            directives: Arc::new(directives_ip1),
+            matches: Vec::new(),
+            error_config: Vec::new(),
+        };
+        hosts_ip1.insert(Some("example.com".to_string()), host_block_ip1);
+        resolver
+            .stage1()
+            .register_ip("192.168.1.1".parse().unwrap(), hosts_ip1);
+
+        // Setup IP branch 2: 192.168.1.2 -> other.com
+        let mut hosts_ip2 = HashMap::new();
+        let mut directives_ip2 = HashMap::new();
+        directives_ip2.insert("ip2_layer".to_string(), vec![]);
+        let host_block_ip2 = PreparedHostConfigurationBlock {
+            directives: Arc::new(directives_ip2),
+            matches: Vec::new(),
+            error_config: Vec::new(),
+        };
+        hosts_ip2.insert(Some("other.com".to_string()), host_block_ip2);
+        resolver
+            .stage1()
+            .register_ip("192.168.1.2".parse().unwrap(), hosts_ip2);
+
+        // Setup Stage 2
+        let mut directives_example = HashMap::new();
+        directives_example.insert("example_layer".to_string(), vec![]);
+        let example_block = PreparedHostConfigurationBlock {
+            directives: Arc::new(directives_example),
+            matches: Vec::new(),
+            error_config: Vec::new(),
+        };
+        resolver
+            .stage2()
+            .insert_host(vec!["com", "example"], Arc::new(example_block), 10);
+
+        let mut directives_other = HashMap::new();
+        directives_other.insert("other_layer".to_string(), vec![]);
+        let other_block = PreparedHostConfigurationBlock {
+            directives: Arc::new(directives_other),
+            matches: Vec::new(),
+            error_config: Vec::new(),
+        };
+        resolver
+            .stage2()
+            .insert_host(vec!["com", "other"], Arc::new(other_block), 10);
+
+        // Setup Stage 3
+        resolver
+            .stage3()
+            .register_error(404, Arc::new(create_test_block()));
+        resolver
+            .stage3()
+            .register_error(500, Arc::new(create_test_block()));
+
+        let variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+        let result1 = resolver.resolve(
+            "192.168.1.1".parse().unwrap(),
+            "example.com",
+            "/api",
+            &variables,
+        );
+        let result2 = resolver.resolve(
+            "192.168.1.2".parse().unwrap(),
+            "other.com",
+            "/static",
+            &variables,
+        );
+
+        assert!(result1.is_some());
+        assert!(result2.is_some());
+
+        let result1 = result1.unwrap();
+        let result2 = result2.unwrap();
+
+        assert_eq!(
+            result1.location_path.ip,
+            Some("192.168.1.1".parse().unwrap())
+        );
+        assert_eq!(
+            result2.location_path.ip,
+            Some("192.168.1.2".parse().unwrap())
+        );
+        assert_eq!(
+            result1.location_path.hostname_segments,
+            vec!["example", "com"]
+        );
+        assert_eq!(
+            result2.location_path.hostname_segments,
+            vec!["other", "com"]
+        );
+    }
+
+    /// Test that wildcard branches don't leak into exact match branches
+    #[test]
+    fn test_branch_isolation_wildcard_vs_exact() {
+        let mut resolver = Stage2RadixResolver::new();
+
+        let wildcard_config = Arc::new(create_test_block());
+        let exact_config = Arc::new(create_test_block());
+
+        resolver.insert_host_wildcard(vec!["com", "example"], Arc::clone(&wildcard_config), 5);
+        resolver.insert_host(vec!["com", "example", "www"], Arc::clone(&exact_config), 10);
+
+        let mut path_exact = ResolvedLocationPath::new();
+        let configs_exact = resolver.resolve_hostname("www.example.com", &mut path_exact);
+        assert_eq!(configs_exact.len(), 2);
+
+        let mut path_wildcard = ResolvedLocationPath::new();
+        let configs_wildcard = resolver.resolve_hostname("sub.example.com", &mut path_wildcard);
+        assert_eq!(configs_wildcard.len(), 1);
+
+        let mut path_none = ResolvedLocationPath::new();
+        let configs_none = resolver.resolve_hostname("other.com", &mut path_none);
+        assert_eq!(configs_none.len(), 0);
+    }
+
+    /// Test conditional branches don't leak into each other
+    #[test]
+    fn test_branch_isolation_conditionals() {
+        use ferron_core::config::{
+            ServerConfigurationMatcherExpr, ServerConfigurationMatcherOperand,
+            ServerConfigurationMatcherOperator,
+        };
+
+        let mut resolver = Stage2RadixResolver::new();
+
+        let config_get = Arc::new(create_test_block());
+        let config_post = Arc::new(create_test_block());
+
+        let get_expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::Identifier("method".to_string()),
+            right: ServerConfigurationMatcherOperand::String("GET".to_string()),
+            op: ServerConfigurationMatcherOperator::Eq,
+        };
+        let post_expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::Identifier("method".to_string()),
+            right: ServerConfigurationMatcherOperand::String("POST".to_string()),
+            op: ServerConfigurationMatcherOperator::Eq,
+        };
+
+        resolver
+            .insert_if_conditional(vec![get_expr], Arc::clone(&config_get), 10)
+            .expect("Valid GET conditional");
+        resolver
+            .insert_if_conditional(vec![post_expr], Arc::clone(&config_post), 10)
+            .expect("Valid POST conditional");
+
+        let mut variables_get = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+        variables_get
+            .1
+            .insert("method".to_string(), "GET".to_string());
+
+        let mut path_get = ResolvedLocationPath::new();
+        let configs_get = resolver.resolve_conditionals(&variables_get, &mut path_get);
+        assert_eq!(configs_get.len(), 1);
+
+        let mut variables_post = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+        variables_post
+            .1
+            .insert("method".to_string(), "POST".to_string());
+
+        let mut path_post = ResolvedLocationPath::new();
+        let configs_post = resolver.resolve_conditionals(&variables_post, &mut path_post);
+        assert_eq!(configs_post.len(), 1);
+
+        let mut variables_delete = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+        variables_delete
+            .1
+            .insert("method".to_string(), "DELETE".to_string());
+
+        let mut path_delete = ResolvedLocationPath::new();
+        let configs_delete = resolver.resolve_conditionals(&variables_delete, &mut path_delete);
+        assert_eq!(configs_delete.len(), 0);
+    }
+
+    /// Test error configuration branches don't leak
+    #[test]
+    fn test_branch_isolation_error_codes() {
+        let mut resolver = Stage3ErrorResolver::new();
+
+        let config_404 = Arc::new(create_test_block());
+        let config_500 = Arc::new(create_test_block());
+        let config_default = Arc::new(create_test_block());
+
+        resolver.register_error(404, Arc::clone(&config_404));
+        resolver.register_error(500, Arc::clone(&config_500));
+        resolver.set_default(Arc::clone(&config_default));
+
+        let (config_404_result, path_404) = resolver.resolve_layered(404, None);
+        assert_eq!(path_404.error_key, Some(404));
+        assert_eq!(config_404_result.layers.len(), 1);
+
+        let (config_500_result, path_500) = resolver.resolve_layered(500, None);
+        assert_eq!(path_500.error_key, Some(500));
+        assert_eq!(config_500_result.layers.len(), 1);
+
+        let (config_default_result, path_default) = resolver.resolve_layered(418, None);
+        assert_eq!(path_default.error_key, Some(418));
+        assert_eq!(config_default_result.layers.len(), 1);
+    }
+
+    /// Test complex scenario with multiple parallel branches at all stages
+    #[test]
+    fn test_complex_multi_branch_chaining() {
+        let mut resolver = ThreeStageResolver::new();
+
+        // Branch A: 10.0.0.1 -> api.com
+        // Branch B: 10.0.0.2 -> other.com
+
+        let mut hosts_a = HashMap::new();
+        let mut directives_a = HashMap::new();
+        directives_a.insert("branch_a_ip".to_string(), vec![]);
+        hosts_a.insert(
+            Some("api.com".to_string()),
+            PreparedHostConfigurationBlock {
+                directives: Arc::new(directives_a),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            },
+        );
+        resolver
+            .stage1()
+            .register_ip("10.0.0.1".parse().unwrap(), hosts_a);
+
+        let mut hosts_b = HashMap::new();
+        let mut directives_b = HashMap::new();
+        directives_b.insert("branch_b_ip".to_string(), vec![]);
+        hosts_b.insert(
+            Some("other.com".to_string()),
+            PreparedHostConfigurationBlock {
+                directives: Arc::new(directives_b),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            },
+        );
+        resolver
+            .stage1()
+            .register_ip("10.0.0.2".parse().unwrap(), hosts_b);
+
+        // Setup Stage 2
+        let mut directives_api = HashMap::new();
+        directives_api.insert("branch_a_hostname".to_string(), vec![]);
+        resolver.stage2().insert_host(
+            vec!["com", "api"],
+            Arc::new(PreparedHostConfigurationBlock {
+                directives: Arc::new(directives_api),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            }),
+            10,
+        );
+
+        let mut directives_other = HashMap::new();
+        directives_other.insert("branch_b_hostname".to_string(), vec![]);
+        resolver.stage2().insert_host(
+            vec!["com", "other"],
+            Arc::new(PreparedHostConfigurationBlock {
+                directives: Arc::new(directives_other),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            }),
+            10,
+        );
+
+        // Setup Stage 3
+        resolver
+            .stage3()
+            .register_error(400, Arc::new(create_test_block()));
+        resolver
+            .stage3()
+            .register_error(500, Arc::new(create_test_block()));
+
+        let variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+
+        let result_a = resolver.resolve(
+            "10.0.0.1".parse().unwrap(),
+            "api.com",
+            "/v1/users",
+            &variables,
+        );
+        let result_b = resolver.resolve(
+            "10.0.0.2".parse().unwrap(),
+            "other.com",
+            "/home",
+            &variables,
+        );
+
+        assert!(result_a.is_some(), "Branch A should resolve");
+        assert!(result_b.is_some(), "Branch B should resolve");
+
+        let result_a = result_a.unwrap();
+        let result_b = result_b.unwrap();
+
+        assert_eq!(result_a.location_path.ip, Some("10.0.0.1".parse().unwrap()));
+        assert_eq!(result_b.location_path.ip, Some("10.0.0.2".parse().unwrap()));
+        assert_ne!(
+            result_a.location_path.ip, result_b.location_path.ip,
+            "Branches should be isolated"
+        );
+        assert_eq!(result_a.location_path.hostname_segments, vec!["api", "com"]);
+        assert_eq!(
+            result_b.location_path.hostname_segments,
+            vec!["other", "com"]
+        );
+    }
+
+    /// Test that layered configuration properly chains without cross-branch contamination
+    #[test]
+    fn test_layered_chaining_isolation() {
+        let mut resolver = ThreeStageResolver::new();
+
+        // Chain 1: IP1 -> host1
+        // Chain 2: IP2 -> host2
+
+        let mut hosts1 = HashMap::new();
+        let mut directives1 = HashMap::new();
+        directives1.insert("layer1_ip".to_string(), vec![]);
+        hosts1.insert(
+            Some("host1.com".to_string()),
+            PreparedHostConfigurationBlock {
+                directives: Arc::new(directives1),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            },
+        );
+        resolver
+            .stage1()
+            .register_ip("1.1.1.1".parse().unwrap(), hosts1);
+
+        let mut hosts2 = HashMap::new();
+        let mut directives2 = HashMap::new();
+        directives2.insert("layer2_ip".to_string(), vec![]);
+        hosts2.insert(
+            Some("host2.com".to_string()),
+            PreparedHostConfigurationBlock {
+                directives: Arc::new(directives2),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            },
+        );
+        resolver
+            .stage1()
+            .register_ip("2.2.2.2".parse().unwrap(), hosts2);
+
+        // Setup Stage 2
+        let mut h1_directives = HashMap::new();
+        h1_directives.insert("layer1_host".to_string(), vec![]);
+        resolver.stage2().insert_host(
+            vec!["com", "host1"],
+            Arc::new(PreparedHostConfigurationBlock {
+                directives: Arc::new(h1_directives),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            }),
+            10,
+        );
+
+        let mut h2_directives = HashMap::new();
+        h2_directives.insert("layer2_host".to_string(), vec![]);
+        resolver.stage2().insert_host(
+            vec!["com", "host2"],
+            Arc::new(PreparedHostConfigurationBlock {
+                directives: Arc::new(h2_directives),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            }),
+            10,
+        );
+
+        // Setup Stage 3
+        resolver
+            .stage3()
+            .register_error(404, Arc::new(create_test_block()));
+        resolver
+            .stage3()
+            .register_error(500, Arc::new(create_test_block()));
+
+        let variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+
+        let result1 = resolver.resolve("1.1.1.1".parse().unwrap(), "host1.com", "/", &variables);
+        let result2 = resolver.resolve("2.2.2.2".parse().unwrap(), "host2.com", "/", &variables);
+
+        assert!(result1.is_some());
+        assert!(result2.is_some());
+
+        let result1 = result1.unwrap();
+        let result2 = result2.unwrap();
+
+        assert_eq!(result1.location_path.ip, Some("1.1.1.1".parse().unwrap()));
+        assert_eq!(result2.location_path.ip, Some("2.2.2.2".parse().unwrap()));
+        assert_eq!(
+            result1.location_path.hostname_segments,
+            vec!["host1", "com"]
+        );
+        assert_eq!(
+            result2.location_path.hostname_segments,
+            vec!["host2", "com"]
+        );
+    }
+
+    /// Test IP1 -> Host1 -> Error1 vs IP2 -> Host1 -> Error2
+    /// Verifies that the same hostname accessed from different IPs can have
+    /// different configurations based on the IP source
+    #[test]
+    fn test_same_host_different_ip_error_chaining() {
+        use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
+
+        let mut resolver = ThreeStageResolver::new();
+
+        // Both IPs serve the same hostname "shared.com" but with different configs
+        // IP1 (192.168.1.1) -> shared.com -> "ip1" source
+        // IP2 (192.168.1.2) -> shared.com -> "ip2" source
+
+        // Setup Stage 1 - both IPs have the same hostname
+        let mut hosts_ip1 = HashMap::new();
+        let mut ip1_directives = HashMap::new();
+        ip1_directives.insert(
+            "ip_source".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String("ip1".to_string(), None)],
+                children: None,
+                span: None,
+            }],
+        );
+        hosts_ip1.insert(
+            Some("shared.com".to_string()),
+            PreparedHostConfigurationBlock {
+                directives: Arc::new(ip1_directives),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            },
+        );
+        resolver
+            .stage1()
+            .register_ip("192.168.1.1".parse().unwrap(), hosts_ip1);
+
+        let mut hosts_ip2 = HashMap::new();
+        let mut ip2_directives = HashMap::new();
+        ip2_directives.insert(
+            "ip_source".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String("ip2".to_string(), None)],
+                children: None,
+                span: None,
+            }],
+        );
+        hosts_ip2.insert(
+            Some("shared.com".to_string()),
+            PreparedHostConfigurationBlock {
+                directives: Arc::new(ip2_directives),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            },
+        );
+        resolver
+            .stage1()
+            .register_ip("192.168.1.2".parse().unwrap(), hosts_ip2);
+
+        // Setup Stage 2 - same hostname for both
+        let mut shared_directives = HashMap::new();
+        shared_directives.insert(
+            "hostname".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String("shared".to_string(), None)],
+                children: None,
+                span: None,
+            }],
+        );
+        resolver.stage2().insert_host(
+            vec!["com", "shared"],
+            Arc::new(PreparedHostConfigurationBlock {
+                directives: Arc::new(shared_directives),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            }),
+            10,
+        );
+
+        // Setup Stage 3 - global error config (shared across IPs)
+        let mut error_404 = HashMap::new();
+        error_404.insert(
+            "error_source".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "global_404".to_string(),
+                    None,
+                )],
+                children: None,
+                span: None,
+            }],
+        );
+        resolver.stage3().register_error(
+            404,
+            Arc::new(PreparedHostConfigurationBlock {
+                directives: Arc::new(error_404),
+                matches: Vec::new(),
+                error_config: Vec::new(),
+            }),
+        );
+
+        let variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+
+        // Resolve from IP1
+        let result_ip1 = resolver.resolve(
+            "192.168.1.1".parse().unwrap(),
+            "shared.com",
+            "/",
+            &variables,
+        );
+
+        // Resolve from IP2
+        let result_ip2 = resolver.resolve(
+            "192.168.1.2".parse().unwrap(),
+            "shared.com",
+            "/",
+            &variables,
+        );
+
+        assert!(result_ip1.is_some(), "IP1 should resolve");
+        assert!(result_ip2.is_some(), "IP2 should resolve");
+
+        let result_ip1 = result_ip1.unwrap();
+        let result_ip2 = result_ip2.unwrap();
+
+        // Verify IPs are correctly tracked
+        assert_eq!(
+            result_ip1.location_path.ip,
+            Some("192.168.1.1".parse().unwrap())
+        );
+        assert_eq!(
+            result_ip2.location_path.ip,
+            Some("192.168.1.2".parse().unwrap())
+        );
+
+        // Verify both resolve the same hostname
+        assert_eq!(
+            result_ip1.location_path.hostname_segments,
+            vec!["shared", "com"]
+        );
+        assert_eq!(
+            result_ip2.location_path.hostname_segments,
+            vec!["shared", "com"]
+        );
+
+        // Verify Stage 1 IP source directive is preserved and isolated
+        let ip1_source = result_ip1.configuration.get_value("ip_source", true);
+        let ip2_source = result_ip2.configuration.get_value("ip_source", true);
+
+        if let Some(ServerConfigurationValue::String(val, _)) = ip1_source {
+            assert_eq!(val, "ip1", "IP1 should have ip1 source");
+        } else {
+            panic!("IP1 should have ip_source directive");
+        }
+
+        if let Some(ServerConfigurationValue::String(val, _)) = ip2_source {
+            assert_eq!(val, "ip2", "IP2 should have ip2 source");
+        } else {
+            panic!("IP2 should have ip_source directive");
+        }
+
+        // Verify hostname directive is present in both
+        let hostname_val1 = result_ip1.configuration.get_value("hostname", true);
+        let hostname_val2 = result_ip2.configuration.get_value("hostname", true);
+
+        assert!(
+            hostname_val1.is_some(),
+            "IP1 should have hostname directive"
+        );
+        assert!(
+            hostname_val2.is_some(),
+            "IP2 should have hostname directive"
+        );
+
+        // Verify error directive is the same (global) for both
+        let error_val1 = result_ip1.configuration.get_value("error_source", true);
+        let error_val2 = result_ip2.configuration.get_value("error_source", true);
+
+        if let Some(ServerConfigurationValue::String(val, _)) = error_val1 {
+            assert_eq!(val, "global_404", "IP1 should have global error config");
+        }
+        if let Some(ServerConfigurationValue::String(val, _)) = error_val2 {
+            assert_eq!(val, "global_404", "IP2 should have global error config");
+        }
+    }
 }
