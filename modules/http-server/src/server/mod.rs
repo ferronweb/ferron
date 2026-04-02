@@ -17,6 +17,26 @@ use crate::{
 mod tcp;
 mod tls_resolve;
 
+fn format_location(
+    block_name: Option<&str>,
+    span: Option<&ferron_core::config::ServerConfigurationSpan>,
+) -> String {
+    let mut location = String::new();
+    if let Some(name) = block_name {
+        location.push_str(&format!("block '{}'", name));
+    } else {
+        location.push_str("global configuration");
+    }
+    if let Some(span) = span {
+        if let Some(file) = &span.file {
+            location.push_str(&format!(" in file '{}'", file));
+        }
+        location.push_str(&format!(" at line {}", span.line));
+        location.push_str(&format!(", column {}", span.column));
+    }
+    location
+}
+
 pub struct BasicHttpModule {
     pipeline: Arc<Pipeline<HttpContext>>,
     global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
@@ -39,7 +59,7 @@ impl BasicHttpModule {
         for host_config in &port_config.hosts {
             if let Some(tls) = host_config.1.directives.get("tls") {
                 for tls1 in tls {
-                    // TODO: implicit automatic TLS, better error reporting
+                    // TODO: implicit automatic TLS
                     if tls1
                         .args
                         .first()
@@ -51,16 +71,24 @@ impl BasicHttpModule {
                             .children
                             .as_ref()
                             .and_then(|c| c.get_value("provider"))
-                            .ok_or(anyhow::anyhow!("TLS provider not specified"))?
+                            .ok_or(anyhow::anyhow!(
+                                "TLS provider not specified ({})",
+                                format_location(None, tls1.span.as_ref())
+                            ))?
                             .as_str()
-                            .ok_or(anyhow::anyhow!("TLS provider must be a string"))?;
+                            .ok_or(anyhow::anyhow!(
+                                "TLS provider must be a string ({})",
+                                format_location(None, tls1.span.as_ref())
+                            ))?;
 
                         if let Some(tls_registry) =
                             registry.get_provider_registry::<TcpTlsContext>()
                         {
-                            let tls_provider = tls_registry
-                                .get(tls_provider_name)
-                                .ok_or(anyhow::anyhow!("TLS provider not found"))?;
+                            let tls_provider =
+                                tls_registry.get(tls_provider_name).ok_or(anyhow::anyhow!(
+                                    "TLS provider not found ({})",
+                                    format_location(None, tls1.span.as_ref())
+                                ))?;
 
                             let mut tls_resolver_ctx = TcpTlsContext {
                                 // SAFETY: We know that the lifetime of the config is longer
@@ -80,9 +108,11 @@ impl BasicHttpModule {
                                 resolver: None,
                             };
                             tls_provider.execute(&mut tls_resolver_ctx)?;
-                            let tls_resolver_sub = tls_resolver_ctx
-                                .resolver
-                                .ok_or(anyhow::anyhow!("TLS resolver not found"))?;
+                            let tls_resolver_sub =
+                                tls_resolver_ctx.resolver.ok_or(anyhow::anyhow!(
+                                    "TLS resolver not found ({})",
+                                    format_location(None, tls1.span.as_ref())
+                                ))?;
 
                             match (&host_config.0.host, host_config.0.ip) {
                                 (Some(host), Some(ip)) => {
