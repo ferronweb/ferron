@@ -15,7 +15,6 @@ use std::any::{Any, TypeId};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-#[allow(unused_imports)]
 use crate::providers::Provider;
 use parking_lot::RwLock;
 

@@ -20,9 +20,11 @@ anyhow = "1.0.102"
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
 ferron-http = { path = "../../types/http" }
+ferron-tls = { path = "../../types/tls" }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
+rustls = { version = "0.23.37", default-features = false }
 
 [[bench]]
 name = "resolver_bench"

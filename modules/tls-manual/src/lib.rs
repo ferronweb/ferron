@@ -22,7 +22,7 @@ impl TcpTlsResolver for TcpTlsManualResolver {
 
 pub struct TcpTlsManualProvider;
 
-impl Provider<TcpTlsContext> for TcpTlsManualProvider {
+impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
     fn name(&self) -> &str {
         "manual"
     }

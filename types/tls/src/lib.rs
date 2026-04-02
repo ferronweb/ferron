@@ -7,13 +7,13 @@ use tokio_rustls::StartHandshake;
 use vibeio::net::PollTcpStream;
 
 // TODO: support OCSP stapling via "ocsp" field
-pub struct TcpTlsContext {
-    pub config: Arc<ServerConfigurationBlock>,
+pub struct TcpTlsContext<'a> {
+    pub config: &'a ServerConfigurationBlock,
     pub resolver: Option<Arc<dyn TcpTlsResolver>>,
 }
 
 #[async_trait::async_trait(?Send)]
-pub trait TcpTlsResolver {
+pub trait TcpTlsResolver: Send + Sync {
     async fn handshake(
         &self,
         io: StartHandshake<PollTcpStream>,
