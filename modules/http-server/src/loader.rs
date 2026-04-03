@@ -30,9 +30,28 @@ impl ModuleLoader for BasicHttpModuleLoader {
         let mut blocks = Vec::new();
         if let Some(ports) = config.ports.get("http") {
             for port in ports {
-                for (_filters, host) in &port.hosts {
-                    // TODO: more sophisticated block naming based on filters
-                    blocks.push((format!("port {}", port.port.unwrap_or(80)), host));
+                for (filters, host) in &port.hosts {
+                    // Build descriptive block name based on filters
+                    let block_name = match (&filters.host, &filters.ip) {
+                        (Some(hostname), Some(ip)) => {
+                            format!(
+                                "port {} host {} ip {}",
+                                port.port.unwrap_or(80),
+                                hostname,
+                                ip
+                            )
+                        }
+                        (Some(hostname), None) => {
+                            format!("port {} host {}", port.port.unwrap_or(80), hostname)
+                        }
+                        (None, Some(ip)) => {
+                            format!("port {} ip {}", port.port.unwrap_or(80), ip)
+                        }
+                        (None, None) => {
+                            format!("port {}", port.port.unwrap_or(80))
+                        }
+                    };
+                    blocks.push((block_name, host));
                 }
             }
         }
