@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io;
-use std::net::IpAddr;
+use std::net::SocketAddr;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
@@ -39,9 +39,10 @@ pub async fn request_handler(
     pipeline: Arc<Pipeline<HttpContext>>,
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
     config_resolver: Arc<ThreeStageResolver>,
-    local_ip: IpAddr,
+    local_address: SocketAddr,
+    remote_address: SocketAddr,
     hostname: Option<String>,
-    is_tls: bool,
+    encrypted: bool,
     events: CompositeEventSink,
 ) -> Result<Response<ResponseBody>, io::Error> {
     // TODO: add support for HTTP access logs
@@ -72,13 +73,16 @@ pub async fn request_handler(
     }
     variables.insert(
         "request.scheme".to_string(),
-        if is_tls { "https" } else { "http" }.to_string(),
+        if encrypted { "https" } else { "http" }.to_string(),
     );
-    variables.insert("server.ip".to_string(), local_ip.to_string());
+    variables.insert("server.ip".to_string(), local_address.ip().to_string());
+    variables.insert("server.port".to_string(), local_address.port().to_string());
+    variables.insert("remote.ip".to_string(), remote_address.ip().to_string());
+    variables.insert("remote.port".to_string(), remote_address.port().to_string());
 
     let resolver_request = build_resolver_request(&request)?;
     let resolution = config_resolver.resolve(
-        local_ip,
+        local_address.ip(),
         hostname.as_deref().unwrap_or(""),
         request.uri().path(),
         &(resolver_request, variables.clone()),
@@ -105,6 +109,9 @@ pub async fn request_handler(
         variables,
         previous_error: None,
         original_uri: Option::from(request_uri),
+        encrypted,
+        local_address,
+        remote_address,
     };
 
     execute_pipeline_stages(
@@ -126,7 +133,7 @@ pub async fn request_handler(
             if let Some(ref req) = ctx.req {
                 let error_resolver_request = build_resolver_request(req)?;
                 let error_resolution = config_resolver.resolve_error_scoped(
-                    local_ip,
+                    local_address.ip(),
                     ctx.hostname.as_deref().unwrap_or(""),
                     status,
                     &(error_resolver_request, ctx.variables.clone()),
@@ -290,6 +297,9 @@ async fn execute_http_file_pipeline(
         variables: HashMap::new(),
         previous_error: None,
         original_uri: None,
+        encrypted: ctx.encrypted,
+        local_address: ctx.local_address,
+        remote_address: ctx.remote_address,
     };
     let http_ctx = std::mem::replace(ctx, placeholder);
     let mut file_ctx = HttpFileContext {

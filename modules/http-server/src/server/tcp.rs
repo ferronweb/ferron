@@ -205,6 +205,10 @@ impl TcpListenerHandle {
                     let global_observability = global_observability.clone();
                     let connection_cancel_token = cancel_token.clone();
                     vibeio::spawn(async move {
+                        let Ok(remote_addr) = socket.peer_addr() else {
+                            emit_error(&global_observability, "Failed to get remote address");
+                            return;
+                        };
                         let Ok(local_addr) = socket.local_addr() else {
                             emit_error(&global_observability, "Failed to get local address");
                             return;
@@ -268,10 +272,11 @@ impl TcpListenerHandle {
                                     if negotiated_protocol.as_deref() == Some(b"h2".as_slice()) {
                                         handle_http2_connection(
                                             tls_stream,
+                                            remote_addr,
                                             pipeline,
                                             file_pipeline,
                                             config_resolver,
-                                            local_addr.ip(),
+                                            local_addr,
                                             hinted_hostname,
                                             connection_options,
                                             observability_resolver,
@@ -282,10 +287,11 @@ impl TcpListenerHandle {
                                     } else if connection_options.protocols.supports_http1() {
                                         handle_http1_connection(
                                             tls_stream,
+                                            remote_addr,
                                             pipeline,
                                             file_pipeline,
                                             config_resolver,
-                                            local_addr.ip(),
+                                            local_addr,
                                             hinted_hostname,
                                             true,
                                             connection_options,
@@ -317,10 +323,11 @@ impl TcpListenerHandle {
                             }
                             handle_http1_connection(
                                 socket,
+                                remote_addr,
                                 pipeline,
                                 file_pipeline,
                                 config_resolver,
-                                local_addr.ip(),
+                                local_addr,
                                 None,
                                 false,
                                 connection_options,
@@ -383,12 +390,13 @@ fn build_tcp_listener(
 #[allow(clippy::too_many_arguments)]
 async fn handle_http1_connection<S>(
     socket: S,
+    remote_address: SocketAddr,
     pipeline: Arc<Pipeline<HttpContext>>,
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
     config_resolver: Arc<ThreeStageResolver>,
-    local_ip: IpAddr,
+    local_address: SocketAddr,
     hinted_hostname: Option<String>,
-    is_tls: bool,
+    encrypted: bool,
     connection_options: HttpConnectionOptions,
     observability_resolver: Arc<RadixTree<Vec<Arc<dyn EventSink>>>>,
     default_observability: CompositeEventSink,
@@ -405,9 +413,10 @@ async fn handle_http1_connection<S>(
                 pipeline,
                 file_pipeline,
                 config_resolver,
-                local_ip,
+                local_address,
+                remote_address,
                 hinted_hostname,
-                is_tls,
+                encrypted,
                 observability_resolver,
                 default_observability.clone(),
             )),
@@ -435,10 +444,11 @@ async fn handle_http1_connection<S>(
 #[allow(clippy::too_many_arguments)]
 async fn handle_http2_connection<S>(
     socket: S,
+    remote_address: SocketAddr,
     pipeline: Arc<Pipeline<HttpContext>>,
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
     config_resolver: Arc<ThreeStageResolver>,
-    local_ip: IpAddr,
+    local_address: SocketAddr,
     hinted_hostname: Option<String>,
     connection_options: HttpConnectionOptions,
     observability_resolver: Arc<RadixTree<Vec<Arc<dyn EventSink>>>>,
@@ -456,7 +466,8 @@ async fn handle_http2_connection<S>(
                 pipeline,
                 file_pipeline,
                 config_resolver,
-                local_ip,
+                local_address,
+                remote_address,
                 hinted_hostname,
                 true,
                 observability_resolver,
@@ -513,9 +524,10 @@ fn build_request_handler(
     pipeline: Arc<Pipeline<HttpContext>>,
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
     config_resolver: Arc<ThreeStageResolver>,
-    local_ip: IpAddr,
+    local_address: SocketAddr,
+    remote_address: SocketAddr,
     hinted_hostname: Option<String>,
-    is_tls: bool,
+    encrypted: bool,
     observability_resolver: Arc<RadixTree<Vec<Arc<dyn EventSink>>>>,
     default_observability: CompositeEventSink,
 ) -> impl Fn(Request<vibeio_http::Incoming>) -> RequestHandlerFuture {
@@ -530,7 +542,7 @@ fn build_request_handler(
             let hostname = request_hostname_for_lookup(&request, hinted_hostname.as_deref());
             let request_observability = resolve_observability_sink(
                 &observability_resolver,
-                Some(local_ip),
+                Some(local_address.ip()),
                 hostname.as_deref(),
                 &default_observability,
             );
@@ -541,9 +553,10 @@ fn build_request_handler(
                 pipeline,
                 file_pipeline,
                 config_resolver,
-                local_ip,
+                local_address,
+                remote_address,
                 hostname,
-                is_tls,
+                encrypted,
                 request_observability,
             )
             .await

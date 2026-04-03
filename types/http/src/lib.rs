@@ -2,6 +2,8 @@
 
 pub mod variables;
 
+use std::net::SocketAddr;
+
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::Variables;
 use ferron_observability::CompositeEventSink;
@@ -24,6 +26,9 @@ pub struct HttpContext {
     pub variables: std::collections::HashMap<String, String>,
     pub previous_error: Option<u16>,
     pub original_uri: Option<Uri>,
+    pub encrypted: bool,
+    pub local_address: SocketAddr,
+    pub remote_address: SocketAddr,
 }
 
 impl Variables for HttpContext {
