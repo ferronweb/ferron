@@ -36,15 +36,26 @@ impl Runtime {
     ///
     /// Returns `std::io::Error` if runtime creation fails.
     pub fn new(io_uring_enabled: bool) -> Result<Self, std::io::Error> {
-        // Spawn multiple threads (as many threads as available parallelism
-        let available_parallelism = std::thread::available_parallelism()?.get();
+        // Spawn multiple threads (with pinning to each CPU core) to run primary tasks
+        let core_ids = core_affinity::get_core_ids();
+        let available_parallelism = core_ids.as_ref().map_or_else(
+            || std::thread::available_parallelism().unwrap().get(),
+            |core_ids| core_ids.len(),
+        );
         let mut primary_task_channels = Vec::with_capacity(available_parallelism);
 
-        for _ in 0..available_parallelism {
+        for i in 0..available_parallelism {
+            let core_id = core_ids
+                .as_ref()
+                .map(|core_ids| core_ids[i % core_ids.len()]);
+
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<
                 Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send + Sync + 'static>,
             >();
             std::thread::spawn(move || {
+                if let Some(core_id) = core_id {
+                    let _ = core_affinity::set_for_current(core_id);
+                }
                 let use_io_uring = io_uring_enabled && vibeio::util::supports_io_uring();
                 let rt = vibeio::RuntimeBuilder::new()
                     .enable_timer(true)

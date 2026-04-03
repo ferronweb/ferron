@@ -13,6 +13,7 @@ tokio-util = "0.7.18"
 anyhow = "1.0"
 chrono = "0.4"
 vibeio = { version = "0.2.6", default-features = false, features = ["time"] }
+core_affinity = "0.8.3"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
