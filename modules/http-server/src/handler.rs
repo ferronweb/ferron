@@ -44,6 +44,8 @@ pub async fn request_handler(
     is_tls: bool,
     events: CompositeEventSink,
 ) -> Result<Response<ResponseBody>, io::Error> {
+    // TODO: add support for HTTP access log pipeline
+
     // Normalize HTTP/2 and HTTP/3 requests
     if matches!(
         request.version(),
