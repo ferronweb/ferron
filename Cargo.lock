@@ -523,6 +523,7 @@ dependencies = [
  "http-body-util",
  "parking_lot",
  "rustls",
+ "smallvec",
  "socket2",
  "tokio",
  "tokio-rustls",

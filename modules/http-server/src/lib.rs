@@ -7,6 +7,7 @@ mod handler;
 mod loader;
 mod server;
 mod stages;
+mod util;
 mod validator;
 
 pub use loader::BasicHttpModuleLoader;

@@ -8,11 +8,12 @@ use bytes::Bytes;
 use ferron_core::pipeline::{Pipeline, PipelineError};
 use ferron_http::{HttpContext, HttpFileContext, HttpRequest, HttpResponse};
 use ferron_observability::{CompositeEventSink, Event, LogEvent, LogLevel};
-use http::{HeaderMap, Response, StatusCode};
+use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::Empty;
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Full};
 
 use crate::config::ThreeStageResolver;
+use crate::util::url_sanitizer::sanitize_url;
 
 const LOG_TARGET: &str = "ferron-http-server";
 type ResponseBody = UnsyncBoxBody<Bytes, io::Error>;
@@ -34,7 +35,7 @@ enum FilePipelineExecutionError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn request_handler(
-    request: HttpRequest,
+    mut request: HttpRequest,
     pipeline: Arc<Pipeline<HttpContext>>,
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
     config_resolver: Arc<ThreeStageResolver>,
@@ -43,7 +44,25 @@ pub async fn request_handler(
     is_tls: bool,
     events: CompositeEventSink,
 ) -> Result<Response<ResponseBody>, io::Error> {
-    // TODO: normalize "Host" header, HTTP requests, sanitize URL
+    // Normalize HTTP/2 and HTTP/3 requests
+    if matches!(
+        request.version(),
+        http::Version::HTTP_2 | http::Version::HTTP_3
+    ) {
+        normalize_http2_http3_request(&mut request);
+    }
+
+    // Normalize "Host" header
+    if let Err(e) = normalize_host_header(&mut request, &events) {
+        emit_error(&events, format!("Host header normalization error: {}", e));
+        return Ok(error_response(StatusCode::BAD_REQUEST));
+    }
+
+    // Sanitize URL
+    if let Err(e) = sanitize_request_url(&mut request, &events) {
+        emit_error(&events, format!("URL sanitization error: {}", e));
+        return Ok(error_response(StatusCode::BAD_REQUEST));
+    }
 
     let mut variables = HashMap::new();
     if let Some(hostname) = hostname.as_ref() {
@@ -402,6 +421,122 @@ fn is_not_directory_like(error: &io::Error) -> bool {
     }
 
     false
+}
+
+/// Normalize HTTP/2 and HTTP/3 requests
+///
+/// For HTTP/2 and HTTP/3, the Host header is not transmitted; instead, it's encoded
+/// in the :authority pseudo-header. This function sets the Host header from the authority
+/// and normalizes the Cookie header (combining multiple values).
+fn normalize_http2_http3_request(request: &mut HttpRequest) {
+    // Set "Host" request header from authority for HTTP/2 and HTTP/3 connections
+    if let Some(authority) = request.uri().authority() {
+        let authority = authority.to_owned();
+        let headers = request.headers_mut();
+        if !headers.contains_key(http::header::HOST) {
+            if let Ok(authority_value) = HeaderValue::from_bytes(authority.as_str().as_bytes()) {
+                headers.append(http::header::HOST, authority_value);
+            }
+        }
+    }
+
+    // Normalize the Cookie header for HTTP/2 and HTTP/3
+    // Combine multiple cookie headers into a single one with "; " separator
+    let mut cookie_normalized = String::new();
+    let mut cookie_set = false;
+    let headers = request.headers_mut();
+    for cookie in headers.get_all(http::header::COOKIE) {
+        if let Ok(cookie) = cookie.to_str() {
+            if cookie_set {
+                cookie_normalized.push_str("; ");
+            }
+            cookie_set = true;
+            cookie_normalized.push_str(cookie);
+        }
+    }
+    if cookie_set {
+        if let Ok(cookie_value) = HeaderValue::from_bytes(cookie_normalized.as_bytes()) {
+            headers.insert(http::header::COOKIE, cookie_value);
+        }
+    }
+}
+
+/// Normalize the "Host" header
+///
+/// - Converts the host to lowercase
+/// - Removes trailing dot (FQDN notation)
+/// - Validates the resulting header value
+fn normalize_host_header(
+    request: &mut HttpRequest,
+    _events: &CompositeEventSink,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let host_header_option = request.headers().get(http::header::HOST);
+    if let Some(header_data) = host_header_option {
+        let host_header = header_data.to_str()?;
+        let host_header_lower_case = host_header.to_lowercase();
+        let host_header_without_dot = host_header_lower_case
+            .strip_suffix('.')
+            .unwrap_or(host_header_lower_case.as_str());
+
+        if host_header_without_dot != host_header {
+            let host_header_value = HeaderValue::from_str(host_header_without_dot)?;
+            request
+                .headers_mut()
+                .insert(http::header::HOST, host_header_value);
+        }
+    }
+    Ok(())
+}
+
+/// Sanitize the request URL path
+///
+/// Removes dangerous sequences like path traversal attempts (../, .\\, etc.)
+/// and normalizes slashes and percent-encoding.
+fn sanitize_request_url(
+    request: &mut HttpRequest,
+    _events: &CompositeEventSink,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let url_pathname = request.uri().path();
+    let sanitized_url_pathname = sanitize_url(url_pathname, false)?;
+
+    if sanitized_url_pathname != url_pathname {
+        // We need to reconstruct the URI with the sanitized path
+        let orig_uri = request.uri().clone();
+        let mut uri_parts = orig_uri.into_parts();
+
+        // Reconstruct the path_and_query with sanitized path and original query
+        let new_path_and_query = format!(
+            "{}{}",
+            sanitized_url_pathname,
+            uri_parts
+                .path_and_query
+                .as_ref()
+                .and_then(|pq| pq.query())
+                .map_or("".to_string(), |q| format!("?{q}"))
+        );
+
+        uri_parts.path_and_query = Some(new_path_and_query.parse()?);
+        let new_uri = http::Uri::from_parts(uri_parts)?;
+
+        // Use the http::Request extension to set the URI
+        *request.uri_mut() = new_uri;
+    }
+
+    Ok(())
+}
+
+fn error_response(status: StatusCode) -> Response<ResponseBody> {
+    let body = status.canonical_reason().unwrap_or("Error");
+    Response::builder()
+        .status(status)
+        .body(
+            Full::new(Bytes::copy_from_slice(body.as_bytes()))
+                .map_err(|e| match e {})
+                .boxed_unsync(),
+        )
+        .unwrap_or_else(|_| {
+            text_response(StatusCode::INTERNAL_SERVER_ERROR, b"Internal Server Error")
+        })
 }
 
 fn build_resolver_request(request: &HttpRequest) -> Result<HttpRequest, io::Error> {
