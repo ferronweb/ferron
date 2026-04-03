@@ -6,9 +6,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
+use arc_swap::ArcSwap;
 use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
-use ferron_core::shutdown::RELOAD_TOKEN;
 use ferron_core::{log_error, log_info};
 use ferron_http::{HttpContext, HttpFileContext};
 use ferron_observability::{CompositeEventSink, Event, EventSink, LogEvent, LogLevel};
@@ -20,7 +20,11 @@ use vibeio_http::{Http1, Http1Options, Http2, Http2Options, HttpProtocol};
 
 use crate::config::ThreeStageResolver;
 use crate::handler::request_handler;
-use crate::server::tls_resolve::{RadixTree, TlsResolverRadixTree};
+use crate::server::tls_resolve::RadixTree;
+use crate::server::HttpServerConfig;
+
+// Type alias for the config ArcSwap
+type ConfigArcSwap = Arc<ArcSwap<HttpServerConfig>>;
 
 const LOG_TARGET: &str = "ferron-http-server";
 type ResponseBody = UnsyncBoxBody<bytes::Bytes, io::Error>;
@@ -106,23 +110,17 @@ pub struct TcpListenerHandle {
 }
 
 impl TcpListenerHandle {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         options: TcpListenerOptions,
-        pipeline: Arc<Pipeline<HttpContext>>,
-        file_pipeline: Arc<Pipeline<HttpFileContext>>,
+        config: ConfigArcSwap,
         runtime: &mut Runtime,
-        config_resolver: Arc<ThreeStageResolver>,
-        tls_resolver: Option<Arc<TlsResolverRadixTree>>,
-        http_connection_options_resolver: Arc<RadixTree<HttpConnectionOptions>>,
-        observability_resolver: Arc<RadixTree<Vec<Arc<dyn EventSink>>>>,
     ) -> Result<Self, std::io::Error> {
         let listener = build_tcp_listener(
             options.address,
             (options.send_buffer_size, options.recv_buffer_size),
         )?;
 
-        if tls_resolver.is_some() {
+        if config.load().tls_resolver.is_some() {
             log_info!("HTTPS server listening on {}", options.address);
         } else {
             log_info!("HTTP server listening on {}", options.address);
@@ -130,23 +128,13 @@ impl TcpListenerHandle {
 
         let cancel_token = Arc::new(CancellationToken::new());
 
-        let pipeline_clone = pipeline.clone();
-        let file_pipeline_clone = file_pipeline.clone();
+        let config_clone = config.clone();
         let cancel_token_clone = cancel_token.clone();
 
         runtime.spawn_primary_task(move || {
             let new_listener_result = listener.try_clone();
             let cancel_token = cancel_token_clone.clone();
-            let config_resolver = config_resolver.clone();
-            let tls_resolver = tls_resolver.clone();
-            let http_connection_options_resolver = http_connection_options_resolver.clone();
-            let observability_resolver = observability_resolver.clone();
-            let global_observability = observability_resolver
-                .root_data()
-                .map(CompositeEventSink::new)
-                .unwrap_or(CompositeEventSink::new(vec![]));
-            let pipeline = pipeline_clone.clone();
-            let file_pipeline = file_pipeline_clone.clone();
+            let config = config_clone.clone();
             Box::pin(async move {
                 let Ok(new_listener) = new_listener_result else {
                     log_error!("Failed to clone listener");
@@ -174,6 +162,12 @@ impl TcpListenerHandle {
                             socket
                         }
                         Err(err) => {
+                            let global_observability = config
+                                .load()
+                                .observability_resolver
+                                .root_data()
+                                .map(CompositeEventSink::new)
+                                .unwrap_or(CompositeEventSink::new(vec![]));
                             emit_error(
                                 &global_observability,
                                 format!("Failed to accept connection: {err}"),
@@ -192,6 +186,12 @@ impl TcpListenerHandle {
                     };
                     let _ = socket.set_nodelay(true);
                     let Ok(socket) = socket.into_poll() else {
+                        let global_observability = config
+                            .load()
+                            .observability_resolver
+                            .root_data()
+                            .map(CompositeEventSink::new)
+                            .unwrap_or(CompositeEventSink::new(vec![]));
                         emit_error(
                             &global_observability,
                             "Failed to convert socket to poll-based I/O",
@@ -199,32 +199,36 @@ impl TcpListenerHandle {
                         continue;
                     };
 
-                    let pipeline = pipeline.clone();
-                    let file_pipeline = file_pipeline.clone();
-                    let config_resolver = config_resolver.clone();
-                    let tls_resolver = tls_resolver.clone();
-                    let http_connection_options_resolver =
-                        http_connection_options_resolver.clone();
-                    let observability_resolver = observability_resolver.clone();
-                    let global_observability = global_observability.clone();
+                    // Load the current config for this connection
+                    let server_config = config.load_full();
                     let connection_cancel_token = cancel_token.clone();
                     vibeio::spawn(async move {
                         let Ok(remote_addr) = socket.peer_addr() else {
+                            let global_observability = server_config
+                                .observability_resolver
+                                .root_data()
+                                .map(CompositeEventSink::new)
+                                .unwrap_or(CompositeEventSink::new(vec![]));
                             emit_error(&global_observability, "Failed to get remote address");
                             return;
                         };
                         let Ok(local_addr) = socket.local_addr() else {
+                            let global_observability = server_config
+                                .observability_resolver
+                                .root_data()
+                                .map(CompositeEventSink::new)
+                                .unwrap_or(CompositeEventSink::new(vec![]));
                             emit_error(&global_observability, "Failed to get local address");
                             return;
                         };
                         let ip_observability = resolve_observability_sink(
-                            &observability_resolver,
+                            &server_config.observability_resolver,
                             Some(local_addr.ip()),
                             None,
-                            &global_observability,
+                            &CompositeEventSink::new(vec![]),
                         );
 
-                        if let Some(tls_resolver) = tls_resolver {
+                        if let Some(tls_resolver) = &server_config.tls_resolver {
                             let Ok(start_handshake) =
                                 tokio_rustls::LazyConfigAcceptor::new(Acceptor::default(), socket)
                                     .await
@@ -239,7 +243,7 @@ impl TcpListenerHandle {
                             let hinted_hostname =
                                 sni.as_deref().and_then(normalize_host_for_lookup);
                             let connection_options = resolve_http_connection_options(
-                                &http_connection_options_resolver,
+                                &server_config.http_connection_options_resolver,
                                 local_addr.ip(),
                                 hinted_hostname.as_deref(),
                             );
@@ -253,7 +257,7 @@ impl TcpListenerHandle {
                                     resolver.handshake(start_handshake).await
                                 else {
                                     let tls_observability = resolve_observability_sink(
-                                        &observability_resolver,
+                                        &server_config.observability_resolver,
                                         Some(local_addr.ip()),
                                         hinted_hostname.as_deref(),
                                         &ip_observability,
@@ -262,7 +266,7 @@ impl TcpListenerHandle {
                                     return;
                                 };
                                 let tls_observability = resolve_observability_sink(
-                                    &observability_resolver,
+                                    &server_config.observability_resolver,
                                     Some(local_addr.ip()),
                                     hinted_hostname.as_deref(),
                                     &ip_observability,
@@ -277,31 +281,33 @@ impl TcpListenerHandle {
                                         handle_http2_connection(
                                             tls_stream,
                                             remote_addr,
-                                            pipeline,
-                                            file_pipeline,
-                                            config_resolver,
+                                            server_config.pipeline.clone(),
+                                            server_config.file_pipeline.clone(),
+                                            server_config.config_resolver.clone(),
                                             local_addr,
                                             hinted_hostname,
                                             connection_options,
-                                            observability_resolver,
+                                            server_config.observability_resolver.clone(),
                                             tls_observability,
-                                            connection_cancel_token.as_ref().clone(),
+                                            (*connection_cancel_token).clone(),
+                                            server_config.reload_token.clone(),
                                         )
                                         .await;
                                     } else if connection_options.protocols.supports_http1() {
                                         handle_http1_connection(
                                             tls_stream,
                                             remote_addr,
-                                            pipeline,
-                                            file_pipeline,
-                                            config_resolver,
+                                            server_config.pipeline.clone(),
+                                            server_config.file_pipeline.clone(),
+                                            server_config.config_resolver.clone(),
                                             local_addr,
                                             hinted_hostname,
                                             true,
                                             connection_options,
-                                            observability_resolver,
+                                            server_config.observability_resolver.clone(),
                                             tls_observability,
-                                            connection_cancel_token.as_ref().clone(),
+                                            (*connection_cancel_token).clone(),
+                                            server_config.reload_token.clone(),
                                         )
                                         .await;
                                     } else {
@@ -314,7 +320,7 @@ impl TcpListenerHandle {
                             }
                         } else {
                             let connection_options = resolve_http_connection_options(
-                                &http_connection_options_resolver,
+                                &server_config.http_connection_options_resolver,
                                 local_addr.ip(),
                                 None,
                             );
@@ -328,16 +334,17 @@ impl TcpListenerHandle {
                             handle_http1_connection(
                                 socket,
                                 remote_addr,
-                                pipeline,
-                                file_pipeline,
-                                config_resolver,
+                                server_config.pipeline.clone(),
+                                server_config.file_pipeline.clone(),
+                                server_config.config_resolver.clone(),
                                 local_addr,
                                 None,
                                 false,
                                 connection_options,
-                                observability_resolver,
+                                server_config.observability_resolver.clone(),
                                 ip_observability,
-                                connection_cancel_token.as_ref().clone(),
+                                (*connection_cancel_token).clone(),
+                                server_config.reload_token.clone(),
                             )
                             .await;
                         }
@@ -405,10 +412,10 @@ async fn handle_http1_connection<S>(
     observability_resolver: Arc<RadixTree<Vec<Arc<dyn EventSink>>>>,
     default_observability: CompositeEventSink,
     shutdown_token: CancellationToken,
+    reload_token: CancellationToken,
 ) where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
-    let reload_token = &**RELOAD_TOKEN.load();
     let graceful_shutdown = CancellationToken::new();
     let mut connection_future = Box::pin(
         Http1::new(socket, build_http1_options(&connection_options))
@@ -458,10 +465,10 @@ async fn handle_http2_connection<S>(
     observability_resolver: Arc<RadixTree<Vec<Arc<dyn EventSink>>>>,
     default_observability: CompositeEventSink,
     shutdown_token: CancellationToken,
+    reload_token: CancellationToken,
 ) where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
-    let reload_token = &**RELOAD_TOKEN.load();
     let graceful_shutdown = CancellationToken::new();
     let mut connection_future = Box::pin(
         Http2::new(socket, build_http2_options(&connection_options))

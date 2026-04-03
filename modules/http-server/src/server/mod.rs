@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
 use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
@@ -12,6 +13,7 @@ use ferron_http::{HttpContext, HttpFileContext};
 use ferron_observability::{EventSink, ObservabilityContext, ObservabilityProviderEventSink};
 use ferron_tls::TcpTlsContext;
 use parking_lot::Mutex;
+use tokio_util::sync::CancellationToken;
 
 use crate::server::tls_resolve::RadixTree;
 use crate::{
@@ -21,6 +23,23 @@ use crate::{
 
 mod tcp;
 mod tls_resolve;
+
+/// Configuration that can be atomically swapped during reload.
+/// Contains all reloadable state for the HTTP server module.
+pub struct HttpServerConfig {
+    pub pipeline: Arc<Pipeline<HttpContext>>,
+    pub file_pipeline: Arc<Pipeline<HttpFileContext>>,
+    pub global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
+    pub config_resolver: Arc<crate::config::ThreeStageResolver>,
+    pub tls_resolver: Option<Arc<self::tls_resolve::TlsResolverRadixTree>>,
+    pub http_connection_options_resolver:
+        Arc<self::tls_resolve::RadixTree<tcp::HttpConnectionOptions>>,
+    pub observability_resolver: Arc<self::tls_resolve::RadixTree<Vec<Arc<dyn EventSink>>>>,
+    /// Token that is cancelled when configuration is reloaded to gracefully shut down existing connections.
+    pub reload_token: CancellationToken,
+}
+
+type ConfigArcSwap = Arc<ArcSwap<HttpServerConfig>>;
 
 #[inline]
 fn format_location(
@@ -187,13 +206,7 @@ fn resolve_http_connection_options(
 }
 
 pub struct BasicHttpModule {
-    pipeline: Arc<Pipeline<HttpContext>>,
-    file_pipeline: Arc<Pipeline<HttpFileContext>>,
-    global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
-    config_resolver: Arc<crate::config::ThreeStageResolver>,
-    tls_resolver: Option<Arc<self::tls_resolve::TlsResolverRadixTree>>,
-    http_connection_options_resolver: Arc<self::tls_resolve::RadixTree<tcp::HttpConnectionOptions>>,
-    observability_resolver: Arc<self::tls_resolve::RadixTree<Vec<Arc<dyn EventSink>>>>,
+    config: ConfigArcSwap,
     listeners: Mutex<Vec<tcp::TcpListenerHandle>>,
     port: u16,
 }
@@ -433,6 +446,268 @@ impl BasicHttpModule {
             .map(|registry| registry.build_all())
             .unwrap_or_else(Pipeline::new);
         Ok(Self {
+            config: Arc::new(ArcSwap::new(Arc::new(HttpServerConfig {
+                pipeline: Arc::new(pipeline),
+                file_pipeline: Arc::new(file_pipeline),
+                global_config: global_config.clone(),
+                config_resolver: Arc::new(ThreeStageResolver::from_prepared_with_global(
+                    prepare_host_config(port_config)?,
+                    global_config,
+                )),
+                tls_resolver: if enable_tls {
+                    Some(Arc::new(tls_resolver))
+                } else {
+                    None
+                },
+                http_connection_options_resolver: Arc::new(http_connection_options_resolver),
+                observability_resolver: Arc::new(observability_resolver),
+                reload_token: CancellationToken::new(),
+            }))),
+            listeners: Mutex::new(Vec::new()),
+            port,
+        })
+    }
+
+    /// Reload the module with new configuration.
+    /// This method is called during configuration reload (SIGHUP).
+    /// It atomically replaces all reloadable fields with new values.
+    pub fn reload(
+        &self,
+        registry: &ferron_core::registry::Registry,
+        port_config: ferron_core::config::ServerConfigurationPort,
+        global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut enable_tls = false;
+        let mut http_connection_options_resolver = RadixTree::new();
+        let mut observability_resolver = RadixTree::new();
+        let mut tls_resolver = TlsResolverRadixTree::new();
+        for host_config in &port_config.hosts {
+            let http_connection_options = resolve_http_connection_options(&host_config.1)?;
+            match (&host_config.0.host, host_config.0.ip) {
+                (Some(host), Some(ip)) => {
+                    http_connection_options_resolver.insert_ip_and_hostname(
+                        ip,
+                        host,
+                        http_connection_options.clone(),
+                        false,
+                    );
+                }
+                (Some(host), None) => {
+                    http_connection_options_resolver.insert_hostname(
+                        host,
+                        http_connection_options.clone(),
+                        false,
+                    );
+                }
+                (None, Some(ip)) => {
+                    http_connection_options_resolver.insert_ip(ip, http_connection_options.clone());
+                }
+                (None, None) => {
+                    http_connection_options_resolver.set_root_data(http_connection_options.clone());
+                }
+            }
+
+            if let Some(tls) = host_config.1.directives.get("tls") {
+                for tls1 in tls {
+                    // TODO: implicit automatic TLS
+                    if tls1
+                        .args
+                        .first()
+                        .and_then(|a| a.as_boolean())
+                        .unwrap_or(true)
+                    {
+                        enable_tls = true;
+                        let mut children = tls1.children.clone().unwrap_or(Default::default());
+                        if let (Some(cert), Some(key)) = (
+                            tls1.args
+                                .first()
+                                .and_then(|v| v.as_string_with_interpolations(&HashMap::new())),
+                            tls1.args
+                                .get(1)
+                                .and_then(|v| v.as_string_with_interpolations(&HashMap::new())),
+                        ) {
+                            let mut directives = (*children.directives).clone();
+                            directives.insert(
+                                "provider".to_string(),
+                                vec![ServerConfigurationDirectiveEntry {
+                                    args: vec![ServerConfigurationValue::String(
+                                        "manual".to_string(),
+                                        None,
+                                    )],
+                                    ..Default::default()
+                                }],
+                            );
+                            directives.insert(
+                                "cert".to_string(),
+                                vec![ServerConfigurationDirectiveEntry {
+                                    args: vec![ServerConfigurationValue::String(cert, None)],
+                                    ..Default::default()
+                                }],
+                            );
+                            directives.insert(
+                                "key".to_string(),
+                                vec![ServerConfigurationDirectiveEntry {
+                                    args: vec![ServerConfigurationValue::String(key, None)],
+                                    ..Default::default()
+                                }],
+                            );
+                            children.directives = Arc::new(directives);
+                        }
+
+                        let tls_provider_name = children
+                            .get_value("provider")
+                            .ok_or(anyhow::anyhow!(
+                                "TLS provider not specified ({})",
+                                format_location(None, tls1.span.as_ref())
+                            ))?
+                            .as_str()
+                            .ok_or(anyhow::anyhow!(
+                                "TLS provider must be a string ({})",
+                                format_location(None, tls1.span.as_ref())
+                            ))?;
+
+                        if let Some(tls_registry) =
+                            registry.get_provider_registry::<TcpTlsContext>()
+                        {
+                            let tls_provider =
+                                tls_registry.get(tls_provider_name).ok_or(anyhow::anyhow!(
+                                    "TLS provider not found ({})",
+                                    format_location(None, tls1.span.as_ref())
+                                ))?;
+
+                            let mut tls_resolver_ctx = TcpTlsContext {
+                                // SAFETY: We know that the lifetime of the config is longer
+                                //         than the lifetime of the resolver. but "'static"
+                                //         is the only lifetime we can use here. This
+                                //         constraint is enforced by the provider registry.
+                                config: unsafe {
+                                    std::mem::transmute::<
+                                        &ServerConfigurationBlock,
+                                        &'static ServerConfigurationBlock,
+                                    >(&children)
+                                },
+                                alpn: {
+                                    let alpn_protocols = http_connection_options.alpn_protocols();
+                                    (!alpn_protocols.is_empty()).then_some(alpn_protocols)
+                                },
+                                resolver: None,
+                            };
+                            tls_provider.execute(&mut tls_resolver_ctx)?;
+                            let tls_resolver_sub =
+                                tls_resolver_ctx.resolver.ok_or(anyhow::anyhow!(
+                                    "TLS resolver not found ({})",
+                                    format_location(None, tls1.span.as_ref())
+                                ))?;
+
+                            match (&host_config.0.host, host_config.0.ip) {
+                                (Some(host), Some(ip)) => {
+                                    tls_resolver.insert_ip_and_hostname(
+                                        ip,
+                                        host,
+                                        tls_resolver_sub,
+                                        false,
+                                    );
+                                }
+                                (Some(host), None) => {
+                                    tls_resolver.insert_hostname(host, tls_resolver_sub, false);
+                                }
+                                (None, Some(ip)) => {
+                                    tls_resolver.insert_ip(ip, tls_resolver_sub);
+                                }
+                                (None, None) => {
+                                    tls_resolver.set_root_data(tls_resolver_sub);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some(observability) = host_config.1.directives.get("observability") {
+                let mut observability_to_insert: Vec<Arc<dyn EventSink>> = Vec::new();
+                for observability1 in observability {
+                    if observability1
+                        .args
+                        .first()
+                        .and_then(|a| a.as_boolean())
+                        .unwrap_or(true)
+                    {
+                        let observability_provider_name = observability1
+                            .children
+                            .as_ref()
+                            .and_then(|c| c.get_value("provider"))
+                            .ok_or(anyhow::anyhow!(
+                                "Observability provider not specified ({})",
+                                format_location(None, observability1.span.as_ref())
+                            ))?
+                            .as_str()
+                            .ok_or(anyhow::anyhow!(
+                                "Observability provider must be a string ({})",
+                                format_location(None, observability1.span.as_ref())
+                            ))?;
+
+                        if let Some(observability_registry) =
+                            registry.get_provider_registry::<ObservabilityContext>()
+                        {
+                            let observability_provider = observability_registry
+                                .get(observability_provider_name)
+                                .ok_or(anyhow::anyhow!(
+                                    "Observability provider not found ({})",
+                                    format_location(None, observability1.span.as_ref())
+                                ))?;
+
+                            observability_to_insert.push(Arc::new(
+                                ObservabilityProviderEventSink::new(
+                                    observability_provider,
+                                    Arc::new(
+                                        observability1
+                                            .children
+                                            .as_ref()
+                                            .cloned()
+                                            .unwrap_or_default(),
+                                    ),
+                                ),
+                            ));
+                        }
+                    }
+                }
+                match (&host_config.0.host, host_config.0.ip) {
+                    (Some(host), Some(ip)) => {
+                        observability_resolver.insert_ip_and_hostname(
+                            ip,
+                            host,
+                            observability_to_insert,
+                            false,
+                        );
+                    }
+                    (Some(host), None) => {
+                        observability_resolver.insert_hostname(
+                            host,
+                            observability_to_insert,
+                            false,
+                        );
+                    }
+                    (None, Some(ip)) => {
+                        observability_resolver.insert_ip(ip, observability_to_insert);
+                    }
+                    (None, None) => {
+                        observability_resolver.set_root_data(observability_to_insert);
+                    }
+                }
+            }
+        }
+        let pipeline = registry
+            .get_stage_registry::<HttpContext>()
+            .expect("HTTP stage registry not found")
+            .build_all();
+        let file_pipeline = registry
+            .get_stage_registry::<HttpFileContext>()
+            .map(|registry| registry.build_all())
+            .unwrap_or_else(Pipeline::new);
+
+        let old_config = self.config.load();
+
+        // Atomically swap the entire configuration
+        self.config.store(Arc::new(HttpServerConfig {
             pipeline: Arc::new(pipeline),
             file_pipeline: Arc::new(file_pipeline),
             global_config: global_config.clone(),
@@ -447,9 +722,13 @@ impl BasicHttpModule {
             },
             http_connection_options_resolver: Arc::new(http_connection_options_resolver),
             observability_resolver: Arc::new(observability_resolver),
-            listeners: Mutex::new(Vec::new()),
-            port,
-        })
+            reload_token: CancellationToken::new(),
+        }));
+
+        // Cancel the old reload token to trigger graceful shutdown of existing connections
+        old_config.reload_token.cancel();
+
+        Ok(())
     }
 }
 
@@ -469,19 +748,10 @@ impl Module for BasicHttpModule {
             vec![80]
         };
         for port in ports {
-            let pipeline = self.pipeline.clone();
-            let file_pipeline = self.file_pipeline.clone();
-            let listener_options = resolve_tcp_listener_options(&self.global_config, port)?;
-            let listener = tcp::TcpListenerHandle::new(
-                listener_options,
-                pipeline,
-                file_pipeline,
-                runtime,
-                self.config_resolver.clone(),
-                self.tls_resolver.clone(),
-                self.http_connection_options_resolver.clone(),
-                self.observability_resolver.clone(),
-            )?;
+            let config = self.config.load();
+            let listener_options = resolve_tcp_listener_options(&config.global_config, port)?;
+            let listener =
+                tcp::TcpListenerHandle::new(listener_options, self.config.clone(), runtime)?;
             self.listeners.lock().push(listener);
             // TODO: QUIC
         }

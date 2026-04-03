@@ -135,7 +135,8 @@ impl ModuleLoader for BasicHttpModuleLoader {
                 let port = port_config.port.expect("invalid HTTP server module state");
 
                 if let Some(cached) = self.cache.get(&port) {
-                    new_cache.insert(port, cached.clone());
+                    // Configuration reload: update the cached module with new configuration
+                    cached.reload(&registry, port_config, config.global_config.clone())?;
                 } else {
                     let http_module = Arc::new(BasicHttpModule::new(
                         &registry,

@@ -519,6 +519,7 @@ name = "ferron-http-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "async-trait",
  "bytes",
  "criterion",
