@@ -9,7 +9,7 @@ use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfiguration
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_core::{config::ServerConfigurationBlock, pipeline::Pipeline};
-use ferron_http::{HttpContext, HttpFileContext};
+use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
 use ferron_observability::{EventSink, ObservabilityContext, ObservabilityProviderEventSink};
 use ferron_tls::TcpTlsContext;
 use parking_lot::Mutex;
@@ -29,6 +29,7 @@ mod tls_resolve;
 pub struct HttpServerConfig {
     pub pipeline: Arc<Pipeline<HttpContext>>,
     pub file_pipeline: Arc<Pipeline<HttpFileContext>>,
+    pub error_pipeline: Arc<Pipeline<HttpErrorContext>>,
     pub global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
     pub config_resolver: Arc<crate::config::ThreeStageResolver>,
     pub tls_resolver: Option<Arc<self::tls_resolve::TlsResolverRadixTree>>,
@@ -445,10 +446,15 @@ impl BasicHttpModule {
             .get_stage_registry::<HttpFileContext>()
             .map(|registry| registry.build_all())
             .unwrap_or_else(Pipeline::new);
+        let error_pipeline = registry
+            .get_stage_registry::<HttpErrorContext>()
+            .map(|registry| registry.build_all())
+            .unwrap_or_else(Pipeline::new);
 
         Ok(HttpServerConfig {
             pipeline: Arc::new(pipeline),
             file_pipeline: Arc::new(file_pipeline),
+            error_pipeline: Arc::new(error_pipeline),
             global_config: global_config.clone(),
             config_resolver: Arc::new(ThreeStageResolver::from_prepared_with_global(
                 prepare_host_config(port_config.clone())?,

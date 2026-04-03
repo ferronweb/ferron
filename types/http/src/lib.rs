@@ -48,3 +48,10 @@ pub struct HttpFileContext {
     pub path_info: Option<String>, // For example, "/test" in "/index.php/test"
     pub file_root: std::path::PathBuf,
 }
+
+pub struct HttpErrorContext {
+    pub error_code: u16,
+    pub headers: Option<HeaderMap>,
+    pub configuration: LayeredConfiguration,
+    pub res: Option<Response<UnsyncBoxBody<bytes::Bytes, std::io::Error>>>,
+}

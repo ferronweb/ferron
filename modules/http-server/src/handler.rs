@@ -5,8 +5,9 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use bytes::Bytes;
+use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::{Pipeline, PipelineError};
-use ferron_http::{HttpContext, HttpFileContext, HttpRequest, HttpResponse};
+use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse};
 use ferron_observability::{CompositeEventSink, Event, LogEvent, LogLevel};
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::Empty;
@@ -38,6 +39,7 @@ pub async fn request_handler(
     mut request: HttpRequest,
     pipeline: Arc<Pipeline<HttpContext>>,
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
+    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
     config_resolver: Arc<ThreeStageResolver>,
     local_address: SocketAddr,
     remote_address: SocketAddr,
@@ -58,13 +60,35 @@ pub async fn request_handler(
     // Normalize "Host" header
     if let Err(e) = normalize_host_header(&mut request, &events) {
         emit_error(&events, format!("Host header normalization error: {}", e));
-        return Ok(error_response(StatusCode::BAD_REQUEST));
+        if let Some(response) = execute_error_pipeline(
+            error_pipeline.as_ref(),
+            400,
+            None,
+            LayeredConfiguration::default(),
+            &events,
+        )
+        .await
+        {
+            return Ok(response);
+        }
+        return Ok(builtin_error_response(400, None));
     }
 
     // Sanitize URL
     if let Err(e) = sanitize_request_url(&mut request, &events) {
         emit_error(&events, format!("URL sanitization error: {}", e));
-        return Ok(error_response(StatusCode::BAD_REQUEST));
+        if let Some(response) = execute_error_pipeline(
+            error_pipeline.as_ref(),
+            400,
+            None,
+            LayeredConfiguration::default(),
+            &events,
+        )
+        .await
+        {
+            return Ok(response);
+        }
+        return Ok(builtin_error_response(400, None));
     }
 
     let mut variables = HashMap::new();
@@ -89,7 +113,18 @@ pub async fn request_handler(
     );
 
     let Some(resolution) = resolution else {
-        return Ok(text_response(StatusCode::NOT_FOUND, b"Not Found"));
+        if let Some(response) = execute_error_pipeline(
+            error_pipeline.as_ref(),
+            404,
+            None,
+            LayeredConfiguration::default(),
+            &events,
+        )
+        .await
+        {
+            return Ok(response);
+        }
+        return Ok(builtin_error_response(404, None));
     };
 
     let request_uri = request.uri().clone();
@@ -160,7 +195,17 @@ pub async fn request_handler(
         match ctx.res.unwrap_or(HttpResponse::BuiltinError(404, None)) {
             HttpResponse::Custom(response) => response,
             HttpResponse::BuiltinError(status, headers) => {
-                // TODO: support custom error pages
+                if let Some(response) = execute_error_pipeline(
+                    error_pipeline.as_ref(),
+                    status,
+                    headers.clone(),
+                    ctx.configuration.clone(),
+                    &events,
+                )
+                .await
+                {
+                    return Ok(response);
+                }
                 builtin_error_response(status, headers.as_ref())
             }
             HttpResponse::Abort => return Err(io::Error::other("Aborted")),
@@ -537,20 +582,6 @@ fn sanitize_request_url(
     Ok(())
 }
 
-fn error_response(status: StatusCode) -> Response<ResponseBody> {
-    let body = status.canonical_reason().unwrap_or("Error");
-    Response::builder()
-        .status(status)
-        .body(
-            Full::new(Bytes::copy_from_slice(body.as_bytes()))
-                .map_err(|e| match e {})
-                .boxed_unsync(),
-        )
-        .unwrap_or_else(|_| {
-            text_response(StatusCode::INTERNAL_SERVER_ERROR, b"Internal Server Error")
-        })
-}
-
 fn build_resolver_request(request: &HttpRequest) -> Result<HttpRequest, io::Error> {
     let mut builder = http::Request::builder()
         .method(request.method().clone())
@@ -608,6 +639,27 @@ fn emit_error(events: &CompositeEventSink, message: impl Into<String>) {
         message: message.into(),
         target: LOG_TARGET,
     }));
+}
+
+async fn execute_error_pipeline(
+    error_pipeline: &Pipeline<HttpErrorContext>,
+    error_code: u16,
+    headers: Option<HeaderMap>,
+    configuration: LayeredConfiguration,
+    events: &CompositeEventSink,
+) -> Option<Response<ResponseBody>> {
+    let mut error_ctx = HttpErrorContext {
+        error_code,
+        headers,
+        configuration,
+        res: None,
+    };
+
+    if let Err(error) = error_pipeline.execute_without_inverse(&mut error_ctx).await {
+        emit_error(events, format!("Error pipeline execution error: {error}"));
+    }
+
+    error_ctx.res
 }
 
 #[cfg(test)]

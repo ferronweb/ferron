@@ -10,7 +10,7 @@ use arc_swap::ArcSwap;
 use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
 use ferron_core::{log_error, log_info};
-use ferron_http::{HttpContext, HttpFileContext};
+use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
 use ferron_observability::{CompositeEventSink, Event, EventSink, LogEvent, LogLevel};
 use http::Request;
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt};
@@ -283,6 +283,7 @@ impl TcpListenerHandle {
                                             remote_addr,
                                             server_config.pipeline.clone(),
                                             server_config.file_pipeline.clone(),
+                                            server_config.error_pipeline.clone(),
                                             server_config.config_resolver.clone(),
                                             local_addr,
                                             hinted_hostname,
@@ -299,6 +300,7 @@ impl TcpListenerHandle {
                                             remote_addr,
                                             server_config.pipeline.clone(),
                                             server_config.file_pipeline.clone(),
+                                            server_config.error_pipeline.clone(),
                                             server_config.config_resolver.clone(),
                                             local_addr,
                                             hinted_hostname,
@@ -336,6 +338,7 @@ impl TcpListenerHandle {
                                 remote_addr,
                                 server_config.pipeline.clone(),
                                 server_config.file_pipeline.clone(),
+                                server_config.error_pipeline.clone(),
                                 server_config.config_resolver.clone(),
                                 local_addr,
                                 None,
@@ -404,6 +407,7 @@ async fn handle_http1_connection<S>(
     remote_address: SocketAddr,
     pipeline: Arc<Pipeline<HttpContext>>,
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
+    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
     config_resolver: Arc<ThreeStageResolver>,
     local_address: SocketAddr,
     hinted_hostname: Option<String>,
@@ -423,6 +427,7 @@ async fn handle_http1_connection<S>(
             .handle(build_request_handler(
                 pipeline,
                 file_pipeline,
+                error_pipeline,
                 config_resolver,
                 local_address,
                 remote_address,
@@ -458,6 +463,7 @@ async fn handle_http2_connection<S>(
     remote_address: SocketAddr,
     pipeline: Arc<Pipeline<HttpContext>>,
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
+    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
     config_resolver: Arc<ThreeStageResolver>,
     local_address: SocketAddr,
     hinted_hostname: Option<String>,
@@ -476,6 +482,7 @@ async fn handle_http2_connection<S>(
             .handle(build_request_handler(
                 pipeline,
                 file_pipeline,
+                error_pipeline,
                 config_resolver,
                 local_address,
                 remote_address,
@@ -534,6 +541,7 @@ fn build_http2_options(connection_options: &HttpConnectionOptions) -> Http2Optio
 fn build_request_handler(
     pipeline: Arc<Pipeline<HttpContext>>,
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
+    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
     config_resolver: Arc<ThreeStageResolver>,
     local_address: SocketAddr,
     remote_address: SocketAddr,
@@ -545,6 +553,7 @@ fn build_request_handler(
     move |request: Request<vibeio_http::Incoming>| {
         let pipeline = pipeline.clone();
         let file_pipeline = file_pipeline.clone();
+        let error_pipeline = error_pipeline.clone();
         let config_resolver = config_resolver.clone();
         let hinted_hostname = hinted_hostname.clone();
         let observability_resolver = observability_resolver.clone();
@@ -563,6 +572,7 @@ fn build_request_handler(
                 request,
                 pipeline,
                 file_pipeline,
+                error_pipeline,
                 config_resolver,
                 local_address,
                 remote_address,
