@@ -14,6 +14,7 @@ use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_core::{log_debug, log_info, log_warn};
 use ferron_http_server::BasicHttpModuleLoader;
+use malloc_best_effort::BEMalloc;
 
 mod cli;
 mod service;
@@ -28,7 +29,12 @@ use cli::WinServiceCommands;
 use ferron_observability_consolelog::ConsoleObservabilityModuleLoader;
 use ferron_tls_manual::TlsManualModuleLoader;
 
+#[global_allocator]
+static GLOBAL: BEMalloc = BEMalloc::new();
+
 fn main() {
+    BEMalloc::init();
+
     if let Err(e) = main_inner() {
         if !ferron_core::logging::is_init() {
             let _ = ferron_core::logging::init_stdio_logger(LogLevel::Error);

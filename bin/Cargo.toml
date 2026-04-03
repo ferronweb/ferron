@@ -17,6 +17,7 @@ ferron-config-json = { path = "../modules/config-json" }
 ferron-config-ferronconf = { path = "../modules/config-ferronconf" }
 ferron-tls-manual = { path = "../modules/tls-manual" }
 ferron-observability-consolelog = { path = "../modules/observability-consolelog" }
+malloc-best-effort = "0.1.4"
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8"
