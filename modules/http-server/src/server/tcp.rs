@@ -122,7 +122,11 @@ impl TcpListenerHandle {
             (options.send_buffer_size, options.recv_buffer_size),
         )?;
 
-        log_info!("HTTP server listening on {}", options.address);
+        if tls_resolver.is_some() {
+            log_info!("HTTPS server listening on {}", options.address);
+        } else {
+            log_info!("HTTP server listening on {}", options.address);
+        }
 
         let cancel_token = Arc::new(CancellationToken::new());
 
