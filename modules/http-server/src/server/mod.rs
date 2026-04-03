@@ -1,8 +1,10 @@
 //! HTTP server implementation
 
+use std::collections::HashMap;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 
+use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_core::{config::ServerConfigurationBlock, pipeline::Pipeline};
@@ -243,10 +245,46 @@ impl BasicHttpModule {
                         .unwrap_or(true)
                     {
                         enable_tls = true;
-                        let tls_provider_name = tls1
-                            .children
-                            .as_ref()
-                            .and_then(|c| c.get_value("provider"))
+                        let mut children = tls1.children.clone().unwrap_or(Default::default());
+                        if let (Some(cert), Some(key)) = (
+                            tls1.args
+                                .first()
+                                .and_then(|v| v.as_string_with_interpolations(&HashMap::new())),
+                            tls1.args
+                                .iter()
+                                .nth(1)
+                                .and_then(|v| v.as_string_with_interpolations(&HashMap::new())),
+                        ) {
+                            let mut directives = (&*children.directives).clone();
+                            directives.insert(
+                                "provider".to_string(),
+                                vec![ServerConfigurationDirectiveEntry {
+                                    args: vec![ServerConfigurationValue::String(
+                                        "manual".to_string(),
+                                        None,
+                                    )],
+                                    ..Default::default()
+                                }],
+                            );
+                            directives.insert(
+                                "cert".to_string(),
+                                vec![ServerConfigurationDirectiveEntry {
+                                    args: vec![ServerConfigurationValue::String(cert, None)],
+                                    ..Default::default()
+                                }],
+                            );
+                            directives.insert(
+                                "key".to_string(),
+                                vec![ServerConfigurationDirectiveEntry {
+                                    args: vec![ServerConfigurationValue::String(key, None)],
+                                    ..Default::default()
+                                }],
+                            );
+                            children.directives = Arc::new(directives);
+                        }
+
+                        let tls_provider_name = children
+                            .get_value("provider")
                             .ok_or(anyhow::anyhow!(
                                 "TLS provider not specified ({})",
                                 format_location(None, tls1.span.as_ref())
@@ -275,9 +313,7 @@ impl BasicHttpModule {
                                     std::mem::transmute::<
                                         &ServerConfigurationBlock,
                                         &'static ServerConfigurationBlock,
-                                    >(
-                                        tls1.children.as_ref().expect("TLS config not found")
-                                    )
+                                    >(&children)
                                 },
                                 alpn: {
                                     let alpn_protocols = http_connection_options.alpn_protocols();

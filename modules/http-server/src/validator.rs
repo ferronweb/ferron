@@ -12,9 +12,12 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         // TLS settings
         validate_directive!(config, used_directives, tls, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)]
-            | args(2) => [ServerConfigurationValue::String(_, _), ServerConfigurationValue::String(_, _)],
+            | args(2) => [
+                ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _),
+                ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
+            ],
             {
-            validate_nested!(tls, provider, args(1) => ServerConfigurationValue::String(_, _));
+            validate_nested!(tls, provider, optional args(1) => [ServerConfigurationValue::String(_, _)]);
         });
 
         // Observability settings
@@ -40,7 +43,9 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         });
 
         // Webroot
-        validate_directive!(config, used_directives, root, args(1) => [ServerConfigurationValue::String(_, _)], {});
+        validate_directive!(config, used_directives, root, args(1) => [
+            ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
+        ], {});
 
         Ok(())
     }

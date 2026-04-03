@@ -77,7 +77,6 @@ Current runtime behavior:
 - If `tls` is absent, TLS is disabled for that host.
 - If `tls false { ... }` is used, the block is ignored.
 - The HTTP server currently reads the nested `provider` directive and then delegates the rest of the block to the selected TLS provider.
-- The validator also accepts `tls <string> <string>`, but the current HTTP server path does not consume that shorthand directly. Prefer the block form.
 
 Bundled provider-specific options:
 
