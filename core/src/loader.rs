@@ -97,7 +97,7 @@ pub trait ModuleLoader {
     #[allow(unused_variables)]
     fn register_modules(
         &mut self,
-        registry: &crate::registry::Registry,
+        registry: Arc<crate::registry::Registry>,
         modules: &mut Vec<Arc<dyn crate::Module>>,
         config: &mut crate::config::ServerConfiguration,
     ) -> Result<(), Box<dyn std::error::Error>> {

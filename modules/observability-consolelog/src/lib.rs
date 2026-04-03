@@ -12,23 +12,10 @@ struct ConfiguredEvent {
     log_config: Arc<ServerConfigurationBlock>,
 }
 
-/// Safe wrapper around a registry pointer that implements Send + Sync
-struct RegistryPtr(*const Registry);
-
-unsafe impl Send for RegistryPtr {}
-unsafe impl Sync for RegistryPtr {}
-
-impl RegistryPtr {
-    #[inline]
-    fn as_ref(&self) -> &'static Registry {
-        unsafe { &*self.0 }
-    }
-}
-
 struct ConsoleObservabilityModule {
     inner: kanal::AsyncReceiver<ConfiguredEvent>,
     cancel_token: tokio_util::sync::CancellationToken,
-    registry: RegistryPtr,
+    registry: Arc<Registry>,
 }
 
 impl Module for ConsoleObservabilityModule {
@@ -45,7 +32,7 @@ impl Module for ConsoleObservabilityModule {
         runtime: &mut ferron_core::runtime::Runtime,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let cancel_token = self.cancel_token.clone();
-        let registry = self.registry.as_ref();
+        let registry = self.registry.clone();
 
         let rx = self.inner.clone();
         runtime.spawn_secondary_task(async move {
@@ -57,10 +44,11 @@ impl Module for ConsoleObservabilityModule {
                     None
                 }
             } {
+                let registry = registry.clone();
                 tokio::task::spawn_blocking(move || {
                     match msg.event {
                         ferron_observability::Event::Access(ae) => {
-                            let message = format_access_event(&ae, &msg.log_config, registry);
+                            let message = format_access_event(&ae, &msg.log_config, &registry);
                             if let Some(message) = message {
                                 log_info!("{}", message);
                             }
@@ -164,7 +152,7 @@ impl ModuleLoader for ConsoleObservabilityModuleLoader {
 
     fn register_modules(
         &mut self,
-        registry: &ferron_core::registry::Registry,
+        registry: Arc<ferron_core::registry::Registry>,
         modules: &mut Vec<Arc<dyn ferron_core::Module>>,
         _config: &mut ferron_core::config::ServerConfiguration,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -172,7 +160,7 @@ impl ModuleLoader for ConsoleObservabilityModuleLoader {
             let module = Arc::new(ConsoleObservabilityModule {
                 inner: self.channel.1.clone(),
                 cancel_token: tokio_util::sync::CancellationToken::new(),
-                registry: RegistryPtr(registry as *const Registry),
+                registry: registry.clone(),
             });
 
             self.cache = Some(module.clone());

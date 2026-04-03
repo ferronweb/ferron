@@ -76,7 +76,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
 
     fn register_modules(
         &mut self,
-        registry: &ferron_core::registry::Registry,
+        registry: Arc<ferron_core::registry::Registry>,
         modules: &mut Vec<Arc<dyn ferron_core::Module>>,
         config: &mut ferron_core::config::ServerConfiguration,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -138,7 +138,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
                     new_cache.insert(port, cached.clone());
                 } else {
                     let http_module = Arc::new(BasicHttpModule::new(
-                        registry,
+                        &registry,
                         port_config,
                         config.global_config.clone(),
                         port,
