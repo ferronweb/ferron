@@ -1,12 +1,9 @@
 [package]
-name = "ferron-observability-consolelog"
+name = "ferron-observability-format-json"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 ferron-observability = { path = "../../types/observability" }
 ferron-core = { path = "../../core" }
-kanal = "0.1.1"
-tokio-util = "0.7.18"
-tokio = { version = "1.50.0", features = ["macros"] }
-serde_json = "1.0"
+serde_json = "1.0.149"

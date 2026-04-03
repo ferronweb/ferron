@@ -354,7 +354,6 @@ impl BasicHttpModule {
             if let Some(observability) = host_config.1.directives.get("observability") {
                 let mut observability_to_insert: Vec<Arc<dyn EventSink>> = Vec::new();
                 for observability1 in observability {
-                    // TODO: implicit automatic TLS
                     if observability1
                         .args
                         .first()
@@ -386,7 +385,16 @@ impl BasicHttpModule {
                                 ))?;
 
                             observability_to_insert.push(Arc::new(
-                                ObservabilityProviderEventSink::new(observability_provider),
+                                ObservabilityProviderEventSink::new(
+                                    observability_provider,
+                                    Arc::new(
+                                        observability1
+                                            .children
+                                            .as_ref()
+                                            .cloned()
+                                            .unwrap_or_default(),
+                                    ),
+                                ),
                             ));
                         }
                     }

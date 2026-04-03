@@ -1,14 +1,13 @@
+use std::sync::Arc;
+
+pub use super::access::*;
+
 #[derive(Clone)]
 pub enum Event {
-    Access(AccessEvent),
+    Access(Arc<dyn AccessEvent>),
     Log(LogEvent),
     Metric(MetricEvent),
     Trace(TraceEvent),
-}
-
-#[derive(Clone)]
-pub struct AccessEvent {
-    pub message: String,
 }
 
 #[derive(Clone)]

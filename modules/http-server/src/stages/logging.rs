@@ -1,10 +1,27 @@
 //! Logging stage
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::HttpContext;
 use ferron_observability::{AccessEvent, Event};
+
+// TODO: move access logging logic to the HTTP request handler
+struct HttpAccessLog {
+    path: String,
+}
+
+impl AccessEvent for HttpAccessLog {
+    fn protocol(&self) -> &'static str {
+        "http"
+    }
+
+    fn visit(&self, visitor: &mut dyn ferron_observability::AccessVisitor) {
+        visitor.field_string("path", &self.path);
+    }
+}
 
 pub struct LoggingStage;
 
@@ -29,9 +46,9 @@ impl Stage<HttpContext> for LoggingStage {
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         if let Some(req) = &ctx.req {
-            ctx.events.emit(Event::Access(AccessEvent {
-                message: format!("--> {}", req.uri().path()),
-            }));
+            ctx.events.emit(Event::Access(Arc::new(HttpAccessLog {
+                path: req.uri().path().to_string(),
+            })));
         }
         Ok(true)
     }

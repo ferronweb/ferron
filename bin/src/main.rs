@@ -14,6 +14,7 @@ use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_core::{log_debug, log_info, log_warn};
 use ferron_http_server::BasicHttpModuleLoader;
+use ferron_observability_format_json::JsonFormatObservabilityModuleLoader;
 use malloc_best_effort::BEMalloc;
 
 mod cli;
@@ -236,6 +237,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(FerronConfConfigurationAdapterModuleLoader),
         Box::new(TlsManualModuleLoader),
         Box::new(ConsoleObservabilityModuleLoader::default()),
+        Box::new(JsonFormatObservabilityModuleLoader),
     ]
 }
 

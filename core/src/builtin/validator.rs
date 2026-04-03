@@ -26,6 +26,9 @@ impl crate::config::validator::ConfigurationValidator for BuiltinGlobalConfigura
             args(1) => [ServerConfigurationValue::Boolean(_, _)],
             {
             validate_nested!(observability, provider, args(1) => ServerConfigurationValue::String(_, _));
+
+            // Common fields
+            validate_nested!(observability, format, args(1) => ServerConfigurationValue::String(_, _));
         });
 
         Ok(())
