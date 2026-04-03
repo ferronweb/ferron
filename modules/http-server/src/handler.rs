@@ -71,7 +71,14 @@ pub async fn request_handler(
         {
             return Ok(response);
         }
-        return Ok(builtin_error_response(400, None));
+        return Ok(builtin_error_response(
+            400,
+            None,
+            config_resolver.global().and_then(|g| {
+                g.get_value("admin_email")
+                    .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+            }),
+        ));
     }
 
     // Sanitize URL
@@ -88,7 +95,14 @@ pub async fn request_handler(
         {
             return Ok(response);
         }
-        return Ok(builtin_error_response(400, None));
+        return Ok(builtin_error_response(
+            400,
+            None,
+            config_resolver.global().and_then(|g| {
+                g.get_value("admin_email")
+                    .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+            }),
+        ));
     }
 
     let mut variables = HashMap::new();
@@ -124,7 +138,14 @@ pub async fn request_handler(
         {
             return Ok(response);
         }
-        return Ok(builtin_error_response(404, None));
+        return Ok(builtin_error_response(
+            404,
+            None,
+            config_resolver.global().and_then(|g| {
+                g.get_value("admin_email")
+                    .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+            }),
+        ));
     };
 
     let request_uri = request.uri().clone();
@@ -135,6 +156,10 @@ pub async fn request_handler(
     );
     let request = http::Request::from_parts(request_parts, body);
 
+    let admin_email = resolution
+        .configuration
+        .get_value("admin_email", false)
+        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
     let mut ctx = HttpContext {
         req: Some(request),
         res: None,
@@ -206,7 +231,7 @@ pub async fn request_handler(
                 {
                     return Ok(response);
                 }
-                builtin_error_response(status, headers.as_ref())
+                builtin_error_response(status, headers.as_ref(), admin_email)
             }
             HttpResponse::Abort => return Err(io::Error::other("Aborted")),
         },
@@ -600,8 +625,12 @@ fn build_resolver_request(request: &HttpRequest) -> Result<HttpRequest, io::Erro
         .map_err(|error| io::Error::other(error.to_string()))
 }
 
-// TODO: improved built-in error responses
-fn builtin_error_response(status: u16, headers: Option<&HeaderMap>) -> Response<ResponseBody> {
+// TODO: improved built-in error responses, server administrator's email address
+fn builtin_error_response(
+    status: u16,
+    headers: Option<&HeaderMap>,
+    _admin_email: Option<String>,
+) -> Response<ResponseBody> {
     let status = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
     let body = status.canonical_reason().unwrap_or("Error");
     let mut builder = Response::builder().status(status);

@@ -587,6 +587,11 @@ impl ThreeStageResolver {
 
         Some(ResolutionResult::new(error_layered_config, location_path))
     }
+
+    /// Get the global configuration block
+    pub fn global(&self) -> Option<Arc<ServerConfigurationBlock>> {
+        self.global.clone()
+    }
 }
 
 impl Default for ThreeStageResolver {

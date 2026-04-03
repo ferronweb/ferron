@@ -40,6 +40,11 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
         ], {});
 
+        // Server administrator's email address
+        validate_directive!(config, used_directives, admin_email, args(1) => [
+            ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
+        ], {});
+
         Ok(())
     }
 }

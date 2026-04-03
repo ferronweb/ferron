@@ -14,6 +14,7 @@ http example.com:8080 {
 
 - Protocol behavior: `http`
 - TLS: `tls`
+- Server information: `admin_email`
 
 ## `http`
 
@@ -87,6 +88,24 @@ The bundled `manual` TLS provider reads:
 | --- | --- | --- | --- |
 | `cert` | `<string>` | Path to a PEM certificate file. Interpolation is supported. | none |
 | `key` | `<string>` | Path to a PEM private key file. Interpolation is supported. | none |
+
+## `admin_email`
+
+Syntax:
+
+```ferron
+{
+    admin_email "admin@example.com"
+}
+```
+
+| Arguments | Description | Default |
+| --- | --- | --- |
+| `<string>` | Server administrator's email address. Used in built-in error responses. Interpolation is supported. | none |
+
+Notes:
+
+- This directive is validated but the email is not yet included in error responses (reserved for future use).
 
 ## Notes
 
