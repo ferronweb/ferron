@@ -228,6 +228,8 @@ impl TcpListenerHandle {
                             &CompositeEventSink::new(vec![]),
                         );
 
+                        // TODO: support PROXY protocol server-side
+
                         if let Some(tls_resolver) = &server_config.tls_resolver {
                             let Ok(start_handshake) =
                                 tokio_rustls::LazyConfigAcceptor::new(Acceptor::default(), socket)
