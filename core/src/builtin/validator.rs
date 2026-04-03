@@ -21,6 +21,13 @@ impl crate::config::validator::ConfigurationValidator for BuiltinGlobalConfigura
             });
         }
 
+        // Observability settings
+        validate_directive!(config, used_directives, observability, optional
+            args(1) => [ServerConfigurationValue::Boolean(_, _)],
+            {
+            validate_nested!(observability, provider, args(1) => ServerConfigurationValue::String(_, _));
+        });
+
         Ok(())
     }
 }

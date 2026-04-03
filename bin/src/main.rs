@@ -229,7 +229,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(JsonConfigurationAdapterModuleLoader),
         Box::new(FerronConfConfigurationAdapterModuleLoader),
         Box::new(TlsManualModuleLoader),
-        Box::new(ConsoleObservabilityModuleLoader),
+        Box::new(ConsoleObservabilityModuleLoader::default()),
     ]
 }
 

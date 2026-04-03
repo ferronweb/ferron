@@ -14,7 +14,6 @@ http example.com:8080 {
 
 - Protocol behavior: `http`
 - TLS: `tls`
-- Observability: `observability`
 
 ## `http`
 
@@ -88,34 +87,6 @@ The bundled `manual` TLS provider reads:
 | --- | --- | --- | --- |
 | `cert` | `<string>` | Path to a PEM certificate file. Interpolation is supported. | none |
 | `key` | `<string>` | Path to a PEM private key file. Interpolation is supported. | none |
-
-## `observability`
-
-Syntax:
-
-```ferron
-example.com {
-    observability true {
-        provider console
-    }
-}
-```
-
-| Nested directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `provider` | `<string>` | Observability provider name. Required when observability is enabled through the block form. | none |
-
-Current runtime behavior:
-
-- If `observability` is absent, no host-specific event sink is attached.
-- If `observability false { ... }` is used, the block is ignored.
-- Multiple `observability` directives for the same host accumulate event sinks.
-
-Bundled provider-specific options:
-
-### `provider console`
-
-The bundled `console` provider takes no additional nested directives and writes supported observability events to Titanium's logs.
 
 ## Notes
 
