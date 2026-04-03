@@ -87,6 +87,7 @@ fn format_access_event(
             if let Some(formatter) = formatter_registry.get(formatter_name) {
                 let mut ctx = LogFormatterContext {
                     access_event: access_event.clone(),
+                    log_config: log_config.clone(),
                     output: None,
                 };
                 if formatter.execute(&mut ctx).is_ok() {

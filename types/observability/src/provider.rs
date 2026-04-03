@@ -35,5 +35,6 @@ impl EventSink for ObservabilityProviderEventSink {
 
 pub struct LogFormatterContext {
     pub access_event: Arc<dyn AccessEvent>,
+    pub log_config: Arc<ServerConfigurationBlock>,
     pub output: Option<String>,
 }
