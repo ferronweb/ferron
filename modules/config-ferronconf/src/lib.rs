@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{anyhow, Context};
@@ -24,6 +25,9 @@ use ferronconf::{
     Block, Config, Directive, HostLabels, MatchBlock, Operand, Operator, SnippetBlock, Statement,
     StringPart, Value,
 };
+use notify::RecursiveMode;
+use notify_debouncer_mini::{new_debouncer, DebounceEventResult};
+use tokio::sync::mpsc;
 
 /// Type alias for grouped port configuration to reduce type complexity
 type GroupedPorts = BTreeMap<
@@ -60,12 +64,19 @@ impl ConfigurationAdapter for FerronConfConfigurationAdapter {
         let statements =
             load_top_level_statements(Path::new(filename), &mut include_stack, &mut loaded_files)?;
 
-        Ok((
-            translate_configuration(&statements)?,
-            Box::new(FerronConfConfigurationWatcher {
-                _files: loaded_files,
-            }),
-        ))
+        let watch_enabled = params
+            .get("watch")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+
+        let watcher: Box<dyn ferron_core::config::adapter::ConfigurationWatcher> = if watch_enabled
+        {
+            Box::new(FerronConfConfigurationWatcher::new(loaded_files)?)
+        } else {
+            Box::new(DisabledConfigurationWatcher)
+        };
+
+        Ok((translate_configuration(&statements)?, watcher))
     }
 
     #[inline]
@@ -716,14 +727,51 @@ fn format_source_location(file: &Path, line: usize, column: usize) -> String {
     )
 }
 
+struct DisabledConfigurationWatcher;
+
+#[async_trait]
+impl ferron_core::config::adapter::ConfigurationWatcher for DisabledConfigurationWatcher {
+    async fn watch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        std::future::pending().await
+    }
+}
+
 struct FerronConfConfigurationWatcher {
-    _files: Vec<PathBuf>,
+    _debouncer: notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>,
+    change_rx: mpsc::Receiver<DebounceEventResult>,
+}
+
+impl FerronConfConfigurationWatcher {
+    fn new(files: Vec<PathBuf>) -> Result<Self, Box<dyn std::error::Error>> {
+        let (tx, rx) = mpsc::channel(32);
+
+        let mut debouncer = new_debouncer(
+            Duration::from_millis(100),
+            move |result: DebounceEventResult| {
+                let _ = tx.blocking_send(result);
+            },
+        )?;
+
+        let watcher = debouncer.watcher();
+        for file in &files {
+            watcher.watch(file, RecursiveMode::NonRecursive)?;
+        }
+
+        Ok(Self {
+            _debouncer: debouncer,
+            change_rx: rx,
+        })
+    }
 }
 
 #[async_trait]
 impl ferron_core::config::adapter::ConfigurationWatcher for FerronConfConfigurationWatcher {
     async fn watch(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        std::future::pending().await
+        match self.change_rx.recv().await {
+            Some(Ok(_events)) => Ok(()),
+            Some(Err(e)) => Err(Box::new(e)),
+            None => Err("Watcher channel closed".into()),
+        }
     }
 }
 

@@ -6,6 +6,9 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1.89"
 anyhow = "1"
+notify = "8.2"
+notify-debouncer-mini = "0.6"
+tokio = { version = "1", features = ["sync"] }
 
 ferron-core = { path = "../../core" }
 
