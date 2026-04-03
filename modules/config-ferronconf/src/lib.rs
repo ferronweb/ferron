@@ -198,8 +198,12 @@ fn load_top_level_statements(
 
     let source = fs::read_to_string(&path)
         .with_context(|| format!("Failed to read configuration file '{}'", path.display()))?;
-    let config = Config::from_str(&source)
-        .with_context(|| format!("Failed to parse configuration file '{}'", path.display()))?;
+    let config = Config::from_str(&source).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to parse configuration file '{}': {e}",
+            path.display()
+        )
+    })?;
 
     include_stack.push(path.clone());
 
