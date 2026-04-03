@@ -490,11 +490,12 @@ impl BasicHttpModule {
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Cancel the old reload token to trigger graceful shutdown of existing connections
         let old_config = self.config.load();
-        old_config.reload_token.cancel();
 
         // Build new configuration and atomically swap it
         let new_config = Self::build_config(registry, &port_config, global_config)?;
         self.config.store(Arc::new(new_config));
+
+        old_config.reload_token.cancel();
 
         Ok(())
     }

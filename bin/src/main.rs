@@ -593,7 +593,7 @@ fn load_modules(
             runtime = Some(Runtime::new(io_uring_enabled)?);
         }
         let mut runtime = runtime
-            .take()
+            .as_mut()
             .expect("runtime should be initialized at this point");
 
         for loader in &mut loaders {

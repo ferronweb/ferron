@@ -137,6 +137,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
                 if let Some(cached) = self.cache.get(&port) {
                     // Configuration reload: update the cached module with new configuration
                     cached.reload(&registry, port_config, config.global_config.clone())?;
+                    new_cache.insert(port, cached.clone());
                 } else {
                     let http_module = Arc::new(BasicHttpModule::new(
                         &registry,
