@@ -29,6 +29,7 @@ pub struct HttpContext {
     pub encrypted: bool,
     pub local_address: SocketAddr,
     pub remote_address: SocketAddr,
+    // TODO: ability to store custom variables (using a type map)
 }
 
 impl Variables for HttpContext {
