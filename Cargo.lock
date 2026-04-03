@@ -435,7 +435,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "ferron-config-blank",
  "ferron-config-ferronconf",
  "ferron-config-json",
  "ferron-core",
@@ -448,14 +447,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "windows-service",
-]
-
-[[package]]
-name = "ferron-config-blank"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "ferron-core",
 ]
 
 [[package]]

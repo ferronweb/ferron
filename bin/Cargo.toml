@@ -13,7 +13,6 @@ anyhow = "1.0.102"
 ferron-core = { path = "../core" }
 
 ferron-http-server = { path = "../modules/http-server" }
-ferron-config-blank = { path = "../modules/config-blank" }
 ferron-config-json = { path = "../modules/config-json" }
 ferron-config-ferronconf = { path = "../modules/config-ferronconf" }
 ferron-tls-manual = { path = "../modules/tls-manual" }

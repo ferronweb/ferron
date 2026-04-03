@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use clap::Parser;
-use ferron_config_blank::BlankConfigurationAdapterModuleLoader;
 use ferron_config_ferronconf::FerronConfConfigurationAdapterModuleLoader;
 use ferron_config_json::JsonConfigurationAdapterModuleLoader;
 use ferron_core::builtin::BuiltinModuleLoader;
@@ -227,7 +226,6 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
     vec![
         Box::new(BuiltinModuleLoader),
         Box::new(BasicHttpModuleLoader::default()),
-        Box::new(BlankConfigurationAdapterModuleLoader),
         Box::new(JsonConfigurationAdapterModuleLoader),
         Box::new(FerronConfConfigurationAdapterModuleLoader),
         Box::new(TlsManualModuleLoader),
