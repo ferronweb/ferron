@@ -90,7 +90,7 @@ pub async fn request_handler(
             // Rebuild the resolver request from the current request in context
             if let Some(ref req) = ctx.req {
                 let error_resolver_request = build_resolver_request(req)?;
-                let error_resolution = config_resolver.resolve_error(
+                let error_resolution = config_resolver.resolve_error_scoped(
                     local_ip,
                     ctx.hostname.as_deref().unwrap_or(""),
                     status,

@@ -26,7 +26,7 @@ use ferron_http::HttpRequest;
 
 use super::prepare::{
     PreparedConfiguration, PreparedHostConfigurationBlock, PreparedHostConfigurationErrorConfig,
-    PreparedHostConfigurationMatcher,
+    PreparedHostConfigurationMatch, PreparedHostConfigurationMatcher,
 };
 
 /// Variables that can be used in conditional matching
@@ -1088,16 +1088,28 @@ impl Default for Stage2RadixResolver {
 // Stage 3: Error Configuration Resolution
 // ============================================================================
 
+/// A group of conditional expressions with a polarity (positive for `if`, negated for `if_not`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConditionalGroup {
+    pub exprs: Vec<ServerConfigurationMatcherExpr>,
+    /// When true, this group must NOT match (used for `if_not` blocks).
+    pub negated: bool,
+}
+
+/// Compiled conditional group with pre-compiled regex patterns.
+type CompiledConditionalGroup = (ConditionalGroup, Vec<CompiledMatcherExpr>);
+
 /// Error configuration scope - composable and extensible
 ///
 /// Supports any combination of IP, hostname, path, and conditional scoping.
+/// Conditionals are stored as groups to correctly handle nested `if`/`if_not` blocks.
 /// Resolution order: most specific (all fields set) → least specific (global)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorConfigScope {
     pub ip: Option<IpAddr>,
     pub hostname: Option<String>,
     pub path: Option<String>,
-    pub conditionals: Vec<ServerConfigurationMatcherExpr>,
+    pub conditionals: Vec<ConditionalGroup>,
     pub error_code: Option<u16>, // None = default fallback
 }
 
@@ -1319,11 +1331,11 @@ impl ErrorConfigScope {
 pub struct Stage3ErrorResolver {
     /// Map for non-conditional error configurations keyed by scope
     configs: HashMap<ErrorConfigScopeKey, Arc<PreparedHostConfigurationBlock>>,
-    /// Conditional error configurations stored separately for runtime evaluation
-    /// Each entry: (scope_with_conditionals, compiled_expressions, config, priority)
+    /// Conditional error configurations stored separately for runtime evaluation.
+    /// Each entry: (scope, compiled_groups, config, priority)
     conditional_configs: Vec<(
         ErrorConfigScope,
-        Vec<CompiledMatcherExpr>,
+        Vec<CompiledConditionalGroup>,
         Arc<PreparedHostConfigurationBlock>,
         u32,
     )>,
@@ -1345,15 +1357,22 @@ impl Stage3ErrorResolver {
     ) {
         // If scope has conditionals, store in conditional_configs
         if !scope.conditionals.is_empty() {
-            let compiled_exprs: Result<Vec<_>, _> = scope
+            let compiled_groups: Result<Vec<_>, _> = scope
                 .conditionals
                 .iter()
-                .map(|expr| CompiledMatcherExpr::new(expr.clone()))
+                .map(|group| {
+                    let compiled: Result<Vec<_>, _> = group
+                        .exprs
+                        .iter()
+                        .map(|expr| CompiledMatcherExpr::new(expr.clone()))
+                        .collect();
+                    compiled.map(|c| (group.clone(), c))
+                })
                 .collect();
-            if let Ok(compiled_exprs) = compiled_exprs {
-                let priority = 0u32; // Default priority
+            if let Ok(compiled_groups) = compiled_groups {
+                let priority = 0u32;
                 self.conditional_configs
-                    .push((scope, compiled_exprs, config, priority));
+                    .push((scope, compiled_groups, config, priority));
             }
         } else {
             // Non-conditional, store in regular configs using the key
@@ -1361,27 +1380,34 @@ impl Stage3ErrorResolver {
         }
     }
 
-    /// Register an error configuration with conditionals
+    /// Register an error configuration with conditional groups
     pub fn register_conditional(
         &mut self,
         scope: ErrorConfigScope,
-        conditionals: Vec<ServerConfigurationMatcherExpr>,
+        groups: Vec<ConditionalGroup>,
         priority: u32,
         config: Arc<PreparedHostConfigurationBlock>,
     ) {
-        if conditionals.is_empty() {
+        if groups.is_empty() {
             // No conditionals, use regular register
             self.register(scope, config);
             return;
         }
 
-        let compiled_exprs: Result<Vec<_>, _> = conditionals
+        let compiled_groups: Result<Vec<_>, _> = groups
             .iter()
-            .map(|expr| CompiledMatcherExpr::new(expr.clone()))
+            .map(|group| {
+                let compiled: Result<Vec<_>, _> = group
+                    .exprs
+                    .iter()
+                    .map(|expr| CompiledMatcherExpr::new(expr.clone()))
+                    .collect();
+                compiled.map(|c| (group.clone(), c))
+            })
             .collect();
-        if let Ok(compiled_exprs) = compiled_exprs {
+        if let Ok(compiled_groups) = compiled_groups {
             self.conditional_configs
-                .push((scope, compiled_exprs, config, priority));
+                .push((scope, compiled_groups, config, priority));
         }
     }
 
@@ -1659,13 +1685,22 @@ impl Stage3ErrorResolver {
         scopes
     }
 
-    /// Evaluate conditional expressions with given variables
-    fn evaluate_conditions(
+    /// Evaluate conditional expression groups with proper negation handling.
+    /// Each group must match (for `if`) or must NOT match (for `if_not`).
+    /// All groups use AND logic — every group's requirement must be satisfied.
+    fn evaluate_condition_groups(
         &self,
-        exprs: &[CompiledMatcherExpr],
+        compiled_groups: &[CompiledConditionalGroup],
         variables: &ResolverVariables,
     ) -> bool {
-        evaluate_matcher_conditions(exprs, variables)
+        compiled_groups.iter().all(|(group, compiled_exprs)| {
+            let matches = evaluate_matcher_conditions(compiled_exprs, variables);
+            if group.negated {
+                !matches
+            } else {
+                matches
+            }
+        })
     }
 
     /// Evaluate a single conditional expression with given variables
@@ -1716,10 +1751,10 @@ impl Stage3ErrorResolver {
         let mut matching_conditionals: Vec<_> = self
             .conditional_configs
             .iter()
-            .filter(|(scope, compiled_exprs, _, _)| {
+            .filter(|(scope, compiled_groups, _, _)| {
                 // Check if scope matches (ignoring conditionals in the key)
                 Self::scope_matches(scope, hostname, ip, path_segments, error_code)
-                    && self.evaluate_conditions(compiled_exprs, variables)
+                    && self.evaluate_condition_groups(compiled_groups, variables)
             })
             .map(|(_, _, config, priority)| (*priority, Arc::clone(config)))
             .collect();
@@ -1805,10 +1840,10 @@ impl Stage3ErrorResolver {
         let mut matching_conditionals: Vec<_> = self
             .conditional_configs
             .iter()
-            .filter(|(scope, compiled_exprs, _, _)| {
+            .filter(|(scope, compiled_groups, _, _)| {
                 // Check if scope matches for defaults (error_code = None)
                 Self::scope_matches_for_default(scope, hostname, ip, path_segments)
-                    && self.evaluate_conditions(compiled_exprs, variables)
+                    && self.evaluate_condition_groups(compiled_groups, variables)
             })
             .map(|(_, _, config, priority)| (*priority, Arc::clone(config)))
             .collect();
@@ -2008,66 +2043,208 @@ impl ThreeStageResolver {
 
             // Stage 2 & 3: Register hostname configs and error configs
             for (hostname_opt, host_block) in hosts {
-                // Stage 2: Insert hostname into radix tree
-                if let Some(hostname) = hostname_opt {
-                    // Parse hostname into segments (reversed: com, example, ...)
+                if let Some(ref hostname) = hostname_opt {
+                    // Stage 2: Insert hostname into radix tree
                     let segments: Vec<&str> = hostname.split('.').rev().collect();
                     let host_arc = Arc::new(host_block.clone());
                     resolver.stage2_radix.insert_host(segments, host_arc, 10);
-
-                    // Stage 3: Register host-level error configs (hostname scope)
-                    for error_config in &host_block.error_config {
-                        let config = Arc::new(error_config.config.clone());
-                        if let Some(code) = error_config.error_code {
-                            resolver
-                                .stage3_error
-                                .register_hostname_error(&hostname, code, config);
-                        } else {
-                            resolver
-                                .stage3_error
-                                .set_hostname_default(&hostname, config);
-                        }
-                    }
-
-                    // Stage 3: Register location match error configs (hostname + path scope)
-                    for location_match in &host_block.matches {
-                        if let PreparedHostConfigurationMatcher::Location(ref path_pattern) =
-                            location_match.matcher
-                        {
-                            for error_config in &location_match.config.error_config {
-                                let config = Arc::new(error_config.config.clone());
-                                if let Some(code) = error_config.error_code {
-                                    resolver.stage3_error.register_hostname_path_error(
-                                        &hostname,
-                                        path_pattern,
-                                        code,
-                                        config,
-                                    );
-                                } else {
-                                    resolver.stage3_error.set_hostname_path_default(
-                                        &hostname,
-                                        path_pattern,
-                                        config,
-                                    );
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // Default host (no hostname) - register as global
-                    for error_config in &host_block.error_config {
-                        let config = Arc::new(error_config.config.clone());
-                        if let Some(code) = error_config.error_code {
-                            resolver.stage3_error.register_error(code, config);
-                        } else {
-                            resolver.stage3_error.set_default(config);
-                        }
-                    }
                 }
+
+                // Stage 3: Register error configs recursively with proper scopes
+                Self::register_error_configs_stage3(
+                    &mut resolver.stage3_error,
+                    hostname_opt.as_deref(),
+                    &host_block,
+                    Vec::new(), // no accumulated conditionals at host level
+                    None,       // no path at host level
+                );
+
+                // Stage 2: Register IfConditional and IfNotConditional matchers
+                Self::register_matchers_stage2(&mut resolver.stage2_radix, &host_block.matches);
             }
         }
 
         resolver
+    }
+
+    /// Register IfConditional and IfNotConditional matchers into Stage 2
+    fn register_matchers_stage2(
+        stage2: &mut Stage2RadixResolver,
+        matches: &[PreparedHostConfigurationMatch],
+    ) {
+        for m in matches {
+            match &m.matcher {
+                PreparedHostConfigurationMatcher::IfConditional(exprs) => {
+                    let _ = stage2.insert_if_conditional(exprs.clone(), Arc::clone(&m.config), 10);
+                }
+                PreparedHostConfigurationMatcher::IfNotConditional(exprs) => {
+                    let _ =
+                        stage2.insert_if_not_conditional(exprs.clone(), Arc::clone(&m.config), 10);
+                }
+                PreparedHostConfigurationMatcher::Location(_) => {
+                    // Location matchers are handled in error config registration
+                }
+            }
+        }
+    }
+
+    /// Recursively walk all match blocks and register their error configs into Stage 3
+    /// with proper scope (hostname + path + accumulated conditional groups).
+    ///
+    /// `if` blocks add a positive group, `if_not` blocks add a negated group.
+    fn register_error_configs_stage3(
+        stage3: &mut Stage3ErrorResolver,
+        hostname: Option<&str>,
+        block: &PreparedHostConfigurationBlock,
+        accumulated_groups: Vec<ConditionalGroup>,
+        current_path: Option<String>,
+    ) {
+        // Register host-level error configs
+        for error_config in &block.error_config {
+            let config = Arc::new(error_config.config.clone());
+            Self::register_single_error_config(
+                stage3,
+                hostname,
+                current_path.as_deref(),
+                &accumulated_groups,
+                error_config.error_code,
+                config,
+            );
+        }
+
+        // Recursively walk match blocks
+        for location_match in &block.matches {
+            match &location_match.matcher {
+                PreparedHostConfigurationMatcher::Location(ref path_pattern) => {
+                    // Register location-level error configs
+                    for error_config in &location_match.config.error_config {
+                        let config = Arc::new(error_config.config.clone());
+                        Self::register_single_error_config(
+                            stage3,
+                            hostname,
+                            Some(path_pattern.as_str()),
+                            &accumulated_groups,
+                            error_config.error_code,
+                            config,
+                        );
+                    }
+                    // Recurse into nested location match blocks with the path
+                    Self::register_error_configs_stage3(
+                        stage3,
+                        hostname,
+                        &location_match.config,
+                        accumulated_groups.clone(),
+                        Some(path_pattern.clone()),
+                    );
+                }
+                PreparedHostConfigurationMatcher::IfConditional(ref exprs) => {
+                    // Add a positive conditional group
+                    let mut new_groups = accumulated_groups.clone();
+                    new_groups.push(ConditionalGroup {
+                        exprs: exprs.clone(),
+                        negated: false,
+                    });
+                    // Register error configs inside this if block
+                    for error_config in &location_match.config.error_config {
+                        let config = Arc::new(error_config.config.clone());
+                        Self::register_single_error_config(
+                            stage3,
+                            hostname,
+                            current_path.as_deref(),
+                            &new_groups,
+                            error_config.error_code,
+                            config,
+                        );
+                    }
+                    // Recurse into nested match blocks inside this if
+                    Self::register_error_configs_stage3(
+                        stage3,
+                        hostname,
+                        &location_match.config,
+                        new_groups,
+                        current_path.clone(),
+                    );
+                }
+                PreparedHostConfigurationMatcher::IfNotConditional(ref exprs) => {
+                    // Add a negated conditional group
+                    let mut new_groups = accumulated_groups.clone();
+                    new_groups.push(ConditionalGroup {
+                        exprs: exprs.clone(),
+                        negated: true,
+                    });
+                    // Register error configs inside this if_not block
+                    for error_config in &location_match.config.error_config {
+                        let config = Arc::new(error_config.config.clone());
+                        Self::register_single_error_config(
+                            stage3,
+                            hostname,
+                            current_path.as_deref(),
+                            &new_groups,
+                            error_config.error_code,
+                            config,
+                        );
+                    }
+                    // Recurse into nested match blocks inside this if_not
+                    Self::register_error_configs_stage3(
+                        stage3,
+                        hostname,
+                        &location_match.config,
+                        new_groups,
+                        current_path.clone(),
+                    );
+                }
+            }
+        }
+    }
+
+    /// Register a single error config with the proper scope
+    fn register_single_error_config(
+        stage3: &mut Stage3ErrorResolver,
+        hostname: Option<&str>,
+        path: Option<&str>,
+        conditionals: &[ConditionalGroup],
+        error_code: Option<u16>,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        let scope = ErrorConfigScope {
+            ip: None,
+            hostname: hostname.map(|s| s.to_string()),
+            path: path.map(|s| s.to_string()),
+            conditionals: conditionals.to_vec(),
+            error_code,
+        };
+
+        if !conditionals.is_empty() {
+            stage3.register(scope, config);
+        } else if let Some(hostname) = hostname {
+            if let Some(code) = error_code {
+                if let Some(path) = path {
+                    stage3.register_hostname_path_error(hostname, path, code, config);
+                } else {
+                    stage3.register_hostname_error(hostname, code, config);
+                }
+            } else {
+                if let Some(path) = path {
+                    stage3.set_hostname_path_default(hostname, path, config);
+                } else {
+                    stage3.set_hostname_default(hostname, config);
+                }
+            }
+        } else {
+            if let Some(code) = error_code {
+                if let Some(path) = path {
+                    stage3.register_path_error(path, code, config);
+                } else {
+                    stage3.register_error(code, config);
+                }
+            } else {
+                if let Some(path) = path {
+                    stage3.set_path_default(path, config);
+                } else {
+                    stage3.set_default(config);
+                }
+            }
+        }
     }
 
     /// Create a resolver from prepared configuration and global configuration
@@ -4189,10 +4366,13 @@ mod tests {
         });
 
         // Create a conditional expression: request.method == "GET"
-        let conditionals = vec![ServerConfigurationMatcherExpr {
-            left: ServerConfigurationMatcherOperand::Identifier("request.method".to_string()),
-            right: ServerConfigurationMatcherOperand::String("GET".to_string()),
-            op: ServerConfigurationMatcherOperator::Eq,
+        let conditionals = vec![ConditionalGroup {
+            exprs: vec![ServerConfigurationMatcherExpr {
+                left: ServerConfigurationMatcherOperand::Identifier("request.method".to_string()),
+                right: ServerConfigurationMatcherOperand::String("GET".to_string()),
+                op: ServerConfigurationMatcherOperator::Eq,
+            }],
+            negated: false,
         }];
 
         // Create a scope with conditionals
@@ -4235,6 +4415,233 @@ mod tests {
         assert!(
             result_post.is_none(),
             "Should NOT match conditional error config for POST request"
+        );
+    }
+
+    #[test]
+    fn test_from_prepared_registers_conditionals_stage2() {
+        use ferron_core::config::{
+            ServerConfigurationDirectiveEntry, ServerConfigurationMatcherExpr,
+            ServerConfigurationMatcherOperand, ServerConfigurationMatcherOperator,
+            ServerConfigurationValue,
+        };
+
+        // Build a PreparedHostConfigurationBlock with an IfConditional matcher
+        let mut cond_cfg = HashMap::new();
+        cond_cfg.insert(
+            "conditional_directive".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "if_value".to_string(),
+                    None,
+                )],
+                children: None,
+                span: None,
+            }],
+        );
+
+        let expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::Identifier("method".to_string()),
+            right: ServerConfigurationMatcherOperand::String("GET".to_string()),
+            op: ServerConfigurationMatcherOperator::Eq,
+        };
+
+        let host_block = PreparedHostConfigurationBlock {
+            directives: Arc::new(HashMap::new()),
+            matches: vec![PreparedHostConfigurationMatch {
+                matcher: PreparedHostConfigurationMatcher::IfConditional(vec![expr]),
+                config: Arc::new(PreparedHostConfigurationBlock {
+                    directives: Arc::new(cond_cfg),
+                    matches: Vec::new(),
+                    error_config: Vec::new(),
+                }),
+            }],
+            error_config: Vec::new(),
+        };
+
+        let mut hosts = HashMap::new();
+        hosts.insert(Some("example.com".to_string()), host_block);
+
+        let mut prepared: PreparedConfiguration = PreparedConfiguration::new();
+        prepared.insert(None, hosts);
+
+        let resolver = ThreeStageResolver::from_prepared(prepared);
+
+        // Verify Stage 2 has the conditional registered by resolving it
+        let mut variables = (
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+            HashMap::new(),
+        );
+        variables.1.insert("method".to_string(), "GET".to_string());
+
+        let mut path = ResolvedLocationPath::new();
+        let configs = resolver
+            .stage2_ref()
+            .resolve_conditionals(&variables, &mut path);
+        assert!(
+            !configs.is_empty(),
+            "Stage 2 should have IfConditional registered from from_prepared"
+        );
+    }
+
+    #[test]
+    fn test_from_prepared_registers_location_error_configs_stage3() {
+        use ferron_core::config::{ServerConfigurationDirectiveEntry, ServerConfigurationValue};
+
+        // Build a PreparedHostConfigurationBlock with a Location matcher containing error config
+        let mut error_directives = HashMap::new();
+        error_directives.insert(
+            "error_type".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "location_404".to_string(),
+                    None,
+                )],
+                children: None,
+                span: None,
+            }],
+        );
+
+        let location_block = PreparedHostConfigurationBlock {
+            directives: Arc::new(error_directives),
+            matches: Vec::new(),
+            error_config: vec![PreparedHostConfigurationErrorConfig {
+                error_code: Some(404),
+                config: PreparedHostConfigurationBlock {
+                    directives: Arc::new(HashMap::new()),
+                    matches: Vec::new(),
+                    error_config: Vec::new(),
+                },
+            }],
+        };
+
+        let host_block = PreparedHostConfigurationBlock {
+            directives: Arc::new(HashMap::new()),
+            matches: vec![PreparedHostConfigurationMatch {
+                matcher: PreparedHostConfigurationMatcher::Location("/api".to_string()),
+                config: Arc::new(location_block),
+            }],
+            error_config: Vec::new(),
+        };
+
+        let mut hosts = HashMap::new();
+        hosts.insert(Some("example.com".to_string()), host_block);
+
+        let mut prepared: PreparedConfiguration = PreparedConfiguration::new();
+        prepared.insert(None, hosts);
+
+        let resolver = ThreeStageResolver::from_prepared(prepared);
+
+        // Verify Stage 3 has the location error config registered
+        let mut path = ResolvedLocationPath::new();
+        let result = resolver.stage3_ref().resolve_scoped(
+            404,
+            Some("example.com"),
+            None,
+            Some(&["/api".to_string()]),
+            &(
+                http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
+                HashMap::new(),
+            ),
+            &mut path,
+        );
+        assert!(
+            result.is_some(),
+            "Stage 3 should have location error config registered from from_prepared"
+        );
+    }
+
+    #[test]
+    fn test_from_prepared_nested_location_and_conditional_error_configs() {
+        use ferron_core::config::{
+            ServerConfigurationDirectiveEntry, ServerConfigurationMatcherExpr,
+            ServerConfigurationMatcherOperand, ServerConfigurationMatcherOperator,
+            ServerConfigurationValue,
+        };
+
+        // Build a nested structure:
+        // host_block
+        //   -> Location("/api")
+        //        -> IfConditional(method == POST)
+        //             -> error_config for 500
+        let mut nested_error_directives = HashMap::new();
+        nested_error_directives.insert(
+            "nested_error".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "nested_500".to_string(),
+                    None,
+                )],
+                children: None,
+                span: None,
+            }],
+        );
+
+        let conditional_expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::Identifier("request.method".to_string()),
+            right: ServerConfigurationMatcherOperand::String("POST".to_string()),
+            op: ServerConfigurationMatcherOperator::Eq,
+        };
+
+        let nested_block = PreparedHostConfigurationBlock {
+            directives: Arc::new(nested_error_directives),
+            matches: Vec::new(),
+            error_config: vec![PreparedHostConfigurationErrorConfig {
+                error_code: Some(500),
+                config: PreparedHostConfigurationBlock {
+                    directives: Arc::new(HashMap::new()),
+                    matches: Vec::new(),
+                    error_config: Vec::new(),
+                },
+            }],
+        };
+
+        let if_matcher = PreparedHostConfigurationMatch {
+            matcher: PreparedHostConfigurationMatcher::IfConditional(vec![conditional_expr]),
+            config: Arc::new(nested_block),
+        };
+
+        let location_block = PreparedHostConfigurationBlock {
+            directives: Arc::new(HashMap::new()),
+            matches: vec![if_matcher],
+            error_config: Vec::new(),
+        };
+
+        let host_block = PreparedHostConfigurationBlock {
+            directives: Arc::new(HashMap::new()),
+            matches: vec![PreparedHostConfigurationMatch {
+                matcher: PreparedHostConfigurationMatcher::Location("/api".to_string()),
+                config: Arc::new(location_block),
+            }],
+            error_config: Vec::new(),
+        };
+
+        let mut hosts = HashMap::new();
+        hosts.insert(Some("example.com".to_string()), host_block);
+
+        let mut prepared: PreparedConfiguration = PreparedConfiguration::new();
+        prepared.insert(None, hosts);
+
+        let resolver = ThreeStageResolver::from_prepared(prepared);
+
+        // Verify Stage 3 has the nested conditional error config
+        let mut post_request =
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        *post_request.method_mut() = http::Method::POST;
+        let post_variables = (post_request, HashMap::new());
+
+        let mut path = ResolvedLocationPath::new();
+        let result = resolver.stage3_ref().resolve_scoped(
+            500,
+            Some("example.com"),
+            None,
+            Some(&["/api".to_string()]),
+            &post_variables,
+            &mut path,
+        );
+        assert!(
+            result.is_some(),
+            "Stage 3 should have nested nested location + conditional error config"
         );
     }
 }
