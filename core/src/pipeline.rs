@@ -1,18 +1,24 @@
+//! Pipeline execution framework with ordered stages and inverse operations.
+//!
+//! Pipelines execute stages sequentially, with support for early termination
+//! and inverse operations (like cleanup) in reverse order.
+
 use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::StageConstraint;
 
-/// Error type for pipeline execution
+/// Error type for pipeline execution failures.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PipelineError {
-    /// Stage requested pipeline termination
+    /// Stage requested early pipeline termination
     Terminated,
     /// Custom error from a stage
     Custom(String),
 }
 
 impl PipelineError {
+    /// Create a custom pipeline error with the given message.
     #[inline]
     pub fn custom(msg: impl Into<String>) -> Self {
         PipelineError::Custom(msg.into())
@@ -31,48 +37,72 @@ impl std::fmt::Display for PipelineError {
 
 impl std::error::Error for PipelineError {}
 
+/// A stage in the execution pipeline.
+///
+/// Stages are ordered components that execute sequentially. They can:
+/// - Continue to the next stage (return `Ok(true)`)
+/// - Stop the pipeline gracefully (return `Ok(false)`)
+/// - Terminate with an error (return `Err`)
+/// - Define ordering constraints (Before/After other stages)
+/// - Optionally run inverse operations for cleanup
 #[async_trait(?Send)]
 pub trait Stage<C>: Send + Sync {
-    /// Returns the name of this stage
+    /// Returns the name of this stage (used for ordering constraints).
     fn name(&self) -> &str;
 
-    /// Returns the ordering constraints for this stage
+    /// Returns ordering constraints for this stage.
     #[inline]
     fn constraints(&self) -> Vec<StageConstraint> {
         Vec::new()
     }
 
-    /// Execute the stage with the given context
-    /// Returns Ok(true) to continue pipeline, Ok(false) to terminate gracefully
-    /// Returns Err to terminate with an error
+    /// Execute the stage with the given context.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(true)` - Continue to next stage
+    /// - `Ok(false)` - Terminate pipeline gracefully
+    /// - `Err` - Terminate pipeline with error
     async fn run(&self, ctx: &mut C) -> Result<bool, PipelineError>;
 
-    /// Inverse operation for this stage
-    /// Returns Err to terminate the inverse operation
+    /// Inverse operation for this stage (e.g., cleanup).
+    ///
+    /// Called during pipeline finalization or error handling in reverse execution order.
+    /// Only called for stages that successfully executed.
     #[inline]
     async fn run_inverse(&self, _ctx: &mut C) -> Result<(), PipelineError> {
         Ok(())
     }
 }
 
+/// An ordered sequence of stages to be executed.
+///
+/// Pipelines execute stages in order and support early termination.
+/// After all stages complete, inverse operations are run in reverse order.
 #[derive(Clone, Default)]
 pub struct Pipeline<C> {
     stages: Vec<Arc<dyn Stage<C>>>,
 }
 
 impl<C> Pipeline<C> {
+    /// Create a new empty pipeline.
     #[inline]
     pub fn new() -> Self {
         Self { stages: vec![] }
     }
 
+    /// Add a stage to the end of the pipeline.
     #[inline]
     pub fn add_stage(mut self, stage: Arc<dyn Stage<C>>) -> Self {
         self.stages.push(stage);
         self
     }
 
-    /// Execute the pipeline, stopping early if a stage returns Ok(false) or Err
+    /// Execute the pipeline, running inverse operations in reverse order on completion.
+    ///
+    /// Stages are executed in order until one returns `Ok(false)` or an error.
+    /// After execution completes (successfully or with error), inverse operations
+    /// are run for all executed stages in reverse order.
     pub async fn execute(&self, ctx: &mut C) -> Result<(), PipelineError> {
         let mut executed_stages = vec![];
         for stage in &self.stages {
@@ -91,6 +121,10 @@ impl<C> Pipeline<C> {
         Ok(())
     }
 
+    /// Execute stages without running inverse operations, returning executed stages.
+    ///
+    /// This allows manual control over when inverse operations are run.
+    /// Use with `execute_inverse` to separate stage execution from cleanup.
     pub async fn execute_without_inverse<'a>(
         &'a self,
         ctx: &mut C,
@@ -107,6 +141,7 @@ impl<C> Pipeline<C> {
         Ok(executed_stages)
     }
 
+    /// Execute inverse operations for the given stages in reverse order.
     pub async fn execute_inverse<'a>(
         &'a self,
         ctx: &mut C,

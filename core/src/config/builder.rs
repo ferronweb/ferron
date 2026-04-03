@@ -1,3 +1,10 @@
+//! Builder patterns for constructing server configurations.
+//!
+//! Provides fluent APIs for building:
+//! - ServerConfiguration with global and per-port settings
+//! - Configuration blocks with directives and matchers
+//! - Configuration values and directives
+
 use super::{
     ServerConfiguration, ServerConfigurationBlock, ServerConfigurationDirectiveEntry,
     ServerConfigurationHostFilters, ServerConfigurationMatcher, ServerConfigurationMatcherExpr,
@@ -7,6 +14,8 @@ use super::{
 use std::{collections::BTreeMap, net::IpAddr, sync::Arc};
 
 /// Builder for constructing [`ServerConfiguration`] instances.
+///
+/// Provides a fluent API for building server configurations hierarchically.
 pub struct ServerConfigurationBuilder {
     global_config: Option<Arc<ServerConfigurationBlock>>,
     ports: BTreeMap<String, ServerConfigurationPortBuilder>,

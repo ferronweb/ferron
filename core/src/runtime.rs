@@ -1,9 +1,20 @@
+//! Multi-threaded async runtime supporting both io_uring and traditional async I/O.
+//!
+//! The runtime consists of:
+//! - Primary tasks: Executed on dedicated threads using vibeio with optional io_uring
+//! - Secondary tasks: Executed on a tokio multi-threaded runtime
+
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use crate::log_warn;
 
 static IO_URING_FAILED_WARNING_LOGGED: std::sync::Once = std::sync::Once::new();
 
+/// Manages async task execution across primary and secondary runtimes.
+///
+/// The runtime uses a dual-runtime model:
+/// - Primary threads run vibeio tasks (one per CPU core) with optional io_uring
+/// - Secondary runtime is a tokio multi-threaded executor for other tasks
 #[allow(clippy::type_complexity)]
 pub struct Runtime {
     primary_task_channels: Vec<
@@ -15,6 +26,15 @@ pub struct Runtime {
 }
 
 impl Runtime {
+    /// Create a new runtime with primary threads equal to available parallelism.
+    ///
+    /// # Arguments
+    ///
+    /// * `io_uring_enabled` - Whether to enable io_uring on primary threads (if supported)
+    ///
+    /// # Errors
+    ///
+    /// Returns `std::io::Error` if runtime creation fails.
     pub fn new(io_uring_enabled: bool) -> Result<Self, std::io::Error> {
         // Spawn multiple threads (as many threads as available parallelism
         let available_parallelism = std::thread::available_parallelism()?.get();
@@ -57,6 +77,10 @@ impl Runtime {
         })
     }
 
+    /// Spawn a task factory to all primary threads.
+    ///
+    /// The factory will be called once on each primary thread, allowing
+    /// thread-local initialization for each concurrent task.
     pub fn spawn_primary_task<F>(&mut self, task_factory: F)
     where
         F: Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send + Sync + 'static,
@@ -67,6 +91,7 @@ impl Runtime {
         }
     }
 
+    /// Spawn a task on the secondary (tokio) runtime.
     pub fn spawn_secondary_task<F>(&self, task: F)
     where
         F: Future<Output = ()> + Send + 'static,
@@ -74,6 +99,7 @@ impl Runtime {
         self.secondary_runtime.spawn(task);
     }
 
+    /// Block the current thread and execute a future to completion.
     pub fn block_on<F>(&self, task: F) -> F::Output
     where
         F: Future + 'static,

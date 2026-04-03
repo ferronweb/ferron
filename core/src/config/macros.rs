@@ -1,3 +1,9 @@
+//! Macros for configuration validation and building.
+//!
+//! Provides convenience macros for:
+//! - Validating configuration directives with pattern matching
+//! - Building configuration structures with a fluent API
+
 /// Validate a top-level directive in a configuration block.
 ///
 /// # Usage
