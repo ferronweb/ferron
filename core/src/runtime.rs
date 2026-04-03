@@ -25,7 +25,6 @@ impl Runtime {
                 Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()>>> + Send + Sync + 'static>,
             >();
             std::thread::spawn(move || {
-                // TODO: option to enable/disable `io_uring` support in vibeio
                 let use_io_uring = io_uring_enabled && vibeio::util::supports_io_uring();
                 let rt = vibeio::RuntimeBuilder::new()
                     .enable_timer(true)
