@@ -28,6 +28,7 @@ Notes:
 
 - Matching is path-prefix based.
 - Longer matches are more specific.
+- If this block matches, the URL is automatically rewritten to remove the base URL
 
 ## `if`
 

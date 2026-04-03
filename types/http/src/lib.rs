@@ -5,7 +5,7 @@ pub mod variables;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::Variables;
 use ferron_observability::CompositeEventSink;
-use http::{HeaderMap, Request, Response};
+use http::{HeaderMap, Request, Response, Uri};
 use http_body_util::combinators::UnsyncBoxBody;
 
 pub type HttpRequest = Request<UnsyncBoxBody<bytes::Bytes, std::io::Error>>;
@@ -23,6 +23,7 @@ pub struct HttpContext {
     pub hostname: Option<String>,
     pub variables: std::collections::HashMap<String, String>,
     pub previous_error: Option<u16>,
+    pub original_uri: Option<Uri>,
 }
 
 impl Variables for HttpContext {

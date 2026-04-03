@@ -9,6 +9,7 @@ use ferron_core::pipeline::{Pipeline, PipelineError};
 use ferron_http::{HttpContext, HttpFileContext, HttpRequest, HttpResponse};
 use ferron_observability::{CompositeEventSink, Event, LogEvent, LogLevel};
 use http::{HeaderMap, Response, StatusCode};
+use http_body_util::Empty;
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Full};
 
 use crate::config::ThreeStageResolver;
@@ -64,6 +65,14 @@ pub async fn request_handler(
         return Ok(text_response(StatusCode::NOT_FOUND, b"Not Found"));
     };
 
+    let request_uri = request.uri().clone();
+    let (request_parts, body) = request.into_parts();
+    let cloned_request = http::Request::from_parts(
+        request_parts.clone(),
+        Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync(),
+    );
+    let request = http::Request::from_parts(request_parts, body);
+
     let mut ctx = HttpContext {
         req: Some(request),
         res: None,
@@ -72,6 +81,7 @@ pub async fn request_handler(
         hostname,
         variables,
         previous_error: None,
+        original_uri: Option::from(request_uri),
     };
 
     execute_pipeline_stages(
@@ -80,6 +90,7 @@ pub async fn request_handler(
         file_pipeline.as_ref(),
         &events,
         "",
+        &resolution.location_path.path_segments,
     )
     .await;
 
@@ -87,6 +98,7 @@ pub async fn request_handler(
     if let Some(HttpResponse::BuiltinError(status, _)) = ctx.res {
         if status >= 400 {
             ctx.previous_error = Some(status);
+            ctx.req = Some(cloned_request);
             // Rebuild the resolver request from the current request in context
             if let Some(ref req) = ctx.req {
                 let error_resolver_request = build_resolver_request(req)?;
@@ -106,6 +118,7 @@ pub async fn request_handler(
                         file_pipeline.as_ref(),
                         &events,
                         "Error ",
+                        &resolution.location_path.path_segments,
                     )
                     .await;
                 }
@@ -131,7 +144,43 @@ async fn execute_pipeline_stages(
     file_pipeline: &Pipeline<HttpFileContext>,
     events: &CompositeEventSink,
     log_prefix: &str,
+    path_segments: &[String],
 ) {
+    // Remove the base URL if path segments were matched
+    if !path_segments.is_empty() {
+        if let Some(req) = ctx.req.take() {
+            let (mut parts, body) = req.into_parts();
+            let mut uri_parts = parts.uri.into_parts();
+            if let Some(path_and_query) = uri_parts.path_and_query {
+                let mut path_split = path_and_query.path().split('/').collect::<Vec<_>>();
+                let mut new_path_split = Vec::with_capacity(path_split.len() - path_segments.len());
+                new_path_split.push("");
+                new_path_split.extend(path_split.split_off(path_segments.len() + 1));
+                let new_path = new_path_split.join("/");
+                uri_parts.path_and_query = format!(
+                    "{new_path}{}",
+                    if let Some(q) = path_and_query.query() {
+                        format!("?{q}")
+                    } else {
+                        "".to_string()
+                    }
+                )
+                .try_into()
+                .ok();
+                if uri_parts.path_and_query.is_none() {
+                    ctx.res = Some(HttpResponse::BuiltinError(400, None));
+                    return;
+                }
+            }
+            let Ok(new_uri) = http::Uri::from_parts(uri_parts) else {
+                ctx.res = Some(HttpResponse::BuiltinError(400, None));
+                return;
+            };
+            parts.uri = new_uri;
+            ctx.req = Some(http::Request::from_parts(parts, body));
+        }
+    }
+
     let executed_stages = match pipeline.execute_without_inverse(ctx).await {
         Ok(executed_stages) => Some(executed_stages),
         Err(error) => {
@@ -217,6 +266,7 @@ async fn execute_http_file_pipeline(
         hostname: ctx.hostname.clone(),
         variables: HashMap::new(),
         previous_error: None,
+        original_uri: None,
     };
     let http_ctx = std::mem::replace(ctx, placeholder);
     let mut file_ctx = HttpFileContext {
