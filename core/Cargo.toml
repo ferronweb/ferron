@@ -12,7 +12,7 @@ arc-swap = "1.9.0"
 tokio-util = "0.7.18"
 anyhow = "1.0"
 chrono = "0.4"
-vibeio = { version = "0.2.6", default-features = false, features = ["time"] }
+vibeio = { version = "0.2.6", default-features = false, features = ["time", "blocking-default"] }
 core_affinity = "0.8.3"
 
 [target.'cfg(windows)'.dependencies]

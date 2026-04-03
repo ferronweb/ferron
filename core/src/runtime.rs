@@ -4,7 +4,13 @@
 //! - Primary tasks: Executed on dedicated threads using vibeio with optional io_uring
 //! - Secondary tasks: Executed on a tokio multi-threaded runtime
 
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{Arc, LazyLock},
+};
+
+use vibeio::blocking::DefaultBlockingThreadPool;
 
 use crate::log_warn;
 
@@ -59,6 +65,7 @@ impl Runtime {
                 let use_io_uring = io_uring_enabled && vibeio::util::supports_io_uring();
                 let rt = vibeio::RuntimeBuilder::new()
                     .enable_timer(true)
+                    .blocking_pool(Box::new(BlockingThreadPool))
                     .build()
                     .expect("failed to create vibeio runtime for primary tasks");
 
@@ -83,6 +90,7 @@ impl Runtime {
         Ok(Self {
             primary_task_channels,
             secondary_runtime: tokio::runtime::Builder::new_multi_thread()
+                .worker_threads((available_parallelism / 2).max(1))
                 .enable_all()
                 .build()?,
         })
@@ -116,5 +124,18 @@ impl Runtime {
         F: Future + 'static,
     {
         self.secondary_runtime.block_on(task)
+    }
+}
+
+static GLOBAL_BLOCKING_POOL: LazyLock<DefaultBlockingThreadPool> =
+    LazyLock::new(|| DefaultBlockingThreadPool::with_max_threads(1536));
+
+/// A global blocking thread pool for `vibeio`
+struct BlockingThreadPool;
+
+impl vibeio::blocking::BlockingThreadPool for BlockingThreadPool {
+    #[inline]
+    fn spawn(&self, task: Box<dyn FnOnce() + Send + 'static>) {
+        GLOBAL_BLOCKING_POOL.spawn(task);
     }
 }
