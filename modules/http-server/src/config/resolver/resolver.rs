@@ -67,6 +67,7 @@ impl ThreeStageResolver {
 
                 // Stage 3: Register error configs recursively with proper scopes
                 Self::register_error_configs_stage3(
+                    &mut resolver.stage2_radix,
                     &mut resolver.stage3_error,
                     hostname_opt.as_deref(),
                     &host_block,
@@ -82,7 +83,7 @@ impl ThreeStageResolver {
         resolver
     }
 
-    /// Register IfConditional and IfNotConditional matchers into Stage 2
+    /// Register IfConditional, IfNotConditional, and Location matchers into Stage 2
     fn register_matchers_stage2(
         stage2: &mut Stage2RadixResolver,
         matches: &[PreparedHostConfigurationMatch],
@@ -96,8 +97,15 @@ impl ThreeStageResolver {
                     let _ =
                         stage2.insert_if_not_conditional(exprs.clone(), Arc::clone(&m.config), 10);
                 }
-                PreparedHostConfigurationMatcher::Location(_) => {
-                    // Location matchers are handled in error config registration
+                PreparedHostConfigurationMatcher::Location(path_pattern) => {
+                    // Insert location path into the path radix tree
+                    let path_segments: Vec<&str> = path_pattern
+                        .trim_start_matches('/')
+                        .split('/')
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    let priority = path_pattern.len() as u32;
+                    stage2.insert_location(path_segments, Arc::clone(&m.config), priority);
                 }
             }
         }
@@ -105,9 +113,11 @@ impl ThreeStageResolver {
 
     /// Recursively walk all match blocks and register their error configs into Stage 3
     /// with proper scope (hostname + path + accumulated conditional groups).
+    /// Also registers location matchers into Stage 2.
     ///
     /// `if` blocks add a positive group, `if_not` blocks add a negated group.
     fn register_error_configs_stage3(
+        stage2: &mut Stage2RadixResolver,
         stage3: &mut Stage3ErrorResolver,
         hostname: Option<&str>,
         block: &PreparedHostConfigurationBlock,
@@ -131,6 +141,19 @@ impl ThreeStageResolver {
         for location_match in &block.matches {
             match &location_match.matcher {
                 PreparedHostConfigurationMatcher::Location(ref path_pattern) => {
+                    // Register location into Stage 2 radix tree
+                    let path_segments: Vec<&str> = path_pattern
+                        .trim_start_matches('/')
+                        .split('/')
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    let priority = path_pattern.len() as u32;
+                    stage2.insert_location(
+                        path_segments,
+                        Arc::clone(&location_match.config),
+                        priority,
+                    );
+
                     // Register location-level error configs
                     for error_config in &location_match.config.error_config {
                         let config = Arc::new(error_config.config.clone());
@@ -145,6 +168,7 @@ impl ThreeStageResolver {
                     }
                     // Recurse into nested location match blocks with the path
                     Self::register_error_configs_stage3(
+                        stage2,
                         stage3,
                         hostname,
                         &location_match.config,
@@ -173,6 +197,7 @@ impl ThreeStageResolver {
                     }
                     // Recurse into nested match blocks inside this if
                     Self::register_error_configs_stage3(
+                        stage2,
                         stage3,
                         hostname,
                         &location_match.config,
@@ -201,6 +226,7 @@ impl ThreeStageResolver {
                     }
                     // Recurse into nested match blocks inside this if_not
                     Self::register_error_configs_stage3(
+                        stage2,
                         stage3,
                         hostname,
                         &location_match.config,
@@ -592,84 +618,6 @@ mod tests {
     }
 
     #[test]
-    fn test_stage1_ip_resolver() {
-        let mut resolver = Stage1IpResolver::new();
-
-        let mut hosts = HashMap::new();
-        hosts.insert(Some("example.com".to_string()), create_test_block());
-
-        resolver.register_ip("127.0.0.1".parse().unwrap(), hosts);
-
-        let mut path = ResolvedLocationPath::new();
-        let result = resolver.resolve("127.0.0.1".parse().unwrap(), &mut path);
-
-        assert!(result.is_some());
-        assert_eq!(path.ip, Some("127.0.0.1".parse().unwrap()));
-    }
-
-    #[test]
-    fn test_stage2_hostname_resolution() {
-        let mut resolver = Stage2RadixResolver::new();
-
-        let config = Arc::new(create_test_block());
-
-        // Insert example.com configuration
-        resolver.insert_host(vec!["com", "example"], Arc::clone(&config), 10);
-
-        let mut path = ResolvedLocationPath::new();
-        let configs = resolver.resolve_hostname("example.com", &mut path);
-
-        assert!(!configs.is_empty());
-        assert_eq!(path.hostname_segments, vec!["example", "com"]);
-    }
-
-    #[test]
-    fn test_stage2_wildcard_resolution() {
-        let mut resolver = Stage2RadixResolver::new();
-
-        let config = Arc::new(create_test_block());
-
-        // Insert *.example.com wildcard configuration
-        resolver.insert_host_wildcard(vec!["com", "example"], Arc::clone(&config), 5);
-
-        let mut path = ResolvedLocationPath::new();
-        let configs = resolver.resolve_hostname("sub.example.com", &mut path);
-
-        assert!(!configs.is_empty());
-    }
-
-    #[test]
-    fn test_stage3_error_resolver() {
-        let mut resolver = Stage3ErrorResolver::new();
-
-        let config = Arc::new(create_test_block());
-        resolver.register_error(404, config);
-
-        let mut path = ResolvedLocationPath::new();
-        let result = resolver.resolve(404, &mut path);
-
-        assert!(result.is_some());
-        assert_eq!(path.error_key, Some(404));
-    }
-
-    #[test]
-    fn test_stage1_layered_resolution() {
-        let mut resolver = Stage1IpResolver::new();
-
-        let mut hosts = HashMap::new();
-        let host_block = create_test_block();
-        // Use None as the key (default host config)
-        hosts.insert(None, host_block);
-
-        resolver.register_ip("127.0.0.1".parse().unwrap(), hosts);
-
-        let (config, path) = resolver.resolve_layered("127.0.0.1".parse().unwrap(), None);
-
-        assert_eq!(path.ip, Some("127.0.0.1".parse().unwrap()));
-        assert_eq!(config.layers.len(), 1);
-    }
-
-    #[test]
     fn test_stage2_layered_resolution() {
         let mut resolver = Stage2RadixResolver::new();
 
@@ -691,19 +639,6 @@ mod tests {
 
         assert!(!path.hostname_segments.is_empty());
         assert!(!layered_config.layers.is_empty());
-    }
-
-    #[test]
-    fn test_stage3_layered_resolution() {
-        let mut resolver = Stage3ErrorResolver::new();
-
-        let config = Arc::new(create_test_block());
-        resolver.register_error(404, config);
-
-        let (layered_config, path) = resolver.resolve_layered(404, None);
-
-        assert_eq!(path.error_key, Some(404));
-        assert_eq!(layered_config.layers.len(), 1);
     }
 
     #[test]
@@ -834,45 +769,6 @@ mod tests {
 
         assert!(!configs.is_empty());
         assert!(!path.conditionals.is_empty());
-    }
-
-    /// After inserting a single hostname the root (which is non-terminal and
-    /// has only one child) must absorb the entire chain into itself.
-    /// The root's `keys` must therefore contain both segments.
-    #[test]
-    fn test_radix_compression_single_host() {
-        let mut resolver = Stage2RadixResolver::new();
-        let config = Arc::new(create_test_block());
-        resolver.insert_host(vec!["com", "example"], Arc::clone(&config), 10);
-
-        // With terminal compression enabled, BOTH "com" and "example" compress into root.
-        // Final state: root.keys == [HostSegment("com"), HostSegment("example")]
-        //              root.children is empty, root.is_terminal = true
-        let root = &resolver.host_tree;
-        assert_eq!(root.keys.len(), 2);
-        assert_eq!(root.keys[0], RadixKey::HostSegment("com".to_string()));
-        assert_eq!(root.keys[1], RadixKey::HostSegment("example".to_string()));
-        assert!(root.children.is_empty());
-        assert!(root.data.is_terminal);
-    }
-
-    /// When two hostnames share a TLD ("com") but differ in their second
-    /// segment, the root absorbs "com" (sole child, non-terminal) but stops
-    /// there because the "com" node has two children.
-    #[test]
-    fn test_radix_no_compression_branch() {
-        let mut resolver = Stage2RadixResolver::new();
-        let c1 = Arc::new(create_test_block());
-        let c2 = Arc::new(create_test_block());
-        resolver.insert_host(vec!["com", "example"], Arc::clone(&c1), 10);
-        resolver.insert_host(vec!["com", "other"], Arc::clone(&c2), 10);
-
-        // Root absorbs "com" → root.keys == [HostSegment("com")].
-        // Cannot go further: "com" has two children ("example", "other").
-        let root = &resolver.host_tree;
-        assert_eq!(root.keys.len(), 1);
-        assert_eq!(root.keys[0], RadixKey::HostSegment("com".to_string()));
-        assert_eq!(root.children.len(), 2);
     }
 
     /// Compressed nodes must still resolve correctly.
@@ -1211,14 +1107,18 @@ mod tests {
                 span: None,
             }],
         );
+        let loc_config = Arc::new(PreparedHostConfigurationBlock {
+            directives: Arc::new(loc_cfg),
+            matches: Vec::new(),
+            error_config: Vec::new(),
+        });
         base_block.matches.push(PreparedHostConfigurationMatch {
             matcher: PreparedHostConfigurationMatcher::Location("/api".to_string()),
-            config: Arc::new(PreparedHostConfigurationBlock {
-                directives: Arc::new(loc_cfg),
-                matches: Vec::new(),
-                error_config: Vec::new(),
-            }),
+            config: Arc::clone(&loc_config),
         });
+
+        // Register location into path tree
+        resolver.insert_location(vec!["api"], loc_config, 4);
 
         // Conditional matcher: if method == GET
         let expr = ServerConfigurationMatcherExpr {

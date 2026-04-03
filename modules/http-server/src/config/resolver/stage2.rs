@@ -8,7 +8,7 @@ use ferron_core::config::{
     ServerConfigurationMatcherOperand,
 };
 
-use super::super::prepare::{PreparedHostConfigurationBlock, PreparedHostConfigurationMatcher};
+use super::super::prepare::PreparedHostConfigurationBlock;
 use super::matcher::{
     evaluate_matcher_condition, evaluate_matcher_conditions, resolve_matcher_operand,
     CompiledMatcherExpr,
@@ -133,6 +133,8 @@ impl RadixNode {
 pub struct Stage2RadixResolver {
     /// The radix tree for hostname matching
     pub(crate) host_tree: RadixNode,
+    /// The radix tree for location path matching
+    pub(crate) path_tree: RadixNode,
     /// Conditional configurations (IfConditional) with pre-compiled regexes
     if_conditionals: Vec<(
         Vec<CompiledMatcherExpr>,
@@ -147,11 +149,18 @@ pub struct Stage2RadixResolver {
     )>,
 }
 
+impl Default for Stage2RadixResolver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Stage2RadixResolver {
     pub fn new() -> Self {
         Self {
             // Root node has no keys of its own.
             host_tree: RadixNode::new(vec![]),
+            path_tree: RadixNode::new(vec![]),
             if_conditionals: Vec::new(),
             if_not_conditionals: Vec::new(),
         }
@@ -417,6 +426,82 @@ impl Stage2RadixResolver {
         }
     }
 
+    /// Insert a location path configuration into the path radix tree.
+    ///
+    /// # Arguments
+    /// * `path_segments` - Path segments in order (e.g., ["api", "users"] for "/api/users")
+    /// * `config` - Configuration block to associate
+    /// * `priority` - Match priority (higher = more specific)
+    pub fn insert_location(
+        &mut self,
+        path_segments: Vec<&str>,
+        config: Arc<PreparedHostConfigurationBlock>,
+        priority: u32,
+    ) {
+        let mut current = &mut self.path_tree;
+        let mut segment_idx = 0;
+
+        while segment_idx < path_segments.len() {
+            let segment = path_segments[segment_idx];
+
+            // Check if current node has compressed keys that match our path
+            if !current.keys.is_empty() {
+                let first_key_matches = current
+                    .keys
+                    .first()
+                    .is_some_and(|k| matches!(k, RadixKey::PathSegment(s) if s == segment));
+
+                if first_key_matches {
+                    segment_idx += 1;
+
+                    // Split if there are remaining keys
+                    if current.keys.len() > 1 {
+                        let remaining_keys: Vec<RadixKey> = current.keys.drain(1..).collect();
+                        let old_data = std::mem::take(&mut current.data);
+                        let old_children = std::mem::take(&mut current.children);
+                        let old_wildcard = current.wildcard_child.take();
+
+                        let child_key = match remaining_keys.first() {
+                            Some(RadixKey::PathSegment(s)) => s.clone(),
+                            _ => panic!("Expected PathSegment as first key after split"),
+                        };
+                        let mut child_node = RadixNode::new(remaining_keys);
+                        child_node.data = old_data;
+                        child_node.children = old_children;
+                        child_node.wildcard_child = old_wildcard;
+                        current.children.insert(child_key, child_node);
+                    }
+
+                    // Navigate to children for next segment
+                    if segment_idx < path_segments.len() {
+                        let next_segment = path_segments[segment_idx];
+                        let key = next_segment.to_string();
+                        current = current.children.entry(key).or_insert_with(|| {
+                            RadixNode::new(vec![RadixKey::PathSegment(next_segment.to_string())])
+                        });
+                        segment_idx += 1;
+                    }
+                    continue;
+                }
+            }
+
+            // Normal case
+            let key = segment.to_string();
+            current = current.children.entry(key).or_insert_with(|| {
+                RadixNode::new(vec![RadixKey::PathSegment(segment.to_string())])
+            });
+            segment_idx += 1;
+        }
+
+        current.data = RadixNodeData {
+            config: Some(config),
+            is_terminal: true,
+            priority,
+        };
+
+        self.path_tree.try_compress();
+    }
+
     /// Resolve hostname and return matching configurations
     ///
     /// Returns all matching configurations from most specific to least specific
@@ -574,7 +659,7 @@ impl Stage2RadixResolver {
 
     /// Resolve location path and return matching configurations
     ///
-    /// This performs a prefix-based search through the location matches.
+    /// This performs a longest-prefix match search through the path radix tree.
     /// Uses Arc::clone() for zero-copy sharing of the base configuration.
     pub fn resolve_location(
         &self,
@@ -587,56 +672,124 @@ impl Stage2RadixResolver {
         // First, add the base configuration (zero-copy Arc clone)
         configs.push((0u32, Arc::clone(&base_config)));
 
-        // Find matching location directives
-        for location_match in &base_config.matches {
-            if let PreparedHostConfigurationMatcher::Location(location_path_str) =
-                &location_match.matcher
-            {
-                if self.location_matches(path, location_path_str) {
-                    // Calculate priority based on specificity (longer path = more specific)
-                    let priority = location_path_str.len() as u32;
-                    configs.push((priority, Arc::clone(&location_match.config)));
+        // Parse path segments
+        let segments: Vec<&str> = path
+            .trim_start_matches('/')
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .collect();
 
-                    // Update location path
-                    location_path.path_segments = location_path_str
-                        .trim_start_matches('/')
-                        .split('/')
-                        .filter(|s| !s.is_empty())
-                        .map(|s| s.to_string())
-                        .collect();
-                }
-            }
+        // Traverse the path tree and collect all matching configs
+        let mut matched_configs = Vec::new();
+        let mut matched_path_segments = Vec::new();
+        self.collect_path_matches(
+            &self.path_tree,
+            &segments,
+            0,
+            &mut matched_configs,
+            &mut Vec::new(),
+            &mut matched_path_segments,
+        );
+
+        // Sort by priority (descending - longer/more specific paths first)
+        matched_configs.sort_by(|a, b| b.0.cmp(&a.0));
+
+        // Use the longest matched path (most specific match)
+        if let Some(longest_path) = matched_path_segments.into_iter().max_by_key(|p| p.len()) {
+            location_path.path_segments = longest_path;
         }
 
-        // Sort by priority (descending)
-        configs.sort_by(|a, b| b.0.cmp(&a.0));
+        // Add matched configs
+        for (_, config) in matched_configs {
+            configs.push((0u32, Arc::clone(&config)));
+        }
 
         configs.into_iter().map(|(_, c)| c).collect()
     }
 
-    /// Check if a path matches a location pattern
+    /// Recursive traversal of the path radix tree for location matching.
     ///
-    /// Supports:
-    /// - Exact match: "/api" matches "/api"
-    /// - Prefix match: "/api/" matches "/api/users"
-    /// - Regex-like patterns could be added later
-    fn location_matches(&self, path: &str, pattern: &str) -> bool {
-        // Exact match
-        if path == pattern {
-            return true;
+    /// Collects all matching configurations along the path, supporting
+    /// both exact matches and prefix matches (terminal nodes).
+    fn collect_path_matches(
+        &self,
+        node: &RadixNode,
+        segments: &[&str],
+        depth: usize,
+        configs: &mut Vec<(u32, Arc<PreparedHostConfigurationBlock>)>,
+        current_path: &mut Vec<String>,
+        result_paths: &mut Vec<Vec<String>>,
+    ) {
+        // Collect the PathSegment strings of this node's own key chain.
+        let own_seg_keys: Vec<&str> = node
+            .keys
+            .iter()
+            .filter_map(|k| {
+                if let RadixKey::PathSegment(s) = k {
+                    Some(s.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let own_len = own_seg_keys.len();
+
+        // Validate that the input segments match this node's own keys.
+        if own_len > 0 {
+            let end = depth + own_len;
+            if end > segments.len() || segments[depth..end] != own_seg_keys[..] {
+                return; // Mismatch — this branch cannot match.
+            }
+            for seg in &own_seg_keys {
+                current_path.push(seg.to_string());
+            }
         }
 
-        // Prefix match (pattern with trailing slash)
-        if pattern.ends_with('/') && path.starts_with(pattern) {
-            return true;
+        // `effective_depth` is the index past this node's own keys.
+        let effective_depth = depth + own_len;
+
+        // If this node is terminal, it's a prefix match
+        if node.data.is_terminal {
+            if let Some(ref config) = node.data.config {
+                configs.push((node.data.priority, Arc::clone(config)));
+                result_paths.push(current_path.clone());
+            }
         }
 
-        // Prefix match (pattern without trailing slash, path has more segments)
-        if !pattern.ends_with('/') && path.starts_with(&format!("{}/", pattern)) {
-            return true;
+        // If all segments consumed, check for exact match
+        if effective_depth == segments.len() {
+            // Already added terminal nodes above
+            // Also check children for more specific matches (prefix match)
+            for child in node.children.values() {
+                self.collect_path_matches(
+                    child,
+                    segments,
+                    effective_depth,
+                    configs,
+                    current_path,
+                    result_paths,
+                );
+            }
+        } else if effective_depth < segments.len() {
+            // More segments to match - try exact child match
+            let current_segment = segments[effective_depth];
+            if let Some(child) = node.children.get(current_segment) {
+                self.collect_path_matches(
+                    child,
+                    segments,
+                    effective_depth,
+                    configs,
+                    current_path,
+                    result_paths,
+                );
+            }
         }
 
-        false
+        // Pop this node's own keys from the path before returning.
+        for _ in &own_seg_keys {
+            current_path.pop();
+        }
     }
 
     /// Resolve conditionals with given variables
@@ -835,5 +988,98 @@ mod tests {
         // The radix tree should NOT compress here because "com" has multiple children
         let root = &resolver.host_tree;
         assert!(!root.children.is_empty(), "Root should have children");
+    }
+
+    #[test]
+    fn test_stage2_path_resolution_exact() {
+        let mut resolver = Stage2RadixResolver::new();
+
+        let config = Arc::new(create_test_block());
+
+        // Insert /api/users path configuration
+        resolver.insert_location(vec!["api", "users"], Arc::clone(&config), 10);
+
+        let mut path = ResolvedLocationPath::new();
+        let configs = resolver.resolve_location("/api/users", Arc::clone(&config), &mut path);
+
+        assert!(!configs.is_empty());
+        assert_eq!(path.path_segments, vec!["api", "users"]);
+    }
+
+    #[test]
+    fn test_stage2_path_resolution_prefix() {
+        let mut resolver = Stage2RadixResolver::new();
+
+        let base_config = Arc::new(create_test_block());
+        let api_config = Arc::new(create_test_block());
+
+        // Insert /api path configuration
+        resolver.insert_location(vec!["api"], Arc::clone(&api_config), 3);
+
+        let mut path = ResolvedLocationPath::new();
+        let configs =
+            resolver.resolve_location("/api/users/123", Arc::clone(&base_config), &mut path);
+
+        // Should match the /api prefix
+        assert!(configs.len() >= 2); // base + api
+        assert_eq!(path.path_segments, vec!["api"]);
+    }
+
+    #[test]
+    fn test_stage2_path_resolution_longest_match() {
+        let mut resolver = Stage2RadixResolver::new();
+
+        let base_config = Arc::new(create_test_block());
+        let api_config = Arc::new(create_test_block());
+        let users_config = Arc::new(create_test_block());
+
+        // Insert /api and /api/users path configurations
+        resolver.insert_location(vec!["api"], Arc::clone(&api_config), 3);
+        resolver.insert_location(vec!["api", "users"], Arc::clone(&users_config), 10);
+
+        let mut path = ResolvedLocationPath::new();
+        let configs =
+            resolver.resolve_location("/api/users/123", Arc::clone(&base_config), &mut path);
+
+        // Should match both /api and /api/users, with /api/users being more specific
+        assert!(configs.len() >= 3); // base + api + users
+        assert_eq!(path.path_segments, vec!["api", "users"]);
+    }
+
+    #[test]
+    fn test_stage2_path_resolution_no_match() {
+        let mut resolver = Stage2RadixResolver::new();
+
+        let base_config = Arc::new(create_test_block());
+        let api_config = Arc::new(create_test_block());
+
+        // Insert /api path configuration
+        resolver.insert_location(vec!["api"], Arc::clone(&api_config), 3);
+
+        let mut path = ResolvedLocationPath::new();
+        let configs = resolver.resolve_location("/other/path", Arc::clone(&base_config), &mut path);
+
+        // Should only have base config
+        assert_eq!(configs.len(), 1);
+        assert!(path.path_segments.is_empty());
+    }
+
+    #[test]
+    fn test_path_radix_compression() {
+        let mut resolver = Stage2RadixResolver::new();
+
+        let config = Arc::new(create_test_block());
+
+        // Insert api/v1/users path
+        resolver.insert_location(vec!["api", "v1", "users"], Arc::clone(&config), 15);
+
+        // After insertion, verify the path tree structure
+        let root = &resolver.path_tree;
+        assert!(!root.keys.is_empty(), "Root should have compressed keys");
+        assert_eq!(
+            root.keys.len(),
+            3,
+            "Should have 3 compressed keys: api, v1, users"
+        );
     }
 }
