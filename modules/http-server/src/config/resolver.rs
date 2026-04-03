@@ -160,6 +160,89 @@ impl CompiledMatcherExpr {
 }
 
 // ============================================================================
+// Shared Conditional Evaluation Utilities
+// ============================================================================
+
+/// Evaluate a collection of conditional expressions with AND logic (all must match).
+pub fn evaluate_matcher_conditions(
+    exprs: &[CompiledMatcherExpr],
+    variables: &ResolverVariables,
+) -> bool {
+    exprs
+        .iter()
+        .all(|expr| evaluate_matcher_condition(expr, variables))
+}
+
+/// Evaluate a single conditional matcher expression with given variables.
+pub fn evaluate_matcher_condition(
+    compiled_expr: &CompiledMatcherExpr,
+    variables: &ResolverVariables,
+) -> bool {
+    let expr = &compiled_expr.expr;
+    let left_val = resolve_matcher_operand(&expr.left, variables);
+    let right_val = resolve_matcher_operand(&expr.right, variables);
+
+    match &expr.op {
+        ServerConfigurationMatcherOperator::Eq => left_val == right_val,
+        ServerConfigurationMatcherOperator::NotEq => left_val != right_val,
+        ServerConfigurationMatcherOperator::Regex => {
+            if let Some(left) = left_val {
+                if let Some(regex) = &compiled_expr.compiled_regex {
+                    regex.is_match(&left).unwrap_or(false)
+                } else if let Some(right) = right_val {
+                    match Regex::new(&right) {
+                        Ok(regex) => regex.is_match(&left).unwrap_or(false),
+                        Err(_) => false,
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        }
+        ServerConfigurationMatcherOperator::NotRegex => {
+            if let Some(left) = left_val {
+                if let Some(regex) = &compiled_expr.compiled_regex {
+                    !regex.is_match(&left).unwrap_or(false)
+                } else if let Some(right) = right_val {
+                    match Regex::new(&right) {
+                        Ok(regex) => !regex.is_match(&left).unwrap_or(false),
+                        Err(_) => true,
+                    }
+                } else {
+                    true
+                }
+            } else {
+                true
+            }
+        }
+        ServerConfigurationMatcherOperator::In => {
+            if let (Some(l), Some(r)) = (left_val, right_val) {
+                r.split(',').any(|item| item.trim() == l)
+            } else {
+                false
+            }
+        }
+    }
+}
+
+/// Resolve the string value of a matcher operand from variables or literals.
+pub fn resolve_matcher_operand(
+    operand: &ServerConfigurationMatcherOperand,
+    variables: &ResolverVariables,
+) -> Option<String> {
+    match operand {
+        ServerConfigurationMatcherOperand::Identifier(name) => {
+            resolve_variable(name, &variables.0, &variables.1)
+        }
+        ServerConfigurationMatcherOperand::String(s) => Some(s.clone()),
+        ServerConfigurationMatcherOperand::Integer(n) => Some(n.to_string()),
+        ServerConfigurationMatcherOperand::Float(f) => Some(f.to_string()),
+    }
+}
+
+// ============================================================================
 // Stage 1: IP Address-based Resolution
 // ============================================================================
 
@@ -917,10 +1000,7 @@ impl Stage2RadixResolver {
         exprs: &[CompiledMatcherExpr],
         variables: &ResolverVariables,
     ) -> bool {
-        // All expressions must match (AND logic)
-        exprs
-            .iter()
-            .all(|expr| self.evaluate_condition(expr, variables))
+        evaluate_matcher_conditions(exprs, variables)
     }
 
     /// Evaluate a single conditional expression with given variables
@@ -929,62 +1009,7 @@ impl Stage2RadixResolver {
         compiled_expr: &CompiledMatcherExpr,
         variables: &ResolverVariables,
     ) -> bool {
-        let expr = &compiled_expr.expr;
-        let left_val = self.get_operand_value(&expr.left, variables);
-        let right_val = self.get_operand_value(&expr.right, variables);
-
-        match &expr.op {
-            ServerConfigurationMatcherOperator::Eq => left_val == right_val,
-            ServerConfigurationMatcherOperator::NotEq => left_val != right_val,
-            ServerConfigurationMatcherOperator::Regex => {
-                if let Some(left) = left_val {
-                    // Use pre-compiled regex if available
-                    if let Some(regex) = &compiled_expr.compiled_regex {
-                        regex.is_match(&left).unwrap_or(false)
-                    } else {
-                        // Compile at runtime only if pattern is dynamic (from identifier)
-                        if let Some(right) = right_val {
-                            match Regex::new(&right) {
-                                Ok(regex) => regex.is_match(&left).unwrap_or(false),
-                                Err(_) => false, // Invalid regex pattern fails gracefully
-                            }
-                        } else {
-                            false
-                        }
-                    }
-                } else {
-                    false
-                }
-            }
-            ServerConfigurationMatcherOperator::NotRegex => {
-                if let Some(left) = left_val {
-                    // Use pre-compiled regex if available
-                    if let Some(regex) = &compiled_expr.compiled_regex {
-                        !regex.is_match(&left).unwrap_or(false)
-                    } else {
-                        // Compile at runtime only if pattern is dynamic (from identifier)
-                        if let Some(right) = right_val {
-                            match Regex::new(&right) {
-                                Ok(regex) => !regex.is_match(&left).unwrap_or(false),
-                                Err(_) => true, // Invalid regex pattern treated as non-matching
-                            }
-                        } else {
-                            true
-                        }
-                    }
-                } else {
-                    true
-                }
-            }
-            ServerConfigurationMatcherOperator::In => {
-                // TODO: support Accept-Language style lists
-                if let (Some(l), Some(r)) = (left_val, right_val) {
-                    r.split(',').any(|item| item.trim() == l)
-                } else {
-                    false
-                }
-            }
-        }
+        evaluate_matcher_condition(compiled_expr, variables)
     }
 
     /// Get the string value of an operand
@@ -993,14 +1018,7 @@ impl Stage2RadixResolver {
         operand: &ServerConfigurationMatcherOperand,
         variables: &ResolverVariables,
     ) -> Option<String> {
-        match operand {
-            ServerConfigurationMatcherOperand::Identifier(name) => {
-                resolve_variable(name, &variables.0, &variables.1)
-            }
-            ServerConfigurationMatcherOperand::String(s) => Some(s.clone()),
-            ServerConfigurationMatcherOperand::Integer(n) => Some(n.to_string()),
-            ServerConfigurationMatcherOperand::Float(f) => Some(f.to_string()),
-        }
+        resolve_matcher_operand(operand, variables)
     }
 
     /// Full Stage 2 resolution combining hostname, location, and conditionals
@@ -1072,14 +1090,36 @@ impl Default for Stage2RadixResolver {
 
 /// Error configuration scope - composable and extensible
 ///
-/// Supports any combination of IP, hostname, and path scoping.
+/// Supports any combination of IP, hostname, path, and conditional scoping.
 /// Resolution order: most specific (all fields set) → least specific (global)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorConfigScope {
     pub ip: Option<IpAddr>,
     pub hostname: Option<String>,
     pub path: Option<String>,
+    pub conditionals: Vec<ServerConfigurationMatcherExpr>,
     pub error_code: Option<u16>, // None = default fallback
+}
+
+/// Hashable key for error configuration lookup (excludes conditionals)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ErrorConfigScopeKey {
+    pub ip: Option<IpAddr>,
+    pub hostname: Option<String>,
+    pub path: Option<String>,
+    pub error_code: Option<u16>,
+}
+
+impl ErrorConfigScope {
+    /// Convert to a hashable key (excluding conditionals)
+    pub fn to_key(&self) -> ErrorConfigScopeKey {
+        ErrorConfigScopeKey {
+            ip: self.ip,
+            hostname: self.hostname.clone(),
+            path: self.path.clone(),
+            error_code: self.error_code,
+        }
+    }
 }
 
 impl ErrorConfigScope {
@@ -1089,6 +1129,7 @@ impl ErrorConfigScope {
             ip: None,
             hostname: None,
             path: None,
+            conditionals: Vec::new(),
             error_code: Some(code),
         }
     }
@@ -1099,6 +1140,7 @@ impl ErrorConfigScope {
             ip: Some(ip),
             hostname: None,
             path: None,
+            conditionals: Vec::new(),
             error_code: Some(code),
         }
     }
@@ -1109,6 +1151,7 @@ impl ErrorConfigScope {
             ip: None,
             hostname: Some(hostname.into()),
             path: None,
+            conditionals: Vec::new(),
             error_code: Some(code),
         }
     }
@@ -1119,6 +1162,7 @@ impl ErrorConfigScope {
             ip: None,
             hostname: None,
             path: Some(path.into()),
+            conditionals: Vec::new(),
             error_code: Some(code),
         }
     }
@@ -1129,6 +1173,7 @@ impl ErrorConfigScope {
             ip: Some(ip),
             hostname: Some(hostname.into()),
             path: None,
+            conditionals: Vec::new(),
             error_code: Some(code),
         }
     }
@@ -1139,6 +1184,7 @@ impl ErrorConfigScope {
             ip: Some(ip),
             hostname: None,
             path: Some(path.into()),
+            conditionals: Vec::new(),
             error_code: Some(code),
         }
     }
@@ -1149,6 +1195,7 @@ impl ErrorConfigScope {
             ip: None,
             hostname: Some(hostname.into()),
             path: Some(path.into()),
+            conditionals: Vec::new(),
             error_code: Some(code),
         }
     }
@@ -1164,6 +1211,7 @@ impl ErrorConfigScope {
             ip: Some(ip),
             hostname: Some(hostname.into()),
             path: Some(path.into()),
+            conditionals: Vec::new(),
             error_code: Some(code),
         }
     }
@@ -1174,6 +1222,7 @@ impl ErrorConfigScope {
             ip: None,
             hostname: None,
             path: None,
+            conditionals: Vec::new(),
             error_code: None,
         }
     }
@@ -1184,6 +1233,7 @@ impl ErrorConfigScope {
             ip: None,
             hostname: Some(hostname.into()),
             path: None,
+            conditionals: Vec::new(),
             error_code: None,
         }
     }
@@ -1194,6 +1244,7 @@ impl ErrorConfigScope {
             ip: Some(ip),
             hostname: None,
             path: None,
+            conditionals: Vec::new(),
             error_code: None,
         }
     }
@@ -1204,6 +1255,7 @@ impl ErrorConfigScope {
             ip: None,
             hostname: None,
             path: Some(path.into()),
+            conditionals: Vec::new(),
             error_code: None,
         }
     }
@@ -1214,6 +1266,7 @@ impl ErrorConfigScope {
             ip: Some(ip),
             hostname: Some(hostname.into()),
             path: None,
+            conditionals: Vec::new(),
             error_code: None,
         }
     }
@@ -1224,6 +1277,7 @@ impl ErrorConfigScope {
             ip: Some(ip),
             hostname: None,
             path: Some(path.into()),
+            conditionals: Vec::new(),
             error_code: None,
         }
     }
@@ -1234,6 +1288,7 @@ impl ErrorConfigScope {
             ip: None,
             hostname: Some(hostname.into()),
             path: Some(path.into()),
+            conditionals: Vec::new(),
             error_code: None,
         }
     }
@@ -1248,6 +1303,7 @@ impl ErrorConfigScope {
             ip: Some(ip),
             hostname: Some(hostname.into()),
             path: Some(path.into()),
+            conditionals: Vec::new(),
             error_code: None,
         }
     }
@@ -1255,19 +1311,29 @@ impl ErrorConfigScope {
 
 /// Stage 3 resolver: Error configuration lookup with scoped support
 ///
-/// Uses a single HashMap with composable ErrorConfigScope keys.
+/// Uses a single HashMap with composable ErrorConfigScopeKey keys for non-conditional scopes.
+/// Conditional error configs are stored separately and evaluated at resolution time.
 /// Supports any combination of IP, hostname, and path scoping.
 /// Resolution order: most specific → least specific (global default)
 #[derive(Debug, Clone)]
 pub struct Stage3ErrorResolver {
-    /// Single map for all error configurations keyed by scope
-    configs: HashMap<ErrorConfigScope, Arc<PreparedHostConfigurationBlock>>,
+    /// Map for non-conditional error configurations keyed by scope
+    configs: HashMap<ErrorConfigScopeKey, Arc<PreparedHostConfigurationBlock>>,
+    /// Conditional error configurations stored separately for runtime evaluation
+    /// Each entry: (scope_with_conditionals, compiled_expressions, config, priority)
+    conditional_configs: Vec<(
+        ErrorConfigScope,
+        Vec<CompiledMatcherExpr>,
+        Arc<PreparedHostConfigurationBlock>,
+        u32,
+    )>,
 }
 
 impl Stage3ErrorResolver {
     pub fn new() -> Self {
         Self {
             configs: HashMap::new(),
+            conditional_configs: Vec::new(),
         }
     }
 
@@ -1277,12 +1343,52 @@ impl Stage3ErrorResolver {
         scope: ErrorConfigScope,
         config: Arc<PreparedHostConfigurationBlock>,
     ) {
-        self.configs.insert(scope, config);
+        // If scope has conditionals, store in conditional_configs
+        if !scope.conditionals.is_empty() {
+            let compiled_exprs: Result<Vec<_>, _> = scope
+                .conditionals
+                .iter()
+                .map(|expr| CompiledMatcherExpr::new(expr.clone()))
+                .collect();
+            if let Ok(compiled_exprs) = compiled_exprs {
+                let priority = 0u32; // Default priority
+                self.conditional_configs
+                    .push((scope, compiled_exprs, config, priority));
+            }
+        } else {
+            // Non-conditional, store in regular configs using the key
+            self.configs.insert(scope.to_key(), config);
+        }
+    }
+
+    /// Register an error configuration with conditionals
+    pub fn register_conditional(
+        &mut self,
+        scope: ErrorConfigScope,
+        conditionals: Vec<ServerConfigurationMatcherExpr>,
+        priority: u32,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        if conditionals.is_empty() {
+            // No conditionals, use regular register
+            self.register(scope, config);
+            return;
+        }
+
+        let compiled_exprs: Result<Vec<_>, _> = conditionals
+            .iter()
+            .map(|expr| CompiledMatcherExpr::new(expr.clone()))
+            .collect();
+        if let Ok(compiled_exprs) = compiled_exprs {
+            self.conditional_configs
+                .push((scope, compiled_exprs, config, priority));
+        }
     }
 
     /// Register a global error configuration
     pub fn register_error(&mut self, code: u16, config: Arc<PreparedHostConfigurationBlock>) {
-        self.configs.insert(ErrorConfigScope::global(code), config);
+        self.configs
+            .insert(ErrorConfigScope::global(code).to_key(), config);
     }
 
     /// Register a hostname-specific error configuration (supports wildcards like *.example.com)
@@ -1293,7 +1399,7 @@ impl Stage3ErrorResolver {
         config: Arc<PreparedHostConfigurationBlock>,
     ) {
         self.configs
-            .insert(ErrorConfigScope::hostname(hostname, code), config);
+            .insert(ErrorConfigScope::hostname(hostname, code).to_key(), config);
     }
 
     /// Register an IP-specific error configuration
@@ -1303,7 +1409,8 @@ impl Stage3ErrorResolver {
         code: u16,
         config: Arc<PreparedHostConfigurationBlock>,
     ) {
-        self.configs.insert(ErrorConfigScope::ip(ip, code), config);
+        self.configs
+            .insert(ErrorConfigScope::ip(ip, code).to_key(), config);
     }
 
     /// Register a path-specific error configuration
@@ -1314,7 +1421,7 @@ impl Stage3ErrorResolver {
         config: Arc<PreparedHostConfigurationBlock>,
     ) {
         self.configs
-            .insert(ErrorConfigScope::path(path_prefix, code), config);
+            .insert(ErrorConfigScope::path(path_prefix, code).to_key(), config);
     }
 
     /// Register an IP + hostname combination error configuration
@@ -1325,8 +1432,10 @@ impl Stage3ErrorResolver {
         code: u16,
         config: Arc<PreparedHostConfigurationBlock>,
     ) {
-        self.configs
-            .insert(ErrorConfigScope::ip_hostname(ip, hostname, code), config);
+        self.configs.insert(
+            ErrorConfigScope::ip_hostname(ip, hostname, code).to_key(),
+            config,
+        );
     }
 
     /// Register a hostname + path combination error configuration
@@ -1338,7 +1447,7 @@ impl Stage3ErrorResolver {
         config: Arc<PreparedHostConfigurationBlock>,
     ) {
         self.configs.insert(
-            ErrorConfigScope::hostname_path(hostname, path, code),
+            ErrorConfigScope::hostname_path(hostname, path, code).to_key(),
             config,
         );
     }
@@ -1353,7 +1462,7 @@ impl Stage3ErrorResolver {
         config: Arc<PreparedHostConfigurationBlock>,
     ) {
         self.configs.insert(
-            ErrorConfigScope::ip_hostname_path(ip, hostname, path, code),
+            ErrorConfigScope::ip_hostname_path(ip, hostname, path, code).to_key(),
             config,
         );
     }
@@ -1361,7 +1470,7 @@ impl Stage3ErrorResolver {
     /// Set the default error configuration (global fallback)
     pub fn set_default(&mut self, config: Arc<PreparedHostConfigurationBlock>) {
         self.configs
-            .insert(ErrorConfigScope::global_default(), config);
+            .insert(ErrorConfigScope::global_default().to_key(), config);
     }
 
     /// Set a hostname-specific default error configuration
@@ -1370,14 +1479,16 @@ impl Stage3ErrorResolver {
         hostname: &str,
         config: Arc<PreparedHostConfigurationBlock>,
     ) {
-        self.configs
-            .insert(ErrorConfigScope::hostname_default(hostname), config);
+        self.configs.insert(
+            ErrorConfigScope::hostname_default(hostname).to_key(),
+            config,
+        );
     }
 
     /// Set an IP-specific default error configuration
     pub fn set_ip_default(&mut self, ip: IpAddr, config: Arc<PreparedHostConfigurationBlock>) {
         self.configs
-            .insert(ErrorConfigScope::ip_default(ip), config);
+            .insert(ErrorConfigScope::ip_default(ip).to_key(), config);
     }
 
     /// Set a path-specific default error configuration
@@ -1387,7 +1498,7 @@ impl Stage3ErrorResolver {
         config: Arc<PreparedHostConfigurationBlock>,
     ) {
         self.configs
-            .insert(ErrorConfigScope::path_default(path_prefix), config);
+            .insert(ErrorConfigScope::path_default(path_prefix).to_key(), config);
     }
 
     /// Set an IP + hostname default error configuration
@@ -1397,8 +1508,10 @@ impl Stage3ErrorResolver {
         hostname: &str,
         config: Arc<PreparedHostConfigurationBlock>,
     ) {
-        self.configs
-            .insert(ErrorConfigScope::ip_hostname_default(ip, hostname), config);
+        self.configs.insert(
+            ErrorConfigScope::ip_hostname_default(ip, hostname).to_key(),
+            config,
+        );
     }
 
     /// Set a hostname + path default error configuration
@@ -1409,7 +1522,7 @@ impl Stage3ErrorResolver {
         config: Arc<PreparedHostConfigurationBlock>,
     ) {
         self.configs.insert(
-            ErrorConfigScope::hostname_path_default(hostname, path),
+            ErrorConfigScope::hostname_path_default(hostname, path).to_key(),
             config,
         );
     }
@@ -1423,7 +1536,7 @@ impl Stage3ErrorResolver {
         config: Arc<PreparedHostConfigurationBlock>,
     ) {
         self.configs.insert(
-            ErrorConfigScope::ip_hostname_path_default(ip, hostname, path),
+            ErrorConfigScope::ip_hostname_path_default(ip, hostname, path).to_key(),
             config,
         );
     }
@@ -1436,11 +1549,11 @@ impl Stage3ErrorResolver {
     ) -> Option<Arc<PreparedHostConfigurationBlock>> {
         location_path.error_key = Some(error_code);
         self.configs
-            .get(&ErrorConfigScope::global(error_code))
+            .get(&ErrorConfigScope::global(error_code).to_key())
             .cloned()
             .or_else(|| {
                 self.configs
-                    .get(&ErrorConfigScope::global_default())
+                    .get(&ErrorConfigScope::global_default().to_key())
                     .cloned()
             })
     }
@@ -1546,6 +1659,33 @@ impl Stage3ErrorResolver {
         scopes
     }
 
+    /// Evaluate conditional expressions with given variables
+    fn evaluate_conditions(
+        &self,
+        exprs: &[CompiledMatcherExpr],
+        variables: &ResolverVariables,
+    ) -> bool {
+        evaluate_matcher_conditions(exprs, variables)
+    }
+
+    /// Evaluate a single conditional expression with given variables
+    fn evaluate_condition(
+        &self,
+        compiled_expr: &CompiledMatcherExpr,
+        variables: &ResolverVariables,
+    ) -> bool {
+        evaluate_matcher_condition(compiled_expr, variables)
+    }
+
+    /// Get the string value of an operand
+    fn get_operand_value(
+        &self,
+        operand: &ServerConfigurationMatcherOperand,
+        variables: &ResolverVariables,
+    ) -> Option<String> {
+        resolve_matcher_operand(operand, variables)
+    }
+
     /// Resolve error configuration with scoped lookup
     ///
     /// Resolution order (most specific to least specific):
@@ -1558,6 +1698,8 @@ impl Stage3ErrorResolver {
     /// 7. IP + ErrorCode
     /// 8. Global ErrorCode
     /// 9-16. Same combinations for defaults (error_code = None)
+    ///
+    /// Additionally checks conditional error configs that match the current variables.
     #[allow(clippy::doc_lazy_continuation)]
     pub fn resolve_scoped(
         &self,
@@ -1565,16 +1707,37 @@ impl Stage3ErrorResolver {
         hostname: Option<&str>,
         ip: Option<IpAddr>,
         path_segments: Option<&[String]>,
+        variables: &ResolverVariables,
         location_path: &mut ResolvedLocationPath,
     ) -> Option<Arc<PreparedHostConfigurationBlock>> {
         location_path.error_key = Some(error_code);
+
+        // First, try conditional configs (sorted by priority, highest first)
+        let mut matching_conditionals: Vec<_> = self
+            .conditional_configs
+            .iter()
+            .filter(|(scope, compiled_exprs, _, _)| {
+                // Check if scope matches (ignoring conditionals in the key)
+                Self::scope_matches(scope, hostname, ip, path_segments, error_code)
+                    && self.evaluate_conditions(compiled_exprs, variables)
+            })
+            .map(|(_, _, config, priority)| (*priority, Arc::clone(config)))
+            .collect();
+
+        // Sort by priority (highest first)
+        matching_conditionals.sort_by(|a, b| b.0.cmp(&a.0));
+
+        // Return highest priority matching conditional config
+        if let Some((_, config)) = matching_conditionals.into_iter().next() {
+            return Some(config);
+        }
 
         // Generate all possible scopes from most to least specific
         let scopes = Self::generate_scopes(error_code, hostname, ip, path_segments);
 
         // Try each scope in order
         for scope in scopes {
-            if let Some(config) = self.configs.get(&scope) {
+            if let Some(config) = self.configs.get(&scope.to_key()) {
                 return Some(config.clone());
             }
         }
@@ -1582,12 +1745,52 @@ impl Stage3ErrorResolver {
         // Try defaults (same order, but error_code = None)
         let default_scopes = Self::generate_default_scopes(hostname, ip, path_segments);
         for scope in default_scopes {
-            if let Some(config) = self.configs.get(&scope) {
+            if let Some(config) = self.configs.get(&scope.to_key()) {
                 return Some(config.clone());
             }
         }
 
         None
+    }
+
+    /// Check if an error config scope matches the given resolution context
+    fn scope_matches(
+        scope: &ErrorConfigScope,
+        hostname: Option<&str>,
+        ip: Option<IpAddr>,
+        path_segments: Option<&[String]>,
+        error_code: u16,
+    ) -> bool {
+        // Check error code matches (or is None for defaults)
+        if let Some(code) = scope.error_code {
+            if code != error_code {
+                return false;
+            }
+        }
+
+        // Check IP matches
+        if let Some(scope_ip) = scope.ip {
+            if ip != Some(scope_ip) {
+                return false;
+            }
+        }
+
+        // Check hostname matches
+        if let Some(ref scope_hostname) = scope.hostname {
+            if hostname != Some(scope_hostname.as_str()) {
+                return false;
+            }
+        }
+
+        // Check path matches
+        if let Some(ref scope_path) = scope.path {
+            let path_str = path_segments.map(|s| s.join("/"));
+            if path_str.as_deref() != Some(scope_path.as_str()) {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Resolve default error configuration with scoped lookup
@@ -1596,14 +1799,73 @@ impl Stage3ErrorResolver {
         hostname: Option<&str>,
         ip: Option<IpAddr>,
         path_segments: Option<&[String]>,
+        variables: &ResolverVariables,
     ) -> Option<Arc<PreparedHostConfigurationBlock>> {
+        // First, try conditional configs with error_code = None (defaults)
+        let mut matching_conditionals: Vec<_> = self
+            .conditional_configs
+            .iter()
+            .filter(|(scope, compiled_exprs, _, _)| {
+                // Check if scope matches for defaults (error_code = None)
+                Self::scope_matches_for_default(scope, hostname, ip, path_segments)
+                    && self.evaluate_conditions(compiled_exprs, variables)
+            })
+            .map(|(_, _, config, priority)| (*priority, Arc::clone(config)))
+            .collect();
+
+        // Sort by priority (highest first)
+        matching_conditionals.sort_by(|a, b| b.0.cmp(&a.0));
+
+        // Return highest priority matching conditional config
+        if let Some((_, config)) = matching_conditionals.into_iter().next() {
+            return Some(config);
+        }
+
+        // Fall back to non-conditional defaults
         let default_scopes = Self::generate_default_scopes(hostname, ip, path_segments);
         for scope in default_scopes {
-            if let Some(config) = self.configs.get(&scope) {
+            if let Some(config) = self.configs.get(&scope.to_key()) {
                 return Some(config.clone());
             }
         }
         None
+    }
+
+    /// Check if an error config scope matches for default resolution (error_code = None)
+    fn scope_matches_for_default(
+        scope: &ErrorConfigScope,
+        hostname: Option<&str>,
+        ip: Option<IpAddr>,
+        path_segments: Option<&[String]>,
+    ) -> bool {
+        // For defaults, error_code should be None
+        if scope.error_code.is_some() {
+            return false;
+        }
+
+        // Check IP matches
+        if let Some(scope_ip) = scope.ip {
+            if ip != Some(scope_ip) {
+                return false;
+            }
+        }
+
+        // Check hostname matches
+        if let Some(ref scope_hostname) = scope.hostname {
+            if hostname != Some(scope_hostname.as_str()) {
+                return false;
+            }
+        }
+
+        // Check path matches
+        if let Some(ref scope_path) = scope.path {
+            let path_str = path_segments.map(|s| s.join("/"));
+            if path_str.as_deref() != Some(scope_path.as_str()) {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Resolve error configuration and create a layered configuration (global only - legacy)
@@ -1641,6 +1903,7 @@ impl Stage3ErrorResolver {
     /// * `hostname` - Optional hostname for scoped lookup
     /// * `ip` - Optional IP for scoped lookup
     /// * `path_segments` - Optional path segments for scoped lookup
+    /// * `variables` - Variables for conditional evaluation
     /// * `base_config` - Base layered configuration from Stage 2
     pub fn resolve_layered_scoped(
         &self,
@@ -1648,18 +1911,25 @@ impl Stage3ErrorResolver {
         hostname: Option<&str>,
         ip: Option<IpAddr>,
         path_segments: Option<&[String]>,
+        variables: &ResolverVariables,
         base_config: Option<LayeredConfiguration>,
     ) -> (LayeredConfiguration, ResolvedLocationPath) {
         let mut location_path = ResolvedLocationPath::new();
         let mut layered_config = base_config.unwrap_or_default();
 
         // Try to resolve specific error code first
-        let error_config =
-            self.resolve_scoped(error_code, hostname, ip, path_segments, &mut location_path);
+        let error_config = self.resolve_scoped(
+            error_code,
+            hostname,
+            ip,
+            path_segments,
+            variables,
+            &mut location_path,
+        );
 
         // If no specific error config found, try default (also scoped)
-        let error_config =
-            error_config.or_else(|| self.resolve_default_scoped(hostname, ip, path_segments));
+        let error_config = error_config
+            .or_else(|| self.resolve_default_scoped(hostname, ip, path_segments, variables));
 
         if let Some(config) = error_config {
             let block = ServerConfigurationBlock {
@@ -2090,6 +2360,7 @@ impl ThreeStageResolver {
             Some(hostname),
             Some(ip),
             Some(&location_path.path_segments),
+            variables,
             Some(layered_config),
         );
 
@@ -3886,5 +4157,84 @@ mod tests {
         if let Some(ServerConfigurationValue::String(val, _)) = web_err {
             assert_eq!(val, "web_404", "Web should have hostname-specific error");
         }
+    }
+
+    #[test]
+    fn test_error_config_with_conditionals() {
+        use ferron_core::config::{
+            ServerConfigurationDirectiveEntry, ServerConfigurationMatcherExpr,
+            ServerConfigurationMatcherOperand, ServerConfigurationMatcherOperator,
+            ServerConfigurationValue,
+        };
+
+        let mut resolver = Stage3ErrorResolver::new();
+
+        // Create a base config for error handling
+        let mut error_directives = std::collections::HashMap::new();
+        error_directives.insert(
+            "error_type".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "conditional_404".to_string(),
+                    Default::default(),
+                )],
+                children: None,
+                span: None,
+            }],
+        );
+        let error_config = Arc::new(PreparedHostConfigurationBlock {
+            directives: Arc::new(error_directives),
+            matches: Vec::new(),
+            error_config: Vec::new(),
+        });
+
+        // Create a conditional expression: request.method == "GET"
+        let conditionals = vec![ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::Identifier("request.method".to_string()),
+            right: ServerConfigurationMatcherOperand::String("GET".to_string()),
+            op: ServerConfigurationMatcherOperator::Eq,
+        }];
+
+        // Create a scope with conditionals
+        let scope = ErrorConfigScope {
+            ip: None,
+            hostname: None,
+            path: None,
+            conditionals: conditionals.clone(),
+            error_code: Some(404),
+        };
+
+        // Register the conditional error config
+        resolver.register(scope, error_config);
+
+        // Create test variables with a GET request
+        let get_request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let get_variables = (get_request, HashMap::new());
+
+        // Test that conditional matches for GET request
+        let mut path_get = ResolvedLocationPath::new();
+        let result_get =
+            resolver.resolve_scoped(404, None, None, None, &get_variables, &mut path_get);
+
+        assert!(
+            result_get.is_some(),
+            "Should match conditional error config for GET request"
+        );
+
+        // Create test variables with a POST request
+        let mut post_request =
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        *post_request.method_mut() = http::Method::POST;
+        let post_variables = (post_request, HashMap::new());
+
+        // Test that conditional doesn't match for POST request
+        let mut path_post = ResolvedLocationPath::new();
+        let result_post =
+            resolver.resolve_scoped(404, None, None, None, &post_variables, &mut path_post);
+
+        assert!(
+            result_post.is_none(),
+            "Should NOT match conditional error config for POST request"
+        );
     }
 }
