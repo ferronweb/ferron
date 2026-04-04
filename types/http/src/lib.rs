@@ -33,6 +33,7 @@ pub struct HttpContext {
     pub encrypted: bool,
     pub local_address: SocketAddr,
     pub remote_address: SocketAddr,
+    pub auth_user: Option<String>,
     pub extensions: TypeMap,
 }
 
@@ -190,6 +191,7 @@ mod tests {
             encrypted: false,
             local_address: "127.0.0.1:8080".parse().unwrap(),
             remote_address: "127.0.0.1:12345".parse().unwrap(),
+            auth_user: None,
             extensions: TypeMap::new(),
         }
     }

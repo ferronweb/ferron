@@ -10,7 +10,10 @@ use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::{Pipeline, PipelineError};
 use ferron_core::util::parse_duration;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse};
-use ferron_observability::{CompositeEventSink, Event, LogEvent, LogLevel};
+use ferron_observability::{
+    AccessEvent, AccessVisitor, CompositeEventSink, Event, LogEvent, LogLevel,
+    MetricAttributeValue, MetricEvent, MetricType, MetricValue, TraceEvent,
+};
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::Empty;
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Full};
@@ -39,6 +42,164 @@ enum FilePipelineExecutionError {
     Pipeline(PipelineError),
 }
 
+/// Access log event emitted at request completion.
+struct HttpAccessLog {
+    path: String,
+    path_and_query: String,
+    method: String,
+    version: String,
+    scheme: String,
+    client_ip: String,
+    client_port: u16,
+    client_ip_canonical: String,
+    server_ip: String,
+    server_port: u16,
+    server_ip_canonical: String,
+    auth_user: Option<String>,
+    status: u16,
+    content_length: Option<u64>,
+    duration_secs: f64,
+    response_headers: Vec<(String, String)>,
+}
+
+impl AccessEvent for HttpAccessLog {
+    fn protocol(&self) -> &'static str {
+        "http"
+    }
+
+    fn visit(&self, visitor: &mut dyn AccessVisitor) {
+        visitor.field_string("path", &self.path);
+        visitor.field_string("path_and_query", &self.path_and_query);
+        visitor.field_string("method", &self.method);
+        visitor.field_string("version", &self.version);
+        visitor.field_string("scheme", &self.scheme);
+        visitor.field_string("client_ip", &self.client_ip);
+        visitor.field_u64("client_port", self.client_port as u64);
+        visitor.field_string("client_ip_canonical", &self.client_ip_canonical);
+        visitor.field_string("server_ip", &self.server_ip);
+        visitor.field_u64("server_port", self.server_port as u64);
+        visitor.field_string("server_ip_canonical", &self.server_ip_canonical);
+        if let Some(user) = &self.auth_user {
+            visitor.field_string("auth_user", user);
+        } else {
+            visitor.field_string("auth_user", "-");
+        }
+        visitor.field_u64("status", self.status as u64);
+        if let Some(cl) = self.content_length {
+            visitor.field_u64("content_length", cl);
+        } else {
+            visitor.field_string("content_length", "-");
+        }
+        visitor.field_f64("duration_secs", self.duration_secs);
+        for (name, value) in &self.response_headers {
+            visitor.field_string(
+                &format!("header_{}", name.to_ascii_lowercase().replace("-", "_")),
+                value,
+            );
+        }
+    }
+}
+
+/// Canonicalize an IP address: convert IPv4-mapped IPv6 (`::ffff:x.x.x.x`) to IPv4.
+fn canonicalize_ip(ip: std::net::IpAddr) -> String {
+    match ip {
+        std::net::IpAddr::V4(_) => ip.to_string(),
+        std::net::IpAddr::V6(v6) => {
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                v4.to_string()
+            } else {
+                ip.to_string()
+            }
+        }
+    }
+}
+
+/// Format HTTP version as a string (e.g. `HTTP/1.1`).
+fn http_version_access_string(version: http::Version) -> &'static str {
+    match version {
+        http::Version::HTTP_09 => "HTTP/0.9",
+        http::Version::HTTP_10 => "HTTP/1.0",
+        http::Version::HTTP_11 => "HTTP/1.1",
+        http::Version::HTTP_2 => "HTTP/2.0",
+        http::Version::HTTP_3 => "HTTP/3.0",
+        _ => "HTTP/unknown",
+    }
+}
+
+/// HTTP version string for metric attributes.
+fn http_version_string(version: http::Version) -> Option<&'static str> {
+    match version {
+        http::Version::HTTP_09 => Some("0.9"),
+        http::Version::HTTP_10 => Some("1.0"),
+        http::Version::HTTP_11 => Some("1.1"),
+        http::Version::HTTP_2 => Some("2"),
+        http::Version::HTTP_3 => Some("3"),
+        _ => None,
+    }
+}
+
+/// Extract response data from a successful result.
+fn extract_response_info(
+    response: &Result<Response<ResponseBody>, io::Error>,
+) -> (u16, Option<u64>, Vec<(String, String)>) {
+    match response {
+        Ok(r) => {
+            let status = r.status().as_u16();
+            let content_length = r
+                .headers()
+                .get(http::header::CONTENT_LENGTH)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse().ok());
+            let headers = r
+                .headers()
+                .iter()
+                .filter_map(|(name, value)| {
+                    value
+                        .to_str()
+                        .ok()
+                        .map(|v| (name.to_string(), v.to_string()))
+                })
+                .collect();
+            (status, content_length, headers)
+        }
+        Err(_) => (500, None, Vec::new()),
+    }
+}
+
+/// Build the common metric attributes shared across all HTTP metrics.
+fn build_metric_attributes(
+    request: &HttpRequest,
+    encrypted: bool,
+    previous_error: Option<u16>,
+) -> Vec<(&'static str, MetricAttributeValue)> {
+    let mut attrs = Vec::with_capacity(5);
+    attrs.push((
+        "http.request.method",
+        MetricAttributeValue::String(request.method().as_str().to_string()),
+    ));
+    attrs.push((
+        "url.scheme",
+        MetricAttributeValue::String(if encrypted { "https" } else { "http" }.to_string()),
+    ));
+    attrs.push((
+        "network.protocol.name",
+        MetricAttributeValue::String("http".to_string()),
+    ));
+    if let Some(http_ver) = http_version_string(request.version()) {
+        attrs.push((
+            "network.protocol.version",
+            MetricAttributeValue::String(http_ver.to_string()),
+        ));
+    }
+    if let Some(error_code) = previous_error {
+        attrs.push((
+            "ferron.http.request.error_status_code",
+            MetricAttributeValue::I64(error_code as i64),
+        ));
+    }
+    attrs
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn request_handler(
     request: HttpRequest,
@@ -52,9 +213,41 @@ pub async fn request_handler(
     encrypted: bool,
     events: CompositeEventSink,
 ) -> Result<Response<ResponseBody>, io::Error> {
-    // TODO: add support for HTTP access logs
+    // Build metric attributes from the original request before consuming it
+    let metric_attrs = build_metric_attributes(&request, encrypted, None);
+    let method = request.method().clone();
+    let path = request.uri().path().to_string();
+    let path_and_query = request
+        .uri()
+        .path_and_query()
+        .map_or(path.clone(), |pq| pq.to_string());
+    let version = http_version_access_string(request.version()).to_string();
+    let scheme = if encrypted { "https" } else { "http" }.to_string();
+    let client_ip = remote_address.ip().to_string();
+    let client_port = remote_address.port();
+    let client_ip_canonical = canonicalize_ip(remote_address.ip());
+    let server_ip = local_address.ip().to_string();
+    let server_port = local_address.port();
+    let server_ip_canonical = canonicalize_ip(local_address.ip());
 
-    let mut response_result = request_handler_inner(
+    // Start tracing span
+    events.emit(Event::Trace(TraceEvent::StartSpan(
+        "ferron.request_handler".to_string(),
+    )));
+
+    // Increment active requests counter
+    events.emit(Event::Metric(MetricEvent {
+        name: "http.server.active_requests",
+        attributes: metric_attrs.clone(),
+        ty: MetricType::UpDownCounter,
+        value: MetricValue::I64(1),
+        unit: Some("{request}"),
+        description: Some("Number of active HTTP server requests."),
+    }));
+
+    let request_timer = std::time::Instant::now();
+
+    let (mut response_result, auth_user) = request_handler_inner(
         request,
         pipeline,
         file_pipeline,
@@ -64,9 +257,86 @@ pub async fn request_handler(
         remote_address,
         hostname,
         encrypted,
-        events,
+        events.clone(),
     )
     .await;
+
+    // Compute duration and extract response info
+    let duration_secs = request_timer.elapsed().as_secs_f64();
+    let (status_code, content_length, response_headers) = extract_response_info(&response_result);
+
+    // Build request_count-specific attributes
+    let mut request_count_attrs = metric_attrs.clone();
+    request_count_attrs.push((
+        "http.response.status_code",
+        MetricAttributeValue::I64(status_code as i64),
+    ));
+    if status_code >= 400 {
+        request_count_attrs.push((
+            "error.type",
+            MetricAttributeValue::String(status_code.to_string()),
+        ));
+    }
+
+    // Decrement active requests
+    events.emit(Event::Metric(MetricEvent {
+        name: "http.server.active_requests",
+        attributes: metric_attrs.clone(),
+        ty: MetricType::UpDownCounter,
+        value: MetricValue::I64(-1),
+        unit: Some("{request}"),
+        description: Some("Number of active HTTP server requests."),
+    }));
+
+    // Emit request duration histogram
+    events.emit(Event::Metric(MetricEvent {
+        name: "http.server.request.duration",
+        attributes: metric_attrs.clone(),
+        ty: MetricType::Histogram(Some(vec![
+            0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
+        ])),
+        value: MetricValue::F64(duration_secs),
+        unit: Some("s"),
+        description: Some("Duration of HTTP server requests."),
+    }));
+
+    // Emit request count
+    events.emit(Event::Metric(MetricEvent {
+        name: "ferron.http.server.request_count",
+        attributes: request_count_attrs,
+        ty: MetricType::Counter,
+        value: MetricValue::U64(1),
+        unit: Some("{request}"),
+        description: Some("Number of HTTP server requests."),
+    }));
+
+    // Emit access log
+    events.emit(Event::Access(Arc::new(HttpAccessLog {
+        path,
+        path_and_query,
+        method: method.as_str().to_string(),
+        version,
+        scheme,
+        client_ip,
+        client_port,
+        client_ip_canonical,
+        server_ip,
+        server_port,
+        server_ip_canonical,
+        auth_user,
+        status: status_code,
+        content_length,
+        duration_secs,
+        response_headers,
+    })));
+
+    // End tracing span
+    let error_description = response_result.as_ref().err().map(|e| e.to_string());
+    events.emit(Event::Trace(TraceEvent::EndSpan(
+        "ferron.request_handler".to_string(),
+        error_description,
+    )));
+
     if let Ok(response) = &mut response_result {
         // TODO: add Alt-Svc for HTTP/3
         response
@@ -88,7 +358,7 @@ async fn request_handler_inner(
     hostname: Option<String>,
     encrypted: bool,
     events: CompositeEventSink,
-) -> Result<Response<ResponseBody>, io::Error> {
+) -> (Result<Response<ResponseBody>, io::Error>, Option<String>) {
     // Increment request counter for admin API /status endpoint
     ferron_admin::ADMIN_METRICS
         .requests_total
@@ -114,16 +384,19 @@ async fn request_handler_inner(
         )
         .await
         {
-            return Ok(response);
+            return (Ok(response), None);
         }
-        return Ok(builtin_error_response(
-            400,
+        return (
+            Ok(builtin_error_response(
+                400,
+                None,
+                config_resolver.global().and_then(|g| {
+                    g.get_value("admin_email")
+                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                }),
+            )),
             None,
-            config_resolver.global().and_then(|g| {
-                g.get_value("admin_email")
-                    .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            }),
-        ));
+        );
     }
 
     // Sanitize URL (unless disabled by configuration)
@@ -143,16 +416,19 @@ async fn request_handler_inner(
             )
             .await
             {
-                return Ok(response);
+                return (Ok(response), None);
             }
-            return Ok(builtin_error_response(
-                400,
+            return (
+                Ok(builtin_error_response(
+                    400,
+                    None,
+                    config_resolver.global().and_then(|g| {
+                        g.get_value("admin_email")
+                            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                    }),
+                )),
                 None,
-                config_resolver.global().and_then(|g| {
-                    g.get_value("admin_email")
-                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                }),
-            ));
+            );
         }
     }
 
@@ -169,7 +445,10 @@ async fn request_handler_inner(
     variables.insert("remote.ip".to_string(), remote_address.ip().to_string());
     variables.insert("remote.port".to_string(), remote_address.port().to_string());
 
-    let resolver_request = build_resolver_request(&request)?;
+    let resolver_request = match build_resolver_request(&request) {
+        Ok(r) => r,
+        Err(e) => return (Err(e), None),
+    };
     let resolution = config_resolver.resolve(
         local_address.ip(),
         hostname.as_deref().unwrap_or(""),
@@ -187,16 +466,19 @@ async fn request_handler_inner(
         )
         .await
         {
-            return Ok(response);
+            return (Ok(response), None);
         }
-        return Ok(builtin_error_response(
-            404,
+        return (
+            Ok(builtin_error_response(
+                404,
+                None,
+                config_resolver.global().and_then(|g| {
+                    g.get_value("admin_email")
+                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                }),
+            )),
             None,
-            config_resolver.global().and_then(|g| {
-                g.get_value("admin_email")
-                    .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            }),
-        ));
+        );
     };
 
     let request_uri = request.uri().clone();
@@ -223,6 +505,7 @@ async fn request_handler_inner(
         encrypted,
         local_address,
         remote_address,
+        auth_user: None,
         extensions: TypeMap::new(),
     };
 
@@ -243,7 +526,24 @@ async fn request_handler_inner(
             ctx.req = Some(cloned_request);
             // Rebuild the resolver request from the current request in context
             if let Some(ref req) = ctx.req {
-                let error_resolver_request = build_resolver_request(req)?;
+                let error_resolver_request = match build_resolver_request(req) {
+                    Ok(r) => r,
+                    Err(_) => {
+                        let auth_user = ctx.auth_user.clone();
+                        return (
+                            Ok(builtin_error_response(
+                                500,
+                                None,
+                                config_resolver.global().and_then(|g| {
+                                    g.get_value("admin_email").and_then(|v| {
+                                        v.as_string_with_interpolations(&HashMap::new())
+                                    })
+                                }),
+                            )),
+                            auth_user,
+                        );
+                    }
+                };
                 let error_resolution = config_resolver.resolve_error_scoped(
                     local_address.ip(),
                     ctx.hostname.as_deref().unwrap_or(""),
@@ -268,9 +568,10 @@ async fn request_handler_inner(
         }
     }
 
-    Ok(
+    let auth_user = ctx.auth_user.clone();
+    (
         match ctx.res.unwrap_or(HttpResponse::BuiltinError(404, None)) {
-            HttpResponse::Custom(response) => response,
+            HttpResponse::Custom(response) => Ok(response),
             HttpResponse::BuiltinError(status, headers) => {
                 if let Some(response) = execute_error_pipeline(
                     error_pipeline.as_ref(),
@@ -281,12 +582,18 @@ async fn request_handler_inner(
                 )
                 .await
                 {
-                    return Ok(response);
+                    Ok(response)
+                } else {
+                    Ok(builtin_error_response(
+                        status,
+                        headers.as_ref(),
+                        admin_email,
+                    ))
                 }
-                builtin_error_response(status, headers.as_ref(), admin_email)
             }
-            HttpResponse::Abort => return Err(io::Error::other("Aborted")),
+            HttpResponse::Abort => Err(io::Error::other("Aborted")),
         },
+        auth_user,
     )
 }
 
@@ -467,6 +774,7 @@ async fn execute_http_file_pipeline(
         encrypted: ctx.encrypted,
         local_address: ctx.local_address,
         remote_address: ctx.remote_address,
+        auth_user: None,
         extensions: TypeMap::new(),
     };
     let http_ctx = std::mem::replace(ctx, placeholder);

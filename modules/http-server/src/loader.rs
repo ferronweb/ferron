@@ -8,9 +8,7 @@ use ferron_core::registry::RegistryBuilder;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
 
 use crate::server::BasicHttpModule;
-use crate::stages::{
-    DirectoryIndexStage, HelloStage, LoggingStage, NotFoundStage, StaticFileStage,
-};
+use crate::stages::{DirectoryIndexStage, HelloStage, NotFoundStage, StaticFileStage};
 use crate::validator::HttpConfigurationValidator;
 
 #[derive(Default)]
@@ -67,7 +65,6 @@ impl ModuleLoader for BasicHttpModuleLoader {
 
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         registry
-            .with_stage::<HttpContext, _>(|| Arc::new(LoggingStage))
             .with_stage::<HttpContext, _>(|| Arc::new(HelloStage))
             .with_stage::<HttpErrorContext, _>(|| Arc::new(NotFoundStage))
             .with_stage::<HttpFileContext, _>(|| Arc::new(DirectoryIndexStage))
