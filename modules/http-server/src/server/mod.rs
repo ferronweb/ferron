@@ -53,9 +53,9 @@ fn format_location(
     }
     if let Some(span) = span {
         if let Some(file) = &span.file {
-            location.push_str(&format!(" in file '{}'", file));
+            location.push_str(&format!("in file '{}' ", file));
         }
-        location.push_str(&format!(" at line {}", span.line));
+        location.push_str(&format!("at line {}", span.line));
         location.push_str(&format!(", column {}", span.column));
     }
     location
