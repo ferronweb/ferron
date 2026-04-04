@@ -512,7 +512,10 @@ impl Module for BasicHttpModule {
             let config = self.config.load();
             let listener_options = resolve_tcp_listener_options(&config.global_config, port)?;
             let listener =
-                tcp::TcpListenerHandle::new(listener_options, self.config.clone(), runtime)?;
+                tcp::TcpListenerHandle::new(listener_options, self.config.clone(), runtime)
+                    .map_err(|e| {
+                        anyhow::anyhow!("Failed to start HTTP server on port {port}: {e}")
+                    })?;
             self.listeners.lock().push(listener);
             // TODO: QUIC
         }
