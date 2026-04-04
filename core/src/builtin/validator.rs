@@ -31,6 +31,49 @@ impl crate::config::validator::ConfigurationValidator for BuiltinGlobalConfigura
             validate_nested!(observability, format, args(1) => ServerConfigurationValue::String(_, _));
         });
 
+        // Alias: log /path/to/access.log { ... } -> observability { provider file; access_log /path/to/access.log; ... }
+        validate_directive!(config, used_directives, log, optional
+            args(1) => [ServerConfigurationValue::Boolean(_, _)]
+            | args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)],
+            {
+            validate_nested!(log, format, args(1) => ServerConfigurationValue::String(_, _));
+        });
+
+        // Alias: error_log /path/to/error.log { ... } -> observability { provider file; error_log /path/to/error.log; ... }
+        // Note: error_log may or may not have a nested block, so we validate it manually
+        if let Some(directives) = config.directives.get("error_log") {
+            used_directives.insert("error_log".to_string());
+            for directive in directives {
+                let arg_count = directive.args.len();
+                if arg_count != 1 {
+                    return Err(format!(
+                        "Invalid directive 'error_log': expected 1 argument, got {}",
+                        arg_count
+                    )
+                    .into());
+                }
+
+                let is_valid = matches!(
+                    directive.args.first(),
+                    Some(ServerConfigurationValue::Boolean(_, _))
+                        | Some(ServerConfigurationValue::String(_, _))
+                        | Some(ServerConfigurationValue::InterpolatedString(_, _))
+                );
+
+                if !is_valid {
+                    return Err("Invalid directive 'error_log': argument type mismatch".into());
+                }
+                // error_log may or may not have children, both are valid
+            }
+        }
+
+        // Alias: console_log { ... } -> observability { provider console; ... }
+        validate_directive!(config, used_directives, console_log, optional
+            args(1) => [ServerConfigurationValue::Boolean(_, _)],
+            {
+            validate_nested!(console_log, format, args(1) => ServerConfigurationValue::String(_, _));
+        });
+
         Ok(())
     }
 }

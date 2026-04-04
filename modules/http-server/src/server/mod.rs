@@ -215,6 +215,120 @@ pub struct BasicHttpModule {
 }
 
 impl BasicHttpModule {
+    /// Transform alias directives (log, error_log, console_log) into an observability block.
+    /// Returns None if the alias is disabled (e.g., `log false`).
+    fn transform_observability_alias(
+        directive_name: &str,
+        directive: &ServerConfigurationDirectiveEntry,
+    ) -> Result<Option<ServerConfigurationBlock>, Box<dyn std::error::Error>> {
+        // Check if the directive is disabled
+        if directive
+            .args
+            .first()
+            .and_then(|a| a.as_boolean())
+            .map(|b| !b)
+            .unwrap_or(false)
+        {
+            return Ok(None);
+        }
+
+        let mut directives = HashMap::new();
+
+        match directive_name {
+            "log" => {
+                // log /path/to/access.log { ... } -> observability { provider file; access_log /path/to/access.log; ... }
+                directives.insert(
+                    "provider".to_string(),
+                    vec![ServerConfigurationDirectiveEntry {
+                        args: vec![ServerConfigurationValue::String("file".to_string(), None)],
+                        children: None,
+                        span: directive.span.clone(),
+                    }],
+                );
+
+                // If first arg is a string, it's the access_log path
+                if let Some(path_value) = directive.args.first().and_then(|v| v.as_str()) {
+                    directives.insert(
+                        "access_log".to_string(),
+                        vec![ServerConfigurationDirectiveEntry {
+                            args: vec![ServerConfigurationValue::String(
+                                path_value.to_string(),
+                                None,
+                            )],
+                            children: None,
+                            span: directive.span.clone(),
+                        }],
+                    );
+                }
+
+                // Copy any nested directives (like format)
+                if let Some(children) = &directive.children {
+                    for (key, values) in children.directives.iter() {
+                        directives.insert(key.clone(), values.clone());
+                    }
+                }
+            }
+            "error_log" => {
+                // error_log /path/to/error.log { ... } -> observability { provider file; error_log /path/to/error.log; ... }
+                directives.insert(
+                    "provider".to_string(),
+                    vec![ServerConfigurationDirectiveEntry {
+                        args: vec![ServerConfigurationValue::String("file".to_string(), None)],
+                        children: None,
+                        span: directive.span.clone(),
+                    }],
+                );
+
+                // If first arg is a string, it's the error_log path
+                if let Some(path_value) = directive.args.first().and_then(|v| v.as_str()) {
+                    directives.insert(
+                        "error_log".to_string(),
+                        vec![ServerConfigurationDirectiveEntry {
+                            args: vec![ServerConfigurationValue::String(
+                                path_value.to_string(),
+                                None,
+                            )],
+                            children: None,
+                            span: directive.span.clone(),
+                        }],
+                    );
+                }
+            }
+            "console_log" => {
+                // console_log { ... } -> observability { provider console; ... }
+                directives.insert(
+                    "provider".to_string(),
+                    vec![ServerConfigurationDirectiveEntry {
+                        args: vec![ServerConfigurationValue::String(
+                            "console".to_string(),
+                            None,
+                        )],
+                        children: None,
+                        span: directive.span.clone(),
+                    }],
+                );
+
+                // Copy any nested directives (like format)
+                if let Some(children) = &directive.children {
+                    for (key, values) in children.directives.iter() {
+                        directives.insert(key.clone(), values.clone());
+                    }
+                }
+            }
+            _ => {
+                return Err(
+                    format!("Unknown observability alias directive: {}", directive_name).into(),
+                );
+            }
+        }
+
+        Ok(Some(ServerConfigurationBlock {
+            directives: Arc::new(directives),
+            matchers: HashMap::new(),
+            span: directive.span.clone(),
+        }))
+    }
+
     /// Build the HTTP server configuration from the given port and global config.
     /// This is used by both `new()` and `reload()`.
     fn build_config(
@@ -436,6 +550,76 @@ impl BasicHttpModule {
                     }
                     (None, None) => {
                         observability_resolver.set_root_data(observability_to_insert);
+                    }
+                }
+            }
+
+            // Process observability aliases: log, error_log, console_log
+            for alias_directive_name in &["log", "error_log", "console_log"] {
+                if let Some(alias_directives) = host_config.1.directives.get(*alias_directive_name)
+                {
+                    for alias_directive in alias_directives {
+                        if let Some(observability_block) = Self::transform_observability_alias(
+                            alias_directive_name,
+                            alias_directive,
+                        )? {
+                            // Extract provider from the transformed block
+                            let observability_provider_name = observability_block
+                                .get_value("provider")
+                                .ok_or(anyhow::anyhow!(
+                                    "Observability provider not specified in {} alias ({})",
+                                    alias_directive_name,
+                                    format_location(None, alias_directive.span.as_ref())
+                                ))?
+                                .as_str()
+                                .ok_or(anyhow::anyhow!(
+                                    "Observability provider must be a string in {} alias ({})",
+                                    alias_directive_name,
+                                    format_location(None, alias_directive.span.as_ref())
+                                ))?;
+
+                            if let Some(observability_registry) =
+                                registry.get_provider_registry::<ObservabilityContext>()
+                            {
+                                let observability_provider = observability_registry
+                                    .get(observability_provider_name)
+                                    .ok_or(anyhow::anyhow!(
+                                        "Observability provider not found in {} alias ({})",
+                                        observability_provider_name,
+                                        format_location(None, alias_directive.span.as_ref())
+                                    ))?;
+
+                                let event_sink = Arc::new(ObservabilityProviderEventSink::new(
+                                    observability_provider,
+                                    Arc::new(observability_block),
+                                ));
+
+                                // Insert into the resolver using the same logic as regular observability
+                                match (&host_config.0.host, host_config.0.ip) {
+                                    (Some(host), Some(ip)) => {
+                                        observability_resolver.insert_ip_and_hostname(
+                                            ip,
+                                            host,
+                                            vec![event_sink],
+                                            false,
+                                        );
+                                    }
+                                    (Some(host), None) => {
+                                        observability_resolver.insert_hostname(
+                                            host,
+                                            vec![event_sink],
+                                            false,
+                                        );
+                                    }
+                                    (None, Some(ip)) => {
+                                        observability_resolver.insert_ip(ip, vec![event_sink]);
+                                    }
+                                    (None, None) => {
+                                        observability_resolver.set_root_data(vec![event_sink]);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -706,5 +890,125 @@ mod tests {
         let error = resolve_http_connection_options(&config).unwrap_err();
 
         assert_eq!(error.to_string(), "Unsupported HTTP protocol 'h3'");
+    }
+
+    #[test]
+    fn transform_log_alias_with_path() {
+        let log_directive = ServerConfigurationDirectiveEntry {
+            args: vec![ServerConfigurationValueBuilder::string(
+                "/var/log/access.log",
+            )],
+            children: Some(
+                ServerConfigurationBlockBuilder::new()
+                    .directive_str("format", vec!["combined"])
+                    .build(),
+            ),
+            span: None,
+        };
+
+        let result = BasicHttpModule::transform_observability_alias("log", &log_directive).unwrap();
+        let block = result.expect("Should return a block");
+
+        // Check provider is set to "file"
+        assert_eq!(
+            block.get_value("provider").and_then(|v| v.as_str()),
+            Some("file")
+        );
+
+        // Check access_log is set
+        assert_eq!(
+            block.get_value("access_log").and_then(|v| v.as_str()),
+            Some("/var/log/access.log")
+        );
+
+        // Check format is preserved
+        assert_eq!(
+            block.get_value("format").and_then(|v| v.as_str()),
+            Some("combined")
+        );
+    }
+
+    #[test]
+    fn transform_log_alias_disabled() {
+        let log_directive = ServerConfigurationDirectiveEntry {
+            args: vec![ServerConfigurationValueBuilder::boolean(false)],
+            children: None,
+            span: None,
+        };
+
+        let result = BasicHttpModule::transform_observability_alias("log", &log_directive).unwrap();
+        assert!(result.is_none(), "Should return None for disabled alias");
+    }
+
+    #[test]
+    fn transform_error_log_alias_with_path() {
+        let error_log_directive = ServerConfigurationDirectiveEntry {
+            args: vec![ServerConfigurationValueBuilder::string(
+                "/var/log/error.log",
+            )],
+            children: None,
+            span: None,
+        };
+
+        let result =
+            BasicHttpModule::transform_observability_alias("error_log", &error_log_directive)
+                .unwrap();
+        let block = result.expect("Should return a block");
+
+        // Check provider is set to "file"
+        assert_eq!(
+            block.get_value("provider").and_then(|v| v.as_str()),
+            Some("file")
+        );
+
+        // Check error_log is set
+        assert_eq!(
+            block.get_value("error_log").and_then(|v| v.as_str()),
+            Some("/var/log/error.log")
+        );
+    }
+
+    #[test]
+    fn transform_console_log_alias() {
+        let console_log_directive = ServerConfigurationDirectiveEntry {
+            args: vec![],
+            children: Some(
+                ServerConfigurationBlockBuilder::new()
+                    .directive_str("format", vec!["json"])
+                    .build(),
+            ),
+            span: None,
+        };
+
+        let result =
+            BasicHttpModule::transform_observability_alias("console_log", &console_log_directive)
+                .unwrap();
+        let block = result.expect("Should return a block");
+
+        // Check provider is set to "console"
+        assert_eq!(
+            block.get_value("provider").and_then(|v| v.as_str()),
+            Some("console")
+        );
+
+        // Check format is preserved
+        assert_eq!(
+            block.get_value("format").and_then(|v| v.as_str()),
+            Some("json")
+        );
+    }
+
+    #[test]
+    fn transform_console_log_alias_disabled() {
+        let console_log_directive = ServerConfigurationDirectiveEntry {
+            args: vec![ServerConfigurationValueBuilder::boolean(false)],
+            children: None,
+            span: None,
+        };
+
+        let result =
+            BasicHttpModule::transform_observability_alias("console_log", &console_log_directive)
+                .unwrap();
+        assert!(result.is_none(), "Should return None for disabled alias");
     }
 }

@@ -13,7 +13,7 @@ These directives belong in top-level global blocks:
 - Runtime: `runtime`
 - Network/listener defaults: `tcp`
 - PROXY protocol: `protocol_proxy`
-- Observability: `observability`
+- Observability: `observability`, `log`, `error_log`, `console_log`
 
 ## `runtime`
 
@@ -130,6 +130,147 @@ Notes:
 - Writes are buffered and flushed periodically (every 1 second) and on shutdown.
 - If `access_log` is omitted, access events are ignored. Same applies for `error_log`.
 - If a formatter is specified but not found in the registry, access events are not written (no fallback output).
+
+## Observability Aliases
+
+Titanium provides shorthand alias directives for common observability configurations. These aliases are automatically transformed into equivalent `observability` blocks during configuration processing.
+
+### `log`
+
+The `log` directive is a shorthand for configuring access logging with the `file` provider.
+
+Syntax:
+
+```ferron
+example.com {
+    log "/var/log/ferron/access.log" {
+        format "combined"
+    }
+}
+```
+
+| Arguments | Description |
+| --- | --- |
+| `<string>` | File path for access log output. Required when not using `false`. |
+| `false` | Disables access logging. |
+
+| Nested directive | Arguments | Description |
+| --- | --- | --- |
+| `format` | `<string>` | Optional log formatter name. |
+
+This is equivalent to:
+
+```ferron
+example.com {
+    observability {
+        provider file
+        access_log "/var/log/ferron/access.log"
+        format "combined"
+    }
+}
+```
+
+Examples:
+
+```ferron
+# Enable access logging with default format
+log "/var/log/access.log"
+
+# Enable with custom format
+log "/var/log/access.log" {
+    format "json"
+}
+
+# Disable access logging
+log false
+```
+
+### `error_log`
+
+The `error_log` directive is a shorthand for configuring error logging with the `file` provider.
+
+Syntax:
+
+```ferron
+example.com {
+    error_log "/var/log/ferron/error.log"
+}
+```
+
+| Arguments | Description |
+| --- | --- |
+| `<string>` | File path for error log output. Required when not using `false`. |
+| `false` | Disables error logging. |
+
+This is equivalent to:
+
+```ferron
+example.com {
+    observability {
+        provider file
+        error_log "/var/log/ferron/error.log"
+    }
+}
+```
+
+Examples:
+
+```ferron
+# Enable error logging
+error_log "/var/log/error.log"
+
+# Disable error logging
+error_log false
+```
+
+Notes:
+
+- The `error_log` directive does not support nested blocks.
+- Error logs include timestamps and severity levels (ERROR, WARN, INFO, DEBUG).
+
+### `console_log`
+
+The `console_log` directive is a shorthand for configuring console-based observability.
+
+Syntax:
+
+```ferron
+example.com {
+    console_log {
+        format "json"
+    }
+}
+```
+
+| Nested directive | Arguments | Description |
+| --- | --- | --- |
+| `format` | `<string>` | Optional log formatter name. |
+
+This is equivalent to:
+
+```ferron
+example.com {
+    observability {
+        provider console
+        format "json"
+    }
+}
+```
+
+Examples:
+
+```ferron
+# Enable console logging with default format
+console_log
+
+# Enable with custom format
+console_log {
+    format "json"
+}
+
+# Disable console logging
+console_log false
+```
 
 ## Notes
 
