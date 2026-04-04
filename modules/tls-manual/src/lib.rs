@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use ferron_core::config::ServerConfigurationBlock;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
+use ferron_core::util::parse_duration;
 use ferron_tls::{
     TcpTlsContext, TcpTlsResolver,
     tickets::{
@@ -48,8 +49,13 @@ impl TicketKeyRotationConfig {
         // Extract rotation_interval (optional, default: 12h)
         let rotation_interval = ticket_keys_block
             .get_value("rotation_interval")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            .map(|s| parse_duration(&s).unwrap_or(Duration::from_secs(12 * 3600)))
+            .and_then(|v| {
+                if let Some(si) = v.as_string_with_interpolations(&HashMap::new()) {
+                    Some(parse_duration(&si).unwrap_or(Duration::from_secs(12 * 3600)))
+                } else {
+                    v.as_number().map(|n| Duration::from_secs(n as u64))
+                }
+            })
             .unwrap_or(Duration::from_secs(12 * 3600));
 
         // Extract max_keys (optional, default: 3, range: 2-5)
@@ -82,43 +88,6 @@ impl TicketKeyRotationConfig {
             rotation_interval,
             max_keys,
         })
-    }
-}
-
-/// Parse a duration string (e.g., "12h", "30m", "1d") into a Duration.
-fn parse_duration(s: &str) -> Result<Duration, String> {
-    let s = s.trim();
-
-    if let Some(num_str) = s.strip_suffix(['h', 'H']) {
-        let hours: u64 = num_str
-            .trim()
-            .parse()
-            .map_err(|e| format!("Invalid hours '{}': {}", s, e))?;
-        Ok(Duration::from_secs(hours * 3600))
-    } else if let Some(num_str) = s.strip_suffix(['m', 'M']) {
-        let minutes: u64 = num_str
-            .trim()
-            .parse()
-            .map_err(|e| format!("Invalid minutes '{}': {}", s, e))?;
-        Ok(Duration::from_secs(minutes * 60))
-    } else if let Some(num_str) = s.strip_suffix(['s', 'S']) {
-        let seconds: u64 = num_str
-            .trim()
-            .parse()
-            .map_err(|e| format!("Invalid seconds '{}': {}", s, e))?;
-        Ok(Duration::from_secs(seconds))
-    } else if let Some(num_str) = s.strip_suffix(['d', 'D']) {
-        let days: u64 = num_str
-            .trim()
-            .parse()
-            .map_err(|e| format!("Invalid days '{}': {}", s, e))?;
-        Ok(Duration::from_secs(days * 86400))
-    } else {
-        // Try plain number (assume hours)
-        let hours: u64 = s
-            .parse()
-            .map_err(|e| format!("Invalid duration '{}': {}", s, e))?;
-        Ok(Duration::from_secs(hours * 3600))
     }
 }
 
@@ -519,54 +488,6 @@ b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4
             // If it fails, it shouldn't be due to ticket_keys
             assert!(!e.to_string().contains("ticket"));
         }
-    }
-
-    #[test]
-    fn test_parse_duration_hours() {
-        assert_eq!(
-            parse_duration("12h").unwrap(),
-            Duration::from_secs(12 * 3600)
-        );
-        assert_eq!(parse_duration("1h").unwrap(), Duration::from_secs(3600));
-        assert_eq!(
-            parse_duration("24H").unwrap(),
-            Duration::from_secs(24 * 3600)
-        );
-    }
-
-    #[test]
-    fn test_parse_duration_minutes() {
-        assert_eq!(parse_duration("30m").unwrap(), Duration::from_secs(1800));
-        assert_eq!(parse_duration("60M").unwrap(), Duration::from_secs(3600));
-    }
-
-    #[test]
-    fn test_parse_duration_seconds() {
-        assert_eq!(parse_duration("90s").unwrap(), Duration::from_secs(90));
-    }
-
-    #[test]
-    fn test_parse_duration_days() {
-        assert_eq!(parse_duration("1d").unwrap(), Duration::from_secs(86400));
-        assert_eq!(
-            parse_duration("2D").unwrap(),
-            Duration::from_secs(2 * 86400)
-        );
-    }
-
-    #[test]
-    fn test_parse_duration_plain_number() {
-        // Plain numbers are treated as hours
-        assert_eq!(
-            parse_duration("12").unwrap(),
-            Duration::from_secs(12 * 3600)
-        );
-    }
-
-    #[test]
-    fn test_parse_duration_invalid() {
-        assert!(parse_duration("abc").is_err());
-        assert!(parse_duration("").is_err());
     }
 
     #[test]

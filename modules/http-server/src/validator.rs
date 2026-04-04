@@ -33,7 +33,12 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             validate_nested!(http, protocols, args(*) => [ServerConfigurationValue::String(_, _)]);
 
             // Timeout
-            validate_nested!(http, timeout, args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Boolean(false, _)]);
+            validate_nested!(http, timeout, args(1) => [
+                ServerConfigurationValue::Number(_, _)
+                    | ServerConfigurationValue::Boolean(false, _)
+                    | ServerConfigurationValue::String(_, _)
+                    | ServerConfigurationValue::InterpolatedString(_, _)
+            ]);
 
             // HTTP/1.x settings
             validate_nested!(http, h1_enable_early_hints, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);

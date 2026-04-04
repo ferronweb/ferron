@@ -59,7 +59,7 @@ This configuration:
 |-----------|------|---------|----------|-------------|
 | `file` | string | - | Yes | Path to the ticket key file |
 | `auto_rotate` | bool | `false` | No | Enable automatic key rotation |
-| `rotation_interval` | duration | `12h` | No | How often to rotate keys |
+| `rotation_interval` | string/number | `12h` | No | How often to rotate keys |
 | `max_keys` | int | `3` | No | Maximum keys to retain (2-5) |
 
 ## Key File Format

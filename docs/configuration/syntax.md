@@ -58,6 +58,26 @@ Supported value types:
 - Floats: `3.14`
 - Booleans: `true`, `false`
 - Interpolated strings: `{{env.TLS_CERT}}`
+- Duration strings: `30m`, `1h`, `90s`, `1d` (see below)
+
+### Duration Strings
+
+Several directives accept duration values. The following formats are supported:
+
+| Suffix | Unit | Example | Result |
+|--------|------|---------|--------|
+| `h` or `H` | Hours | `12h`, `1H` | 12 hours |
+| `m` or `M` | Minutes | `30m`, `30M` | 30 minutes |
+| `s` or `S` | Seconds | `90s`, `90S` | 90 seconds |
+| `d` or `D` | Days | `1d`, `1D` | 1 day |
+| (none) | Hours (default) | `12` | 12 hours |
+
+Examples:
+- `timeout 30m` — 30 minutes
+- `rotation_interval "12h"` — 12 hours
+- `timeout 90s` — 90 seconds
+
+Plain numbers without a suffix are treated as hours for backward compatibility.
 
 Comments start with `#`.
 

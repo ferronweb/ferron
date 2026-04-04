@@ -7,6 +7,7 @@
 //! - Pipeline execution with inverse operations
 //! - Logging with Windows Event Log and stdio backends
 //! - Runtime management with primary and secondary task execution
+//! - Utility functions for common operations (e.g., duration parsing)
 
 #[macro_use]
 pub mod config;
@@ -18,6 +19,7 @@ pub mod providers;
 pub mod registry;
 pub mod runtime;
 pub mod shutdown;
+pub mod util;
 
 pub use registry::StageConstraint;
 

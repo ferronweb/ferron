@@ -3,10 +3,12 @@ use std::io;
 use std::net::SocketAddr;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use bytes::Bytes;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::{Pipeline, PipelineError};
+use ferron_core::util::parse_duration;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse};
 use ferron_observability::{CompositeEventSink, Event, LogEvent, LogLevel};
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
@@ -321,18 +323,23 @@ async fn execute_pipeline_stages(
     }
 
     let timeout_duration = ctx.configuration.get_value("timeout", false).map_or(
-        Some(std::time::Duration::from_secs(300)),
+        Some(Duration::from_secs(300)),
         |value| {
             if !value.as_boolean().unwrap_or(true) {
                 None
+            } else if let Some(s) = value.as_string_with_interpolations(&HashMap::new()) {
+                match parse_duration(&s) {
+                    Ok(d) => Some(d),
+                    Err(e) => {
+                        ferron_core::log_warn!("Invalid timeout duration '{}': {}", s, e);
+                        Some(Duration::from_secs(300))
+                    }
+                }
             } else {
-                Some(
-                    value
-                        .as_number()
-                        .map_or(std::time::Duration::from_secs(300), |n| {
-                            std::time::Duration::from_millis(n as u64)
-                        }),
-                )
+                value
+                    .as_number()
+                    .map(|n| Duration::from_millis(n as u64))
+                    .or_else(|| Some(Duration::from_secs(300)))
             }
         },
     );
