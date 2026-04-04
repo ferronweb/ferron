@@ -572,9 +572,10 @@ fn load_modules(
     let mut runtime = None;
 
     loop {
-        let (mut config, mut watcher) = config_adapter
+        let (config, mut watcher) = config_adapter
             .adapt(&config_adapter_params)
             .map_err(|e| anyhow::anyhow!("Failed to load configuration: {e}"))?;
+        let config = Arc::new(config);
 
         let mut modules = Vec::new();
 
@@ -601,7 +602,7 @@ fn load_modules(
             .expect("runtime should be initialized at this point");
 
         for loader in &mut loaders {
-            loader.register_modules(registry.clone(), &mut modules, &mut config)?;
+            loader.register_modules(registry.clone(), &mut modules, config.clone())?;
         }
 
         // Start all modules

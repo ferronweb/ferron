@@ -78,10 +78,10 @@ impl ModuleLoader for BasicHttpModuleLoader {
         &mut self,
         registry: Arc<ferron_core::registry::Registry>,
         modules: &mut Vec<Arc<dyn ferron_core::Module>>,
-        config: &mut ferron_core::config::ServerConfiguration,
+        config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut new_cache = HashMap::new();
-        if let Some(port_configs) = config.ports.remove("http") {
+        if let Some(port_configs) = config.ports.get("http").cloned() {
             let mut port_configs_new: Vec<ferron_core::config::ServerConfigurationPort> =
                 Vec::new();
 

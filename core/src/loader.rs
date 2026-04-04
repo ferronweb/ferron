@@ -99,7 +99,7 @@ pub trait ModuleLoader {
         &mut self,
         registry: Arc<crate::registry::Registry>,
         modules: &mut Vec<Arc<dyn crate::Module>>,
-        config: &mut crate::config::ServerConfiguration,
+        config: Arc<crate::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }

@@ -44,7 +44,7 @@ impl ModuleLoader for OcspStaplerModuleLoader {
         &mut self,
         _registry: Arc<ferron_core::registry::Registry>,
         modules: &mut Vec<Arc<dyn ferron_core::Module>>,
-        _config: &mut ferron_core::config::ServerConfiguration,
+        _config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         modules.push(Arc::new(OcspStaplerModule));
         Ok(())
