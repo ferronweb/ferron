@@ -169,7 +169,7 @@ pub fn generate_initial_ticket_keys(filename: &str, num_keys: usize) -> std::io:
     fs::rename(&tmp_path, path)?;
 
     // Sync parent directory to ensure rename is persisted
-    if let Some(parent) = path.parent() {
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         let parent_dir = fs::File::open(parent)?;
         parent_dir.sync_all().ok(); // Ignore errors on some filesystems
     }
