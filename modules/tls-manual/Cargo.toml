@@ -1,7 +1,7 @@
 [package]
 name = "ferron-tls-manual"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
@@ -10,8 +10,15 @@ rustls = { version = "0.23.37", default-features = false, features = ["tls12", "
 #tokio-rustls = { version = "0.26.4", default-features = false }
 
 ferron-core = { path = "../../core" }
+ferron-ocsp = { path = "../../types/ocsp", optional = true }
 ferron-tls = { path = "../../types/tls" }
 rustls-pki-types = "1.14.0"
+x509-parser = { version = "0.18", optional = true }
+der-parser = { version = "10", optional = true }
+
+[features]
+default = ["ocsp"]
+ocsp = ["dep:ferron-ocsp", "dep:x509-parser", "dep:der-parser"]
 
 [dev-dependencies]
 tempfile = "3"

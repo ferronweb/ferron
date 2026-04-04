@@ -1,0 +1,25 @@
+[package]
+name = "ferron-ocsp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ferron-core = { path = "../../core" }
+tokio = { version = "1", features = ["sync", "time", "macros", "rt"] }
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["client", "tokio"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["webpki-roots", "http1", "aws-lc-rs"] }
+http-body-util = "0.1"
+rasn = "0.28"
+rasn-ocsp = "0.28"
+rasn-pkix = "0.28"
+rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
+rustls-pki-types = "1"
+sha1 = "0.11"
+sha2 = "0.11"
+parking_lot = "0.12"
+anyhow = "1"
+num-bigint = "0.4"
+rand = "0.10"
+tokio-util = "0.7"
+x509-parser = "0.18"

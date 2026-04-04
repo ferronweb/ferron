@@ -11,6 +11,7 @@ It is split by topic and by scope so the directive reference is easier to scan.
 - [HTTP Host Directives](./http-host.md)
 - [HTTP Control Directives](./http-control.md)
 - [TLS Session Ticket Keys](./tls-session-tickets.md)
+- [OCSP Stapling](./ocsp-stapling.md)
 
 ## Scopes
 

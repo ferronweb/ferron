@@ -41,7 +41,6 @@ use aws_lc_rs::cipher::{
 };
 use aws_lc_rs::hmac::{self, Key as HmacKey};
 use aws_lc_rs::iv::FixedLength;
-use rand::RngCore;
 use rustls::server::ProducesTickets;
 use rustls_pki_types::UnixTime;
 use std::fmt;
@@ -82,7 +81,7 @@ pub type TicketKeyComponents = ([u8; 16], [u8; 32], [u8; 32]);
 ///
 /// # Security Notes
 ///
-/// - Uses system CSPRNG via `rand::thread_rng()`
+/// - Uses system CSPRNG via `getrandom`
 /// - Never log the returned key bytes
 /// - Store generated keys securely with restrictive permissions
 ///
@@ -96,7 +95,7 @@ pub type TicketKeyComponents = ([u8; 16], [u8; 32], [u8; 32]);
 /// ```
 pub fn generate_ticket_key() -> [u8; TICKET_KEY_RECORD_SIZE] {
     let mut key = [0u8; TICKET_KEY_RECORD_SIZE];
-    RngCore::fill_bytes(&mut rand::thread_rng(), &mut key);
+    getrandom::fill(&mut key).expect("failed to generate random bytes for ticket key");
     key
 }
 

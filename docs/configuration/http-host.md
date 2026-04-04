@@ -92,6 +92,99 @@ The bundled `manual` TLS provider reads:
 | `cert` | `<string>` | Path to a PEM certificate file. Interpolation is supported. | none |
 | `key` | `<string>` | Path to a PEM private key file. Interpolation is supported. | none |
 
+#### `cert`
+
+Path to a PEM-encoded certificate file. Must contain at least one certificate.
+
+```ferron
+example.com {
+    tls {
+        provider manual
+        cert "/etc/ssl/example.com/cert.pem"
+        key "/etc/ssl/example.com/key.pem"
+    }
+}
+```
+
+#### `key`
+
+Path to a PEM-encoded private key file.
+
+#### `ticket_keys`
+
+Configures TLS session ticket key management with optional automatic rotation.
+See the [TLS Session Ticket Keys](./tls-session-tickets.md) page for full details.
+
+```ferron
+example.com {
+    tls {
+        provider manual
+        cert "/etc/ssl/example.com/cert.pem"
+        key "/etc/ssl/example.com/key.pem"
+        ticket_keys {
+            file "/etc/ssl/example.com/session_tickets.keys"
+            auto_rotate true
+            rotation_interval "12h"
+            max_keys 3
+        }
+    }
+}
+```
+
+| Nested directive | Type | Default | Description |
+| --- | --- | --- | --- |
+| `file` | `<string>` | - | Path to the ticket key file (required) |
+| `auto_rotate` | `<bool>` | `false` | Enable automatic key rotation |
+| `rotation_interval` | `<duration>` | `12h` | How often to rotate keys |
+| `max_keys` | `<int>` | `3` | Maximum keys to retain (2-5) |
+
+#### `ocsp`
+
+Configures OCSP stapling for this TLS configuration. OCSP stapling is **enabled by default**.
+See the [OCSP Stapling](./ocsp-stapling.md) page for full details.
+
+```ferron
+# Explicitly enable (default behavior)
+example.com {
+    tls {
+        provider manual
+        cert "/etc/ssl/example.com/cert.pem"
+        key "/etc/ssl/example.com/key.pem"
+        ocsp {
+            enabled true
+        }
+    }
+}
+
+# Disable OCSP stapling
+example.com {
+    tls {
+        provider manual
+        cert "/etc/ssl/example.com/cert.pem"
+        key "/etc/ssl/example.com/key.pem"
+        ocsp {
+            enabled false
+        }
+    }
+}
+
+# Bare directive — also enables (same as default)
+example.com {
+    tls {
+        provider manual
+        cert "/etc/ssl/example.com/cert.pem"
+        key "/etc/ssl/example.com/key.pem"
+        ocsp
+    }
+}
+```
+
+| Nested directive | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | `<bool>` | `true` | Whether OCSP stapling is active |
+
+When enabled, certificates with the OCSP Must-Staple extension (TLS Feature `status_request`, RFC 7633) are detected and preloaded immediately for faster initial stapling.
+
 ## `admin_email`
 
 Syntax:

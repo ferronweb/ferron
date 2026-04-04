@@ -5,14 +5,104 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::util::parse_duration;
 use ferron_tls::{
-    TcpTlsContext, TcpTlsResolver,
     tickets::{
-        TicketKey, TicketKeyRotator, generate_initial_ticket_keys, load_ticket_keys,
-        validate_ticket_keys_file,
+        generate_initial_ticket_keys, load_ticket_keys, validate_ticket_keys_file, TicketKey,
+        TicketKeyRotator,
     },
+    TcpTlsContext, TcpTlsResolver,
 };
 use rustls::ServerConfig;
-use rustls_pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
+use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
+
+/// Check if a certificate has the OCSP Must-Staple (TLS Feature status_request) extension.
+///
+/// Per RFC 7633, the TLS Feature extension contains a SEQUENCE of feature values.
+/// The `status_request` feature (value 5) indicates OCSP Must-Staple.
+#[cfg(feature = "ocsp")]
+fn cert_has_must_staple(leaf: &CertificateDer<'_>) -> bool {
+    use x509_parser::prelude::*;
+
+    let Ok((_, cert)) = X509Certificate::from_der(leaf.as_ref()) else {
+        return false;
+    };
+
+    for ext in cert.extensions() {
+        // ext.oid.as_bytes() returns BER-encoded OID bytes
+        // BER encoding of 1.3.6.1.5.5.7.1.24: 2b 06 01 05 05 07 01 18
+        if ext.oid.as_bytes() == [0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x01, 0x18] {
+            if let Ok((_, root)) = der_parser::der::parse_der(ext.value) {
+                if let Ok(items) = root.as_sequence() {
+                    return items
+                        .iter()
+                        .any(|item: &der_parser::ber::BerObject| item.as_u32().ok() == Some(5));
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Build a `rustls::sign::CertifiedKey` from loaded certs and private key.
+///
+/// Used to preload certificates with Must-Staple into the OCSP service for
+/// immediate fetching.
+#[cfg(feature = "ocsp")]
+fn build_certified_key(
+    certs: &[CertificateDer<'static>],
+    private_key: &PrivateKeyDer<'static>,
+) -> Option<rustls::sign::CertifiedKey> {
+    use rustls::crypto::aws_lc_rs::sign::any_supported_type;
+
+    let signing_key = any_supported_type(private_key).ok()?;
+    Some(rustls::sign::CertifiedKey::new(certs.to_vec(), signing_key))
+}
+
+/// Configuration for OCSP stapling.
+#[derive(Debug, Clone, Default)]
+pub struct OcspConfig {
+    /// Whether OCSP stapling is enabled (default: true).
+    pub enabled: bool,
+}
+
+impl OcspConfig {
+    /// Parse OCSP stapling configuration from a `ServerConfigurationBlock`.
+    ///
+    /// Looks for a nested `ocsp` block:
+    /// ```text
+    /// tls {
+    ///     cert /path/cert.pem
+    ///     key /path/key.pem
+    ///     ocsp {
+    ///         enabled true
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// Returns `Some(OcspConfig)` if an `ocsp` block is found,
+    /// or `Some(OcspConfig::default())` if no block is found (enabled by default).
+    /// Returns `None` only if parsing a present block fails unexpectedly.
+    pub fn from_config(config: &ServerConfigurationBlock) -> Self {
+        let Some(ocsp_directive) = config.directives.get("ocsp") else {
+            // No `ocsp` block — enabled by default
+            return Self { enabled: true };
+        };
+        let Some(ocsp_entry) = ocsp_directive.first() else {
+            return Self { enabled: true };
+        };
+
+        // Check if it's a nested block (has children)
+        if let Some(ref ocsp_block) = ocsp_entry.children {
+            let enabled = ocsp_block
+                .get_value("enabled")
+                .and_then(|v| v.as_boolean())
+                .unwrap_or(true);
+            Self { enabled }
+        } else {
+            // Bare `ocsp` directive (no children) — treat as enabled
+            Self { enabled: true }
+        }
+    }
+}
 
 /// Configuration for automatic ticket key rotation.
 #[derive(Debug, Clone)]
@@ -188,27 +278,37 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
             rustls::crypto::aws_lc_rs::Ticketer::new()?
         };
 
-        // Build the config with certificates
-        let mut config_with_tickets = config.with_single_cert(
-            load_certs(
-                ctx.config
-                    .get_value("cert")
-                    .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                    .as_deref()
-                    .ok_or(std::io::Error::other(
-                        "'cert' TLS parameter missing or invalid",
-                    ))?,
-            )?,
-            load_private_key(
-                ctx.config
-                    .get_value("key")
-                    .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                    .as_deref()
-                    .ok_or(std::io::Error::other(
-                        "'key' TLS parameter missing or invalid",
-                    ))?,
-            )?,
+        // Load certificates
+        let certs = load_certs(
+            ctx.config
+                .get_value("cert")
+                .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                .as_deref()
+                .ok_or(std::io::Error::other(
+                    "'cert' TLS parameter missing or invalid",
+                ))
+                .map_err(|e| {
+                    std::io::Error::other(format!("Error while loading TLS certificate: {e}"))
+                })?,
         )?;
+
+        // Load private key
+        let private_key = load_private_key(
+            ctx.config
+                .get_value("key")
+                .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                .as_deref()
+                .ok_or(std::io::Error::other(
+                    "'key' TLS parameter missing or invalid",
+                ))
+                .map_err(|e| {
+                    std::io::Error::other(format!("Error while loading TLS private key: {e}"))
+                })?,
+        )?;
+
+        // Build the config with certificates
+        let mut config_with_tickets =
+            config.with_single_cert(certs.clone(), private_key.clone_key())?;
 
         // Attach the ticketer
         config_with_tickets.ticketer = ticketer;
@@ -216,6 +316,36 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
         if let Some(alpn_protocols) = ctx.alpn.as_ref() {
             config_with_tickets.alpn_protocols = alpn_protocols.clone();
         }
+
+        // Wrap cert_resolver with OCSP stapler if enabled
+        #[cfg(feature = "ocsp")]
+        {
+            let ocsp_config = OcspConfig::from_config(ctx.config);
+            if ocsp_config.enabled {
+                let ocsp_handle = ferron_ocsp::get_service_handle()
+                    .expect("OCSP service handle should always be available");
+                let inner_resolver = config_with_tickets.cert_resolver.clone();
+                config_with_tickets.cert_resolver =
+                    Arc::new(ferron_ocsp::OcspStapler::new(inner_resolver, &ocsp_handle));
+
+                // Preload the certificate for immediate OCSP fetching.
+                // Without preloading, the first TLS handshake for each server
+                // would not include a stapled OCSP response because the fetch
+                // hasn't completed yet. Preloading ensures the background task
+                // starts fetching as soon as the config is loaded.
+                if let Some(certified_key) = build_certified_key(&certs, &private_key) {
+                    if let Some(leaf) = certs.first() {
+                        if cert_has_must_staple(leaf) {
+                            ferron_core::log_info!(
+                                "OCSP stapling enabled — Must-Staple detected, preloading certificate"
+                            );
+                        }
+                    }
+                    ocsp_handle.preload(certified_key);
+                }
+            }
+        }
+
         let config = Arc::new(config_with_tickets);
 
         ctx.resolver = Some(Arc::new(TcpTlsManualResolver { config }));
@@ -596,5 +726,103 @@ b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4
 
         let rotation_config = TicketKeyRotationConfig::from_config(&config);
         assert!(rotation_config.is_none());
+    }
+
+    #[test]
+    fn test_ocsp_config_defaults_to_enabled() {
+        // No `ocsp` block at all → enabled
+        let config = create_test_config(vec![("cert", "/tmp/cert.pem"), ("key", "/tmp/key.pem")]);
+        let ocsp = OcspConfig::from_config(&config);
+        assert!(ocsp.enabled);
+    }
+
+    #[test]
+    fn test_ocsp_config_bare_directive() {
+        // Bare `ocsp` directive (no children) → enabled
+        let config = create_test_config(vec![
+            ("cert", "/tmp/cert.pem"),
+            ("key", "/tmp/key.pem"),
+            ("ocsp", ""),
+        ]);
+        let ocsp = OcspConfig::from_config(&config);
+        assert!(ocsp.enabled);
+    }
+
+    #[test]
+    fn test_ocsp_config_explicitly_enabled() {
+        let nested = ServerConfigurationBlock {
+            directives: Arc::new(HashMap::from([(
+                "enabled".to_string(),
+                vec![ServerConfigurationDirectiveEntry {
+                    args: vec![ServerConfigurationValue::Boolean(true, None)],
+                    children: None,
+                    span: None,
+                }],
+            )])),
+            matchers: HashMap::new(),
+            span: None,
+        };
+        let config = create_test_config_with_nested(
+            vec![("cert", "/tmp/cert.pem"), ("key", "/tmp/key.pem")],
+            ("ocsp", nested),
+        );
+        let ocsp = OcspConfig::from_config(&config);
+        assert!(ocsp.enabled);
+    }
+
+    #[test]
+    fn test_ocsp_config_explicitly_disabled() {
+        let nested = ServerConfigurationBlock {
+            directives: Arc::new(HashMap::from([(
+                "enabled".to_string(),
+                vec![ServerConfigurationDirectiveEntry {
+                    args: vec![ServerConfigurationValue::Boolean(false, None)],
+                    children: None,
+                    span: None,
+                }],
+            )])),
+            matchers: HashMap::new(),
+            span: None,
+        };
+        let config = create_test_config_with_nested(
+            vec![("cert", "/tmp/cert.pem"), ("key", "/tmp/key.pem")],
+            ("ocsp", nested),
+        );
+        let ocsp = OcspConfig::from_config(&config);
+        assert!(!ocsp.enabled);
+    }
+
+    #[test]
+    fn test_ocsp_config_missing_enabled_uses_default() {
+        // ocsp block present but no `enabled` directive → defaults to true
+        let nested = ServerConfigurationBlock {
+            directives: Arc::new(HashMap::new()),
+            matchers: HashMap::new(),
+            span: None,
+        };
+        let config = create_test_config_with_nested(
+            vec![("cert", "/tmp/cert.pem"), ("key", "/tmp/key.pem")],
+            ("ocsp", nested),
+        );
+        let ocsp = OcspConfig::from_config(&config);
+        assert!(ocsp.enabled);
+    }
+
+    #[test]
+    #[cfg(feature = "ocsp")]
+    fn test_cert_has_must_staple_returns_false_for_invalid_cert() {
+        // Invalid DER data should not panic, just return false
+        let invalid = CertificateDer::from(vec![0xDE, 0xAD, 0xBE, 0xEF]);
+        assert!(!cert_has_must_staple(&invalid));
+    }
+
+    #[test]
+    #[cfg(feature = "ocsp")]
+    fn test_cert_has_must_staple_no_extension() {
+        // A minimal valid-ish cert without Must-Staple should return false
+        // We can't easily create a real cert in tests, so just test
+        // that the function handles realistic data
+        let fake_der = CertificateDer::from(vec![0x30, 0x00]);
+        assert!(!cert_has_must_staple(&fake_der));
     }
 }

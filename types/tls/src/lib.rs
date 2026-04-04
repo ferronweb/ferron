@@ -8,7 +8,6 @@ use vibeio::net::PollTcpStream;
 
 pub mod tickets;
 
-// TODO: support OCSP stapling via "ocsp" field
 pub struct TcpTlsContext<'a> {
     pub config: &'a ServerConfigurationBlock,
     pub alpn: Option<Vec<Vec<u8>>>,

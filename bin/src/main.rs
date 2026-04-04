@@ -29,6 +29,7 @@ use cli::{parse_config_params, Cli, Commands};
 #[cfg(windows)]
 use cli::WinServiceCommands;
 use ferron_observability_consolelog::ConsoleObservabilityModuleLoader;
+use ferron_ocsp_stapler::OcspStaplerModuleLoader;
 use ferron_tls_manual::TlsManualModuleLoader;
 
 #[global_allocator]
@@ -236,6 +237,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(BasicHttpModuleLoader::default()),
         Box::new(JsonConfigurationAdapterModuleLoader),
         Box::new(FerronConfConfigurationAdapterModuleLoader),
+        Box::new(OcspStaplerModuleLoader),
         Box::new(TlsManualModuleLoader),
         Box::new(ConsoleObservabilityModuleLoader::default()),
         Box::new(LogFileObservabilityModuleLoader::default()),

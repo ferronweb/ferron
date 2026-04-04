@@ -277,3 +277,4 @@ Keys are rotated automatically using the `maybe_roll()` pattern:
 - [rustls documentation](https://docs.rs/rustls/)
 - [aws-lc-rs documentation](https://docs.rs/aws-lc-rs/)
 - [Ferron TLS Provider Architecture](../README.md)
+- [OCSP Stapling](./ocsp-stapling.md)
