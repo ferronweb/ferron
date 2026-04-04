@@ -1,3 +1,5 @@
 /target
 /AGENTS.md
 /ferron.conf
+/access.log
+/error.log

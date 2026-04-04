@@ -482,6 +482,7 @@ dependencies = [
  "ferron-http-server",
  "ferron-observability-consolelog",
  "ferron-observability-format-json",
+ "ferron-observability-logfile",
  "ferron-tls-manual",
  "malloc-best-effort",
  "nix",
@@ -590,7 +591,6 @@ dependencies = [
  "ferron-core",
  "ferron-observability",
  "kanal",
- "serde_json",
  "tokio",
  "tokio-util",
 ]
@@ -602,6 +602,18 @@ dependencies = [
  "ferron-core",
  "ferron-observability",
  "serde_json",
+]
+
+[[package]]
+name = "ferron-observability-logfile"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "ferron-core",
+ "ferron-observability",
+ "kanal",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
