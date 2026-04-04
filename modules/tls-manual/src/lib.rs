@@ -1,10 +1,126 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use ferron_core::config::ServerConfigurationBlock;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
-use ferron_tls::{TcpTlsContext, TcpTlsResolver, tickets::validate_ticket_keys_file};
+use ferron_tls::{
+    TcpTlsContext, TcpTlsResolver,
+    tickets::{
+        TicketKey, TicketKeyRotator, generate_initial_ticket_keys, load_ticket_keys,
+        validate_ticket_keys_file,
+    },
+};
 use rustls::ServerConfig;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
+
+/// Configuration for automatic ticket key rotation.
+#[derive(Debug, Clone)]
+pub struct TicketKeyRotationConfig {
+    /// Path to the ticket key file
+    pub file: String,
+    /// Whether automatic rotation is enabled
+    pub auto_rotate: bool,
+    /// How often to rotate keys (default: 12 hours)
+    pub rotation_interval: Duration,
+    /// Maximum number of keys to keep (default: 3)
+    pub max_keys: usize,
+}
+
+impl TicketKeyRotationConfig {
+    /// Parse ticket key rotation configuration from a ServerConfigurationBlock.
+    pub fn from_config(config: &ServerConfigurationBlock) -> Option<Self> {
+        // Look for ticket_keys nested block
+        let ticket_keys_directive = config.directives.get("ticket_keys")?;
+        let ticket_keys_entry = ticket_keys_directive.first()?;
+        let ticket_keys_block = ticket_keys_entry.children.as_ref()?;
+
+        // Extract file path (required)
+        let file = ticket_keys_block
+            .get_value("file")
+            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))?;
+
+        // Extract auto_rotate (optional, default: false)
+        let auto_rotate = ticket_keys_block
+            .get_value("auto_rotate")
+            .and_then(|v| v.as_boolean())
+            .unwrap_or(false);
+
+        // Extract rotation_interval (optional, default: 12h)
+        let rotation_interval = ticket_keys_block
+            .get_value("rotation_interval")
+            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+            .map(|s| parse_duration(&s).unwrap_or(Duration::from_secs(12 * 3600)))
+            .unwrap_or(Duration::from_secs(12 * 3600));
+
+        // Extract max_keys (optional, default: 3, range: 2-5)
+        let max_keys = ticket_keys_block
+            .get_value("max_keys")
+            .and_then(|v| v.as_number())
+            .map(|n| {
+                let n = n as usize;
+                if n < 2 {
+                    ferron_core::log_warn!(
+                        "ticket_keys.max_keys={} is too small, using minimum of 2",
+                        n
+                    );
+                    2
+                } else if n > 5 {
+                    ferron_core::log_warn!(
+                        "ticket_keys.max_keys={} is too large, using maximum of 5",
+                        n
+                    );
+                    5
+                } else {
+                    n
+                }
+            })
+            .unwrap_or(3);
+
+        Some(Self {
+            file,
+            auto_rotate,
+            rotation_interval,
+            max_keys,
+        })
+    }
+}
+
+/// Parse a duration string (e.g., "12h", "30m", "1d") into a Duration.
+fn parse_duration(s: &str) -> Result<Duration, String> {
+    let s = s.trim();
+
+    if let Some(num_str) = s.strip_suffix(['h', 'H']) {
+        let hours: u64 = num_str
+            .trim()
+            .parse()
+            .map_err(|e| format!("Invalid hours '{}': {}", s, e))?;
+        Ok(Duration::from_secs(hours * 3600))
+    } else if let Some(num_str) = s.strip_suffix(['m', 'M']) {
+        let minutes: u64 = num_str
+            .trim()
+            .parse()
+            .map_err(|e| format!("Invalid minutes '{}': {}", s, e))?;
+        Ok(Duration::from_secs(minutes * 60))
+    } else if let Some(num_str) = s.strip_suffix(['s', 'S']) {
+        let seconds: u64 = num_str
+            .trim()
+            .parse()
+            .map_err(|e| format!("Invalid seconds '{}': {}", s, e))?;
+        Ok(Duration::from_secs(seconds))
+    } else if let Some(num_str) = s.strip_suffix(['d', 'D']) {
+        let days: u64 = num_str
+            .trim()
+            .parse()
+            .map_err(|e| format!("Invalid days '{}': {}", s, e))?;
+        Ok(Duration::from_secs(days * 86400))
+    } else {
+        // Try plain number (assume hours)
+        let hours: u64 = s
+            .parse()
+            .map_err(|e| format!("Invalid duration '{}': {}", s, e))?;
+        Ok(Duration::from_secs(hours * 3600))
+    }
+}
 
 pub struct TcpTlsManualResolver {
     config: Arc<ServerConfig>,
@@ -33,37 +149,78 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
             .with_safe_default_protocol_versions()?
             .with_no_client_auth();
 
-        // Check if ticket_keys are specified and validate the file
-        if let Some(ticket_keys_path) = ctx
-            .config
-            .get_value("ticket_keys")
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-        {
-            // Validate the ticket keys file
-            match validate_ticket_keys_file(&ticket_keys_path) {
-                Ok(num_keys) => {
-                    ferron_core::log_debug!(
-                        "TLS session ticket keys validated from {} ({} keys loaded)",
-                        ticket_keys_path,
-                        num_keys
+        // Parse ticket key configuration
+        let rotation_config = TicketKeyRotationConfig::from_config(ctx.config);
+
+        let ticketer = if let Some(rot_config) = rotation_config {
+            // Ensure key file exists (generate if missing and auto_rotate is on)
+            if !std::path::Path::new(&rot_config.file).exists() {
+                if rot_config.auto_rotate {
+                    ferron_core::log_info!(
+                        "Generating initial ticket keys at {} ({} keys)",
+                        rot_config.file,
+                        rot_config.max_keys
                     );
-                    // Note: rustls 0.23.37 doesn't expose an API to load custom ticket keys.
-                    // The ticketer will use randomly generated keys internally.
-                    // Validation ensures the file exists and has the correct format for future use.
+                    generate_initial_ticket_keys(&rot_config.file, rot_config.max_keys)?;
+                } else {
+                    return Err(format!(
+                        "Ticket keys file not found: {}. Enable auto_rotate to auto-generate.",
+                        rot_config.file
+                    )
+                    .into());
                 }
-                Err(e) => {
-                    ferron_core::log_error!(
-                        "Failed to load TLS session ticket keys from {}: {}",
-                        ticket_keys_path,
-                        e
-                    );
-                    return Err(e.into());
-                }
+            } else {
+                // Validate existing file
+                validate_ticket_keys_file(&rot_config.file)?;
             }
-        }
+
+            if rot_config.auto_rotate {
+                // Load keys and create rotator
+                let raw_keys = load_ticket_keys(&rot_config.file)?;
+                ferron_core::log_info!(
+                    "Loaded {} ticket keys from {} (rotation interval: {:?})",
+                    raw_keys.len(),
+                    rot_config.file,
+                    rot_config.rotation_interval
+                );
+
+                let ticket_keys: Vec<TicketKey> = raw_keys
+                    .iter()
+                    .map(|(name, aes, hmac)| TicketKey::new(*name, *aes, *hmac))
+                    .collect();
+
+                let rotator = TicketKeyRotator::new(
+                    ticket_keys,
+                    rot_config.rotation_interval,
+                    rot_config.file.clone(),
+                )
+                .map_err(|e| {
+                    Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
+                })?;
+
+                ferron_core::log_info!(
+                    "TLS session ticket key rotation enabled (interval: {:?}, max_keys: {})",
+                    rot_config.rotation_interval,
+                    rot_config.max_keys
+                );
+
+                Arc::new(rotator)
+            } else {
+                // Static mode: just validate and use rustls default ticketer
+                // In the future, we could implement a static custom ticketer here
+                ferron_core::log_info!(
+                    "TLS session ticket keys validated from {} (static mode, no rotation)",
+                    rot_config.file
+                );
+                rustls::crypto::aws_lc_rs::Ticketer::new()?
+            }
+        } else {
+            // No ticket_keys configuration: use rustls default ticketer
+            rustls::crypto::aws_lc_rs::Ticketer::new()?
+        };
 
         // Build the config with certificates
-        let config = config.with_single_cert(
+        let mut config_with_tickets = config.with_single_cert(
             load_certs(
                 ctx.config
                     .get_value("cert")
@@ -84,11 +241,7 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
             )?,
         )?;
 
-        // Enable session tickets with rustls-generated random keys
-        // In future, when rustls exposes the API to load custom keys,
-        // we'll use the validated ticket_keys file here
-        let ticketer = rustls::crypto::aws_lc_rs::Ticketer::new()?;
-        let mut config_with_tickets = config;
+        // Attach the ticketer
         config_with_tickets.ticketer = ticketer;
 
         if let Some(alpn_protocols) = ctx.alpn.as_ref() {
@@ -138,7 +291,9 @@ impl ModuleLoader for TlsManualModuleLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferron_core::config::ServerConfigurationBlock;
+    use ferron_core::config::{
+        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+    };
     use ferron_tls::TcpTlsContext;
     use std::collections::HashMap;
     use std::io::Write;
@@ -146,9 +301,6 @@ mod tests {
 
     /// Helper to create a test configuration block
     fn create_test_config(directives: Vec<(&str, &str)>) -> ServerConfigurationBlock {
-        use ferron_core::config::ServerConfigurationDirectiveEntry;
-        use ferron_core::config::ServerConfigurationValue;
-
         let mut directives_map = HashMap::new();
         for (name, value) in directives {
             directives_map.insert(
@@ -160,6 +312,41 @@ mod tests {
                 }],
             );
         }
+
+        ServerConfigurationBlock {
+            directives: Arc::new(directives_map),
+            matchers: HashMap::new(),
+            span: None,
+        }
+    }
+
+    /// Helper to create a test configuration block with nested children
+    fn create_test_config_with_nested(
+        directives: Vec<(&str, &str)>,
+        nested_block: (&str, ServerConfigurationBlock),
+    ) -> ServerConfigurationBlock {
+        let mut directives_map = HashMap::new();
+        for (name, value) in directives {
+            directives_map.insert(
+                name.to_string(),
+                vec![ServerConfigurationDirectiveEntry {
+                    args: vec![ServerConfigurationValue::String(value.to_string(), None)],
+                    children: None,
+                    span: None,
+                }],
+            );
+        }
+
+        // Add the nested block
+        let (nested_name, nested_children) = nested_block;
+        directives_map.insert(
+            nested_name.to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(nested_children),
+                span: None,
+            }],
+        );
 
         ServerConfigurationBlock {
             directives: Arc::new(directives_map),
@@ -260,11 +447,30 @@ b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4
         let cert_file = create_temp_cert_file();
         let key_file = create_temp_key_file();
 
-        let config = create_test_config(vec![
-            ("cert", cert_file.path().to_str().unwrap()),
-            ("key", key_file.path().to_str().unwrap()),
-            ("ticket_keys", "/nonexistent/ticket.keys"),
-        ]);
+        // Create config with nested ticket_keys block pointing to nonexistent file
+        let nested_config = ServerConfigurationBlock {
+            directives: Arc::new(HashMap::from([(
+                "file".to_string(),
+                vec![ServerConfigurationDirectiveEntry {
+                    args: vec![ServerConfigurationValue::String(
+                        "/nonexistent/ticket.keys".to_string(),
+                        None,
+                    )],
+                    children: None,
+                    span: None,
+                }],
+            )])),
+            matchers: HashMap::new(),
+            span: None,
+        };
+
+        let config = create_test_config_with_nested(
+            vec![
+                ("cert", cert_file.path().to_str().unwrap()),
+                ("key", key_file.path().to_str().unwrap()),
+            ],
+            ("ticket_keys", nested_config),
+        );
 
         let provider = TcpTlsManualProvider;
         let mut ctx = TcpTlsContext {
@@ -313,5 +519,161 @@ b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4
             // If it fails, it shouldn't be due to ticket_keys
             assert!(!e.to_string().contains("ticket"));
         }
+    }
+
+    #[test]
+    fn test_parse_duration_hours() {
+        assert_eq!(
+            parse_duration("12h").unwrap(),
+            Duration::from_secs(12 * 3600)
+        );
+        assert_eq!(parse_duration("1h").unwrap(), Duration::from_secs(3600));
+        assert_eq!(
+            parse_duration("24H").unwrap(),
+            Duration::from_secs(24 * 3600)
+        );
+    }
+
+    #[test]
+    fn test_parse_duration_minutes() {
+        assert_eq!(parse_duration("30m").unwrap(), Duration::from_secs(1800));
+        assert_eq!(parse_duration("60M").unwrap(), Duration::from_secs(3600));
+    }
+
+    #[test]
+    fn test_parse_duration_seconds() {
+        assert_eq!(parse_duration("90s").unwrap(), Duration::from_secs(90));
+    }
+
+    #[test]
+    fn test_parse_duration_days() {
+        assert_eq!(parse_duration("1d").unwrap(), Duration::from_secs(86400));
+        assert_eq!(
+            parse_duration("2D").unwrap(),
+            Duration::from_secs(2 * 86400)
+        );
+    }
+
+    #[test]
+    fn test_parse_duration_plain_number() {
+        // Plain numbers are treated as hours
+        assert_eq!(
+            parse_duration("12").unwrap(),
+            Duration::from_secs(12 * 3600)
+        );
+    }
+
+    #[test]
+    fn test_parse_duration_invalid() {
+        assert!(parse_duration("abc").is_err());
+        assert!(parse_duration("").is_err());
+    }
+
+    #[test]
+    fn test_ticket_key_rotation_config_parsing() {
+        let ticket_keys_file = create_temp_ticket_keys_file();
+
+        let nested_config = ServerConfigurationBlock {
+            directives: Arc::new(HashMap::from([
+                (
+                    "file".to_string(),
+                    vec![ServerConfigurationDirectiveEntry {
+                        args: vec![ServerConfigurationValue::String(
+                            ticket_keys_file.path().to_str().unwrap().to_string(),
+                            None,
+                        )],
+                        children: None,
+                        span: None,
+                    }],
+                ),
+                (
+                    "auto_rotate".to_string(),
+                    vec![ServerConfigurationDirectiveEntry {
+                        args: vec![ServerConfigurationValue::Boolean(true, None)],
+                        children: None,
+                        span: None,
+                    }],
+                ),
+                (
+                    "rotation_interval".to_string(),
+                    vec![ServerConfigurationDirectiveEntry {
+                        args: vec![ServerConfigurationValue::String("6h".to_string(), None)],
+                        children: None,
+                        span: None,
+                    }],
+                ),
+                (
+                    "max_keys".to_string(),
+                    vec![ServerConfigurationDirectiveEntry {
+                        args: vec![ServerConfigurationValue::Number(5, None)],
+                        children: None,
+                        span: None,
+                    }],
+                ),
+            ])),
+            matchers: HashMap::new(),
+            span: None,
+        };
+
+        let config = create_test_config_with_nested(
+            vec![("cert", "/tmp/cert.pem"), ("key", "/tmp/key.pem")],
+            ("ticket_keys", nested_config),
+        );
+
+        let rotation_config = TicketKeyRotationConfig::from_config(&config);
+        assert!(rotation_config.is_some());
+        let rotation_config = rotation_config.unwrap();
+
+        assert!(rotation_config.auto_rotate);
+        assert_eq!(
+            rotation_config.rotation_interval,
+            Duration::from_secs(6 * 3600)
+        );
+        assert_eq!(rotation_config.max_keys, 5);
+    }
+
+    #[test]
+    fn test_ticket_key_rotation_config_defaults() {
+        let ticket_keys_file = create_temp_ticket_keys_file();
+
+        let nested_config = ServerConfigurationBlock {
+            directives: Arc::new(HashMap::from([(
+                "file".to_string(),
+                vec![ServerConfigurationDirectiveEntry {
+                    args: vec![ServerConfigurationValue::String(
+                        ticket_keys_file.path().to_str().unwrap().to_string(),
+                        None,
+                    )],
+                    children: None,
+                    span: None,
+                }],
+            )])),
+            matchers: HashMap::new(),
+            span: None,
+        };
+
+        let config = create_test_config_with_nested(
+            vec![("cert", "/tmp/cert.pem"), ("key", "/tmp/key.pem")],
+            ("ticket_keys", nested_config),
+        );
+
+        let rotation_config = TicketKeyRotationConfig::from_config(&config);
+        assert!(rotation_config.is_some());
+        let rotation_config = rotation_config.unwrap();
+
+        assert!(!rotation_config.auto_rotate);
+        assert_eq!(
+            rotation_config.rotation_interval,
+            Duration::from_secs(12 * 3600)
+        );
+        assert_eq!(rotation_config.max_keys, 3);
+    }
+
+    #[test]
+    fn test_ticket_key_rotation_config_no_block() {
+        let config = create_test_config(vec![("cert", "/tmp/cert.pem"), ("key", "/tmp/key.pem")]);
+
+        let rotation_config = TicketKeyRotationConfig::from_config(&config);
+        assert!(rotation_config.is_none());
     }
 }

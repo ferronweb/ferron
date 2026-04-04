@@ -18,6 +18,14 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             ],
             {
             validate_nested!(tls, provider, optional args(1) => [ServerConfigurationValue::String(_, _)]);
+
+            // Session ticket keys configuration (validated at runtime by provider)
+            validate_nested!(tls, ticket_keys, optional args(?) => [
+                ServerConfigurationValue::String(_, _)
+                    | ServerConfigurationValue::InterpolatedString(_, _)
+                    | ServerConfigurationValue::Number(_, _)
+                    | ServerConfigurationValue::Boolean(_, _)
+            ]);
         });
 
         // HTTP settings

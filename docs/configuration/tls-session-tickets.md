@@ -4,55 +4,75 @@
 
 TLS session tickets enable **stateless session resumption**, allowing clients to resume previous TLS sessions without a full handshake. This improves performance and reduces latency for returning clients.
 
-In Ferron 3, session ticket keys are managed through the `tls "manual"` provider, with support for key files that enable session resumption across server restarts and multiple server instances.
+In Ferron 3, session ticket keys are managed through the `tls "manual"` provider, with full support for **automatic key rotation** and file-backed persistence. This enables:
+
+- **Session resumption across restarts**: Survive configuration reloads and server restarts
+- **Multi-instance support**: Share the same keys across multiple Ferron instances
+- **Automatic rotation**: Cryptographically secure keys generated and rotated on a schedule
 
 ## Configuration
 
-### Basic Usage
+### Basic Usage (Static Keys)
 
-To enable session tickets with automatically generated random keys:
+To enable session tickets with a pre-existing key file:
 
-```ferron
-tls {
-    provider manual
+```
+tls "manual" {
     cert "cert.pem"
     key "key.pem"
+    ticket_keys {
+        file "session_tickets.keys"
+    }
 }
 ```
 
-This configuration enables session tickets with cryptographically random keys generated at startup. **Note**: Keys are not persisted across restarts with this configuration.
+This configuration validates the key file and enables session tickets. Keys are loaded once at startup.
 
-### With Shared Ticket Keys
+### Automatic Key Rotation (Recommended for Production)
 
-To use shared ticket keys (recommended for production):
+To enable automatic key rotation:
 
-```ferron
-tls {
-    provider manual
+```
+tls "manual" {
     cert "cert.pem"
     key "key.pem"
-    ticket_keys "session_tickets.keys"
+    ticket_keys {
+        file "session_tickets.keys"
+        auto_rotate true
+        rotation_interval "12h"
+        max_keys 3
+    }
 }
 ```
 
-The `ticket_keys` directive specifies a file containing pre-shared ticket keys. This enables:
+This configuration:
+- Generates initial keys if the file doesn't exist
+- Automatically rotates keys every 12 hours
+- Keeps up to 3 keys for seamless decryption of old tickets
+- Persists new keys to disk atomically on each rotation
 
-- **Session resumption across restarts**: Survive configuration reloads and server restarts
-- **Multi-instance support**: Share the same keys across multiple Ferron instances for cross-instance session resumption
+### Configuration Parameters
+
+| Parameter | Type | Default | Required | Description |
+|-----------|------|---------|----------|-------------|
+| `file` | string | - | Yes | Path to the ticket key file |
+| `auto_rotate` | bool | `false` | No | Enable automatic key rotation |
+| `rotation_interval` | duration | `12h` | No | How often to rotate keys |
+| `max_keys` | int | `3` | No | Maximum keys to retain (2-5) |
 
 ## Key File Format
 
-The ticket key file must follow a specific format:
+The ticket key file follows a specific format:
 
 - File size must be a multiple of **80 bytes**
 - Each 80-byte record contains:
   - **16 bytes**: Key Name (unique identifier)
-  - **32 bytes**: AES-256-GCM Key (encryption/decryption)
+  - **32 bytes**: AES-256 Key (encryption/decryption)
   - **32 bytes**: HMAC-SHA256 Key (authentication)
 
-### Example: Generating a Key File
+### Example: Generating a Key File Manually
 
-Use OpenSSL or similar tool to generate cryptographically secure keys:
+If `auto_rotate` is disabled, you can generate keys externally:
 
 ```bash
 # Generate a single 80-byte key
@@ -64,7 +84,7 @@ openssl rand 80 >> session_tickets.keys
 openssl rand 80 >> session_tickets.keys
 ```
 
-**Important**: Keys must be generated using cryptographically secure randomness. Do not use predictable values.
+**Important**: Keys must be generated using cryptographically secure randomness.
 
 ### File Permissions
 
@@ -77,90 +97,61 @@ chown ferron:ferron session_tickets.keys
 
 The file should be readable only by the user running the Ferron process.
 
-## Key Rotation
-
-### Rotation Strategy
-
-To rotate ticket keys without breaking existing sessions:
-
-1. **Generate a new key**:
-   ```bash
-   openssl rand 80 > new_ticket_key.keys
-   ```
-
-2. **Prepend the new key** to existing keys (keep 1-2 old keys for overlap):
-   ```bash
-   # Assuming you have 2 existing keys in session_tickets.keys
-   cat new_ticket_key.keys session_tickets.keys > temp.keys
-   # Keep only first 3 keys (240 bytes)
-   head -c 240 temp.keys > session_tickets.keys
-   rm temp.keys new_ticket_key.keys
-   ```
-
-3. **Trigger a configuration reload**:
-   ```bash
-   # Send SIGHUP to the Ferron daemon
-   kill -HUP <ferron-pid>
-   ```
+## Automatic Key Rotation
 
 ### How Rotation Works
 
-When multiple keys are present in the file:
+When `auto_rotate` is enabled:
 
-- **Encryption (issuing new tickets)**: Uses the **first** key in the file
-- **Decryption (resuming sessions)**: Attempts **all** keys in the file
+1. **Initial Setup**: If the key file doesn't exist, Ferron generates `max_keys` random keys
+2. **Validation**: The existing file is validated (size must be multiple of 80 bytes)
+3. **Runtime**: Keys are loaded and a `TicketKeyRotator` is created
+4. **Rotation Trigger**: When `rotation_interval` elapses
+5. **Key Generation**: A new cryptographically secure key is generated
+6. **File Update**: New key is prepended, file is trimmed to `max_keys`, atomic write
+7. **Memory Update**: Current → previous, new key becomes current
+8. **Logging**: Rotation event is logged
 
-This design ensures:
-- New tickets use the freshest key
-- Existing sessions with older keys continue to work
-- Gradual transition without breaking active sessions
+### Example: 12-Hour Rotation
 
-### Recommended Key Count
+With `rotation_interval = "12h"` and `max_keys = 3`:
 
-- **Minimum**: 1 key (works, but no rotation capability)
-- **Recommended**: 2-3 keys (allows smooth rotation)
-- **Maximum**: Ferron loads only the first 3 keys; additional keys are ignored with a warning
+```
+T=0h:   [Key_A, Key_B, Key_C]     ← Encrypt with Key_A
+T=12h:  [Key_D, Key_A, Key_B]     ← Encrypt with Key_D, decrypt with A/B
+T=24h:  [Key_E, Key_D, Key_A]     ← Encrypt with Key_E, decrypt with A/D/E
+T=36h:  [Key_F, Key_E, Key_D]     ← Key_A removed (expired)
+```
 
-## Current Implementation Status
+Tickets issued with `Key_A` at T=0h remain valid until ~T=24h (2× interval).
 
-### What's Implemented ✅
+### Rotation Duration Format
 
-- Validation of ticket key file format (size must be multiple of 80 bytes)
-- File existence and readability checks
-- Session ticket enablement with rustls-generated random keys
-- Logging of key file validation results
-- Graceful error handling (invalid files prevent config reload)
+The `rotation_interval` parameter accepts:
+- `"12h"` or `"12H"` - Hours
+- `"30m"` or `"30M"` - Minutes
+- `"90s"` or `"90S"` - Seconds
+- `"1d"` or `"1D"` - Days
+- `"12"` - Plain number (treated as hours)
 
-### Current Limitations ⚠️
+### Multi-Instance Considerations
 
-Due to limitations in rustls 0.23's public API:
-
-- **Custom key loading**: The ticket key file is validated but not directly loaded into rustls
-- **Random keys**: rustls internally generates random keys for the ticketer
-- **Cross-instance resumption**: Requires waiting for rustls to expose the key loading API or implementing a custom `ProducesTickets` trait
-
-This means:
-- Session resumption **works** within a single server instance lifetime
-- Keys are **not persisted** across restarts (despite the file being validated)
-- Multi-instance session resumption is **not yet functional**
-
-### Future Work
-
-When rustls exposes the necessary API or when we implement a custom `ProducesTickets` trait:
-
-- Full key file loading with direct integration into rustls
-- Cross-instance session resumption with shared key files
-- Key persistence across restarts
+When running multiple Ferron instances:
+- Use shared storage for the key file (NFS, synced directory, etc.)
+- Each instance rotates independently
+- File updates propagate via the shared filesystem
+- Consider external coordination if instances don't share storage
 
 ## Security Considerations
 
 ### Do's ✅
 
-- Generate keys using cryptographically secure randomness (e.g., `openssl rand`)
+- Enable `auto_rotate` for production deployments
+- Generate keys using cryptographically secure randomness (handled automatically)
 - Set restrictive file permissions (`chmod 600`)
-- Rotate keys regularly (recommended: every 24-48 hours)
+- Rotate keys regularly (recommended: every 12-24 hours)
 - Keep 2-3 keys during rotation for smooth transition
-- Store key files in secure locations (e.g., encrypted volumes, secret managers)
+- Store key files in secure locations (e.g., encrypted volumes)
 
 ### Don'ts ❌
 
@@ -174,49 +165,50 @@ When rustls exposes the necessary API or when we implement a custom `ProducesTic
 
 ### Common Errors
 
+#### "Ticket keys file not found"
+
+The key file doesn't exist and `auto_rotate` is disabled.
+
+**Fix**: Either enable `auto_rotate` or create the file manually with `openssl rand 80 > session_tickets.keys`.
+
 #### "TLS ticket key file is empty"
 
-The key file exists but has zero bytes. Generate at least one 80-byte key.
+The key file exists but has zero bytes.
+
+**Fix**: Generate at least one 80-byte key.
 
 #### "TLS ticket key file size (X) is not a multiple of 80 bytes"
 
-The file size is incorrect. Ensure the file contains complete 80-byte records.
+The file size is incorrect.
 
-**Fix**:
-```bash
-# Regenerate the file with correct size
-openssl rand 80 > session_tickets.keys
-```
+**Fix**: Ensure the file contains complete 80-byte records.
 
 #### "No such file or directory"
 
-The ticket key file path is incorrect or the file doesn't exist.
+The ticket key file path is incorrect or inaccessible.
 
 **Fix**: Verify the path is correct and accessible to the Ferron process.
 
-#### Session resumption not working across restarts
-
-This is expected with the current rustls limitation. The key file is validated but not loaded. Session resumption works within a single instance lifetime only.
-
-**Workaround**: Wait for rustls to expose the custom key loading API, or implement a custom `ProducesTickets` trait.
-
 ### Debugging
 
-Enable debug logging to see ticket key validation messages:
+Enable debug logging to see ticket key events:
 
-```bash
-# In CLI
-ferron run -v
+```
+# In Ferron configuration
+log_level "debug"
 ```
 
 You should see messages like:
 ```
-[2026-04-04 12:35:27.042 INFO] TLS session ticket keys validated from /path/to/session_tickets.keys (1 keys loaded)
+INFO Generating initial ticket keys at /path/to/session_tickets.keys (3 keys)
+INFO Loaded 3 ticket keys from /path/to/session_tickets.keys (rotation interval: 12h)
+INFO TLS session ticket key rotation enabled (interval: 12h, max_keys: 3)
+INFO TLS session ticket keys rotated successfully
 ```
 
 Or on error:
 ```
-[2026-04-04 12:35:27.042 ERROR] Failed to load TLS session ticket keys from /path/to/session_tickets.keys: <error details>
+ERROR Failed to load TLS session ticket keys from /path/to/session_tickets.keys: <error details>
 ```
 
 ## Integration with Config Reload
@@ -226,7 +218,7 @@ Ferron's configuration reload system ensures safe key rotation:
 1. **Config reload triggered** (via `SIGHUP` or file change)
 2. **TLS provider re-executes** with new configuration
 3. **Ticket keys validated** from the specified file
-4. **New `ServerConfig` created** with validated keys
+4. **New `TicketKeyRotator` created** (if auto_rotate enabled)
 5. **Atomic swap** via `ArcSwap` - zero downtime
 6. **Old connections** continue with old config
 7. **New connections** use new config
@@ -243,13 +235,13 @@ If key file validation fails during reload:
 ```
 session_tickets.keys file
     ↓
-validate_ticket_keys_file() in types/tls
+generate_initial_ticket_keys() if missing + auto_rotate
     ↓
-TcpTlsManualProvider::execute() validates path
+load_ticket_keys() → Vec<TicketKey>
     ↓
-rustls::crypto::aws_lc_rs::Ticketer::new() creates ticketer
+TicketKeyRotator::new() → Arc<dyn ProducesTickets>
     ↓
-ServerConfig.ticketer is set
+ServerConfig.ticketer = rotator
     ↓
 TcpTlsManualResolver wraps ServerConfig
     ↓
@@ -258,16 +250,28 @@ TlsResolverRadixTree stores resolver
 ArcSwap atomic swap on config reload
 ```
 
+### Ticket Encryption
+
+The `TicketKeyRotator` implements RFC 5077 ticket format:
+- **Encryption**: AES-256-CBC with PKCS#7 padding
+- **Authentication**: HMAC-SHA256
+- **Ticket structure**: IV (16B) || Ciphertext || HMAC (32B)
+
+Keys are rotated automatically using the `maybe_roll()` pattern:
+- Fast path: Read-only check, no lock contention
+- Slow path: Generate keys **outside** the lock, then atomic swap
+- Double-check: Another thread might have rotated first
+- Graceful: Failed rotation keeps old keys working
+
 ### Module Responsibilities
 
-- **`types/tls`**: Core ticket key validation and parsing utilities
-- **`modules/tls-manual`**: Provider that integrates validation into TLS configuration
+- **`types/tls`**: Core ticket key generation, validation, persistence, and `TicketKeyRotator`
+- **`modules/tls-manual`**: Provider that integrates configuration and creates rotator
 - **`core`**: Configuration reload infrastructure (no TLS-specific logic)
-
-This design keeps TLS concerns within the TLS provider while enabling reusable validation logic across multiple TLS providers.
 
 ## References
 
 - [RFC 5077: Transport Layer Security (TLS) Session Resumption](https://tools.ietf.org/html/rfc5077)
 - [rustls documentation](https://docs.rs/rustls/)
+- [aws-lc-rs documentation](https://docs.rs/aws-lc-rs/)
 - [Ferron TLS Provider Architecture](../README.md)
