@@ -12,3 +12,6 @@ rustls = { version = "0.23.37", default-features = false, features = ["tls12", "
 ferron-core = { path = "../../core" }
 ferron-tls = { path = "../../types/tls" }
 rustls-pki-types = "1.14.0"
+
+[dev-dependencies]
+tempfile = "3"

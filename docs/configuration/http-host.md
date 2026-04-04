@@ -58,7 +58,7 @@ Preferred syntax:
 
 ```ferron
 example.com {
-    tls true {
+    tls {
         provider manual
         cert "{{env.TLS_CERT}}"
         key "{{env.TLS_KEY}}"
@@ -68,7 +68,7 @@ example.com {
 
 Accepted by the current validator:
 
-- `tls <bool> { ... }`
+- `tls [<bool>] { ... }`
 - `tls <string> <string>`
 
 | Nested directive | Arguments | Description | Default |

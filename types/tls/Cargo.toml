@@ -5,8 +5,11 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
-rustls = { version = "0.23.37", default-features = false }
+rustls = { version = "0.23.37", default-features = false, features = ["std"] }
 vibeio = { version = "0.2.6", default-features = false }
 tokio-rustls = { version = "0.26.4", default-features = false }
 
 ferron-core = { path = "../../core" }
+
+[dev-dependencies]
+tempfile = "3"
