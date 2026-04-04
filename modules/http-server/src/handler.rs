@@ -726,6 +726,10 @@ fn builtin_error_response(
     }
 
     builder
+        .header(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("text/html"),
+        )
         .body(
             Full::new(Bytes::copy_from_slice(body.as_bytes()))
                 .map_err(|e| match e {})
