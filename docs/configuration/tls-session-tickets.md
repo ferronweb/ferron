@@ -17,7 +17,8 @@ In Ferron 3, session ticket keys are managed through the `tls "manual"` provider
 To enable session tickets with a pre-existing key file:
 
 ```
-tls "manual" {
+tls {
+    provider manual
     cert "cert.pem"
     key "key.pem"
     ticket_keys {
@@ -33,7 +34,8 @@ This configuration validates the key file and enables session tickets. Keys are 
 To enable automatic key rotation:
 
 ```
-tls "manual" {
+tls {
+    provider manual
     cert "cert.pem"
     key "key.pem"
     ticket_keys {
@@ -193,9 +195,9 @@ The ticket key file path is incorrect or inaccessible.
 
 Enable debug logging to see ticket key events:
 
-```
-# In Ferron configuration
-log_level "debug"
+```bash
+# In CLI
+ferron run --verbose
 ```
 
 You should see messages like:
