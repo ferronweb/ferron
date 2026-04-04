@@ -98,7 +98,38 @@ Bundled provider-specific options:
 
 ### `provider console`
 
-The bundled `console` provider takes no additional nested directives and writes supported observability events to Titanium's logs.
+The bundled `console` provider takes no additional subdirectives and writes supported observability events to Titanium's logs.
+
+### `provider file`
+
+The bundled `file` provider writes observability events to specified log files.
+
+Syntax:
+
+```ferron
+example.com {
+    observability true {
+        provider file {
+        
+        access_log "/var/log/ferron/access.log"
+        error_log "/var/log/ferron/error.log"
+        format "combined"
+    }
+}
+```
+
+| Subdirective | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `access_log` | `<string>` | File path for access log output. Access events are written to this file when specified. | none |
+| `error_log` | `<string>` | File path for error log output. Log events (error, warn, info, debug) are written to this file with timestamps and severity levels. | none |
+| `format` | `<string>` | Optional log formatter name, resolved from the registry. If specified and available, the formatter controls the exact output format of access log entries. | none (falls back to default formatting) |
+
+Notes:
+
+- Log files are created if they don't exist and opened in append mode.
+- Writes are buffered and flushed periodically (every 1 second) and on shutdown.
+- If `access_log` is omitted, access events are ignored. Same applies for `error_log`.
+- If a formatter is specified but not found in the registry, access events are not written (no fallback output).
 
 ## Notes
 
