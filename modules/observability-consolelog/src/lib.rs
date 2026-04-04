@@ -4,12 +4,29 @@ use ferron_core::{
     config::ServerConfigurationBlock, loader::ModuleLoader, log_debug, log_error, log_info,
     log_warn, providers::Provider, registry::Registry, Module,
 };
-use ferron_observability::{AccessEvent, Event, LogFormatterContext, ObservabilityContext};
+use ferron_observability::{
+    AccessEvent, Event, EventSink, LogFormatterContext, ObservabilityContext,
+};
 
 /// Wrapper that carries an event with its configuration through the channel
 struct ConfiguredEvent {
     event: Event,
     log_config: Arc<ServerConfigurationBlock>,
+}
+
+/// The initialized event sink that emits events to the console
+struct ConsoleEventSink {
+    inner: kanal::AsyncSender<ConfiguredEvent>,
+    log_config: Arc<ServerConfigurationBlock>,
+}
+
+impl EventSink for ConsoleEventSink {
+    fn emit(&self, event: Event) {
+        let _ = self.inner.try_send(ConfiguredEvent {
+            event,
+            log_config: self.log_config.clone(),
+        });
+    }
 }
 
 struct ConsoleObservabilityModule {
@@ -112,10 +129,10 @@ impl Provider<ObservabilityContext> for ConsoleObservabilityProvider {
     }
 
     fn execute(&self, ctx: &mut ObservabilityContext) -> Result<(), Box<dyn std::error::Error>> {
-        let _ = self.inner.try_send(ConfiguredEvent {
-            event: ctx.event.clone(),
+        ctx.sink = Some(Arc::new(ConsoleEventSink {
+            inner: self.inner.clone(),
             log_config: ctx.log_config.clone(),
-        });
+        }));
         Ok(())
     }
 }

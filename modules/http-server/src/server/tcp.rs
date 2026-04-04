@@ -9,10 +9,13 @@ use std::time::Duration;
 use arc_swap::ArcSwap;
 use ferron_admin::ADMIN_METRICS;
 use ferron_core::pipeline::Pipeline;
+use ferron_core::providers::Provider;
 use ferron_core::runtime::Runtime;
 use ferron_core::{log_error, log_info};
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
-use ferron_observability::{CompositeEventSink, Event, EventSink, LogEvent, LogLevel};
+use ferron_observability::{
+    CompositeEventSink, Event, EventSink, LogEvent, LogLevel, ObservabilityContext,
+};
 use http::Request;
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt};
 use rustls::server::Acceptor;
@@ -27,6 +30,11 @@ use crate::util::proxy_protocol::read_proxy_header;
 
 // Type alias for the config ArcSwap
 type ConfigArcSwap = Arc<ArcSwap<HttpServerConfig>>;
+
+type ObservabilityProviderEntry = (
+    Arc<dyn Provider<ObservabilityContext>>,
+    Arc<ferron_core::config::ServerConfigurationBlock>,
+);
 
 const LOG_TARGET: &str = "ferron-http-server";
 type ResponseBody = UnsyncBoxBody<bytes::Bytes, io::Error>;
@@ -185,12 +193,8 @@ impl TcpListenerHandle {
                             socket
                         }
                         Err(err) => {
-                            let global_observability = config
-                                .load()
-                                .observability_resolver
-                                .root_data()
-                                .map(CompositeEventSink::new)
-                                .unwrap_or(CompositeEventSink::new(vec![]));
+                            let global_observability =
+                                resolve_root_observability_sink(&config.load().observability_resolver);
                             emit_error(
                                 &global_observability,
                                 format!("Failed to accept connection: {err}"),
@@ -210,12 +214,8 @@ impl TcpListenerHandle {
                     let _ = socket.set_nodelay(true);
 
                     let Ok(socket) = socket.into_poll() else {
-                        let global_observability = config
-                            .load()
-                            .observability_resolver
-                            .root_data()
-                            .map(CompositeEventSink::new)
-                            .unwrap_or(CompositeEventSink::new(vec![]));
+                        let global_observability =
+                            resolve_root_observability_sink(&config.load().observability_resolver);
                         emit_error(
                             &global_observability,
                             "Failed to convert socket to poll-based I/O",
@@ -239,11 +239,8 @@ impl TcpListenerHandle {
                                 (stream, client_addr, server_addr)
                             }
                             Err(e) => {
-                                let global_observability = server_config
-                                    .observability_resolver
-                                    .root_data()
-                                    .map(CompositeEventSink::new)
-                                    .unwrap_or(CompositeEventSink::new(vec![]));
+                                let global_observability =
+                                    resolve_root_observability_sink(&server_config.observability_resolver);
                                 emit_error(
                                     &global_observability,
                                     format!("Failed to read PROXY protocol header: {e}"),
@@ -268,20 +265,14 @@ impl TcpListenerHandle {
                             (client, server)
                         } else {
                             let Ok(remote_addr) = socket.peer_addr() else {
-                                let global_observability = server_config
-                                    .observability_resolver
-                                    .root_data()
-                                    .map(CompositeEventSink::new)
-                                    .unwrap_or(CompositeEventSink::new(vec![]));
+                                let global_observability =
+                                    resolve_root_observability_sink(&server_config.observability_resolver);
                                 emit_error(&global_observability, "Failed to get remote address");
                                 return;
                             };
                             let Ok(local_addr) = socket.local_addr() else {
-                                let global_observability = server_config
-                                    .observability_resolver
-                                    .root_data()
-                                    .map(CompositeEventSink::new)
-                                    .unwrap_or(CompositeEventSink::new(vec![]));
+                                let global_observability =
+                                    resolve_root_observability_sink(&server_config.observability_resolver);
                                 emit_error(&global_observability, "Failed to get local address");
                                 return;
                             };
@@ -479,7 +470,7 @@ async fn handle_http1_connection<S>(
     hinted_hostname: Option<String>,
     encrypted: bool,
     connection_options: HttpConnectionOptions,
-    observability_resolver: Arc<RadixTree<Vec<Arc<dyn EventSink>>>>,
+    observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
     default_observability: CompositeEventSink,
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
@@ -534,7 +525,7 @@ async fn handle_http2_connection<S>(
     local_address: SocketAddr,
     hinted_hostname: Option<String>,
     connection_options: HttpConnectionOptions,
-    observability_resolver: Arc<RadixTree<Vec<Arc<dyn EventSink>>>>,
+    observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
     default_observability: CompositeEventSink,
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
@@ -613,7 +604,7 @@ fn build_request_handler(
     remote_address: SocketAddr,
     hinted_hostname: Option<String>,
     encrypted: bool,
-    observability_resolver: Arc<RadixTree<Vec<Arc<dyn EventSink>>>>,
+    observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
     default_observability: CompositeEventSink,
 ) -> impl Fn(Request<vibeio_http::Incoming>) -> RequestHandlerFuture {
     move |request: Request<vibeio_http::Incoming>| {
@@ -667,23 +658,58 @@ fn resolve_http_connection_options(
     .unwrap_or_default()
 }
 
+/// Initialize event sinks from provider entries (called at request/connection time).
+fn initialize_sinks_from_providers(
+    entries: &[ObservabilityProviderEntry],
+) -> Vec<Arc<dyn EventSink>> {
+    let mut sinks = Vec::with_capacity(entries.len());
+    for (provider, log_config) in entries {
+        let mut ctx = ObservabilityContext {
+            log_config: log_config.clone(),
+            sink: None,
+        };
+        if let Ok(()) = provider.execute(&mut ctx) {
+            if let Some(sink) = ctx.sink {
+                sinks.push(sink);
+            }
+        }
+    }
+    sinks
+}
+
+/// Helper to resolve root-level observability sinks (for pre-connection errors).
+fn resolve_root_observability_sink(
+    observability_resolver: &RadixTree<Vec<ObservabilityProviderEntry>>,
+) -> CompositeEventSink {
+    let sinks = observability_resolver
+        .root_data()
+        .map(|e| initialize_sinks_from_providers(&e))
+        .unwrap_or_default();
+    CompositeEventSink::new(sinks)
+}
+
 fn resolve_observability_sink(
-    observability_resolver: &RadixTree<Vec<Arc<dyn EventSink>>>,
+    observability_resolver: &RadixTree<Vec<ObservabilityProviderEntry>>,
     ip: Option<IpAddr>,
     hostname: Option<&str>,
     fallback: &CompositeEventSink,
 ) -> CompositeEventSink {
     let normalized_hostname = hostname.and_then(normalize_host_for_lookup);
-    let sinks = match (ip, normalized_hostname.as_deref()) {
+    let entries = match (ip, normalized_hostname.as_deref()) {
         (Some(ip), Some(hostname)) => observability_resolver.lookup_ip_and_hostname(ip, hostname),
         (Some(ip), None) => observability_resolver.lookup_ip(ip),
         (None, Some(hostname)) => observability_resolver.lookup_hostname(hostname),
         (None, None) => observability_resolver.root_data(),
     };
 
-    sinks
-        .map(CompositeEventSink::new)
-        .unwrap_or_else(|| fallback.clone())
+    let sinks = entries
+        .map(|e| initialize_sinks_from_providers(&e))
+        .unwrap_or_default();
+    if sinks.is_empty() {
+        fallback.clone()
+    } else {
+        CompositeEventSink::new(sinks)
+    }
 }
 
 fn request_hostname_for_lookup<B>(

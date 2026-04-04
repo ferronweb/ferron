@@ -10,9 +10,7 @@ use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_core::{config::ServerConfigurationBlock, pipeline::Pipeline};
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext};
-use ferron_observability::{
-    EventSink, ObservabilityConfigExtractor, ObservabilityContext, ObservabilityProviderEventSink,
-};
+use ferron_observability::{ObservabilityConfigExtractor, ObservabilityContext};
 use ferron_tls::TcpTlsContext;
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -26,6 +24,11 @@ use crate::{
 mod tcp;
 mod tls_resolve;
 
+type ObservabilityProviderEntry = (
+    Arc<dyn ferron_core::providers::Provider<ObservabilityContext>>,
+    Arc<ferron_core::config::ServerConfigurationBlock>,
+);
+
 /// Configuration that can be atomically swapped during reload.
 /// Contains all reloadable state for the HTTP server module.
 pub struct HttpServerConfig {
@@ -37,7 +40,7 @@ pub struct HttpServerConfig {
     pub tls_resolver: Option<Arc<self::tls_resolve::TlsResolverRadixTree>>,
     pub http_connection_options_resolver:
         Arc<self::tls_resolve::RadixTree<tcp::HttpConnectionOptions>>,
-    pub observability_resolver: Arc<self::tls_resolve::RadixTree<Vec<Arc<dyn EventSink>>>>,
+    pub observability_resolver: Arc<self::tls_resolve::RadixTree<Vec<ObservabilityProviderEntry>>>,
     /// Token that is cancelled when configuration is reloaded to gracefully shut down existing connections.
     pub reload_token: CancellationToken,
 }
@@ -395,30 +398,28 @@ impl BasicHttpModule {
                             format_location(None, observability_block.span.as_ref())
                         ))?;
 
-                    let event_sink: Arc<dyn EventSink> =
-                        Arc::new(ObservabilityProviderEventSink::new(
-                            observability_provider,
-                            Arc::new(observability_block),
-                        ));
+                    let observability_block_arc = Arc::new(observability_block);
 
-                    // Insert into the resolver
+                    // Insert provider + config tuple into the resolver (sink initialization deferred)
+                    let entry: ObservabilityProviderEntry =
+                        (observability_provider, observability_block_arc);
                     match (&host_config.0.host, host_config.0.ip) {
                         (Some(host), Some(ip)) => {
                             observability_resolver.insert_ip_and_hostname(
                                 ip,
                                 host,
-                                vec![event_sink],
+                                vec![entry],
                                 false,
                             );
                         }
                         (Some(host), None) => {
-                            observability_resolver.insert_hostname(host, vec![event_sink], false);
+                            observability_resolver.insert_hostname(host, vec![entry], false);
                         }
                         (None, Some(ip)) => {
-                            observability_resolver.insert_ip(ip, vec![event_sink]);
+                            observability_resolver.insert_ip(ip, vec![entry]);
                         }
                         (None, None) => {
-                            observability_resolver.set_root_data(vec![event_sink]);
+                            observability_resolver.set_root_data(vec![entry]);
                         }
                     }
                 }

@@ -9,13 +9,28 @@ use ferron_core::{
     registry::Registry, Module,
 };
 use ferron_observability::{
-    AccessEvent, Event, LogFormatterContext, LogLevel, ObservabilityContext,
+    AccessEvent, Event, EventSink, LogFormatterContext, LogLevel, ObservabilityContext,
 };
 
 /// Wrapper that carries an event with its configuration through the channel
 struct ConfiguredEvent {
     event: Event,
     log_config: Arc<ServerConfigurationBlock>,
+}
+
+/// The initialized event sink that writes events to log files
+struct LogFileEventSink {
+    inner: kanal::AsyncSender<ConfiguredEvent>,
+    log_config: Arc<ServerConfigurationBlock>,
+}
+
+impl EventSink for LogFileEventSink {
+    fn emit(&self, event: Event) {
+        let _ = self.inner.try_send(ConfiguredEvent {
+            event,
+            log_config: self.log_config.clone(),
+        });
+    }
 }
 
 /// File handle wrapper with path tracking
@@ -120,7 +135,7 @@ impl Module for LogFileObservabilityModule {
                                     if let Some(access_log_path) =
                                       msg.log_config.get_value("access_log")
                                           .and_then(|v|
-                                           v.as_string_with_interpolations(&mut HashMap::new())) {
+                                           v.as_string_with_interpolations(&HashMap::new())) {
                                         if let Some(message) =
                                           format_access_event(ae, &msg.log_config, &registry) {
                                             let mut line = message;
@@ -136,7 +151,7 @@ impl Module for LogFileObservabilityModule {
                                     let log_path = msg.log_config
                                         .get_value("error_log")
                                         .and_then(|v| v
-                                            .as_string_with_interpolations(&mut HashMap::new()));
+                                            .as_string_with_interpolations(&HashMap::new()));
 
                                     if let Some(log_path) = log_path {
                                         let line = format!("[{} {}] {}\n",
@@ -220,10 +235,10 @@ impl Provider<ObservabilityContext> for LogFileObservabilityProvider {
     }
 
     fn execute(&self, ctx: &mut ObservabilityContext) -> Result<(), Box<dyn std::error::Error>> {
-        let _ = self.inner.try_send(ConfiguredEvent {
-            event: ctx.event.clone(),
+        ctx.sink = Some(Arc::new(LogFileEventSink {
+            inner: self.inner.clone(),
             log_config: ctx.log_config.clone(),
-        });
+        }));
         Ok(())
     }
 }
