@@ -31,6 +31,7 @@ struct ResolvedHttpFile {
 enum FilePipelineExecutionError {
     Forbidden,
     BadRequest,
+    Timeout,
     Io(io::Error),
     Pipeline(PipelineError),
 }
@@ -317,10 +318,33 @@ async fn execute_pipeline_stages(
         }
     }
 
-    // TODO: execute with timeout START
-    let executed_stages = match pipeline.execute_without_inverse(ctx).await {
-        Ok(executed_stages) => Some(executed_stages),
-        Err(error) => {
+    let timeout_duration = ctx.configuration.get_value("timeout", false).map_or(
+        Some(std::time::Duration::from_secs(300)),
+        |value| {
+            if !value.as_boolean().unwrap_or(true) {
+                None
+            } else {
+                Some(
+                    value
+                        .as_number()
+                        .map_or(std::time::Duration::from_secs(300), |n| {
+                            std::time::Duration::from_millis(n as u64)
+                        }),
+                )
+            }
+        },
+    );
+    let instant = std::time::Instant::now();
+
+    let executed_stages = match if let Some(timeout_duration) =
+        timeout_duration.map(|d| d.saturating_sub(instant.elapsed()))
+    {
+        vibeio::time::timeout(timeout_duration, pipeline.execute_without_inverse(ctx)).await
+    } else {
+        Ok(pipeline.execute_without_inverse(ctx).await)
+    } {
+        Ok(Ok(executed_stages)) => Some(executed_stages),
+        Ok(Err(error)) => {
             emit_error(
                 events,
                 format!("{log_prefix}Pipeline execution error: {error}"),
@@ -328,17 +352,31 @@ async fn execute_pipeline_stages(
             ctx.res = Some(HttpResponse::BuiltinError(500, None));
             None
         }
+        Err(_) => {
+            emit_error(events, format!("{log_prefix}Pipeline execution timeout"));
+            ctx.res = Some(HttpResponse::BuiltinError(408, None));
+            None
+        }
     };
 
     if let Some(executed_stages) = executed_stages {
         if ctx.res.is_none() {
-            match execute_http_file_pipeline(ctx, file_pipeline).await {
+            match execute_http_file_pipeline(
+                ctx,
+                file_pipeline,
+                timeout_duration.map(|d| d.saturating_sub(instant.elapsed())),
+            )
+            .await
+            {
                 Ok(()) => {}
                 Err(FilePipelineExecutionError::Forbidden) => {
                     ctx.res = Some(HttpResponse::BuiltinError(403, None));
                 }
                 Err(FilePipelineExecutionError::BadRequest) => {
                     ctx.res = Some(HttpResponse::BuiltinError(400, None));
+                }
+                Err(FilePipelineExecutionError::Timeout) => {
+                    ctx.res = Some(HttpResponse::BuiltinError(404, None));
                 }
                 Err(FilePipelineExecutionError::Io(error)) => {
                     emit_error(
@@ -371,6 +409,7 @@ async fn execute_pipeline_stages(
 async fn execute_http_file_pipeline(
     ctx: &mut HttpContext,
     file_pipeline: &Pipeline<HttpFileContext>,
+    timeout: Option<std::time::Duration>,
 ) -> Result<(), FilePipelineExecutionError> {
     let Some(request_path_encoded) = ctx
         .req
@@ -418,10 +457,19 @@ async fn execute_http_file_pipeline(
         file_root: root_path,
     };
 
-    let pipeline_result = file_pipeline.execute(&mut file_ctx).await;
+    let pipeline_result = if let Some(timeout) = timeout {
+        vibeio::time::timeout(timeout, file_pipeline.execute(&mut file_ctx)).await
+    } else {
+        Ok(file_pipeline.execute(&mut file_ctx).await)
+    };
+
     *ctx = file_ctx.http;
 
-    pipeline_result.map_err(FilePipelineExecutionError::Pipeline)
+    match pipeline_result {
+        Ok(Ok(v)) => Ok(v),
+        Ok(Err(e)) => Err(FilePipelineExecutionError::Pipeline(e)),
+        Err(_) => Err(FilePipelineExecutionError::Timeout),
+    }
 }
 
 fn resolve_webroot(ctx: &HttpContext) -> Result<Option<PathBuf>, FilePipelineExecutionError> {

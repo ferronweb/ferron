@@ -24,6 +24,7 @@ Syntax:
 example.com {
     http {
         protocols h1 h2
+        timeout 30000
         h1_enable_early_hints false
         h2_initial_window_size 65535
         h2_max_frame_size 32768
@@ -37,6 +38,7 @@ example.com {
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
 | `protocols` | `<string>...` | Enabled HTTP protocols. Currently supported values are `h1` and `h2`. | `h1 h2` |
+| `timeout` | `<number>` or `false` | Pipeline execution timeout in milliseconds. Set to `false` to disable the timeout. When a timeout occurs, a 408 Request Timeout response is returned. | `300000` (5 minutes) |
 | `h1_enable_early_hints` | `<bool>` | Enables HTTP/1.1 early hints support. | `false` |
 | `h2_initial_window_size` | `<number>` | HTTP/2 initial flow-control window size. Must resolve to a non-negative integer at runtime. | unset |
 | `h2_max_frame_size` | `<number>` | HTTP/2 maximum frame size. Must resolve to a non-negative integer at runtime. | unset |
@@ -48,6 +50,7 @@ Notes:
 
 - `protocols` must leave at least one supported protocol enabled.
 - `h3` is currently rejected.
+- The `timeout` directive applies to both the main pipeline execution and file pipeline execution. If a timeout occurs, a 408 response is returned and the event is logged.
 
 ## `tls`
 
