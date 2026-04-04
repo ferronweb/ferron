@@ -12,6 +12,7 @@ use ferron_observability::{CompositeEventSink, Event, LogEvent, LogLevel};
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::Empty;
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Full};
+use typemap_rev::TypeMap;
 
 use crate::config::ThreeStageResolver;
 use crate::util::error_pages::generate_default_error_page;
@@ -209,6 +210,7 @@ async fn request_handler_inner(
         encrypted,
         local_address,
         remote_address,
+        extensions: TypeMap::new(),
     };
 
     execute_pipeline_stages(
@@ -447,6 +449,7 @@ async fn execute_http_file_pipeline(
         encrypted: ctx.encrypted,
         local_address: ctx.local_address,
         remote_address: ctx.remote_address,
+        extensions: TypeMap::new(),
     };
     let http_ctx = std::mem::replace(ctx, placeholder);
     let mut file_ctx = HttpFileContext {

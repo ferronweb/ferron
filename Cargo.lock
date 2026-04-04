@@ -545,6 +545,7 @@ dependencies = [
  "ferron-observability",
  "http",
  "http-body-util",
+ "typemap_rev",
  "vibeio",
 ]
 
@@ -572,6 +573,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-util",
+ "typemap_rev",
  "urlencoding",
  "vibeio",
  "vibeio-http",
@@ -1825,6 +1827,12 @@ checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
 ]
+
+[[package]]
+name = "typemap_rev"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2b09e0a8b1bc7863de68ec5d2d132b45751b82b5049a4761e6cfc22e1e56780"
 
 [[package]]
 name = "unicode-ident"
