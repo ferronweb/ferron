@@ -50,8 +50,6 @@ fn format_location(
     let mut location = String::new();
     if let Some(name) = block_name {
         location.push_str(&format!("block '{}'", name));
-    } else {
-        location.push_str("global configuration");
     }
     if let Some(span) = span {
         if let Some(file) = &span.file {
