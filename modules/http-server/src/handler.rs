@@ -37,7 +37,7 @@ enum FilePipelineExecutionError {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn request_handler(
-    mut request: HttpRequest,
+    request: HttpRequest,
     pipeline: Arc<Pipeline<HttpContext>>,
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
     error_pipeline: Arc<Pipeline<HttpErrorContext>>,
@@ -50,6 +50,41 @@ pub async fn request_handler(
 ) -> Result<Response<ResponseBody>, io::Error> {
     // TODO: add support for HTTP access logs
 
+    let mut response_result = request_handler_inner(
+        request,
+        pipeline,
+        file_pipeline,
+        error_pipeline,
+        config_resolver,
+        local_address,
+        remote_address,
+        hostname,
+        encrypted,
+        events,
+    )
+    .await;
+    if let Ok(response) = &mut response_result {
+        // TODO: add Alt-Svc for HTTP/3
+        response
+            .headers_mut()
+            .insert(http::header::SERVER, HeaderValue::from_static("Ferron"));
+    }
+    response_result
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn request_handler_inner(
+    mut request: HttpRequest,
+    pipeline: Arc<Pipeline<HttpContext>>,
+    file_pipeline: Arc<Pipeline<HttpFileContext>>,
+    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
+    config_resolver: Arc<ThreeStageResolver>,
+    local_address: SocketAddr,
+    remote_address: SocketAddr,
+    hostname: Option<String>,
+    encrypted: bool,
+    events: CompositeEventSink,
+) -> Result<Response<ResponseBody>, io::Error> {
     // Normalize HTTP/2 and HTTP/3 requests
     if matches!(
         request.version(),
@@ -282,6 +317,7 @@ async fn execute_pipeline_stages(
         }
     }
 
+    // TODO: execute with timeout START
     let executed_stages = match pipeline.execute_without_inverse(ctx).await {
         Ok(executed_stages) => Some(executed_stages),
         Err(error) => {
@@ -320,6 +356,7 @@ async fn execute_pipeline_stages(
                 }
             }
         }
+        // TODO: execute with timeout END
 
         if let Err(error) = pipeline.execute_inverse(ctx, executed_stages).await {
             emit_error(
