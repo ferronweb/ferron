@@ -11,3 +11,6 @@ vibeio = { version = "0.2.6", default-features = false, features = ["fs"] }
 
 ferron-observability = { path = "../../types/observability" }
 ferron-core = { path = "../../core" }
+
+[features]
+util = []

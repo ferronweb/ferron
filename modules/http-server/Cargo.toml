@@ -28,7 +28,7 @@ ppp = "2.3.0"
 
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
-ferron-http = { path = "../../types/http" }
+ferron-http = { path = "../../types/http", features = ["util"] }
 ferron-tls = { path = "../../types/tls" }
 
 [dev-dependencies]

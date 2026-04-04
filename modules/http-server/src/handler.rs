@@ -14,6 +14,7 @@ use http_body_util::Empty;
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Full};
 
 use crate::config::ThreeStageResolver;
+use crate::util::error_pages::generate_default_error_page;
 use crate::util::url_sanitizer::sanitize_url;
 
 const LOG_TARGET: &str = "ferron-http-server";
@@ -625,14 +626,13 @@ fn build_resolver_request(request: &HttpRequest) -> Result<HttpRequest, io::Erro
         .map_err(|error| io::Error::other(error.to_string()))
 }
 
-// TODO: improved built-in error responses, server administrator's email address
 fn builtin_error_response(
     status: u16,
     headers: Option<&HeaderMap>,
-    _admin_email: Option<String>,
+    admin_email: Option<String>,
 ) -> Response<ResponseBody> {
     let status = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-    let body = status.canonical_reason().unwrap_or("Error");
+    let body = generate_default_error_page(status, admin_email.as_deref());
     let mut builder = Response::builder().status(status);
     if let Some(headers) = headers {
         for (name, value) in headers {
@@ -646,20 +646,7 @@ fn builtin_error_response(
                 .map_err(|e| match e {})
                 .boxed_unsync(),
         )
-        .unwrap_or_else(|_| {
-            text_response(StatusCode::INTERNAL_SERVER_ERROR, b"Internal Server Error")
-        })
-}
-
-fn text_response(status: StatusCode, body: &'static [u8]) -> Response<ResponseBody> {
-    Response::builder()
-        .status(status)
-        .body(
-            Full::new(Bytes::from_static(body))
-                .map_err(|e| match e {})
-                .boxed_unsync(),
-        )
-        .expect("failed to build text response")
+        .unwrap_or_else(|_| builtin_error_response(500, None, admin_email))
 }
 
 fn emit_error(events: &CompositeEventSink, message: impl Into<String>) {

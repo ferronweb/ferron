@@ -1,5 +1,7 @@
 //! HTTP context types
 
+#[cfg(feature = "util")]
+pub mod util;
 pub mod variables;
 
 use std::net::SocketAddr;
