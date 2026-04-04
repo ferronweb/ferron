@@ -126,28 +126,34 @@ async fn request_handler_inner(
         ));
     }
 
-    // Sanitize URL
-    if let Err(e) = sanitize_request_url(&mut request, &events) {
-        emit_error(&events, format!("URL sanitization error: {}", e));
-        if let Some(response) = execute_error_pipeline(
-            error_pipeline.as_ref(),
-            400,
-            None,
-            LayeredConfiguration::default(),
-            &events,
-        )
-        .await
-        {
-            return Ok(response);
+    // Sanitize URL (unless disabled by configuration)
+    let url_sanitize_enabled = config_resolver
+        .global()
+        .and_then(|g| get_http_nested_boolean(&g, "url_sanitize"))
+        .unwrap_or(true);
+    if url_sanitize_enabled {
+        if let Err(e) = sanitize_request_url(&mut request, &events) {
+            emit_error(&events, format!("URL sanitization error: {}", e));
+            if let Some(response) = execute_error_pipeline(
+                error_pipeline.as_ref(),
+                400,
+                None,
+                LayeredConfiguration::default(),
+                &events,
+            )
+            .await
+            {
+                return Ok(response);
+            }
+            return Ok(builtin_error_response(
+                400,
+                None,
+                config_resolver.global().and_then(|g| {
+                    g.get_value("admin_email")
+                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                }),
+            ));
         }
-        return Ok(builtin_error_response(
-            400,
-            None,
-            config_resolver.global().and_then(|g| {
-                g.get_value("admin_email")
-                    .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-            }),
-        ));
     }
 
     let mut variables = HashMap::new();
@@ -669,6 +675,29 @@ fn normalize_host_header(
         }
     }
     Ok(())
+}
+
+/// Get a nested boolean value from an HTTP configuration block.
+///
+/// Looks up `http.<directive>` within the given configuration block
+/// and returns it as a boolean if present.
+fn get_http_nested_boolean(
+    block: &ferron_core::config::ServerConfigurationBlock,
+    directive: &str,
+) -> Option<bool> {
+    block
+        .directives
+        .get("http")
+        .and_then(|entries| entries.first())
+        .and_then(|http_entry| http_entry.children.as_ref())
+        .and_then(|http_block| {
+            http_block
+                .directives
+                .get(directive)
+                .and_then(|entries| entries.first())
+                .and_then(|entry| entry.args.first())
+                .and_then(|value| value.as_boolean())
+        })
 }
 
 /// Sanitize the request URL path

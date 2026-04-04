@@ -8,6 +8,7 @@ These directives affect HTTP request matching and configuration layering inside 
 - Conditional matching: `if`, `if_not`
 - Error layering: `handle_error`
 - Web root: `root`
+- URL sanitization: `url_sanitize`
 
 ## `location`
 
@@ -108,3 +109,27 @@ Notes:
 - The resolved path is canonicalized before file stages run.
 - Requests that try to escape the webroot are rejected.
 - If a request continues below a matched file path, the unmatched suffix is carried into the file-stage context as `path_info`.
+
+## `url_sanitize`
+
+Syntax:
+
+```ferron
+example.com {
+    http {
+        url_sanitize false
+    }
+}
+```
+
+| Arguments | Description | Default |
+| --- | --- | --- |
+| `<boolean>` | Enables or disables URL path sanitization. When enabled (the default), dangerous sequences such as path traversal attempts (`../`, `..\\`), null bytes, and invalid percent-encodings are removed or normalized. | `true` (enabled) |
+
+Notes:
+
+- URL sanitization is applied early in request processing, before configuration resolution.
+- This directive is only read from the **global** configuration block. Per-host settings are not currently supported.
+- Disabling URL sanitization may improve RFC 3986 compliance for URLs that use valid but unusual encodings.
+- **Warning**: When disabled, Ferron will not protect backend services from path traversal attacks if reverse proxying is implemented. Use with caution.
+- Even when disabled, the file resolution stage still canonicalizes paths and rejects requests that escape the configured webroot.
