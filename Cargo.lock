@@ -623,7 +623,6 @@ dependencies = [
  "async-trait",
  "ferron-core",
  "rustls",
- "tokio",
  "tokio-rustls",
  "vibeio",
 ]
@@ -637,8 +636,6 @@ dependencies = [
  "ferron-tls",
  "rustls",
  "rustls-pki-types",
- "tokio-rustls",
- "vibeio",
 ]
 
 [[package]]

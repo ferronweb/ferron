@@ -7,7 +7,6 @@ edition = "2021"
 async-trait = "0.1"
 rustls = { version = "0.23.37", default-features = false }
 vibeio = { version = "0.2.6", default-features = false }
-tokio = "1.50.0"
 tokio-rustls = { version = "0.26.4", default-features = false }
 
 ferron-core = { path = "../../core" }
