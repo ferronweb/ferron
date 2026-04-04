@@ -22,6 +22,7 @@ use crate::config::ThreeStageResolver;
 use crate::handler::request_handler;
 use crate::server::tls_resolve::RadixTree;
 use crate::server::HttpServerConfig;
+use crate::util::proxy_protocol::read_proxy_header;
 
 // Type alias for the config ArcSwap
 type ConfigArcSwap = Arc<ArcSwap<HttpServerConfig>>;
@@ -97,6 +98,7 @@ pub(crate) struct HttpConnectionOptions {
     pub protocols: HttpProtocols,
     pub h1_enable_early_hints: bool,
     pub h2: Http2Settings,
+    pub proxy_protocol_enabled: bool,
 }
 
 impl HttpConnectionOptions {
@@ -185,6 +187,7 @@ impl TcpListenerHandle {
                         }
                     };
                     let _ = socket.set_nodelay(true);
+
                     let Ok(socket) = socket.into_poll() else {
                         let global_observability = config
                             .load()
@@ -199,27 +202,67 @@ impl TcpListenerHandle {
                         continue;
                     };
 
+                    // Read PROXY protocol header
+                    // Use root HttpConnectionOptions to determine if PROXY protocol is enabled
+                    let server_config = config.load();
+                    let proxy_protocol_enabled = server_config
+                        .http_connection_options_resolver
+                        .root_data()
+                        .map(|opts| opts.proxy_protocol_enabled)
+                        .unwrap_or(false);
+                    let (socket, proxy_client_addr, proxy_server_addr) = if proxy_protocol_enabled {
+                        // Use tokio's TcpStream to read PROXY header asynchronously
+                        match read_proxy_header(socket).await {
+                            Ok((stream, client_addr, server_addr)) => {
+                                // Convert back to std TcpStream for vibeio
+                                (stream, client_addr, server_addr)
+                            }
+                            Err(e) => {
+                                let global_observability = server_config
+                                    .observability_resolver
+                                    .root_data()
+                                    .map(CompositeEventSink::new)
+                                    .unwrap_or(CompositeEventSink::new(vec![]));
+                                emit_error(
+                                    &global_observability,
+                                    format!("Failed to read PROXY protocol header: {e}"),
+                                );
+                                continue;
+                            }
+                        }
+                    } else {
+                        (socket, None, None)
+                    };
+
                     // Load the current config for this connection
                     let server_config = config.load_full();
                     let connection_cancel_token = cancel_token.clone();
                     vibeio::spawn(async move {
-                        let Ok(remote_addr) = socket.peer_addr() else {
-                            let global_observability = server_config
-                                .observability_resolver
-                                .root_data()
-                                .map(CompositeEventSink::new)
-                                .unwrap_or(CompositeEventSink::new(vec![]));
-                            emit_error(&global_observability, "Failed to get remote address");
-                            return;
-                        };
-                        let Ok(local_addr) = socket.local_addr() else {
-                            let global_observability = server_config
-                                .observability_resolver
-                                .root_data()
-                                .map(CompositeEventSink::new)
-                                .unwrap_or(CompositeEventSink::new(vec![]));
-                            emit_error(&global_observability, "Failed to get local address");
-                            return;
+                        // Use PROXY protocol addresses if available, otherwise get from socket
+                        let (remote_addr, local_addr) = if let (Some(client), Some(server)) =
+                            (proxy_client_addr, proxy_server_addr)
+                        {
+                            (client, server)
+                        } else {
+                            let Ok(remote_addr) = socket.peer_addr() else {
+                                let global_observability = server_config
+                                    .observability_resolver
+                                    .root_data()
+                                    .map(CompositeEventSink::new)
+                                    .unwrap_or(CompositeEventSink::new(vec![]));
+                                emit_error(&global_observability, "Failed to get remote address");
+                                return;
+                            };
+                            let Ok(local_addr) = socket.local_addr() else {
+                                let global_observability = server_config
+                                    .observability_resolver
+                                    .root_data()
+                                    .map(CompositeEventSink::new)
+                                    .unwrap_or(CompositeEventSink::new(vec![]));
+                                emit_error(&global_observability, "Failed to get local address");
+                                return;
+                            };
+                            (remote_addr, local_addr)
                         };
                         let ip_observability = resolve_observability_sink(
                             &server_config.observability_resolver,
@@ -227,8 +270,6 @@ impl TcpListenerHandle {
                             None,
                             &CompositeEventSink::new(vec![]),
                         );
-
-                        // TODO: support PROXY protocol server-side
 
                         if let Some(tls_resolver) = &server_config.tls_resolver {
                             let Ok(start_handshake) =

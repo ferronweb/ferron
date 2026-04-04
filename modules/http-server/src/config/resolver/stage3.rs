@@ -918,6 +918,12 @@ impl Stage3ErrorResolver {
     }
 }
 
+impl Default for Stage3ErrorResolver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

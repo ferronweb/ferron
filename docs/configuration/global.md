@@ -12,6 +12,7 @@ These directives belong in top-level global blocks:
 
 - Runtime: `runtime`
 - Network/listener defaults: `tcp`
+- PROXY protocol: `protocol_proxy`
 - Observability: `observability`
 
 ## `runtime`
@@ -49,6 +50,27 @@ Syntax:
 | `listen` | `<string>` | Listener bind address for HTTP TCP listeners. Accepts either an IP address or a full socket address. If a socket address is used, its port must match the HTTP port being started. | `[::]:<http-port>` |
 | `send_buf` | `<number>` | TCP send buffer size. Must resolve to a non-negative integer at runtime. | OS default |
 | `recv_buf` | `<number>` | TCP receive buffer size. Must resolve to a non-negative integer at runtime. | OS default |
+
+## `protocol_proxy`
+
+Syntax:
+
+```ferron
+{
+    protocol_proxy true
+}
+```
+
+| Arguments | Description | Default |
+| --- | --- | --- |
+| `<bool>` | Enables PROXY protocol v1/v2 parsing for incoming TCP connections. When enabled, Titanium reads the PROXY protocol header from HAProxy or similar load balancers before processing the HTTP request. The client and server addresses from the PROXY header replace the actual socket addresses for the duration of the connection. | `false` |
+
+Notes:
+
+- Supports both PROXY protocol v1 (text-based) and v2 (binary).
+- If parsing fails, the connection is rejected with an error logged.
+- This is a global directive and applies to all TCP listeners.
+- Useful when running behind HAProxy, AWS ELB, or other Layer 4 load balancers that forward client IP information via PROXY protocol.
 
 ## `observability`
 

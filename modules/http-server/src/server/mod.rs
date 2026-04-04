@@ -203,6 +203,10 @@ fn resolve_http_connection_options(
                 .and_then(|value| value.as_boolean())
                 .unwrap_or(false),
         },
+        proxy_protocol_enabled: http_config
+            .and_then(|config| config.get_value("protocol_proxy"))
+            .and_then(|value| value.as_boolean())
+            .unwrap_or(false),
     })
 }
 

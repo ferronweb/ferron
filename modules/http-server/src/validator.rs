@@ -45,6 +45,11 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
         ], {});
 
+        // PROXY protocol
+        validate_directive!(config, used_directives, protocol_proxy, optional args(1) => [
+            ServerConfigurationValue::Boolean(_, _)
+        ], {});
+
         Ok(())
     }
 }

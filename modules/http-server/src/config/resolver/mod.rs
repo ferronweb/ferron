@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
+#![allow(clippy::module_inception)]
 //! 3-Stage Configuration Resolver
 //!
 //! This module provides a modular configuration resolution system with three independent stages:
