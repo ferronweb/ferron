@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use clap::Parser;
+use ferron_admin_api::AdminApiModuleLoader;
 use ferron_config_ferronconf::FerronConfConfigurationAdapterModuleLoader;
 use ferron_config_json::JsonConfigurationAdapterModuleLoader;
 use ferron_core::builtin::BuiltinModuleLoader;
@@ -235,6 +236,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
     vec![
         Box::new(BuiltinModuleLoader),
         Box::new(BasicHttpModuleLoader::default()),
+        Box::new(AdminApiModuleLoader::default()),
         Box::new(JsonConfigurationAdapterModuleLoader),
         Box::new(FerronConfConfigurationAdapterModuleLoader),
         Box::new(OcspStaplerModuleLoader),
@@ -632,6 +634,10 @@ fn load_modules(
             log_info!("Shutting down the server...");
             return Ok(());
         } else {
+            // Increment reload counter for admin API /status endpoint
+            ferron_admin::ADMIN_METRICS
+                .reloads
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             log_info!("Reloading configuration...");
         }
     }

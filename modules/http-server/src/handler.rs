@@ -89,6 +89,11 @@ async fn request_handler_inner(
     encrypted: bool,
     events: CompositeEventSink,
 ) -> Result<Response<ResponseBody>, io::Error> {
+    // Increment request counter for admin API /status endpoint
+    ferron_admin::ADMIN_METRICS
+        .requests_total
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
     // Normalize HTTP/2 and HTTP/3 requests
     if matches!(
         request.version(),

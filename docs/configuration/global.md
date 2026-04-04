@@ -12,6 +12,7 @@ These directives belong in top-level global blocks:
 
 - Runtime: `runtime`
 - Network/listener defaults: `tcp`
+- Admin API: `admin`
 - PROXY protocol: `protocol_proxy`
 - Observability: `observability`, `log`, `error_log`, `console_log`
 
@@ -50,6 +51,71 @@ Syntax:
 | `listen` | `<string>` | Listener bind address for HTTP TCP listeners. Accepts either an IP address or a full socket address. If a socket address is used, its port must match the HTTP port being started. | `[::]:<http-port>` |
 | `send_buf` | `<number>` | TCP send buffer size. Must resolve to a non-negative integer at runtime. | OS default |
 | `recv_buf` | `<number>` | TCP receive buffer size. Must resolve to a non-negative integer at runtime. | OS default |
+
+## `admin`
+
+Syntax:
+
+```ferron
+{
+    admin {
+        listen 127.0.0.1:8081
+
+        health true
+        status true
+        config true
+        reload true
+    }
+}
+```
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `listen` | `<string>` | Socket address for the admin HTTP listener. | `127.0.0.1:8081` |
+| `health` | `<bool>` | Enables the `GET /health` endpoint. Returns `200 OK` or `503 Service Unavailable` during shutdown. | `true` |
+| `status` | `<bool>` | Enables the `GET /status` endpoint. Returns JSON with uptime, active connections, request count, and reload count. | `true` |
+| `config` | `<bool>` | Enables the `GET /config` endpoint. Returns the current effective configuration as sanitized JSON (sensitive fields redacted). | `true` |
+| `reload` | `<bool>` | Enables the `POST /reload` endpoint. Triggers a configuration reload equivalent to SIGHUP. | `true` |
+
+Notes:
+
+- If the `admin` block is absent, the admin API is **disabled** entirely.
+- All endpoint flags accept `true` or `false`. A bare directive without a value (e.g. `health`) counts as enabled.
+- The admin listener runs on a separate secondary Tokio runtime, isolated from the primary data-plane runtime.
+- The `/config` endpoint redacts these sensitive directive names: `key`, `cert`, `private_key`, `password`, `secret`, `token`, `ticket_keys`.
+- During configuration reload (SIGHUP), the existing admin listener is gracefully shut down and a new one is started if the `admin` block is still present.
+
+### `GET /health`
+
+Returns `200 OK` while the server is running, or `503 Service Unavailable` when a shutdown has been initiated. Suitable for load balancer and orchestration health checks.
+
+### `GET /status`
+
+Returns JSON with server metrics:
+
+```json
+{
+  "uptime_sec": 12345,
+  "connections_active": 42,
+  "requests_total": 100000,
+  "reloads": 3
+}
+```
+
+| Field | Description |
+| --- | --- |
+| `uptime_sec` | Seconds since the server started. |
+| `connections_active` | Currently open TCP connections across all HTTP listeners. |
+| `requests_total` | Total HTTP requests served across all listeners. |
+| `reloads` | Number of configuration reloads performed. |
+
+### `GET /config`
+
+Returns the full effective server configuration as sanitized JSON. Sensitive directives (TLS keys, passwords, tokens) are replaced with `"[redacted]"`. Useful for debugging and auditing.
+
+### `POST /reload`
+
+Triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon process. Returns `{"status": "reload_initiated"}`.
 
 ## `protocol_proxy`
 

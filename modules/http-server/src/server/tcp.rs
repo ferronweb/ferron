@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
+use ferron_admin::ADMIN_METRICS;
 use ferron_core::pipeline::Pipeline;
 use ferron_core::runtime::Runtime;
 use ferron_core::{log_error, log_info};
@@ -31,6 +32,26 @@ const LOG_TARGET: &str = "ferron-http-server";
 type ResponseBody = UnsyncBoxBody<bytes::Bytes, io::Error>;
 type RequestHandlerFuture =
     Pin<Box<dyn std::future::Future<Output = Result<http::Response<ResponseBody>, io::Error>>>>;
+
+/// RAII guard that decrements the active connection counter on drop.
+struct ConnectionCountGuard;
+
+impl ConnectionCountGuard {
+    fn new() -> Self {
+        ADMIN_METRICS
+            .connections_active
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Self
+    }
+}
+
+impl Drop for ConnectionCountGuard {
+    fn drop(&mut self) {
+        ADMIN_METRICS
+            .connections_active
+            .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct TcpListenerOptions {
@@ -238,6 +259,8 @@ impl TcpListenerHandle {
                     let server_config = config.load_full();
                     let connection_cancel_token = cancel_token.clone();
                     vibeio::spawn(async move {
+                        let _conn_guard = ConnectionCountGuard::new();
+
                         // Use PROXY protocol addresses if available, otherwise get from socket
                         let (remote_addr, local_addr) = if let (Some(client), Some(server)) =
                             (proxy_client_addr, proxy_server_addr)

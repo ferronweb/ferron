@@ -31,6 +31,7 @@ ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
 ferron-http = { path = "../../types/http", features = ["util"] }
 ferron-tls = { path = "../../types/tls" }
+ferron-admin = { path = "../../types/admin" }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }

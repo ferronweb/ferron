@@ -8,6 +8,7 @@ It is split by topic and by scope so the directive reference is easier to scan.
 - [Syntax And File Structure](./syntax.md)
 - [Conditionals And Variables](./conditionals.md)
 - [Global Directives](./global.md)
+- [Admin API](./global.md#admin)
 - [HTTP Host Directives](./http-host.md)
 - [HTTP Control Directives](./http-control.md)
 - [TLS Session Ticket Keys](./tls-session-tickets.md)
@@ -15,9 +16,10 @@ It is split by topic and by scope so the directive reference is easier to scan.
 
 ## Scopes
 
-Titanium currently has two main directive scopes in this codebase:
+Titanium currently has three main directive scopes in this codebase:
 
 - Global scope: directives inside top-level `{ ... }` blocks
+- Admin API scope: directives inside the `admin { ... }` global block
 - HTTP host scope: directives inside HTTP host blocks such as `example.com { ... }`
 
 The HTTP host scope also has control directives that affect request matching and layering:
