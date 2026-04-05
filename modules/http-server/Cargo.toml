@@ -33,6 +33,7 @@ ferron-http = { path = "../../types/http", features = ["util"] }
 ferron-tls = { path = "../../types/tls" }
 ferron-admin = { path = "../../types/admin" }
 chrono = "0.4"
+quick_cache = "0.6"
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }

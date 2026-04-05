@@ -93,6 +93,9 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             validate_nested!(console_log, format, args(1) => ServerConfigurationValue::String(_, _));
         });
 
+        // Index file names
+        validate_directive!(config, used_directives, index, optional args(?), {});
+
         Ok(())
     }
 }

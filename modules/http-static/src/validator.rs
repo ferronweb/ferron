@@ -36,9 +36,6 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpStaticConfig
                     | ServerConfigurationValue::Boolean(false, _)
             ], {});
 
-        // Index file names
-        validate_directive!(config, used_directives, index, optional args(?), {});
-
         // Custom MIME type mappings
         validate_directive!(config, used_directives, mime_type, optional
             args(2) => [

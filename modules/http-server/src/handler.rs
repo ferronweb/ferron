@@ -3,7 +3,7 @@ use std::io;
 use std::net::SocketAddr;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use ferron_core::config::layer::LayeredConfiguration;
@@ -26,7 +26,63 @@ use crate::util::url_sanitizer::sanitize_url;
 const LOG_TARGET: &str = "ferron-http-server";
 type ResponseBody = UnsyncBoxBody<Bytes, io::Error>;
 
-#[derive(Debug)]
+/// Cache for path canonicalization results.
+/// Keys: (canonical_root, request_path), Value: Timestamped<ResolvedHttpFile>
+/// TTL: 100 milliseconds to balance performance with filesystem change detection.
+const PATH_RESOLVE_CACHE_TTL: Duration = Duration::from_millis(100);
+
+static PATH_RESOLVE_CACHE: std::sync::LazyLock<
+    quick_cache::sync::Cache<
+        (PathBuf, String),
+        Timestamped<ResolvedHttpFile>,
+        PathResolveCacheWeighter,
+    >,
+> = std::sync::LazyLock::new(|| {
+    quick_cache::sync::Cache::with_weighter(
+        1024,             // initial capacity
+        64 * 1024 * 1024, // max weight (approx 64MB)
+        PathResolveCacheWeighter,
+    )
+});
+
+/// Wraps a value with an insertion timestamp for TTL-based expiry.
+#[derive(Debug, Clone)]
+struct Timestamped<T> {
+    inserted_at: Instant,
+    value: T,
+}
+
+impl<T> Timestamped<T> {
+    fn new(value: T) -> Self {
+        Self {
+            inserted_at: Instant::now(),
+            value,
+        }
+    }
+
+    fn is_expired(&self, ttl: Duration) -> bool {
+        self.inserted_at.elapsed() >= ttl
+    }
+}
+
+/// Weighter for the path resolve cache.
+/// Each entry costs approximately: size_of_key + size_of_value + overhead
+#[derive(Clone)]
+struct PathResolveCacheWeighter;
+
+impl quick_cache::Weighter<(PathBuf, String), Timestamped<ResolvedHttpFile>>
+    for PathResolveCacheWeighter
+{
+    fn weight(&self, key: &(PathBuf, String), val: &Timestamped<ResolvedHttpFile>) -> u64 {
+        let key_size = key.0.as_os_str().len() + key.1.len();
+        let value_size = val.value.file_path.as_os_str().len()
+            + val.value.path_info.as_ref().map_or(0, |s| s.len())
+            + size_of::<vibeio::fs::Metadata>();
+        (key_size + value_size) as u64
+    }
+}
+
+#[derive(Debug, Clone)]
 struct ResolvedHttpFile {
     metadata: vibeio::fs::Metadata,
     file_path: PathBuf,
@@ -751,10 +807,75 @@ async fn execute_http_file_pipeline(
     let Some(root_path) = resolve_webroot(ctx)? else {
         return Ok(());
     };
-    let Some(resolved_file) = resolve_http_file_target(&root_path, &request_path).await? else {
-        return Ok(());
+
+    // Get index file configuration for directory resolution
+    let index_files = resolve_index_files(ctx);
+
+    // Check cache first
+    let cache_key = (root_path.clone(), request_path.clone());
+    let resolved_file = match PATH_RESOLVE_CACHE.get(&cache_key) {
+        Some(timestamped) if !timestamped.is_expired(PATH_RESOLVE_CACHE_TTL) => {
+            // Re-validate metadata to detect file changes/deletions
+            let cache_path = &timestamped.value.file_path;
+            match vibeio::fs::metadata(cache_path).await {
+                Ok(current_metadata)
+                    if current_metadata.len() == timestamped.value.metadata.len()
+                        && current_metadata.modified().ok()
+                            == timestamped.value.metadata.modified().ok() =>
+                {
+                    // Metadata unchanged — safe to use cached value
+                    timestamped.value.clone()
+                }
+                _ => {
+                    // Metadata changed or file deleted — resolve fresh
+                    let Some(resolved) =
+                        resolve_and_cache(&root_path, &request_path, Some(&index_files)).await?
+                    else {
+                        return Ok(());
+                    };
+                    resolved
+                }
+            }
+        }
+        _ => {
+            // Cache miss or expired — resolve from filesystem
+            let Some(resolved) =
+                resolve_and_cache(&root_path, &request_path, Some(&index_files)).await?
+            else {
+                return Ok(());
+            };
+            resolved
+        }
     };
 
+    apply_resolved_file_to_context(ctx, resolved_file, file_pipeline, timeout, root_path).await
+}
+
+/// Resolve a file path and insert into cache with timestamp.
+async fn resolve_and_cache(
+    root_path: &Path,
+    request_path: &str,
+    index_files: Option<&[String]>,
+) -> Result<Option<ResolvedHttpFile>, FilePipelineExecutionError> {
+    let Some(resolved_file) =
+        resolve_http_file_target(root_path, request_path, index_files).await?
+    else {
+        return Ok(None);
+    };
+
+    let cache_key = (root_path.to_path_buf(), request_path.to_string());
+    PATH_RESOLVE_CACHE.insert(cache_key, Timestamped::new(resolved_file.clone()));
+    Ok(Some(resolved_file))
+}
+
+/// Apply a resolved file to the HTTP context and execute the file pipeline.
+async fn apply_resolved_file_to_context(
+    ctx: &mut HttpContext,
+    resolved_file: ResolvedHttpFile,
+    file_pipeline: &Pipeline<HttpFileContext>,
+    timeout: Option<std::time::Duration>,
+    root_path: PathBuf,
+) -> Result<(), FilePipelineExecutionError> {
     if let Some(path_info) = resolved_file.path_info.as_ref() {
         ctx.variables
             .insert("request.path_info".to_string(), path_info.clone());
@@ -819,9 +940,36 @@ fn resolve_webroot(ctx: &HttpContext) -> Result<Option<PathBuf>, FilePipelineExe
     Ok(Some(PathBuf::from(root_path)))
 }
 
+/// Get the list of configured index files for a directory.
+/// Returns the default list if not explicitly configured.
+fn resolve_index_files(ctx: &HttpContext) -> Vec<String> {
+    let entries = ctx.configuration.get_entries("index", true);
+    if entries.is_empty() {
+        vec![
+            "index.html".into(),
+            "index.htm".into(),
+            "index.xhtml".into(),
+        ]
+    } else {
+        entries
+            .iter()
+            .flat_map(|entry| {
+                entry
+                    .args
+                    .iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+            })
+            .collect()
+    }
+}
+
+/// Resolve an HTTP file target from a request path.
+/// If `index_files` is provided and the resolved path is a directory,
+/// tries each index file in order until one is found.
 async fn resolve_http_file_target(
     root_path: &Path,
     request_path: &str,
+    index_files: Option<&[String]>,
 ) -> Result<Option<ResolvedHttpFile>, FilePipelineExecutionError> {
     if !request_path.starts_with('/') {
         return Ok(None);
@@ -847,6 +995,24 @@ async fn resolve_http_file_target(
                     return Err(FilePipelineExecutionError::Forbidden);
                 }
 
+                // If it's a directory and index_files are provided, try to find an index file
+                if metadata.is_dir() {
+                    if let Some(index_files) = index_files {
+                        if let Some(index_file) =
+                            try_resolve_index_files(&candidate_path, index_files).await?
+                        {
+                            return Ok(Some(ResolvedHttpFile {
+                                metadata: index_file.metadata,
+                                file_path: index_file.file_path,
+                                path_info: build_path_info(
+                                    &request_segments[candidate_depth..],
+                                    trailing_slash,
+                                ),
+                            }));
+                        }
+                    }
+                }
+
                 return Ok(Some(ResolvedHttpFile {
                     metadata,
                     file_path: candidate_path,
@@ -863,6 +1029,42 @@ async fn resolve_http_file_target(
             Err(error) => return Err(FilePipelineExecutionError::Io(error)),
         }
     }
+}
+
+/// Try to resolve an index file in a directory.
+/// Returns the first index file that exists and is a regular file.
+async fn try_resolve_index_files(
+    directory: &Path,
+    index_files: &[String],
+) -> Result<Option<ResolvedHttpFile>, FilePipelineExecutionError> {
+    for index in index_files {
+        let index_path = directory.join(index);
+        match vibeio::fs::metadata(&index_path).await {
+            Ok(metadata) if metadata.is_file() => {
+                // Verify the index file is within the webroot
+                let canonical = vibeio::fs::canonicalize(&index_path)
+                    .await
+                    .map_err(FilePipelineExecutionError::Io)?;
+
+                return Ok(Some(ResolvedHttpFile {
+                    metadata,
+                    file_path: canonical,
+                    path_info: None,
+                }));
+            }
+            Ok(_) => continue, // Directory or other type
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) if error.kind() == io::ErrorKind::NotADirectory => continue,
+            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+                return Err(FilePipelineExecutionError::Forbidden);
+            }
+            Err(error) => {
+                return Err(FilePipelineExecutionError::Io(error));
+            }
+        }
+    }
+
+    Ok(None)
 }
 
 fn request_path_segments(request_path: &str) -> Result<Vec<String>, FilePipelineExecutionError> {
@@ -1156,7 +1358,7 @@ mod tests {
         let root = TestDir::new("path-info");
         std::fs::write(root.path.join("index.html"), b"hello").expect("failed to write file");
 
-        let resolved = resolve_http_file_target(&root.path, "/index.html/test")
+        let resolved = resolve_http_file_target(&root.path, "/index.html/test", None)
             .await
             .expect("resolution should succeed")
             .expect("file should resolve");
@@ -1176,7 +1378,7 @@ mod tests {
     async fn returns_none_for_missing_files() {
         let root = TestDir::new("missing-file");
 
-        let resolved = resolve_http_file_target(&root.path, "/missing.txt")
+        let resolved = resolve_http_file_target(&root.path, "/missing.txt", None)
             .await
             .expect("resolution should succeed");
 
@@ -1187,7 +1389,7 @@ mod tests {
     async fn rejects_parent_directory_traversal() {
         let root = TestDir::new("parent-traversal");
 
-        let error = resolve_http_file_target(&root.path, "/../secret.txt")
+        let error = resolve_http_file_target(&root.path, "/../secret.txt", None)
             .await
             .expect_err("traversal should be rejected");
 
@@ -1206,7 +1408,7 @@ mod tests {
         std::os::unix::fs::symlink(&outside, root.join("escape.txt"))
             .expect("failed to create symlink");
 
-        let error = resolve_http_file_target(&root, "/escape.txt")
+        let error = resolve_http_file_target(&root, "/escape.txt", None)
             .await
             .expect_err("symlink escape should be rejected");
 

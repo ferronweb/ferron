@@ -14,7 +14,7 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;
 use ferron_http::HttpFileContext;
 
-pub use stages::{DirectoryIndexStage, DirectoryListingStage, StaticFileStage};
+pub use stages::{DirectoryListingStage, StaticFileStage};
 pub use validator::HttpStaticConfigurationValidator;
 
 /// Module loader for the HTTP static file module.
@@ -46,7 +46,6 @@ impl ModuleLoader for StaticFileModuleLoader {
 
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         registry
-            .with_stage::<HttpFileContext, _>(|| Arc::new(DirectoryIndexStage))
             .with_stage::<HttpFileContext, _>(|| Arc::new(DirectoryListingStage))
             .with_stage::<HttpFileContext, _>(|| Arc::new(StaticFileStage))
     }
