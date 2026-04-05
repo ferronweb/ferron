@@ -141,7 +141,10 @@ mod tests {
     #[test]
     fn dns_record_type_from_str() {
         assert_eq!("a".parse::<DnsRecordType>().unwrap(), DnsRecordType::A);
-        assert_eq!("AAAA".parse::<DnsRecordType>().unwrap(), DnsRecordType::AAAA);
+        assert_eq!(
+            "AAAA".parse::<DnsRecordType>().unwrap(),
+            DnsRecordType::AAAA
+        );
         assert!("INVALID".parse::<DnsRecordType>().is_err());
     }
 

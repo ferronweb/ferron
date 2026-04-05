@@ -57,7 +57,6 @@ bytes = "1"
 anyhow = "1.0"
 dirs = "6.0"
 async-channel = "2.3"
-urlencoding = "2.1"
 
 [features]
 default = ["ocsp"]
@@ -65,4 +64,3 @@ ocsp = ["dep:ferron-ocsp"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
-tempfile = "3"

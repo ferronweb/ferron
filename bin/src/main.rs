@@ -609,7 +609,7 @@ fn load_modules(
         if runtime.is_none() {
             runtime = Some(Runtime::new(io_uring_enabled)?);
         }
-        let mut runtime = runtime
+        let runtime = runtime
             .as_mut()
             .expect("runtime should be initialized at this point");
 
@@ -620,7 +620,7 @@ fn load_modules(
         // Start all modules
         for module in modules {
             log_debug!("Starting module: {}", module.name());
-            module.start(&mut runtime)?;
+            module.start(runtime)?;
         }
 
         // Run the runtime (check for shutdown/reload signal)

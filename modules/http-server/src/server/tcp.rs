@@ -394,8 +394,7 @@ impl TcpListenerHandle {
                                                 &ip_observability,
                                             );
                                             emit_error(&tls_observability, format!("Failed to start TLS handshake: {e}"));
-                                            return;
-                                        };
+                                        }
                                     }
                             }
                         } else {
