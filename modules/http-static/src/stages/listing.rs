@@ -54,7 +54,8 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
         // Check if directory listing is enabled
         if !ctx.http.configuration.get_flag("directory_listing", true) {
             ctx.http.req = Some(request);
-            return Ok(true);
+            ctx.http.res = Some(HttpResponse::BuiltinError(403, None));
+            return Ok(false);
         }
 
         let method = request.method().clone();
