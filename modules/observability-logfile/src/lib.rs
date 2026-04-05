@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::error::Error;
 use std::sync::Arc;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
@@ -33,10 +34,65 @@ impl EventSink for LogFileEventSink {
     }
 }
 
-/// File handle wrapper with path tracking
+/// Rotates the log file if it is too large
+async fn rotate_log_file(
+    log_filename: &str,
+    rotate_keep: Option<usize>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    // If we are not keeping any logs, just delete the current log file
+    if rotate_keep == Some(0) {
+        tokio::fs::remove_file(log_filename).await?;
+        return Ok(());
+    }
+
+    // Find the oldest log file
+    let mut oldest_log_file_suffix = 0;
+    while rotate_keep.is_none_or(|k| oldest_log_file_suffix < k)
+        && tokio::fs::try_exists(format!("{log_filename}.{}", oldest_log_file_suffix + 1)).await?
+    {
+        oldest_log_file_suffix += 1;
+    }
+
+    // Delete the oldest log file if we are keeping too many
+    if rotate_keep.is_some_and(|k| oldest_log_file_suffix >= k) {
+        tokio::fs::remove_file(format!("{log_filename}.{oldest_log_file_suffix}")).await?;
+        oldest_log_file_suffix -= 1;
+    }
+
+    // Rotate the log files
+    for i in (0..=oldest_log_file_suffix).rev() {
+        tokio::fs::rename(
+            format!(
+                "{log_filename}{}",
+                if i == 0 {
+                    String::new()
+                } else {
+                    format!(".{i}")
+                }
+            ),
+            format!("{log_filename}.{}", i + 1),
+        )
+        .await?;
+    }
+
+    Ok(())
+}
+
+/// Rotation configuration for a log file
+#[derive(Clone, Copy)]
+struct RotationConfig {
+    /// Rotate when file size exceeds this value (in bytes)
+    rotate_size: Option<u64>,
+    /// Number of rotated log files to keep
+    rotate_keep: Option<usize>,
+}
+
+/// File handle wrapper with path tracking and rotation support
 struct FileHandle {
     file: tokio::fs::File,
     buffer: Vec<u8>,
+    current_size: u64,
+    rotation: Option<RotationConfig>,
 }
 
 /// Manages buffered file handles and flushing
@@ -53,24 +109,29 @@ impl FileWriter {
         }
     }
 
-    async fn write_to_file(
+    /// Ensure a file handle exists for the given path
+    async fn ensure_handle(
         &mut self,
-        path: String,
-        content: &[u8],
+        path: &str,
+        rotation: Option<RotationConfig>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        if !self.handles.contains_key(&path) {
-            match OpenOptions::new()
+        if !self.handles.contains_key(path) {
+            let file = OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(&path)
-                .await
-            {
+                .open(path)
+                .await;
+
+            match file {
                 Ok(file) => {
+                    let current_size = file.metadata().await?.len();
                     self.handles.insert(
-                        path.clone(),
+                        path.to_string(),
                         FileHandle {
                             file,
                             buffer: Vec::with_capacity(4096),
+                            current_size,
+                            rotation,
                         },
                     );
                 }
@@ -81,8 +142,65 @@ impl FileWriter {
             }
         }
 
-        if let Some(handle) = self.handles.get_mut(&path) {
+        // Update rotation config if it changed
+        if let Some(handle) = self.handles.get_mut(path) {
+            handle.rotation = rotation;
+        }
+
+        Ok(())
+    }
+
+    /// Write content to a log file, rotating if necessary
+    async fn write_to_file(
+        &mut self,
+        path: &str,
+        content: &[u8],
+        rotation: Option<RotationConfig>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.ensure_handle(path, rotation).await?;
+
+        // Check if rotation is needed
+        if let (Some(handle), Some(rot)) =
+            (self.handles.get(path), rotation.and_then(|r| r.rotate_size))
+        {
+            if handle.current_size >= rot {
+                // Need to rotate
+                drop(self.handles.remove(path).unwrap());
+
+                let rotate_keep = rotation.and_then(|r| r.rotate_keep);
+                if let Err(e) = rotate_log_file(path, rotate_keep).await {
+                    log_error!("Failed to rotate log file {}: {}", path, e);
+                }
+
+                // Re-open the file
+                match OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(path)
+                    .await
+                {
+                    Ok(file) => {
+                        self.handles.insert(
+                            path.to_string(),
+                            FileHandle {
+                                file,
+                                buffer: Vec::with_capacity(4096),
+                                current_size: 0,
+                                rotation,
+                            },
+                        );
+                    }
+                    Err(e) => {
+                        log_error!("Failed to re-open log file after rotation {}: {}", path, e);
+                        return Err(Box::new(e));
+                    }
+                }
+            }
+        }
+
+        if let Some(handle) = self.handles.get_mut(path) {
             handle.buffer.extend_from_slice(content);
+            handle.current_size += content.len() as u64;
         }
 
         Ok(())
@@ -140,9 +258,18 @@ impl Module for LogFileObservabilityModule {
                                           format_access_event(ae, &msg.log_config, &registry) {
                                             let mut line = message;
                                             line.push('\n');
+
+                                            // Read rotation config
+                                            let rotation = read_rotation_config(
+                                                &msg.log_config,
+                                                "access_log_rotate_size",
+                                                "access_log_rotate_keep",
+                                            );
+
                                             let _ = file_writer
-                                            .write_to_file(access_log_path.to_string(),
-                                                line.as_bytes())
+                                            .write_to_file(&access_log_path,
+                                                line.as_bytes(),
+                                                rotation)
                                             .await;
                                         }
                                     }
@@ -162,8 +289,16 @@ impl Module for LogFileObservabilityModule {
                                             LogLevel::Info => "INFO",
                                             LogLevel::Debug => "DEBUG",
                                         },  le.message.clone());
+
+                                        // Read rotation config for error log
+                                        let rotation = read_rotation_config(
+                                            &msg.log_config,
+                                            "error_log_rotate_size",
+                                            "error_log_rotate_keep",
+                                        );
+
                                         let _ = file_writer
-                                            .write_to_file(log_path.to_string(), line.as_bytes())
+                                            .write_to_file(&log_path, line.as_bytes(), rotation)
                                             .await;
                                     }
                                 }
@@ -195,6 +330,35 @@ impl Module for LogFileObservabilityModule {
 impl Drop for LogFileObservabilityModule {
     fn drop(&mut self) {
         self.cancel_token.cancel();
+    }
+}
+
+/// Read rotation configuration from the log config block
+fn read_rotation_config(
+    log_config: &ServerConfigurationBlock,
+    rotate_size_directive: &str,
+    rotate_keep_directive: &str,
+) -> Option<RotationConfig> {
+    let rotate_size = log_config
+        .get_value(rotate_size_directive)
+        .and_then(|v| v.as_number())
+        .filter(|&v| v > 0)
+        .map(|v| v as u64);
+
+    let rotate_keep = log_config
+        .get_value(rotate_keep_directive)
+        .and_then(|v| v.as_number())
+        .filter(|&v| v >= 0)
+        .map(|v| v as usize);
+
+    // Only return Some if at least one rotation setting is configured
+    if rotate_size.is_some() || rotate_keep.is_some() {
+        Some(RotationConfig {
+            rotate_size,
+            rotate_keep,
+        })
+    } else {
+        None
     }
 }
 

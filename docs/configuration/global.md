@@ -189,6 +189,10 @@ example.com {
 | `access_log` | `<string>` | File path for access log output. Access events are written to this file when specified. | none |
 | `error_log` | `<string>` | File path for error log output. Log events (error, warn, info, debug) are written to this file with timestamps and severity levels. | none |
 | `format` | `<string>` | Optional log formatter name, resolved from the registry. If specified and available, the formatter controls the exact output format of access log entries. | none (falls back to default formatting) |
+| `access_log_rotate_size` | `<number>` | Maximum access log file size in bytes before rotation. | disabled |
+| `access_log_rotate_keep` | `<number>` | Number of rotated access log files to keep. | none (no limit) |
+| `error_log_rotate_size` | `<number>` | Maximum error log file size in bytes before rotation. | disabled |
+| `error_log_rotate_keep` | `<number>` | Number of rotated error log files to keep. | none (no limit) |
 
 Notes:
 
@@ -196,6 +200,8 @@ Notes:
 - Writes are buffered and flushed periodically (every 1 second) and on shutdown.
 - If `access_log` is omitted, access events are ignored. Same applies for `error_log`.
 - If a formatter is specified but not found in the registry, access events are not written (no fallback output).
+- When rotation is enabled, the current log file is renamed to `<filename>.1`, existing rotated files are shifted up (`.1` → `.2`, `.2` → `.3`, etc.), and a new empty log file is created.
+- If `access_log_rotate_keep` (or `error_log_rotate_keep`) is set to `0`, the log file is deleted on rotation instead of being renamed.
 
 ## Observability Aliases
 
@@ -223,6 +229,8 @@ example.com {
 | Nested directive | Arguments | Description |
 | --- | --- | --- |
 | `format` | `<string>` | Optional log formatter name. |
+| `access_log_rotate_size` | `<number>` | Maximum access log file size in bytes before rotation. |
+| `access_log_rotate_keep` | `<number>` | Number of rotated access log files to keep. |
 
 This is equivalent to:
 
@@ -247,6 +255,12 @@ log "/var/log/access.log" {
     format "json"
 }
 
+# Enable with log rotation (100MB max, keep 5 rotated files)
+log "/var/log/access.log" {
+    access_log_rotate_size 104857600
+    access_log_rotate_keep 5
+}
+
 # Disable access logging
 log false
 ```
@@ -268,6 +282,11 @@ example.com {
 | `<string>` | File path for error log output. Required when not using `false`. |
 | `false` | Disables error logging. |
 
+| Nested directive | Arguments | Description |
+| --- | --- | --- |
+| `error_log_rotate_size` | `<number>` | Maximum error log file size in bytes before rotation. |
+| `error_log_rotate_keep` | `<number>` | Number of rotated error log files to keep. |
+
 This is equivalent to:
 
 ```ferron
@@ -285,13 +304,18 @@ Examples:
 # Enable error logging
 error_log "/var/log/error.log"
 
+# Enable with log rotation (50MB max, keep 3 rotated files)
+error_log "/var/log/error.log" {
+    error_log_rotate_size 52428800
+    error_log_rotate_keep 3
+}
+
 # Disable error logging
 error_log false
 ```
 
 Notes:
 
-- The `error_log` directive does not support nested blocks.
 - Error logs include timestamps and severity levels (ERROR, WARN, INFO, DEBUG).
 
 ### `console_log`

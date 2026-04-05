@@ -75,12 +75,17 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             | args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)],
             {
             validate_nested!(log, format, args(1) => ServerConfigurationValue::String(_, _));
+            validate_nested!(log, access_log_rotate_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(log, access_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
         });
 
         validate_directive!(config, used_directives, error_log, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)]
             | args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)],
-            {});
+            {
+            validate_nested!(error_log, error_log_rotate_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(error_log, error_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+        });
 
         validate_directive!(config, used_directives, console_log, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)],

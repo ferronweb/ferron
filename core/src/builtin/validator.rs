@@ -37,6 +37,8 @@ impl crate::config::validator::ConfigurationValidator for BuiltinGlobalConfigura
             | args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)],
             {
             validate_nested!(log, format, args(1) => ServerConfigurationValue::String(_, _));
+            validate_nested!(log, access_log_rotate_size, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
+            validate_nested!(log, access_log_rotate_keep, optional args(1) => [ServerConfigurationValue::Number(_, _)]);
         });
 
         // Alias: error_log /path/to/error.log { ... } -> observability { provider file; error_log /path/to/error.log; ... }
@@ -62,6 +64,47 @@ impl crate::config::validator::ConfigurationValidator for BuiltinGlobalConfigura
 
                 if !is_valid {
                     return Err("Invalid directive 'error_log': argument type mismatch".into());
+                }
+                // Validate nested block if present
+                if let Some(ref children) = directive.children {
+                    if let Some(rotate_size_entries) =
+                        children.directives.get("error_log_rotate_size")
+                    {
+                        used_directives.insert("error_log_rotate_size".to_string());
+                        for entry in rotate_size_entries {
+                            if entry.args.len() != 1 {
+                                return Err(format!(
+                                    "Invalid directive 'error_log_rotate_size': expected 1 argument, got {}",
+                                    entry.args.len()
+                                ).into());
+                            }
+                            if !matches!(
+                                entry.args.first(),
+                                Some(ServerConfigurationValue::Number(_, _))
+                            ) {
+                                return Err("Invalid directive 'error_log_rotate_size': argument must be a number".into());
+                            }
+                        }
+                    }
+                    if let Some(rotate_keep_entries) =
+                        children.directives.get("error_log_rotate_keep")
+                    {
+                        used_directives.insert("error_log_rotate_keep".to_string());
+                        for entry in rotate_keep_entries {
+                            if entry.args.len() != 1 {
+                                return Err(format!(
+                                    "Invalid directive 'error_log_rotate_keep': expected 1 argument, got {}",
+                                    entry.args.len()
+                                ).into());
+                            }
+                            if !matches!(
+                                entry.args.first(),
+                                Some(ServerConfigurationValue::Number(_, _))
+                            ) {
+                                return Err("Invalid directive 'error_log_rotate_keep': argument must be a number".into());
+                            }
+                        }
+                    }
                 }
                 // error_log may or may not have children, both are valid
             }
