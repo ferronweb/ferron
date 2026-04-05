@@ -15,6 +15,7 @@ ferron-core = { path = "../core" }
 ferron-admin = { path = "../types/admin" }
 
 ferron-http-server = { path = "../modules/http-server" }
+ferron-http-static = { path = "../modules/http-static" }
 ferron-admin-api = { path = "../modules/admin-api" }
 ferron-config-json = { path = "../modules/config-json" }
 ferron-config-ferronconf = { path = "../modules/config-ferronconf" }

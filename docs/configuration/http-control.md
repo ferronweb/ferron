@@ -9,6 +9,7 @@ These directives affect HTTP request matching and configuration layering inside 
 - Error layering: `handle_error`
 - Web root: `root`
 - URL sanitization: `url_sanitize`
+- Static file serving: `index`, `directory_listing`, `compressed`, `precompressed`, `etag`, `file_cache_control`, `mime_type` (see [Static File Serving Directives](./http-static.md))
 
 ## `location`
 
@@ -109,6 +110,7 @@ Notes:
 - The resolved path is canonicalized before file stages run.
 - Requests that try to escape the webroot are rejected.
 - If a request continues below a matched file path, the unmatched suffix is carried into the file-stage context as `path_info`.
+- Additional static file behavior (index resolution, compression, ETags, directory listings, MIME types) is controlled by separate directives. See [Static File Serving Directives](./http-static.md).
 
 ## `url_sanitize`
 

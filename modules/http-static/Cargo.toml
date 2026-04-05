@@ -1,0 +1,26 @@
+[package]
+name = "ferron-http-static"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt"] }
+vibeio = { version = "0.2.6", default-features = false, features = ["fs"] }
+vibeio-http = { version = "0.3.0", default-features = false, features = ["h1", "h2", "h1-zerocopy"] }
+ferron-core = { path = "../../core" }
+ferron-observability = { path = "../../types/observability" }
+ferron-http = { path = "../../types/http", features = ["util"] }
+http = "1"
+http-body = "1"
+http-body-util = "0.1"
+bytes = "1"
+tokio-util = { version = "0.7", features = ["io"] }
+futures-util = "0.3"
+futures-core = "0.3"
+send_wrapper = { version = "0.6", features = ["futures"] }
+async-compression = { version = "0.4", features = ["tokio", "gzip", "brotli", "deflate", "zstd"] }
+new_mime_guess = "4"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+urlencoding = "2"
+chrono = "0.4"

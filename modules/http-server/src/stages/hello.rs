@@ -30,7 +30,7 @@ impl Stage<HttpContext> for HelloStage {
     }
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        if ctx.req.as_ref().is_some_and(|r| r.uri().path() == "/") {
+        if ctx.req.as_ref().is_some_and(|r| r.uri().path() == "/hello") {
             ctx.res = Some(HttpResponse::Custom(
                 Response::builder()
                     .status(200)
