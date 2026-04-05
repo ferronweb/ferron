@@ -4,23 +4,36 @@
 
 TLS session tickets enable **stateless session resumption**, allowing clients to resume previous TLS sessions without a full handshake. This improves performance and reduces latency for returning clients.
 
-In Ferron 3, session ticket keys are managed through the `tls "manual"` provider, with full support for **automatic key rotation** and file-backed persistence. This enables:
+In Titanium, session ticket keys are managed through TLS providers (`manual`, `acme`, etc.), with full support for **automatic key rotation** and file-backed persistence. This enables:
 
 - **Session resumption across restarts**: Survive configuration reloads and server restarts
-- **Multi-instance support**: Share the same keys across multiple Ferron instances
+- **Multi-instance support**: Share the same keys across multiple Titanium instances
 - **Automatic rotation**: Cryptographically secure keys generated and rotated on a schedule
 
 ## Configuration
 
 ### Basic Usage (Static Keys)
 
-To enable session tickets with a pre-existing key file:
+To enable session tickets with a pre-existing key file (works with any TLS provider):
 
 ```
 tls {
     provider manual
     cert "cert.pem"
     key "key.pem"
+    ticket_keys {
+        file "session_tickets.keys"
+    }
+}
+```
+
+Or with the ACME provider:
+
+```
+tls {
+    provider "acme"
+    challenge http-01
+    contact "admin@example.com"
     ticket_keys {
         file "session_tickets.keys"
     }
@@ -215,7 +228,7 @@ ERROR Failed to load TLS session ticket keys from /path/to/session_tickets.keys:
 
 ## Integration with Config Reload
 
-Ferron's configuration reload system ensures safe key rotation:
+Titanium's configuration reload system ensures safe key rotation across all TLS providers:
 
 1. **Config reload triggered** (via `SIGHUP` or file change)
 2. **TLS provider re-executes** with new configuration
@@ -268,7 +281,8 @@ Keys are rotated automatically using the `maybe_roll()` pattern:
 ### Module Responsibilities
 
 - **`types/tls`**: Core ticket key generation, validation, persistence, and `TicketKeyRotator`
-- **`modules/tls-manual`**: Provider that integrates configuration and creates rotator
+- **`modules/tls-manual`**: Provider integration for the manual TLS provider
+- **`modules/tls-acme`**: Provider integration for the ACME TLS provider
 - **`core`**: Configuration reload infrastructure (no TLS-specific logic)
 
 ## References
@@ -276,5 +290,6 @@ Keys are rotated automatically using the `maybe_roll()` pattern:
 - [RFC 5077: Transport Layer Security (TLS) Session Resumption](https://tools.ietf.org/html/rfc5077)
 - [rustls documentation](https://docs.rs/rustls/)
 - [aws-lc-rs documentation](https://docs.rs/aws-lc-rs/)
-- [Ferron TLS Provider Architecture](../README.md)
+- [TLS Provider Architecture](../README.md)
 - [OCSP Stapling](./ocsp-stapling.md)
+- [ACME Automatic TLS](./tls-acme.md) — Session tickets with ACME-obtained certificates

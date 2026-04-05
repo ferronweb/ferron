@@ -13,6 +13,7 @@ It is split by topic and by scope so the directive reference is easier to scan.
 - [HTTP Control Directives](./http-control.md)
 - [Static File Serving Directives](./http-static.md)
 - [TLS Crypto Settings and mTLS](./tls-crypto.md)
+- [ACME Automatic TLS](./tls-acme.md)
 - [TLS Session Ticket Keys](./tls-session-tickets.md)
 - [OCSP Stapling](./ocsp-stapling.md)
 - [Observability And Logging](./observability.md)

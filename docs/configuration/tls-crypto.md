@@ -195,8 +195,21 @@ All directives available inside a `tls { ... }` block:
 | Directive | Arguments | Description | Default |
 |-----------|-----------|-------------|---------|
 | `provider` | `<string>` | TLS provider name (required) | — |
-| `cert` | `<string>` | Path to a PEM certificate file | — |
-| `key` | `<string>` | Path to a PEM private key file | — |
+| `cert` | `<string>` | Path to a PEM certificate file (manual provider) | — |
+| `key` | `<string>` | Path to a PEM private key file (manual provider) | — |
+| `challenge` | `http-01`, `tls-alpn-01`, `dns-01` | ACME challenge type (acme provider) | `http-01` |
+| `contact` | `<string>` | Email for ACME account (acme provider) | — |
+| `directory` | `<string>` | ACME directory URL (acme provider) | LE Production |
+| `profile` | `<string>` | ACME profile name (acme provider) | — |
+| `eab` | `<key-id> <hmac>` | External Account Binding (acme provider) | — |
+| `dns_provider` | `<string>` | DNS provider name for DNS-01 (acme provider) | — |
+| `cache` | `<string>` | File-based certificate cache path (acme provider) | Platform data dir |
+| `save` | `<cert> [key]` | Save obtained cert/key to disk (acme provider) | — |
+| `post_obtain_command` | `<string>` | Command after cert issuance (acme provider) | — |
+| `no_verification` | `<bool>` | Skip ACME directory TLS verification (acme provider) | `false` |
+| `on_demand` | `<bool>` | Enable on-demand cert issuance (acme provider) | `false` |
+| `on_demand_ask` | `<string>` | Approval endpoint URL (acme provider) | — |
+| `on_demand_ask_no_verification` | `<bool>` | Skip TLS for approval endpoint (acme provider) | `false` |
 | `cipher_suite` | `<string>` | Add a cipher suite (repeatable) | rustls defaults |
 | `ecdh_curve` | `<string>` | Add an ECDH curve (repeatable) | rustls defaults |
 | `min_version` | `TLSv1.2`, `TLSv1.3` | Minimum TLS protocol version | `TLSv1.2` |
@@ -208,6 +221,7 @@ All directives available inside a `tls { ... }` block:
 
 See also:
 
+- [ACME Automatic TLS](./tls-acme.md) — ACME provider directives (`challenge`, `contact`, `directory`, etc.)
 - [TLS Session Ticket Keys](./tls-session-tickets.md) — `ticket_keys` directive reference
 - [OCSP Stapling](./ocsp-stapling.md) — `ocsp` directive reference
 

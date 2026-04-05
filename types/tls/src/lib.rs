@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ferron_core::config::ServerConfigurationBlock;
+use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationHostFilters};
 use rustls::ServerConfig;
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::StartHandshake;
@@ -13,6 +13,8 @@ pub mod tickets;
 pub struct TcpTlsContext<'a> {
     pub config: &'a ServerConfigurationBlock,
     pub alpn: Option<Vec<Vec<u8>>>,
+    pub domain: ServerConfigurationHostFilters,
+    pub port: u16,
     pub resolver: Option<Arc<dyn TcpTlsResolver>>,
 }
 

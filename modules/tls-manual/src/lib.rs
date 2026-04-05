@@ -386,7 +386,8 @@ impl ModuleLoader for TlsManualModuleLoader {
 mod tests {
     use super::*;
     use ferron_core::config::{
-        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+        ServerConfigurationBlock, ServerConfigurationDirectiveEntry,
+        ServerConfigurationHostFilters, ServerConfigurationValue,
     };
     use ferron_tls::TcpTlsContext;
     use std::collections::HashMap;
@@ -524,6 +525,8 @@ b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4
         let mut ctx = TcpTlsContext {
             config: &config,
             alpn: None,
+            domain: ServerConfigurationHostFilters::default(),
+            port: 443,
             resolver: None,
         };
 
@@ -570,6 +573,8 @@ b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4
         let mut ctx = TcpTlsContext {
             config: &config,
             alpn: None,
+            domain: ServerConfigurationHostFilters::default(),
+            port: 443,
             resolver: None,
         };
 
@@ -603,6 +608,8 @@ b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4b3F4
         let mut ctx = TcpTlsContext {
             config: &config,
             alpn: None,
+            domain: ServerConfigurationHostFilters::default(),
+            port: 443,
             resolver: None,
         };
 

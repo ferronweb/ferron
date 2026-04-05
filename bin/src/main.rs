@@ -19,6 +19,7 @@ use ferron_http_static::StaticFileModuleLoader;
 use ferron_observability_format_json::JsonFormatObservabilityModuleLoader;
 use ferron_observability_format_text::TextFormatObservabilityModuleLoader;
 use ferron_observability_logfile::LogFileObservabilityModuleLoader;
+use ferron_tls_acme::TlsAcmeModuleLoader;
 use malloc_best_effort::BEMalloc;
 
 mod cli;
@@ -246,6 +247,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(FerronConfConfigurationAdapterModuleLoader),
         Box::new(OcspStaplerModuleLoader),
         Box::new(TlsManualModuleLoader),
+        Box::new(TlsAcmeModuleLoader),
         Box::new(ConsoleObservabilityModuleLoader::default()),
         Box::new(LogFileObservabilityModuleLoader::default()),
         Box::new(OtlpObservabilityModuleLoader::default()),

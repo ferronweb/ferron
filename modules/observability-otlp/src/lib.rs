@@ -396,9 +396,8 @@ fn init_providers(config: &OtlpBackendConfig) -> OtlpProviderCache {
 /// for OTLP HTTP exporters. Uses native certificate store with webpki-roots fallback.
 fn build_http_client(no_verify: bool) -> Result<HyperOtelClient, Box<dyn Error>> {
     use hyper_rustls::HttpsConnectorBuilder;
-    use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+    use rustls::client::danger::ServerCertVerifier;
     use rustls::crypto::CryptoProvider;
-    use rustls::pki_types::ServerName;
 
     let crypto = CryptoProvider::get_default()
         .cloned()
@@ -412,30 +411,46 @@ fn build_http_client(no_verify: bool) -> Result<HyperOtelClient, Box<dyn Error>>
                 &self,
                 _end_entity: &rustls::pki_types::CertificateDer<'_>,
                 _intermediates: &[rustls::pki_types::CertificateDer<'_>],
-                _server_name: &ServerName<'_>,
-                _ocsp: &[u8],
+                _server_name: &rustls::pki_types::ServerName<'_>,
+                _ocsp_response: &[u8],
                 _now: rustls::pki_types::UnixTime,
-            ) -> Result<ServerCertVerified, rustls::Error> {
-                Ok(ServerCertVerified::assertion())
+            ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+                Ok(rustls::client::danger::ServerCertVerified::assertion())
             }
+
             fn verify_tls12_signature(
                 &self,
                 _message: &[u8],
                 _cert: &rustls::pki_types::CertificateDer<'_>,
                 _dss: &rustls::DigitallySignedStruct,
-            ) -> Result<HandshakeSignatureValid, rustls::Error> {
-                Err(rustls::Error::General("not supported".into()))
+            ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error>
+            {
+                Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
             }
+
             fn verify_tls13_signature(
                 &self,
                 _message: &[u8],
                 _cert: &rustls::pki_types::CertificateDer<'_>,
                 _dss: &rustls::DigitallySignedStruct,
-            ) -> Result<HandshakeSignatureValid, rustls::Error> {
-                Err(rustls::Error::General("not supported".into()))
+            ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error>
+            {
+                Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
             }
+
             fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-                vec![]
+                use rustls::SignatureScheme::*;
+                vec![
+                    ECDSA_NISTP384_SHA384,
+                    ECDSA_NISTP256_SHA256,
+                    ED25519,
+                    RSA_PSS_SHA512,
+                    RSA_PSS_SHA384,
+                    RSA_PSS_SHA256,
+                    RSA_PKCS1_SHA512,
+                    RSA_PKCS1_SHA384,
+                    RSA_PKCS1_SHA256,
+                ]
             }
         }
         rustls::ClientConfig::builder_with_provider(crypto)

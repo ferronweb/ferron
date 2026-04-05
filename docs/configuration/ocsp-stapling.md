@@ -8,7 +8,9 @@ OCSP stapling allows the TLS server to **attach a signed OCSP response** during 
 - **Performance**: Eliminates the extra round-trip to the OCSP responder
 - **Reliability**: Works even when the CA's OCSP responder is unreachable
 
-In Titanium, OCSP stapling is managed through a dedicated background service that fetches and caches OCSP responses over HTTPS. All certificates are **preloaded** when the configuration is loaded, ensuring the first TLS handshake includes a stapled response.
+In Titanium, OCSP stapling is managed through a dedicated background service that fetches and caches OCSP responses over HTTPS. It works with all TLS providers (`manual`, `acme`, etc.).
+
+For the `manual` provider, certificates are **preloaded** when the configuration is loaded. For the `acme` provider, certificates are preloaded as soon as they are obtained from the ACME CA.
 
 ## Configuration
 
@@ -89,10 +91,12 @@ example.com {
 
 ### Startup Sequence
 
-1. The `ocsp-stapler` module initializes a background service on the secondary tokio runtime
-2. The TLS provider loads certificates and private keys
+1. The OCSP module initializes a background service on the secondary tokio runtime
+2. The TLS provider (manual, acme, etc.) loads or obtains certificates
 3. The provider wraps its certificate resolver with `OcspStapler`
 4. The certificate is **preloaded** into the OCSP service immediately
+   - For `manual`: preloaded on config load
+   - For `acme`: preloaded as soon as the certificate is obtained
 5. The background task fetches an OCSP response from the CA's responder
 6. The response is cached and attached to subsequent TLS handshakes
 
@@ -211,6 +215,8 @@ On configuration reload (SIGHUP or file change):
 
 1. The OCSP service is reused (not recreated) via `AlreadyInitialized` check
 2. The TLS provider re-executes and preloads the new certificates
+   - For `manual`: new certificates are loaded from disk
+   - For `acme`: renewed certificates are obtained from the ACME CA
 3. The background task picks up new certificates from the channel
 4. OCSP responses are fetched for the new certificates
 5. Zero downtime — old connections continue with old responses
@@ -220,3 +226,4 @@ On configuration reload (SIGHUP or file change):
 - [RFC 6960: X.509 Internet Public Key Infrastructure Online Certificate Status Protocol](https://tools.ietf.org/html/rfc6960)
 - [RFC 7633: X.509v3 Transport Layer Security (TLS) Feature Extension](https://tools.ietf.org/html/rfc7633)
 - [OCSP Stapling Explained](https://sslinsights.com/ocsp-stapling-explained/)
+- [ACME Automatic TLS](./tls-acme.md) — OCSP stapling with ACME-obtained certificates

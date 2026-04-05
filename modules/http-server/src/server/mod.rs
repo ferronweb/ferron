@@ -377,6 +377,8 @@ impl BasicHttpModule {
                                     let alpn_protocols = http_connection_options.alpn_protocols();
                                     (!alpn_protocols.is_empty()).then_some(alpn_protocols)
                                 },
+                                domain: host_config.0.clone(),
+                                port: port_config.port.unwrap_or(443),
                                 resolver: None,
                             };
                             tls_provider.execute(&mut tls_resolver_ctx)?;

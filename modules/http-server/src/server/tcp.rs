@@ -310,17 +310,20 @@ impl TcpListenerHandle {
                                 tls_resolver.lookup_ip(local_addr.ip())
                             };
                             if let Some(resolver) = resolver {
-                                let Ok(tls_stream_option) =
+                                let tls_stream_option = match
                                     resolver.handshake(start_handshake).await
-                                else {
+                                {
+                                    Ok(s) => s,
+                                    Err(e) => {
                                     let tls_observability = resolve_observability_sink(
                                         &server_config.observability_resolver,
                                         Some(local_addr.ip()),
                                         hinted_hostname.as_deref(),
                                         &ip_observability,
                                     );
-                                    emit_error(&tls_observability, "Failed to start TLS handshake");
+                                    emit_error(&tls_observability, format!("Failed to start TLS handshake: {e}"));
                                     return;
+                                    }
                                 };
                                 let tls_observability = resolve_observability_sink(
                                     &server_config.observability_resolver,
@@ -376,6 +379,24 @@ impl TcpListenerHandle {
                                         );
                                     }
                                 }
+                            } else {
+                                // Construct empty rustls `ServerConfig`
+                                if let Ok(b) = rustls::ServerConfig::builder_with_provider(
+                                      Arc::new(rustls::crypto::aws_lc_rs::default_provider())
+                                    )
+                                    .with_safe_default_protocol_versions() {
+                                        let tls_config = b.with_no_client_auth().with_cert_resolver(Arc::new(NoCertResolver));
+                                        if let Err(e) = start_handshake.into_stream(Arc::new(tls_config)).await {
+                                            let tls_observability = resolve_observability_sink(
+                                                &server_config.observability_resolver,
+                                                Some(local_addr.ip()),
+                                                hinted_hostname.as_deref(),
+                                                &ip_observability,
+                                            );
+                                            emit_error(&tls_observability, format!("Failed to start TLS handshake: {e}"));
+                                            return;
+                                        };
+                                    }
                             }
                         } else {
                             let connection_options = resolve_http_connection_options(
@@ -764,4 +785,16 @@ fn normalize_host_for_lookup(host: &str) -> Option<String> {
     }
 
     Some(normalized.to_ascii_lowercase())
+}
+
+#[derive(Debug)]
+pub struct NoCertResolver;
+
+impl rustls::server::ResolvesServerCert for NoCertResolver {
+    fn resolve(
+        &self,
+        _client_hello: rustls::server::ClientHello<'_>,
+    ) -> Option<Arc<rustls::sign::CertifiedKey>> {
+        None
+    }
 }

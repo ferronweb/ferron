@@ -119,8 +119,12 @@ impl ServerConfigurationBlock {
     /// Returns the boolean value if present, or true as default for flag-style directives.
     #[inline]
     pub fn get_flag(&self, directive: &str) -> bool {
-        if let Some(v) = self.get_value(directive) {
-            v.as_boolean().unwrap_or(true)
+        if let Some(e) = self
+            .directives
+            .get(directive)
+            .and_then(|entries| entries.first())
+        {
+            e.get_flag()
         } else {
             false
         }
