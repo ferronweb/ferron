@@ -9,21 +9,44 @@ ferron-core = { path = "../../core" }
 async-channel = "2.5.0"
 tokio-util = "0.7.18"
 tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread"] }
-opentelemetry = { version = "0.31", features = ["metrics", "logs", "trace"] }
-opentelemetry-sdk = { version = "0.31", package = "opentelemetry_sdk", features = [
-    "rt-tokio",
-    "experimental_logs_batch_log_processor_with_async_runtime",
-    "experimental_metrics_periodicreader_with_async_runtime",
-    "experimental_trace_batch_span_processor_with_async_runtime",
-] }
-opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic", "http-proto", "http-json"] }
-reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+opentelemetry-otlp = { version = "0.31.0", default-features = false, features = [
+  "logs",
+  "metrics",
+  "trace",
+  "grpc-tonic",
+  "http-proto",
+  "http-json",
+  "hyper-client"
+]}
+opentelemetry-http = { version = "0.31.0", default-features = false, features = [
+  "hyper"
+]}
+opentelemetry_sdk = { version = "0.31.0", default-features = false, features = [
+  "logs",
+  "metrics",
+  "trace",
+  "experimental_logs_batch_log_processor_with_async_runtime",
+  "experimental_metrics_periodicreader_with_async_runtime",
+  "experimental_trace_batch_span_processor_with_async_runtime",
+  "rt-tokio"
+]}
+opentelemetry = { version = "0.31.0", default-features = false, features = [
+  "logs",
+  "metrics",
+  "trace"
+]}
+hyper = { version = "1", features = ["client", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["client", "client-legacy", "tokio"] }
+hyper-rustls = { version = "0.27", features = ["http1", "http2", "rustls-native-certs", "webpki-roots"] }
 tonic = "0.14"
-hyper-rustls = { version = "0.27", features = ["http1", "http2"] }
-hyper = "1"
 rustls = "0.23"
-rustls-platform-verifier = "0.6"
+rustls-native-certs = "0.8"
+webpki-roots = "1.0"
 dashmap = "6.1"
+async-trait = "0.1"
+bytes = "1"
+http = "1"
+http-body-util = "0.1"
 
 [package.metadata.cargo-shear]
 ignored = ["opentelemetry-http"]

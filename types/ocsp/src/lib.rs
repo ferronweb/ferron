@@ -213,6 +213,71 @@ impl ResolvesServerCert for OcspStapler {
 }
 
 // ---------------------------------------------------------------------------
+// HTTPS client construction
+// ---------------------------------------------------------------------------
+
+/// Build an `HttpsConnector` with native certificate store and webpki-roots fallback.
+fn build_https_connector() -> Result<
+    hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+    std::io::Error,
+> {
+    use rustls::ClientConfig;
+
+    let mut root_store = rustls::RootCertStore::empty();
+    let mut found_any = false;
+
+    // Try native certs first
+    match rustls_native_certs::load_native_certs() {
+        cert_result if !cert_result.errors.is_empty() => {
+            ferron_core::log_warn!(
+                "native root CA certificate loading errors: {:?}",
+                cert_result.errors
+            );
+        }
+        cert_result if cert_result.certs.is_empty() => {
+            ferron_core::log_warn!("no native root CA certificates found");
+        }
+        cert_result => {
+            for cert in cert_result.certs {
+                if let Err(err) = root_store.add(cert) {
+                    ferron_core::log_warn!("native certificate parsing failed: {:?}", err);
+                } else {
+                    found_any = true;
+                }
+            }
+        }
+    }
+
+    // Always add webpki-roots as fallback
+    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+    if !found_any {
+        ferron_core::log_warn!("using webpki-roots as fallback (no native root CAs available)");
+    }
+
+    if root_store.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "no root certificates available",
+        ));
+    }
+
+    let tls_config =
+        ClientConfig::builder_with_provider(rustls::crypto::aws_lc_rs::default_provider().into())
+            .with_safe_default_protocol_versions()
+            .map_err(std::io::Error::other)?
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+
+    Ok(hyper_rustls::HttpsConnectorBuilder::new()
+        .with_tls_config(tls_config)
+        .https_or_http()
+        .enable_http1()
+        .enable_http2()
+        .build())
+}
+
+// ---------------------------------------------------------------------------
 // Background task
 // ---------------------------------------------------------------------------
 
@@ -226,13 +291,9 @@ async fn background_ocsp_task(
     // Track known cert chains
     let mut known_certs: HashMap<Vec<u8>, CertifiedKey> = HashMap::new();
 
-    // Build HTTPS client
-    let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-        .with_provider_and_webpki_roots(rustls::crypto::aws_lc_rs::default_provider())
-        .expect("failed to create HTTPS connector with webpki roots")
-        .https_or_http()
-        .enable_http1()
-        .build();
+    // Build HTTPS client with native certificate store and webpki-roots fallback
+    let https_connector =
+        build_https_connector().expect("failed to create HTTPS connector with native/webpki roots");
 
     let client = Client::builder(TokioExecutor::new())
         .build::<_, http_body_util::Full<Bytes>>(https_connector);

@@ -6,9 +6,11 @@ edition = "2021"
 [dependencies]
 ferron-core = { path = "../../core" }
 tokio = { version = "1", features = ["sync", "time", "macros", "rt"] }
-hyper = { version = "1", features = ["client", "http1"] }
+hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["client", "tokio"] }
-hyper-rustls = { version = "0.27", default-features = false, features = ["webpki-roots", "http1", "aws-lc-rs"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["webpki-roots", "rustls-native-certs", "http1", "http2", "aws-lc-rs"] }
+rustls-native-certs = "0.8"
+webpki-roots = "1.0"
 http-body-util = "0.1"
 rasn = "0.28"
 rasn-ocsp = "0.28"
