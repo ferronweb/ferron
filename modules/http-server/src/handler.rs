@@ -59,7 +59,7 @@ struct HttpAccessLog {
     status: u16,
     content_length: Option<u64>,
     duration_secs: f64,
-    response_headers: Vec<(String, String)>,
+    request_headers: Vec<(String, String)>,
 }
 
 impl AccessEvent for HttpAccessLog {
@@ -91,7 +91,7 @@ impl AccessEvent for HttpAccessLog {
             visitor.field_string("content_length", "-");
         }
         visitor.field_f64("duration_secs", self.duration_secs);
-        for (name, value) in &self.response_headers {
+        for (name, value) in &self.request_headers {
             visitor.field_string(
                 &format!("header_{}", name.to_ascii_lowercase().replace("-", "_")),
                 value,
@@ -135,34 +135,6 @@ fn http_version_string(version: http::Version) -> Option<&'static str> {
         http::Version::HTTP_2 => Some("2"),
         http::Version::HTTP_3 => Some("3"),
         _ => None,
-    }
-}
-
-/// Extract response data from a successful result.
-fn extract_response_info(
-    response: &Result<Response<ResponseBody>, io::Error>,
-) -> (u16, Option<u64>, Vec<(String, String)>) {
-    match response {
-        Ok(r) => {
-            let status = r.status().as_u16();
-            let content_length = r
-                .headers()
-                .get(http::header::CONTENT_LENGTH)
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.parse().ok());
-            let headers = r
-                .headers()
-                .iter()
-                .filter_map(|(name, value)| {
-                    value
-                        .to_str()
-                        .ok()
-                        .map(|v| (name.to_string(), v.to_string()))
-                })
-                .collect();
-            (status, content_length, headers)
-        }
-        Err(_) => (500, None, Vec::new()),
     }
 }
 
@@ -229,6 +201,16 @@ pub async fn request_handler(
     let server_ip = local_address.ip().to_string();
     let server_port = local_address.port();
     let server_ip_canonical = canonicalize_ip(local_address.ip());
+    let request_headers: Vec<(String, String)> = request
+        .headers()
+        .iter()
+        .filter_map(|(name, value)| {
+            value
+                .to_str()
+                .ok()
+                .map(|v| (name.to_string(), v.to_string()))
+        })
+        .collect();
 
     // Start tracing span
     events.emit(Event::Trace(TraceEvent::StartSpan(
@@ -263,7 +245,18 @@ pub async fn request_handler(
 
     // Compute duration and extract response info
     let duration_secs = request_timer.elapsed().as_secs_f64();
-    let (status_code, content_length, response_headers) = extract_response_info(&response_result);
+    let (status_code, content_length) = match &response_result {
+        Ok(r) => {
+            let status = r.status().as_u16();
+            let content_length = r
+                .headers()
+                .get(http::header::CONTENT_LENGTH)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse().ok());
+            (status, content_length)
+        }
+        Err(_) => (500, None),
+    };
 
     // Build request_count-specific attributes
     let mut request_count_attrs = metric_attrs.clone();
@@ -327,7 +320,7 @@ pub async fn request_handler(
         status: status_code,
         content_length,
         duration_secs,
-        response_headers,
+        request_headers,
     })));
 
     // End tracing span
