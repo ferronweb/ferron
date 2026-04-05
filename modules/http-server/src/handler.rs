@@ -60,6 +60,7 @@ struct HttpAccessLog {
     content_length: Option<u64>,
     duration_secs: f64,
     request_headers: Vec<(String, String)>,
+    timestamp: chrono::DateTime<chrono::Local>,
 }
 
 impl AccessEvent for HttpAccessLog {
@@ -91,6 +92,10 @@ impl AccessEvent for HttpAccessLog {
             visitor.field_string("content_length", "-");
         }
         visitor.field_f64("duration_secs", self.duration_secs);
+        visitor.field_string(
+            "timestamp",
+            &self.timestamp.format("%d/%b/%Y:%H:%M:%S %z").to_string(),
+        );
         for (name, value) in &self.request_headers {
             visitor.field_string(
                 &format!("header_{}", name.to_ascii_lowercase().replace("-", "_")),
@@ -245,6 +250,7 @@ pub async fn request_handler(
 
     // Compute duration and extract response info
     let duration_secs = request_timer.elapsed().as_secs_f64();
+    let timestamp = chrono::Local::now();
     let (status_code, content_length) = match &response_result {
         Ok(r) => {
             let status = r.status().as_u16();
@@ -321,6 +327,7 @@ pub async fn request_handler(
         content_length,
         duration_secs,
         request_headers,
+        timestamp,
     })));
 
     // End tracing span

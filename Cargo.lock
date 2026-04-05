@@ -749,6 +749,7 @@ dependencies = [
  "ferron-http-server",
  "ferron-observability-consolelog",
  "ferron-observability-format-json",
+ "ferron-observability-format-text",
  "ferron-observability-logfile",
  "ferron-ocsp-stapler",
  "ferron-tls-manual",
@@ -844,6 +845,7 @@ dependencies = [
  "arc-swap",
  "async-trait",
  "bytes",
+ "chrono",
  "criterion",
  "fancy-regex",
  "ferron-admin",
@@ -892,6 +894,16 @@ dependencies = [
  "ferron-core",
  "ferron-observability",
  "serde_json",
+]
+
+[[package]]
+name = "ferron-observability-format-text"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "ferron-core",
+ "ferron-observability",
+ "once_cell",
 ]
 
 [[package]]

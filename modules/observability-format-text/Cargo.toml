@@ -1,0 +1,10 @@
+[package]
+name = "ferron-observability-format-text"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ferron-observability = { path = "../../types/observability" }
+ferron-core = { path = "../../core" }
+chrono = "0.4"
+once_cell = "1.19"

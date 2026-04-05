@@ -203,20 +203,22 @@ fn format_access_event(
     log_config: &Arc<ServerConfigurationBlock>,
     registry: &Registry,
 ) -> Option<String> {
-    // Check if a formatter is specified in the config
-    if let Some(formatter_name) = log_config.get_value("format").and_then(|v| v.as_str()) {
-        // Try to resolve the formatter from the registry
-        if let Some(formatter_registry) = registry.get_provider_registry::<LogFormatterContext>() {
-            if let Some(formatter) = formatter_registry.get(formatter_name) {
-                let mut ctx = LogFormatterContext {
-                    access_event: access_event.clone(),
-                    log_config: log_config.clone(),
-                    output: None,
-                };
-                if formatter.execute(&mut ctx).is_ok() {
-                    if let Some(output) = ctx.output {
-                        return Some(output);
-                    }
+    let formatter_name = log_config
+        .get_value("format")
+        .and_then(|v| v.as_str())
+        .unwrap_or("text");
+
+    // Try to resolve the formatter from the registry
+    if let Some(formatter_registry) = registry.get_provider_registry::<LogFormatterContext>() {
+        if let Some(formatter) = formatter_registry.get(formatter_name) {
+            let mut ctx = LogFormatterContext {
+                access_event: access_event.clone(),
+                log_config: log_config.clone(),
+                output: None,
+            };
+            if formatter.execute(&mut ctx).is_ok() {
+                if let Some(output) = ctx.output {
+                    return Some(output);
                 }
             }
         }

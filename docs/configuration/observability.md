@@ -44,7 +44,8 @@ placeholder names:
 | `status` | `{status_code}` | The HTTP response status code |
 | `content_length` | `{content_length}` | The response content length, or `-` if not available |
 | `duration_secs` | _(none)_ | Request processing duration in seconds |
-| `header_<name>` | `{header:<name>}` | Response header values (one field per header, e.g. `header_content_type`) |
+| `timestamp` | _(none)_ | Request timestamp in CLF format (e.g. `05/Apr/2026:14:32:01 +0200`) |
+| `header_<name>` | `{header:<name>}` | Request header values (one field per header, e.g. `header_user_agent`) |
 
 ## Log Formatters
 
@@ -85,6 +86,100 @@ This produces output containing only the specified fields:
 ```
 
 If `fields` is not specified, all available access log fields are emitted.
+
+### `text`
+
+The text formatter generates each access log entry as a plain text string using a
+configurable pattern. It is provided by the `ferron-observability-format-text`
+module.
+
+By default, it uses the **Combined Log Format (CLF)**, the same format used by
+Apache and Nginx:
+
+```ferron
+example.com {
+    log "access" {
+        format "text"
+    }
+}
+```
+
+Example output:
+
+```
+127.0.0.1 - frank [05/Apr/2026:14:32:01 +0200] "GET /index.html HTTP/1.1" 200 1234 "http://www.example.com/start.html" "Mozilla/5.0"
+```
+
+#### Custom Patterns
+
+Use the `access_pattern` directive to define a custom log format:
+
+```ferron
+log "access" {
+    format "text"
+    access_pattern "%client_ip %method %path %status %content_length %{duration_secs}s"
+}
+```
+
+Example output:
+
+```
+127.0.0.1 GET /index.html 200 1234 0.012s
+```
+
+#### Timestamp Formatting
+
+The `%t` token outputs the request timestamp. By default, it uses the CLF
+timestamp format (`%d/%b/%Y:%H:%M:%S %z`). Use the `timestamp_format` directive
+to customize it with [chrono format specifiers](https://docs.rs/chrono/latest/chrono/format/strftime/index.html):
+
+```ferron
+log "access" {
+    format "text"
+    timestamp_format "%Y-%m-%d %H:%M:%S"
+}
+```
+
+Example output:
+
+```
+127.0.0.1 - frank [2026-04-05 14:32:01] "GET /index.html HTTP/1.1" 200 1234
+```
+
+#### Pattern Syntax
+
+The `access_pattern` directive supports the following tokens:
+
+| Token | Description | Example |
+| --- | --- | --- |
+| `%field_name` | Access log field | `%client_ip`, `%status`, `%method` |
+| `%{Header-Name}i` | Request header | `%{Referer}i`, `%{User-Agent}i` |
+| `%{format}t` | Timestamp with custom format | `%{%Y-%m-%d %H:%M:%S}t` |
+| `%t` | Timestamp (uses `timestamp_format` or CLF default) | `%t` |
+| `%%` | Literal `%` character | `%%` |
+| Other text | Passed through literally | `"`, ` `, `-` |
+
+#### Request Header Access
+
+Request headers are available via the `%{Header-Name}i` syntax. The header name
+is case-insensitive and hyphens are converted to underscores internally:
+
+```ferron
+access_pattern "%client_ip \"%{User-Agent}i\" %{Referer}i"
+```
+
+#### Field Filtering
+
+Like the JSON formatter, the text formatter supports the `fields` directive to
+limit which fields are collected:
+
+```ferron
+log "access" {
+    format "text"
+    access_pattern "%client_ip %method %path %status"
+    fields "client_ip" "method" "path" "status"
+}
+```
 
 ## Metrics
 
