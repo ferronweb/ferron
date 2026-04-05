@@ -13,8 +13,88 @@ http example.com:8080 {
 ## Categories
 
 - Protocol behavior: `http`
-- TLS: `tls`
+- TLS: `tls` (automatic for non-localhost hostnames)
+- HTTPS redirect: `https_redirect`
 - Server information: `admin_email`
+
+## Automatic TLS
+
+When a hostname is specified (e.g. `example.com`) and no explicit port is given, Titanium starts **two listeners**:
+
+- One on `default_http_port` (default: 80) — serves plain HTTP with no TLS
+- One on `default_https_port` (default: 443) — serves HTTPS with automatic ACME TLS
+
+On the HTTPS listener, if no explicit `tls` directive is present, Titanium **automatically enables TLS via the ACME provider** (Let's Encrypt by default). Certificates are obtained and renewed automatically at startup.
+
+Hostnames that are **exempt** from the HTTPS listener and automatic TLS:
+
+- `localhost`
+- `127.0.0.1`
+- `::1`
+
+These hostnames only get the HTTP listener — no HTTPS listener is started for them unless they specify an explicit `tls` directive (in which case they are included in the HTTPS listener with the configured TLS).
+
+To disable automatic TLS for a specific host on the HTTPS listener, use `tls false`:
+
+```ferron
+example.com {
+    tls false
+    root /var/www/html
+}
+```
+
+To use manual TLS instead:
+
+```ferron
+example.com {
+    tls {
+        provider "manual"
+        cert "/etc/ssl/cert.pem"
+        key "/etc/ssl/key.pem"
+    }
+    root /var/www/html
+}
+```
+
+When an **explicit port** is specified (e.g., `example.com:8080`), only a single listener is started on that port, and no automatic ACME TLS is applied — you must configure TLS explicitly.
+
+See [ACME Automatic TLS](./tls-acme.md) for full ACME configuration details.
+
+## HTTPS Redirect
+
+When TLS is enabled (either automatically via ACME or explicitly), Titanium automatically redirects plain HTTP requests to their HTTPS equivalent.
+
+### How it works
+
+The redirect stage runs early in the HTTP pipeline and checks:
+
+1. **TLS is enabled somewhere** — `ctx.https_port` is set (a separate HTTPS listener exists)
+2. **Not already encrypted** — the request arrived over plain HTTP
+3. **Not `X-Forwarded-Proto: https`** — avoids redirect loops behind TLS-terminating proxies
+4. **Not a localhost hostname** — `localhost`, `127.0.0.1`, and `::1` are skipped since no HTTPS listener exists for them
+5. **Listener port differs from HTTPS port** — when an explicit port is specified (e.g., `example.com:8080`), no separate HTTPS listener exists, so redirect is skipped
+
+### `https_redirect`
+
+Syntax:
+
+```ferron
+example.com {
+    https_redirect false
+}
+```
+
+| Arguments | Description | Default |
+| --- | --- | --- |
+| `<bool>` | Enables or disables automatic HTTP-to-HTTPS redirects. | `true` (when TLS is enabled) |
+
+Notes:
+
+- The redirect uses **308 Permanent Redirect**, which preserves the HTTP method and request body.
+- The redirect respects the `X-Forwarded-Proto: https` header to avoid redirect loops when behind a TLS-terminating reverse proxy.
+- `localhost` hostnames never get redirected — there is no HTTPS listener for them.
+- When an explicit port is specified (e.g., `example.com:8080`), no redirect is performed since no separate HTTPS listener exists.
+- The target port is `default_https_port` (default: `443`). When the port is `443`, it is omitted from the URL.
 
 ## `http`
 

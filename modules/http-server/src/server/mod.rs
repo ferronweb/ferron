@@ -43,6 +43,9 @@ pub struct HttpServerConfig {
     pub observability_resolver: Arc<self::tls_resolve::RadixTree<Vec<ObservabilityProviderEntry>>>,
     /// Token that is cancelled when configuration is reloaded to gracefully shut down existing connections.
     pub reload_token: CancellationToken,
+    /// The canonical HTTPS port for this server (default: 443).
+    /// Used for HTTP-to-HTTPS redirects and URL generation.
+    pub https_port: u16,
 }
 
 type ConfigArcSwap = Arc<ArcSwap<HttpServerConfig>>;
@@ -226,11 +229,17 @@ impl BasicHttpModule {
         registry: &ferron_core::registry::Registry,
         port_config: &ferron_core::config::ServerConfigurationPort,
         global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
+        https_port: u16,
     ) -> Result<HttpServerConfig, Box<dyn std::error::Error>> {
         let mut enable_tls = false;
         let mut http_connection_options_resolver = RadixTree::new();
         let mut observability_resolver = RadixTree::new();
         let mut tls_resolver = TlsResolverRadixTree::new();
+
+        // Check if the ACME TLS provider is available
+        let acme_provider_available = registry
+            .get_provider_registry::<TcpTlsContext>()
+            .is_some_and(|r| r.get("acme").is_some());
 
         // Process global observability configuration (applies to all hosts)
         let global_observability_extractor = ObservabilityConfigExtractor::new(&global_config);
@@ -294,120 +303,72 @@ impl BasicHttpModule {
                 }
             }
 
-            if let Some(tls) = host_config.1.directives.get("tls") {
-                for tls1 in tls {
-                    // TODO: implicit automatic TLS
-                    if tls1
-                        .args
-                        .first()
-                        .and_then(|a| a.as_boolean())
-                        .unwrap_or(true)
-                    {
-                        enable_tls = true;
-                        let mut children = tls1.children.clone().unwrap_or(Default::default());
-                        if let (Some(cert), Some(key)) = (
-                            tls1.args
-                                .first()
-                                .and_then(|v| v.as_string_with_interpolations(&HashMap::new())),
-                            tls1.args
-                                .get(1)
-                                .and_then(|v| v.as_string_with_interpolations(&HashMap::new())),
-                        ) {
-                            let mut directives = (*children.directives).clone();
-                            directives.insert(
+            // Only process TLS directives on the HTTPS listener.
+            // The plaintext HTTP listener (port != https_port) ignores all `tls` directives,
+            // including explicit configurations and automatic ACME.
+            if port_config.port == Some(https_port) {
+                if let Some(tls) = host_config.1.directives.get("tls") {
+                    for tls1 in tls {
+                        // Handle explicit `tls false` — skip TLS entirely
+                        if tls1
+                            .args
+                            .first()
+                            .and_then(|a| a.as_boolean())
+                            .is_some_and(|v| !v)
+                        {
+                            continue;
+                        }
+                        let host_config_with_arc =
+                            (host_config.0.clone(), Arc::new(host_config.1.clone()));
+                        Self::process_tls_directive(
+                            registry,
+                            tls1,
+                            &host_config_with_arc,
+                            &http_connection_options,
+                            port_config,
+                            &mut tls_resolver,
+                            &mut enable_tls,
+                        )?;
+                    }
+                } else if acme_provider_available {
+                    // No `tls` directive present — automatically enable ACME for
+                    // non-localhost hostnames on the HTTPS listener.
+                    let hostname = host_config.0.host.as_deref();
+                    let is_localhost = hostname
+                        .is_some_and(|h| h == "localhost" || h == "127.0.0.1" || h == "::1");
+                    // Only auto-enable ACME when a hostname is specified and it's not localhost
+                    if !is_localhost && host_config.0.host.is_some() {
+                        // Construct a synthetic ACME TLS configuration block
+                        let synthetic_children = ferron_core::config::ServerConfigurationBlock {
+                            directives: Arc::new(HashMap::from([(
                                 "provider".to_string(),
                                 vec![ServerConfigurationDirectiveEntry {
                                     args: vec![ServerConfigurationValue::String(
-                                        "manual".to_string(),
+                                        "acme".to_string(),
                                         None,
                                     )],
                                     ..Default::default()
                                 }],
-                            );
-                            directives.insert(
-                                "cert".to_string(),
-                                vec![ServerConfigurationDirectiveEntry {
-                                    args: vec![ServerConfigurationValue::String(cert, None)],
-                                    ..Default::default()
-                                }],
-                            );
-                            directives.insert(
-                                "key".to_string(),
-                                vec![ServerConfigurationDirectiveEntry {
-                                    args: vec![ServerConfigurationValue::String(key, None)],
-                                    ..Default::default()
-                                }],
-                            );
-                            children.directives = Arc::new(directives);
-                        }
-
-                        let tls_provider_name = children
-                            .get_value("provider")
-                            .ok_or(anyhow::anyhow!(
-                                "TLS provider not specified ({})",
-                                format_location(None, tls1.span.as_ref())
-                            ))?
-                            .as_str()
-                            .ok_or(anyhow::anyhow!(
-                                "TLS provider must be a string ({})",
-                                format_location(None, tls1.span.as_ref())
-                            ))?;
-
-                        if let Some(tls_registry) =
-                            registry.get_provider_registry::<TcpTlsContext>()
-                        {
-                            let tls_provider =
-                                tls_registry.get(tls_provider_name).ok_or(anyhow::anyhow!(
-                                    "TLS provider not found ({})",
-                                    format_location(None, tls1.span.as_ref())
-                                ))?;
-
-                            let mut tls_resolver_ctx = TcpTlsContext {
-                                // SAFETY: We know that the lifetime of the config is longer
-                                //         than the lifetime of the resolver. but "'static"
-                                //         is the only lifetime we can use here. This
-                                //         constraint is enforced by the provider registry.
-                                config: unsafe {
-                                    std::mem::transmute::<
-                                        &ServerConfigurationBlock,
-                                        &'static ServerConfigurationBlock,
-                                    >(&children)
-                                },
-                                alpn: {
-                                    let alpn_protocols = http_connection_options.alpn_protocols();
-                                    (!alpn_protocols.is_empty()).then_some(alpn_protocols)
-                                },
-                                domain: host_config.0.clone(),
-                                port: port_config.port.unwrap_or(443),
-                                resolver: None,
-                            };
-                            tls_provider.execute(&mut tls_resolver_ctx)?;
-                            let tls_resolver_sub =
-                                tls_resolver_ctx.resolver.ok_or(anyhow::anyhow!(
-                                    "TLS resolver not found ({})",
-                                    format_location(None, tls1.span.as_ref())
-                                ))?;
-
-                            match (&host_config.0.host, host_config.0.ip) {
-                                (Some(host), Some(ip)) => {
-                                    tls_resolver.insert_ip_and_hostname(
-                                        ip,
-                                        host,
-                                        tls_resolver_sub,
-                                        false,
-                                    );
-                                }
-                                (Some(host), None) => {
-                                    tls_resolver.insert_hostname(host, tls_resolver_sub, false);
-                                }
-                                (None, Some(ip)) => {
-                                    tls_resolver.insert_ip(ip, tls_resolver_sub);
-                                }
-                                (None, None) => {
-                                    tls_resolver.set_root_data(tls_resolver_sub);
-                                }
-                            }
-                        }
+                            )])),
+                            matchers: HashMap::new(),
+                            span: None,
+                        };
+                        let synthetic_tls_entry = ServerConfigurationDirectiveEntry {
+                            args: vec![ServerConfigurationValue::Boolean(true, None)],
+                            children: Some(synthetic_children),
+                            span: None,
+                        };
+                        let host_config_with_arc =
+                            (host_config.0.clone(), Arc::new(host_config.1.clone()));
+                        Self::process_tls_directive(
+                            registry,
+                            &synthetic_tls_entry,
+                            &host_config_with_arc,
+                            &http_connection_options,
+                            port_config,
+                            &mut tls_resolver,
+                            &mut enable_tls,
+                        )?;
                     }
                 }
             }
@@ -498,7 +459,120 @@ impl BasicHttpModule {
             http_connection_options_resolver: Arc::new(http_connection_options_resolver),
             observability_resolver: Arc::new(observability_resolver),
             reload_token: CancellationToken::new(),
+            https_port,
         })
+    }
+
+    /// Process a single TLS directive entry (from either explicit config or synthetic ACME).
+    fn process_tls_directive(
+        registry: &ferron_core::registry::Registry,
+        tls1: &ServerConfigurationDirectiveEntry,
+        host_config: &(
+            ferron_core::config::ServerConfigurationHostFilters,
+            Arc<ferron_core::config::ServerConfigurationBlock>,
+        ),
+        http_connection_options: &tcp::HttpConnectionOptions,
+        port_config: &ferron_core::config::ServerConfigurationPort,
+        tls_resolver: &mut TlsResolverRadixTree,
+        enable_tls: &mut bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        *enable_tls = true;
+        let mut children = tls1.children.clone().unwrap_or_default();
+
+        // Handle the shorthand form: `tls /path/cert.pem /path/key.pem`
+        if let (Some(cert), Some(key)) = (
+            tls1.args
+                .first()
+                .and_then(|v| v.as_string_with_interpolations(&HashMap::new())),
+            tls1.args
+                .get(1)
+                .and_then(|v| v.as_string_with_interpolations(&HashMap::new())),
+        ) {
+            let mut directives = (*children.directives).clone();
+            directives.insert(
+                "provider".to_string(),
+                vec![ServerConfigurationDirectiveEntry {
+                    args: vec![ServerConfigurationValue::String("manual".to_string(), None)],
+                    ..Default::default()
+                }],
+            );
+            directives.insert(
+                "cert".to_string(),
+                vec![ServerConfigurationDirectiveEntry {
+                    args: vec![ServerConfigurationValue::String(cert, None)],
+                    ..Default::default()
+                }],
+            );
+            directives.insert(
+                "key".to_string(),
+                vec![ServerConfigurationDirectiveEntry {
+                    args: vec![ServerConfigurationValue::String(key, None)],
+                    ..Default::default()
+                }],
+            );
+            children.directives = Arc::new(directives);
+        }
+
+        let tls_provider_name = children
+            .get_value("provider")
+            .ok_or(anyhow::anyhow!(
+                "TLS provider not specified ({})",
+                format_location(None, tls1.span.as_ref())
+            ))?
+            .as_str()
+            .ok_or(anyhow::anyhow!(
+                "TLS provider must be a string ({})",
+                format_location(None, tls1.span.as_ref())
+            ))?;
+
+        if let Some(tls_registry) = registry.get_provider_registry::<TcpTlsContext>() {
+            let tls_provider = tls_registry.get(tls_provider_name).ok_or(anyhow::anyhow!(
+                "TLS provider not found ({})",
+                format_location(None, tls1.span.as_ref())
+            ))?;
+
+            let mut tls_resolver_ctx = TcpTlsContext {
+                // SAFETY: We know that the lifetime of the config is longer
+                //         than the lifetime of the resolver. but "'static"
+                //         is the only lifetime we can use here. This
+                //         constraint is enforced by the provider registry.
+                config: unsafe {
+                    std::mem::transmute::<
+                        &ServerConfigurationBlock,
+                        &'static ServerConfigurationBlock,
+                    >(&children)
+                },
+                alpn: {
+                    let alpn_protocols = http_connection_options.alpn_protocols();
+                    (!alpn_protocols.is_empty()).then_some(alpn_protocols)
+                },
+                domain: host_config.0.clone(),
+                port: port_config.port.unwrap_or(443),
+                resolver: None,
+            };
+            tls_provider.execute(&mut tls_resolver_ctx)?;
+            let tls_resolver_sub = tls_resolver_ctx.resolver.ok_or(anyhow::anyhow!(
+                "TLS resolver not found ({})",
+                format_location(None, tls1.span.as_ref())
+            ))?;
+
+            match (&host_config.0.host, host_config.0.ip) {
+                (Some(host), Some(ip)) => {
+                    tls_resolver.insert_ip_and_hostname(ip, host, tls_resolver_sub, false);
+                }
+                (Some(host), None) => {
+                    tls_resolver.insert_hostname(host, tls_resolver_sub, false);
+                }
+                (None, Some(ip)) => {
+                    tls_resolver.insert_ip(ip, tls_resolver_sub);
+                }
+                (None, None) => {
+                    tls_resolver.set_root_data(tls_resolver_sub);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub fn new(
@@ -506,8 +580,9 @@ impl BasicHttpModule {
         port_config: ferron_core::config::ServerConfigurationPort,
         global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
         port: u16,
+        https_port: u16,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let config = Self::build_config(registry, &port_config, global_config)?;
+        let config = Self::build_config(registry, &port_config, global_config, https_port)?;
         Ok(Self {
             config: Arc::new(ArcSwap::new(Arc::new(config))),
             listeners: Mutex::new(Vec::new()),
@@ -523,12 +598,13 @@ impl BasicHttpModule {
         registry: &ferron_core::registry::Registry,
         port_config: ferron_core::config::ServerConfigurationPort,
         global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
+        https_port: u16,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Cancel the old reload token to trigger graceful shutdown of existing connections
         let old_config = self.config.load();
 
         // Build new configuration and atomically swap it
-        let new_config = Self::build_config(registry, &port_config, global_config)?;
+        let new_config = Self::build_config(registry, &port_config, global_config, https_port)?;
         self.config.store(Arc::new(new_config));
 
         old_config.reload_token.cancel();

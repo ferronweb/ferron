@@ -7,8 +7,19 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         &self,
         config: &ferron_core::config::ServerConfigurationBlock,
         used_directives: &mut std::collections::HashSet<String>,
-        _is_global: bool,
+        is_global: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        // Global-only directives (default port configuration)
+        if is_global {
+            validate_directive!(config, used_directives, default_http_port, optional args(1) => [
+                ServerConfigurationValue::Number(_, _)
+            ], {});
+
+            validate_directive!(config, used_directives, default_https_port, optional args(1) => [
+                ServerConfigurationValue::Number(_, _)
+            ], {});
+        }
+
         // TLS settings
         validate_directive!(config, used_directives, tls, optional
             args(1) => [ServerConfigurationValue::Boolean(_, _)]
@@ -98,6 +109,11 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
 
         // Trailing slash redirect for directories
         validate_directive!(config, used_directives, trailing_slash_redirect, optional args(1) => [
+            ServerConfigurationValue::Boolean(_, _)
+        ], {});
+
+        // HTTPS redirect toggle
+        validate_directive!(config, used_directives, https_redirect, optional args(1) => [
             ServerConfigurationValue::Boolean(_, _)
         ], {});
 

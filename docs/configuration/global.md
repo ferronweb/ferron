@@ -12,9 +12,44 @@ These directives belong in top-level global blocks:
 
 - Runtime: `runtime`
 - Network/listener defaults: `tcp`
+- Default ports: `default_http_port`, `default_https_port`
 - Admin API: `admin`
 - PROXY protocol: `protocol_proxy`
 - Observability: `observability`, `log`, `error_log`, `console_log`
+
+## `default_http_port`
+
+Syntax:
+
+```ferron
+{
+    default_http_port 8080
+}
+```
+
+| Arguments | Description | Default |
+| --- | --- | --- |
+| `<number>` | Default HTTP port when no port is specified in a host block. Must be a positive integer ≤ 65535. | `80` |
+
+## `default_https_port`
+
+Syntax:
+
+```ferron
+{
+    default_https_port 8443
+}
+```
+
+| Arguments | Description | Default |
+| --- | --- | --- |
+| `<number>` | Default HTTPS port used for HTTP-to-HTTPS redirects and URL generation. Must be a positive integer ≤ 65535. | `443` |
+
+Notes:
+
+- When no explicit port is specified for a host, Titanium starts both an HTTP listener on `default_http_port` and an HTTPS listener on `default_https_port`.
+- This port is exposed to the HTTP pipeline via `ctx.https_port` and is used by the built-in HTTPS redirect stage.
+- The redirect stage constructs `https://` URLs using this port (omitting it when the value is `443`).
 
 ## `runtime`
 

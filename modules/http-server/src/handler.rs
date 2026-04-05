@@ -244,6 +244,7 @@ pub async fn request_handler(
     remote_address: SocketAddr,
     hostname: Option<String>,
     encrypted: bool,
+    https_port: Option<u16>,
     events: CompositeEventSink,
 ) -> Result<Response<ResponseBody>, io::Error> {
     // Build metric attributes from the original request before consuming it
@@ -300,6 +301,7 @@ pub async fn request_handler(
         remote_address,
         hostname,
         encrypted,
+        https_port,
         events.clone(),
     )
     .await;
@@ -413,6 +415,7 @@ async fn request_handler_inner(
     remote_address: SocketAddr,
     hostname: Option<String>,
     encrypted: bool,
+    https_port: Option<u16>,
     events: CompositeEventSink,
 ) -> (Result<Response<ResponseBody>, io::Error>, Option<String>) {
     // Increment request counter for admin API /status endpoint
@@ -562,6 +565,7 @@ async fn request_handler_inner(
         local_address,
         remote_address,
         auth_user: None,
+        https_port,
         extensions: TypeMap::new(),
     };
 
@@ -950,6 +954,7 @@ async fn apply_resolved_file_to_context(
         local_address: ctx.local_address,
         remote_address: ctx.remote_address,
         auth_user: None,
+        https_port: ctx.https_port,
         extensions: TypeMap::new(),
     };
     let http_ctx = std::mem::replace(ctx, placeholder);

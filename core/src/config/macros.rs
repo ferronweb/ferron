@@ -103,8 +103,9 @@ macro_rules! validate_directive {
                         ).into());
                     }
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -258,8 +259,8 @@ macro_rules! validate_directive {
                         stringify!($name)
                     ).into());
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -291,8 +292,8 @@ macro_rules! validate_directive {
                         stringify!($name)
                     ).into());
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -309,8 +310,8 @@ macro_rules! validate_directive {
                         stringify!($name), $count, directive.args.len()
                     ).into());
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -328,8 +329,8 @@ macro_rules! validate_directive {
                     ).into());
                 }
                 $crate::validate_args!(directive, [$($pattern),+]);
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -346,8 +347,8 @@ macro_rules! validate_directive {
                         stringify!($name), $min, directive.args.len()
                     ).into());
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -365,8 +366,8 @@ macro_rules! validate_directive {
                     ).into());
                 }
                 $crate::validate_args!(directive, [$($pattern),+]);
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -383,8 +384,8 @@ macro_rules! validate_directive {
                         stringify!($name), $max, directive.args.len()
                     ).into());
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -402,8 +403,8 @@ macro_rules! validate_directive {
                     ).into());
                 }
                 $crate::validate_args!(directive, [$($pattern),+]);
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -420,8 +421,8 @@ macro_rules! validate_directive {
                         stringify!($name), $range.min().unwrap_or(0), $range.max().unwrap_or(0), directive.args.len()
                     ).into());
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -439,8 +440,8 @@ macro_rules! validate_directive {
                     ).into());
                 }
                 $crate::validate_args!(directive, [$($pattern),+]);
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -451,8 +452,8 @@ macro_rules! validate_directive {
         if let Some(directives) = $config.directives.get(stringify!($name)) {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -480,8 +481,8 @@ macro_rules! validate_directive {
                         stringify!($name), $count, directive.args.len()
                     ).into());
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -501,8 +502,8 @@ macro_rules! validate_directive {
                     }
                     $crate::validate_args!(directive, [$($pattern),+]);
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -519,8 +520,8 @@ macro_rules! validate_directive {
                         stringify!($name), $min, directive.args.len()
                     ).into());
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -540,8 +541,8 @@ macro_rules! validate_directive {
                     }
                     $crate::validate_args!(directive, [$($pattern),+]);
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -558,8 +559,8 @@ macro_rules! validate_directive {
                         stringify!($name), $max, directive.args.len()
                     ).into());
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -579,8 +580,8 @@ macro_rules! validate_directive {
                     }
                     $crate::validate_args!(directive, [$($pattern),+]);
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -597,8 +598,8 @@ macro_rules! validate_directive {
                         stringify!($name), $range, directive.args.len()
                     ).into());
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -618,8 +619,8 @@ macro_rules! validate_directive {
                     }
                     $crate::validate_args!(directive, [$($pattern),+]);
                 }
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }
@@ -1001,8 +1002,8 @@ macro_rules! validate_nested {
     ($block:expr, $name:ident, $body:block) => {
         if let Some(directives) = $block.directives.get(stringify!($name)) {
             for directive in directives {
-                let $name = directive.children.as_ref()
-                    .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
                 $body
             }
         }

@@ -34,6 +34,9 @@ pub struct HttpContext {
     pub local_address: SocketAddr,
     pub remote_address: SocketAddr,
     pub auth_user: Option<String>,
+    // For example, Some(443) for encrypted port 443
+    // or Some(443) for implicit default HTTP non-encrypted port
+    pub https_port: Option<u16>,
     pub extensions: TypeMap,
 }
 
@@ -192,6 +195,7 @@ mod tests {
             local_address: "127.0.0.1:8080".parse().unwrap(),
             remote_address: "127.0.0.1:12345".parse().unwrap(),
             auth_user: None,
+            https_port: None,
             extensions: TypeMap::new(),
         }
     }
