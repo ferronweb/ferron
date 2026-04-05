@@ -1,6 +1,7 @@
+use ferron_core::log_warn;
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::time::{interval, Duration, MissedTickBehavior};
@@ -12,6 +13,8 @@ use ferron_core::{
 use ferron_observability::{
     AccessEvent, Event, EventSink, LogFormatterContext, LogLevel, ObservabilityContext,
 };
+
+static DROPPED_EVENT: Once = Once::new();
 
 /// Wrapper that carries an event with its configuration through the channel
 struct ConfiguredEvent {
@@ -27,10 +30,20 @@ struct LogFileEventSink {
 
 impl EventSink for LogFileEventSink {
     fn emit(&self, event: Event) {
-        if matches!(event, Event::Access(_) | Event::Log(_)) {
-            let _ = self.inner.try_send(ConfiguredEvent {
-                event,
-                log_config: self.log_config.clone(),
+        if matches!(event, Event::Access(_) | Event::Log(_))
+            && self
+                .inner
+                .try_send(ConfiguredEvent {
+                    event,
+                    log_config: self.log_config.clone(),
+                })
+                .is_err()
+        {
+            DROPPED_EVENT.call_once(|| {
+                log_warn!(
+                    "Observability event dropped (`file` observability backend). \
+                    This may be caused by high server load."
+                )
             });
         }
     }
@@ -426,7 +439,7 @@ impl Default for LogFileObservabilityModuleLoader {
     fn default() -> Self {
         Self {
             cache: None,
-            channel: async_channel::unbounded(),
+            channel: async_channel::bounded(131072),
         }
     }
 }

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 
 use ferron_core::{
     config::ServerConfigurationBlock, loader::ModuleLoader, log_debug, log_error, log_info,
@@ -7,6 +7,8 @@ use ferron_core::{
 use ferron_observability::{
     AccessEvent, Event, EventSink, LogFormatterContext, ObservabilityContext,
 };
+
+static DROPPED_EVENT: Once = Once::new();
 
 /// Wrapper that carries an event with its configuration through the channel
 struct ConfiguredEvent {
@@ -22,10 +24,22 @@ struct ConsoleEventSink {
 
 impl EventSink for ConsoleEventSink {
     fn emit(&self, event: Event) {
-        let _ = self.inner.try_send(ConfiguredEvent {
-            event,
-            log_config: self.log_config.clone(),
-        });
+        if matches!(event, Event::Access(_) | Event::Log(_))
+            && self
+                .inner
+                .try_send(ConfiguredEvent {
+                    event,
+                    log_config: self.log_config.clone(),
+                })
+                .is_err()
+        {
+            DROPPED_EVENT.call_once(|| {
+                log_warn!(
+                    "Observability event dropped (`console` observability backend). \
+                    This may be caused by high server load."
+                )
+            });
+        }
     }
 }
 
@@ -151,7 +165,7 @@ impl Default for ConsoleObservabilityModuleLoader {
     fn default() -> Self {
         Self {
             cache: None,
-            channel: async_channel::unbounded(),
+            channel: async_channel::bounded(131072),
         }
     }
 }

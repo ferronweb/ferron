@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 
 use dashmap::DashMap;
 use ferron_core::{
     config::ServerConfigurationBlock,
     loader::ModuleLoader,
+    log_warn,
     providers::Provider,
     registry::{Registry, RegistryBuilder},
     Module,
@@ -18,6 +19,8 @@ use opentelemetry::{logs::AnyValue, trace::TracerProvider, KeyValue};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig, WithTonicConfig};
 use opentelemetry_sdk::Resource;
 use std::time::Duration;
+
+static DROPPED_EVENT: Once = Once::new();
 
 /// Per-host configuration for a single OTLP signal (logs, metrics, or traces)
 struct SignalConfig {
@@ -80,10 +83,21 @@ struct OtlpEventSink {
 
 impl EventSink for OtlpEventSink {
     fn emit(&self, event: Event) {
-        let _ = self.inner.try_send(ConfiguredEvent {
-            event,
-            log_config: self.log_config.clone(),
-        });
+        if self
+            .inner
+            .try_send(ConfiguredEvent {
+                event,
+                log_config: self.log_config.clone(),
+            })
+            .is_err()
+        {
+            DROPPED_EVENT.call_once(|| {
+                log_warn!(
+                    "Observability event dropped (`otlp` observability backend). \
+                    This may be caused by high server load."
+                )
+            });
+        }
     }
 }
 
@@ -845,7 +859,7 @@ impl Default for OtlpObservabilityModuleLoader {
     fn default() -> Self {
         Self {
             cache: None,
-            channel: async_channel::unbounded(),
+            channel: async_channel::bounded(131072),
         }
     }
 }
