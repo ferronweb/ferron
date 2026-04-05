@@ -5,10 +5,10 @@ use std::sync::Arc;
 
 use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;
-use ferron_http::{HttpContext, HttpErrorContext};
+use ferron_http::HttpContext;
 
 use crate::server::BasicHttpModule;
-use crate::stages::{HelloStage, NotFoundStage};
+use crate::stages::HelloStage;
 use crate::validator::HttpConfigurationValidator;
 
 #[derive(Default)]
@@ -64,9 +64,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
     }
 
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
-        registry
-            .with_stage::<HttpContext, _>(|| Arc::new(HelloStage))
-            .with_stage::<HttpErrorContext, _>(|| Arc::new(NotFoundStage))
+        registry.with_stage::<HttpContext, _>(|| Arc::new(HelloStage))
     }
 
     fn register_modules(
