@@ -48,13 +48,22 @@ fn build_https_url(ctx: &HttpContext) -> Option<String> {
 
     // Determine the host: use the original Host header, then the ctx hostname,
     // then fall back to the local address.
-    let host = req
+    let host_req = req
         .headers()
         .get(http::header::HOST)
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
         .or_else(|| ctx.hostname.clone())
         .unwrap_or_else(|| ctx.local_address.ip().to_string());
+    let host = if let Some((host_split, port)) = host_req.rsplit_once(":") {
+        if port.parse::<u16>().is_ok() {
+            host_split.to_string()
+        } else {
+            host_req
+        }
+    } else {
+        host_req
+    };
 
     let path_and_query = req
         .uri()
