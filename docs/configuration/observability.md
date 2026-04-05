@@ -198,6 +198,71 @@ All metrics include attributes for `http.request.method`, `url.scheme`,
 and `error.type` (for 4xx/5xx responses). When an error occurred before the
 request handler executed, `ferron.http.request.error_status_code` is included.
 
+### Process Metrics
+
+The `observability-process-metrics` module collects process-level metrics
+automatically when an observability backend is configured (OTLP, console,
+file, etc.). It reads `/proc/self/stat` every 1 second and emits metrics
+through the same observability event pipeline as HTTP metrics.
+
+**Platform support:** Linux only. On other platforms, the module is a no-op.
+
+| Metric | Type | Unit | Description | Attributes |
+| --- | --- | --- | --- | --- |
+| `process.cpu.time` | Counter | `s` | Total CPU seconds broken down by different states. | `cpu.mode`: `"user"` or `"system"` |
+| `process.cpu.utilization` | Gauge | `1` | Difference in `process.cpu.time` since the last measurement, divided by the elapsed time and number of CPUs available to the process. | `cpu.mode`: `"user"` or `"system"` |
+| `process.memory.usage` | UpDownCounter | `By` | The change in physical memory (RSS) since the last measurement. | _none_ |
+| `process.memory.virtual` | UpDownCounter | `By` | The change in committed virtual memory (VMS) since the last measurement. | _none_ |
+
+#### CPU Time
+
+`process.cpu.time` is a **counter** that reports the delta in CPU seconds
+(user or system mode) since the previous collection interval. To get the
+cumulative CPU time, sum all received values per `cpu.mode`.
+
+```
+process.cpu.time{cpu.mode="user"}    0.023
+process.cpu.time{cpu.mode="system"}  0.005
+```
+
+#### CPU Utilization
+
+`process.cpu.utilization` is a **gauge** representing the instantaneous
+utilization, calculated as:
+
+```
+utilization = delta_cpu_time / (elapsed_seconds * num_cpus)
+```
+
+Values range from `0.0` (no CPU usage) to `1.0` (all CPUs fully utilized),
+and can exceed `1.0` under certain conditions (e.g., CPU time accounting).
+
+#### Memory Usage and Virtual Memory
+
+`process.memory.usage` and `process.memory.virtual` are **up-down counters**
+that report the delta in RSS and VMS bytes since the last collection interval.
+A positive value means memory grew; a negative value means it shrank. To get
+the current memory usage, sum all received values from startup.
+
+#### Configuration
+
+Process metrics are automatically enabled whenever an observability backend
+(OTLP, console, file) is configured in the global scope or on any host. The
+metrics flow through the same backend configuration. For example, with OTLP:
+
+```ferron
+observability {
+    provider "otlp"
+
+    metrics "http://localhost:4318/v1/metrics" {
+        protocol "http/protobuf"
+    }
+}
+```
+
+Process metrics will be exported alongside HTTP server metrics to the same
+collector, with the same `service_name` and signal configuration.
+
 ## Tracing
 
 Each HTTP request generates a trace span:
@@ -220,7 +285,7 @@ collector. It is configured via `observability` blocks with `provider "otlp"`.
 
 ```ferron
 example.com {
-    observability "otlp" {
+    observability {
         provider "otlp"
 
         logs "https://collector:4318/v1/logs" {
@@ -281,7 +346,7 @@ Different hosts can send to different collectors:
 
 ```ferron
 api.example.com {
-    observability "otlp" {
+    observability {
         provider "otlp"
         service_name "api"
 
@@ -292,7 +357,7 @@ api.example.com {
 }
 
 admin.example.com {
-    observability "otlp" {
+    observability {
         provider "otlp"
         service_name "admin"
 
@@ -313,7 +378,7 @@ example.com {
         format "json"
     }
 
-    observability "otlp" {
+    observability {
         provider "otlp"
 
         metrics "https://collector:4318/v1/metrics" {}

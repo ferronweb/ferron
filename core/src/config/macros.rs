@@ -474,7 +474,7 @@ macro_rules! validate_directive {
         if let Some(directives) = $config.directives.get(stringify!($name)) {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
-                if directive.args.len() != $count {
+                if directive.args.len() != 0 && directive.args.len() != $count {
                     return Err(format!(
                         "Invalid directive '{}': expected {} argument(s), got {}",
                         stringify!($name), $count, directive.args.len()
@@ -492,13 +492,15 @@ macro_rules! validate_directive {
         if let Some(directives) = $config.directives.get(stringify!($name)) {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
-                if directive.args.len() != $count {
-                    return Err(format!(
-                        "Invalid directive '{}': expected {} argument(s), got {}",
-                        stringify!($name), $count, directive.args.len()
-                    ).into());
+                if directive.args.len() != 0 {
+                    if directive.args.len() != $count {
+                        return Err(format!(
+                            "Invalid directive '{}': expected {} argument(s), got {}",
+                            stringify!($name), $count, directive.args.len()
+                        ).into());
+                    }
+                    $crate::validate_args!(directive, [$($pattern),+]);
                 }
-                $crate::validate_args!(directive, [$($pattern),+]);
                 let $name = directive.children.as_ref()
                     .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
                 $body
@@ -511,7 +513,7 @@ macro_rules! validate_directive {
         if let Some(directives) = $config.directives.get(stringify!($name)) {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
-                if directive.args.len() < $min {
+                if directive.args.len() != 0 && directive.args.len() < $min {
                     return Err(format!(
                         "Invalid directive '{}': expected at least {} argument(s), got {}",
                         stringify!($name), $min, directive.args.len()
@@ -529,13 +531,15 @@ macro_rules! validate_directive {
         if let Some(directives) = $config.directives.get(stringify!($name)) {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
-                if directive.args.len() < $min {
-                    return Err(format!(
-                        "Invalid directive '{}': expected at least {} argument(s), got {}",
-                        stringify!($name), $min, directive.args.len()
-                    ).into());
+                if directive.args.len() != 0 {
+                    directive.args.len() < $min {
+                        return Err(format!(
+                            "Invalid directive '{}': expected at least {} argument(s), got {}",
+                            stringify!($name), $min, directive.args.len()
+                        ).into());
+                    }
+                    $crate::validate_args!(directive, [$($pattern),+]);
                 }
-                $crate::validate_args!(directive, [$($pattern),+]);
                 let $name = directive.children.as_ref()
                     .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
                 $body
@@ -548,7 +552,7 @@ macro_rules! validate_directive {
         if let Some(directives) = $config.directives.get(stringify!($name)) {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
-                if directive.args.len() > $max {
+                if directive.args.len() != 0 && directive.args.len() > $max {
                     return Err(format!(
                         "Invalid directive '{}': expected at most {} argument(s), got {}",
                         stringify!($name), $max, directive.args.len()
@@ -566,13 +570,15 @@ macro_rules! validate_directive {
         if let Some(directives) = $config.directives.get(stringify!($name)) {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
-                if directive.args.len() > $max {
-                    return Err(format!(
-                        "Invalid directive '{}': expected at most {} argument(s), got {}",
-                        stringify!($name), $max, directive.args.len()
-                    ).into());
+                if directive.args.len() != 0 {
+                    if directive.args.len() > $max {
+                        return Err(format!(
+                            "Invalid directive '{}': expected at most {} argument(s), got {}",
+                            stringify!($name), $max, directive.args.len()
+                        ).into());
+                    }
+                    $crate::validate_args!(directive, [$($pattern),+]);
                 }
-                $crate::validate_args!(directive, [$($pattern),+]);
                 let $name = directive.children.as_ref()
                     .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
                 $body
@@ -585,7 +591,7 @@ macro_rules! validate_directive {
         if let Some(directives) = $config.directives.get(stringify!($name)) {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
-                if !$range.contains(&directive.args.len()) {
+                if directive.args.len() != 0 && !$range.contains(&directive.args.len()) {
                     return Err(format!(
                         "Invalid directive '{}': expected {} argument(s), got {}",
                         stringify!($name), $range, directive.args.len()
@@ -603,13 +609,15 @@ macro_rules! validate_directive {
         if let Some(directives) = $config.directives.get(stringify!($name)) {
             $used.insert(stringify!($name).to_string());
             for directive in directives {
-                if !$range.contains(&directive.args.len()) {
-                    return Err(format!(
-                        "Invalid directive '{}': expected {} argument(s), got {}",
-                        stringify!($name), $range, directive.args.len()
-                    ).into());
+                if directive.args.len() != 0 {
+                    if !$range.contains(&directive.args.len()) {
+                        return Err(format!(
+                            "Invalid directive '{}': expected {} argument(s), got {}",
+                            stringify!($name), $range, directive.args.len()
+                        ).into());
+                    }
+                    $crate::validate_args!(directive, [$($pattern),+]);
                 }
-                $crate::validate_args!(directive, [$($pattern),+]);
                 let $name = directive.children.as_ref()
                     .ok_or(format!("Invalid directive '{}': missing nested block", stringify!($name)))?;
                 $body

@@ -25,6 +25,7 @@ ferron-observability-logfile = { path = "../modules/observability-logfile" }
 ferron-observability-otlp = { path = "../modules/observability-otlp" }
 ferron-observability-format-json = { path = "../modules/observability-format-json" }
 ferron-observability-format-text = { path = "../modules/observability-format-text" }
+ferron-observability-process-metrics = { path = "../modules/observability-process-metrics" }
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8"

@@ -32,6 +32,7 @@ use cli::{parse_config_params, Cli, Commands};
 use cli::WinServiceCommands;
 use ferron_observability_consolelog::ConsoleObservabilityModuleLoader;
 use ferron_observability_otlp::OtlpObservabilityModuleLoader;
+use ferron_observability_process_metrics::ProcessMetricsModuleLoader;
 use ferron_ocsp_stapler::OcspStaplerModuleLoader;
 use ferron_tls_manual::TlsManualModuleLoader;
 
@@ -248,6 +249,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(OtlpObservabilityModuleLoader::default()),
         Box::new(JsonFormatObservabilityModuleLoader),
         Box::new(TextFormatObservabilityModuleLoader),
+        Box::new(ProcessMetricsModuleLoader::default()),
     ]
 }
 
