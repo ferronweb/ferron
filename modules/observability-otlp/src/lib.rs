@@ -74,7 +74,7 @@ struct ConfiguredEvent {
 
 /// The OTLP event sink that emits events to an OTLP collector
 struct OtlpEventSink {
-    inner: kanal::AsyncSender<ConfiguredEvent>,
+    inner: async_channel::Sender<ConfiguredEvent>,
     log_config: Arc<ServerConfigurationBlock>,
 }
 
@@ -147,7 +147,7 @@ fn build_resource(service_name: String) -> Resource {
 }
 
 struct OtlpObservabilityModule {
-    inner: kanal::AsyncReceiver<ConfiguredEvent>,
+    inner: async_channel::Receiver<ConfiguredEvent>,
     cancel_token: tokio_util::sync::CancellationToken,
 }
 
@@ -816,7 +816,7 @@ fn emit_trace(
 }
 
 struct OtlpObservabilityProvider {
-    inner: kanal::AsyncSender<ConfiguredEvent>,
+    inner: async_channel::Sender<ConfiguredEvent>,
 }
 
 impl Provider<ObservabilityContext> for OtlpObservabilityProvider {
@@ -836,8 +836,8 @@ impl Provider<ObservabilityContext> for OtlpObservabilityProvider {
 pub struct OtlpObservabilityModuleLoader {
     cache: Option<Arc<OtlpObservabilityModule>>,
     channel: (
-        kanal::AsyncSender<ConfiguredEvent>,
-        kanal::AsyncReceiver<ConfiguredEvent>,
+        async_channel::Sender<ConfiguredEvent>,
+        async_channel::Receiver<ConfiguredEvent>,
     ),
 }
 
@@ -845,7 +845,7 @@ impl Default for OtlpObservabilityModuleLoader {
     fn default() -> Self {
         Self {
             cache: None,
-            channel: kanal::unbounded_async(),
+            channel: async_channel::unbounded(),
         }
     }
 }

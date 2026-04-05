@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 use tokio::fs::OpenOptions;
-use tokio::io::AsyncWriteExt;
-use tokio::time::{interval, Duration};
+use tokio::io::{AsyncWriteExt, BufWriter};
+use tokio::time::{interval, Duration, MissedTickBehavior};
 
 use ferron_core::{
     config::ServerConfigurationBlock, loader::ModuleLoader, log_error, providers::Provider,
@@ -21,16 +21,18 @@ struct ConfiguredEvent {
 
 /// The initialized event sink that writes events to log files
 struct LogFileEventSink {
-    inner: kanal::AsyncSender<ConfiguredEvent>,
+    inner: async_channel::Sender<ConfiguredEvent>,
     log_config: Arc<ServerConfigurationBlock>,
 }
 
 impl EventSink for LogFileEventSink {
     fn emit(&self, event: Event) {
-        let _ = self.inner.try_send(ConfiguredEvent {
-            event,
-            log_config: self.log_config.clone(),
-        });
+        if matches!(event, Event::Access(_) | Event::Log(_)) {
+            let _ = self.inner.try_send(ConfiguredEvent {
+                event,
+                log_config: self.log_config.clone(),
+            });
+        }
     }
 }
 
@@ -87,10 +89,9 @@ struct RotationConfig {
     rotate_keep: Option<usize>,
 }
 
-/// File handle wrapper with path tracking and rotation support
+/// File handle wrapper with BufWriter and rotation support
 struct FileHandle {
-    file: tokio::fs::File,
-    buffer: Vec<u8>,
+    writer: BufWriter<tokio::fs::File>,
     current_size: u64,
     rotation: Option<RotationConfig>,
 }
@@ -128,8 +129,7 @@ impl FileWriter {
                     self.handles.insert(
                         path.to_string(),
                         FileHandle {
-                            file,
-                            buffer: Vec::with_capacity(4096),
+                            writer: BufWriter::with_capacity(131072, file),
                             current_size,
                             rotation,
                         },
@@ -160,52 +160,51 @@ impl FileWriter {
         self.ensure_handle(path, rotation).await?;
 
         // Check if rotation is needed
-        if let (Some(handle), Some(rot)) =
-            (self.handles.get(path), rotation.and_then(|r| r.rotate_size))
-        {
-            if handle.current_size >= rot {
-                // Need to rotate
-                if let Some(mut handle) = self.handles.remove(path) {
-                    if !handle.buffer.is_empty() {
-                        handle.file.write_all(&handle.buffer).await?;
-                        handle.buffer.clear();
-                    }
-                    handle.file.flush().await?;
-                }
+        let needs_rotation = rotation.and_then(|r| r.rotate_size).is_some_and(|rot| {
+            self.handles
+                .get(path)
+                .is_some_and(|h| h.current_size >= rot)
+        });
 
-                let rotate_keep = rotation.and_then(|r| r.rotate_keep);
-                if let Err(e) = rotate_log_file(path, rotate_keep).await {
-                    log_error!("Failed to rotate log file {}: {}", path, e);
+        if needs_rotation {
+            // Flush and remove the old handle
+            if let Some(mut handle) = self.handles.remove(path) {
+                if let Err(e) = handle.writer.flush().await {
+                    log_error!("Failed to flush log file before rotation {}: {}", path, e);
                 }
+            }
 
-                // Re-open the file
-                match OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(path)
-                    .await
-                {
-                    Ok(file) => {
-                        self.handles.insert(
-                            path.to_string(),
-                            FileHandle {
-                                file,
-                                buffer: Vec::with_capacity(4096),
-                                current_size: 0,
-                                rotation,
-                            },
-                        );
-                    }
-                    Err(e) => {
-                        log_error!("Failed to re-open log file after rotation {}: {}", path, e);
-                        return Err(Box::new(e));
-                    }
+            let rotate_keep = rotation.and_then(|r| r.rotate_keep);
+            if let Err(e) = rotate_log_file(path, rotate_keep).await {
+                log_error!("Failed to rotate log file {}: {}", path, e);
+            }
+
+            // Re-open the file
+            match OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .await
+            {
+                Ok(file) => {
+                    self.handles.insert(
+                        path.to_string(),
+                        FileHandle {
+                            writer: BufWriter::with_capacity(131072, file),
+                            current_size: 0,
+                            rotation,
+                        },
+                    );
+                }
+                Err(e) => {
+                    log_error!("Failed to re-open log file after rotation {}: {}", path, e);
+                    return Err(Box::new(e));
                 }
             }
         }
 
         if let Some(handle) = self.handles.get_mut(path) {
-            handle.buffer.extend_from_slice(content);
+            handle.writer.write_all(content).await?;
             handle.current_size += content.len() as u64;
         }
 
@@ -214,18 +213,14 @@ impl FileWriter {
 
     async fn flush_all(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         for handle in self.handles.values_mut() {
-            if !handle.buffer.is_empty() {
-                handle.file.write_all(&handle.buffer).await?;
-                handle.buffer.clear();
-            }
-            handle.file.flush().await?;
+            handle.writer.flush().await?;
         }
         Ok(())
     }
 }
 
 struct LogFileObservabilityModule {
-    inner: kanal::AsyncReceiver<ConfiguredEvent>,
+    inner: async_channel::Receiver<ConfiguredEvent>,
     cancel_token: tokio_util::sync::CancellationToken,
     registry: Arc<Registry>,
 }
@@ -248,11 +243,14 @@ impl Module for LogFileObservabilityModule {
 
         let rx = self.inner.clone();
         runtime.spawn_secondary_task(async move {
-            let mut file_writer = FileWriter::new(50);
+            let mut file_writer = FileWriter::new(100);
             let mut flush_timer = interval(Duration::from_millis(file_writer.flush_interval_ms));
+            flush_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
             loop {
                 tokio::select! {
+                    biased;
+
                     result = rx.recv() => {
                         if let Ok(msg) = result {
                             match &msg.event {
@@ -295,7 +293,7 @@ impl Module for LogFileObservabilityModule {
                                             LogLevel::Warn => "WARN",
                                             LogLevel::Info => "INFO",
                                             LogLevel::Debug => "DEBUG",
-                                        },  le.message.clone());
+                                        },  le.message);
 
                                         // Read rotation config for error log
                                         let rotation = read_rotation_config(
@@ -399,7 +397,7 @@ fn format_access_event(
 }
 
 struct LogFileObservabilityProvider {
-    inner: kanal::AsyncSender<ConfiguredEvent>,
+    inner: async_channel::Sender<ConfiguredEvent>,
 }
 
 impl Provider<ObservabilityContext> for LogFileObservabilityProvider {
@@ -419,8 +417,8 @@ impl Provider<ObservabilityContext> for LogFileObservabilityProvider {
 pub struct LogFileObservabilityModuleLoader {
     cache: Option<Arc<LogFileObservabilityModule>>,
     channel: (
-        kanal::AsyncSender<ConfiguredEvent>,
-        kanal::AsyncReceiver<ConfiguredEvent>,
+        async_channel::Sender<ConfiguredEvent>,
+        async_channel::Receiver<ConfiguredEvent>,
     ),
 }
 
@@ -428,7 +426,7 @@ impl Default for LogFileObservabilityModuleLoader {
     fn default() -> Self {
         Self {
             cache: None,
-            channel: kanal::unbounded_async(),
+            channel: async_channel::unbounded(),
         }
     }
 }

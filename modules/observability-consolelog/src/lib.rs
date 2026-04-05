@@ -16,7 +16,7 @@ struct ConfiguredEvent {
 
 /// The initialized event sink that emits events to the console
 struct ConsoleEventSink {
-    inner: kanal::AsyncSender<ConfiguredEvent>,
+    inner: async_channel::Sender<ConfiguredEvent>,
     log_config: Arc<ServerConfigurationBlock>,
 }
 
@@ -30,7 +30,7 @@ impl EventSink for ConsoleEventSink {
 }
 
 struct ConsoleObservabilityModule {
-    inner: kanal::AsyncReceiver<ConfiguredEvent>,
+    inner: async_channel::Receiver<ConfiguredEvent>,
     cancel_token: tokio_util::sync::CancellationToken,
     registry: Arc<Registry>,
 }
@@ -122,7 +122,7 @@ fn format_access_event(
 }
 
 struct ConsoleObservabilityProvider {
-    inner: kanal::AsyncSender<ConfiguredEvent>,
+    inner: async_channel::Sender<ConfiguredEvent>,
 }
 
 impl Provider<ObservabilityContext> for ConsoleObservabilityProvider {
@@ -142,8 +142,8 @@ impl Provider<ObservabilityContext> for ConsoleObservabilityProvider {
 pub struct ConsoleObservabilityModuleLoader {
     cache: Option<Arc<ConsoleObservabilityModule>>,
     channel: (
-        kanal::AsyncSender<ConfiguredEvent>,
-        kanal::AsyncReceiver<ConfiguredEvent>,
+        async_channel::Sender<ConfiguredEvent>,
+        async_channel::Receiver<ConfiguredEvent>,
     ),
 }
 
@@ -151,7 +151,7 @@ impl Default for ConsoleObservabilityModuleLoader {
     fn default() -> Self {
         Self {
             cache: None,
-            channel: kanal::unbounded_async(),
+            channel: async_channel::unbounded(),
         }
     }
 }
