@@ -231,6 +231,43 @@ impl BasicHttpModule {
         let mut http_connection_options_resolver = RadixTree::new();
         let mut observability_resolver = RadixTree::new();
         let mut tls_resolver = TlsResolverRadixTree::new();
+
+        // Process global observability configuration (applies to all hosts)
+        let global_observability_extractor = ObservabilityConfigExtractor::new(&global_config);
+        let global_observability_entries: Vec<ObservabilityProviderEntry> =
+            global_observability_extractor
+                .extract_observability_blocks()?
+                .into_iter()
+                .filter_map(|observability_block| {
+                    let observability_provider_name = match observability_block
+                        .get_value("provider")
+                        .and_then(|v| v.as_str())
+                    {
+                        Some(name) => name.to_string(),
+                        None => {
+                            // Error will be handled by host-level extraction if provider is missing there
+                            return None;
+                        }
+                    };
+
+                    registry
+                        .get_provider_registry::<ObservabilityContext>()
+                        .and_then(|observability_registry| {
+                            observability_registry
+                                .get(&observability_provider_name)
+                                .map(|provider| {
+                                    let observability_block_arc = Arc::new(observability_block);
+                                    (provider, observability_block_arc)
+                                })
+                        })
+                })
+                .collect();
+
+        // If global observability entries exist, set them as root data (fallback for all hosts)
+        if !global_observability_entries.is_empty() {
+            observability_resolver.set_root_data(global_observability_entries);
+        }
+
         for host_config in &port_config.hosts {
             let http_connection_options = resolve_http_connection_options(&host_config.1)?;
             match (&host_config.0.host, host_config.0.ip) {
@@ -419,7 +456,11 @@ impl BasicHttpModule {
                             observability_resolver.insert_ip(ip, vec![entry]);
                         }
                         (None, None) => {
-                            observability_resolver.set_root_data(vec![entry]);
+                            // Merge with global observability entries if they exist
+                            let existing_root = observability_resolver.root_data();
+                            let mut merged_entries = existing_root.unwrap_or_default();
+                            merged_entries.push(entry);
+                            observability_resolver.set_root_data(merged_entries);
                         }
                     }
                 }
@@ -809,5 +850,190 @@ mod tests {
 
         let result = transform_observability_alias("console_log", &console_log_directive).unwrap();
         assert!(result.is_none(), "Should return None for disabled alias");
+    }
+
+    #[test]
+    fn global_observability_console_log_alias() {
+        // Test that console_log in global config is transformed correctly
+        let global_config = ServerConfigurationBlockBuilder::new()
+            .directive(
+                "console_log",
+                ServerConfigurationDirectiveEntry {
+                    args: vec![],
+                    children: Some(
+                        ServerConfigurationBlockBuilder::new()
+                            .directive_str("format", vec!["json"])
+                            .build(),
+                    ),
+                    span: None,
+                },
+            )
+            .build();
+
+        let extractor = ObservabilityConfigExtractor::new(&global_config);
+        let blocks = extractor.extract_observability_blocks().unwrap();
+
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(
+            blocks[0].get_value("provider").and_then(|v| v.as_str()),
+            Some("console")
+        );
+        assert_eq!(
+            blocks[0].get_value("format").and_then(|v| v.as_str()),
+            Some("json")
+        );
+    }
+
+    #[test]
+    fn global_observability_log_alias() {
+        // Test that log in global config is transformed correctly
+        let global_config = ServerConfigurationBlockBuilder::new()
+            .directive(
+                "log",
+                ServerConfigurationDirectiveEntry {
+                    args: vec![ServerConfigurationValueBuilder::string(
+                        "/var/log/access.log",
+                    )],
+                    children: Some(
+                        ServerConfigurationBlockBuilder::new()
+                            .directive_str("format", vec!["combined"])
+                            .build(),
+                    ),
+                    span: None,
+                },
+            )
+            .build();
+
+        let extractor = ObservabilityConfigExtractor::new(&global_config);
+        let blocks = extractor.extract_observability_blocks().unwrap();
+
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(
+            blocks[0].get_value("provider").and_then(|v| v.as_str()),
+            Some("file")
+        );
+        assert_eq!(
+            blocks[0].get_value("access_log").and_then(|v| v.as_str()),
+            Some("/var/log/access.log")
+        );
+        assert_eq!(
+            blocks[0].get_value("format").and_then(|v| v.as_str()),
+            Some("combined")
+        );
+    }
+
+    #[test]
+    fn global_observability_error_log_alias() {
+        // Test that error_log in global config is transformed correctly
+        let global_config = ServerConfigurationBlockBuilder::new()
+            .directive(
+                "error_log",
+                ServerConfigurationDirectiveEntry {
+                    args: vec![ServerConfigurationValueBuilder::string(
+                        "/var/log/error.log",
+                    )],
+                    children: None,
+                    span: None,
+                },
+            )
+            .build();
+
+        let extractor = ObservabilityConfigExtractor::new(&global_config);
+        let blocks = extractor.extract_observability_blocks().unwrap();
+
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(
+            blocks[0].get_value("provider").and_then(|v| v.as_str()),
+            Some("file")
+        );
+        assert_eq!(
+            blocks[0].get_value("error_log").and_then(|v| v.as_str()),
+            Some("/var/log/error.log")
+        );
+    }
+
+    #[test]
+    fn global_observability_explicit_block() {
+        // Test that explicit observability block in global config works
+        let global_config = ServerConfigurationBlockBuilder::new()
+            .directive(
+                "observability",
+                ServerConfigurationDirectiveEntry {
+                    args: vec![],
+                    children: Some(
+                        ServerConfigurationBlockBuilder::new()
+                            .directive_str("provider", vec!["file"])
+                            .directive_str("access_log", vec!["/var/log/http.log"])
+                            .build(),
+                    ),
+                    span: None,
+                },
+            )
+            .build();
+
+        let extractor = ObservabilityConfigExtractor::new(&global_config);
+        let blocks = extractor.extract_observability_blocks().unwrap();
+
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(
+            blocks[0].get_value("provider").and_then(|v| v.as_str()),
+            Some("file")
+        );
+        assert_eq!(
+            blocks[0].get_value("access_log").and_then(|v| v.as_str()),
+            Some("/var/log/http.log")
+        );
+    }
+
+    #[test]
+    fn global_observability_multiple_aliases() {
+        // Test that multiple alias directives in global config are all extracted
+        let global_config = ServerConfigurationBlockBuilder::new()
+            .directive(
+                "log",
+                ServerConfigurationDirectiveEntry {
+                    args: vec![ServerConfigurationValueBuilder::string(
+                        "/var/log/access.log",
+                    )],
+                    children: None,
+                    span: None,
+                },
+            )
+            .directive(
+                "error_log",
+                ServerConfigurationDirectiveEntry {
+                    args: vec![ServerConfigurationValueBuilder::string(
+                        "/var/log/error.log",
+                    )],
+                    children: None,
+                    span: None,
+                },
+            )
+            .build();
+
+        let extractor = ObservabilityConfigExtractor::new(&global_config);
+        let blocks = extractor.extract_observability_blocks().unwrap();
+
+        assert_eq!(blocks.len(), 2);
+
+        // Check first block (log)
+        assert_eq!(
+            blocks[0].get_value("provider").and_then(|v| v.as_str()),
+            Some("file")
+        );
+        assert_eq!(
+            blocks[0].get_value("access_log").and_then(|v| v.as_str()),
+            Some("/var/log/access.log")
+        );
+
+        // Check second block (error_log)
+        assert_eq!(
+            blocks[1].get_value("provider").and_then(|v| v.as_str()),
+            Some("file")
+        );
+        assert_eq!(
+            blocks[1].get_value("error_log").and_then(|v| v.as_str()),
+            Some("/var/log/error.log")
+        );
     }
 }
