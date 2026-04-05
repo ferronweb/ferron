@@ -884,11 +884,9 @@ dependencies = [
  "axum",
  "ferron-admin",
  "ferron-core",
- "serde",
  "serde_json",
  "tokio",
  "tokio-util",
- "tower",
 ]
 
 [[package]]
