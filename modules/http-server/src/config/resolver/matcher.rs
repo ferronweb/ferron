@@ -117,8 +117,29 @@ pub fn evaluate_matcher_condition(
             }
         }
         ServerConfigurationMatcherOperator::In => {
-            if let (Some(l), Some(r)) = (left_val, right_val) {
-                r.split(',').any(|item| item.trim() == l)
+            // Accept-Language header matching: check if left value is in the parsed Accept-Language header
+            if let (Some(left), Some(right)) = (left_val, right_val) {
+                // Check if right looks like an Accept-Language header (contains q= or multiple comma-separated values)
+                let is_accept_language = right.contains("q=")
+                    || (right.contains(',') && !right.split(',').any(|s| s.trim().is_empty()));
+
+                if is_accept_language {
+                    // Parse as Accept-Language header with q-values
+                    let accepted_languages: Vec<String> =
+                        ferron_http::util::parse_q_value_header::parse_q_value_header(&right);
+                    accepted_languages.iter().any(|lang| {
+                        lang.eq_ignore_ascii_case(&left)
+                            || lang
+                                .split_once('-')
+                                .map(|(base, _): (&str, &str)| base.eq_ignore_ascii_case(&left))
+                                .unwrap_or(false)
+                    })
+                } else {
+                    // Fallback to simple comma-separated list matching
+                    right
+                        .split(',')
+                        .any(|item| item.trim().eq_ignore_ascii_case(&left))
+                }
             } else {
                 false
             }
@@ -190,6 +211,120 @@ mod tests {
 
         let compiled = CompiledMatcherExpr::new(expr).unwrap();
 
+        let req = HttpRequest::default();
+        let variables = (req, HashMap::new());
+
+        assert!(evaluate_matcher_condition(&compiled, &variables));
+    }
+
+    #[test]
+    fn test_in_operator_accept_language_with_q_values() {
+        let expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::String("en".to_string()),
+            op: ServerConfigurationMatcherOperator::In,
+            right: ServerConfigurationMatcherOperand::String(
+                "en-US; q=0.8, fr-FR; q=0.5, de; q=0.3".to_string(),
+            ),
+        };
+
+        let compiled = CompiledMatcherExpr::new(expr).unwrap();
+        let req = HttpRequest::default();
+        let variables = (req, HashMap::new());
+
+        assert!(evaluate_matcher_condition(&compiled, &variables));
+    }
+
+    #[test]
+    fn test_in_operator_accept_language_base_language_match() {
+        let expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::String("en".to_string()),
+            op: ServerConfigurationMatcherOperator::In,
+            right: ServerConfigurationMatcherOperand::String(
+                "en-US; q=0.8, fr-FR; q=0.5".to_string(),
+            ),
+        };
+
+        let compiled = CompiledMatcherExpr::new(expr).unwrap();
+        let req = HttpRequest::default();
+        let variables = (req, HashMap::new());
+
+        // Should match "en" from "en-US" base language
+        assert!(evaluate_matcher_condition(&compiled, &variables));
+    }
+
+    #[test]
+    fn test_in_operator_accept_language_no_match() {
+        let expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::String("zh".to_string()),
+            op: ServerConfigurationMatcherOperator::In,
+            right: ServerConfigurationMatcherOperand::String(
+                "en-US; q=0.8, fr-FR; q=0.5".to_string(),
+            ),
+        };
+
+        let compiled = CompiledMatcherExpr::new(expr).unwrap();
+        let req = HttpRequest::default();
+        let variables = (req, HashMap::new());
+
+        assert!(!evaluate_matcher_condition(&compiled, &variables));
+    }
+
+    #[test]
+    fn test_in_operator_accept_language_case_insensitive() {
+        let expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::String("EN".to_string()),
+            op: ServerConfigurationMatcherOperator::In,
+            right: ServerConfigurationMatcherOperand::String(
+                "en-US; q=0.8, fr-FR; q=0.5".to_string(),
+            ),
+        };
+
+        let compiled = CompiledMatcherExpr::new(expr).unwrap();
+        let req = HttpRequest::default();
+        let variables = (req, HashMap::new());
+
+        assert!(evaluate_matcher_condition(&compiled, &variables));
+    }
+
+    #[test]
+    fn test_in_operator_simple_comma_separated_list() {
+        let expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::String("api".to_string()),
+            op: ServerConfigurationMatcherOperator::In,
+            right: ServerConfigurationMatcherOperand::String("web,api,admin".to_string()),
+        };
+
+        let compiled = CompiledMatcherExpr::new(expr).unwrap();
+        let req = HttpRequest::default();
+        let variables = (req, HashMap::new());
+
+        assert!(evaluate_matcher_condition(&compiled, &variables));
+    }
+
+    #[test]
+    fn test_in_operator_simple_comma_separated_list_no_match() {
+        let expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::String("guest".to_string()),
+            op: ServerConfigurationMatcherOperator::In,
+            right: ServerConfigurationMatcherOperand::String("web,api,admin".to_string()),
+        };
+
+        let compiled = CompiledMatcherExpr::new(expr).unwrap();
+        let req = HttpRequest::default();
+        let variables = (req, HashMap::new());
+
+        assert!(!evaluate_matcher_condition(&compiled, &variables));
+    }
+
+    #[test]
+    fn test_in_operator_accept_language_without_q_values() {
+        let expr = ServerConfigurationMatcherExpr {
+            left: ServerConfigurationMatcherOperand::String("fr".to_string()),
+            op: ServerConfigurationMatcherOperator::In,
+            right: ServerConfigurationMatcherOperand::String("en-US, fr-FR, de-DE".to_string()),
+        };
+
+        let compiled = CompiledMatcherExpr::new(expr).unwrap();
         let req = HttpRequest::default();
         let variables = (req, HashMap::new());
 
