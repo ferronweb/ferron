@@ -285,3 +285,46 @@ async fn generate_directory_listing(
         vec![css_common, css_directory]
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sizify_zero_bytes() {
+        assert_eq!(sizify(0, false), "0 B");
+    }
+
+    #[test]
+    fn sizify_one_byte() {
+        assert_eq!(sizify(1, false), "1 B");
+    }
+
+    #[test]
+    fn sizify_kilobytes() {
+        assert_eq!(sizify(1024, false), "1.0 KiB");
+        assert_eq!(sizify(1536, false), "1.5 KiB");
+    }
+
+    #[test]
+    fn sizify_megabytes() {
+        assert_eq!(sizify(1_048_576, false), "1.0 MiB");
+        assert_eq!(sizify(2_621_440, false), "2.5 MiB");
+    }
+
+    #[test]
+    fn sizify_gigabytes() {
+        assert_eq!(sizify(1_073_741_824, false), "1.0 GiB");
+    }
+
+    #[test]
+    fn sizify_terabytes() {
+        assert_eq!(sizify(1_099_511_627_776, false), "1.0 TiB");
+    }
+
+    #[test]
+    fn sizify_caps_at_tib() {
+        // Very large files should cap at TiB
+        assert!(sizify(u64::MAX, false).contains("TiB"));
+    }
+}

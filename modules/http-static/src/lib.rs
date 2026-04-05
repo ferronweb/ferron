@@ -6,6 +6,7 @@
 //! - `StaticFileStage` — serves files with MIME types, ETags, range requests, and compression
 
 mod stages;
+mod util;
 mod validator;
 
 use std::sync::Arc;
