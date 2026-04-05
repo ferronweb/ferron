@@ -165,7 +165,13 @@ impl FileWriter {
         {
             if handle.current_size >= rot {
                 // Need to rotate
-                drop(self.handles.remove(path).unwrap());
+                if let Some(mut handle) = self.handles.remove(path) {
+                    if !handle.buffer.is_empty() {
+                        handle.file.write_all(&handle.buffer).await?;
+                        handle.buffer.clear();
+                    }
+                    handle.file.flush().await?;
+                }
 
                 let rotate_keep = rotation.and_then(|r| r.rotate_keep);
                 if let Err(e) = rotate_log_file(path, rotate_keep).await {
@@ -212,6 +218,7 @@ impl FileWriter {
                 handle.file.write_all(&handle.buffer).await?;
                 handle.buffer.clear();
             }
+            handle.file.flush().await?;
         }
         Ok(())
     }
@@ -241,7 +248,7 @@ impl Module for LogFileObservabilityModule {
 
         let rx = self.inner.clone();
         runtime.spawn_secondary_task(async move {
-            let mut file_writer = FileWriter::new(1000);
+            let mut file_writer = FileWriter::new(50);
             let mut flush_timer = interval(Duration::from_millis(file_writer.flush_interval_ms));
 
             loop {
