@@ -848,6 +848,60 @@ async fn execute_http_file_pipeline(
         }
     };
 
+    // Handle trailing slash redirect for directories
+    if resolved_file.metadata.is_dir() {
+        let trailing_slash_redirect_enabled = ctx
+            .configuration
+            .get_value("trailing_slash_redirect", true)
+            .map(|v| v.as_boolean())
+            .unwrap_or(Some(true))
+            .unwrap_or(true);
+
+        if trailing_slash_redirect_enabled && !request_path.ends_with('/') {
+            // Build redirect URL with trailing slash
+            let redirect_path = format!("{request_path}/");
+            let uri = match ctx.req.as_ref() {
+                Some(req) => {
+                    let mut uri_parts = req.uri().clone().into_parts();
+                    if let Some(path_and_query) = &uri_parts.path_and_query {
+                        let new_path_and_query = format!(
+                            "{redirect_path}{}",
+                            if let Some(q) = path_and_query.query() {
+                                format!("?{q}")
+                            } else {
+                                String::new()
+                            }
+                        );
+                        uri_parts.path_and_query = new_path_and_query.try_into().ok();
+                    }
+                    if uri_parts.path_and_query.is_some() {
+                        http::Uri::from_parts(uri_parts).ok()
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            };
+
+            if let Some(redirect_uri) = uri {
+                ctx.res = Some(HttpResponse::Custom(
+                    http::Response::builder()
+                        .status(http::StatusCode::MOVED_PERMANENTLY)
+                        .header(http::header::LOCATION, redirect_uri.to_string())
+                        .body(
+                            http_body_util::Full::new(bytes::Bytes::from(format!(
+                                "Moved Permanently to {redirect_path}",
+                            )))
+                            .map_err(|_| unreachable!())
+                            .boxed_unsync(),
+                        )
+                        .expect("failed to build redirect response"),
+                ));
+                return Ok(());
+            }
+        }
+    }
+
     apply_resolved_file_to_context(ctx, resolved_file, file_pipeline, timeout, root_path).await
 }
 

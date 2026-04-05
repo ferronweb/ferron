@@ -9,6 +9,7 @@ These directives affect HTTP request matching and configuration layering inside 
 - Error layering: `handle_error`
 - Web root: `root`
 - URL sanitization: `url_sanitize`
+- Trailing slash redirect: `trailing_slash_redirect`
 - Static file serving: `index`, `directory_listing`, `compressed`, `precompressed`, `etag`, `file_cache_control`, `mime_type` (see [Static File Serving Directives](./http-static.md))
 
 ## `location`
@@ -135,3 +136,26 @@ Notes:
 - Disabling URL sanitization may improve RFC 3986 compliance for URLs that use valid but unusual encodings.
 - **Warning**: When disabled, Ferron will not protect backend services from path traversal attacks if reverse proxying is implemented. Use with caution.
 - Even when disabled, the file resolution stage still canonicalizes paths and rejects requests that escape the configured webroot.
+
+## `trailing_slash_redirect`
+
+Syntax:
+
+```ferron
+example.com {
+    root /srv/www/example
+    trailing_slash_redirect off
+}
+```
+
+| Arguments | Description | Default |
+| --- | --- | --- |
+| `<boolean>` | Enables or disables automatic 301 redirects from directory paths without a trailing slash to the same path with a trailing slash. | `on` (enabled) |
+
+Notes:
+
+- Only applies when the resolved request path maps to a directory on the filesystem.
+- When enabled and a request like `/blog` resolves to a directory, the server responds with `301 Moved Permanently` and a `Location` header pointing to `/blog/`.
+- Query strings are preserved in the redirect (e.g., `/blog?foo=bar` → `/blog/?foo=bar`).
+- This is useful for SEO consistency and ensuring relative links within directory-served pages resolve correctly.
+- Disabling this directive allows directory paths without trailing slashes to be served directly, which may cause relative URL resolution issues in generated content.

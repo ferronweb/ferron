@@ -96,6 +96,11 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         // Index file names
         validate_directive!(config, used_directives, index, optional args(?), {});
 
+        // Trailing slash redirect for directories
+        validate_directive!(config, used_directives, trailing_slash_redirect, optional args(1) => [
+            ServerConfigurationValue::Boolean(_, _)
+        ], {});
+
         Ok(())
     }
 }

@@ -12,7 +12,7 @@ These directives configure static file serving, directory listings, compression,
 
 See also:
 
-- [HTTP Control Directives](./http-control.md) (where `root` is defined)
+- [HTTP Control Directives](./http-control.md) (where `root` and `trailing_slash_redirect` are defined)
 
 ## `index`
 
