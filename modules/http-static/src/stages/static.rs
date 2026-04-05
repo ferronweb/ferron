@@ -45,10 +45,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
     #[inline]
     fn constraints(&self) -> Vec<StageConstraint> {
-        vec![
-            StageConstraint::After("directory_index".to_string()),
-            StageConstraint::After("directory_listing".to_string()),
-        ]
+        vec![StageConstraint::After("directory_listing".to_string())]
     }
 
     async fn run(&self, ctx: &mut HttpFileContext) -> Result<bool, PipelineError> {

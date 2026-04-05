@@ -4,6 +4,7 @@
 //! - `DirectoryIndexStage` — resolves index files (index.html, etc.) in directories
 //! - `DirectoryListingStage` — generates HTML directory listings when enabled
 //! - `StaticFileStage` — serves files with MIME types, ETags, range requests, and compression
+//! - `ErrorPageStage` — serves static HTML files for HTTP error responses
 
 mod stages;
 mod util;
@@ -13,16 +14,16 @@ use std::sync::Arc;
 
 use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;
-use ferron_http::HttpFileContext;
+use ferron_http::{HttpErrorContext, HttpFileContext};
 
-pub use stages::{DirectoryListingStage, StaticFileStage};
+pub use stages::{DirectoryListingStage, ErrorPageStage, StaticFileStage};
 pub use validator::HttpStaticConfigurationValidator;
 
 /// Module loader for the HTTP static file module.
 ///
 /// Registers:
 /// - Global configuration validator for static file directives
-/// - Pipeline stages: DirectoryIndexStage, DirectoryListingStage, StaticFileStage
+/// - Pipeline stages: DirectoryIndexStage, DirectoryListingStage, StaticFileStage, ErrorPageStage
 ///
 /// Note: This loader does not register any `Module` instances. All functionality
 /// is provided through pipeline stages.
@@ -49,5 +50,6 @@ impl ModuleLoader for StaticFileModuleLoader {
         registry
             .with_stage::<HttpFileContext, _>(|| Arc::new(DirectoryListingStage))
             .with_stage::<HttpFileContext, _>(|| Arc::new(StaticFileStage))
+            .with_stage::<HttpErrorContext, _>(|| Arc::new(ErrorPageStage))
     }
 }

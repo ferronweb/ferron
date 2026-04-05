@@ -43,6 +43,13 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpStaticConfig
                 ServerConfigurationValue::String(_, _)
             ], {});
 
+        // Custom error pages (status codes followed by file path)
+        // Format: error_page <code1> [code2 ...] <file_path>
+        // Minimum 2 args enforced at runtime in ErrorPageStage
+        validate_directive!(config, used_directives, error_page, optional args(*) => [
+            ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::String(_, _)
+        ], {});
+
         Ok(())
     }
 }

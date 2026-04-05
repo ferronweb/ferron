@@ -1,6 +1,6 @@
 # Static File Serving Directives
 
-These directives configure static file serving, directory listings, compression, and caching behavior for requests resolved to the filesystem (via `root`). They are consumed by the HTTP static file serving pipeline stages that operate on `HttpFileContext`.
+These directives configure static file serving, directory listings, compression, caching behavior, and custom error pages for requests resolved to the filesystem (via `root`). They are consumed by the HTTP static file serving pipeline stages that operate on `HttpFileContext` and `HttpErrorContext`.
 
 ## Categories
 
@@ -9,6 +9,7 @@ These directives configure static file serving, directory listings, compression,
 - Compression: `compressed`, `precompressed`
 - Caching headers: `etag`, `file_cache_control`
 - MIME types: `mime_type`
+- Error pages: `error_page`
 
 See also:
 
@@ -168,3 +169,30 @@ Notes:
 - Multiple `mime_type` directives can be used to map different extensions.
 - If the extension is not found in custom mappings, the built-in database is used as a fallback.
 - If neither custom nor built-in mappings match, the response is sent with no `Content-Type` header.
+
+## `error_page`
+
+Syntax:
+
+```ferron
+example.com {
+    root /srv/www/example
+    error_page 404 /custom/404.html
+    error_page 500 502 503 504 /custom/50x.html
+}
+```
+
+| Arguments | Description | Default |
+| --- | --- | --- |
+| `<number|string>...` `<string>` | One or more HTTP status codes followed by a file path to serve as the error response body. The last argument is always the file path; all preceding arguments are status codes. | built-in error pages |
+
+Notes:
+
+- Only applies when an error response is being generated and no custom response has already been set.
+- The file path is absolute or relative to the current working directory.
+- If the specified error page file does not exist, the directive is skipped and the built-in error page is used.
+- The error page is served with `Content-Type: text/html` and `Content-Length` headers.
+- Any additional headers from the error context (e.g., `Allow` for 405 responses) are preserved.
+- Multiple status codes can be mapped to the same error page in a single directive.
+- Uses streaming I/O for efficient file serving, with zerocopy enabled on Unix systems for uncompressed responses.
+- Can be overridden at different configuration levels (global, host, location) following the standard configuration inheritance rules.
