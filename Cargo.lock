@@ -1109,10 +1109,12 @@ dependencies = [
  "ferron-core",
  "getrandom 0.4.2",
  "rustls",
+ "rustls-native-certs",
  "rustls-pki-types",
  "tempfile",
  "tokio-rustls",
  "vibeio",
+ "webpki-roots",
 ]
 
 [[package]]

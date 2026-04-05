@@ -5,6 +5,8 @@ use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
 use ferron_core::util::parse_duration;
 use ferron_tls::{
+    builder::{build_client_cert_verifier, build_crypto_provider, resolve_protocol_versions},
+    config::TlsServerConfig,
     tickets::{
         generate_initial_ticket_keys, load_ticket_keys, validate_ticket_keys_file, TicketKey,
         TicketKeyRotator,
@@ -201,12 +203,23 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
     }
 
     fn execute(&self, ctx: &mut TcpTlsContext) -> Result<(), Box<dyn std::error::Error>> {
-        // TODO: configure TLS crypto provider
-        let provider = rustls::crypto::aws_lc_rs::default_provider();
-        // TODO: mTLS
-        let config = rustls::ServerConfig::builder_with_provider(Arc::new(provider))
-            .with_safe_default_protocol_versions()?
-            .with_no_client_auth();
+        // Parse TLS configuration from the config block
+        let tls_config = TlsServerConfig::from_config(ctx.config)
+            .map_err(|e| std::io::Error::other(format!("Invalid TLS configuration: {e}")))?;
+
+        // Build crypto provider with custom cipher suites and curves
+        let provider = Arc::new(build_crypto_provider(&tls_config.crypto)?);
+
+        // Resolve protocol versions
+        let protocol_versions = resolve_protocol_versions(&tls_config.crypto)?;
+
+        // Build client certificate verifier (mTLS)
+        let client_verifier = build_client_cert_verifier(&tls_config.client_auth, &provider)?;
+
+        // Build the ServerConfig up to the verifier stage
+        let config = rustls::ServerConfig::builder_with_provider(provider.clone())
+            .with_protocol_versions(protocol_versions)?
+            .with_client_cert_verifier(client_verifier);
 
         // Parse ticket key configuration
         let rotation_config = TicketKeyRotationConfig::from_config(ctx.config);
@@ -279,32 +292,14 @@ impl<'a> Provider<TcpTlsContext<'a>> for TcpTlsManualProvider {
         };
 
         // Load certificates
-        let certs = load_certs(
-            ctx.config
-                .get_value("cert")
-                .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                .as_deref()
-                .ok_or(std::io::Error::other(
-                    "'cert' TLS parameter missing or invalid",
-                ))
-                .map_err(|e| {
-                    std::io::Error::other(format!("Error while loading TLS certificate: {e}"))
-                })?,
-        )?;
+        let certs = load_certs(&tls_config.cert_path).map_err(|e| {
+            std::io::Error::other(format!("Error while loading TLS certificate: {e}"))
+        })?;
 
         // Load private key
-        let private_key = load_private_key(
-            ctx.config
-                .get_value("key")
-                .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                .as_deref()
-                .ok_or(std::io::Error::other(
-                    "'key' TLS parameter missing or invalid",
-                ))
-                .map_err(|e| {
-                    std::io::Error::other(format!("Error while loading TLS private key: {e}"))
-                })?,
-        )?;
+        let private_key = load_private_key(&tls_config.key_path).map_err(|e| {
+            std::io::Error::other(format!("Error while loading TLS private key: {e}"))
+        })?;
 
         // Build the config with certificates
         let mut config_with_tickets =

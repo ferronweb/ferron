@@ -17,8 +17,10 @@ x509-parser = { version = "0.18", optional = true }
 der-parser = { version = "10", optional = true }
 
 [features]
-default = ["ocsp"]
+default = ["ocsp", "native-certs", "webpki-roots"]
 ocsp = ["dep:ferron-ocsp", "dep:x509-parser", "dep:der-parser"]
+native-certs = ["ferron-tls/native-certs"]
+webpki-roots = ["ferron-tls/webpki-roots"]
 
 [dev-dependencies]
 tempfile = "3"

@@ -185,6 +185,29 @@ example.com {
 
 When enabled, certificates with the OCSP Must-Staple extension (TLS Feature `status_request`, RFC 7633) are detected and preloaded immediately for faster initial stapling.
 
+#### `cipher_suite`, `ecdh_curve`, `min_version`, `max_version`, `client_auth`, `client_auth_ca`
+
+These directives configure cipher suites, key exchange groups, TLS protocol versions, and mutual TLS (mTLS).
+See the [TLS Crypto Settings and mTLS](./tls-crypto.md) page for the full reference.
+
+Quick example:
+
+```ferron
+example.com {
+    tls {
+        provider manual
+        cert "/etc/ssl/example.com/cert.pem"
+        key "/etc/ssl/example.com/key.pem"
+        cipher_suite TLS_AES_256_GCM_SHA384
+        ecdh_curve x25519
+        min_version TLSv1.3
+        max_version TLSv1.3
+        client_auth true
+        client_auth_ca "/etc/ssl/internal-ca/ca-bundle.pem"
+    }
+}
+```
+
 ## `admin_email`
 
 Syntax:

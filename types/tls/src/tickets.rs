@@ -941,7 +941,7 @@ mod tests {
 
         // Create initial valid file
         let initial_key = generate_valid_key_record();
-        std::fs::write(&key_file, &initial_key).expect("Failed to create initial file");
+        std::fs::write(&key_file, initial_key).expect("Failed to create initial file");
 
         // Persist new keys
         let new_keys = vec![
