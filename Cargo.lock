@@ -1015,6 +1015,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferron-dns"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "ferron-core",
+]
+
+[[package]]
 name = "ferron-http"
 version = "0.1.0"
 dependencies = [
