@@ -12,4 +12,4 @@ ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-procfs = "0.17"
+procfs = "0.18"
