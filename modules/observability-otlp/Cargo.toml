@@ -1,0 +1,29 @@
+[package]
+name = "ferron-observability-otlp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ferron-observability = { path = "../../types/observability" }
+ferron-core = { path = "../../core" }
+kanal = "0.1.1"
+tokio-util = "0.7.18"
+tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread"] }
+opentelemetry = { version = "0.31", features = ["metrics", "logs", "trace"] }
+opentelemetry-sdk = { version = "0.31", package = "opentelemetry_sdk", features = [
+    "rt-tokio",
+    "experimental_logs_batch_log_processor_with_async_runtime",
+    "experimental_metrics_periodicreader_with_async_runtime",
+    "experimental_trace_batch_span_processor_with_async_runtime",
+] }
+opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic", "http-proto", "http-json"] }
+reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+tonic = "0.14"
+hyper-rustls = { version = "0.27", features = ["http1", "http2"] }
+hyper = "1"
+rustls = "0.23"
+rustls-platform-verifier = "0.6"
+dashmap = "6.1"
+
+[package.metadata.cargo-shear]
+ignored = ["opentelemetry-http"]

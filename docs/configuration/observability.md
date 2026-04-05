@@ -210,3 +210,113 @@ Each HTTP request generates a trace span:
 
 Trace events are consumed by observability backends that support tracing (e.g.
 OTLP).
+
+## OTLP (OpenTelemetry Protocol)
+
+The `observability-otlp` module exports logs, metrics, and traces to an OTLP
+collector. It is configured via `observability` blocks with `provider "otlp"`.
+
+### Basic Configuration
+
+```ferron
+example.com {
+    observability "otlp" {
+        provider "otlp"
+
+        logs "https://collector:4318/v1/logs" {
+            protocol "http/protobuf"
+        }
+
+        metrics "https://collector:4318/v1/metrics" {
+            protocol "http/protobuf"
+        }
+
+        traces "https://collector:4317" {
+            protocol "grpc"
+        }
+
+        service_name "my-service"
+    }
+}
+```
+
+### Signal Sub-Blocks
+
+Each signal type (`logs`, `metrics`, `traces`) is configured independently.
+Omitting a signal disables it for that host.
+
+| Directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `logs` | `<endpoint>` | OTLP logs endpoint. | disabled |
+| `metrics` | `<endpoint>` | OTLP metrics endpoint. | disabled |
+| `traces` | `<endpoint>` | OTLP traces endpoint. | disabled |
+
+Each signal sub-block supports these nested directives:
+
+| Directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `protocol` | `<string>` | Transport protocol. One of `grpc`, `http/protobuf`, `http/json`. | `grpc` |
+| `authorization` | `<string>` | HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC). | none |
+
+### Global Options
+
+These directives sit at the `observability` block level (not inside signal sub-blocks):
+
+| Directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `service_name` | `<string>` | OTLP resource service name. | `"ferron"` |
+| `no_verify` | `<bool>` | Disable TLS certificate verification. Use with caution — only for development or trusted internal networks. | `false` |
+
+### Signal Correlation
+
+All three signals from the same HTTP request share the same `trace_id`. When a
+request enters the handler, a trace span is started. Any log events or metric
+records generated during that request are automatically tagged with the span's
+`trace_id` and `span_id`. This enables correlated queries like "show me all logs
+and metrics for trace `abc123`".
+
+### Per-Host Configuration
+
+Different hosts can send to different collectors:
+
+```ferron
+api.example.com {
+    observability "otlp" {
+        provider "otlp"
+        service_name "api"
+
+        logs "https://prod-collector:4318/v1/logs" {}
+        metrics "https://prod-collector:4318/v1/metrics" {}
+        traces "https://prod-collector:4317" {}
+    }
+}
+
+admin.example.com {
+    observability "otlp" {
+        provider "otlp"
+        service_name "admin"
+
+        logs "https://dev-collector:4318/v1/logs" {
+            protocol "http/json"
+        }
+    }
+}
+```
+
+### Mixing Observability Backends
+
+You can combine OTLP with other backends (console, file) on the same host:
+
+```ferron
+example.com {
+    log "access.log" {
+        format "json"
+    }
+
+    observability "otlp" {
+        provider "otlp"
+
+        metrics "https://collector:4318/v1/metrics" {}
+    }
+}
+```
