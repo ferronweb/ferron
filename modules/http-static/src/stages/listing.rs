@@ -74,7 +74,7 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
         let description = vibeio::fs::read_to_string(&maindesc_path).await.ok();
 
         // Get original request path for links
-        let request_path = request.uri().path();
+        let request_path = (ctx.http.original_uri.as_ref().unwrap_or(request.uri())).path();
 
         let html = generate_directory_listing(read_dir, request_path, description)
             .await
