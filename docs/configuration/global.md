@@ -15,6 +15,7 @@ These directives belong in top-level global blocks:
 - Default ports: `default_http_port`, `default_https_port`
 - Admin API: `admin`
 - PROXY protocol: `protocol_proxy`
+- Reverse proxy: `concurrent_conns`
 - Observability: `observability`, `log`, `error_log`, `console_log`
 
 ## `default_http_port`
@@ -396,6 +397,34 @@ console_log {
 # Disable console logging
 console_log false
 ```
+
+## `concurrent_conns`
+
+Sets the global maximum number of concurrent TCP connections maintained in the reverse proxy keep-alive connection pool.
+
+Syntax:
+
+```ferron
+{
+    concurrent_conns 10000
+}
+
+example.com {
+    proxy http://localhost:8080 {
+        keepalive true
+    }
+}
+```
+
+| Arguments | Description | Default |
+| --- | --- | --- |
+| `<number>` | Maximum concurrent TCP connections in the pool. Must be non-negative. Unix socket connections are always unbounded. | `16384` |
+
+Notes:
+
+- This limit is shared across all hosts that use the `proxy` directive.
+- The connection pool is created lazily on the first request that needs it, reading this value at creation time.
+- Per-upstream `limit` directives inside `proxy` blocks further restrict connections to individual backends.
 
 ## Notes
 

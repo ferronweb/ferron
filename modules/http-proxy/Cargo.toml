@@ -1,0 +1,33 @@
+[package]
+name = "ferron-http-proxy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+vibeio = { version = "0.2.6", default-features = false, features = ["time"] }
+vibeio-hyper = { version = "0.2.7" }
+vibeio-http = { version = "0.3.0", default-features = false, features = ["h1"] }
+hyper = { version = "1", features = ["client", "http1", "http2"] }
+http = "1"
+http-body = "1"
+http-body-util = "0.1"
+bytes = "1"
+ferron-core = { path = "../../core" }
+ferron-http = { path = "../../types/http" }
+ferron-observability = { path = "../../types/observability" }
+connpool = "0.2"
+futures-util = "0.3"
+tokio = { version = "1", features = ["rt", "io-util", "sync", "macros", "time"] }
+tokio-rustls = "0.26"
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls-pki-types = "1"
+rustls-platform-verifier = "0.5"
+rand = "0.9"
+anyhow = "1"
+hickory-resolver = { version = "0.24", optional = true }
+hickory-proto = { version = "0.24", optional = true }
+
+[features]
+default = ["srv-lookup"]
+srv-lookup = ["hickory-resolver", "hickory-proto"]
