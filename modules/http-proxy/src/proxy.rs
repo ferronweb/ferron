@@ -19,7 +19,7 @@ use rustls_platform_verifier::BuilderVerifierExt;
 use tokio_rustls::TlsConnector;
 use vibeio_hyper::VibeioIo;
 
-use crate::config::ProxyConfig;
+use crate::config::{HeaderAction, ProxyConfig};
 use crate::connections::{ConnectionManager, PoolKey};
 use crate::send_net_io::{SendTcpStreamPoll, SendUnixStreamPoll};
 use crate::send_request::{
@@ -43,6 +43,59 @@ fn client_ip_from_header_enabled(ctx: &HttpContext) -> bool {
         .is_some()
 }
 
+/// Interpolate header value with HTTP request variables.
+///
+/// Scans for `{{...}}` syntax and resolves variables using the context's
+/// `Variables` implementation. Plain strings without `{{` are returned as-is.
+fn interpolate_header_value(value: &str, ctx: &HttpContext) -> String {
+    if !value.contains("{{") {
+        return value.to_string();
+    }
+
+    let mut result = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '{' && chars.peek() == Some(&'{') {
+            chars.next(); // consume second '{'
+            let mut var_name = String::new();
+            loop {
+                match chars.next() {
+                    Some('}') if chars.peek() == Some(&'}') => {
+                        chars.next(); // consume second '}'
+                        break;
+                    }
+                    Some(c) => var_name.push(c),
+                    None => {
+                        // Unterminated {{ — emit literally
+                        result.push_str("{{");
+                        result.push_str(&var_name);
+                        return result;
+                    }
+                }
+            }
+            // Resolve the variable
+            if let Some(env_var) = var_name.strip_prefix("env.") {
+                if let Ok(env_value) = std::env::var(env_var) {
+                    result.push_str(&env_value);
+                } else {
+                    result.push_str(&format!("{{{{{}}}}}", var_name));
+                }
+            } else if let Some(resolved) =
+                <dyn ferron_core::config::Variables>::resolve(ctx, &var_name)
+            {
+                result.push_str(&resolved);
+            } else {
+                result.push_str(&format!("{{{{{}}}}}", var_name));
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+
+    result
+}
+
 /// Construct proxy request with header transformations.
 fn construct_proxy_request(
     ctx: &mut HttpContext,
@@ -51,6 +104,10 @@ fn construct_proxy_request(
 ) -> Result<Request<ProxyBody>, Box<dyn std::error::Error + Send + Sync>> {
     let req = ctx.req.take().ok_or("no request in context")?;
     let (mut parts, body) = req.into_parts();
+    let req_clone = Request::from_parts(
+        parts.clone(),
+        Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync(),
+    );
 
     let mut uri_parts = proxy_request_url.clone().into_parts();
     if let Some(pq) = parts.uri.path_and_query() {
@@ -58,22 +115,44 @@ fn construct_proxy_request(
     }
     parts.uri = http::Uri::from_parts(uri_parts)?;
 
+    // Remove headers
     for name in &config.headers_to_remove {
         parts.headers.remove(name);
     }
+
+    ctx.req = Some(req_clone);
+
+    // Replace headers (with interpolation)
     for (name, value) in &config.headers_to_replace {
         parts.headers.remove(name);
+        let resolved = interpolate_header_value(value, ctx);
         parts.headers.insert(
             name.clone(),
-            HeaderValue::from_str(value).map_err(|e| format!("Invalid header value: {e}"))?,
+            HeaderValue::from_str(&resolved).map_err(|e| {
+                ctx.req = None;
+                format!("Invalid header value: {e}")
+            })?,
         );
     }
-    for (name, value) in &config.headers_to_add {
+
+    // Add headers (with interpolation)
+    for action in &config.headers_to_add {
+        let resolved = match action {
+            HeaderAction::Append(_, v) => interpolate_header_value(v, ctx),
+        };
+        let (name, value) = match action {
+            HeaderAction::Append(n, _) => (n.clone(), resolved),
+        };
         parts.headers.append(
-            name.clone(),
-            HeaderValue::from_str(value).map_err(|e| format!("Invalid header value: {e}"))?,
+            name,
+            HeaderValue::from_str(&value).map_err(|e| {
+                ctx.req = None;
+                format!("Invalid header value: {e}")
+            })?,
         );
     }
+
+    ctx.req = None;
 
     let client_ip = ctx.remote_address.ip();
     let proto = if ctx.encrypted { "https" } else { "http" };

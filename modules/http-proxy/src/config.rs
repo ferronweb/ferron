@@ -11,6 +11,7 @@ use std::time::Duration;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+    Variables,
 };
 use ferron_core::util::parse_duration;
 use http::header::HeaderName;
@@ -21,6 +22,15 @@ use crate::upstream::{LoadBalancerAlgorithm, ProxyHeader, Upstream, UpstreamConf
 
 /// Default keep-alive idle timeout in milliseconds.
 const DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS: u64 = 60_000;
+
+/// A header action: currently only append is supported for `request_header +Name`.
+/// The value is stored as a raw `String` with potential interpolation
+/// syntax (`{{...}}`); it is resolved at request time.
+#[derive(Clone)]
+pub enum HeaderAction {
+    /// Append the given value to the header.
+    Append(HeaderName, String),
+}
 
 /// Parsed reverse proxy configuration.
 #[derive(Clone)]
@@ -37,8 +47,11 @@ pub struct ProxyConfig {
     pub intercept_errors: bool,
     pub no_verification: bool,
     pub proxy_header: Option<ProxyHeader>,
-    pub headers_to_add: Vec<(HeaderName, String)>,
+    /// Headers to add or append (values may contain `{{...}}` interpolation syntax).
+    pub headers_to_add: Vec<HeaderAction>,
+    /// Headers to replace (values may contain `{{...}}` interpolation syntax).
     pub headers_to_replace: Vec<(HeaderName, String)>,
+    /// Headers to remove.
     pub headers_to_remove: Vec<HeaderName>,
     pub concurrent_conns: Option<usize>,
     /// Pre-built map from upstream URL to idle timeout for O(1) lookup.
@@ -69,6 +82,20 @@ impl Default for ProxyConfig {
     }
 }
 
+/// Resolve a config value as a string, interpolating `{{env.*}}` variables only.
+///
+/// Upstream URLs are resolved at config parse time, so only `env.*` variables
+/// are available (no HTTP request data at this stage).
+fn resolve_config_value_with_env(value: &ServerConfigurationValue) -> Option<String> {
+    struct EnvResolver;
+    impl Variables for EnvResolver {
+        fn resolve(&self, _name: &str) -> Option<String> {
+            None // No request-scoped variables available at parse time
+        }
+    }
+    value.as_string_with_interpolations(&EnvResolver)
+}
+
 /// Parse proxy configuration from a server configuration block.
 pub fn parse_proxy_config(
     ctx: &ferron_http::HttpContext,
@@ -84,15 +111,14 @@ pub fn parse_proxy_config(
     // Check for shorthand upstreams in args (e.g. `proxy http://a http://b { ... }`)
     let default_timeout = Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS);
     for arg in &entry.args {
-        if let Some(url) = arg.as_str() {
+        if let Some(url) = resolve_config_value_with_env(arg) {
             cfg.upstreams.push(Upstream::Static(UpstreamConfig {
-                url: url.to_string(),
+                url: url.clone(),
                 unix_socket: None,
                 limit: None,
                 idle_timeout: Some(default_timeout),
             }));
-            cfg.idle_timeout_map
-                .insert(url.to_string(), default_timeout);
+            cfg.idle_timeout_map.insert(url, default_timeout);
         }
     }
 
@@ -281,7 +307,7 @@ fn parse_upstream_entry(
     let url = entry
         .args
         .first()
-        .and_then(|v| v.as_str())
+        .and_then(resolve_config_value_with_env)
         .ok_or("upstream requires a URL argument")?;
 
     let mut limit: Option<usize> = None;
@@ -318,9 +344,9 @@ fn parse_upstream_entry(
                     if let Some(val) = entries
                         .first()
                         .and_then(|e| e.args.first())
-                        .and_then(|v| v.as_str())
+                        .and_then(resolve_config_value_with_env)
                     {
-                        unix_socket = Some(val.to_string());
+                        unix_socket = Some(val);
                     }
                 }
                 _ => {}
@@ -333,7 +359,7 @@ fn parse_upstream_entry(
     }
 
     cfg.upstreams.push(Upstream::Static(UpstreamConfig {
-        url: url.to_string(),
+        url: url.clone(),
         unix_socket,
         limit,
         idle_timeout,
@@ -341,7 +367,7 @@ fn parse_upstream_entry(
 
     // Populate the O(1) lookup map
     cfg.idle_timeout_map.insert(
-        url.to_string(),
+        url.clone(),
         idle_timeout.unwrap_or(Duration::from_millis(DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS)),
     );
 
@@ -435,33 +461,36 @@ fn parse_request_header_entry(
 
     match first_arg.chars().next() {
         Some('+') => {
+            // Append header — value may contain interpolation syntax
             let name = &first_arg[1..];
             let value = entry
                 .args
                 .get(1)
-                .and_then(|v| v.as_str())
+                .and_then(resolve_config_value_with_env)
                 .ok_or("request_header +Name requires a value")?;
             let header_name = HeaderName::from_str(name)
                 .map_err(|e| format!("Invalid header name '{name}': {e}"))?;
-            cfg.headers_to_add.push((header_name, value.to_string()));
+            cfg.headers_to_add
+                .push(HeaderAction::Append(header_name, value));
         }
         Some('-') => {
+            // Remove header
             let name = &first_arg[1..];
             let header_name = HeaderName::from_str(name)
                 .map_err(|e| format!("Invalid header name '{name}': {e}"))?;
             cfg.headers_to_remove.push(header_name);
         }
         _ => {
+            // Replace header — value may contain interpolation syntax
             let name = first_arg;
             let value = entry
                 .args
                 .get(1)
-                .and_then(|v| v.as_str())
+                .and_then(resolve_config_value_with_env)
                 .ok_or("request_header Name requires a value")?;
             let header_name = HeaderName::from_str(name)
                 .map_err(|e| format!("Invalid header name '{name}': {e}"))?;
-            cfg.headers_to_replace
-                .push((header_name, value.to_string()));
+            cfg.headers_to_replace.push((header_name, value));
         }
     }
 
@@ -480,8 +509,8 @@ impl ConfigurationValidator for ProxyConfigurationValidator {
     ) -> Result<(), Box<dyn Error>> {
         if is_global {
             // Validate global concurrent_conns directive
-            if let Some(entries) = config.directives.get("proxy_concurrent_conns") {
-                used_directives.insert("proxy_concurrent_conns".to_string());
+            if let Some(entries) = config.directives.get("concurrent_conns") {
+                used_directives.insert("concurrent_conns".to_string());
                 for e in entries {
                     if let Some(val) = e.args.first().and_then(|v| v.as_number()) {
                         if val < 0 {
