@@ -655,7 +655,7 @@ async fn establish_and_send(
             }
         }
         #[cfg(not(unix))]
-        unreachable!()
+        unreachable!();
     } else {
         let host = proxy_url.host().ok_or("upstream URL has no host")?;
         let port = proxy_url
