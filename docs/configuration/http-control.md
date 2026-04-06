@@ -150,7 +150,7 @@ example.com {
 
 | Arguments | Description | Default |
 | --- | --- | --- |
-| `<boolean>` | Enables or disables automatic 301 redirects from directory paths without a trailing slash to the same path with a trailing slash. | `on` (enabled) |
+| `<boolean>` | Enables or disables automatic 301 redirects from directory paths without a trailing slash to the same path with a trailing slash. | `true` (enabled) |
 
 Notes:
 

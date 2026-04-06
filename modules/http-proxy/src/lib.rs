@@ -1,4 +1,7 @@
 //! HTTP reverse proxy module for Ferron.
+//!
+//! Provides pipeline stages for:
+//! - `ReverseProxyStage` — reverse proxying with load balancing, health checks, and connection pooling
 
 mod config;
 mod connections;
@@ -149,15 +152,7 @@ impl ProxyState {
 
 /// Module loader for the HTTP reverse proxy module.
 #[derive(Default)]
-pub struct ReverseProxyModuleLoader {
-    _private: (),
-}
-
-impl ReverseProxyModuleLoader {
-    pub fn new() -> Self {
-        Self { _private: () }
-    }
-}
+pub struct ReverseProxyModuleLoader;
 
 impl ModuleLoader for ReverseProxyModuleLoader {
     fn register_global_configuration_validators(

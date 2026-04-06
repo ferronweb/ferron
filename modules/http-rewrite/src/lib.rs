@@ -9,7 +9,6 @@ mod validator;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use ferron_core::config::ServerConfigurationValue;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::pipeline::{PipelineError, Stage};
@@ -24,16 +23,7 @@ use crate::validator::RewriteValidator;
 
 /// Module loader for the HTTP rewrite module.
 #[derive(Default)]
-pub struct HttpRewriteModuleLoader {
-    _private: (),
-}
-
-impl HttpRewriteModuleLoader {
-    /// Create a new module loader.
-    pub fn new() -> Self {
-        Self { _private: () }
-    }
-}
+pub struct HttpRewriteModuleLoader;
 
 impl ModuleLoader for HttpRewriteModuleLoader {
     fn register_per_protocol_configuration_validators(
@@ -57,7 +47,7 @@ impl ModuleLoader for HttpRewriteModuleLoader {
 /// Pipeline stage that applies URL rewrite rules from configuration.
 struct RewriteStage;
 
-#[async_trait(?Send)]
+#[async_trait::async_trait(?Send)]
 impl Stage<HttpContext> for RewriteStage {
     fn name(&self) -> &str {
         "rewrite"

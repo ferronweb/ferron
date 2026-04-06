@@ -5,7 +5,6 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
@@ -178,7 +177,7 @@ impl HttpResponseStage {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait::async_trait(?Send)]
 impl Stage<HttpContext> for HttpResponseStage {
     fn name(&self) -> &str {
         "http_response"

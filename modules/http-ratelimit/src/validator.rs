@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 
 use ferron_core::config::validator::ConfigurationValidator;
-use ferron_core::config::ServerConfigurationBlock;
+use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
 
 use crate::key_extractor::KeyExtractor;
 
@@ -33,14 +33,12 @@ impl ConfigurationValidator for RateLimitValidator {
         _is_global: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Check if this block contains a `rate_limit` directive
-        if !config.directives.contains_key("rate_limit") {
-            return Ok(());
-        }
-
-        // Validate each rate_limit entry
-        for entry in config.directives.get("rate_limit").into_iter().flatten() {
-            if let Some(ref children) = entry.children {
-                self.validate_rate_limit_block(children, used_directives)?;
+        if let Some(entries) = config.directives.get("rate_limit") {
+            used_directives.insert("rate_limit".to_string());
+            for entry in entries {
+                if let Some(ref children) = entry.children {
+                    self.validate_rate_limit_block(children)?;
+                }
             }
         }
 
@@ -52,52 +50,44 @@ impl RateLimitValidator {
     fn validate_rate_limit_block(
         &self,
         block: &ServerConfigurationBlock,
-        used_directives: &mut HashSet<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Check all directives are recognized
         for directive_name in block.directives.keys() {
             if !RECOGNIZED_DIRECTIVES.contains(&directive_name.as_str()) {
-                return Err(
-                    format!("Unknown directive in rate_limit block: {directive_name}").into(),
-                );
+                return Err(format!(
+                    "Invalid `{directive_name}` — unknown directive in rate_limit block"
+                )
+                .into());
             }
         }
 
-        // `rate` is required and must be a positive integer
+        // Validate `rate` — required, must be a positive integer
         let rate_entry = block.directives.get("rate");
         if rate_entry.is_none() {
-            return Err("rate_limit block is missing required 'rate' directive".into());
+            return Err("Invalid `rate_limit` — missing required `rate` directive".into());
         }
 
         for entry in rate_entry.into_iter().flatten() {
-            let value = entry
-                .args
-                .first()
-                .ok_or("'rate' directive requires a value")?;
-            let n = value.as_number().ok_or("'rate' must be an integer value")?;
-            if n <= 0 {
-                return Err("'rate' must be a positive integer".into());
-            }
+            self.validate_number_entry(entry, "rate", 1)?;
         }
 
-        // Validate optional directives
+        // Validate `burst` — optional, must be a non-negative integer
         if let Some(entries) = block.directives.get("burst") {
             for entry in entries {
-                if let Some(value) = entry.args.first() {
-                    if value.as_number().is_none() {
-                        return Err("'burst' must be an integer value".into());
-                    }
-                }
+                self.validate_number_entry(entry, "burst", 0)?;
             }
         }
 
+        // Validate `key` — optional, must be a valid key extractor string
         if let Some(entries) = block.directives.get("key") {
             for entry in entries {
                 if let Some(value) = entry.args.first() {
-                    let key_str = value.as_str().ok_or("'key' must be a string value")?;
+                    let key_str = value
+                        .as_str()
+                        .ok_or("Invalid `key` — must be a string value")?;
                     if KeyExtractor::from_str(key_str).is_none() {
                         return Err(format!(
-                            "'key' must be one of: remote_address, uri, request.header.<name> (got '{key_str}')"
+                            "Invalid `key` — must be one of: remote_address, uri, request.header.<name> (got '{key_str}')"
                         )
                         .into());
                     }
@@ -105,63 +95,64 @@ impl RateLimitValidator {
             }
         }
 
+        // Validate `window` — optional, must be a positive integer
         if let Some(entries) = block.directives.get("window") {
             for entry in entries {
-                if let Some(value) = entry.args.first() {
-                    let n = value
-                        .as_number()
-                        .ok_or("'window' must be an integer value (seconds)")?;
-                    if n <= 0 {
-                        return Err("'window' must be a positive integer".into());
-                    }
-                }
+                self.validate_number_entry(entry, "window", 1)?;
             }
         }
 
+        // Validate `deny_status` — optional, must be a valid HTTP status code
         if let Some(entries) = block.directives.get("deny_status") {
             for entry in entries {
                 if let Some(value) = entry.args.first() {
                     let n = value
                         .as_number()
-                        .ok_or("'deny_status' must be an integer value")?;
+                        .ok_or("Invalid `deny_status` — must be an integer value")?;
                     if !(100..=599).contains(&n) {
                         return Err(
-                            "'deny_status' must be a valid HTTP status code (100-599)".into()
+                            "Invalid `deny_status` — must be a valid HTTP status code (100-599)"
+                                .into(),
                         );
                     }
                 }
             }
         }
 
+        // Validate `bucket_ttl` — optional, must be a positive integer
         if let Some(entries) = block.directives.get("bucket_ttl") {
             for entry in entries {
-                if let Some(value) = entry.args.first() {
-                    let n = value
-                        .as_number()
-                        .ok_or("'bucket_ttl' must be an integer value (seconds)")?;
-                    if n <= 0 {
-                        return Err("'bucket_ttl' must be a positive integer".into());
-                    }
-                }
+                self.validate_number_entry(entry, "bucket_ttl", 1)?;
             }
         }
 
+        // Validate `max_buckets` — optional, must be a positive integer
         if let Some(entries) = block.directives.get("max_buckets") {
             for entry in entries {
-                if let Some(value) = entry.args.first() {
-                    let n = value
-                        .as_number()
-                        .ok_or("'max_buckets' must be an integer value")?;
-                    if n <= 0 {
-                        return Err("'max_buckets' must be a positive integer".into());
-                    }
-                }
+                self.validate_number_entry(entry, "max_buckets", 1)?;
             }
         }
 
-        // Mark rate_limit itself as used
-        used_directives.insert("rate_limit".to_string());
+        Ok(())
+    }
 
+    /// Validate that an entry has exactly one number argument >= min_value.
+    fn validate_number_entry(
+        &self,
+        entry: &ServerConfigurationDirectiveEntry,
+        name: &str,
+        min: i64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let value = entry
+            .args
+            .first()
+            .ok_or(format!("Invalid `{name}` — must be an integer value"))?;
+        let n = value
+            .as_number()
+            .ok_or(format!("Invalid `{name}` — must be an integer value"))?;
+        if n < min {
+            return Err(format!("Invalid `{name}` — must be >= {min}").into());
+        }
         Ok(())
     }
 }

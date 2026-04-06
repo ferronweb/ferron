@@ -22,7 +22,7 @@ impl ModuleLoader for HttpRateLimitModuleLoader {
     ) {
         registry
             .entry("http")
-            .or_insert(Vec::new())
+            .or_default()
             .push(Box::new(RateLimitValidator));
     }
 

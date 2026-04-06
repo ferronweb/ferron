@@ -2,8 +2,8 @@
 
 mod error_page;
 mod listing;
-mod r#static;
+mod static_file;
 
 pub use error_page::ErrorPageStage;
 pub use listing::DirectoryListingStage;
-pub use r#static::StaticFileStage;
+pub use static_file::StaticFileStage;

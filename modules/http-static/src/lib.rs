@@ -28,15 +28,7 @@ pub use validator::HttpStaticConfigurationValidator;
 /// Note: This loader does not register any `Module` instances. All functionality
 /// is provided through pipeline stages.
 #[derive(Default)]
-pub struct StaticFileModuleLoader {
-    _private: (),
-}
-
-impl StaticFileModuleLoader {
-    pub fn new() -> Self {
-        Self { _private: () }
-    }
-}
+pub struct StaticFileModuleLoader;
 
 impl ModuleLoader for StaticFileModuleLoader {
     fn register_global_configuration_validators(

@@ -43,13 +43,13 @@ Syntax:
 ```ferron
 example.com {
     root /srv/www/example
-    directory_listing on
+    directory_listing true
 }
 ```
 
 | Arguments | Description | Default |
 | --- | --- | --- |
-| `<boolean>` | Enables or disables auto-generated HTML directory listings when a request path resolves to a directory and no index file is found. | `off` |
+| `<boolean>` | Enables or disables auto-generated HTML directory listings when a request path resolves to a directory and no index file is found. | `false` |
 
 Notes:
 
@@ -66,13 +66,13 @@ Syntax:
 ```ferron
 example.com {
     root /srv/www/example
-    compressed on
+    compressed true
 }
 ```
 
 | Arguments | Description | Default |
 | --- | --- | --- |
-| `<boolean>` | Enables or disables on-the-fly response body compression based on the `Accept-Encoding` request header. | `on` |
+| `<boolean>` | Enables or disables on-the-fly response body compression based on the `Accept-Encoding` request header. | `true` |
 
 Notes:
 
@@ -88,13 +88,13 @@ Syntax:
 ```ferron
 example.com {
     root /srv/www/example
-    precompressed on
+    precompressed true
 }
 ```
 
 | Arguments | Description | Default |
 | --- | --- | --- |
-| `<boolean>` | Enables serving pre-compressed sidecar files (e.g., `style.css.gz`, `app.js.br`) instead of compressing on the fly. | `off` |
+| `<boolean>` | Enables serving pre-compressed sidecar files (e.g., `style.css.gz`, `app.js.br`) instead of compressing on the fly. | `false` |
 
 Notes:
 
@@ -110,13 +110,13 @@ Syntax:
 ```ferron
 example.com {
     root /srv/www/example
-    etag on
+    etag true
 }
 ```
 
 | Arguments | Description | Default |
 | --- | --- | --- |
-| `<boolean>` | Enables or disables ETag generation for static file responses. | `on` |
+| `<boolean>` | Enables or disables ETag generation for static file responses. | `true` |
 
 Notes:
 

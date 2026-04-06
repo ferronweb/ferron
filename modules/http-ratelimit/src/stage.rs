@@ -7,7 +7,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::{HttpContext, HttpResponse};
@@ -128,7 +127,7 @@ impl RateLimitStage {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait::async_trait(?Send)]
 impl Stage<HttpContext> for RateLimitStage {
     fn name(&self) -> &str {
         "rate_limit"

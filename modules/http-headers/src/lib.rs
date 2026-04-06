@@ -263,15 +263,7 @@ fn interpolate_header_value(value: &str, ctx: &HttpContext) -> String {
 /// Note: This loader does not register any `Module` instances. All functionality
 /// is provided through pipeline stages.
 #[derive(Default)]
-pub struct HttpHeadersModuleLoader {
-    _private: (),
-}
-
-impl HttpHeadersModuleLoader {
-    pub fn new() -> Self {
-        Self { _private: () }
-    }
-}
+pub struct HttpHeadersModuleLoader;
 
 impl ModuleLoader for HttpHeadersModuleLoader {
     fn register_global_configuration_validators(
@@ -290,7 +282,7 @@ impl ModuleLoader for HttpHeadersModuleLoader {
     ) {
         registry
             .entry("http")
-            .or_insert(Vec::new())
+            .or_default()
             .push(Box::new(HttpHeadersConfigurationValidator));
     }
 
