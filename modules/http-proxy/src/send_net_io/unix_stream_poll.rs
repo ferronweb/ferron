@@ -179,7 +179,7 @@ impl Drop for SendUnixStreamPoll {
     }
 }
 
-// Safety: vibeio's internal Rc in SharedFd is only cloned during async operations.
+// Safety: vibeio's internal Rc in InnerRawFd is only cloned during async operations.
 unsafe impl Send for SendUnixStreamPoll {}
 
 /// Drop guard for `SendUnixStreamPoll`.
