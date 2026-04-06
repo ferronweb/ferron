@@ -46,6 +46,19 @@ impl ModuleLoader for StaticFileModuleLoader {
         registry.push(Box::new(HttpStaticConfigurationValidator));
     }
 
+    fn register_per_protocol_configuration_validators(
+        &mut self,
+        registry: &mut std::collections::HashMap<
+            &'static str,
+            Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
+        >,
+    ) {
+        registry
+            .entry("http")
+            .or_insert(Vec::new())
+            .push(Box::new(HttpStaticConfigurationValidator));
+    }
+
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         registry
             .with_stage::<HttpFileContext, _>(|| Arc::new(DirectoryListingStage))

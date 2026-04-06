@@ -53,7 +53,7 @@ pub trait ModuleLoader {
         &mut self,
         registry: &mut HashMap<
             &'static str,
-            Box<dyn crate::config::validator::ConfigurationValidator>,
+            Vec<Box<dyn crate::config::validator::ConfigurationValidator>>,
         >,
     ) {
     }

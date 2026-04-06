@@ -348,7 +348,7 @@ fn run_configuration_validators(
     global_validator_registry: &[Box<dyn ferron_core::config::validator::ConfigurationValidator>],
     per_protocol_validator_registry: &HashMap<
         &'static str,
-        Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Run global validators
@@ -383,20 +383,22 @@ fn run_configuration_validators(
         loader.register_per_protocol_configuration_blocks(config, &mut config_blocks_registry);
     }
     for (protocol, blocks) in &config_blocks_registry {
-        if let Some(validator) = per_protocol_validator_registry.get(protocol) {
+        if let Some(validators) = per_protocol_validator_registry.get(protocol) {
             for block in blocks {
                 let mut used_directives = HashSet::new();
-                validator
-                    .validate_block(block.1, &mut used_directives, false)
-                    .map_err(|e| {
-                        anyhow::anyhow!(
-                            "Invalid configuration ({}): {e}",
-                            format_location(
-                                Some(&format!("{protocol} {}", block.0)),
-                                config.global_config.span.as_ref()
+                for validator in validators {
+                    validator
+                        .validate_block(block.1, &mut used_directives, false)
+                        .map_err(|e| {
+                            anyhow::anyhow!(
+                                "Invalid configuration ({}): {e}",
+                                format_location(
+                                    Some(&format!("{protocol} {}", block.0)),
+                                    config.global_config.span.as_ref()
+                                )
                             )
-                        )
-                    })?;
+                        })?;
+                }
                 let unused_directives: Vec<String> = block
                     .1
                     .directives
@@ -582,7 +584,7 @@ fn load_modules(
     global_validator_registry: Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
     per_protocol_validator_registry: HashMap<
         &'static str,
-        Box<dyn ferron_core::config::validator::ConfigurationValidator>,
+        Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = None;

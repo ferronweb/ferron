@@ -107,6 +107,19 @@ impl ModuleLoader for BasicHttpModuleLoader {
         registry.push(Box::new(HttpConfigurationValidator));
     }
 
+    fn register_per_protocol_configuration_validators(
+        &mut self,
+        registry: &mut std::collections::HashMap<
+            &'static str,
+            Vec<Box<dyn ferron_core::config::validator::ConfigurationValidator>>,
+        >,
+    ) {
+        registry
+            .entry("http")
+            .or_insert(Vec::new())
+            .push(Box::new(HttpConfigurationValidator));
+    }
+
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         registry
             .with_stage::<HttpContext, _>(|| Arc::new(ClientIpFromHeaderStage))
