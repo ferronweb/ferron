@@ -13,7 +13,6 @@ use http::{Request, Response, StatusCode};
 use http_body_util::{BodyExt, Empty};
 use hyper::body::Incoming;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::crypto::CryptoProvider;
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
 use rustls_platform_verifier::BuilderVerifierExt;
@@ -228,8 +227,7 @@ impl ServerCertVerifier for NoServerVerifier {
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        CryptoProvider::get_default()
-            .unwrap()
+        rustls::crypto::aws_lc_rs::default_provider()
             .signature_verification_algorithms
             .supported_schemes()
     }
