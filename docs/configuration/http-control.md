@@ -144,7 +144,7 @@ Syntax:
 ```ferron
 example.com {
     root /srv/www/example
-    trailing_slash_redirect off
+    trailing_slash_redirect false
 }
 ```
 
