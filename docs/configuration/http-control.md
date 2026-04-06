@@ -86,12 +86,6 @@ example.com {
 | --- | --- | --- |
 | `<number>` or no argument | Associates a nested block with a specific error code, or with a default error case when no code is given. | not configured |
 
-Current status:
-
-- `handle_error` is prepared and stored by the resolver.
-- It is not currently applied by the HTTP request handler.
-- Treat it as reserved for future error-layer handling.
-
 ## `root`
 
 Syntax:
@@ -120,14 +114,14 @@ Syntax:
 ```ferron
 example.com {
     http {
-        url_sanitize false
+        url_sanitize
     }
 }
 ```
 
 | Arguments | Description | Default |
 | --- | --- | --- |
-| `<boolean>` | Enables or disables URL path sanitization. When enabled (the default), dangerous sequences such as path traversal attempts (`../`, `..\\`), null bytes, and invalid percent-encodings are removed or normalized. | `true` (enabled) |
+| *(optional)* `<boolean>` | Enables or disables URL path sanitization. When enabled (the default), dangerous sequences such as path traversal attempts (`../`, `..\\`), null bytes, and invalid percent-encodings are removed or normalized. When omitted, defaults to `true`. | `true` (enabled) |
 
 Notes:
 
@@ -144,13 +138,13 @@ Syntax:
 ```ferron
 example.com {
     root /srv/www/example
-    trailing_slash_redirect false
+    trailing_slash_redirect
 }
 ```
 
 | Arguments | Description | Default |
 | --- | --- | --- |
-| `<boolean>` | Enables or disables automatic 301 redirects from directory paths without a trailing slash to the same path with a trailing slash. | `true` (enabled) |
+| *(optional)* `<boolean>` | Enables or disables automatic 301 redirects from directory paths without a trailing slash to the same path with a trailing slash. When omitted, defaults to `true`. | `true` (enabled) |
 
 Notes:
 

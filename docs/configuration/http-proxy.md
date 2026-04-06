@@ -39,7 +39,7 @@ Syntax — shorthand form (upstreams as arguments):
 example.com {
     proxy http://localhost:8080 http://localhost:8081 {
         lb_algorithm two_random
-        keepalive true
+        keepalive
     }
 }
 ```
@@ -49,15 +49,15 @@ example.com {
 | `upstream` | `<url>` | Backend upstream server URL. Accepts `http://` or `https://` URLs. | none |
 | `srv` | `<name>` | SRV-based upstream (requires `srv-lookup` feature). Resolves DNS SRV records dynamically. | none |
 | `lb_algorithm` | `<string>` | Load balancing strategy. See below. | `two_random` |
-| `lb_health_check` | `<bool>` | Enable passive health checking. Failed backends are temporarily excluded. | `false` |
+| `lb_health_check` | *(optional)* `<boolean>` | Enable passive health checking. Failed backends are temporarily excluded. When omitted, defaults to `true`. | `false` |
 | `lb_health_check_max_fails` | `<number>` | Maximum consecutive failures before a backend is marked unhealthy. | `3` |
 | `lb_health_check_window` | `<duration>` | Time window for the failure counter. After this duration, the failure count resets. | `5s` |
-| `lb_retry_connection` | `<bool>` | Retry on connection failure if alternative backends are available. | `true` |
-| `keepalive` | `<bool>` | Enable HTTP keep-alive connection pooling. | `true` |
-| `http2` | `<bool>` | Enable HTTP/2 for upstream connections. | `false` |
-| `http2_only` | `<bool>` | Only use HTTP/2 for upstream connections. | `false` |
-| `intercept_errors` | `<bool>` | Pass upstream error responses (4xx/5xx) through to the client as-is. | `false` |
-| `no_verification` | `<bool>` | Disable TLS certificate verification for HTTPS upstreams. | `false` |
+| `lb_retry_connection` | *(optional)* `<boolean>` | Retry on connection failure if alternative backends are available. When omitted, defaults to `true`. | `true` |
+| `keepalive` | *(optional)* `<boolean>` | Enable HTTP keep-alive connection pooling. When omitted, defaults to `true`. | `true` |
+| `http2` | *(optional)* `<boolean>` | Enable HTTP/2 for upstream connections. When omitted, defaults to `true`. | `false` |
+| `http2_only` | *(optional)* `<boolean>` | Only use HTTP/2 for upstream connections. When omitted, defaults to `true`. | `false` |
+| `intercept_errors` | *(optional)* `<boolean>` | Pass upstream error responses (4xx/5xx) through to the client as-is. When omitted, defaults to `true`. | `false` |
+| `no_verification` | *(optional)* `<boolean>` | Disable TLS certificate verification for HTTPS upstreams. When omitted, defaults to `true`. | `false` |
 | `proxy_header` | `v1 \| v2` | Prepend HAProxy PROXY protocol header to upstream connections. | disabled |
 | `request_header` | see below | Add, remove, or replace request headers before forwarding. | none |
 

@@ -43,13 +43,13 @@ Syntax:
 ```ferron
 example.com {
     root /srv/www/example
-    directory_listing true
+    directory_listing
 }
 ```
 
 | Arguments | Description | Default |
 | --- | --- | --- |
-| `<boolean>` | Enables or disables auto-generated HTML directory listings when a request path resolves to a directory and no index file is found. | `false` |
+| *(optional)* `<boolean>` | Enables or disables auto-generated HTML directory listings when a request path resolves to a directory and no index file is found. When omitted, defaults to `true`. | `false` |
 
 Notes:
 
@@ -66,13 +66,13 @@ Syntax:
 ```ferron
 example.com {
     root /srv/www/example
-    compressed true
+    compressed
 }
 ```
 
 | Arguments | Description | Default |
 | --- | --- | --- |
-| `<boolean>` | Enables or disables on-the-fly response body compression based on the `Accept-Encoding` request header. | `true` |
+| *(optional)* `<boolean>` | Enables or disables on-the-fly response body compression based on the `Accept-Encoding` request header. When omitted, defaults to `true`. | `true` |
 
 Notes:
 
@@ -88,13 +88,13 @@ Syntax:
 ```ferron
 example.com {
     root /srv/www/example
-    precompressed true
+    precompressed
 }
 ```
 
 | Arguments | Description | Default |
 | --- | --- | --- |
-| `<boolean>` | Enables serving pre-compressed sidecar files (e.g., `style.css.gz`, `app.js.br`) instead of compressing on the fly. | `false` |
+| *(optional)* `<boolean>` | Enables serving pre-compressed sidecar files (e.g., `style.css.gz`, `app.js.br`) instead of compressing on the fly. When omitted, defaults to `true`. | `false` |
 
 Notes:
 
@@ -110,13 +110,13 @@ Syntax:
 ```ferron
 example.com {
     root /srv/www/example
-    etag true
+    etag
 }
 ```
 
 | Arguments | Description | Default |
 | --- | --- | --- |
-| `<boolean>` | Enables or disables ETag generation for static file responses. | `true` |
+| *(optional)* `<boolean>` | Enables or disables ETag generation for static file responses. When omitted, defaults to `true`. | `true` |
 
 Notes:
 

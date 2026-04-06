@@ -206,15 +206,15 @@ All directives available inside a `tls { ... }` block:
 | `cache` | `<string>` | File-based certificate cache path (acme provider) | Platform data dir |
 | `save` | `<cert> [key]` | Save obtained cert/key to disk (acme provider) | — |
 | `post_obtain_command` | `<string>` | Command after cert issuance (acme provider) | — |
-| `no_verification` | `<bool>` | Skip ACME directory TLS verification (acme provider) | `false` |
-| `on_demand` | `<bool>` | Enable on-demand cert issuance (acme provider) | `false` |
+| `no_verification` | *(optional)* `<boolean>` | Skip ACME directory TLS verification (acme provider). When omitted, defaults to `true`. | `false` |
+| `on_demand` | *(optional)* `<boolean>` | Enable on-demand cert issuance (acme provider). When omitted, defaults to `true`. | `false` |
 | `on_demand_ask` | `<string>` | Approval endpoint URL (acme provider) | — |
-| `on_demand_ask_no_verification` | `<bool>` | Skip TLS for approval endpoint (acme provider) | `false` |
+| `on_demand_ask_no_verification` | *(optional)* `<boolean>` | Skip TLS for approval endpoint (acme provider). When omitted, defaults to `true`. | `false` |
 | `cipher_suite` | `<string>` | Add a cipher suite (repeatable) | rustls defaults |
 | `ecdh_curve` | `<string>` | Add an ECDH curve (repeatable) | rustls defaults |
 | `min_version` | `TLSv1.2`, `TLSv1.3` | Minimum TLS protocol version | `TLSv1.2` |
 | `max_version` | `TLSv1.2`, `TLSv1.3` | Maximum TLS protocol version | `TLSv1.3` |
-| `client_auth` | `<bool>` | Enable client certificate authentication | `false` |
+| `client_auth` | *(optional)* `<boolean>` | Enable client certificate authentication. When omitted, defaults to `true`. | `false` |
 | `client_auth_ca` | `<string>` | CA cert source for client auth | `webpki` |
 | `ticket_keys` | `{ ... }` | Session ticket key management | Default ticketer |
 | `ocsp` | `{ ... }` | OCSP stapling configuration | Enabled |

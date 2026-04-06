@@ -60,6 +60,25 @@ Supported value types:
 - Interpolated strings: `{{env.TLS_CERT}}`
 - Duration strings: `30m`, `1h`, `90s`, `1d` (see below)
 
+### Flags (Boolean Directives with No Arguments)
+
+Several directives accept boolean values. For convenience, these directives can also be written as **flags** with no arguments, which is equivalent to `true`:
+
+```ferron
+# These are equivalent:
+directory_listing
+directory_listing true
+
+# These are also equivalent:
+abort
+abort true
+
+# To explicitly disable, use false:
+directory_listing false
+```
+
+This shorthand is useful for simple on/off toggles where the intent is clear. The following directives support flag syntax: `abort`, `compressed`, `precompressed`, `etag`, `directory_listing`, `trailing_slash_redirect`, `url_sanitize`, `keepalive`, `http2`, `http2_only`, `intercept_errors`, `no_verification`, `lb_health_check`, `lb_retry_connection`, `on_demand`, `client_auth`, and others.
+
 ### Duration Strings
 
 Several directives accept duration values. The following formats are supported:

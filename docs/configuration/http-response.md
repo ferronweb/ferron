@@ -88,17 +88,17 @@ Syntax:
 
 ```ferron
 example.com {
-    abort true
+    abort
 }
 ```
 
 | Arguments | Description | Default |
 | --- | --- | --- |
-| `<bool>` | When `true`, immediately close the connection without sending any response | `false` |
+| *(optional)* `<boolean>` | When `true` or when omitted, immediately close the connection without sending any response | `false` |
 
 ### Behavior
 
-When `abort true` is set, the connection is terminated immediately with no HTTP response sent. This is useful for:
+When `abort` is set (with or without an explicit `true` value), the connection is terminated immediately with no HTTP response sent. This is useful for:
 
 - Silently dropping requests from unwanted clients
 - Denial-of-service mitigation at the connection level
@@ -109,7 +109,7 @@ The client will see a connection reset error rather than an HTTP status code.
 
 ```ferron
 example.com {
-    abort true
+    abort
 }
 ```
 
