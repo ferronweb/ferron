@@ -33,9 +33,9 @@ use std::sync::Arc;
 
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
-use ferron_core::registry::RegistryBuilder;
+use ferron_core::registry::{ProviderRegistry, Registry, RegistryBuilder};
 use ferron_core::{runtime::Runtime, Module};
-use ferron_dns::DnsClient;
+use ferron_dns::{DnsClient, DnsContext};
 use ferron_tls::TcpTlsContext;
 use instant_acme::ChallengeType;
 use tokio::sync::RwLock;
@@ -62,9 +62,10 @@ pub struct AcmeTaskState {
     pub memory_account_cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
     /// Shared SNI resolver lock.
     pub sni_resolver_lock: SniResolverLock,
-    /// DNS client lookup cache (provider name -> client).
-    pub dns_clients: Arc<RwLock<HashMap<String, Arc<dyn DnsClient>>>>,
 }
+
+/// Global registry for DNS provider lookup, set once during module initialization.
+static GLOBAL_REGISTRY: std::sync::OnceLock<Arc<Registry>> = std::sync::OnceLock::new();
 
 impl Default for AcmeTaskState {
     fn default() -> Self {
@@ -84,7 +85,6 @@ impl AcmeTaskState {
             http_01_resolvers: Arc::new(RwLock::new(Vec::new())),
             memory_account_cache: Arc::new(RwLock::new(HashMap::new())),
             sni_resolver_lock: Arc::new(RwLock::new(HashMap::new())),
-            dns_clients: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -117,17 +117,10 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
             .ok_or("ACME TLS provider requires a domain name or IP address")?;
         let port: u16 = ctx.port;
 
-        let task_state = get_or_init_task_state();
+        // Resolve DNS client from nested dns { } block if present
+        let dns_client = resolve_dns_client_from_config(ctx.config);
 
-        // Resolve DNS client if configured
-        let dns_client = ctx
-            .config
-            .get_value("dns")
-            .and_then(|v| v.as_string_with_interpolations(&std::collections::HashMap::new()))
-            .and_then(|name| {
-                let dns_clients = task_state.dns_clients.blocking_read();
-                dns_clients.get(&name).cloned()
-            });
+        let task_state = get_or_init_task_state();
 
         let acme_result = parse_acme_config(
             ctx.config,
@@ -374,33 +367,9 @@ impl ModuleLoader for TlsAcmeModuleLoader {
         modules: &mut Vec<Arc<dyn ferron_core::Module>>,
         _config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Collect DNS clients from the DNS provider registry
-        if let Some(dns_registry) = registry.get_provider_registry::<ferron_dns::DnsContext<'_>>() {
-            let task_state = get_or_init_task_state();
-            let mut dns_clients = task_state.dns_clients.blocking_write();
-            for provider in dns_registry.get_all() {
-                // Execute the provider to get the DNS client
-                // We use a static empty config since we only need the client instance
-                static DUMMY_CONFIG: std::sync::OnceLock<
-                    ferron_core::config::ServerConfigurationBlock,
-                > = std::sync::OnceLock::new();
-                let dummy_config =
-                    DUMMY_CONFIG.get_or_init(|| ferron_core::config::ServerConfigurationBlock {
-                        directives: Arc::new(HashMap::new()),
-                        matchers: HashMap::new(),
-                        span: None,
-                    });
-
-                let mut dns_ctx = ferron_dns::DnsContext {
-                    config: dummy_config,
-                    client: None,
-                };
-                let _ = provider.execute(&mut dns_ctx);
-                if let Some(client) = dns_ctx.client {
-                    dns_clients.insert(provider.name().to_string(), client);
-                }
-            }
-        }
+        // Store the global registry for later resolution of DNS providers
+        // from nested dns { } blocks in TLS configurations.
+        GLOBAL_REGISTRY.set(registry).ok();
 
         // Create and cache the module — the actual task spawning happens in start()
         if MODULE_CACHE.get().is_none() {
@@ -412,6 +381,59 @@ impl ModuleLoader for TlsAcmeModuleLoader {
 
         Ok(())
     }
+}
+
+/// Resolve a DNS client from a nested `dns { ... }` block inside the TLS config.
+///
+/// The block should contain a `provider` directive naming the DNS provider,
+/// along with any provider-specific configuration.
+///
+/// # Example
+///
+/// ```text
+/// tls {
+///     provider "acme"
+///     challenge dns-01
+///     dns {
+///         provider "cloudflare"
+///         api_token "xxx"
+///     }
+/// }
+/// ```
+fn resolve_dns_client_from_config(
+    config: &ferron_core::config::ServerConfigurationBlock,
+) -> Option<Arc<dyn DnsClient>> {
+    // Look for nested dns { ... } block
+    let dns_entries = config.directives.get("dns")?;
+    let dns_entry = dns_entries.first()?;
+    let dns_block = dns_entry.children.as_ref()?;
+
+    // Get the provider name from the dns block
+    let provider_name = dns_block
+        .get_value("provider")
+        .and_then(|v| v.as_string_with_interpolations(&std::collections::HashMap::new()))?;
+
+    // Look up the DNS provider registry from the stored global registry
+    let global_registry = GLOBAL_REGISTRY.get()?;
+    // SAFETY: The ProviderRegistry stores provider factories (closures), not
+    // references to any DnsContext. The lifetime on DnsContext is only relevant
+    // during execute(), where the provider borrows the config temporarily.
+    // We transmute the lifetime to 'static so we can call execute with any config block.
+    let dns_registry: Arc<ProviderRegistry<DnsContext<'static>>> =
+        unsafe { std::mem::transmute(global_registry.get_provider_registry::<DnsContext<'_>>()?) };
+    let provider = dns_registry.get(&provider_name)?;
+
+    // Execute the provider with the dns block as config to get the client.
+    // SAFETY: The provider only borrows dns_block during execute() and does not
+    // store the reference. The returned Arc<dyn DnsClient> is 'static.
+    let mut dns_ctx: DnsContext<'static> = unsafe {
+        std::mem::transmute::<DnsContext<'_>, DnsContext<'static>>(DnsContext {
+            config: dns_block,
+            client: None,
+        })
+    };
+    let _ = provider.execute(&mut dns_ctx);
+    dns_ctx.client
 }
 
 #[cfg(test)]
