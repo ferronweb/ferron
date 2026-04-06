@@ -257,9 +257,6 @@ pub async fn request_handler(
         .map_or(path.clone(), |pq| pq.to_string());
     let version = http_version_access_string(request.version()).to_string();
     let scheme = if encrypted { "https" } else { "http" }.to_string();
-    let client_ip = remote_address.ip().to_string();
-    let client_port = remote_address.port();
-    let client_ip_canonical = canonicalize_ip(remote_address.ip());
     let server_ip = local_address.ip().to_string();
     let server_port = local_address.port();
     let server_ip_canonical = canonicalize_ip(local_address.ip());
@@ -291,7 +288,7 @@ pub async fn request_handler(
 
     let request_timer = std::time::Instant::now();
 
-    let (mut response_result, auth_user) = request_handler_inner(
+    let (mut response_result, auth_user, final_remote_address) = request_handler_inner(
         request,
         pipeline,
         file_pipeline,
@@ -309,6 +306,13 @@ pub async fn request_handler(
     // Compute duration and extract response info
     let duration_secs = request_timer.elapsed().as_secs_f64();
     let timestamp = chrono::Local::now();
+
+    // Use the potentially modified remote_address (e.g. from X-Forwarded-For stage)
+    // for access log fields, falling back to the original if not provided.
+    let effective_remote = final_remote_address.unwrap_or(remote_address);
+    let client_ip = effective_remote.ip().to_string();
+    let client_port = effective_remote.port();
+    let client_ip_canonical = canonicalize_ip(effective_remote.ip());
     let (status_code, content_length) = match &response_result {
         Ok(r) => {
             let status = r.status().as_u16();
@@ -417,7 +421,11 @@ async fn request_handler_inner(
     encrypted: bool,
     https_port: Option<u16>,
     events: CompositeEventSink,
-) -> (Result<Response<ResponseBody>, io::Error>, Option<String>) {
+) -> (
+    Result<Response<ResponseBody>, io::Error>,
+    Option<String>,
+    Option<SocketAddr>,
+) {
     // Increment request counter for admin API /status endpoint
     ferron_admin::ADMIN_METRICS
         .requests_total
@@ -443,7 +451,7 @@ async fn request_handler_inner(
         )
         .await
         {
-            return (Ok(response), None);
+            return (Ok(response), None, None);
         }
         return (
             Ok(builtin_error_response(
@@ -454,6 +462,7 @@ async fn request_handler_inner(
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 }),
             )),
+            None,
             None,
         );
     }
@@ -475,7 +484,7 @@ async fn request_handler_inner(
             )
             .await
             {
-                return (Ok(response), None);
+                return (Ok(response), None, None);
             }
             return (
                 Ok(builtin_error_response(
@@ -486,6 +495,7 @@ async fn request_handler_inner(
                             .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                     }),
                 )),
+                None,
                 None,
             );
         }
@@ -506,7 +516,7 @@ async fn request_handler_inner(
 
     let resolver_request = match build_resolver_request(&request) {
         Ok(r) => r,
-        Err(e) => return (Err(e), None),
+        Err(e) => return (Err(e), None, None),
     };
     let resolution = config_resolver.resolve(
         local_address.ip(),
@@ -525,7 +535,7 @@ async fn request_handler_inner(
         )
         .await
         {
-            return (Ok(response), None);
+            return (Ok(response), None, None);
         }
         return (
             Ok(builtin_error_response(
@@ -536,6 +546,7 @@ async fn request_handler_inner(
                         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
                 }),
             )),
+            None,
             None,
         );
     };
@@ -601,6 +612,7 @@ async fn request_handler_inner(
                                 }),
                             )),
                             auth_user,
+                            Some(ctx.remote_address),
                         );
                     }
                 };
@@ -629,6 +641,7 @@ async fn request_handler_inner(
     }
 
     let auth_user = ctx.auth_user.clone();
+    let final_remote = ctx.remote_address;
     (
         match ctx.res.unwrap_or(HttpResponse::BuiltinError(404, None)) {
             HttpResponse::Custom(response) => Ok(response),
@@ -654,6 +667,7 @@ async fn request_handler_inner(
             HttpResponse::Abort => Err(io::Error::other("Aborted")),
         },
         auth_user,
+        Some(final_remote),
     )
 }
 

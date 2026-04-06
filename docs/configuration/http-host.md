@@ -15,6 +15,7 @@ http example.com:8080 {
 - Protocol behavior: `http`
 - TLS: `tls` (automatic for non-localhost hostnames)
 - HTTPS redirect: `https_redirect`
+- Client IP from headers: `client_ip_from_header`
 - Server information: `admin_email`
 
 ## Automatic TLS
@@ -95,6 +96,91 @@ Notes:
 - `localhost` hostnames never get redirected — there is no HTTPS listener for them.
 - When an explicit port is specified (e.g., `example.com:8080`), no redirect is performed since no separate HTTPS listener exists.
 - The target port is `default_https_port` (default: `443`). When the port is `443`, it is omitted from the URL.
+
+## Client IP from Forwarded Headers
+
+When running behind a reverse proxy, load balancer, or CDN, the actual client IP address is typically forwarded via HTTP headers rather than being available from the TCP socket. The `client_ip_from_header` directive instructs Titanium to read the client IP from the specified header and make it available as `ctx.remote_address` for downstream stages, matchers, and logging.
+
+### `client_ip_from_header`
+
+Syntax:
+
+```ferron
+{
+    client_ip_from_header x-forwarded-for
+}
+```
+
+| Arguments | Description | Default |
+| --- | --- | --- |
+| `<string>` | Header to read the client IP from. Supported values: `x-forwarded-for`, `forwarded`. | disabled |
+
+### Supported Headers
+
+#### `x-forwarded-for`
+
+Reads the `X-Forwarded-For` header and extracts the **first (leftmost)** IP address from the comma-separated chain:
+
+```
+X-Forwarded-For: 192.0.2.1, 10.0.0.1, 172.16.0.1
+                  ^^^^^^^^^
+                  Titanium uses this IP
+```
+
+Example:
+
+```ferron
+{
+    client_ip_from_header x-forwarded-for
+}
+
+example.com {
+    root /var/www/html
+}
+```
+
+#### `forwarded` (RFC 7239)
+
+Reads the `Forwarded` header and extracts the first `for=` token:
+
+```
+Forwarded: for=192.0.2.60;proto=https, for=10.0.0.1;proto=http
+           ^^^^^^^^^^^^^
+           Titanium uses this IP
+```
+
+Both quoted and unquoted values are supported:
+
+```ferron
+Forwarded: for="192.0.2.60";proto=https
+Forwarded: for=192.0.2.60;proto=https
+```
+
+IPv6 addresses are also supported:
+
+```
+Forwarded: for="[2001:db8::1]"
+```
+
+Example:
+
+```ferron
+{
+    client_ip_from_header forwarded
+}
+
+example.com {
+    root /var/www/html
+}
+```
+
+### Notes
+
+- **Disabled by default.** The stage is only active when the directive is explicitly set.
+- **Trust boundary.** This directive blindly trusts the header value. If the server is directly exposed to the internet (not behind a trusted proxy), a malicious client could spoof their IP address. Only enable this when running behind a trusted reverse proxy or load balancer.
+- **Port preservation.** Only the IP address is replaced — the original remote port from the TCP socket is preserved.
+- **Invalid or missing values.** If the header is absent, malformed, or contains an unparseable value (e.g., `for=_hidden`), the stage silently skips and `ctx.remote_address` remains unchanged.
+- **Matcher variables.** The updated `remote_address` is available in conditional matchers and logging via the standard mechanisms.
 
 ## `http`
 

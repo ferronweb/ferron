@@ -117,6 +117,11 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             ServerConfigurationValue::Boolean(_, _)
         ], {});
 
+        // Client IP from forwarded header
+        validate_directive!(config, used_directives, client_ip_from_header, optional args(1) => [
+            ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
+        ], {});
+
         Ok(())
     }
 }
