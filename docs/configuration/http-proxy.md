@@ -11,7 +11,7 @@ The `proxy` directive configures Titanium to forward incoming HTTP requests to o
 - TLS: `no_verification`
 - PROXY protocol: `proxy_header`
 - Header manipulation: `request_header`
-- Global connection limit: `concurrent_conns` (global scope)
+- Global connection limit: `proxy_concurrent_conns` (global scope)
 
 ## `proxy`
 
@@ -151,7 +151,7 @@ The reverse proxy module also manages standard forwarding headers:
 | `X-Real-IP` | Always set to the client IP. |
 | `Forwarded` (RFC 7239) | When `client_ip_from_header` is enabled, appends a new element (`for=...;proto=...;by=...`). Otherwise, sets a single element. IPv6 addresses are quoted per RFC 7239. |
 
-## `concurrent_conns` (global scope)
+## `proxy_concurrent_conns` (global scope)
 
 Sets the global maximum number of concurrent TCP connections maintained in the keep-alive connection pool across all upstream backends. Unix socket connections are always unbounded.
 
@@ -159,7 +159,7 @@ Syntax:
 
 ```ferron
 {
-    concurrent_conns 10000
+    proxy_concurrent_conns 10000
 }
 
 example.com {
