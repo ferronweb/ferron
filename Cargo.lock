@@ -999,6 +999,7 @@ dependencies = [
  "ferron-core",
  "ferron-http-headers",
  "ferron-http-proxy",
+ "ferron-http-ratelimit",
  "ferron-http-server",
  "ferron-http-static",
  "ferron-observability-consolelog",
@@ -1141,6 +1142,23 @@ dependencies = [
  "vibeio",
  "vibeio-http",
  "vibeio-hyper",
+]
+
+[[package]]
+name = "ferron-http-ratelimit"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "dashmap",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "http",
+ "http-body-util",
+ "parking_lot",
+ "tokio",
+ "typemap_rev",
 ]
 
 [[package]]

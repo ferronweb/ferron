@@ -18,6 +18,7 @@ ferron-http-server = { path = "../modules/http-server" }
 ferron-http-static = { path = "../modules/http-static" }
 ferron-http-proxy = { path = "../modules/http-proxy" }
 ferron-http-headers = { path = "../modules/http-headers" }
+ferron-http-ratelimit = { path = "../modules/http-ratelimit" }
 ferron-admin-api = { path = "../modules/admin-api" }
 ferron-config-json = { path = "../modules/config-json" }
 ferron-config-ferronconf = { path = "../modules/config-ferronconf" }

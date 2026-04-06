@@ -1,0 +1,20 @@
+[package]
+name = "ferron-http-ratelimit"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+parking_lot = "0.12"
+dashmap = "6"
+http = "1"
+http-body-util = "0.1.3"
+bytes = "1"
+
+ferron-core = { path = "../../core" }
+ferron-http = { path = "../../types/http" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }
+ferron-observability = { path = "../../types/observability" }
+typemap_rev = "0.4"
