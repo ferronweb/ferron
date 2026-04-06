@@ -8,10 +8,13 @@ mod send_request;
 mod upstream;
 mod util;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Duration;
 
+use crate::config::ProxyConfig;
+use crate::upstream::LoadBalancerAlgorithmInner;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;
@@ -86,7 +89,8 @@ pub fn get_secondary_runtime_handle(runtime: &Runtime) -> tokio::runtime::Handle
 }
 
 /// Shared state for the reverse proxy stage, constructed once and reused
-/// across all requests to preserve connection pools and health tracking.
+/// across all requests to preserve connection pools, health tracking,
+/// and the load balancer algorithm (which must be shared for RoundRobin to work).
 struct ProxyState {
     /// Connection pool manager — lazily initialized on first use so we can
     /// read the global `concurrent_conns` limit from config first.
@@ -95,6 +99,14 @@ struct ProxyState {
     failed_backends: Arc<RwLock<crate::util::TtlCache<upstream::UpstreamInner, u64>>>,
     /// Connection tracking state for LeastConnections/TwoRandomChoices.
     conn_state: upstream::ConnectionsTrackState,
+    /// Load balancing algorithm (shared across all requests).
+    /// Contains the `AtomicUsize` counter for RoundRobin, so it must be
+    /// constructed once and reused — not per-request.
+    lb_algorithm: RwLock<Option<Arc<LoadBalancerAlgorithmInner>>>,
+    /// Cache of parsed proxy configurations, keyed by the `Arc` pointer
+    /// identity of the `LayeredConfiguration`. Config only changes on reload,
+    /// so the parsed result can be reused indefinitely.
+    parsed_configs: RwLock<HashMap<usize, Arc<ProxyConfig>>>,
 }
 
 impl ProxyState {
@@ -105,6 +117,8 @@ impl ProxyState {
                 DEFAULT_KEEPALIVE_IDLE_TIMEOUT,
             ))),
             conn_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            lb_algorithm: RwLock::new(None),
+            parsed_configs: RwLock::new(HashMap::new()),
         }
     }
 
@@ -162,7 +176,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
     ) {
         registry
             .entry("http")
-            .or_insert(Vec::new())
+            .or_default()
             .push(Box::new(ProxyConfigurationValidator));
     }
 
@@ -248,18 +262,41 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             return Ok(true);
         }
 
-        let config = match config::parse_proxy_config(ctx) {
-            Ok(Some(cfg)) => cfg,
-            Ok(None) => return Ok(true),
-            Err(e) => {
-                ctx.events.emit(ferron_observability::Event::Log(
-                    ferron_observability::LogEvent {
-                        target: "ferron-proxy",
-                        level: ferron_observability::LogLevel::Error,
-                        message: format!("Proxy config error: {e}"),
-                    },
-                ));
-                return Ok(true);
+        // Use the first layer's Arc pointer identity as a cache key.
+        // When config is reloaded, new Arc pointers are created.
+        let config_key = ctx
+            .configuration
+            .layers
+            .first()
+            .map(|arc| Arc::as_ptr(arc) as usize)
+            .unwrap_or(0);
+
+        // Check the parsed config cache before re-parsing
+        let config = {
+            let guard = self.state.parsed_configs.read().await;
+            guard.get(&config_key).cloned()
+        };
+
+        let config = match config {
+            Some(cfg) => cfg,
+            None => {
+                let parsed = match config::parse_proxy_config(ctx) {
+                    Ok(Some(cfg)) => Arc::new(cfg),
+                    Ok(None) => return Ok(true),
+                    Err(e) => {
+                        ctx.events.emit(ferron_observability::Event::Log(
+                            ferron_observability::LogEvent {
+                                target: "ferron-proxy",
+                                level: ferron_observability::LogLevel::Error,
+                                message: format!("Proxy config error: {e}"),
+                            },
+                        ));
+                        return Ok(true);
+                    }
+                };
+                let mut guard = self.state.parsed_configs.write().await;
+                guard.insert(config_key, Arc::clone(&parsed));
+                parsed
             }
         };
 
@@ -286,7 +323,23 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }
         }
 
-        let algorithm = Arc::new(config.lb_algorithm.into());
+        let algorithm = {
+            let guard = self.state.lb_algorithm.read().await;
+            if let Some(alg) = &*guard {
+                Arc::clone(alg)
+            } else {
+                drop(guard);
+                let mut guard = self.state.lb_algorithm.write().await;
+                // Double-check after upgrading the lock
+                if let Some(alg) = &*guard {
+                    Arc::clone(alg)
+                } else {
+                    let alg = Arc::new(config.lb_algorithm.into());
+                    *guard = Some(Arc::clone(&alg));
+                    alg
+                }
+            }
+        };
         let conn_manager = self.state.get_conn_manager().await;
 
         let result = proxy::execute_proxy(

@@ -126,21 +126,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
         let mut vary_header: Option<String> = None;
 
         if etag_enabled {
-            let etag_cache_key = format!(
-                "{}-{}-{}",
-                ctx.file_path.to_string_lossy(),
-                ctx.metadata.len(),
-                ctx.metadata
-                    .modified()
-                    .ok()
-                    .and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0),
-            );
-            let etag = format!(
-                "{:016x}",
-                xxhash_rust::xxh3::xxh3_64(etag_cache_key.as_bytes())
-            );
+            let etag = ctx.etag.clone();
             etag_value = Some(etag.clone());
 
             vary_header = Some(if compression_possible {

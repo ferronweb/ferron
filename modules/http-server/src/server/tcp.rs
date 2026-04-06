@@ -28,6 +28,24 @@ use crate::server::tls_resolve::RadixTree;
 use crate::server::HttpServerConfig;
 use crate::util::proxy_protocol::read_proxy_header;
 
+/// Bundled shared state for the per-request handler closure.
+/// Cloning a single `Arc<RequestHandlerState>` replaces cloning 6 individual
+/// `Arc`s plus a `String` and a `CompositeEventSink`, reducing atomic
+/// refcount contention at high RPS.
+struct RequestHandlerState {
+    pipeline: Arc<Pipeline<HttpContext>>,
+    file_pipeline: Arc<Pipeline<HttpFileContext>>,
+    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
+    config_resolver: Arc<ThreeStageResolver>,
+    observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
+    local_address: SocketAddr,
+    remote_address: SocketAddr,
+    hinted_hostname: Option<String>,
+    encrypted: bool,
+    https_port: u16,
+    default_observability: CompositeEventSink,
+}
+
 // Type alias for the config ArcSwap
 type ConfigArcSwap = Arc<ArcSwap<HttpServerConfig>>;
 
@@ -503,22 +521,23 @@ async fn handle_http1_connection<S>(
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
     let graceful_shutdown = CancellationToken::new();
+    let handler_state = Arc::new(RequestHandlerState {
+        pipeline,
+        file_pipeline,
+        error_pipeline,
+        config_resolver,
+        observability_resolver,
+        local_address,
+        remote_address,
+        hinted_hostname,
+        encrypted,
+        https_port,
+        default_observability: default_observability.clone(),
+    });
     let mut connection_future = Box::pin(
         Http1::new(socket, build_http1_options(&connection_options))
             .graceful_shutdown_token(graceful_shutdown.clone())
-            .handle(build_request_handler(
-                pipeline,
-                file_pipeline,
-                error_pipeline,
-                config_resolver,
-                local_address,
-                remote_address,
-                hinted_hostname,
-                encrypted,
-                https_port,
-                observability_resolver,
-                default_observability.clone(),
-            )),
+            .handle(build_request_handler(handler_state)),
     );
     let connection_result = tokio::select! {
         result = &mut connection_future => result,
@@ -561,22 +580,23 @@ async fn handle_http2_connection<S>(
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
 {
     let graceful_shutdown = CancellationToken::new();
+    let handler_state = Arc::new(RequestHandlerState {
+        pipeline,
+        file_pipeline,
+        error_pipeline,
+        config_resolver,
+        observability_resolver,
+        local_address,
+        remote_address,
+        hinted_hostname,
+        encrypted,
+        https_port,
+        default_observability: default_observability.clone(),
+    });
     let mut connection_future = Box::pin(
         Http2::new(socket, build_http2_options(&connection_options))
             .graceful_shutdown_token(graceful_shutdown.clone())
-            .handle(build_request_handler(
-                pipeline,
-                file_pipeline,
-                error_pipeline,
-                config_resolver,
-                local_address,
-                remote_address,
-                hinted_hostname,
-                encrypted,
-                https_port,
-                observability_resolver,
-                default_observability.clone(),
-            )),
+            .handle(build_request_handler(handler_state)),
     );
     let connection_result = tokio::select! {
         result = &mut connection_future => result,
@@ -623,49 +643,32 @@ fn build_http2_options(connection_options: &HttpConnectionOptions) -> Http2Optio
     options
 }
 
-#[allow(clippy::too_many_arguments)]
 fn build_request_handler(
-    pipeline: Arc<Pipeline<HttpContext>>,
-    file_pipeline: Arc<Pipeline<HttpFileContext>>,
-    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
-    config_resolver: Arc<ThreeStageResolver>,
-    local_address: SocketAddr,
-    remote_address: SocketAddr,
-    hinted_hostname: Option<String>,
-    encrypted: bool,
-    https_port: u16,
-    observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
-    default_observability: CompositeEventSink,
+    state: Arc<RequestHandlerState>,
 ) -> impl Fn(Request<vibeio_http::Incoming>) -> RequestHandlerFuture {
     move |request: Request<vibeio_http::Incoming>| {
-        let pipeline = pipeline.clone();
-        let file_pipeline = file_pipeline.clone();
-        let error_pipeline = error_pipeline.clone();
-        let config_resolver = config_resolver.clone();
-        let hinted_hostname = hinted_hostname.clone();
-        let observability_resolver = observability_resolver.clone();
-        let default_observability = default_observability.clone();
+        let state = Arc::clone(&state);
         Box::pin(async move {
-            let hostname = request_hostname_for_lookup(&request, hinted_hostname.as_deref());
+            let hostname = request_hostname_for_lookup(&request, state.hinted_hostname.as_deref());
             let request_observability = resolve_observability_sink(
-                &observability_resolver,
-                Some(local_address.ip()),
+                &state.observability_resolver,
+                Some(state.local_address.ip()),
                 hostname.as_deref(),
-                &default_observability,
+                &state.default_observability,
             );
             let (parts, body) = request.into_parts();
             let request = Request::from_parts(parts, body.boxed_unsync());
             request_handler(
                 request,
-                pipeline,
-                file_pipeline,
-                error_pipeline,
-                config_resolver,
-                local_address,
-                remote_address,
+                state.pipeline.clone(),
+                state.file_pipeline.clone(),
+                state.error_pipeline.clone(),
+                state.config_resolver.clone(),
+                state.local_address,
+                state.remote_address,
                 hostname,
-                encrypted,
-                Some(https_port),
+                state.encrypted,
+                Some(state.https_port),
                 request_observability,
             )
             .await

@@ -85,6 +85,8 @@ pub struct HttpFileContext {
     pub file_path: std::path::PathBuf,
     pub path_info: Option<String>, // For example, "/test" in "/index.php/test"
     pub file_root: std::path::PathBuf,
+    /// Pre-computed ETag from the path resolve cache.
+    pub etag: String,
 }
 
 pub struct HttpErrorContext {

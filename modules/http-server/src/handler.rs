@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
@@ -77,6 +78,7 @@ impl quick_cache::Weighter<(PathBuf, String), Timestamped<ResolvedHttpFile>>
         let key_size = key.0.as_os_str().len() + key.1.len();
         let value_size = val.value.file_path.as_os_str().len()
             + val.value.path_info.as_ref().map_or(0, |s| s.len())
+            + val.value.etag.len()
             + size_of::<vibeio::fs::Metadata>();
         (key_size + value_size) as u64
     }
@@ -87,6 +89,28 @@ struct ResolvedHttpFile {
     metadata: vibeio::fs::Metadata,
     file_path: PathBuf,
     path_info: Option<String>,
+    /// Pre-computed ETag at cache insertion time, avoiding recomputation per request.
+    etag: String,
+}
+
+impl ResolvedHttpFile {
+    /// Compute the ETag from the file path, size, and modification time.
+    fn compute_etag(&self) -> String {
+        let mtime_secs = self
+            .metadata
+            .modified()
+            .ok()
+            .and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let cache_key = format!(
+            "{}-{}-{}",
+            self.file_path.to_string_lossy(),
+            self.metadata.len(),
+            mtime_secs,
+        );
+        format!("{:016x}", xxhash_rust::xxh3::xxh3_64(cache_key.as_bytes()))
+    }
 }
 
 #[derive(Debug)]
@@ -103,8 +127,8 @@ struct HttpAccessLog {
     path: String,
     path_and_query: String,
     method: String,
-    version: String,
-    scheme: String,
+    version: Cow<'static, str>,
+    scheme: Cow<'static, str>,
     client_ip: String,
     client_port: u16,
     client_ip_canonical: String,
@@ -255,8 +279,8 @@ pub async fn request_handler(
         .uri()
         .path_and_query()
         .map_or(path.clone(), |pq| pq.to_string());
-    let version = http_version_access_string(request.version()).to_string();
-    let scheme = if encrypted { "https" } else { "http" }.to_string();
+    let version = http_version_access_string(request.version());
+    let scheme: &'static str = if encrypted { "https" } else { "http" };
     let server_ip = local_address.ip().to_string();
     let server_port = local_address.port();
     let server_ip_canonical = canonicalize_ip(local_address.ip());
@@ -376,8 +400,8 @@ pub async fn request_handler(
         path,
         path_and_query,
         method: method.as_str().to_string(),
-        version,
-        scheme,
+        version: Cow::Borrowed(version),
+        scheme: Cow::Borrowed(scheme),
         client_ip,
         client_port,
         client_ip_canonical,
@@ -935,6 +959,10 @@ async fn resolve_and_cache(
         return Ok(None);
     };
 
+    // Pre-compute ETag once at cache insertion time
+    let mut resolved_file = resolved_file;
+    resolved_file.etag = resolved_file.compute_etag();
+
     let cache_key = (root_path.to_path_buf(), request_path.to_string());
     PATH_RESOLVE_CACHE.insert(cache_key, Timestamped::new(resolved_file.clone()));
     Ok(Some(resolved_file))
@@ -978,6 +1006,7 @@ async fn apply_resolved_file_to_context(
         file_path: resolved_file.file_path,
         path_info: resolved_file.path_info,
         file_root: root_path,
+        etag: resolved_file.etag,
     };
 
     let pipeline_result = if let Some(timeout) = timeout {
@@ -1081,19 +1110,22 @@ async fn resolve_http_file_target(
                                     &request_segments[candidate_depth..],
                                     trailing_slash,
                                 ),
+                                etag: String::new(), // Will be set after construction
                             }));
                         }
                     }
                 }
 
-                return Ok(Some(ResolvedHttpFile {
+                let resolved = ResolvedHttpFile {
                     metadata,
                     file_path: candidate_path,
                     path_info: build_path_info(
                         &request_segments[candidate_depth..],
                         trailing_slash,
                     ),
-                }));
+                    etag: String::new(), // Will be set after construction
+                };
+                return Ok(Some(resolved));
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) if is_not_directory_like(&error) && candidate_depth > 0 => {
@@ -1123,6 +1155,7 @@ async fn try_resolve_index_files(
                     metadata,
                     file_path: canonical,
                     path_info: None,
+                    etag: String::new(), // Will be set after construction
                 }));
             }
             Ok(_) => continue, // Directory or other type

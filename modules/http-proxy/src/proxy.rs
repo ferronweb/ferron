@@ -456,6 +456,7 @@ pub async fn execute_proxy(
 /// When pooled connections are not ready (but alive), they are collected
 /// and raced against establishing a brand-new connection, avoiding the
 /// cost of unnecessary duplicate connection establishments.
+#[allow(clippy::too_many_arguments)]
 async fn try_send_with_pool(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
@@ -475,6 +476,9 @@ async fn try_send_with_pool(
 
     // Collect non-ready-but-alive connections for racing
     let mut pending_items: Vec<connpool::Item<PoolKey, SendRequestWrapper>> = Vec::new();
+    // Track a non-ready-but-kept item slot for reuse in establish_and_send
+    // (avoids double-pull when the connection is dead and can't be raced).
+    let mut reusable_item: Option<connpool::Item<PoolKey, SendRequestWrapper>> = None;
 
     // Pull one connection from the pool and check readiness
     let mut item = if let Some(idx) = local_limit_idx {
@@ -510,6 +514,10 @@ async fn try_send_with_pool(
         if item.inner().is_some() {
             pending_items.push(item);
         }
+    } else {
+        // Connection is dead — keep the item slot for reuse in establish_and_send
+        // to avoid pulling a second time.
+        reusable_item = Some(item);
     }
 
     // Race pending items against establishing new
@@ -546,6 +554,7 @@ async fn try_send_with_pool(
         is_https,
         _conn_state,
         tracked_connection,
+        reusable_item,
     )
     .await
 }
@@ -588,6 +597,10 @@ async fn wait_for_any_ready(
 }
 
 /// Establish a new connection and send the request.
+///
+/// If `existing_item` is provided, it is reused instead of pulling a new one
+/// from the pool, avoiding a double semaphore acquisition.
+#[allow(clippy::too_many_arguments)]
 async fn establish_and_send(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
@@ -599,11 +612,14 @@ async fn establish_and_send(
     is_https: bool,
     _conn_state: Option<&ConnectionsTrackState>,
     tracked_connection: Option<Arc<()>>,
+    existing_item: Option<connpool::Item<PoolKey, SendRequestWrapper>>,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     let pool_key = (upstream.clone(), client_ip);
     let pool = select_pool(cm, upstream);
 
-    let mut item = if let Some(idx) = local_limit_idx {
+    let mut item = if let Some(it) = existing_item {
+        it
+    } else if let Some(idx) = local_limit_idx {
         pool.pull_with_wait_local_limit(pool_key.clone(), Some(idx))
             .await
     } else {

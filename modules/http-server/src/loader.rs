@@ -116,7 +116,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
     ) {
         registry
             .entry("http")
-            .or_insert(Vec::new())
+            .or_default()
             .push(Box::new(HttpConfigurationValidator));
     }
 

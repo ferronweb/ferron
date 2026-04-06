@@ -55,7 +55,7 @@ impl ModuleLoader for StaticFileModuleLoader {
     ) {
         registry
             .entry("http")
-            .or_insert(Vec::new())
+            .or_default()
             .push(Box::new(HttpStaticConfigurationValidator));
     }
 

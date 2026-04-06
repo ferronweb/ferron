@@ -306,9 +306,9 @@ mod tests {
         let mut ctx2 = make_test_context("192.0.2.1:12345", Some(config));
         stage.run(&mut ctx2).await.unwrap();
 
-        if let Some(HttpResponse::Custom(resp)) = ctx2.res {
-            assert!(resp.headers().contains_key(http::header::RETRY_AFTER));
-            assert_eq!(resp.status(), 429);
+        if let Some(HttpResponse::BuiltinError(status, headers)) = ctx2.res {
+            assert!(headers.unwrap().contains_key(http::header::RETRY_AFTER));
+            assert_eq!(status, 429);
         } else {
             panic!("Expected rate limit response");
         }

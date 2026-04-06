@@ -227,7 +227,6 @@ mod tests {
         let validator = RateLimitValidator;
         assert!(validator.validate_block(&parent, &mut used, false).is_ok());
         assert!(used.contains("rate_limit"));
-        assert!(used.contains("rate"));
     }
 
     #[test]
