@@ -1,5 +1,6 @@
 //! Compression-related utilities for static file serving.
 
+use async_compression::Level;
 use bytes::Bytes;
 use futures_util::TryStreamExt;
 use http_body::Frame;
@@ -188,7 +189,7 @@ pub fn compress_streaming_gzip(file: vibeio::fs::File) -> UnsyncBoxBody<Bytes, s
     use async_compression::tokio::bufread::GzipEncoder;
     use tokio_util::io::{ReaderStream, StreamReader};
     let reader = StreamReader::new(FileStream::new(file, 0, None));
-    let encoder = GzipEncoder::new(reader);
+    let encoder = GzipEncoder::with_quality(reader, Level::Precise(4));
     StreamBody::new(
         ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE)
             .map_ok(Frame::data)
@@ -244,7 +245,7 @@ pub fn compress_streaming_deflate(file: vibeio::fs::File) -> UnsyncBoxBody<Bytes
     use async_compression::tokio::bufread::DeflateEncoder;
     use tokio_util::io::{ReaderStream, StreamReader};
     let reader = StreamReader::new(FileStream::new(file, 0, None));
-    let encoder = DeflateEncoder::new(reader);
+    let encoder = DeflateEncoder::with_quality(reader, Level::Precise(4));
     StreamBody::new(
         ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE)
             .map_ok(Frame::data)
