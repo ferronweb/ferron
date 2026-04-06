@@ -997,6 +997,7 @@ dependencies = [
  "ferron-config-ferronconf",
  "ferron-config-json",
  "ferron-core",
+ "ferron-http-headers",
  "ferron-http-proxy",
  "ferron-http-server",
  "ferron-http-static",
@@ -1097,6 +1098,20 @@ dependencies = [
  "http-body-util",
  "typemap_rev",
  "vibeio",
+]
+
+[[package]]
+name = "ferron-http-headers"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "http",
+ "http-body-util",
+ "typemap_rev",
 ]
 
 [[package]]
