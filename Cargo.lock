@@ -1013,6 +1013,7 @@ dependencies = [
  "ferron-http-proxy",
  "ferron-http-ratelimit",
  "ferron-http-response",
+ "ferron-http-rewrite",
  "ferron-http-server",
  "ferron-http-static",
  "ferron-observability-consolelog",
@@ -1185,6 +1186,23 @@ dependencies = [
  "ferron-observability",
  "http",
  "http-body-util",
+ "tokio",
+ "typemap_rev",
+]
+
+[[package]]
+name = "ferron-http-rewrite"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "fancy-regex",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "http",
+ "http-body-util",
+ "parking_lot",
  "tokio",
  "typemap_rev",
 ]

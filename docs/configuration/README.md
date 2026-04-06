@@ -12,6 +12,7 @@ It is split by topic and by scope so the directive reference is easier to scan.
 - [HTTP Host Directives](./http-host.md)
 - [HTTP Control Directives](./http-control.md)
 - [HTTP Response Control](./http-response.md)
+- [URL Rewriting](./http-rewrite.md)
 - [Reverse Proxy Directives](./http-proxy.md)
 - [Static File Serving Directives](./http-static.md)
 - [TLS Crypto Settings and mTLS](./tls-crypto.md)
