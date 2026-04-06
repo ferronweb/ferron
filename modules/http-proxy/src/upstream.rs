@@ -139,8 +139,9 @@ async fn resolve_srv(
     failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>>,
     health_check_max_fails: u64,
 ) -> Vec<UpstreamInner> {
-    use hickory_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
-    use hickory_resolver::TokioAsyncResolver;
+    use hickory_proto::xfer::Protocol;
+    use hickory_resolver::config::{NameServerConfig, ResolverConfig};
+    use hickory_resolver::TokioResolver;
 
     let srv_name = srv_data.srv_name.clone();
     let dns_servers = srv_data.dns_servers.clone();
@@ -157,6 +158,9 @@ async fn resolve_srv(
     // Spawn SRV lookup on the secondary Tokio runtime
     let result = handle
         .spawn(async move {
+            use hickory_proto::runtime::TokioRuntimeProvider;
+            use hickory_resolver::name_server::TokioConnectionProvider;
+
             // Build resolver inside the spawned task (we're on the secondary runtime)
             let resolver = if !dns_servers.is_empty() {
                 let mut resolver_config = ResolverConfig::new();
@@ -167,13 +171,23 @@ async fn resolve_srv(
                         tls_dns_name: None,
                         trust_negative_responses: false,
                         bind_addr: None,
+                        http_endpoint: None,
                     });
                 }
-                TokioAsyncResolver::tokio(resolver_config, ResolverOpts::default())
+                TokioResolver::builder_with_config(
+                    resolver_config,
+                    TokioConnectionProvider::new(TokioRuntimeProvider::new()),
+                )
+                .build()
             } else {
-                TokioAsyncResolver::tokio_from_system_conf().unwrap_or_else(|_| {
-                    TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default())
-                })
+                TokioResolver::builder_tokio()
+                    .unwrap_or_else(|_| {
+                        TokioResolver::builder_with_config(
+                            ResolverConfig::default(),
+                            TokioConnectionProvider::new(TokioRuntimeProvider::new()),
+                        )
+                    })
+                    .build()
             };
 
             // Perform SRV lookup

@@ -15,7 +15,6 @@ use hyper::body::Incoming;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
-use rustls_platform_verifier::BuilderVerifierExt;
 use tokio_rustls::TlsConnector;
 use vibeio_hyper::VibeioIo;
 
@@ -257,7 +256,23 @@ fn build_tls_config(http2: bool, http2_only: bool, no_verification: bool) -> Cli
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoServerVerifier))
     } else {
-        BuilderVerifierExt::with_platform_verifier(builder)
+        let mut root_store = rustls::RootCertStore::empty();
+
+        // Try native certs first
+        match rustls_native_certs::load_native_certs() {
+            cert_result if !cert_result.errors.is_empty() => (),
+            cert_result if cert_result.certs.is_empty() => (),
+            cert_result => {
+                for cert in cert_result.certs {
+                    let _ = root_store.add(cert);
+                }
+            }
+        }
+
+        // Always add webpki-roots as fallback
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+        builder.with_root_certificates(root_store)
     }
     .with_no_client_auth();
 

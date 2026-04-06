@@ -47,6 +47,3 @@ async-trait = "0.1"
 bytes = "1"
 http = "1"
 http-body-util = "0.1"
-
-[package.metadata.cargo-shear]
-ignored = ["opentelemetry-http"]

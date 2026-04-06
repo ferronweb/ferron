@@ -10,7 +10,6 @@ vibeio-hyper = { version = "0.2.7" }
 vibeio-http = { version = "0.3.0", default-features = false, features = ["h1"] }
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 http = "1"
-http-body = "1"
 http-body-util = "0.1"
 bytes = "1"
 ferron-core = { path = "../../core" }
@@ -21,12 +20,11 @@ futures-util = "0.3"
 tokio = { version = "1", features = ["rt", "io-util", "sync", "macros", "time"] }
 tokio-rustls = "0.26"
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
-rustls-pki-types = "1"
-rustls-platform-verifier = "0.5"
-rand = "0.9"
-anyhow = "1"
-hickory-resolver = { version = "0.24", optional = true }
-hickory-proto = { version = "0.24", optional = true }
+rustls-native-certs = "0.8"
+webpki-roots = "1.0"
+rand = "0.10"
+hickory-resolver = { version = "0.25", optional = true }
+hickory-proto = { version = "0.25", optional = true }
 
 [features]
 default = ["srv-lookup"]
