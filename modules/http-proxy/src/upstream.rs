@@ -516,3 +516,298 @@ pub async fn mark_backend_failure(
     let current = failed.get(upstream).unwrap_or(0);
     failed.insert(upstream.clone(), current + 1);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_upstream(url: &str) -> UpstreamInner {
+        UpstreamInner {
+            proxy_to: url.to_string(),
+            proxy_unix: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_select_backend_index_random() {
+        let backends = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+            make_upstream("http://backend3"),
+        ];
+        let algorithm = LoadBalancerAlgorithmInner::Random;
+
+        // Random should return a valid index
+        for _ in 0..100 {
+            let idx = select_backend_index(&algorithm, &backends, None).await;
+            assert!(idx < backends.len());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_select_backend_index_round_robin() {
+        let backends = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+            make_upstream("http://backend3"),
+        ];
+        let counter = Arc::new(AtomicUsize::new(0));
+        let algorithm = LoadBalancerAlgorithmInner::RoundRobin(counter);
+
+        // Should cycle through backends
+        assert_eq!(select_backend_index(&algorithm, &backends, None).await, 0);
+        assert_eq!(select_backend_index(&algorithm, &backends, None).await, 1);
+        assert_eq!(select_backend_index(&algorithm, &backends, None).await, 2);
+        assert_eq!(select_backend_index(&algorithm, &backends, None).await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_select_backend_index_least_connections() {
+        let backends = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+        ];
+        let conn_state: ConnectionsTrackState = Arc::new(RwLock::new(HashMap::new()));
+        let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
+
+        // With no connections, should return first backend (both have 0 connections)
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state)).await;
+        assert!(idx < backends.len());
+
+        // Simulate more active connections on backend1 by cloning the tracker Arc
+        // The algorithm uses Arc::strong_count(tracker) - 1 to count connections
+        let tracker1 = Arc::new(());
+        conn_state
+            .write()
+            .await
+            .insert(backends[0].clone(), tracker1.clone());
+        // Clone to simulate 2 active connections (strong_count = 3, so 3-1 = 2)
+        let _clone1 = tracker1.clone();
+        let _clone2 = tracker1.clone();
+
+        // backend2 has 0 connections (not in map), backend1 has 2
+        // Should prefer backend2 (less connections)
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state)).await;
+        assert_eq!(idx, 1);
+    }
+
+    #[tokio::test]
+    async fn test_select_backend_index_two_random_choices() {
+        let backends = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+            make_upstream("http://backend3"),
+        ];
+        let conn_state: ConnectionsTrackState = Arc::new(RwLock::new(HashMap::new()));
+        let algorithm = LoadBalancerAlgorithmInner::TwoRandomChoices;
+
+        // Should return valid indices
+        for _ in 0..100 {
+            let idx = select_backend_index(&algorithm, &backends, Some(&conn_state)).await;
+            assert!(idx < backends.len());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_select_backend_single_backend() {
+        let backends = vec![make_upstream("http://backend1")];
+        let conn_state: ConnectionsTrackState = Arc::new(RwLock::new(HashMap::new()));
+        let algorithm = LoadBalancerAlgorithmInner::TwoRandomChoices;
+
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state)).await;
+        assert_eq!(idx, 0);
+    }
+
+    #[tokio::test]
+    async fn test_determine_proxy_to_no_upstreams() {
+        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
+            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
+        );
+        let algorithm = LoadBalancerAlgorithmInner::Random;
+
+        let result = determine_proxy_to(&[], &failed_backends, false, 3, &algorithm, None).await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_determine_proxy_to_single_backend() {
+        let upstreams = vec![make_upstream("http://backend1")];
+        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
+            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
+        );
+        let algorithm = LoadBalancerAlgorithmInner::Random;
+        let conn_state: ConnectionsTrackState = Arc::new(RwLock::new(HashMap::new()));
+
+        let result = determine_proxy_to(
+            &upstreams,
+            &failed_backends,
+            false,
+            3,
+            &algorithm,
+            Some(&conn_state),
+        )
+        .await;
+        assert!(result.is_some());
+        let selected = result.unwrap();
+        assert_eq!(selected.upstream.proxy_to, "http://backend1");
+    }
+
+    #[tokio::test]
+    async fn test_determine_proxy_to_health_check_filters_unhealthy() {
+        let upstreams = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+        ];
+        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
+            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
+        );
+
+        // Mark backend1 as unhealthy (exceeds max_fails)
+        {
+            let mut failed = failed_backends.write().await;
+            failed.insert(make_upstream("http://backend1"), 5);
+        }
+
+        let algorithm = LoadBalancerAlgorithmInner::Random;
+
+        // With health check enabled, should only select backend2
+        let result = determine_proxy_to(
+            &upstreams,
+            &failed_backends,
+            true,
+            3, // max_fails
+            &algorithm,
+            None,
+        )
+        .await;
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
+    }
+
+    #[tokio::test]
+    async fn test_determine_proxy_to_all_unhealthy() {
+        let upstreams = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+        ];
+        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
+            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
+        );
+
+        // Mark all backends as unhealthy
+        {
+            let mut failed = failed_backends.write().await;
+            failed.insert(make_upstream("http://backend1"), 5);
+            failed.insert(make_upstream("http://backend2"), 5);
+        }
+
+        let algorithm = LoadBalancerAlgorithmInner::Random;
+
+        let result = determine_proxy_to(
+            &upstreams,
+            &failed_backends,
+            true,
+            3, // max_fails
+            &algorithm,
+            None,
+        )
+        .await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_determine_proxy_to_health_check_disabled() {
+        let upstreams = vec![
+            make_upstream("http://backend1"),
+            make_upstream("http://backend2"),
+        ];
+        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
+            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
+        );
+
+        // Mark backend1 as unhealthy, but health check is disabled so it should still be selected
+        {
+            let mut failed = failed_backends.write().await;
+            failed.insert(make_upstream("http://backend1"), 100);
+        }
+
+        let algorithm = LoadBalancerAlgorithmInner::Random;
+
+        let result = determine_proxy_to(
+            &upstreams,
+            &failed_backends,
+            false, // health check disabled
+            3,
+            &algorithm,
+            None,
+        )
+        .await;
+        assert!(result.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_mark_backend_failure() {
+        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
+            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
+        );
+        let upstream = make_upstream("http://backend1");
+        let mut metrics = crate::ProxyMetrics::new();
+
+        mark_backend_failure(Arc::clone(&failed_backends), true, &upstream, &mut metrics).await;
+
+        assert_eq!(metrics.unhealthy_backends.len(), 1);
+        assert_eq!(failed_backends.read().await.get(&upstream), Some(1));
+
+        // Second failure
+        mark_backend_failure(Arc::clone(&failed_backends), true, &upstream, &mut metrics).await;
+
+        assert_eq!(failed_backends.read().await.get(&upstream), Some(2));
+    }
+
+    #[tokio::test]
+    async fn test_mark_backend_failure_health_check_disabled() {
+        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
+            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
+        );
+        let upstream = make_upstream("http://backend1");
+        let mut metrics = crate::ProxyMetrics::new();
+
+        mark_backend_failure(
+            Arc::clone(&failed_backends),
+            false, // health check disabled
+            &upstream,
+            &mut metrics,
+        )
+        .await;
+
+        assert_eq!(metrics.unhealthy_backends.len(), 0);
+        assert_eq!(failed_backends.read().await.get(&upstream), None);
+    }
+
+    #[test]
+    fn test_upstream_inner_debug() {
+        let upstream = make_upstream("http://backend1");
+        let debug_str = format!("{:?}", upstream);
+        assert!(debug_str.contains("http://backend1"));
+    }
+
+    #[test]
+    fn test_load_balancer_algorithm_from() {
+        assert!(matches!(
+            LoadBalancerAlgorithmInner::from(LoadBalancerAlgorithm::Random),
+            LoadBalancerAlgorithmInner::Random
+        ));
+        assert!(matches!(
+            LoadBalancerAlgorithmInner::from(LoadBalancerAlgorithm::RoundRobin),
+            LoadBalancerAlgorithmInner::RoundRobin(_)
+        ));
+        assert!(matches!(
+            LoadBalancerAlgorithmInner::from(LoadBalancerAlgorithm::LeastConnections),
+            LoadBalancerAlgorithmInner::LeastConnections
+        ));
+        assert!(matches!(
+            LoadBalancerAlgorithmInner::from(LoadBalancerAlgorithm::TwoRandomChoices),
+            LoadBalancerAlgorithmInner::TwoRandomChoices
+        ));
+    }
+}
