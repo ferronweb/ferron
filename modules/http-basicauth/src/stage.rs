@@ -282,7 +282,7 @@ mod tests {
 
         let mut directives = StdHashMap::new();
         directives.insert(
-            "basicauth".to_string(),
+            "basic_auth".to_string(),
             vec![ServerConfigurationDirectiveEntry {
                 args: vec![],
                 children: Some(ServerConfigurationBlock {
