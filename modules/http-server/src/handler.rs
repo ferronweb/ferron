@@ -13,7 +13,7 @@ use ferron_core::util::parse_duration;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse};
 use ferron_observability::{
     AccessEvent, AccessVisitor, CompositeEventSink, Event, LogEvent, LogLevel,
-    MetricAttributeValue, MetricEvent, MetricType, MetricValue, TraceEvent,
+    MetricAttributeValue, MetricEvent, MetricType, MetricValue, TraceAttributeValue, TraceEvent,
 };
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::Empty;
@@ -296,9 +296,26 @@ pub async fn request_handler(
         .collect();
 
     // Start tracing span
-    events.emit(Event::Trace(TraceEvent::StartSpan(
-        "ferron.request_handler".to_string(),
-    )));
+    events.emit(Event::Trace(TraceEvent::StartSpan {
+        name: "ferron.request_handler".to_string(),
+        parent_span_id: None,
+        attributes: vec![
+            (
+                "http.request.method",
+                TraceAttributeValue::String(method.as_str().to_string()),
+            ),
+            ("url.path", TraceAttributeValue::String(path.clone())),
+            (
+                "url.scheme",
+                TraceAttributeValue::String(scheme.to_string()),
+            ),
+            (
+                "server.address",
+                TraceAttributeValue::String(server_ip.clone()),
+            ),
+            ("server.port", TraceAttributeValue::I64(server_port as i64)),
+        ],
+    }));
 
     // Increment active requests counter
     events.emit(Event::Metric(MetricEvent {
@@ -418,10 +435,21 @@ pub async fn request_handler(
 
     // End tracing span
     let error_description = response_result.as_ref().err().map(|e| e.to_string());
-    events.emit(Event::Trace(TraceEvent::EndSpan(
-        "ferron.request_handler".to_string(),
-        error_description,
-    )));
+    let mut end_attrs = vec![(
+        "http.response.status_code",
+        TraceAttributeValue::I64(status_code as i64),
+    )];
+    if status_code >= 400 {
+        end_attrs.push((
+            "error.type",
+            TraceAttributeValue::String(status_code.to_string()),
+        ));
+    }
+    events.emit(Event::Trace(TraceEvent::EndSpan {
+        name: "ferron.request_handler".to_string(),
+        error: error_description,
+        attributes: end_attrs,
+    }));
 
     if let Ok(response) = &mut response_result {
         // TODO: add Alt-Svc for HTTP/3

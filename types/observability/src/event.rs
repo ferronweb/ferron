@@ -83,11 +83,38 @@ pub enum MetricAttributeValue {
     F64(f64),
 }
 
+/// Represents an attribute value for a trace span.
+/// Mirrors OTEL semantic convention attribute types.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TraceAttributeValue {
+    /// String value
+    String(String),
+
+    /// Boolean value
+    Bool(bool),
+
+    /// Integer value
+    I64(i64),
+
+    /// Floating-point value
+    F64(f64),
+}
+
 /// Represents a trace event with its name, attributes, and optional span ID.
 #[derive(Clone)]
 pub enum TraceEvent {
-    /// Start a new span with the given name.
-    StartSpan(String),
-    /// End the span with the given name and optional error description.
-    EndSpan(String, Option<String>),
+    /// Start a new span with the given name, optional parent, and attributes.
+    StartSpan {
+        name: String,
+        parent_span_id: Option<String>,
+        attributes: Vec<(&'static str, TraceAttributeValue)>,
+    },
+    /// End the span with the given name, optional error description, and final attributes.
+    /// Attributes here are merged with those from StartSpan and are useful for values
+    /// only known at response time (e.g. `http.response.status_code`).
+    EndSpan {
+        name: String,
+        error: Option<String>,
+        attributes: Vec<(&'static str, TraceAttributeValue)>,
+    },
 }

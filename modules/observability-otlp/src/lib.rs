@@ -15,7 +15,7 @@ use ferron_core::{
 };
 use ferron_observability::{
     AccessEvent, Event, EventSink, LogEvent, LogLevel, MetricAttributeValue, MetricEvent,
-    MetricType, MetricValue, ObservabilityContext, TraceEvent,
+    MetricType, MetricValue, ObservabilityContext, TraceAttributeValue, TraceEvent,
 };
 use hyper::header::HeaderValue;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -47,8 +47,8 @@ struct OtlpBackendConfig {
 
 /// Correlation context: tracks active spans per host sink instance.
 struct CorrelationContext {
-    /// Active spans: span_name -> (trace_id_hex, span_id_hex)
-    active_spans: DashMap<String, (String, String)>,
+    /// Active spans: span_name -> (trace_id_hex, span)
+    active_spans: DashMap<String, (String, opentelemetry_sdk::trace::Span)>,
 }
 
 impl CorrelationContext {
@@ -58,20 +58,29 @@ impl CorrelationContext {
         }
     }
 
-    fn insert_span(&self, name: String, trace_id_hex: String, span_id_hex: String) {
-        self.active_spans.insert(name, (trace_id_hex, span_id_hex));
+    fn insert_span(
+        &self,
+        name: String,
+        trace_id_hex: String,
+        span: opentelemetry_sdk::trace::Span,
+    ) {
+        self.active_spans.insert(name, (trace_id_hex, span));
     }
 
-    fn remove_span(&self, name: &str) -> Option<(String, String)> {
+    fn remove_span(&self, name: &str) -> Option<(String, opentelemetry_sdk::trace::Span)> {
         self.active_spans.remove(name).map(|(_, v)| v)
     }
 
-    #[allow(dead_code)]
-    fn get_active_span(&self) -> Option<(String, String)> {
-        self.active_spans
-            .iter()
-            .last()
-            .map(|entry| (entry.value().0.clone(), entry.value().1.clone()))
+    /// Look up an active span's trace and span ID for use as a parent.
+    fn get_parent_ids(&self, name: &str) -> Option<(String, String)> {
+        use opentelemetry::trace::Span;
+        self.active_spans.get(name).map(|entry| {
+            let (trace_id_hex, span) = entry.value();
+            (
+                trace_id_hex.clone(),
+                span.span_context().span_id().to_string(),
+            )
+        })
     }
 }
 
@@ -982,29 +991,81 @@ fn emit_trace(
     event: &TraceEvent,
     correlation: &CorrelationContext,
 ) {
-    use opentelemetry::trace::{Span, Status, Tracer};
+    use opentelemetry::trace::{
+        Span, SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState, Tracer,
+    };
+    use opentelemetry::Context;
 
     let tracer = provider.tracer("ferron");
 
     match event {
-        TraceEvent::StartSpan(name) => {
-            let span = tracer.start(name.clone());
-            let span_context = span.span_context();
-            let trace_id_hex = span_context.trace_id().to_string();
-            let span_id_hex = span_context.span_id().to_string();
-            // Span will be ended when EndSpan arrives
-            correlation.insert_span(name.clone(), trace_id_hex, span_id_hex);
-        }
-        TraceEvent::EndSpan(name, error) => {
-            if correlation.remove_span(name).is_some() {
-                // Create a new span to represent the end with error status
-                if let Some(error_desc) = error {
-                    let mut end_span = tracer.start(format!("{name}.error"));
-                    end_span.set_status(Status::error(error_desc.clone()));
-                    end_span.end();
+        TraceEvent::StartSpan {
+            name,
+            parent_span_id,
+            attributes,
+        } => {
+            let mut span = if let Some(parent_name) = parent_span_id {
+                // Look up the parent span's trace_id and span_id by name
+                if let Some((trace_id_hex, parent_span_id_hex)) =
+                    correlation.get_parent_ids(parent_name)
+                {
+                    if let (Ok(trace_id), Ok(span_id)) = (
+                        TraceId::from_hex(&trace_id_hex),
+                        SpanId::from_hex(&parent_span_id_hex),
+                    ) {
+                        let parent_ctx = SpanContext::new(
+                            trace_id,
+                            span_id,
+                            TraceFlags::SAMPLED,
+                            true,
+                            TraceState::default(),
+                        );
+                        let parent_cx = Context::new().with_remote_span_context(parent_ctx);
+                        tracer.start_with_context(name.clone(), &parent_cx)
+                    } else {
+                        tracer.start(name.clone())
+                    }
+                } else {
+                    tracer.start(name.clone())
                 }
+            } else {
+                tracer.start(name.clone())
+            };
+
+            // Set semantic convention attributes
+            for (key, value) in attributes {
+                span.set_attribute(trace_kv(key, value));
+            }
+
+            let trace_id_hex = span.span_context().trace_id().to_string();
+            correlation.insert_span(name.clone(), trace_id_hex, span);
+        }
+        TraceEvent::EndSpan {
+            name,
+            error,
+            attributes,
+        } => {
+            if let Some((_, mut span)) = correlation.remove_span(name) {
+                // Apply any final attributes (e.g. http.response.status_code)
+                for (key, value) in attributes {
+                    span.set_attribute(trace_kv(key, value));
+                }
+                if let Some(error_desc) = error {
+                    span.set_status(opentelemetry::trace::Status::error(error_desc.clone()));
+                }
+                span.end();
             }
         }
+    }
+}
+
+/// Convert a TraceAttributeValue into an OTEL KeyValue.
+fn trace_kv(key: &'static str, value: &TraceAttributeValue) -> KeyValue {
+    match value {
+        TraceAttributeValue::String(s) => KeyValue::new(key, s.clone()),
+        TraceAttributeValue::Bool(b) => KeyValue::new(key, *b),
+        TraceAttributeValue::I64(i) => KeyValue::new(key, *i),
+        TraceAttributeValue::F64(f) => KeyValue::new(key, *f),
     }
 }
 
@@ -1229,22 +1290,126 @@ mod tests {
 
     #[test]
     fn correlation_context_tracks_active_spans() {
+        use opentelemetry::trace::{Span, Tracer, TracerProvider};
+
         let ctx = CorrelationContext::new();
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+        let tracer = provider.tracer("test");
+
+        let span = tracer.start("ferron.request_handler");
+        let trace_id_hex = span.span_context().trace_id().to_string();
+        let span_id_hex = span.span_context().span_id().to_string();
 
         ctx.insert_span(
             "ferron.request_handler".to_string(),
-            "trace123".to_string(),
-            "span456".to_string(),
+            trace_id_hex.clone(),
+            span,
         );
 
-        let (trace_id, span_id) = ctx.get_active_span().expect("should have active span");
-        assert_eq!(trace_id, "trace123");
-        assert_eq!(span_id, "span456");
+        let (t_id, s_id) = ctx
+            .get_parent_ids("ferron.request_handler")
+            .expect("should have active span");
+        assert_eq!(t_id, trace_id_hex);
+        assert_eq!(s_id, span_id_hex);
 
         let result = ctx.remove_span("ferron.request_handler");
         assert!(result.is_some());
-        assert_eq!(result.unwrap().0, "trace123");
 
-        assert!(ctx.get_active_span().is_none());
+        assert!(ctx.get_parent_ids("ferron.request_handler").is_none());
+    }
+
+    #[test]
+    fn emit_trace_start_span_stores_span_object() {
+        use ferron_observability::TraceAttributeValue;
+
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+        let correlation = CorrelationContext::new();
+
+        let event = TraceEvent::StartSpan {
+            name: "test.span".to_string(),
+            parent_span_id: None,
+            attributes: vec![
+                (
+                    "http.request.method",
+                    TraceAttributeValue::String("GET".to_string()),
+                ),
+                (
+                    "url.path",
+                    TraceAttributeValue::String("/api/test".to_string()),
+                ),
+            ],
+        };
+
+        emit_trace(&provider, &event, &correlation);
+
+        // The span should be stored (not dropped)
+        assert!(correlation.get_parent_ids("test.span").is_some());
+    }
+
+    #[test]
+    fn emit_trace_end_span_ends_properly() {
+        use ferron_observability::TraceAttributeValue;
+
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+        let correlation = CorrelationContext::new();
+
+        // Start a span
+        let start_event = TraceEvent::StartSpan {
+            name: "test.span".to_string(),
+            parent_span_id: None,
+            attributes: vec![(
+                "http.request.method",
+                TraceAttributeValue::String("POST".to_string()),
+            )],
+        };
+        emit_trace(&provider, &start_event, &correlation);
+
+        // End the span with error
+        let end_event = TraceEvent::EndSpan {
+            name: "test.span".to_string(),
+            error: Some("test error".to_string()),
+            attributes: vec![("http.response.status_code", TraceAttributeValue::I64(500))],
+        };
+        emit_trace(&provider, &end_event, &correlation);
+
+        // The span should be removed from the correlation context
+        assert!(correlation.get_parent_ids("test.span").is_none());
+    }
+
+    #[test]
+    fn emit_trace_end_span_without_error() {
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+        let correlation = CorrelationContext::new();
+
+        let start_event = TraceEvent::StartSpan {
+            name: "test.span".to_string(),
+            parent_span_id: None,
+            attributes: vec![],
+        };
+        emit_trace(&provider, &start_event, &correlation);
+
+        let end_event = TraceEvent::EndSpan {
+            name: "test.span".to_string(),
+            error: None,
+            attributes: vec![("http.response.status_code", TraceAttributeValue::I64(200))],
+        };
+        emit_trace(&provider, &end_event, &correlation);
+
+        assert!(correlation.get_parent_ids("test.span").is_none());
+    }
+
+    #[test]
+    fn emit_trace_end_span_on_unknown_name_does_nothing() {
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+        let correlation = CorrelationContext::new();
+
+        // End a span that was never started — should not panic
+        let end_event = TraceEvent::EndSpan {
+            name: "unknown.span".to_string(),
+            error: Some("should be ignored".to_string()),
+            attributes: vec![],
+        };
+        emit_trace(&provider, &end_event, &correlation);
+        assert!(correlation.get_parent_ids("unknown.span").is_none());
     }
 }
