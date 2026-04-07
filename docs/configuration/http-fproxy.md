@@ -1,16 +1,11 @@
-# HTTP Forward Proxy Directives
+---
+title: "Configuration: forward proxy"
+description: "Forward proxy, CONNECT tunneling, access control, and domain allowlisting directives."
+---
 
-The `forward_proxy` directive configures Titanium to act as an HTTP forward proxy, accepting requests from clients and forwarding them to external destinations. It supports both HTTP CONNECT tunneling (for HTTPS/WebSocket) and HTTP/1.x absolute URI forwarding.
-
-## Categories
-
-- Main directive: `forward_proxy`
-- Access control: `allow_domains`, `allow_ports`, `deny_ips`
-- Protocol: `connect_method`, `http_version`
+This page documents directives for configuring Ferron to act as an HTTP forward proxy, accepting requests from clients and forwarding them to external destinations. It supports both HTTP CONNECT tunneling (for HTTPS/WebSocket) and HTTP/1.x absolute URI forwarding.
 
 ## `forward_proxy`
-
-Syntax:
 
 ```ferron
 proxy.example.com {
@@ -27,13 +22,13 @@ proxy.example.com {
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `allow_domains` | `<string>...` | Allowed destination domains. Supports `*` wildcards (e.g., `*.example.com`). If empty, all domains are denied (deny-by-default). | none (deny all) |
+| `allow_domains` | `<string>...` | Allowed destination domains. Supports `*` wildcards. If empty, all domains are denied (deny-by-default). | none (deny all) |
 | `allow_ports` | `<int>...` | Allowed destination ports. | `80`, `443` |
-| `deny_ips` | `<CIDR>...` | Denied destination IP ranges, applied after DNS resolution. Blocks the resolved IP if it falls within any listed range. | Loopback, RFC 1918, link-local, shared, cloud metadata (see below) |
+| `deny_ips` | `<CIDR>...` | Denied destination IP ranges, applied after DNS resolution. | Loopback, RFC 1918, link-local, cloud metadata (see below) |
 | `connect_method` | `<bool>` or bare | Enable HTTP CONNECT tunneling. When disabled, CONNECT requests are rejected with 403. | `true` |
-| `http_version` | `1.0` or `1.1` | HTTP version used for upstream connections when forwarding HTTP requests. | `1.1` |
+| `http_version` | `1.0` or `1.1` | HTTP version used for upstream connections. | `1.1` |
 
-### Default Denied IP Ranges
+### Default denied IP ranges
 
 When no `deny_ips` is specified, the following ranges are denied by default:
 
@@ -50,30 +45,28 @@ When no `deny_ips` is specified, the following ranges are denied by default:
 | `fd00::/8` | IPv6 unique local addresses |
 | `169.254.169.254/32` | Cloud metadata endpoint |
 
-### Security Model
+### Security model
 
 The forward proxy operates on a **deny-by-default** model:
 
 1. **Domain allowlisting**: If `allow_domains` is not configured, all destination domains are denied.
 2. **Port allowlisting**: Only explicitly listed ports are allowed. Defaults to `80` and `443`.
-3. **IP denylisting**: After DNS resolution, the resolved IP is checked against the deny list (including defaults). This prevents SSRF attacks via cloud metadata or internal network access.
+3. **IP denylisting**: After DNS resolution, the resolved IP is checked against the deny list (including defaults). This prevents SSRF attacks.
 
-## Request Handling
+## Request handling
 
-### CONNECT Tunneling
+### CONNECT tunneling
 
-When a client sends an HTTP CONNECT request (e.g., `CONNECT example.com:443 HTTP/1.1`), Titanium:
+When a client sends an HTTP CONNECT request, Ferron:
 
 1. Validates the destination against ACLs (domain, port, IP)
 2. Establishes a TCP connection to the target
 3. Returns `200 Connection Established` to the client
 4. Bidirectionally forwards raw TCP data between client and target
 
-This is used for HTTPS traffic and WebSocket upgrades.
+### HTTP forwarding
 
-### HTTP Forwarding
-
-When a client sends an HTTP request with an absolute URI (e.g., `GET http://example.com/path HTTP/1.1`), Titanium:
+When a client sends an HTTP request with an absolute URI, Ferron:
 
 1. Validates the destination against ACLs
 2. Connects to the target host
@@ -85,7 +78,7 @@ Only `http` scheme is supported. Requests with `https` scheme are rejected with 
 
 ## Examples
 
-### Basic Forward Proxy
+### Basic forward proxy
 
 ```ferron
 proxy.example.com {
@@ -96,9 +89,7 @@ proxy.example.com {
 }
 ```
 
-This allows proxying to `example.com`, any subdomain of `example.com`, and `api.service.internal` on ports 80 and 443 only.
-
-### Forward Proxy with Explicit IP Denylist
+### Forward proxy with explicit IP denylist
 
 ```ferron
 proxy.example.com {
@@ -110,7 +101,7 @@ proxy.example.com {
 }
 ```
 
-### Forward Proxy Without CONNECT
+### Forward proxy without CONNECT
 
 ```ferron
 proxy.example.com {
@@ -122,17 +113,11 @@ proxy.example.com {
 }
 ```
 
-This configuration only supports HTTP/1.x absolute URI forwarding — CONNECT tunneling is disabled.
-
-## Notes
+## Notes and troubleshooting
 
 - The `forward_proxy` directive is scoped to individual HTTP host blocks.
-- Domain patterns support `*` wildcards (e.g., `*.example.com` matches `api.example.com`).
+- Domain patterns support `*` wildcards (e.g. `*.example.com` matches `api.example.com`).
 - DNS resolution happens at connect time. The resolved IP is validated against the deny list to prevent DNS rebinding attacks.
-- The forward proxy stage runs before the `not_found` stage in the HTTP pipeline.
 - For HTTPS forwarding, clients must use CONNECT tunneling — direct `https://` URLs in HTTP requests are not supported.
-
-## See Also
-
-- [HTTP Host Directives](./http-host.md)
-- [Reverse Proxy Directives](./http-proxy.md)
+- For reverse proxy configuration, see [Reverse proxy](/docs/v3/reverse-proxying).
+- For HTTP host directives, see [HTTP host directives](/docs/v3/http-host).

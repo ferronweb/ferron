@@ -1,78 +1,44 @@
-# HTTP Response Control
+---
+title: "Configuration: HTTP response control"
+description: "Custom status codes, connection aborting, and IP-based access control directives."
+---
 
-The HTTP response module provides directives for returning custom status codes, aborting connections, and IP-based access control.
+This page documents directives for returning custom status codes, aborting connections, and IP-based access control.
 
-## Overview
+## Directives
 
-- Return custom HTTP status codes with optional response bodies
-- Match requests by exact URL path or regular expression
-- Redirect with 3xx status codes and `Location` header
-- Immediately abort connections without sending a response
-- Block or allow specific IP addresses and CIDR ranges
+### Custom status codes
 
-## `status`
+- `status <code: integer>` (_http_response_ module)
+  - This directive specifies an HTTP status code to return. In block form, supports nested `url`, `regex`, `body`, and `location` directives. Default: none
 
-Syntax:
-
-```ferron
-example.com {
-    status 403
-}
-```
-
-| Arguments | Description | Default |
-| --- | --- | --- |
-| `<integer>` | HTTP status code to return (100–599, required) | — |
-
-### Nested directives
-
-When using the block form, you can customize the response further:
+#### Block form options
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `url` | `<string>` | Only apply this status to requests matching this exact path | all requests |
-| `regex` | `<string>` | Only apply this status to requests matching this regular expression | all requests |
-| `body` | `<string>` | Response body to include | empty body |
-| `location` | `<string>` | Redirect destination for 3xx responses | no redirect |
+| `url` | `<string>` | Only apply this status to requests matching this exact path. | all requests |
+| `regex` | `<string>` | Only apply this status to requests matching this regular expression. | all requests |
+| `body` | `<string>` | Response body to include. | empty body |
+| `location` | `<string>` | Redirect destination for 3xx responses. | no redirect |
 
-### Examples
-
-#### Return a status code for all requests
+**Configuration example:**
 
 ```ferron
 example.com {
     status 503 {
         body "Service temporarily unavailable"
     }
-}
-```
 
-#### Return a status code for a specific URL
-
-```ferron
-example.com {
     status 404 {
         url "/old-endpoint"
         body "This endpoint has been removed"
     }
-}
-```
 
-#### Redirect with a custom status
-
-```ferron
-example.com {
     status 301 {
         url "/legacy"
         location "/new"
     }
-}
-```
 
-#### Regex-based status matching
-
-```ferron
-example.com {
     status 410 {
         regex "^/api/v1/.*"
         body "API v1 has been deprecated"
@@ -82,30 +48,12 @@ example.com {
 
 Multiple `status` directives can be defined. They are evaluated in order — the first matching rule wins.
 
-## `abort`
+### Connection abort
 
-Syntax:
+- `abort [bool: boolean]` (_http_response_ module)
+  - This directive specifies whether the connection is immediately closed without sending any response. When `true` or when omitted, the connection is terminated immediately. Default: `abort false`
 
-```ferron
-example.com {
-    abort
-}
-```
-
-| Arguments | Description | Default |
-| --- | --- | --- |
-| *(optional)* `<boolean>` | When `true` or when omitted, immediately close the connection without sending any response | `false` |
-
-### Behavior
-
-When `abort` is set (with or without an explicit `true` value), the connection is terminated immediately with no HTTP response sent. This is useful for:
-
-- Silently dropping requests from unwanted clients
-- Denial-of-service mitigation at the connection level
-
-The client will see a connection reset error rather than an HTTP status code.
-
-### Example
+**Configuration example:**
 
 ```ferron
 example.com {
@@ -113,84 +61,43 @@ example.com {
 }
 ```
 
-## `block`
+When `abort` is set, the connection is terminated immediately with no HTTP response sent. This is useful for silently dropping requests from unwanted clients or for denial-of-service mitigation.
 
-Syntax:
+### IP access control
 
-```ferron
-example.com {
-    block "10.0.0.0/8" "192.168.1.100"
-}
-```
+- `block <ip-or-cidr: string>...` (_http_response_ module)
+  - This directive specifies one or more IP addresses or CIDR ranges to block. Blocked IPs receive a **403 Forbidden** response. Default: none
+- `allow <ip-or-cidr: string>...` (_http_response_ module)
+  - This directive specifies one or more IP addresses or CIDR ranges to allow. When configured, **only** the listed IPs/CIDRs are permitted. All other IPs receive a **403 Forbidden** response. Default: none (all allowed)
 
-| Arguments | Description | Default |
-| --- | --- | --- |
-| `<string>...` | One or more IP addresses or CIDR ranges to block | none |
-
-Blocked IPs receive a **403 Forbidden** response. Both individual IPs and CIDR ranges (e.g., `192.168.1.0/24`) are supported.
-
-### Examples
+**Configuration example:**
 
 ```ferron
 example.com {
-    # Block specific IPs
     block "192.168.1.100" "10.0.0.50"
-
-    # Block an entire subnet
     block "203.0.113.0/24"
-}
-```
 
-## `allow`
-
-Syntax:
-
-```ferron
-example.com {
-    allow "192.168.1.0/24" "10.0.0.0/8"
-}
-```
-
-| Arguments | Description | Default |
-| --- | --- | --- |
-| `<string>...` | One or more IP addresses or CIDR ranges to allow | none (all allowed) |
-
-When `allow` is configured, **only** the listed IPs/CIDRs are permitted. All other IPs receive a **403 Forbidden** response.
-
-### Example
-
-```ferron
-internal.example.com {
-    # Only allow access from the internal network
     allow "10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16"
 }
 ```
 
-## Combined block and allow
+#### Combined block and allow
 
 When both `block` and `allow` are configured:
 
 1. If the IP matches an `allow` entry **and** a `block` entry → **blocked** (block takes precedence)
 2. If the IP matches only an `allow` entry → **allowed**
 3. If the IP matches only a `block` entry → **blocked**
-4. If the IP matches neither → **allowed** (not in the allow list, but not blocked either — unless the allow list is non-empty, in which case non-listed IPs are denied)
-
-### Example
+4. If the IP matches neither → **allowed** (unless the allow list is non-empty, in which case non-listed IPs are denied)
 
 ```ferron
 example.com {
-    # Allow the entire /24 subnet
     allow "192.168.1.0/24"
-
-    # But block one specific host within it
     block "192.168.1.100"
 }
 ```
 
-In this example:
-- `192.168.1.50` → allowed
-- `192.168.1.100` → blocked (block takes precedence over allow)
-- `10.0.0.1` → denied (not in the allow list)
+In this example: `192.168.1.50` → allowed, `192.168.1.100` → blocked, `10.0.0.1` → denied.
 
 ## Scoping
 
@@ -200,27 +107,8 @@ All directives (`status`, `abort`, `block`, `allow`) can be placed at different 
 - **`location` block** — applies only to requests matching that path prefix
 - **`if` / `if_not` blocks** — applies conditionally based on a matcher
 
-```ferron
-example.com {
-    # Host-level: blocks apply to everything
-    block "203.0.113.0/24"
+## Notes and troubleshooting
 
-    location /admin {
-        # Location-level: stricter status
-        status 403 {
-            body "Admin area restricted"
-        }
-    }
-
-    if sensitive_matcher {
-        # Conditional: abort certain requests
-        abort true
-    }
-}
-```
-
-## See Also
-
-- [HTTP Control Directives](./http-control.md) (`location`, `if`, `if_not`)
-- [HTTP Host Directives](./http-host.md)
-- [Conditionals And Variables](./conditionals.md)
+- For `location`, `if`, and `if_not` syntax, see [Routing and URL processing](/docs/v3/routing-url-processing).
+- For conditionals and matchers, see [Conditionals and variables](/docs/v3/conditionals).
+- For HTTP host directives, see [HTTP host directives](/docs/v3/http-host).

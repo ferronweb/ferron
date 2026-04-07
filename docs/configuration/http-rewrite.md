@@ -1,43 +1,33 @@
-# URL Rewriting
+---
+title: "Configuration: URL rewriting"
+description: "The `rewrite` directive for transforming request URLs using regular expression patterns."
+---
 
-The URL rewriting module provides the `rewrite` directive for transforming request URLs using regular expression patterns. Rewrites are applied early in the request pipeline, before proxying or static file serving, so the rewritten URL is used for routing.
+This page documents the `rewrite` directive for transforming request URLs using regular expression patterns. Rewrites are applied early in the request pipeline, before proxying or static file serving, so the rewritten URL is used for routing.
 
-## Overview
+## Directives
 
-- Rewrite request URLs using regular expression patterns
-- Capture groups in the regex can be referenced in the replacement string (`$1`, `$2`, etc.)
-- Chain multiple rules — each rule's output becomes the next rule's input
-- Control whether rules apply to files, directories, or both
-- Mark rules as `last` to stop further rewriting
-- Optional logging of all rewrite operations
+### `rewrite`
 
-## `rewrite`
+- `rewrite <regex: string> <replacement: string>`
+  - This directive specifies a regular expression pattern and replacement string for URL rewriting. Capture groups in the regex can be referenced in the replacement string (`$1`, `$2`, etc.). Default: none
 
-Syntax:
-
-```ferron
-example.com {
-    rewrite "<regex>" "<replacement>"
-}
-```
-
-| Arguments | Description | Default |
-| --- | --- | --- |
-| `<regex>` | Regular expression to match against the request URL (path + query string) | — |
-| `<replacement>` | Replacement string; capture groups referenced as `$1`, `$2`, etc. | — |
-
-### Block options
-
-The `rewrite` directive supports an optional block for additional configuration:
+#### Block options
 
 | Option | Arguments | Description | Default |
 | --- | --- | --- | --- |
-| `last` | `<bool>` | When `true`, stop processing further rewrite rules after this one matches | `false` |
-| `directory` | `<bool>` | When `true`, apply this rule when the URL corresponds to a directory | `true` |
-| `file` | `<bool>` | When `true`, apply this rule when the URL corresponds to a file | `true` |
-| `allow_double_slashes` | `<bool>` | When `true`, preserve double slashes (`//`) in the URL instead of collapsing them | `false` |
+| `last` | `<bool>` | When `true`, stop processing further rewrite rules after this one matches. | `false` |
+| `directory` | `<bool>` | When `true`, apply this rule when the URL corresponds to a directory. | `true` |
+| `file` | `<bool>` | When `true`, apply this rule when the URL corresponds to a file. | `true` |
+| `allow_double_slashes` | `<bool>` | When `true`, preserve double slashes (`//`) in the URL instead of collapsing them. | `false` |
 
-### Examples
+**Configuration example:**
+
+```ferron
+example.com {
+    rewrite "^/old-path/(.*)" "/new-path/$1"
+}
+```
 
 #### Simple rewrite
 
@@ -71,7 +61,7 @@ example.com {
 }
 ```
 
-A request to `/legacy/foo` is first rewritten to `/modern/foo`, then the second rule rewrites it to `/current/foo`. Both rules are applied in sequence.
+A request to `/legacy/foo` is first rewritten to `/modern/foo`, then the second rule rewrites it to `/current/foo`.
 
 #### File/directory-specific rules
 
@@ -79,7 +69,6 @@ A request to `/legacy/foo` is first rewritten to `/modern/foo`, then the second 
 example.com {
     root "/var/www"
 
-    # Only rewrite URLs that correspond to files
     rewrite "^/static/(.*)" "/assets/$1" {
         file true
         directory false
@@ -87,19 +76,12 @@ example.com {
 }
 ```
 
-#### Preserve double slashes
+### `rewrite_log`
 
-```ferron
-example.com {
-    rewrite "^/special//(.*)" "/normalized/$1" {
-        allow_double_slashes true
-    }
-}
-```
+- `rewrite_log <bool>`
+  - This directive specifies whether each URL rewrite operation is logged to the error log. Default: `rewrite_log false`
 
-## `rewrite_log`
-
-Syntax:
+**Configuration example:**
 
 ```ferron
 example.com {
@@ -107,11 +89,7 @@ example.com {
 }
 ```
 
-| Arguments | Description | Default |
-| --- | --- | --- |
-| `<bool>` | When `true`, log each URL rewrite operation to the error log | `false` |
-
-When enabled, each rewrite operation is logged with the original and rewritten URLs:
+Example log output:
 
 ```
 URL rewritten from "/old-path/users" to "/new-path/users"
@@ -123,8 +101,14 @@ The regular expression engine used is [`fancy-regex`](https://crates.io/crates/f
 
 ## URL sanitation interaction
 
-When URL sanitization is enabled (the default), dangerous path sequences like `../` are normalized before rewrite rules are applied. If you need raw URL processing, you can disable URL sanitation with `url_sanitize false` (see [HTTP Control Directives](./http-control.md)).
+When URL sanitization is enabled (the default), dangerous path sequences like `../` are normalized before rewrite rules are applied. If you need raw URL processing, you can disable URL sanitation with `url_sanitize false` (see [Routing and URL processing](./routing-url-processing)).
 
 ## Pipeline position
 
 Rewrite rules are applied after client IP resolution and before reverse proxying, static file serving, and response generation. This means rewritten URLs are used for all subsequent routing decisions.
+
+## Notes and troubleshooting
+
+- If you get unexpected routing behavior, verify that rewrite rules are applied in the order you expect. Rules with `last true` stop further processing.
+- For `url_sanitize` interaction, see [Routing and URL processing](/docs/v3/routing-url-processing#url-sanitation-and-redirects).
+- For static file serving, see [Static file serving](/docs/v3/static-content).

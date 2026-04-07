@@ -44,8 +44,6 @@ Ferron 3 is a complete rewrite. It shares the vision but not the code:
 | Extensibility | Compile-time modules | Runtime-registered stages and providers |
 | Request Processing | Linear pipeline | DAG-ordered stages with inverse cleanup |
 
-See the [Ferron 2 README](./ferron/README.md) for that codebase.
-
 ## Configuration examples
 
 ### Static file serving
@@ -57,7 +55,7 @@ example.com {
 
     tls true {
         provider acme
-        email "admin @example.com"
+        email "admin@example.com"
     }
 }
 ```
@@ -72,7 +70,7 @@ api.example.com {
 }
 ```
 
-More examples are available in the [configuration documentation](./docs/configuration/index.md).
+More examples are available in the [configuration documentation](https://ferron.sh/docs/v3/configuration).
 
 ## Building from source
 
@@ -123,11 +121,11 @@ Ferron 3 emits structured events through a unified pipeline. Every HTTP request 
 
 Backends: console, file (JSON or Combined Log Format), and OTLP (OpenTelemetry Protocol).
 
-See the [observability documentation](./docs/configuration/observability.md) for details.
+See the [observability documentation](https://ferron.sh/docs/v3/configuration/observability) for details.
 
 ## Configuration reference
 
-The full directive reference is in [docs/configuration/](./docs/configuration/README.md). Scopes:
+The full directive reference is in [docs/configuration/](https://ferron.sh/docs/v3/configuration). Scopes:
 
 - **Global** — `{ ... }` blocks (runtime, TCP listeners, admin API)
 - **HTTP host** — `example.com { ... }` blocks (TLS, proxy, static, logging)
