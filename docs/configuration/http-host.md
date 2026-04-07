@@ -105,21 +105,21 @@ Reads the `Forwarded` header and extracts the first `for=` token. Both quoted an
 
 ### HTTP protocol settings
 
-- `protocols <protocols: string>...` (_http_ module)
+- `protocols <protocols: string>...`
   - This directive specifies the enabled HTTP protocols. Currently supported values are `h1` and `h2`. Default: `protocols h1 h2`
-- `timeout <duration>` (_http_ module)
+- `timeout <duration>`
   - This directive specifies the pipeline execution timeout. Accepts a duration string (e.g. `30m`, `1h`, `90s`), a number in milliseconds, or `false` to disable. Default: `timeout 300000` (5 minutes)
-- `h1_enable_early_hints <bool>` (_http_ module)
+- `h1_enable_early_hints <bool>`
   - This directive specifies whether HTTP/1.1 early hints support is enabled. Default: `h1_enable_early_hints false`
-- `h2_initial_window_size <size: integer>` (_http_ module)
+- `h2_initial_window_size <size: integer>`
   - This directive specifies the HTTP/2 initial flow-control window size. Default: unset
-- `h2_max_frame_size <size: integer>` (_http_ module)
+- `h2_max_frame_size <size: integer>`
   - This directive specifies the HTTP/2 maximum frame size. Default: unset
-- `h2_max_concurrent_streams <count: integer>` (_http_ module)
+- `h2_max_concurrent_streams <count: integer>`
   - This directive specifies the HTTP/2 maximum concurrent streams. Default: unset
-- `h2_max_header_list_size <size: integer>` (_http_ module)
+- `h2_max_header_list_size <size: integer>`
   - This directive specifies the HTTP/2 maximum header list size. Default: unset
-- `h2_enable_connect_protocol <bool>` (_http_ module)
+- `h2_enable_connect_protocol <bool>`
   - This directive specifies whether the HTTP/2 extended CONNECT protocol setting is enabled. Default: `h2_enable_connect_protocol false`
 
 **Configuration example:**
@@ -141,7 +141,7 @@ Notes:
 
 ### TLS
 
-- `provider <name: string>` (_tls_ module)
+- `provider <name: string>`
   - This directive specifies the TLS provider name. Required when TLS is enabled through the block form. Supported providers: `manual`, `acme`. Default: none
 
 For crypto settings (`cipher_suite`, `ecdh_curve`, `min_version`, `max_version`, `client_auth`, `client_auth_ca`), see [Security and TLS](/docs/v3/configuration/security-tls).

@@ -9,7 +9,7 @@ This page documents the TLS crypto directives available inside a `tls { ... }` b
 
 ### Cipher suites
 
-- `cipher_suite <suite: string>` (_tls_ module)
+- `cipher_suite <suite: string>`
   - This directive specifies a cipher suite to add to the allowed list. Repeatable — each occurrence adds one suite. When omitted, rustls defaults are used. Default: rustls defaults
 
 **Configuration example:**
@@ -42,7 +42,7 @@ tls {
 
 ### ECDH curves
 
-- `ecdh_curve <curve: string>` (_tls_ module)
+- `ecdh_curve <curve: string>`
   - This directive specifies an ECDH key exchange group to add to the allowed list, in priority order. Repeatable — each occurrence adds one curve. When omitted, rustls defaults are used. Default: rustls defaults
 
 #### Supported curves
@@ -57,9 +57,9 @@ tls {
 
 ### TLS protocol version
 
-- `min_version <version: string>` (_tls_ module)
+- `min_version <version: string>`
   - This directive specifies the minimum allowed TLS version. Supported values: `TLSv1.2`, `TLSv1.3`. Default: `min_version TLSv1.2`
-- `max_version <version: string>` (_tls_ module)
+- `max_version <version: string>`
   - This directive specifies the maximum allowed TLS version. Supported values: `TLSv1.2`, `TLSv1.3`. Default: `max_version TLSv1.3`
 
 **Configuration example — TLS 1.3 only:**
@@ -78,9 +78,9 @@ If both are omitted, the safe default range (TLS 1.2–1.3) is used. Setting onl
 
 ### Client certificate authentication (mTLS)
 
-- `client_auth [bool: boolean]` (_tls_ module)
+- `client_auth [bool: boolean]`
   - This directive specifies whether client certificate authentication is enabled. When `true`, clients **must** present a valid certificate. Default: `client_auth false`
-- `client_auth_ca <source: string>` (_tls_ module)
+- `client_auth_ca <source: string>`
   - This directive specifies the source of trusted CA certificates for verifying client certificates. Supported values: a file path (`"/path/ca-cert.pem"`), `system` (OS native root store, requires `native-certs` feature), `webpki` (Mozilla root bundle, requires `webpki-roots` feature). Default: `client_auth_ca webpki`
 
 **Configuration example — full mTLS:**

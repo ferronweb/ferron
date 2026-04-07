@@ -36,7 +36,7 @@ Notes:
 
 ### Runtime
 
-- `io_uring <bool>` (_runtime_ module)
+- `io_uring <bool>`
   - This directive specifies whether `io_uring` is enabled for the primary runtime when available. If initialization fails, Ferron falls back to epoll and logs a warning. Default: `io_uring true`
 
 **Configuration example:**
@@ -51,11 +51,11 @@ Notes:
 
 ### Network and listeners
 
-- `listen <address: string>` (_tcp_ module)
+- `listen <address: string>`
   - This directive specifies the listener bind address for HTTP TCP listeners. Accepts either an IP address or a full socket address. If a socket address is used, its port must match the HTTP port being started. Default: `[::]:<http-port>`
-- `send_buf <size: integer>` (_tcp_ module)
+- `send_buf <size: integer>`
   - This directive specifies the TCP send buffer size. Must resolve to a non-negative integer at runtime. Default: OS default
-- `recv_buf <size: integer>` (_tcp_ module)
+- `recv_buf <size: integer>`
   - This directive specifies the TCP receive buffer size. Must resolve to a non-negative integer at runtime. Default: OS default
 
 **Configuration example:**
@@ -103,15 +103,15 @@ Notes:
 
 The `admin` block configures the built-in administration endpoints. If the `admin` block is absent, the admin API is **disabled** entirely.
 
-- `listen <address: string>` (_admin_ module)
+- `listen <address: string>` (`ferron-admin-api`)
   - This directive specifies the socket address for the admin HTTP listener. Default: `listen 127.0.0.1:8081`
-- `health <bool>` (_admin_ module)
+- `health <bool>` (`ferron-admin-api`)
   - This directive specifies whether the `GET /health` endpoint is enabled. Returns `200 OK` or `503 Service Unavailable` during shutdown. Default: `health true`
-- `status <bool>` (_admin_ module)
+- `status <bool>` (`ferron-admin-api`)
   - This directive specifies whether the `GET /status` endpoint is enabled. Returns JSON with uptime, active connections, request count, and reload count. Default: `status true`
-- `config <bool>` (_admin_ module)
+- `config <bool>` (`ferron-admin-api`)
   - This directive specifies whether the `GET /config` endpoint is enabled. Returns the current effective configuration as sanitized JSON (sensitive fields redacted). Default: `config true`
-- `reload <bool>` (_admin_ module)
+- `reload <bool>` (`ferron-admin-api`)
   - This directive specifies whether the `POST /reload` endpoint is enabled. Triggers a configuration reload equivalent to SIGHUP. Default: `reload true`
 
 **Configuration example:**
@@ -171,7 +171,7 @@ Triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon pr
 
 The `observability` block configures per-host event sinks for logging and metrics. Multiple `observability` directives for the same host accumulate event sinks.
 
-- `provider <name: string>` (_observability_ module)
+- `provider <name: string>`
   - This directive specifies the observability provider name. Required when observability is enabled through the block form. Supported providers: `console`, `file`. Default: none
 
 **Configuration example:**

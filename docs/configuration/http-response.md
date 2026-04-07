@@ -9,7 +9,7 @@ This page documents directives for returning custom status codes, aborting conne
 
 ### Custom status codes
 
-- `status <code: integer>` (_http_response_ module)
+- `status <code: integer>` (`ferron-http-response`)
   - This directive specifies an HTTP status code to return. In block form, supports nested `url`, `regex`, `body`, and `location` directives. Default: none
 
 #### Block form options
@@ -50,7 +50,7 @@ Multiple `status` directives can be defined. They are evaluated in order — the
 
 ### Connection abort
 
-- `abort [bool: boolean]` (_http_response_ module)
+- `abort [bool: boolean]` (`ferron-http-response`)
   - This directive specifies whether the connection is immediately closed without sending any response. When `true` or when omitted, the connection is terminated immediately. Default: `abort false`
 
 **Configuration example:**
@@ -65,9 +65,9 @@ When `abort` is set, the connection is terminated immediately with no HTTP respo
 
 ### IP access control
 
-- `block <ip-or-cidr: string>...` (_http_response_ module)
+- `block <ip-or-cidr: string>...` (`ferron-http-response`)
   - This directive specifies one or more IP addresses or CIDR ranges to block. Blocked IPs receive a **403 Forbidden** response. Default: none
-- `allow <ip-or-cidr: string>...` (_http_response_ module)
+- `allow <ip-or-cidr: string>...` (`ferron-http-response`)
   - This directive specifies one or more IP addresses or CIDR ranges to allow. When configured, **only** the listed IPs/CIDRs are permitted. All other IPs receive a **403 Forbidden** response. Default: none (all allowed)
 
 **Configuration example:**
