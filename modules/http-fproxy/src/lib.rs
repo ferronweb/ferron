@@ -117,7 +117,7 @@ impl Stage<HttpContext> for ForwardProxyStage {
 
     fn constraints(&self) -> Vec<ferron_core::StageConstraint> {
         vec![ferron_core::StageConstraint::Before(
-            "not_found".to_string(),
+            "reverse_proxy".to_string(),
         )]
     }
 

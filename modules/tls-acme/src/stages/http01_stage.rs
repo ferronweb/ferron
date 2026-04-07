@@ -33,7 +33,10 @@ impl Stage<HttpContext> for AcmeHttp01ChallengeStage {
 
     fn constraints(&self) -> Vec<StageConstraint> {
         // Run very early in the pipeline, before other request handlers
-        vec![StageConstraint::Before("https_redirect".to_string())]
+        vec![
+            StageConstraint::Before("https_redirect".to_string()),
+            StageConstraint::Before("client_ip_from_header".to_string()),
+        ]
     }
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {

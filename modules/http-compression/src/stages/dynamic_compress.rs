@@ -172,6 +172,8 @@ impl Stage<HttpContext> for DynamicCompressionStage {
             CoreStageConstraint::Before("static_file".to_string()),
             CoreStageConstraint::Before("reverse_proxy".to_string()),
             CoreStageConstraint::After("headers".to_string()),
+            CoreStageConstraint::After("acme_http01".to_string()),
+            CoreStageConstraint::After("rewrite".to_string()),
         ]
     }
 

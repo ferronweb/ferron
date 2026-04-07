@@ -19,3 +19,4 @@ ferron-observability = { path = "../../types/observability" }
 tokio = { version = "1", features = ["rt", "macros"] }
 ferron-observability = { path = "../../types/observability" }
 typemap_rev = "0.4"
+rustc-hash = "2"

@@ -47,6 +47,25 @@ impl EventSink for LogFileEventSink {
             });
         }
     }
+
+    fn emit_arc(&self, event: std::sync::Arc<Event>) {
+        if matches!(&*event, Event::Access(_) | Event::Log(_))
+            && self
+                .inner
+                .try_send(ConfiguredEvent {
+                    event: Arc::unwrap_or_clone(event),
+                    log_config: self.log_config.clone(),
+                })
+                .is_err()
+        {
+            DROPPED_EVENT.call_once(|| {
+                log_warn!(
+                    "Observability event dropped (`file` observability backend). \
+                    This may be caused by high server load."
+                )
+            });
+        }
+    }
 }
 
 /// Rotates the log file if it is too large

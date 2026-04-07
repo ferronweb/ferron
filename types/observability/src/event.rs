@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::Arc;
 
 pub use super::access::*;
@@ -73,6 +74,9 @@ pub enum MetricAttributeValue {
     /// String value
     String(String),
 
+    /// Static string value (zero allocation)
+    StaticStr(&'static str),
+
     /// Boolean value
     Bool(bool),
 
@@ -90,6 +94,9 @@ pub enum TraceAttributeValue {
     /// String value
     String(String),
 
+    /// Static string value (zero allocation)
+    StaticStr(&'static str),
+
     /// Boolean value
     Bool(bool),
 
@@ -105,7 +112,7 @@ pub enum TraceAttributeValue {
 pub enum TraceEvent {
     /// Start a new span with the given name, optional parent, and attributes.
     StartSpan {
-        name: String,
+        name: Cow<'static, str>,
         parent_span_id: Option<String>,
         attributes: Vec<(&'static str, TraceAttributeValue)>,
     },
@@ -113,7 +120,7 @@ pub enum TraceEvent {
     /// Attributes here are merged with those from StartSpan and are useful for values
     /// only known at response time (e.g. `http.response.status_code`).
     EndSpan {
-        name: String,
+        name: Cow<'static, str>,
         error: Option<String>,
         attributes: Vec<(&'static str, TraceAttributeValue)>,
     },

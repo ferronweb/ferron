@@ -13,6 +13,8 @@ use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType,
 use http::header::LOCATION;
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
+#[cfg(test)]
+use rustc_hash::FxHashMap;
 
 use crate::config::{ResponseConfig, StatusRule};
 
@@ -290,7 +292,7 @@ mod tests {
             events: CompositeEventSink::new(Vec::new()),
             configuration: LayeredConfiguration::default(),
             hostname: None,
-            variables: HashMap::new(),
+            variables: FxHashMap::default(),
             previous_error: None,
             original_uri: None,
             encrypted: false,

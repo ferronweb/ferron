@@ -89,8 +89,10 @@ impl Stage<HttpContext> for HttpsRedirectStage {
 
     #[inline]
     fn constraints(&self) -> Vec<StageConstraint> {
-        // Run very early, before most other stages.
-        vec![StageConstraint::Before("hello".to_string())]
+        vec![
+            StageConstraint::After("headers".to_string()),
+            StageConstraint::After("client_ip".to_string()),
+        ]
     }
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
@@ -161,6 +163,7 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::Empty;
+    use rustc_hash::FxHashMap;
     use std::collections::HashMap as StdHashMap;
     use std::sync::Arc;
     use typemap_rev::TypeMap;
@@ -185,7 +188,7 @@ mod tests {
             events: CompositeEventSink::new(Vec::new()),
             configuration: LayeredConfiguration::default(),
             hostname,
-            variables: StdHashMap::new(),
+            variables: FxHashMap::default(),
             previous_error: None,
             original_uri: None,
             encrypted,

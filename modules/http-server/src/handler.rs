@@ -18,6 +18,7 @@ use ferron_observability::{
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::Empty;
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Full};
+use rustc_hash::FxHashMap;
 use typemap_rev::TypeMap;
 
 use crate::config::ThreeStageResolver;
@@ -35,12 +36,13 @@ struct PerStageSpanHooks<'a> {
 #[async_trait::async_trait(?Send)]
 impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
     async fn before_stage(&mut self, stage: &dyn Stage<HttpContext>) {
+        let stage_name = stage.name();
         self.events.emit(Event::Trace(TraceEvent::StartSpan {
-            name: format!("ferron.stage.{}", stage.name()),
+            name: Cow::Owned(format!("ferron.stage.{}", stage_name)),
             parent_span_id: None,
             attributes: vec![(
                 "stage.name",
-                TraceAttributeValue::String(stage.name().to_string()),
+                TraceAttributeValue::String(stage_name.to_string()),
             )],
         }));
     }
@@ -51,19 +53,20 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
         result: &Result<bool, PipelineError>,
     ) {
         self.events.emit(Event::Trace(TraceEvent::EndSpan {
-            name: format!("ferron.stage.{}", stage.name()),
+            name: Cow::Owned(format!("ferron.stage.{}", stage.name())),
             error: result.as_ref().err().map(|e| e.to_string()),
             attributes: vec![],
         }));
     }
 
     async fn before_stage_inverse(&mut self, stage: &dyn Stage<HttpContext>) {
+        let stage_name = stage.name();
         self.events.emit(Event::Trace(TraceEvent::StartSpan {
-            name: format!("ferron.stage.{}.inverse", stage.name()),
+            name: Cow::Owned(format!("ferron.stage.{}.inverse", stage_name)),
             parent_span_id: None,
             attributes: vec![(
                 "stage.name",
-                TraceAttributeValue::String(stage.name().to_string()),
+                TraceAttributeValue::String(stage_name.to_string()),
             )],
         }));
     }
@@ -74,7 +77,7 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
         result: &Result<(), PipelineError>,
     ) {
         self.events.emit(Event::Trace(TraceEvent::EndSpan {
-            name: format!("ferron.stage.{}.inverse", stage.name()),
+            name: Cow::Owned(format!("ferron.stage.{}.inverse", stage.name())),
             error: result.as_ref().err().map(|e| e.to_string()),
             attributes: vec![],
         }));
@@ -290,16 +293,16 @@ fn build_metric_attributes(
     ));
     attrs.push((
         "url.scheme",
-        MetricAttributeValue::String(if encrypted { "https" } else { "http" }.to_string()),
+        MetricAttributeValue::StaticStr(if encrypted { "https" } else { "http" }),
     ));
     attrs.push((
         "network.protocol.name",
-        MetricAttributeValue::String("http".to_string()),
+        MetricAttributeValue::StaticStr("http"),
     ));
     if let Some(http_ver) = http_version_string(request.version()) {
         attrs.push((
             "network.protocol.version",
-            MetricAttributeValue::String(http_ver.to_string()),
+            MetricAttributeValue::StaticStr(http_ver),
         ));
     }
     if let Some(error_code) = previous_error {
@@ -339,20 +342,10 @@ pub async fn request_handler(
     let server_port = local_address.port();
     let server_ip_canonical = canonicalize_ip(local_address.ip());
     let client_ip_canonical = canonicalize_ip(remote_address.ip());
-    let request_headers: Vec<(String, String)> = request
-        .headers()
-        .iter()
-        .filter_map(|(name, value)| {
-            value
-                .to_str()
-                .ok()
-                .map(|v| (name.to_string(), v.to_string()))
-        })
-        .collect();
 
     // Start tracing span
     events.emit(Event::Trace(TraceEvent::StartSpan {
-        name: "ferron.request_handler".to_string(),
+        name: Cow::Borrowed("ferron.request_handler"),
         parent_span_id: None,
         attributes: vec![
             (
@@ -360,10 +353,7 @@ pub async fn request_handler(
                 TraceAttributeValue::String(method.as_str().to_string()),
             ),
             ("url.path", TraceAttributeValue::String(path.clone())),
-            (
-                "url.scheme",
-                TraceAttributeValue::String(scheme.to_string()),
-            ),
+            ("url.scheme", TraceAttributeValue::StaticStr(scheme)),
             (
                 "server.address",
                 TraceAttributeValue::String(server_ip.clone()),
@@ -387,6 +377,19 @@ pub async fn request_handler(
     }));
 
     let request_timer = std::time::Instant::now();
+
+    // Collect request headers before moving `request` into handler_inner
+    // (only needed for access logging later)
+    let request_headers: Vec<(String, String)> = request
+        .headers()
+        .iter()
+        .filter_map(|(name, value)| {
+            value
+                .to_str()
+                .ok()
+                .map(|v| (name.to_string(), v.to_string()))
+        })
+        .collect();
 
     let (mut response_result, auth_user, final_remote_address) = request_handler_inner(
         request,
@@ -507,16 +510,15 @@ pub async fn request_handler(
 
     // End tracing span
     let error_description = response_result.as_ref().err().map(|e| e.to_string());
-    let mut end_attrs = vec![
-        (
-            "http.response.status_code",
-            TraceAttributeValue::I64(status_code as i64),
-        ),
-        (
-            "http.route",
-            TraceAttributeValue::String(hostname.clone().unwrap_or_else(|| "*".to_string())),
-        ),
-    ];
+    let mut end_attrs = Vec::with_capacity(3);
+    end_attrs.push((
+        "http.response.status_code",
+        TraceAttributeValue::I64(status_code as i64),
+    ));
+    end_attrs.push((
+        "http.route",
+        TraceAttributeValue::String(hostname.as_deref().unwrap_or("*").to_string()),
+    ));
     if status_code >= 400 {
         end_attrs.push((
             "error.type",
@@ -524,7 +526,7 @@ pub async fn request_handler(
         ));
     }
     events.emit(Event::Trace(TraceEvent::EndSpan {
-        name: "ferron.request_handler".to_string(),
+        name: Cow::Borrowed("ferron.request_handler"),
         error: error_description,
         attributes: end_attrs,
     }));
@@ -699,7 +701,7 @@ async fn request_handler_inner(
         events: events.clone(),
         configuration: resolution.configuration,
         hostname,
-        variables,
+        variables: variables.into_iter().collect(),
         previous_error: None,
         original_uri: Option::from(request_uri),
         encrypted,
@@ -750,7 +752,10 @@ async fn request_handler_inner(
                     local_address.ip(),
                     ctx.hostname.as_deref().unwrap_or(""),
                     status,
-                    &(error_resolver_request, ctx.variables.clone()),
+                    &(
+                        error_resolver_request,
+                        ctx.variables.clone().into_iter().collect::<HashMap<_, _>>(),
+                    ),
                 );
                 if let Some(error_resolution) = error_resolution {
                     ctx.configuration = error_resolution.configuration;
@@ -811,7 +816,7 @@ async fn execute_pipeline_stages(
 ) {
     // Start pipeline execution span
     events.emit(Event::Trace(TraceEvent::StartSpan {
-        name: "ferron.pipeline.execute".to_string(),
+        name: Cow::Borrowed("ferron.pipeline.execute"),
         parent_span_id: None,
         attributes: vec![(
             "ferron.pipeline.log_prefix",
@@ -960,7 +965,7 @@ async fn execute_pipeline_stages(
 
     // End pipeline execution span
     events.emit(Event::Trace(TraceEvent::EndSpan {
-        name: "ferron.pipeline.execute".to_string(),
+        name: Cow::Borrowed("ferron.pipeline.execute"),
         error: ctx.res.as_ref().and_then(|r| match r {
             HttpResponse::BuiltinError(s, _) if *s >= 400 => Some(format!("builtin error {}", s)),
             _ => None,
@@ -1127,7 +1132,7 @@ async fn apply_resolved_file_to_context(
         events: ctx.events.clone(),
         configuration: ctx.configuration.clone(),
         hostname: ctx.hostname.clone(),
-        variables: HashMap::new(),
+        variables: FxHashMap::default(),
         previous_error: None,
         original_uri: None,
         encrypted: ctx.encrypted,
@@ -1553,7 +1558,7 @@ async fn execute_error_pipeline(
 ) -> Option<Response<ResponseBody>> {
     // Start error pipeline execution span
     events.emit(Event::Trace(TraceEvent::StartSpan {
-        name: "ferron.pipeline.execute_error".to_string(),
+        name: Cow::Borrowed("ferron.pipeline.execute_error"),
         parent_span_id: None,
         attributes: vec![(
             "http.response.status_code",
@@ -1574,7 +1579,7 @@ async fn execute_error_pipeline(
 
     // End error pipeline execution span
     events.emit(Event::Trace(TraceEvent::EndSpan {
-        name: "ferron.pipeline.execute_error".to_string(),
+        name: Cow::Borrowed("ferron.pipeline.execute_error"),
         error: None,
         attributes: vec![],
     }));

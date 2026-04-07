@@ -10,6 +10,7 @@ cidr = "0.3"
 http = "1"
 http-body-util = "0.1.3"
 bytes = "1"
+rustc-hash = "2"
 
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }

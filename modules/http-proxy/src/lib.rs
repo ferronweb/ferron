@@ -254,12 +254,6 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         "reverse_proxy"
     }
 
-    fn constraints(&self) -> Vec<ferron_core::StageConstraint> {
-        vec![ferron_core::StageConstraint::Before(
-            "not_found".to_string(),
-        )]
-    }
-
     async fn run(
         &self,
         ctx: &mut HttpContext,

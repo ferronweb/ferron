@@ -35,6 +35,7 @@ ferron-admin = { path = "../../types/admin" }
 chrono = "0.4"
 quick_cache = "0.6"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
+rustc-hash = "2"
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }

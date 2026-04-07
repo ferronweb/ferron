@@ -1,13 +1,17 @@
 use std::collections::HashMap;
+use std::hash::BuildHasher;
 
 use crate::HttpRequest;
 
 #[inline]
-pub fn resolve_variable(
+pub fn resolve_variable<S>(
     name: &str,
     request: &HttpRequest,
-    variables: &HashMap<String, String>,
-) -> Option<String> {
+    variables: &HashMap<String, String, S>,
+) -> Option<String>
+where
+    S: BuildHasher,
+{
     match name {
         "request.method" => Some(request.method().to_string()),
         "request.uri.path" => Some(request.uri().path().to_string()),

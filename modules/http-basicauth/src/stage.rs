@@ -108,7 +108,6 @@ impl Stage<HttpContext> for BasicAuthStage {
             StageConstraint::After("client_ip_from_header".to_string()),
             StageConstraint::Before("forward_proxy".to_string()),
             StageConstraint::Before("reverse_proxy".to_string()),
-            StageConstraint::Before("static_file".to_string()),
         ]
     }
 
@@ -218,6 +217,7 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
+    use rustc_hash::FxHashMap;
     use std::collections::HashMap as StdHashMap;
     use std::sync::Arc;
     use typemap_rev::TypeMap;
@@ -240,7 +240,7 @@ mod tests {
             events: CompositeEventSink::new(Vec::new()),
             configuration: config.unwrap_or_default(),
             hostname: None,
-            variables: StdHashMap::new(),
+            variables: FxHashMap::default(),
             previous_error: None,
             original_uri: None,
             encrypted: false,

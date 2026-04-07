@@ -1191,6 +1191,7 @@ dependencies = [
  "ferron-observability",
  "http",
  "http-body-util",
+ "rustc-hash",
  "typemap_rev",
  "vibeio",
 ]
@@ -1209,6 +1210,7 @@ dependencies = [
  "http-body-util",
  "parking_lot",
  "password-auth",
+ "rustc-hash",
  "tokio",
  "typemap_rev",
  "vibeio",
@@ -1306,6 +1308,7 @@ dependencies = [
  "http",
  "http-body-util",
  "parking_lot",
+ "rustc-hash",
  "tokio",
  "typemap_rev",
 ]
@@ -1323,6 +1326,7 @@ dependencies = [
  "ferron-observability",
  "http",
  "http-body-util",
+ "rustc-hash",
  "tokio",
  "typemap_rev",
 ]
@@ -1340,6 +1344,7 @@ dependencies = [
  "http",
  "http-body-util",
  "parking_lot",
+ "rustc-hash",
  "tokio",
  "typemap_rev",
 ]
@@ -1365,6 +1370,7 @@ dependencies = [
  "parking_lot",
  "ppp",
  "quick_cache",
+ "rustc-hash",
  "rustls",
  "smallvec",
  "socket2",

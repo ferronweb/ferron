@@ -60,11 +60,11 @@ impl CorrelationContext {
 
     fn insert_span(
         &self,
-        name: String,
+        name: impl Into<String>,
         trace_id_hex: String,
         span: opentelemetry_sdk::trace::Span,
     ) {
-        self.active_spans.insert(name, (trace_id_hex, span));
+        self.active_spans.insert(name.into(), (trace_id_hex, span));
     }
 
     fn remove_span(&self, name: &str) -> Option<(String, opentelemetry_sdk::trace::Span)> {
@@ -102,6 +102,24 @@ impl EventSink for OtlpEventSink {
             .inner
             .try_send(ConfiguredEvent {
                 event,
+                log_config: self.log_config.clone(),
+            })
+            .is_err()
+        {
+            DROPPED_EVENT.call_once(|| {
+                log_warn!(
+                    "Observability event dropped (`otlp` observability backend). \
+                    This may be caused by high server load."
+                )
+            });
+        }
+    }
+
+    fn emit_arc(&self, event: std::sync::Arc<Event>) {
+        if self
+            .inner
+            .try_send(ConfiguredEvent {
+                event: Arc::unwrap_or_clone(event),
                 log_config: self.log_config.clone(),
             })
             .is_err()
@@ -834,6 +852,7 @@ fn emit_metric(
                     MetricAttributeValue::F64(val) => opentelemetry::Value::from(*val),
                     MetricAttributeValue::I64(val) => opentelemetry::Value::from(*val),
                     MetricAttributeValue::String(val) => opentelemetry::Value::from(val.clone()),
+                    MetricAttributeValue::StaticStr(val) => opentelemetry::Value::from(*val),
                     MetricAttributeValue::Bool(val) => opentelemetry::Value::from(*val),
                 },
             )
@@ -1063,6 +1082,7 @@ fn emit_trace(
 fn trace_kv(key: &'static str, value: &TraceAttributeValue) -> KeyValue {
     match value {
         TraceAttributeValue::String(s) => KeyValue::new(key, s.clone()),
+        TraceAttributeValue::StaticStr(s) => KeyValue::new(key, *s),
         TraceAttributeValue::Bool(b) => KeyValue::new(key, *b),
         TraceAttributeValue::I64(i) => KeyValue::new(key, *i),
         TraceAttributeValue::F64(f) => KeyValue::new(key, *f),
@@ -1321,12 +1341,13 @@ mod tests {
     #[test]
     fn emit_trace_start_span_stores_span_object() {
         use ferron_observability::TraceAttributeValue;
+        use std::borrow::Cow;
 
         let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
         let correlation = CorrelationContext::new();
 
         let event = TraceEvent::StartSpan {
-            name: "test.span".to_string(),
+            name: Cow::Borrowed("test.span"),
             parent_span_id: None,
             attributes: vec![
                 (
@@ -1349,13 +1370,14 @@ mod tests {
     #[test]
     fn emit_trace_end_span_ends_properly() {
         use ferron_observability::TraceAttributeValue;
+        use std::borrow::Cow;
 
         let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
         let correlation = CorrelationContext::new();
 
         // Start a span
         let start_event = TraceEvent::StartSpan {
-            name: "test.span".to_string(),
+            name: Cow::Borrowed("test.span"),
             parent_span_id: None,
             attributes: vec![(
                 "http.request.method",
@@ -1366,7 +1388,7 @@ mod tests {
 
         // End the span with error
         let end_event = TraceEvent::EndSpan {
-            name: "test.span".to_string(),
+            name: Cow::Borrowed("test.span"),
             error: Some("test error".to_string()),
             attributes: vec![("http.response.status_code", TraceAttributeValue::I64(500))],
         };
@@ -1378,18 +1400,20 @@ mod tests {
 
     #[test]
     fn emit_trace_end_span_without_error() {
+        use std::borrow::Cow;
+
         let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
         let correlation = CorrelationContext::new();
 
         let start_event = TraceEvent::StartSpan {
-            name: "test.span".to_string(),
+            name: Cow::Borrowed("test.span"),
             parent_span_id: None,
             attributes: vec![],
         };
         emit_trace(&provider, &start_event, &correlation);
 
         let end_event = TraceEvent::EndSpan {
-            name: "test.span".to_string(),
+            name: Cow::Borrowed("test.span"),
             error: None,
             attributes: vec![("http.response.status_code", TraceAttributeValue::I64(200))],
         };
@@ -1400,12 +1424,14 @@ mod tests {
 
     #[test]
     fn emit_trace_end_span_on_unknown_name_does_nothing() {
+        use std::borrow::Cow;
+
         let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
         let correlation = CorrelationContext::new();
 
         // End a span that was never started — should not panic
         let end_event = TraceEvent::EndSpan {
-            name: "unknown.span".to_string(),
+            name: Cow::Borrowed("unknown.span"),
             error: Some("should be ignored".to_string()),
             attributes: vec![],
         };

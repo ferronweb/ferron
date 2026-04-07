@@ -68,7 +68,7 @@ mod tests {
     use ferron_observability::CompositeEventSink;
     use http::Request;
     use http_body_util::{BodyExt, Empty};
-    use std::collections::HashMap as StdHashMap;
+    use rustc_hash::FxHashMap;
     use typemap_rev::TypeMap;
 
     fn make_test_context(headers: Vec<(&str, &str)>) -> HttpContext {
@@ -90,7 +90,7 @@ mod tests {
             events: CompositeEventSink::new(Vec::new()),
             configuration: LayeredConfiguration::default(),
             hostname: None,
-            variables: StdHashMap::new(),
+            variables: FxHashMap::default(),
             previous_error: None,
             original_uri: None,
             encrypted: false,

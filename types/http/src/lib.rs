@@ -4,7 +4,6 @@
 pub mod util;
 pub mod variables;
 
-use std::collections::HashMap;
 use std::net::SocketAddr;
 
 use ferron_core::config::layer::LayeredConfiguration;
@@ -12,6 +11,7 @@ use ferron_core::config::Variables;
 use ferron_observability::CompositeEventSink;
 use http::{HeaderMap, Request, Response, Uri};
 use http_body_util::combinators::UnsyncBoxBody;
+use rustc_hash::FxHashMap;
 use typemap_rev::{TypeMap, TypeMapKey};
 
 pub type HttpRequest = Request<UnsyncBoxBody<bytes::Bytes, std::io::Error>>;
@@ -27,7 +27,7 @@ pub struct HttpContext {
     pub events: CompositeEventSink,
     pub configuration: LayeredConfiguration,
     pub hostname: Option<String>,
-    pub variables: HashMap<String, String>,
+    pub variables: FxHashMap<String, String>,
     pub previous_error: Option<u16>,
     pub original_uri: Option<Uri>,
     pub encrypted: bool,
@@ -45,7 +45,7 @@ impl Variables for HttpContext {
         if let Some(req) = &self.req {
             variables::resolve_variable(key, req, &self.variables)
         } else {
-            self.variables.resolve(key)
+            self.variables.get(key).cloned()
         }
     }
 }
@@ -190,7 +190,7 @@ mod tests {
             events: ferron_observability::CompositeEventSink::new(Vec::new()),
             configuration: LayeredConfiguration::default(),
             hostname: None,
-            variables: HashMap::new(),
+            variables: FxHashMap::default(),
             previous_error: None,
             original_uri: None,
             encrypted: false,
