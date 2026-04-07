@@ -83,4 +83,3 @@ See [docs/configuration/README.md](docs/configuration/README.md) for the full co
 ## Notes
 
 - The `ferron/` subdirectory is a separate nested git repository and is **not** part of this workspace.
-- `handle_error` is parsed and prepared but not currently applied by the HTTP request handler.
