@@ -178,5 +178,5 @@ example.com {
 - Unknown users are still tracked for brute-force purposes — repeated attempts with a non-existent username will eventually trigger a lockout for that username.
 - Configuration validation fails if any password value is not a recognized hash format.
 - This module does not currently support session-based authentication — credentials are checked on every request.
-- For forward proxy configuration, see [Forward proxy](/docs/v3/http-fproxy).
-- For routing and URL processing, see [Routing and URL processing](/docs/v3/routing-url-processing).
+- For forward proxy configuration, see [Forward proxy](/docs/v3/configuration/http-fproxy).
+- For routing and URL processing, see [Routing and URL processing](/docs/v3/configuration/routing-url-processing).

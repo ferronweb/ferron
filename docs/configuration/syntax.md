@@ -113,7 +113,7 @@ Current defaults:
 - If the protocol is omitted, it defaults to `http`.
 - For HTTP host blocks, if the port is omitted, Ferron treats it as port `80`.
 
-When a hostname is specified (e.g. `example.com`) and no explicit port is given, Ferron starts **two listeners** — one on the default HTTP port (80) and one on the default HTTPS port (443) with automatic ACME TLS. See [ACME automatic TLS](/docs/v3/tls-acme) for details.
+When a hostname is specified (e.g. `example.com`) and no explicit port is given, Ferron starts **two listeners** — one on the default HTTP port (80) and one on the default HTTPS port (443) with automatic ACME TLS. See [ACME automatic TLS](/docs/v3/configuration/tls-acme) for details.
 
 ## Includes and snippets
 
@@ -153,9 +153,9 @@ Ferron applies inheritance by block context:
 
 ## See also
 
-- [Conditionals and variables](/docs/v3/conditionals)
-- [Routing and URL processing](/docs/v3/routing-url-processing) (`location`, `if`, `if_not`)
-- [Core directives](/docs/v3/core-directives)
+- [Conditionals and variables](/docs/v3/configuration/conditionals)
+- [Routing and URL processing](/docs/v3/configuration/routing-url-processing) (`location`, `if`, `if_not`)
+- [Core directives](/docs/v3/configuration/core-directives)
 
 ## Notes and troubleshooting
 

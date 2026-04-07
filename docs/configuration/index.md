@@ -7,25 +7,25 @@ This reference describes the configuration surface for Ferron 3. Directives are 
 
 ## Reference map
 
-- [Syntax and file structure](/docs/v3/syntax)
-- [Conditionals and variables](/docs/v3/conditionals)
-- [Core directives](/docs/v3/core-directives)
-- [Admin API](/docs/v3/core-directives#admin-api)
-- [HTTP host directives](/docs/v3/http-host)
-- [Routing and URL processing](/docs/v3/routing-url-processing)
-- [HTTP response control](/docs/v3/http-response)
-- [URL rewriting](/docs/v3/http-rewrite)
-- [Reverse proxy](/docs/v3/reverse-proxying)
-- [Forward proxy](/docs/v3/http-fproxy)
-- [HTTP basic authentication](/docs/v3/http-basicauth)
-- [Static file serving](/docs/v3/static-content)
-- [HTTP headers and CORS](/docs/v3/http-headers)
-- [Rate limiting](/docs/v3/http-ratelimit)
-- [Security and TLS](/docs/v3/security-tls)
-- [ACME automatic TLS](/docs/v3/tls-acme)
-- [TLS session ticket keys](/docs/v3/tls-session-tickets)
-- [OCSP stapling](/docs/v3/ocsp-stapling)
-- [Observability and logging](/docs/v3/observability-logging)
+- [Syntax and file structure](/docs/v3/configuration/syntax)
+- [Conditionals and variables](/docs/v3/configuration/conditionals)
+- [Core directives](/docs/v3/configuration/core-directives)
+- [Admin API](/docs/v3/configuration/core-directives#admin-api)
+- [HTTP host directives](/docs/v3/configuration/http-host)
+- [Routing and URL processing](/docs/v3/configuration/routing-url-processing)
+- [HTTP response control](/docs/v3/configuration/http-response)
+- [URL rewriting](/docs/v3/configuration/http-rewrite)
+- [Reverse proxy](/docs/v3/configuration/reverse-proxying)
+- [Forward proxy](/docs/v3/configuration/http-fproxy)
+- [HTTP basic authentication](/docs/v3/configuration/http-basicauth)
+- [Static file serving](/docs/v3/configuration/static-content)
+- [HTTP headers and CORS](/docs/v3/configuration/http-headers)
+- [Rate limiting](/docs/v3/configuration/http-ratelimit)
+- [Security and TLS](/docs/v3/configuration/security-tls)
+- [ACME automatic TLS](/docs/v3/configuration/tls-acme)
+- [TLS session ticket keys](/docs/v3/configuration/tls-session-tickets)
+- [OCSP stapling](/docs/v3/configuration/ocsp-stapling)
+- [Observability and logging](/docs/v3/configuration/observability-logging)
 
 ## Scopes
 
@@ -41,7 +41,7 @@ HTTP host blocks also support control directives that affect request matching an
 - `if` / `if_not` — conditional matching based on named matchers
 - `handle_error` — error-specific handling for particular status codes
 
-For details on conditionals and matchers, see [Conditionals and variables](/docs/v3/conditionals).
+For details on conditionals and matchers, see [Conditionals and variables](/docs/v3/configuration/conditionals).
 
 ## Important notes
 

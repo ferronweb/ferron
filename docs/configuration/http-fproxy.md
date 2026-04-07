@@ -119,5 +119,5 @@ proxy.example.com {
 - Domain patterns support `*` wildcards (e.g. `*.example.com` matches `api.example.com`).
 - DNS resolution happens at connect time. The resolved IP is validated against the deny list to prevent DNS rebinding attacks.
 - For HTTPS forwarding, clients must use CONNECT tunneling — direct `https://` URLs in HTTP requests are not supported.
-- For reverse proxy configuration, see [Reverse proxy](/docs/v3/reverse-proxying).
-- For HTTP host directives, see [HTTP host directives](/docs/v3/http-host).
+- For reverse proxy configuration, see [Reverse proxy](/docs/v3/configuration/reverse-proxying).
+- For HTTP host directives, see [HTTP host directives](/docs/v3/configuration/http-host).

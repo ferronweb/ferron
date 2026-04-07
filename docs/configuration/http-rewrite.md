@@ -101,7 +101,7 @@ The regular expression engine used is [`fancy-regex`](https://crates.io/crates/f
 
 ## URL sanitation interaction
 
-When URL sanitization is enabled (the default), dangerous path sequences like `../` are normalized before rewrite rules are applied. If you need raw URL processing, you can disable URL sanitation with `url_sanitize false` (see [Routing and URL processing](./routing-url-processing)).
+When URL sanitization is enabled (the default), dangerous path sequences like `./docs/v3/configuration/` are normalized before rewrite rules are applied. If you need raw URL processing, you can disable URL sanitation with `url_sanitize false` (see [Routing and URL processing](./routing-url-processing)).
 
 ## Pipeline position
 
@@ -110,5 +110,5 @@ Rewrite rules are applied after client IP resolution and before reverse proxying
 ## Notes and troubleshooting
 
 - If you get unexpected routing behavior, verify that rewrite rules are applied in the order you expect. Rules with `last true` stop further processing.
-- For `url_sanitize` interaction, see [Routing and URL processing](/docs/v3/routing-url-processing#url-sanitation-and-redirects).
-- For static file serving, see [Static file serving](/docs/v3/static-content).
+- For `url_sanitize` interaction, see [Routing and URL processing](/docs/v3/configuration/routing-url-processing#url-sanitation-and-redirects).
+- For static file serving, see [Static file serving](/docs/v3/configuration/static-content).

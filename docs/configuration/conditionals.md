@@ -83,13 +83,13 @@ For startup-only TLS settings such as `cert` and `key`, the bundled `manual` TLS
 
 ## Related directives
 
-- [`if`](/docs/v3/routing-url-processing#if) — applies a block when a named matcher evaluates to true
-- [`if_not`](/docs/v3/routing-url-processing#if_not) — applies a block when a named matcher evaluates to false
-- [`location`](/docs/v3/routing-url-processing#path-matching) — path-based matching
+- [`if`](/docs/v3/configuration/routing-url-processing#if) — applies a block when a named matcher evaluates to true
+- [`if_not`](/docs/v3/configuration/routing-url-processing#if_not) — applies a block when a named matcher evaluates to false
+- [`location`](/docs/v3/configuration/routing-url-processing#path-matching) — path-based matching
 
 ## Notes and troubleshooting
 
 - All expressions inside a single `match` block must pass (AND semantics).
 - If a variable cannot be resolved, the placeholder is kept as `{{name}}`.
-- For URL rewriting with regex, see [URL rewriting](/docs/v3/http-rewrite).
-- For HTTP response control with regex matching, see [HTTP response control](/docs/v3/http-response).
+- For URL rewriting with regex, see [URL rewriting](/docs/v3/configuration/http-rewrite).
+- For HTTP response control with regex matching, see [HTTP response control](/docs/v3/configuration/http-response).

@@ -48,7 +48,7 @@ example.com {
 }
 ```
 
-For named matcher syntax and available variables, see [Conditionals and variables](/docs/v3/conditionals).
+For named matcher syntax and available variables, see [Conditionals and variables](/docs/v3/configuration/conditionals).
 
 ### Error handling
 
@@ -81,7 +81,7 @@ example.com {
 Notes:
 
 - If a request continues below a matched file path, the unmatched suffix is carried into the file-stage context as `path_info`.
-- Additional static file behavior (index resolution, compression, ETags, directory listings, MIME types) is controlled by separate directives. See [Static file serving](/docs/v3/static-content).
+- Additional static file behavior (index resolution, compression, ETags, directory listings, MIME types) is controlled by separate directives. See [Static file serving](/docs/v3/configuration/static-content).
 
 ### URL sanitation and redirects
 
@@ -117,6 +117,6 @@ Notes for `trailing_slash_redirect`:
 
 - `location` is prefix-based. `/api` matches `/api` and `/api/users`.
 - More specific locations win over less specific ones.
-- For [conditionals and variables](/docs/v3/conditionals), see the dedicated page.
-- For static file serving, see [Static file serving](/docs/v3/static-content).
-- For URL rewriting, see [URL rewriting](/docs/v3/http-rewrite).
+- For [conditionals and variables](/docs/v3/configuration/conditionals), see the dedicated page.
+- For static file serving, see [Static file serving](/docs/v3/configuration/static-content).
+- For URL rewriting, see [URL rewriting](/docs/v3/configuration/http-rewrite).

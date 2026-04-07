@@ -144,6 +144,6 @@ On configuration reload (SIGHUP or file change), the OCSP service is reused (not
 
 ## See also
 
-- [Security and TLS](/docs/v3/security-tls) — cipher suites, ECDH curves, mTLS
-- [ACME automatic TLS](/docs/v3/tls-acme) — OCSP stapling with ACME-obtained certificates
-- [TLS session ticket keys](/docs/v3/tls-session-tickets)
+- [Security and TLS](/docs/v3/configuration/security-tls) — cipher suites, ECDH curves, mTLS
+- [ACME automatic TLS](/docs/v3/configuration/tls-acme) — OCSP stapling with ACME-obtained certificates
+- [TLS session ticket keys](/docs/v3/configuration/tls-session-tickets)

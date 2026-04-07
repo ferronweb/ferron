@@ -54,7 +54,7 @@ example.com {
 
 When an **explicit port** is specified (e.g. `example.com:8080`), only a single listener is started on that port, and no automatic ACME TLS is applied — you must configure TLS explicitly.
 
-See [ACME automatic TLS](/docs/v3/tls-acme) for full ACME configuration details.
+See [ACME automatic TLS](/docs/v3/configuration/tls-acme) for full ACME configuration details.
 
 ### HTTPS redirect
 
@@ -144,11 +144,11 @@ Notes:
 - `provider <name: string>` (_tls_ module)
   - This directive specifies the TLS provider name. Required when TLS is enabled through the block form. Supported providers: `manual`, `acme`. Default: none
 
-For crypto settings (`cipher_suite`, `ecdh_curve`, `min_version`, `max_version`, `client_auth`, `client_auth_ca`), see [Security and TLS](/docs/v3/security-tls).
+For crypto settings (`cipher_suite`, `ecdh_curve`, `min_version`, `max_version`, `client_auth`, `client_auth_ca`), see [Security and TLS](/docs/v3/configuration/security-tls).
 
-For OCSP stapling configuration, see [OCSP stapling](/docs/v3/ocsp-stapling).
+For OCSP stapling configuration, see [OCSP stapling](/docs/v3/configuration/ocsp-stapling).
 
-For session ticket keys, see [TLS session ticket keys](/docs/v3/tls-session-tickets).
+For session ticket keys, see [TLS session ticket keys](/docs/v3/configuration/tls-session-tickets).
 
 ### `admin_email`
 
@@ -158,5 +158,5 @@ For session ticket keys, see [TLS session ticket keys](/docs/v3/tls-session-tick
 ## Notes and troubleshooting
 
 - These directives are host-scoped rather than global.
-- For ACME configuration details, see [ACME automatic TLS](/docs/v3/tls-acme).
-- For crypto and mTLS settings, see [Security and TLS](/docs/v3/security-tls).
+- For ACME configuration details, see [ACME automatic TLS](/docs/v3/configuration/tls-acme).
+- For crypto and mTLS settings, see [Security and TLS](/docs/v3/configuration/security-tls).

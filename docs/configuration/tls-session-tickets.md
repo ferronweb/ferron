@@ -185,6 +185,6 @@ On configuration reload (SIGHUP or file change), the TLS provider re-executes wi
 
 ## See also
 
-- [Security and TLS](/docs/v3/security-tls) — cipher suites, ECDH curves, mTLS
-- [ACME automatic TLS](/docs/v3/tls-acme) — session tickets with ACME-obtained certificates
-- [OCSP stapling](/docs/v3/ocsp-stapling)
+- [Security and TLS](/docs/v3/configuration/security-tls) — cipher suites, ECDH curves, mTLS
+- [ACME automatic TLS](/docs/v3/configuration/tls-acme) — session tickets with ACME-obtained certificates
+- [OCSP stapling](/docs/v3/configuration/ocsp-stapling)

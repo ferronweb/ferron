@@ -109,6 +109,6 @@ All directives (`status`, `abort`, `block`, `allow`) can be placed at different 
 
 ## Notes and troubleshooting
 
-- For `location`, `if`, and `if_not` syntax, see [Routing and URL processing](/docs/v3/routing-url-processing).
-- For conditionals and matchers, see [Conditionals and variables](/docs/v3/conditionals).
-- For HTTP host directives, see [HTTP host directives](/docs/v3/http-host).
+- For `location`, `if`, and `if_not` syntax, see [Routing and URL processing](/docs/v3/configuration/routing-url-processing).
+- For conditionals and matchers, see [Conditionals and variables](/docs/v3/configuration/conditionals).
+- For HTTP host directives, see [HTTP host directives](/docs/v3/configuration/http-host).

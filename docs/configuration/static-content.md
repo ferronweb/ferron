@@ -122,7 +122,7 @@ Notes:
 
 ## Notes and troubleshooting
 
-- The `root` directive is defined in [Routing and URL processing](/docs/v3/routing-url-processing).
-- For `trailing_slash_redirect`, see [Routing and URL processing](/docs/v3/routing-url-processing#url-sanitation-and-redirects).
-- For response control (`status`, `abort`), see [HTTP response control](/docs/v3/http-response).
-- For URL rewriting, see [URL rewriting](/docs/v3/http-rewrite).
+- The `root` directive is defined in [Routing and URL processing](/docs/v3/configuration/routing-url-processing).
+- For `trailing_slash_redirect`, see [Routing and URL processing](/docs/v3/configuration/routing-url-processing#url-sanitation-and-redirects).
+- For response control (`status`, `abort`), see [HTTP response control](/docs/v3/configuration/http-response).
+- For URL rewriting, see [URL rewriting](/docs/v3/configuration/http-rewrite).

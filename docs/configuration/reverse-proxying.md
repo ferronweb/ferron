@@ -186,5 +186,5 @@ Passive health checking tracks connection failures per backend:
 ## Notes and troubleshooting
 
 - If you get 502 errors from backends, verify the `upstream` URLs are reachable and check `lb_health_check_max_fails` settings.
-- For the global connection limit (`concurrent_conns`), see [Core directives](/docs/v3/core-directives#reverse-proxy-connection-limits).
-- For forward proxy configuration, see [Forward proxy](/docs/v3/http-fproxy).
+- For the global connection limit (`concurrent_conns`), see [Core directives](/docs/v3/configuration/core-directives#reverse-proxy-connection-limits).
+- For forward proxy configuration, see [Forward proxy](/docs/v3/configuration/http-fproxy).

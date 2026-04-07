@@ -201,5 +201,5 @@ All three signals from the same HTTP request share the same `trace_id`. This ena
 ## Notes and troubleshooting
 
 - If log files are not being written, verify the file paths are accessible and the Ferron process has write permissions.
-- For global observability configuration (`console_log`, `log`, `error_log` shorthand directives), see [Core directives](/docs/v3/core-directives#observability).
+- For global observability configuration (`console_log`, `log`, `error_log` shorthand directives), see [Core directives](/docs/v3/configuration/core-directives#observability).
 - For log format details, see the `json` and `text` formatter sections above.

@@ -127,5 +127,5 @@ Limits login to 3 requests burst, then 2/second. Returns 429 when exceeded.
 - The `Retry-After` header value is rounded up to the nearest whole second.
 - Bucket memory usage is approximately 128 bytes per unique key.
 - Rate limiting is applied per-server-instance. For distributed rate limiting, use an external service (e.g. Redis) — this is not currently supported.
-- For `location` syntax, see [Routing and URL processing](/docs/v3/routing-url-processing).
-- For HTTP host directives, see [HTTP host directives](/docs/v3/http-host).
+- For `location` syntax, see [Routing and URL processing](/docs/v3/configuration/routing-url-processing).
+- For HTTP host directives, see [HTTP host directives](/docs/v3/configuration/http-host).

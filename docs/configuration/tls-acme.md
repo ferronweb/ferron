@@ -238,7 +238,7 @@ openssl s_client -connect example.com:443 -status -servername example.com </dev/
 
 ## See also
 
-- [Security and TLS](/docs/v3/security-tls) — cipher suites, ECDH curves, mTLS
-- [TLS session ticket keys](/docs/v3/tls-session-tickets) — session resumption
-- [OCSP stapling](/docs/v3/ocsp-stapling) — OCSP response stapling
-- [HTTP host directives](/docs/v3/http-host) — per-host TLS configuration
+- [Security and TLS](/docs/v3/configuration/security-tls) — cipher suites, ECDH curves, mTLS
+- [TLS session ticket keys](/docs/v3/configuration/tls-session-tickets) — session resumption
+- [OCSP stapling](/docs/v3/configuration/ocsp-stapling) — OCSP response stapling
+- [HTTP host directives](/docs/v3/configuration/http-host) — per-host TLS configuration

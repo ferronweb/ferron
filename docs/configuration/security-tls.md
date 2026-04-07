@@ -153,6 +153,6 @@ The `client_auth_ca` value requires a feature that is not compiled in. Enable th
 
 ## See also
 
-- [ACME automatic TLS](/docs/v3/tls-acme)
-- [TLS session ticket keys](/docs/v3/tls-session-tickets)
-- [OCSP stapling](/docs/v3/ocsp-stapling)
+- [ACME automatic TLS](/docs/v3/configuration/tls-acme)
+- [TLS session ticket keys](/docs/v3/configuration/tls-session-tickets)
+- [OCSP stapling](/docs/v3/configuration/ocsp-stapling)

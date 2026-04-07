@@ -320,5 +320,5 @@ observability {
 - These directives affect startup and listener construction, not per-request routing.
 - The built-in blank configuration enables `runtime.io_uring true`.
 - During configuration reload (SIGHUP), the existing admin listener is gracefully shut down and a new one is started if the `admin` block is still present.
-- For observability-specific configuration (log formatters, OTLP export), see [Observability and logging](/docs/v3/observability-logging).
-- For per-host HTTP settings, see [HTTP host directives](/docs/v3/http-host).
+- For observability-specific configuration (log formatters, OTLP export), see [Observability and logging](/docs/v3/configuration/observability-logging).
+- For per-host HTTP settings, see [HTTP host directives](/docs/v3/configuration/http-host).

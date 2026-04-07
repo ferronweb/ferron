@@ -109,5 +109,5 @@ api.example.com {
 ## Notes and troubleshooting
 
 - If CORS headers are not appearing in responses, verify that `origins` is configured (CORS is disabled by default if `origins` is empty).
-- For `header` interpolation variables, see [Conditionals and variables](/docs/v3/conditionals).
-- For HTTP host directives, see [HTTP host directives](/docs/v3/http-host).
+- For `header` interpolation variables, see [Conditionals and variables](/docs/v3/configuration/conditionals).
+- For HTTP host directives, see [HTTP host directives](/docs/v3/configuration/http-host).
