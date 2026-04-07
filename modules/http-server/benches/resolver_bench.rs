@@ -1,18 +1,20 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use ferron_http::config::prepare::{
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use ferron_http_server::config::prepare::{
     PreparedHostConfigurationBlock, PreparedHostConfigurationMatch,
     PreparedHostConfigurationMatcher,
 };
-use ferron_http::config::resolver::{
+use ferron_http_server::config::resolver::{
     ResolvedLocationPath, Stage2RadixResolver, ThreeStageResolver,
 };
-use std::collections::HashMap;
+use ferron_http_server::config::HostConfigs;
+use http_body_util::BodyExt;
+use std::hint::black_box;
 use std::sync::Arc;
 
 /// Create a test configuration block
 fn create_test_block() -> PreparedHostConfigurationBlock {
     PreparedHostConfigurationBlock {
-        directives: Arc::new(HashMap::new()),
+        directives: Arc::new(std::collections::HashMap::default()),
         matches: Vec::new(),
         error_config: Vec::new(),
     }
@@ -95,20 +97,6 @@ fn setup_many_hosts() -> Stage2RadixResolver {
     // Add some wildcards
     let wildcard_config = Arc::new(create_test_block());
     resolver.insert_host_wildcard(vec!["com", "example"], wildcard_config, 5);
-
-    resolver
-}
-
-/// Setup a resolver with terminal compression (deep chains that compress)
-fn setup_compressed_hosts() -> Stage2RadixResolver {
-    let mut resolver = Stage2RadixResolver::new();
-
-    // These will compress into single chains
-    for i in 0..10 {
-        let config = Arc::new(create_test_block());
-        let domain = format!("domain{}", i);
-        resolver.insert_host(vec!["com", &domain, "sub", "deep", "leaf"], config, 10);
-    }
 
     resolver
 }
@@ -241,7 +229,7 @@ fn bench_stage2_full_resolution(c: &mut Criterion) {
 
     // Setup resolver with hostname config
     let mut resolver = Stage2RadixResolver::new();
-    let mut host_directives = HashMap::new();
+    let mut host_directives = std::collections::HashMap::default();
     host_directives.insert(
         "host_level".to_string(),
         vec![ServerConfigurationDirectiveEntry {
@@ -261,7 +249,7 @@ fn bench_stage2_full_resolution(c: &mut Criterion) {
     resolver.insert_host(vec!["com", "example"], host_config, 10);
 
     // Setup base block with location matcher
-    let mut base_directives = HashMap::new();
+    let mut base_directives = std::collections::HashMap::default();
     base_directives.insert(
         "base_level".to_string(),
         vec![ServerConfigurationDirectiveEntry {
@@ -280,7 +268,7 @@ fn bench_stage2_full_resolution(c: &mut Criterion) {
     };
 
     // Add location matcher
-    let mut location_config = HashMap::new();
+    let mut location_config = std::collections::HashMap::default();
     location_config.insert(
         "location_directive".to_string(),
         vec![ServerConfigurationDirectiveEntry {
@@ -294,14 +282,23 @@ fn bench_stage2_full_resolution(c: &mut Criterion) {
     );
     base_block.matches.push(PreparedHostConfigurationMatch {
         matcher: PreparedHostConfigurationMatcher::Location("/api".to_string()),
-        config: PreparedHostConfigurationBlock {
+        config: Arc::new(PreparedHostConfigurationBlock {
             directives: Arc::new(location_config),
             matches: Vec::new(),
             error_config: Vec::new(),
-        },
+        }),
     });
 
-    let variables = (http::Request::new(()).into_parts().0, HashMap::new());
+    let variables = (
+        http::Request::new(
+            http_body_util::Empty::new()
+                .map_err(|e| match e {})
+                .boxed_unsync(),
+        ),
+        std::collections::HashMap::default(),
+    );
+
+    let base_block_arc = Arc::new(base_block);
 
     // Full resolution with hostname + path
     group.bench_function("full_resolution_api", |b| {
@@ -309,7 +306,7 @@ fn bench_stage2_full_resolution(c: &mut Criterion) {
             let (config, path) = resolver.resolve(
                 Some(black_box("example.com")),
                 black_box("/api/users"),
-                &base_block,
+                base_block_arc.clone(),
                 &variables,
                 None,
             );
@@ -324,7 +321,7 @@ fn bench_stage2_full_resolution(c: &mut Criterion) {
             let (config, path) = resolver.resolve(
                 Some(black_box("example.com")),
                 black_box("/static/file.css"),
-                &base_block,
+                base_block_arc.clone(),
                 &variables,
                 None,
             );
@@ -342,9 +339,9 @@ fn bench_three_stage_resolver(c: &mut Criterion) {
     let mut resolver = ThreeStageResolver::new();
 
     // Setup Stage 1 - IP resolver
-    let mut hosts = HashMap::new();
+    let mut hosts = HostConfigs::default();
     let host_block = create_test_block();
-    hosts.insert(Some("example.com".to_string()), host_block);
+    hosts.insert(Some("example.com".to_string()), Arc::new(host_block));
     resolver
         .stage1()
         .register_ip("192.168.1.1".parse().unwrap(), hosts);
@@ -359,7 +356,14 @@ fn bench_three_stage_resolver(c: &mut Criterion) {
     let error_config = Arc::new(create_test_block());
     resolver.stage3().register_error(404, error_config);
 
-    let variables = (http::Request::new(()).into_parts().0, HashMap::new());
+    let variables = (
+        http::Request::new(
+            http_body_util::Empty::new()
+                .map_err(|e| match e {})
+                .boxed_unsync(),
+        ),
+        std::collections::HashMap::default(),
+    );
     let test_ip: std::net::IpAddr = "192.168.1.1".parse().unwrap();
 
     // Full three-stage resolution

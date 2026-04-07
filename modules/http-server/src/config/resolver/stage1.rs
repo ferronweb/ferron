@@ -2,40 +2,33 @@ use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
 use ferron_core::config::{layer::LayeredConfiguration, ServerConfigurationBlock};
 
+use super::super::prepare::HostConfigs;
 use super::super::prepare::PreparedHostConfigurationBlock;
 use super::types::ResolvedLocationPath;
 
 /// Stage 1 resolver: IP address-based configuration lookup
 ///
 /// Uses a BTreeMap for ordered IP address lookups.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Stage1IpResolver {
-    /// Maps IP addresses to prepared host configurations
-    ip_map:
-        std::collections::BTreeMap<IpAddr, HashMap<Option<String>, PreparedHostConfigurationBlock>>,
-    /// Default configuration when no IP matches
-    default: Option<HashMap<Option<String>, PreparedHostConfigurationBlock>>,
+    /// Maps IP addresses to host configurations (named + default)
+    ip_map: std::collections::BTreeMap<IpAddr, HostConfigs>,
+    /// Default host configurations when no IP matches
+    default: Option<HostConfigs>,
 }
 
 impl Stage1IpResolver {
     pub fn new() -> Self {
-        Self {
-            ip_map: std::collections::BTreeMap::new(),
-            default: None,
-        }
+        Self::default()
     }
 
     /// Register a configuration for a specific IP address
-    pub fn register_ip(
-        &mut self,
-        ip: IpAddr,
-        hosts: HashMap<Option<String>, PreparedHostConfigurationBlock>,
-    ) {
+    pub fn register_ip(&mut self, ip: IpAddr, hosts: HostConfigs) {
         self.ip_map.insert(ip, hosts);
     }
 
     /// Set the default configuration when no IP matches
-    pub fn set_default(&mut self, hosts: HashMap<Option<String>, PreparedHostConfigurationBlock>) {
+    pub fn set_default(&mut self, hosts: HostConfigs) {
         self.default = Some(hosts);
     }
 
@@ -46,7 +39,7 @@ impl Stage1IpResolver {
         &self,
         ip: IpAddr,
         location_path: &mut ResolvedLocationPath,
-    ) -> Option<&HashMap<Option<String>, PreparedHostConfigurationBlock>> {
+    ) -> Option<&HostConfigs> {
         location_path.ip = Some(ip);
 
         if let Some(config) = self.ip_map.get(&ip) {
@@ -54,6 +47,23 @@ impl Stage1IpResolver {
         }
 
         self.default.as_ref()
+    }
+
+    /// Look up a specific host within an IP's host configurations
+    ///
+    /// Returns the host configuration for the given hostname, falling back
+    /// to the default host if no named match is found.
+    /// Uses `&str` lookup — no `String` allocation.
+    pub fn resolve_host(
+        &self,
+        ip: IpAddr,
+        hostname: &str,
+        location_path: &mut ResolvedLocationPath,
+    ) -> Option<&Arc<PreparedHostConfigurationBlock>> {
+        location_path.ip = Some(ip);
+
+        let hosts = self.ip_map.get(&ip).or(self.default.as_ref())?;
+        hosts.get(hostname)
     }
 
     /// Resolve and create a layered configuration
@@ -71,8 +81,8 @@ impl Stage1IpResolver {
 
         if let Some(hosts) = self.resolve(ip, &mut location_path) {
             // Add the default host configuration if available
-            if let Some(default_host) = hosts.get(&None) {
-                // Clone the Arc (cheap - just increments ref count)
+            if let Some(default_host) = hosts.get_default() {
+                // Clone the Arc (cheap - just increments ref count, no HashMap clone)
                 let block = ServerConfigurationBlock {
                     directives: Arc::clone(&default_host.directives),
                     matchers: HashMap::new(),
@@ -83,12 +93,6 @@ impl Stage1IpResolver {
         }
 
         (layered_config, location_path)
-    }
-}
-
-impl Default for Stage1IpResolver {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -109,8 +113,11 @@ mod tests {
     fn test_stage1_ip_resolver() {
         let mut resolver = Stage1IpResolver::new();
 
-        let mut hosts = HashMap::new();
-        hosts.insert(Some("example.com".to_string()), create_test_block());
+        let mut hosts = HostConfigs::new();
+        hosts.insert(
+            Some("example.com".to_string()),
+            Arc::new(create_test_block()),
+        );
 
         resolver.register_ip("127.0.0.1".parse().unwrap(), hosts);
 
@@ -122,13 +129,31 @@ mod tests {
     }
 
     #[test]
+    fn test_stage1_resolve_host() {
+        let mut resolver = Stage1IpResolver::new();
+
+        let mut hosts = HostConfigs::new();
+        hosts.insert(
+            Some("example.com".to_string()),
+            Arc::new(create_test_block()),
+        );
+        hosts.insert(None, Arc::new(create_test_block()));
+
+        resolver.register_ip("127.0.0.1".parse().unwrap(), hosts);
+
+        let mut path = ResolvedLocationPath::new();
+        let result = resolver.resolve_host("127.0.0.1".parse().unwrap(), "example.com", &mut path);
+
+        assert!(result.is_some());
+        assert_eq!(path.ip, Some("127.0.0.1".parse().unwrap()));
+    }
+
+    #[test]
     fn test_stage1_layered_resolution() {
         let mut resolver = Stage1IpResolver::new();
 
-        let mut hosts = HashMap::new();
-        let host_block = create_test_block();
-        // Use None as the key (default host config)
-        hosts.insert(None, host_block);
+        let mut hosts = HostConfigs::new();
+        hosts.insert(None, Arc::new(create_test_block()));
 
         resolver.register_ip("127.0.0.1".parse().unwrap(), hosts);
 

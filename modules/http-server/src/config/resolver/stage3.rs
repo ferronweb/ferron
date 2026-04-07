@@ -626,24 +626,6 @@ impl Stage3ErrorResolver {
         })
     }
 
-    /// Evaluate a single conditional expression with given variables
-    fn evaluate_condition(
-        &self,
-        compiled_expr: &CompiledMatcherExpr,
-        variables: &ResolverVariables,
-    ) -> bool {
-        evaluate_matcher_condition(compiled_expr, variables)
-    }
-
-    /// Get the string value of an operand
-    fn get_operand_value(
-        &self,
-        operand: &ServerConfigurationMatcherOperand,
-        variables: &ResolverVariables,
-    ) -> Option<String> {
-        resolve_matcher_operand(operand, variables)
-    }
-
     /// Resolve error configuration with scoped lookup
     ///
     /// Resolution order (most specific to least specific):
@@ -670,13 +652,26 @@ impl Stage3ErrorResolver {
     ) -> Option<Arc<PreparedHostConfigurationBlock>> {
         location_path.error_key = Some(error_code);
 
+        // Pre-compute the joined path string once to avoid repeated allocations
+        let path_str = path_segments.map(|s| {
+            let mut joined = String::with_capacity(s.iter().map(|s| s.len() + 1).sum::<usize>());
+            for (i, segment) in s.iter().enumerate() {
+                if i > 0 {
+                    joined.push('/');
+                }
+                joined.push_str(segment);
+            }
+            joined
+        });
+        let path_str_ref = path_str.as_deref();
+
         // First, try conditional configs (sorted by priority, highest first)
         let mut matching_conditionals: Vec<_> = self
             .conditional_configs
             .iter()
             .filter(|(scope, compiled_groups, _, _)| {
                 // Check if scope matches (ignoring conditionals in the key)
-                Self::scope_matches(scope, hostname, ip, path_segments, error_code)
+                Self::scope_matches(scope, hostname, ip, path_str_ref, error_code)
                     && self.evaluate_condition_groups(compiled_groups, variables)
             })
             .map(|(_, _, config, priority)| (*priority, Arc::clone(config)))
@@ -716,7 +711,7 @@ impl Stage3ErrorResolver {
         scope: &ErrorConfigScope,
         hostname: Option<&str>,
         ip: Option<IpAddr>,
-        path_segments: Option<&[String]>,
+        path_str: Option<&str>,
         error_code: u16,
     ) -> bool {
         // Check error code matches (or is None for defaults)
@@ -742,8 +737,7 @@ impl Stage3ErrorResolver {
 
         // Check path matches
         if let Some(ref scope_path) = scope.path {
-            let path_str = path_segments.map(|s| s.join("/"));
-            if path_str.as_deref() != Some(scope_path.as_str()) {
+            if path_str != Some(scope_path.as_str()) {
                 return false;
             }
         }
@@ -759,13 +753,26 @@ impl Stage3ErrorResolver {
         path_segments: Option<&[String]>,
         variables: &ResolverVariables,
     ) -> Option<Arc<PreparedHostConfigurationBlock>> {
+        // Pre-compute the joined path string once to avoid repeated allocations
+        let path_str = path_segments.map(|s| {
+            let mut joined = String::with_capacity(s.iter().map(|s| s.len() + 1).sum::<usize>());
+            for (i, segment) in s.iter().enumerate() {
+                if i > 0 {
+                    joined.push('/');
+                }
+                joined.push_str(segment);
+            }
+            joined
+        });
+        let path_str_ref = path_str.as_deref();
+
         // First, try conditional configs with error_code = None (defaults)
         let mut matching_conditionals: Vec<_> = self
             .conditional_configs
             .iter()
             .filter(|(scope, compiled_groups, _, _)| {
                 // Check if scope matches for defaults (error_code = None)
-                Self::scope_matches_for_default(scope, hostname, ip, path_segments)
+                Self::scope_matches_for_default(scope, hostname, ip, path_str_ref)
                     && self.evaluate_condition_groups(compiled_groups, variables)
             })
             .map(|(_, _, config, priority)| (*priority, Arc::clone(config)))
@@ -794,7 +801,7 @@ impl Stage3ErrorResolver {
         scope: &ErrorConfigScope,
         hostname: Option<&str>,
         ip: Option<IpAddr>,
-        path_segments: Option<&[String]>,
+        path_str: Option<&str>,
     ) -> bool {
         // For defaults, error_code should be None
         if scope.error_code.is_some() {
@@ -817,8 +824,7 @@ impl Stage3ErrorResolver {
 
         // Check path matches
         if let Some(ref scope_path) = scope.path {
-            let path_str = path_segments.map(|s| s.join("/"));
-            if path_str.as_deref() != Some(scope_path.as_str()) {
+            if path_str != Some(scope_path.as_str()) {
                 return false;
             }
         }

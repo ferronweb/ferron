@@ -14,8 +14,9 @@ use std::{collections::HashMap, net::IpAddr, sync::Arc};
 use ferron_core::config::{layer::LayeredConfiguration, ServerConfigurationBlock};
 
 use super::super::prepare::{
-    PreparedConfiguration, PreparedHostConfigurationBlock, PreparedHostConfigurationErrorConfig,
-    PreparedHostConfigurationMatch, PreparedHostConfigurationMatcher,
+    HostConfigs, PreparedConfiguration, PreparedHostConfigurationBlock,
+    PreparedHostConfigurationErrorConfig, PreparedHostConfigurationMatch,
+    PreparedHostConfigurationMatcher,
 };
 use super::stage1::Stage1IpResolver;
 use super::stage2::Stage2RadixResolver;
@@ -57,26 +58,38 @@ impl ThreeStageResolver {
             }
 
             // Stage 2 & 3: Register hostname configs and error configs
-            for (hostname_opt, host_block) in hosts {
-                if let Some(ref hostname) = hostname_opt {
-                    // Stage 2: Insert hostname into radix tree
-                    let segments: Vec<&str> = hostname.split('.').rev().collect();
-                    let host_arc = Arc::new(host_block.clone());
-                    resolver.stage2_radix.insert_host(segments, host_arc, 10);
-                }
+            for (hostname_opt, host_arc) in &hosts.named_hosts {
+                // Stage 2: Insert hostname into radix tree
+                let segments: Vec<&str> = hostname_opt.split('.').rev().collect();
+                resolver
+                    .stage2_radix
+                    .insert_host(segments, Arc::clone(host_arc), 10);
 
                 // Stage 3: Register error configs recursively with proper scopes
                 Self::register_error_configs_stage3(
                     &mut resolver.stage2_radix,
                     &mut resolver.stage3_error,
-                    hostname_opt.as_deref(),
-                    &host_block,
+                    Some(hostname_opt.as_str()),
+                    host_arc,
                     Vec::new(), // no accumulated conditionals at host level
                     None,       // no path at host level
                 );
 
                 // Stage 2: Register IfConditional and IfNotConditional matchers
-                Self::register_matchers_stage2(&mut resolver.stage2_radix, &host_block.matches);
+                Self::register_matchers_stage2(&mut resolver.stage2_radix, &host_arc.matches);
+            }
+
+            // Handle default host (hostname = None)
+            if let Some(ref default_arc) = hosts.default_host {
+                Self::register_error_configs_stage3(
+                    &mut resolver.stage2_radix,
+                    &mut resolver.stage3_error,
+                    None,
+                    default_arc,
+                    Vec::new(),
+                    None,
+                );
+                Self::register_matchers_stage2(&mut resolver.stage2_radix, &default_arc.matches);
             }
         }
 
@@ -120,7 +133,7 @@ impl ThreeStageResolver {
         stage2: &mut Stage2RadixResolver,
         stage3: &mut Stage3ErrorResolver,
         hostname: Option<&str>,
-        block: &PreparedHostConfigurationBlock,
+        block: &Arc<PreparedHostConfigurationBlock>,
         accumulated_groups: Vec<ConditionalGroup>,
         current_path: Option<String>,
     ) {
@@ -344,20 +357,19 @@ impl ThreeStageResolver {
     ) -> Option<ResolutionResult> {
         let mut location_path = ResolvedLocationPath::new();
 
-        // Stage 1: IP-based resolution
-        let host_configs = self.stage1_ip.resolve(ip, &mut location_path)?;
-
-        // Get the host-specific configuration
-        let host_config = host_configs
-            .get(&Some(hostname.to_string()))
-            .or_else(|| host_configs.get(&None))?;
+        // Stage 1: IP-based resolution (zero-copy Arc lookup)
+        let host_config_arc = self
+            .stage1_ip
+            .resolve_host(ip, hostname, &mut location_path)?;
 
         // Stage 2: Hostname, path, and conditional resolution (passing Stage 1's config)
-        // Wrap in Arc for zero-copy sharing
-        let host_config_arc = Arc::new(host_config.clone());
-        let (stage2_config, stage2_path) =
-            self.stage2_radix
-                .resolve(Some(hostname), path, host_config_arc, variables, None);
+        let (stage2_config, stage2_path) = self.stage2_radix.resolve(
+            Some(hostname),
+            path,
+            Arc::clone(host_config_arc),
+            variables,
+            None,
+        );
 
         // Merge Stage 2 results
         let mut layered_config = LayeredConfiguration::new();
@@ -377,10 +389,7 @@ impl ThreeStageResolver {
     /// Resolve only through Stage 1 (IP-based)
     ///
     /// Returns the host configurations for the given IP
-    pub fn resolve_stage1(
-        &self,
-        ip: IpAddr,
-    ) -> Option<&HashMap<Option<String>, PreparedHostConfigurationBlock>> {
+    pub fn resolve_stage1(&self, ip: IpAddr) -> Option<&HostConfigs> {
         let mut path = ResolvedLocationPath::new();
         self.stage1_ip.resolve(ip, &mut path)
     }
@@ -477,20 +486,19 @@ impl ThreeStageResolver {
     ) -> Option<ResolutionResult> {
         let mut location_path = ResolvedLocationPath::new();
 
-        // Stage 1: IP-based resolution
-        let host_configs = self.stage1_ip.resolve(ip, &mut location_path)?;
+        // Stage 1: IP-based resolution (zero-copy Arc lookup)
+        let host_config_arc = self
+            .stage1_ip
+            .resolve_host(ip, hostname, &mut location_path)?;
 
-        // Get the host-specific configuration
-        let host_config = host_configs
-            .get(&Some(hostname.to_string()))
-            .or_else(|| host_configs.get(&None))?;
-
-        // Stage 2: Hostname, path, and conditional resolution (passing Stage 1's config)
-        // Wrap in Arc for zero-copy sharing
-        let host_config_arc = Arc::new(host_config.clone());
-        let (stage2_config, stage2_path) =
-            self.stage2_radix
-                .resolve(Some(hostname), "/", host_config_arc, variables, None);
+        // Stage 2: Hostname, path, and conditional resolution
+        let (stage2_config, stage2_path) = self.stage2_radix.resolve(
+            Some(hostname),
+            "/",
+            Arc::clone(host_config_arc),
+            variables,
+            None,
+        );
 
         // Merge Stage 2 results
         let mut layered_config = LayeredConfiguration::new();
@@ -544,20 +552,19 @@ impl ThreeStageResolver {
     ) -> Option<ResolutionResult> {
         let mut location_path = ResolvedLocationPath::new();
 
-        // Stage 1: IP-based resolution
-        let host_configs = self.stage1_ip.resolve(ip, &mut location_path)?;
+        // Stage 1: IP-based resolution (zero-copy Arc lookup)
+        let host_config_arc = self
+            .stage1_ip
+            .resolve_host(ip, hostname, &mut location_path)?;
 
-        // Get the host-specific configuration
-        let host_config = host_configs
-            .get(&Some(hostname.to_string()))
-            .or_else(|| host_configs.get(&None))?;
-
-        // Stage 2: Hostname, path, and conditional resolution (passing Stage 1's config)
-        // Wrap in Arc for zero-copy sharing
-        let host_config_arc = Arc::new(host_config.clone());
-        let (stage2_config, stage2_path) =
-            self.stage2_radix
-                .resolve(Some(hostname), "/", host_config_arc, variables, None);
+        // Stage 2: Hostname, path, and conditional resolution
+        let (stage2_config, stage2_path) = self.stage2_radix.resolve(
+            Some(hostname),
+            "/",
+            Arc::clone(host_config_arc),
+            variables,
+            None,
+        );
 
         // Merge Stage 2 results
         let mut layered_config = LayeredConfiguration::new();
@@ -609,7 +616,9 @@ mod tests {
     use http_body_util::{BodyExt, Empty};
 
     use super::*;
-    use crate::config::prepare::{prepare_host_config, PreparedHostConfigurationBlock};
+    use crate::config::prepare::{
+        prepare_host_config, HostConfigs, PreparedHostConfigurationBlock,
+    };
     use crate::config::resolver::matcher::CompiledMatcherExpr;
     use crate::config::resolver::stage2::RadixKey;
     use std::net::Ipv4Addr;
@@ -651,7 +660,7 @@ mod tests {
         let mut resolver = ThreeStageResolver::new();
 
         // Setup Stage 1
-        let mut hosts = HashMap::new();
+        let mut hosts = HostConfigs::new();
         let mut directives1 = HashMap::new();
         directives1.insert("stage1_directive".to_string(), vec![]);
         let host_block = PreparedHostConfigurationBlock {
@@ -659,7 +668,7 @@ mod tests {
             matches: Vec::new(),
             error_config: Vec::new(),
         };
-        hosts.insert(Some("example.com".to_string()), host_block);
+        hosts.insert(Some("example.com".to_string()), Arc::new(host_block));
         resolver
             .stage1()
             .register_ip("127.0.0.1".parse().unwrap(), hosts);
@@ -686,7 +695,7 @@ mod tests {
         let host_block = resolver
             .resolve_stage1("127.0.0.1".parse().unwrap())
             .unwrap()
-            .get(&Some("example.com".to_string()))
+            .get("example.com")
             .unwrap();
 
         let variables = (
@@ -696,7 +705,7 @@ mod tests {
         let (config2, _) = resolver.resolve_stage2_layered(
             Some("example.com"),
             "/api",
-            Arc::new(host_block.clone()),
+            Arc::clone(host_block),
             &variables,
             Some(config1),
         );
@@ -713,13 +722,13 @@ mod tests {
         let mut resolver = ThreeStageResolver::new();
 
         // Setup Stage 1
-        let mut hosts = HashMap::new();
+        let mut hosts = HostConfigs::new();
         let host_block = PreparedHostConfigurationBlock {
             directives: Arc::new(HashMap::new()),
             matches: Vec::new(),
             error_config: Vec::new(),
         };
-        hosts.insert(Some("example.com".to_string()), host_block);
+        hosts.insert(Some("example.com".to_string()), Arc::new(host_block));
 
         resolver
             .stage1()
@@ -1380,7 +1389,7 @@ mod tests {
         let mut resolver = ThreeStageResolver::new();
 
         // Setup two different IP branches with distinct configurations
-        let mut hosts_ip1 = HashMap::new();
+        let mut hosts_ip1 = HostConfigs::new();
         let mut directives_ip1 = HashMap::new();
         directives_ip1.insert("ip1_directive".to_string(), vec![]);
         let host_block_ip1 = PreparedHostConfigurationBlock {
@@ -1388,12 +1397,12 @@ mod tests {
             matches: Vec::new(),
             error_config: Vec::new(),
         };
-        hosts_ip1.insert(None, host_block_ip1);
+        hosts_ip1.insert(None, Arc::new(host_block_ip1));
         resolver
             .stage1()
             .register_ip("192.168.1.1".parse().unwrap(), hosts_ip1);
 
-        let mut hosts_ip2 = HashMap::new();
+        let mut hosts_ip2 = HostConfigs::new();
         let mut directives_ip2 = HashMap::new();
         directives_ip2.insert("ip2_directive".to_string(), vec![]);
         let host_block_ip2 = PreparedHostConfigurationBlock {
@@ -1401,7 +1410,7 @@ mod tests {
             matches: Vec::new(),
             error_config: Vec::new(),
         };
-        hosts_ip2.insert(None, host_block_ip2);
+        hosts_ip2.insert(None, Arc::new(host_block_ip2));
         resolver
             .stage1()
             .register_ip("192.168.1.2".parse().unwrap(), hosts_ip2);
@@ -1448,7 +1457,7 @@ mod tests {
         let mut resolver = ThreeStageResolver::new();
 
         // Setup IP branch 1: 192.168.1.1 -> example.com
-        let mut hosts_ip1 = HashMap::new();
+        let mut hosts_ip1 = HostConfigs::new();
         let mut directives_ip1 = HashMap::new();
         directives_ip1.insert("ip1_layer".to_string(), vec![]);
         let host_block_ip1 = PreparedHostConfigurationBlock {
@@ -1456,13 +1465,13 @@ mod tests {
             matches: Vec::new(),
             error_config: Vec::new(),
         };
-        hosts_ip1.insert(Some("example.com".to_string()), host_block_ip1);
+        hosts_ip1.insert(Some("example.com".to_string()), Arc::new(host_block_ip1));
         resolver
             .stage1()
             .register_ip("192.168.1.1".parse().unwrap(), hosts_ip1);
 
         // Setup IP branch 2: 192.168.1.2 -> other.com
-        let mut hosts_ip2 = HashMap::new();
+        let mut hosts_ip2 = HostConfigs::new();
         let mut directives_ip2 = HashMap::new();
         directives_ip2.insert("ip2_layer".to_string(), vec![]);
         let host_block_ip2 = PreparedHostConfigurationBlock {
@@ -1470,7 +1479,7 @@ mod tests {
             matches: Vec::new(),
             error_config: Vec::new(),
         };
-        hosts_ip2.insert(Some("other.com".to_string()), host_block_ip2);
+        hosts_ip2.insert(Some("other.com".to_string()), Arc::new(host_block_ip2));
         resolver
             .stage1()
             .register_ip("192.168.1.2".parse().unwrap(), hosts_ip2);
@@ -1673,31 +1682,31 @@ mod tests {
         // Branch A: 10.0.0.1 -> api.com
         // Branch B: 10.0.0.2 -> other.com
 
-        let mut hosts_a = HashMap::new();
+        let mut hosts_a = HostConfigs::new();
         let mut directives_a = HashMap::new();
         directives_a.insert("branch_a_ip".to_string(), vec![]);
         hosts_a.insert(
             Some("api.com".to_string()),
-            PreparedHostConfigurationBlock {
+            Arc::new(PreparedHostConfigurationBlock {
                 directives: Arc::new(directives_a),
                 matches: Vec::new(),
                 error_config: Vec::new(),
-            },
+            }),
         );
         resolver
             .stage1()
             .register_ip("10.0.0.1".parse().unwrap(), hosts_a);
 
-        let mut hosts_b = HashMap::new();
+        let mut hosts_b = HostConfigs::new();
         let mut directives_b = HashMap::new();
         directives_b.insert("branch_b_ip".to_string(), vec![]);
         hosts_b.insert(
             Some("other.com".to_string()),
-            PreparedHostConfigurationBlock {
+            Arc::new(PreparedHostConfigurationBlock {
                 directives: Arc::new(directives_b),
                 matches: Vec::new(),
                 error_config: Vec::new(),
-            },
+            }),
         );
         resolver
             .stage1()
@@ -1781,31 +1790,31 @@ mod tests {
         // Chain 1: IP1 -> host1
         // Chain 2: IP2 -> host2
 
-        let mut hosts1 = HashMap::new();
+        let mut hosts1 = HostConfigs::new();
         let mut directives1 = HashMap::new();
         directives1.insert("layer1_ip".to_string(), vec![]);
         hosts1.insert(
             Some("host1.com".to_string()),
-            PreparedHostConfigurationBlock {
+            Arc::new(PreparedHostConfigurationBlock {
                 directives: Arc::new(directives1),
                 matches: Vec::new(),
                 error_config: Vec::new(),
-            },
+            }),
         );
         resolver
             .stage1()
             .register_ip("1.1.1.1".parse().unwrap(), hosts1);
 
-        let mut hosts2 = HashMap::new();
+        let mut hosts2 = HostConfigs::new();
         let mut directives2 = HashMap::new();
         directives2.insert("layer2_ip".to_string(), vec![]);
         hosts2.insert(
             Some("host2.com".to_string()),
-            PreparedHostConfigurationBlock {
+            Arc::new(PreparedHostConfigurationBlock {
                 directives: Arc::new(directives2),
                 matches: Vec::new(),
                 error_config: Vec::new(),
-            },
+            }),
         );
         resolver
             .stage1()
@@ -1884,7 +1893,7 @@ mod tests {
         // IP2 (192.168.1.2) -> shared.com -> "ip2" source
 
         // Setup Stage 1 - both IPs have the same hostname
-        let mut hosts_ip1 = HashMap::new();
+        let mut hosts_ip1 = HostConfigs::new();
         let mut ip1_directives = HashMap::new();
         ip1_directives.insert(
             "ip_source".to_string(),
@@ -1896,17 +1905,17 @@ mod tests {
         );
         hosts_ip1.insert(
             Some("shared.com".to_string()),
-            PreparedHostConfigurationBlock {
+            Arc::new(PreparedHostConfigurationBlock {
                 directives: Arc::new(ip1_directives),
                 matches: Vec::new(),
                 error_config: Vec::new(),
-            },
+            }),
         );
         resolver
             .stage1()
             .register_ip("192.168.1.1".parse().unwrap(), hosts_ip1);
 
-        let mut hosts_ip2 = HashMap::new();
+        let mut hosts_ip2 = HostConfigs::new();
         let mut ip2_directives = HashMap::new();
         ip2_directives.insert(
             "ip_source".to_string(),
@@ -1918,11 +1927,11 @@ mod tests {
         );
         hosts_ip2.insert(
             Some("shared.com".to_string()),
-            PreparedHostConfigurationBlock {
+            Arc::new(PreparedHostConfigurationBlock {
                 directives: Arc::new(ip2_directives),
                 matches: Vec::new(),
                 error_config: Vec::new(),
-            },
+            }),
         );
         resolver
             .stage1()
@@ -2071,7 +2080,7 @@ mod tests {
         // web.com -> 404 -> "web_custom_404"
 
         // Stage 1: Both IPs have their respective hostnames
-        let mut hosts = HashMap::new();
+        let mut hosts = HostConfigs::new();
 
         let mut api_directives = HashMap::new();
         api_directives.insert(
@@ -2084,11 +2093,11 @@ mod tests {
         );
         hosts.insert(
             Some("api.com".to_string()),
-            PreparedHostConfigurationBlock {
+            Arc::new(PreparedHostConfigurationBlock {
                 directives: Arc::new(api_directives),
                 matches: Vec::new(),
                 error_config: Vec::new(),
-            },
+            }),
         );
 
         let mut web_directives = HashMap::new();
@@ -2102,11 +2111,11 @@ mod tests {
         );
         hosts.insert(
             Some("web.com".to_string()),
-            PreparedHostConfigurationBlock {
+            Arc::new(PreparedHostConfigurationBlock {
                 directives: Arc::new(web_directives),
                 matches: Vec::new(),
                 error_config: Vec::new(),
-            },
+            }),
         );
 
         resolver
@@ -2386,8 +2395,8 @@ mod tests {
             error_config: Vec::new(),
         };
 
-        let mut hosts = HashMap::new();
-        hosts.insert(Some("example.com".to_string()), host_block);
+        let mut hosts = HostConfigs::new();
+        hosts.insert(Some("example.com".to_string()), Arc::new(host_block));
 
         let mut prepared: PreparedConfiguration = PreparedConfiguration::new();
         prepared.insert(None, hosts);
@@ -2451,8 +2460,8 @@ mod tests {
             error_config: Vec::new(),
         };
 
-        let mut hosts = HashMap::new();
-        hosts.insert(Some("example.com".to_string()), host_block);
+        let mut hosts = HostConfigs::new();
+        hosts.insert(Some("example.com".to_string()), Arc::new(host_block));
 
         let mut prepared: PreparedConfiguration = PreparedConfiguration::new();
         prepared.insert(None, hosts);
@@ -2543,8 +2552,8 @@ mod tests {
             error_config: Vec::new(),
         };
 
-        let mut hosts = HashMap::new();
-        hosts.insert(Some("example.com".to_string()), host_block);
+        let mut hosts = HostConfigs::new();
+        hosts.insert(Some("example.com".to_string()), Arc::new(host_block));
 
         let mut prepared: PreparedConfiguration = PreparedConfiguration::new();
         prepared.insert(None, hosts);

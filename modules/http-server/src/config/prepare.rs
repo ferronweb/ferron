@@ -4,8 +4,56 @@ use ferron_core::config::{
     ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationMatcherExpr,
 };
 
-pub type PreparedConfiguration =
-    HashMap<Option<IpAddr>, HashMap<Option<String>, PreparedHostConfigurationBlock>>;
+/// Named and default host configurations for a given IP scope.
+///
+/// Separating the default host from named hosts enables:
+/// - Zero-allocation lookups via `HashMap::get(hostname)` using `&str` (Borrow)
+/// - Cheap `Arc::clone` instead of deep cloning on every request
+#[derive(Debug, Clone, Default)]
+pub struct HostConfigs {
+    /// Default host config (for `host None` / `_` block)
+    pub default_host: Option<Arc<PreparedHostConfigurationBlock>>,
+    /// Named host configs, keyed by hostname
+    pub named_hosts: HashMap<String, Arc<PreparedHostConfigurationBlock>>,
+}
+
+impl HostConfigs {
+    #[cfg(test)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Insert a host configuration (None hostname = default)
+    pub fn insert(
+        &mut self,
+        hostname: Option<String>,
+        config: Arc<PreparedHostConfigurationBlock>,
+    ) {
+        match hostname {
+            Some(name) => {
+                self.named_hosts.insert(name, config);
+            }
+            None => {
+                self.default_host = Some(config);
+            }
+        }
+    }
+
+    /// Look up a host configuration by hostname.
+    /// Falls back to the default host if no named match is found.
+    pub fn get(&self, hostname: &str) -> Option<&Arc<PreparedHostConfigurationBlock>> {
+        self.named_hosts
+            .get(hostname)
+            .or(self.default_host.as_ref())
+    }
+
+    /// Get the default host configuration, if any
+    pub fn get_default(&self) -> Option<&Arc<PreparedHostConfigurationBlock>> {
+        self.default_host.as_ref()
+    }
+}
+
+pub type PreparedConfiguration = HashMap<Option<IpAddr>, HostConfigs>;
 
 #[derive(Debug, Clone)]
 pub struct PreparedHostConfigurationBlock {
@@ -50,7 +98,7 @@ pub fn prepare_host_config(
         let hostname = host.0.host;
         let config = host.1;
 
-        let prepared_config = prepare_host_block(config)?;
+        let prepared_config = Arc::new(prepare_host_block(config)?);
 
         result
             .entry(ip)
@@ -862,8 +910,8 @@ mod tests {
         assert!(result.contains_key(&None));
 
         let host_configs = result.get(&None).unwrap();
-        assert_eq!(host_configs.len(), 1);
-        assert!(host_configs.contains_key(&Some("example.com".to_string())));
+        assert_eq!(host_configs.named_hosts.len(), 1);
+        assert!(host_configs.named_hosts.contains_key("example.com"));
     }
 
     #[test]
@@ -904,7 +952,7 @@ mod tests {
 
         assert_eq!(result.len(), 1);
         let host_configs = result.get(&None).unwrap();
-        assert_eq!(host_configs.len(), 2);
+        assert_eq!(host_configs.named_hosts.len(), 2);
     }
 
     #[test]
@@ -980,7 +1028,7 @@ mod tests {
         assert_eq!(result.len(), 2);
 
         for host_configs in result.values() {
-            for config in host_configs.values() {
+            for config in host_configs.named_hosts.values() {
                 assert_eq!(config.matches.len(), 1);
                 match &config.matches[0].matcher {
                     PreparedHostConfigurationMatcher::Location(path) => {

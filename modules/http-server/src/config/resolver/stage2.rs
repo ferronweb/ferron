@@ -835,24 +835,6 @@ impl Stage2RadixResolver {
         evaluate_matcher_conditions(exprs, variables)
     }
 
-    /// Evaluate a single conditional expression with given variables
-    fn evaluate_condition(
-        &self,
-        compiled_expr: &CompiledMatcherExpr,
-        variables: &ResolverVariables,
-    ) -> bool {
-        evaluate_matcher_condition(compiled_expr, variables)
-    }
-
-    /// Get the string value of an operand
-    fn get_operand_value(
-        &self,
-        operand: &ServerConfigurationMatcherOperand,
-        variables: &ResolverVariables,
-    ) -> Option<String> {
-        resolve_matcher_operand(operand, variables)
-    }
-
     /// Full Stage 2 resolution combining hostname, location, and conditionals
     ///
     /// # Arguments
