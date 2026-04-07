@@ -70,7 +70,9 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
         provider "acme"
         challenge dns-01
         contact "admin@example.com"
-        dns_provider "cloudflare"
+        dns "cloudflare" {
+            api_key "EXAMPLE_API_KEY"
+        }
     }
 }
 ```
@@ -136,7 +138,9 @@ On-demand mode defers certificate issuance until the **first TLS handshake** for
         provider "acme"
         challenge dns-01
         contact "admin@example.com"
-        dns_provider "cloudflare"
+        dns "cloudflare" {
+            api_key "EXAMPLE_API_KEY"
+        }
         on_demand
     }
     root "/var/www/multi-tenant"

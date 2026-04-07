@@ -67,7 +67,7 @@ identifier-path ::= identifier ( '.' identifier )*
 server_name example.com
 max_connections 1000
 enabled true
-root "{{app.root}}"
+cert "{{env.TLS_CERT}}"
 ```
 
 ### 4.2 Host blocks
@@ -95,11 +95,14 @@ example.com {
 }
 
 *.example.com:80, example.org:443 {
-    ssl enabled
+    tls {
+        provider "acme"
+        challenge http-01
+    }
 }
 
-http://api.example.com {
-    proxy http://backend
+http api.example.com {
+    proxy http://localhost:3000
 }
 
 [2001:db8::1]:8080 {
@@ -123,8 +126,16 @@ global-block    ::= block
 **Example:**
 ```ferron
 {
-    default_timeout 30s
-    log_format combined
+    runtime {
+        io_uring true
+    }
+
+    tcp {
+        listen "::"
+    }
+
+    default_http_port 8080
+    default_https_port 8443
 }
 ```
 
@@ -142,9 +153,12 @@ snippet-block   ::= 'snippet' identifier block
 
 **Example:**
 ```ferron
-snippet ssl_config {
-    ssl_certificate /etc/ssl/cert.pem
-    ssl_key /etc/ssl/key.pem
+snippet tls_acme {
+    tls {
+        provider "acme"
+        challenge http-01
+        contact "admin@example.com"
+    }
 }
 ```
 
@@ -165,23 +179,28 @@ operand         ::= identifier-path | string | number
 
 **Examples:**
 ```ferron
-match user_agent {
-    request.header.user_agent == "Mozilla/5.0"
-    request.header.x_forwarded_proto != "http"
-    request.path ~ "^/api/"
-    request.method !~ "(GET|HEAD)"
-    request.method in "GET,HEAD"
+match curl_client {
+    request.header.user_agent ~ "curl"
+}
+
+match api_request {
+    request.uri.path ~ "/api"
+    request.method in "GET,POST"
+}
+
+match english_language {
+    "en" in request.header.accept_language
 }
 ```
 
 **Operators:**
 | Operator | Meaning | Example |
 |----------|---------|---------|
-| `==` | Equality | `Path == "/index.html"` |
-| `!=` | Inequality | `Status != 404` |
-| `~` | Regex match | `User-Agent ~ "Chrome.*"` |
-| `!~` | Negated regex | `Host !~ "^test\."` |
-| `in` | Membership | `Method in ["GET", "POST"]` |
+| `==` | String equality | `request.method == "GET"` |
+| `!=` | String inequality | `request.scheme != "https"` |
+| `~` | Regex match | `request.header.user-agent ~ "Chrome.*"` |
+| `!~` | Negated regex | `request.header.host !~ "^test\."` |
+| `in` | Membership / language match | `request.method in "GET,POST"` |
 
 ## 5. Data types
 
@@ -217,7 +236,7 @@ Boolean literals are case-sensitive:
 
 ## 6. Interpolation
 
-Interpolation allows referencing variables or configuration values:
+Interpolation allows referencing variables, environment variables, or configuration values:
 
 ```ebnf
 interpolation ::= '{{' identifier-path '}}'
@@ -226,50 +245,135 @@ identifier-path ::= identifier ( '.' identifier )*
 
 **Examples:**
 ```ferron
-root "{{app.root}}"
-port {{server.port}}
+cert "{{env.TLS_CERT}}"
+key "{{env.TLS_KEY}}"
+header +X-Client-IP "{{remote_address}}"
 timeout {{config.defaults.timeout}}
 ```
+
+Common interpolation variables:
+
+| Variable | Description |
+|----------|-------------|
+| `{{env.NAME}}` | Environment variable `NAME` |
+| `{{remote_address}}` | Client IP address |
+| `{{local_address}}` | Server listening address |
+| `{{hostname}}` | Matched hostname |
+| `{{scheme}}` | Request scheme (`http` or `https`) |
+
+Unresolved variables are left as `{{name}}` in the output.
 
 ## 7. Syntax examples
 
 ### Complete configuration example
 
-***Note:** This configuration example may not reflect the directives the Ferron web server might use.*
-
 ```ferron
 # Global defaults
 {
-    default_timeout 30s
-    log_format combined
+    runtime {
+        io_uring true
+    }
+
+    tcp {
+        listen "::"
+    }
+
+    default_http_port 80
+    default_https_port 443
+
+    admin {
+        listen 127.0.0.1:8081
+        health true
+        status true
+    }
 }
 
 # Snippet definition
-snippet ssl_config {
-    ssl_certificate /etc/ssl/cert.pem
-    ssl_key /etc/ssl/key.pem
-    ssl_protocols TLSv1.2 TLSv1.3
+snippet tls_acme {
+    tls {
+        provider "acme"
+        challenge http-01
+        contact "admin@example.com"
+    }
 }
 
 # Host-specific configuration
 example.com:443 {
-    include ssl_config
+    use tls_acme
+
     root /var/www/example
+    index index.html index.htm
+    directory_listing
+    compressed
+
+    log "access" {
+        format "combined"
+    }
 }
 
+# Wildcard with DNS-01 challenge
 *.example.com {
-    proxy http://backend.example.com
+    tls {
+        provider "acme"
+        challenge dns-01
+        contact "admin@example.com"
+        dns "cloudflare" {
+            api_key "EXAMPLE_API_KEY"
+        }
+    }
+
+    root /var/www/multi-tenant
+}
+
+# Reverse proxy with load balancing
+api.example.com {
+    proxy http://localhost:3000 http://localhost:3001 {
+        lb_algorithm two_random
+        keepalive true
+        http2 true
+
+        request_header +X-Real-IP "{{remote_address}}"
+    }
+
+    rate_limit {
+        rate 100
+        burst 50
+        key remote_address
+    }
+
+    cors {
+        origins "https://app.example.com"
+        methods GET POST PUT DELETE
+        headers "Content-Type" "Authorization"
+        credentials true
+    }
 }
 
 # Match-based routing
-match api_rules {
-    request.path ~ "^/api/"
-    request.method in "GET,POST,PUT,DELETE"
+match api_request {
+    request.uri.path ~ "/api"
+    request.method in "GET,POST"
 }
 
-api.example.com {
-    match api_rules
-    root /var/www/api
+match curl_client {
+    request.header.user_agent ~ "curl"
+}
+
+# Location and conditional blocks
+example.com {
+    root /var/www/example
+
+    location /static {
+        file_cache_control "public, max-age=31536000"
+    }
+
+    location /admin {
+        if curl_client {
+            status 403 {
+                body "Forbidden"
+            }
+        }
+    }
 }
 ```
 

@@ -30,11 +30,15 @@ use std::str::FromStr;
 let input = r#"
 example.com {
     root /var/www/example
-    ssl true
+    tls {
+        provider "acme"
+        challenge http-01
+        contact "admin@example.com"
+    }
 }
 
-*.example.com:443 {
-    proxy http://backend
+api.example.com:8080 {
+    proxy http://localhost:3000
 }
 "#;
 
@@ -53,7 +57,7 @@ Key-value pairs with optional nested blocks:
 server_name example.com
 max_connections 1000
 enabled true
-root "{{app.root}}"
+cert "{{env.TLS_CERT}}"
 ```
 
 ### 2. Host blocks
@@ -68,12 +72,16 @@ example.com {
 
 # Wildcard subdomains
 *.example.com {
-    ssl enabled
+    tls {
+        provider "acme"
+        challenge http-01
+        contact "admin@example.com"
+    }
 }
 
 # With protocol and port
-http://api.example.com:8080 {
-    proxy http://backend
+http api.example.com:8080 {
+    proxy http://localhost:3000
 }
 
 # IPv6
@@ -83,7 +91,7 @@ http://api.example.com:8080 {
 
 # Multiple hosts (comma-separated)
 example.com, www.example.com {
-    shared_config true
+    root /var/www/shared
 }
 ```
 
@@ -93,8 +101,17 @@ Global configuration applied to all hosts (top-level only):
 
 ```ferron
 {
-    default_timeout 30s
-    log_format combined
+    runtime {
+        io_uring true
+    }
+
+    tcp {
+        listen "::"
+        send_buf 65536
+    }
+
+    default_http_port 8080
+    default_https_port 8443
 }
 ```
 
@@ -103,9 +120,16 @@ Global configuration applied to all hosts (top-level only):
 Reusable configuration fragments:
 
 ```ferron
-snippet ssl_config {
-    ssl_certificate /etc/ssl/cert.pem
-    ssl_key /etc/ssl/key.pem
+snippet tls_defaults {
+    tls {
+        provider "acme"
+        challenge http-01
+        contact "admin@example.com"
+    }
+
+    http {
+        protocols h1 h2
+    }
 }
 ```
 
@@ -114,10 +138,13 @@ snippet ssl_config {
 Conditional logic based on request attributes:
 
 ```ferron
-match api_rules {
-    request.path ~ "^/api/"
+match api_request {
+    request.uri.path ~ "/api"
     request.method in "GET,POST"
-    request.header.user_agent != "curl"
+}
+
+match curl_client {
+    request.header.user_agent ~ "curl"
 }
 ```
 
@@ -138,9 +165,9 @@ server_name example.com  # inline comment
 |------|---------|-------------|
 | String (quoted) | `"hello world"` | Supports escape sequences (`\n`, `\t`, `\\`, `\"`) |
 | String (bare) | `example.com` | Unquoted alphanumeric with `_-.:/+*` |
-| Number | `42`, `3.14`, `-10` | Integer or decimal |
+| Number | `80`, `3.14`, `-10` | Integer or decimal |
 | Boolean | `true`, `false` | Case-sensitive literals |
-| Interpolation | `{{app.root}}` | Variable reference with dotted path |
+| Interpolation | `{{env.TLS_CERT}}` | Variable reference with dotted path |
 
 ## Library API
 
@@ -321,41 +348,124 @@ A TextMate grammar is provided in `ferron.tmLanguage.json` for editor syntax hig
 ```ferron
 # Global defaults
 {
-    default_timeout 30s
-    log_format combined
-}
+    runtime {
+        io_uring true
+    }
 
-# Reusable SSL configuration
-snippet ssl_config {
-    ssl_certificate /etc/ssl/cert.pem
-    ssl_key /etc/ssl/key.pem
-    ssl_protocols TLSv1.2 TLSv1.3
-}
+    tcp {
+        listen "::"
+    }
 
-# Main site
-example.com:443 {
-    include ssl_config
-    root /var/www/example
-    
-    if curl_client {
-        use set_curl
+    default_http_port 80
+    default_https_port 443
+
+    admin {
+        listen 127.0.0.1:8081
+        health true
+        status true
     }
 }
 
-# Wildcard subdomains
+# Reusable TLS configuration
+snippet tls_acme {
+    tls {
+        provider "acme"
+        challenge http-01
+        contact "admin@example.com"
+    }
+}
+
+# Reusable HTTP settings
+snippet common_http {
+    http {
+        protocols h1 h2
+    }
+}
+
+# Main site with static file serving
+example.com:443 {
+    use tls_acme
+    use common_http
+
+    root /var/www/example
+    index index.html index.htm
+    directory_listing
+    compressed
+
+    log "access" {
+        format "combined"
+    }
+}
+
+# Wildcard subdomains with ACME TLS
 *.example.com {
-    reverse_proxy localhost:9000
+    tls {
+        provider "acme"
+        challenge dns-01
+        contact "admin@example.com"
+        dns "cloudflare" {
+            api_key "EXAMPLE_API_KEY"
+        }
+    }
+
+    root /var/www/multi-tenant
+}
+
+# API reverse proxy
+api.example.com {
+    proxy http://localhost:3000 http://localhost:3001 {
+        lb_algorithm two_random
+        keepalive true
+        http2 true
+
+        request_header +X-Real-IP "{{remote_address}}"
+        request_header X-Forwarded-Proto "{{scheme}}"
+    }
+
+    rate_limit {
+        rate 100
+        burst 50
+        key remote_address
+    }
+
+    cors {
+        origins "https://app.example.com"
+        methods GET POST PUT DELETE
+        headers "Content-Type" "Authorization"
+        credentials true
+    }
 }
 
 # Conditional routing
-match api_rules {
-    request.path ~ "^/api/"
-    request.method in "GET,POST,PUT,DELETE"
+match api_request {
+    request.uri.path ~ "/api"
+    request.method in "GET,POST"
+}
+
+match curl_client {
+    request.header.user_agent ~ "curl"
+}
+
+# Location-based configuration
+example.com {
+    root /var/www/example
+
+    location /static {
+        file_cache_control "public, max-age=31536000"
+    }
+
+    location /admin {
+        if curl_client {
+            status 403 {
+                body "Forbidden"
+            }
+        }
+    }
 }
 
 # Protocol-specific configuration
 http * {
-    header X-Powered-By MyServer
+    header X-Powered-By "Ferron"
 }
 
 # TCP service

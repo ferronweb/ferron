@@ -37,13 +37,12 @@ Current matcher operators:
 | --- | --- |
 | `==` | String equality |
 | `!=` | String inequality |
-| `~` | Substring match |
-| `!~` | Negated substring match |
+| `~` | Regex match |
+| `!~` | Negated regex match |
 | `in` | Left value must equal one of the comma-separated items in the right value, or match a language in an `Accept-Language` header |
 
 Notes:
 
-- `~` and `!~` are not regular expressions yet. The resolver currently uses substring matching.
 - `in` splits the right-hand string on commas and trims each item.
 - When the right value looks like an `Accept-Language` header (contains quality values or multiple language ranges), `in` performs language matching with support for base language codes (e.g., `en` matches `en-US`).
 - All expressions inside a single `match` block must pass.
