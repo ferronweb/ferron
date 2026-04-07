@@ -15,6 +15,7 @@ use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::registry::RegistryBuilder;
 use ferron_core::StageConstraint;
 use ferron_http::HttpContext;
+use ferron_observability::{Event, MetricEvent, MetricType, MetricValue};
 
 use crate::config::{
     apply_rewrite_rules, is_rewrite_log_enabled, parse_rewrite_config, RewriteResult,
@@ -92,6 +93,16 @@ impl Stage<HttpContext> for RewriteStage {
             RewriteResult::NoMatch => return Ok(true),
             RewriteResult::InvalidRewrite => {
                 ctx.res = Some(ferron_http::HttpResponse::BuiltinError(400, None));
+                ctx.events.emit(Event::Metric(MetricEvent {
+                    name: "ferron.rewrite.invalid",
+                    attributes: vec![],
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{request}"),
+                    description: Some(
+                        "Rewrite rules that produced an invalid path (400 response).",
+                    ),
+                }));
                 return Ok(false);
             }
             RewriteResult::Rewritten(url) => url,
@@ -135,6 +146,15 @@ impl Stage<HttpContext> for RewriteStage {
                 },
             ));
         }
+
+        ctx.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.rewrite.rewrites_applied",
+            attributes: vec![],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{request}"),
+            description: Some("URLs successfully rewritten."),
+        }));
 
         Ok(true)
     }

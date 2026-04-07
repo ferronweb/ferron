@@ -9,6 +9,7 @@ use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::util::parse_q_value_header::parse_q_value_header;
 use ferron_http::{HttpFileContext, HttpResponse};
+use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
 use futures_util::TryStreamExt;
 use http::header::{self, HeaderValue};
 use http::{Method, Response, StatusCode};
@@ -551,6 +552,55 @@ impl Stage<HttpFileContext> for StaticFileStage {
 
         ctx.http.req = Some(request);
         ctx.http.res = Some(HttpResponse::Custom(response));
+
+        // Emit static file metrics
+        let compression_label = match used_compression {
+            Compression::Brotli => "br",
+            Compression::Zstd => "zstd",
+            Compression::Deflate => "deflate",
+            Compression::Gzip => "gzip",
+            Compression::Identity => "identity",
+        };
+        let cache_hit = is_precompressed_file;
+        let file_size = ctx.metadata.len();
+
+        ctx.http.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.static.files_served",
+            attributes: vec![
+                (
+                    "ferron.compression",
+                    MetricAttributeValue::String(compression_label.to_string()),
+                ),
+                ("ferron.cache_hit", MetricAttributeValue::Bool(cache_hit)),
+            ],
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{file}"),
+            description: Some("Number of static files served."),
+        }));
+
+        ctx.http.events.emit(Event::Metric(MetricEvent {
+            name: "ferron.static.bytes_sent",
+            attributes: vec![
+                (
+                    "ferron.compression",
+                    MetricAttributeValue::String(compression_label.to_string()),
+                ),
+                ("ferron.cache_hit", MetricAttributeValue::Bool(cache_hit)),
+            ],
+            ty: MetricType::Histogram(Some(vec![
+                1024.0,
+                10240.0,
+                102400.0,
+                1048576.0,
+                10485760.0,
+                104857600.0,
+            ])),
+            value: MetricValue::F64(file_size as f64),
+            unit: Some("By"),
+            description: Some("Bytes sent for static file responses."),
+        }));
+
         Ok(false)
     }
 }

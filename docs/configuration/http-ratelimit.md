@@ -121,6 +121,21 @@ example.com {
 
 Limits login to 3 requests burst, then 2/second. Returns 429 when exceeded.
 
+## Observability
+
+### Metrics
+
+The rate limiting module emits the following metrics:
+
+- `ferron.ratelimit.allowed` (Counter) — requests that passed rate limiting.
+- `ferron.ratelimit.rejected` (Counter) — requests rejected due to exhausted buckets or registry at capacity.
+  - Both include the `ferron.ratelimit.key_type` attribute: `"ip"`, `"header"`, or `"uri"`.
+
+### Logs
+
+- **`DEBUG`**: logged when a rate limit bucket is exhausted for a key.
+- **`WARN`**: logged when the registry reaches `max_buckets` capacity and backpressure is applied.
+
 ## Notes and troubleshooting
 
 - Requests where the key cannot be extracted (e.g. missing header) skip that rule.

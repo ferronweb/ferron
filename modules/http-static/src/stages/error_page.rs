@@ -88,7 +88,10 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
             let path = Path::new(file_path);
             let meta = match vibeio::fs::metadata(path).await {
                 Ok(m) => m,
-                Err(_) => continue,
+                Err(_) => {
+                    ferron_core::log_warn!("Error page file cannot be opened: {}", file_path);
+                    continue;
+                }
             };
 
             if !meta.is_file() {

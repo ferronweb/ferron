@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use ferron_core::config::layer::LayeredConfiguration;
-use ferron_core::pipeline::{Pipeline, PipelineError};
+use ferron_core::pipeline::{Pipeline, PipelineError, Stage, StageHooks};
 use ferron_core::util::parse_duration;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse};
 use ferron_observability::{
@@ -26,6 +26,60 @@ use crate::util::url_sanitizer::sanitize_url;
 
 const LOG_TARGET: &str = "ferron-http-server";
 type ResponseBody = UnsyncBoxBody<Bytes, io::Error>;
+
+/// Per-stage hooks that emit trace spans around each pipeline stage.
+struct PerStageSpanHooks<'a> {
+    events: &'a CompositeEventSink,
+}
+
+#[async_trait::async_trait(?Send)]
+impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
+    async fn before_stage(&mut self, stage: &dyn Stage<HttpContext>) {
+        self.events.emit(Event::Trace(TraceEvent::StartSpan {
+            name: format!("ferron.stage.{}", stage.name()),
+            parent_span_id: None,
+            attributes: vec![(
+                "stage.name",
+                TraceAttributeValue::String(stage.name().to_string()),
+            )],
+        }));
+    }
+
+    async fn after_stage(
+        &mut self,
+        stage: &dyn Stage<HttpContext>,
+        result: &Result<bool, PipelineError>,
+    ) {
+        self.events.emit(Event::Trace(TraceEvent::EndSpan {
+            name: format!("ferron.stage.{}", stage.name()),
+            error: result.as_ref().err().map(|e| e.to_string()),
+            attributes: vec![],
+        }));
+    }
+
+    async fn before_stage_inverse(&mut self, stage: &dyn Stage<HttpContext>) {
+        self.events.emit(Event::Trace(TraceEvent::StartSpan {
+            name: format!("ferron.stage.{}.inverse", stage.name()),
+            parent_span_id: None,
+            attributes: vec![(
+                "stage.name",
+                TraceAttributeValue::String(stage.name().to_string()),
+            )],
+        }));
+    }
+
+    async fn after_stage_inverse(
+        &mut self,
+        stage: &dyn Stage<HttpContext>,
+        result: &Result<(), PipelineError>,
+    ) {
+        self.events.emit(Event::Trace(TraceEvent::EndSpan {
+            name: format!("ferron.stage.{}.inverse", stage.name()),
+            error: result.as_ref().err().map(|e| e.to_string()),
+            attributes: vec![],
+        }));
+    }
+}
 
 /// Cache for path canonicalization results.
 /// Keys: (canonical_root, request_path), Value: Timestamped<ResolvedHttpFile>
@@ -284,6 +338,7 @@ pub async fn request_handler(
     let server_ip = local_address.ip().to_string();
     let server_port = local_address.port();
     let server_ip_canonical = canonicalize_ip(local_address.ip());
+    let client_ip_canonical = canonicalize_ip(remote_address.ip());
     let request_headers: Vec<(String, String)> = request
         .headers()
         .iter()
@@ -314,6 +369,10 @@ pub async fn request_handler(
                 TraceAttributeValue::String(server_ip.clone()),
             ),
             ("server.port", TraceAttributeValue::I64(server_port as i64)),
+            (
+                "client.address",
+                TraceAttributeValue::String(client_ip_canonical.clone()),
+            ),
         ],
     }));
 
@@ -337,7 +396,7 @@ pub async fn request_handler(
         config_resolver,
         local_address,
         remote_address,
-        hostname,
+        hostname.clone(),
         encrypted,
         https_port,
         events.clone(),
@@ -380,6 +439,19 @@ pub async fn request_handler(
         ));
     }
 
+    // Build duration-specific attributes (includes status_code for OTel compliance)
+    let mut duration_attrs = metric_attrs.clone();
+    duration_attrs.push((
+        "http.response.status_code",
+        MetricAttributeValue::I64(status_code as i64),
+    ));
+    if status_code >= 400 {
+        duration_attrs.push((
+            "error.type",
+            MetricAttributeValue::String(status_code.to_string()),
+        ));
+    }
+
     // Decrement active requests
     events.emit(Event::Metric(MetricEvent {
         name: "http.server.active_requests",
@@ -393,7 +465,7 @@ pub async fn request_handler(
     // Emit request duration histogram
     events.emit(Event::Metric(MetricEvent {
         name: "http.server.request.duration",
-        attributes: metric_attrs.clone(),
+        attributes: duration_attrs,
         ty: MetricType::Histogram(Some(vec![
             0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
         ])),
@@ -435,10 +507,16 @@ pub async fn request_handler(
 
     // End tracing span
     let error_description = response_result.as_ref().err().map(|e| e.to_string());
-    let mut end_attrs = vec![(
-        "http.response.status_code",
-        TraceAttributeValue::I64(status_code as i64),
-    )];
+    let mut end_attrs = vec![
+        (
+            "http.response.status_code",
+            TraceAttributeValue::I64(status_code as i64),
+        ),
+        (
+            "http.route",
+            TraceAttributeValue::String(hostname.clone().unwrap_or_else(|| "*".to_string())),
+        ),
+    ];
     if status_code >= 400 {
         end_attrs.push((
             "error.type",
@@ -731,6 +809,16 @@ async fn execute_pipeline_stages(
     log_prefix: &str,
     path_segments: &[String],
 ) {
+    // Start pipeline execution span
+    events.emit(Event::Trace(TraceEvent::StartSpan {
+        name: "ferron.pipeline.execute".to_string(),
+        parent_span_id: None,
+        attributes: vec![(
+            "ferron.pipeline.log_prefix",
+            TraceAttributeValue::String(log_prefix.to_string()),
+        )],
+    }));
+
     // Remove the base URL if path segments were matched
     if !path_segments.is_empty() {
         if let Some(req) = ctx.req.take() {
@@ -789,12 +877,21 @@ async fn execute_pipeline_stages(
     );
     let instant = std::time::Instant::now();
 
+    // Per-stage span hooks — emit StartSpan/EndSpan around each stage
+    let mut stage_hooks = PerStageSpanHooks { events };
+
     let executed_stages = match if let Some(timeout_duration) =
         timeout_duration.map(|d| d.saturating_sub(instant.elapsed()))
     {
-        vibeio::time::timeout(timeout_duration, pipeline.execute_without_inverse(ctx)).await
+        vibeio::time::timeout(
+            timeout_duration,
+            pipeline.execute_without_inverse_with_hooks(ctx, &mut stage_hooks),
+        )
+        .await
     } else {
-        Ok(pipeline.execute_without_inverse(ctx).await)
+        Ok(pipeline
+            .execute_without_inverse_with_hooks(ctx, &mut stage_hooks)
+            .await)
     } {
         Ok(Ok(executed_stages)) => Some(executed_stages),
         Ok(Err(error)) => {
@@ -849,7 +946,10 @@ async fn execute_pipeline_stages(
         }
         // TODO: execute with timeout END
 
-        if let Err(error) = pipeline.execute_inverse(ctx, executed_stages).await {
+        if let Err(error) = pipeline
+            .execute_inverse_with_hooks(ctx, executed_stages, &mut stage_hooks)
+            .await
+        {
             emit_error(
                 events,
                 format!("{log_prefix}Pipeline inverse execution error: {error}"),
@@ -857,6 +957,16 @@ async fn execute_pipeline_stages(
             ctx.res = Some(HttpResponse::BuiltinError(500, None));
         }
     }
+
+    // End pipeline execution span
+    events.emit(Event::Trace(TraceEvent::EndSpan {
+        name: "ferron.pipeline.execute".to_string(),
+        error: ctx.res.as_ref().and_then(|r| match r {
+            HttpResponse::BuiltinError(s, _) if *s >= 400 => Some(format!("builtin error {}", s)),
+            _ => None,
+        }),
+        attributes: vec![],
+    }));
 }
 
 async fn execute_http_file_pipeline(
@@ -1441,6 +1551,16 @@ async fn execute_error_pipeline(
     configuration: LayeredConfiguration,
     events: &CompositeEventSink,
 ) -> Option<Response<ResponseBody>> {
+    // Start error pipeline execution span
+    events.emit(Event::Trace(TraceEvent::StartSpan {
+        name: "ferron.pipeline.execute_error".to_string(),
+        parent_span_id: None,
+        attributes: vec![(
+            "http.response.status_code",
+            TraceAttributeValue::I64(error_code as i64),
+        )],
+    }));
+
     let mut error_ctx = HttpErrorContext {
         error_code,
         headers,
@@ -1451,6 +1571,13 @@ async fn execute_error_pipeline(
     if let Err(error) = error_pipeline.execute_without_inverse(&mut error_ctx).await {
         emit_error(events, format!("Error pipeline execution error: {error}"));
     }
+
+    // End error pipeline execution span
+    events.emit(Event::Trace(TraceEvent::EndSpan {
+        name: "ferron.pipeline.execute_error".to_string(),
+        error: None,
+        attributes: vec![],
+    }));
 
     error_ctx.res
 }

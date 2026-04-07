@@ -36,6 +36,14 @@ pub struct ProxyMetrics {
     pub unhealthy_backends: Vec<upstream::UpstreamInner>,
     /// Whether a pooled connection was reused.
     pub connection_reused: bool,
+    /// TLS handshake failure count for this request.
+    pub tls_handshake_failures: u64,
+    /// Number of times the pool was exhausted and had to wait.
+    pub pool_waits: u64,
+    /// Total time spent waiting for pooled connections (in seconds).
+    pub pool_wait_time_secs: f64,
+    /// HTTP response status code from the upstream.
+    pub status_code: Option<u16>,
 }
 
 impl Default for ProxyMetrics {
@@ -50,6 +58,10 @@ impl ProxyMetrics {
             selected_backends: Vec::new(),
             unhealthy_backends: Vec::new(),
             connection_reused: false,
+            tls_handshake_failures: 0,
+            pool_waits: 0,
+            pool_wait_time_secs: 0.0,
+            status_code: None,
         }
     }
 }
@@ -413,19 +425,74 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
-        // Emit request counter with connection reuse flag
+        // Emit request counter with connection reuse flag and status code
+        let mut request_attrs = Vec::with_capacity(3);
+        request_attrs.push((
+            "ferron.proxy.connection_reused",
+            MetricAttributeValue::Bool(metrics.connection_reused),
+        ));
+        if let Some(status) = metrics.status_code {
+            request_attrs.push((
+                "http.response.status_code",
+                MetricAttributeValue::I64(status as i64),
+            ));
+        }
+        request_attrs.push((
+            "ferron.proxy.status_code",
+            MetricAttributeValue::I64(metrics.status_code.map(|s| s as i64).unwrap_or(0)),
+        ));
         ctx.events
             .emit(ferron_observability::Event::Metric(MetricEvent {
                 name: "ferron.proxy.requests",
-                attributes: vec![(
-                    "ferron.proxy.connection_reused",
-                    MetricAttributeValue::Bool(metrics.connection_reused),
-                )],
+                attributes: request_attrs,
                 ty: MetricType::Counter,
                 value: MetricValue::U64(1),
                 unit: Some("{request}"),
                 description: Some("Number of reverse proxy requests."),
             }));
+
+        // Emit TLS handshake failures counter
+        if metrics.tls_handshake_failures > 0 {
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.tls_handshake_failures",
+                    attributes: vec![],
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(metrics.tls_handshake_failures),
+                    unit: Some("{handshake}"),
+                    description: Some("TLS handshake failures with upstream backends."),
+                }));
+        }
+
+        // Emit pool waits counter
+        if metrics.pool_waits > 0 {
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.pool.waits",
+                    attributes: vec![],
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(metrics.pool_waits),
+                    unit: Some("{wait}"),
+                    description: Some(
+                        "Times the connection pool was exhausted and a request had to wait.",
+                    ),
+                }));
+        }
+
+        // Emit pool wait time histogram
+        if metrics.pool_wait_time_secs > 0.0 {
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.pool.wait_time",
+                    attributes: vec![],
+                    ty: MetricType::Histogram(Some(vec![
+                        0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0,
+                    ])),
+                    value: MetricValue::F64(metrics.pool_wait_time_secs),
+                    unit: Some("s"),
+                    description: Some("Duration spent waiting for a pooled connection."),
+                }));
+        }
 
         Ok(false)
     }

@@ -13,6 +13,7 @@ bytes = "1"
 
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }
+ferron-observability = { path = "../../types/observability" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }

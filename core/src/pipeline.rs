@@ -75,6 +75,35 @@ pub trait Stage<C>: Send + Sync {
     }
 }
 
+/// Hooks invoked around each stage during pipeline execution.
+///
+/// Implement this trait to observe or instrument stage execution (e.g., emit
+/// per-stage trace spans) without coupling the Pipeline to observability code.
+#[async_trait(?Send)]
+pub trait StageHooks<C>: Send + Sync {
+    /// Called before a stage's `run` method is invoked.
+    #[inline]
+    async fn before_stage(&mut self, _stage: &dyn Stage<C>) {}
+
+    /// Called after a stage's `run` method completes.
+    /// `result` is the outcome of `stage.run(ctx)`.
+    #[inline]
+    async fn after_stage(&mut self, _stage: &dyn Stage<C>, _result: &Result<bool, PipelineError>) {}
+
+    /// Called before a stage's `run_inverse` method is invoked.
+    #[inline]
+    async fn before_stage_inverse(&mut self, _stage: &dyn Stage<C>) {}
+
+    /// Called after a stage's `run_inverse` method completes.
+    #[inline]
+    async fn after_stage_inverse(
+        &mut self,
+        _stage: &dyn Stage<C>,
+        _result: &Result<(), PipelineError>,
+    ) {
+    }
+}
+
 /// An ordered sequence of stages to be executed.
 ///
 /// Pipelines execute stages in order and support early termination.
@@ -151,5 +180,79 @@ impl<C> Pipeline<C> {
             stage.run_inverse(ctx).await?;
         }
         Ok(())
+    }
+
+    /// Execute inverse operations for the given stages with per-stage hooks.
+    pub async fn execute_inverse_with_hooks<'a, H: StageHooks<C>>(
+        &'a self,
+        ctx: &mut C,
+        executed_stages: Vec<&'a Arc<dyn Stage<C>>>,
+        hooks: &mut H,
+    ) -> Result<(), PipelineError> {
+        for stage in executed_stages.iter().rev() {
+            hooks.before_stage_inverse(stage.as_ref()).await;
+            let result = stage.run_inverse(ctx).await;
+            hooks.after_stage_inverse(stage.as_ref(), &result).await;
+            result?;
+        }
+        Ok(())
+    }
+
+    /// Execute the pipeline with per-stage hooks, running inverse operations in reverse order.
+    ///
+    /// Behaves identically to [`execute`](Self::execute), but invokes the
+    /// provided `hooks` before and after each stage's `run` and `run_inverse`
+    /// methods. This allows callers to instrument stage execution (e.g., emit
+    /// per-stage trace spans) without coupling the Pipeline to observability code.
+    pub async fn execute_with_hooks<H: StageHooks<C>>(
+        &self,
+        ctx: &mut C,
+        hooks: &mut H,
+    ) -> Result<(), PipelineError> {
+        let mut executed_stages = vec![];
+        for stage in &self.stages {
+            hooks.before_stage(stage.as_ref()).await;
+            let result = stage.run(ctx).await;
+            hooks.after_stage(stage.as_ref(), &result).await;
+            executed_stages.push(stage);
+            match result {
+                Ok(true) => continue,
+                Ok(false) => break,
+                Err(e) => return Err(e),
+            }
+        }
+
+        // Execute inverse operations in reverse order, stopping on error
+        for stage in executed_stages.iter().rev() {
+            hooks.before_stage_inverse(stage.as_ref()).await;
+            let result = stage.run_inverse(ctx).await;
+            hooks.after_stage_inverse(stage.as_ref(), &result).await;
+            result?;
+        }
+        Ok(())
+    }
+
+    /// Execute stages without running inverse operations, with per-stage hooks.
+    ///
+    /// Behaves identically to [`execute_without_inverse`](Self::execute_without_inverse),
+    /// but invokes the provided `hooks` before and after each stage's `run` method.
+    pub async fn execute_without_inverse_with_hooks<'a, H: StageHooks<C>>(
+        &'a self,
+        ctx: &mut C,
+        hooks: &mut H,
+    ) -> Result<Vec<&'a Arc<dyn Stage<C>>>, PipelineError> {
+        let mut executed_stages = vec![];
+        for stage in &self.stages {
+            hooks.before_stage(stage.as_ref()).await;
+            let result = stage.run(ctx).await;
+            hooks.after_stage(stage.as_ref(), &result).await;
+            executed_stages.push(stage);
+            match result {
+                Ok(true) => continue,
+                Ok(false) => break,
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(executed_stages)
     }
 }

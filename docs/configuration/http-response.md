@@ -107,6 +107,14 @@ All directives (`status`, `abort`, `block`, `allow`) can be placed at different 
 - **`location` block** — applies only to requests matching that path prefix
 - **`if` / `if_not` blocks** — applies conditionally based on a matcher
 
+## Observability
+
+### Metrics
+
+- `ferron.response.aborted` (Counter) — connections aborted via the `abort` directive.
+- `ferron.response.ip_blocked` (Counter) — connections blocked via `block`/`allow` directives. This metric does **not** include raw IP addresses.
+- `ferron.response.status_rule_matched` (Counter) — custom status codes returned via `status` directives. Includes `http.response.status_code` and `ferron.rule_id` attributes.
+
 ## Notes and troubleshooting
 
 - For `location`, `if`, and `if_not` syntax, see [Routing and URL processing](/docs/v3/configuration/routing-url-processing).

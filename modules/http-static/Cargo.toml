@@ -9,6 +9,7 @@ vibeio = { version = "0.2.6", default-features = false, features = ["fs"] }
 vibeio-http = { version = "0.3.0", default-features = false, features = ["h1", "h2", "h1-zerocopy"] }
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http", features = ["util"] }
+ferron-observability = { path = "../../types/observability" }
 http = "1"
 http-body = "1"
 http-body-util = "0.1"

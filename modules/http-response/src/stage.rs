@@ -9,6 +9,7 @@ use bytes::Bytes;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::{HttpContext, HttpResponse};
+use ferron_observability::{Event, MetricAttributeValue, MetricEvent, MetricType, MetricValue};
 use http::header::LOCATION;
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
@@ -47,6 +48,14 @@ impl HttpResponseStage {
         let config = ResponseConfig::from_config(&ctx.configuration);
         if config.abort.abort {
             ctx.res = Some(HttpResponse::Abort);
+            ctx.events.emit(Event::Metric(MetricEvent {
+                name: "ferron.response.aborted",
+                attributes: vec![],
+                ty: MetricType::Counter,
+                value: MetricValue::U64(1),
+                unit: Some("{request}"),
+                description: Some("Connections aborted via the abort directive."),
+            }));
             return Ok(false);
         }
         Ok(true)
@@ -56,6 +65,16 @@ impl HttpResponseStage {
         let config = ResponseConfig::from_config(&ctx.configuration);
         if config.ip_access.is_blocked(ctx.remote_address.ip()) {
             ctx.res = Some(HttpResponse::BuiltinError(403, None));
+            ctx.events.emit(Event::Metric(MetricEvent {
+                name: "ferron.response.ip_blocked",
+                attributes: vec![],
+                ty: MetricType::Counter,
+                value: MetricValue::U64(1),
+                unit: Some("{request}"),
+                description: Some(
+                    "Connections blocked via block/allow directives (raw IPs not included).",
+                ),
+            }));
             return Ok(false);
         }
         Ok(true)
@@ -81,6 +100,25 @@ impl HttpResponseStage {
             // Rule matched — build response
             let response = Self::build_response(rule)?;
             ctx.res = Some(response);
+
+            ctx.events.emit(Event::Metric(MetricEvent {
+                name: "ferron.response.status_rule_matched",
+                attributes: vec![
+                    (
+                        "http.response.status_code",
+                        MetricAttributeValue::I64(rule.status_code as i64),
+                    ),
+                    (
+                        "ferron.rule_id",
+                        MetricAttributeValue::String(rule.status_code.to_string()),
+                    ),
+                ],
+                ty: MetricType::Counter,
+                value: MetricValue::U64(1),
+                unit: Some("{request}"),
+                description: Some("Custom status codes returned via status directives."),
+            }));
+
             return Ok(false);
         }
 

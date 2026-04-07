@@ -107,6 +107,17 @@ When URL sanitization is enabled (the default), dangerous path sequences like `.
 
 Rewrite rules are applied after client IP resolution and before reverse proxying, static file serving, and response generation. This means rewritten URLs are used for all subsequent routing decisions.
 
+## Observability
+
+### Metrics
+
+- `ferron.rewrite.rewrites_applied` (Counter) — URLs successfully rewritten.
+- `ferron.rewrite.invalid` (Counter) — rewrite rules that produced an invalid path (resulting in a 400 response).
+
+### Logs
+
+When `rewrite_log` is enabled, each rewrite operation is logged to the error log at `INFO` level.
+
 ## Notes and troubleshooting
 
 - If you get unexpected routing behavior, verify that rewrite rules are applied in the order you expect. Rules with `last true` stop further processing.

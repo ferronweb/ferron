@@ -10,10 +10,14 @@ use std::sync::Arc;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::{HttpContext, HttpResponse};
+use ferron_observability::{
+    Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType, MetricValue,
+};
 use http::{HeaderMap, HeaderValue};
 use parking_lot::Mutex;
 
 use crate::config::{parse_rate_limit_config, RateLimitConfig};
+use crate::key_extractor::KeyExtractor;
 use crate::registry::TokenBucketRegistry;
 
 /// Shared rate limit engine that manages per-key token bucket registries.
@@ -64,7 +68,7 @@ impl RateLimitEngine {
     /// Check all rate limit rules against the current request.
     ///
     /// Returns `Some(response)` if any rule is exhausted, or `None` if all rules pass.
-    fn check_rate_limits(&self, ctx: &HttpContext) -> Option<HttpResponse> {
+    fn check_rate_limits(&self, ctx: &mut HttpContext) -> Option<HttpResponse> {
         let rules = parse_rate_limit_config(&ctx.configuration);
         if rules.is_empty() {
             return None;
@@ -83,14 +87,64 @@ impl RateLimitEngine {
             // Get or create bucket
             let Some(bucket) = registry.get_or_create(&key) else {
                 // Registry at capacity — apply backpressure
+                ferron_core::log_warn!("Rate limit registry at capacity — applying backpressure");
+                ctx.events.emit(Event::Metric(MetricEvent {
+                    name: "ferron.ratelimit.rejected",
+                    attributes: vec![(
+                        "ferron.ratelimit.key_type",
+                        MetricAttributeValue::String(key_type_label(&config.key).to_string()),
+                    )],
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{request}"),
+                    description: Some("Requests rejected due to rate limit registry at capacity."),
+                }));
                 return Some(Self::make_response(config.deny_status, 1.0));
             };
 
             // Attempt to consume one token
             if !bucket.try_consume(1) {
                 let retry_after = bucket.time_until_available(1);
+                ferron_core::log_debug!(
+                    "Rate limit bucket exhausted for key \"{}\" (type: {})",
+                    key,
+                    key_type_label(&config.key)
+                );
+                ctx.events.emit(Event::Log(LogEvent {
+                    level: LogLevel::Debug,
+                    message: format!(
+                        "Rate limit bucket exhausted for key \"{}\" (type: {})",
+                        key,
+                        key_type_label(&config.key)
+                    ),
+                    target: "ferron-ratelimit",
+                }));
+                ctx.events.emit(Event::Metric(MetricEvent {
+                    name: "ferron.ratelimit.rejected",
+                    attributes: vec![(
+                        "ferron.ratelimit.key_type",
+                        MetricAttributeValue::String(key_type_label(&config.key).to_string()),
+                    )],
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(1),
+                    unit: Some("{request}"),
+                    description: Some("Requests rejected due to exhausted rate limit buckets."),
+                }));
                 return Some(Self::make_response(config.deny_status, retry_after));
             }
+
+            // Token consumed successfully — emit allowed counter
+            ctx.events.emit(Event::Metric(MetricEvent {
+                name: "ferron.ratelimit.allowed",
+                attributes: vec![(
+                    "ferron.ratelimit.key_type",
+                    MetricAttributeValue::String(key_type_label(&config.key).to_string()),
+                )],
+                ty: MetricType::Counter,
+                value: MetricValue::U64(1),
+                unit: Some("{request}"),
+                description: Some("Requests that passed rate limiting."),
+            }));
         }
 
         None
@@ -106,6 +160,15 @@ impl RateLimitEngine {
                 .expect("retry-after value should be valid"),
         );
         HttpResponse::BuiltinError(status, Some(headers))
+    }
+}
+
+/// Returns a human-readable label for the key extractor type.
+fn key_type_label(key: &KeyExtractor) -> &'static str {
+    match key {
+        KeyExtractor::RemoteAddress => "ip",
+        KeyExtractor::Uri => "uri",
+        KeyExtractor::Header(_) => "header",
     }
 }
 

@@ -183,6 +183,17 @@ Passive health checking tracks connection failures per backend:
 3. After the window expires, the counter resets and the backend becomes eligible again.
 4. When `lb_retry_connection` is enabled and the selected backend fails, Ferron tries the next available backend.
 
+## Observability
+
+### Metrics
+
+In addition to the existing proxy metrics (`ferron.proxy.backends.selected`, `ferron.proxy.backends.unhealthy`), the following metrics are emitted:
+
+- `ferron.proxy.requests` (Counter) — now includes the `http.response.status_code` and `ferron.proxy.status_code` attributes for upstream response tracking, in addition to `ferron.proxy.connection_reused`.
+- `ferron.proxy.tls_handshake_failures` (Counter) — TLS handshake failures with upstream backends.
+- `ferron.proxy.pool.waits` (Counter) — times the connection pool was exhausted and a request had to wait.
+- `ferron.proxy.pool.wait_time` (Histogram) — duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s.
+
 ## Notes and troubleshooting
 
 - If you get 502 errors from backends, verify the `upstream` URLs are reachable and check `lb_health_check_max_fails` settings.

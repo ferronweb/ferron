@@ -1388,6 +1388,7 @@ dependencies = [
  "chrono",
  "ferron-core",
  "ferron-http",
+ "ferron-observability",
  "futures-core",
  "futures-util",
  "http",

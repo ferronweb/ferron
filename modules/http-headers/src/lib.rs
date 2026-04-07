@@ -86,7 +86,10 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
         let config = match config::parse_headers_config(ctx) {
             Ok(Some(cfg)) => cfg,
             Ok(None) => return Ok(()),
-            Err(_) => return Ok(()),
+            Err(e) => {
+                ferron_core::log_error!("Failed to apply response headers: {e}");
+                return Ok(());
+            }
         };
 
         // Pre-resolve all header values before borrowing ctx.res mutably

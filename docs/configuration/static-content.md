@@ -120,6 +120,21 @@ Notes:
 - If the specified error page file does not exist, the directive is skipped and the built-in error page is used.
 - Multiple status codes can be mapped to the same error page in a single directive.
 
+## Observability
+
+### Metrics
+
+#### Static file serving
+
+- `ferron.static.files_served` (Counter) — number of static files served.
+  - Attributes: `ferron.compression` (`"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`), `ferron.cache_hit` (`"true"` or `"false"`)
+- `ferron.static.bytes_sent` (Histogram) — bytes sent for static file responses. Buckets: 1KB, 10KB, 100KB, 1MB, 10MB, 100MB.
+  - Attributes: same as above
+
+### Logs
+
+- **`WARN`**: logged when an `error_page` file cannot be opened. The directive is skipped and the built-in error page is used instead.
+
 ## Notes and troubleshooting
 
 - The `root` directive is defined in [Routing and URL processing](/docs/v3/configuration/routing-url-processing).

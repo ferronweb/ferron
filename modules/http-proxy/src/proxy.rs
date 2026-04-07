@@ -496,12 +496,20 @@ async fn try_send_with_pool(
     let mut reusable_item: Option<connpool::Item<PoolKey, SendRequestWrapper>> = None;
 
     // Pull one connection from the pool and check readiness
+    let pull_start = std::time::Instant::now();
     let mut item = if let Some(idx) = local_limit_idx {
         pool.pull_with_wait_local_limit(pool_key.clone(), Some(idx))
             .await
     } else {
         pool.pull(pool_key.clone()).await
     };
+    let pull_duration = pull_start.elapsed().as_secs_f64();
+
+    // Track pool wait metrics when pool was exhausted (no immediate connection available)
+    if item.inner().is_none() || pull_duration > 0.001 {
+        metrics.pool_waits += 1;
+        metrics.pool_wait_time_secs += pull_duration;
+    }
 
     let (is_ready, should_keep) = if let Some(wrapper) = item.inner_mut() {
         wrapper.check_ready(Some(idle_timeout))
@@ -520,6 +528,7 @@ async fn try_send_with_pool(
             proxy_url,
             tracked_connection,
             true,
+            metrics,
         )
         .await;
     }
@@ -549,6 +558,7 @@ async fn try_send_with_pool(
                     proxy_url,
                     tracked_connection,
                     true,
+                    metrics,
                 )
                 .await;
             }
@@ -570,6 +580,7 @@ async fn try_send_with_pool(
         _conn_state,
         tracked_connection,
         reusable_item,
+        metrics,
     )
     .await
 }
@@ -628,6 +639,7 @@ async fn establish_and_send(
     _conn_state: Option<&ConnectionsTrackState>,
     tracked_connection: Option<Arc<()>>,
     existing_item: Option<connpool::Item<PoolKey, SendRequestWrapper>>,
+    metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     let pool_key = (upstream.clone(), client_ip);
     let pool = select_pool(cm, upstream);
@@ -698,6 +710,7 @@ async fn establish_and_send(
             let domain = ServerName::try_from(host.to_string())
                 .map_err(|e| format!("Invalid server name: {e}"))?;
             let tls_stream = connector.connect(domain, stream).await.map_err(|e| {
+                metrics.tls_handshake_failures += 1;
                 ctx.events.emit(Event::Log(LogEvent {
                     level: LogLevel::Warn,
                     message: format!("Reverse proxy: TLS handshake with {addr} failed: {e}"),
@@ -729,11 +742,13 @@ async fn establish_and_send(
         proxy_url,
         tracked_connection,
         config.keepalive,
+        metrics,
     )
     .await
 }
 
 /// Send request via a SendRequestWrapper and handle the response.
+#[allow(clippy::too_many_arguments)]
 async fn send_via_wrapper(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
@@ -742,6 +757,7 @@ async fn send_via_wrapper(
     proxy_url: &http::Uri,
     tracked_connection: Option<Arc<()>>,
     enable_keepalive: bool,
+    metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     let request = construct_proxy_request(ctx, config, proxy_url)?;
 
@@ -753,6 +769,7 @@ async fn send_via_wrapper(
     };
 
     let status = response.status();
+    metrics.status_code = Some(status.as_u16());
 
     // Handle HTTP 101 Switching Protocols (upgrades)
     if status == StatusCode::SWITCHING_PROTOCOLS {
@@ -1043,7 +1060,7 @@ mod tests {
 
     #[test]
     fn test_io_error_status_other() {
-        let err = std::io::Error::new(std::io::ErrorKind::Other, "other error");
+        let err = std::io::Error::other("other error");
         let (status, reason) = io_error_status(&err);
         assert_eq!(status, StatusCode::BAD_GATEWAY);
         assert_eq!(reason, "Bad gateway");

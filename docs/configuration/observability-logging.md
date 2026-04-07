@@ -118,7 +118,57 @@ The HTTP server emits the following OpenTelemetry-style metrics via the observab
 | `http.server.request.duration` | Histogram | `s` | Duration of HTTP requests. |
 | `ferron.http.server.request_count` | Counter | `{request}` | Total number of HTTP requests completed. |
 
-All metrics include attributes for `http.request.method`, `url.scheme`, `network.protocol.name`, and `network.protocol.version`.
+All metrics include attributes for `http.request.method`, `url.scheme`, `network.protocol.name`, and `network.protocol.version`. The `http.server.request.duration` and `ferron.http.server.request_count` metrics also include `http.response.status_code` and `error.type` (for 4xx/5xx responses).
+
+#### Rate limiting metrics
+
+The `http-ratelimit` module emits counters for allowed and rejected requests:
+
+| Metric | Type | Description | Attributes |
+| --- | --- | --- | --- |
+| `ferron.ratelimit.allowed` | Counter | Requests that passed rate limiting. | `ferron.ratelimit.key_type`: `"ip"`, `"header"`, or `"uri"` |
+| `ferron.ratelimit.rejected` | Counter | Requests rejected due to exhausted rate limit buckets or registry at capacity. | `ferron.ratelimit.key_type`: `"ip"`, `"header"`, or `"uri"` |
+
+#### Response control metrics
+
+The `http-response` module emits metrics for security and policy enforcement:
+
+| Metric | Type | Description | Attributes |
+| --- | --- | --- | --- |
+| `ferron.response.aborted` | Counter | Connections aborted via the `abort` directive. | _none_ |
+| `ferron.response.ip_blocked` | Counter | Connections blocked via `block`/`allow` directives. | _none_ (raw IPs are not included in metrics) |
+| `ferron.response.status_rule_matched` | Counter | Custom status codes returned via the `status` directive. | `http.response.status_code`, `ferron.rule_id` |
+
+#### Static file metrics
+
+The `http-static` module emits metrics for file serving:
+
+| Metric | Type | Unit | Description | Attributes |
+| --- | --- | --- | --- | --- |
+| `ferron.static.files_served` | Counter | `{file}` | Number of static files served. | `ferron.compression`: `"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`; `ferron.cache_hit`: `"true"` or `"false"` |
+| `ferron.static.bytes_sent` | Histogram | `By` | Bytes sent for static file responses. Buckets: 1KB, 10KB, 100KB, 1MB, 10MB, 100MB. | Same as above |
+
+#### Rewrite metrics
+
+The `http-rewrite` module emits counters for URL rewrites:
+
+| Metric | Type | Description | Attributes |
+| --- | --- | --- | --- |
+| `ferron.rewrite.rewrites_applied` | Counter | URLs successfully rewritten. | _none_ |
+| `ferron.rewrite.invalid` | Counter | Rewrite rules that resulted in an invalid path (400 response). | _none_ |
+
+#### Proxy metrics
+
+The `http-proxy` module emits the following metrics:
+
+| Metric | Type | Unit | Description | Attributes |
+| --- | --- | --- | --- | --- |
+| `ferron.proxy.backends.selected` | Counter | `{backend}` | Backends selected during load balancing. | Backend URL/unix path |
+| `ferron.proxy.backends.unhealthy` | Counter | `{backend}` | Backends marked as unhealthy. | Backend URL/unix path |
+| `ferron.proxy.requests` | Counter | `{request}` | Upstream proxy requests completed. | `ferron.proxy.connection_reused`: `true`/`false`; `http.response.status_code`; `ferron.proxy.status_code` |
+| `ferron.proxy.tls_handshake_failures` | Counter | `{handshake}` | TLS handshake failures with upstream backends. | _none_ |
+| `ferron.proxy.pool.waits` | Counter | `{wait}` | Times the connection pool was exhausted and a request had to wait. | _none_ |
+| `ferron.proxy.pool.wait_time` | Histogram | `s` | Duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s. | _none_ |
 
 #### Process metrics
 
@@ -135,12 +185,39 @@ The `observability-process-metrics` module collects process-level metrics automa
 
 ### Tracing
 
-Each HTTP request generates a trace span:
+Each HTTP request generates a root trace span and multiple nested spans for pipeline execution:
+
+#### Root request span
 
 - **`StartSpan("ferron.request_handler")`** — emitted when the request enters the handler.
+  - Attributes: `http.request.method`, `url.path`, `url.scheme`, `server.address`, `server.port`, `client.address`
 - **`EndSpan("ferron.request_handler", error)`** — emitted when the request completes.
+  - Attributes: `http.response.status_code`, `http.route` (if applicable), `error.type` (if status >= 400)
 
-Trace events are consumed by observability backends that support tracing (e.g. OTLP).
+#### Pipeline execution span
+
+- **`ferron.pipeline.execute`** — wraps the entire pipeline execution, including all forward and inverse stages.
+
+#### Per-stage spans
+
+Each pipeline stage generates its own forward and inverse span, enabling flame graph analysis:
+
+| Span name | Module | Description |
+| --- | --- | --- |
+| `ferron.stage.rewrite` | `http-rewrite` | URL rewrite stage |
+| `ferron.stage.rate_limit` | `http-ratelimit` | Rate limiting stage |
+| `ferron.stage.headers` | `http-headers` | Response header manipulation stage |
+| `ferron.stage.reverse_proxy` | `http-proxy` | Reverse proxy stage |
+| `ferron.stage.static_file` | `http-static` | Static file serving stage |
+| `ferron.stage.http_response` | `http-response` | Response control stage |
+| `ferron.stage.<name>.inverse` | (any) | Inverse (cleanup) operation for a stage |
+
+#### Error pipeline span
+
+- **`ferron.pipeline.execute_error`** — wraps error pipeline execution when generating error responses.
+  - Attributes: `http.response.status_code`
+
+Trace events are consumed by observability backends that support tracing (e.g. OTLP). All spans from the same request share the same `trace_id`, enabling correlated queries.
 
 ### OTLP export
 
