@@ -241,40 +241,39 @@ impl TcpListenerHandle {
                         continue;
                     };
 
-                    // Read PROXY protocol header
-                    // Use root HttpConnectionOptions to determine if PROXY protocol is enabled
-                    let server_config = config.load();
-                    let proxy_protocol_enabled = server_config
-                        .http_connection_options_resolver
-                        .root_data()
-                        .map(|opts| opts.proxy_protocol_enabled)
-                        .unwrap_or(false);
-                    let (socket, proxy_client_addr, proxy_server_addr) = if proxy_protocol_enabled {
-                        // Use tokio's TcpStream to read PROXY header asynchronously
-                        match read_proxy_header(socket).await {
-                            Ok((stream, client_addr, server_addr)) => {
-                                // Convert back to std TcpStream for vibeio
-                                (stream, client_addr, server_addr)
-                            }
-                            Err(e) => {
-                                let global_observability =
-                                    resolve_root_observability_sink(&server_config.observability_resolver);
-                                emit_error(
-                                    &global_observability,
-                                    format!("Failed to read PROXY protocol header: {e}"),
-                                );
-                                continue;
-                            }
-                        }
-                    } else {
-                        (socket, None, None)
-                    };
-
                     // Load the current config for this connection
                     let server_config = config.load_full();
                     let connection_cancel_token = cancel_token.clone();
                     vibeio::spawn(async move {
                         let _conn_guard = ConnectionCountGuard::new();
+
+                        // Read PROXY protocol header
+                        // Use root HttpConnectionOptions to determine if PROXY protocol is enabled
+                        let proxy_protocol_enabled = server_config
+                            .http_connection_options_resolver
+                            .root_data()
+                            .map(|opts| opts.proxy_protocol_enabled)
+                            .unwrap_or(false);
+                        let (socket, proxy_client_addr, proxy_server_addr) = if proxy_protocol_enabled {
+                            // Use tokio's TcpStream to read PROXY header asynchronously
+                            match read_proxy_header(socket).await {
+                                Ok((stream, client_addr, server_addr)) => {
+                                    // Convert back to std TcpStream for vibeio
+                                    (stream, client_addr, server_addr)
+                                }
+                                Err(e) => {
+                                    let global_observability =
+                                        resolve_root_observability_sink(&server_config.observability_resolver);
+                                    emit_error(
+                                        &global_observability,
+                                        format!("Failed to read PROXY protocol header: {e}"),
+                                    );
+                                    return;
+                                }
+                            }
+                        } else {
+                            (socket, None, None)
+                        };
 
                         // Use PROXY protocol addresses if available, otherwise get from socket
                         let (remote_addr, local_addr) = if let (Some(client), Some(server)) =
