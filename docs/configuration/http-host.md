@@ -17,7 +17,7 @@ http example.com:8080 {
 - HTTPS redirect: `https_redirect`
 - Client IP from headers: `client_ip_from_header`
 - Server information: `admin_email`
-- Authentication: `basicauth`
+- Authentication: `basic_auth`
 
 ## Automatic TLS
 

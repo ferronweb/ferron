@@ -1,6 +1,6 @@
 # HTTP Basic Authentication
 
-The `basicauth` directive configures HTTP Basic Authentication for request-level access control.
+The `basic_auth` directive configures HTTP Basic Authentication for request-level access control.
 When configured, requests without valid credentials receive a 401 Unauthorized response with a
 `WWW-Authenticate` header. For CONNECT requests (forward proxy), a 407 Proxy Authentication
 Required response is returned instead.
@@ -21,7 +21,7 @@ validation time for security reasons.
 
 ```ferron
 example.com {
-    basicauth {
+    basic_auth {
         realm "Restricted Area"
         users {
             alice "$argon2id$v=19$m=19456,t=2,p=1$..."
@@ -38,18 +38,18 @@ example.com {
 }
 ```
 
-Multiple `basicauth` blocks can be defined — users from all blocks are merged:
+Multiple `basic_auth` blocks can be defined — users from all blocks are merged:
 
 ```ferron
 example.com {
-    basicauth {
+    basic_auth {
         realm "Admin Area"
         users {
             admin "$argon2id$v=19$m=19456,t=2,p=1$..."
         }
     }
 
-    basicauth {
+    basic_auth {
         users {
             deploy "$argon2id$v=19$m=19456,t=2,p=1$..."
         }
@@ -164,7 +164,7 @@ target a specific username.
 
 ### Stage Ordering
 
-The `basicauth` stage runs early in the pipeline:
+The `basic_auth` stage runs early in the pipeline:
 
 - **After** `client_ip_from_header` (ensures accurate remote address)
 - **Before** `forward_proxy` (auth before forwarding)
@@ -179,7 +179,7 @@ This ensures authentication is checked before any content is served or forwarded
 
 ```ferron
 admin.example.com {
-    basicauth {
+    basic_auth {
         realm "Admin Panel"
         users {
             admin "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHQ$..."
@@ -194,7 +194,7 @@ admin.example.com {
 
 ```ferron
 proxy.example.com {
-    basicauth {
+    basic_auth {
         realm "Proxy Access"
         users {
             user1 "$argon2id$v=19$m=19456,t=2,p=1$..."
@@ -225,7 +225,7 @@ you may want to disable it:
 
 ```ferron
 example.com {
-    basicauth {
+    basic_auth {
         realm "Behind WAF"
         users {
             deploy "$argon2id$v=19$m=19456,t=2,p=1$..."

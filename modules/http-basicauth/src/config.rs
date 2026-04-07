@@ -1,6 +1,6 @@
-//! Configuration parsing for `basicauth` blocks.
+//! Configuration parsing for `basic_auth` blocks.
 //!
-//! Parses `basicauth { ... }` directive entries from the layered configuration
+//! Parses `basic_auth { ... }` directive entries from the layered configuration
 //! into typed `BasicAuthConfig` structures. Only hashed passwords are supported.
 
 use std::collections::HashMap;
@@ -31,7 +31,7 @@ impl BasicAuthConfig {
 /// Returns `Some(config)` if at least one `basicauth` block is found,
 /// merging users from all blocks. Returns `None` if no `basicauth` is configured.
 pub fn parse_basicauth_config(config: &LayeredConfiguration) -> Option<BasicAuthConfig> {
-    let entries = config.get_entries("basicauth", true);
+    let entries = config.get_entries("basic_auth", true);
     if entries.is_empty() {
         return None;
     }

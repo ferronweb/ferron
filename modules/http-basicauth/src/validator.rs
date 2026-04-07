@@ -1,6 +1,6 @@
-//! Configuration validator for `basicauth` directives.
+//! Configuration validator for `basic_auth` directives.
 //!
-//! Validates that `basicauth` blocks contain recognized directives,
+//! Validates that `basic_auth` blocks contain recognized directives,
 /// that all password values are proper hashes (Argon2, PBKDF2, or scrypt),
 /// and that nested blocks use only known directive names.
 use std::collections::HashSet;
@@ -8,13 +8,13 @@ use std::collections::HashSet;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
 
-/// Recognized directives inside a `basicauth { ... }` block.
+/// Recognized directives inside a `basic_auth { ... }` block.
 const BASICAUTH_DIRECTIVES: &[&str] = &["realm", "users", "brute_force_protection"];
 
 /// Recognized directives inside a `brute_force_protection { ... }` block.
 const BRUTE_FORCE_DIRECTIVES: &[&str] = &["enabled", "max_attempts", "lockout_duration", "window"];
 
-/// Validator for `basicauth` configuration blocks.
+/// Validator for `basic_auth` configuration blocks.
 #[derive(Default)]
 pub struct BasicAuthValidator;
 
@@ -25,11 +25,11 @@ impl ConfigurationValidator for BasicAuthValidator {
         used_directives: &mut HashSet<String>,
         _is_global: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(entries) = config.directives.get("basicauth") {
-            used_directives.insert("basicauth".to_string());
+        if let Some(entries) = config.directives.get("basic_auth") {
+            used_directives.insert("basic_auth".to_string());
             for entry in entries {
                 if let Some(ref children) = entry.children {
-                    self.validate_basicauth_block(children)?;
+                    self.validate_basic_auth_block(children)?;
                 }
             }
         }
@@ -39,7 +39,7 @@ impl ConfigurationValidator for BasicAuthValidator {
 }
 
 impl BasicAuthValidator {
-    fn validate_basicauth_block(
+    fn validate_basic_auth_block(
         &self,
         block: &ServerConfigurationBlock,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -47,7 +47,7 @@ impl BasicAuthValidator {
         for directive_name in block.directives.keys() {
             if !BASICAUTH_DIRECTIVES.contains(&directive_name.as_str()) {
                 return Err(format!(
-                    "Invalid `{directive_name}` — unknown directive in basicauth block. \
+                    "Invalid `{directive_name}` — unknown directive in basic_auth block. \
                      Recognized directives: realm, users, brute_force_protection"
                 )
                 .into());
@@ -64,7 +64,7 @@ impl BasicAuthValidator {
         // Validate `users` block — required, must have at least one user with a hash
         let users_entries = block.directives.get("users");
         if users_entries.is_none() {
-            return Err("Invalid `basicauth` — missing required `users` block".into());
+            return Err("Invalid `basic_auth` — missing required `users` block".into());
         }
 
         for users_entry in users_entries.into_iter().flatten() {
@@ -72,7 +72,7 @@ impl BasicAuthValidator {
                 self.validate_users_block(users_block)?;
             } else {
                 return Err(
-                    "Invalid `basicauth` — `users` must be a block form: `users {{ ... }}`".into(),
+                    "Invalid `basic_auth` — `users` must be a block form: `users {{ ... }}`".into(),
                 );
             }
         }
@@ -95,7 +95,7 @@ impl BasicAuthValidator {
     ) -> Result<(), Box<dyn std::error::Error>> {
         if block.directives.is_empty() {
             return Err(
-                "Invalid `basicauth` — `users` block must contain at least one user".into(),
+                "Invalid `basic_auth` — `users` block must contain at least one user".into(),
             );
         }
 
@@ -130,7 +130,7 @@ impl BasicAuthValidator {
 
         if !is_valid {
             return Err(format!(
-                "Invalid `basicauth` — password for user '{username}' must be a hashed value. \
+                "Invalid `basic_auth` — password for user '{username}' must be a hashed value. \
                  Supported formats: Argon2 ($argon2id$, $argon2i$, $argon2d$), \
                  PBKDF2 ($pbkdf2$, $pbkdf2-sha256$), or scrypt ($scrypt$). \
                  Plaintext passwords are not allowed for security reasons."
@@ -200,10 +200,10 @@ impl BasicAuthValidator {
         let value = entry
             .args
             .first()
-            .ok_or(format!("Invalid `basicauth` — {name} must have a value"))?;
+            .ok_or(format!("Invalid `basic_auth` — {name} must have a value"))?;
 
         if value.as_str().is_none() {
-            return Err(format!("Invalid `basicauth` — {name} must be a string value").into());
+            return Err(format!("Invalid `basic_auth` — {name} must be a string value").into());
         }
 
         Ok(())
@@ -218,14 +218,14 @@ impl BasicAuthValidator {
         let value = entry
             .args
             .first()
-            .ok_or(format!("Invalid `basicauth` — {name} must have a value"))?;
+            .ok_or(format!("Invalid `basic_auth` — {name} must have a value"))?;
 
         let n = value.as_number().ok_or(format!(
-            "Invalid `basicauth` — {name} must be an integer value"
+            "Invalid `basic_auth` — {name} must be an integer value"
         ))?;
 
         if n <= 0 {
-            return Err(format!("Invalid `basicauth` — {name} must be a positive integer").into());
+            return Err(format!("Invalid `basic_auth` — {name} must be a positive integer").into());
         }
 
         Ok(())
@@ -240,11 +240,11 @@ impl BasicAuthValidator {
         let value = entry
             .args
             .first()
-            .ok_or(format!("Invalid `basicauth` — {name} must have a value"))?;
+            .ok_or(format!("Invalid `basic_auth` — {name} must have a value"))?;
 
         if value.as_str().is_none() && value.as_number().is_none() {
             return Err(format!(
-                "Invalid `basicauth` — {name} must be a duration string (e.g., '15m', '1h') or a number"
+                "Invalid `basic_auth` — {name} must be a duration string (e.g., '15m', '1h') or a number"
             )
             .into());
         }
@@ -291,7 +291,7 @@ mod tests {
         }
     }
 
-    fn make_basicauth_block(
+    fn make_basic_auth_block(
         realm: Option<&str>,
         users_block: ServerConfigurationBlock,
         brute_force_block: Option<ServerConfigurationBlock>,
@@ -336,10 +336,10 @@ mod tests {
         }
     }
 
-    fn make_parent_with_basicauth(children: ServerConfigurationBlock) -> ServerConfigurationBlock {
+    fn make_parent_with_basic_auth(children: ServerConfigurationBlock) -> ServerConfigurationBlock {
         let mut d = StdHashMap::new();
         d.insert(
-            "basicauth".to_string(),
+            "basic_auth".to_string(),
             vec![ServerConfigurationDirectiveEntry {
                 args: vec![],
                 children: Some(children),
@@ -354,18 +354,18 @@ mod tests {
     }
 
     #[test]
-    fn valid_basicauth_block_with_argon2() {
+    fn valid_basic_auth_block_with_argon2() {
         let users = make_users_block(vec![("alice", "$argon2id$v=19$m=19456,t=2,p=1$abc123")]);
-        let inner = make_basicauth_block(None, users, None);
-        let parent = make_parent_with_basicauth(inner);
+        let inner = make_basic_auth_block(None, users, None);
+        let parent = make_parent_with_basic_auth(inner);
         let mut used = HashSet::new();
         let validator = BasicAuthValidator;
         assert!(validator.validate_block(&parent, &mut used, false).is_ok());
-        assert!(used.contains("basicauth"));
+        assert!(used.contains("basic_auth"));
     }
 
     #[test]
-    fn valid_basicauth_block_with_all_options() {
+    fn valid_basic_auth_block_with_all_options() {
         let users = make_users_block(vec![("alice", "$argon2id$v=19$m=19456,t=2,p=1$abc123")]);
         let bf_block = ServerConfigurationBlock {
             directives: Arc::new(StdHashMap::from([
@@ -405,8 +405,8 @@ mod tests {
             matchers: StdHashMap::new(),
             span: None,
         };
-        let inner = make_basicauth_block(Some("My Realm"), users, Some(bf_block));
-        let parent = make_parent_with_basicauth(inner);
+        let inner = make_basic_auth_block(Some("My Realm"), users, Some(bf_block));
+        let parent = make_parent_with_basic_auth(inner);
         let mut used = HashSet::new();
         let validator = BasicAuthValidator;
         assert!(validator.validate_block(&parent, &mut used, false).is_ok());
@@ -415,8 +415,8 @@ mod tests {
     #[test]
     fn rejects_plaintext_password() {
         let users = make_users_block(vec![("alice", "my-plain-password")]);
-        let inner = make_basicauth_block(None, users, None);
-        let parent = make_parent_with_basicauth(inner);
+        let inner = make_basic_auth_block(None, users, None);
+        let parent = make_parent_with_basic_auth(inner);
         let mut used = HashSet::new();
         let validator = BasicAuthValidator;
         let err = validator
@@ -427,9 +427,9 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unknown_directive_in_basicauth() {
+    fn rejects_unknown_directive_in_basic_auth() {
         let users = make_users_block(vec![("alice", "$argon2id$hash")]);
-        let mut inner = make_basicauth_block(None, users, None);
+        let mut inner = make_basic_auth_block(None, users, None);
         let directives = Arc::make_mut(&mut inner.directives);
         directives.insert(
             "unknown_directive".to_string(),
@@ -439,7 +439,7 @@ mod tests {
                 span: None,
             }],
         );
-        let parent = make_parent_with_basicauth(inner);
+        let parent = make_parent_with_basic_auth(inner);
         let mut used = HashSet::new();
         let validator = BasicAuthValidator;
         let err = validator
@@ -455,8 +455,8 @@ mod tests {
             matchers: StdHashMap::new(),
             span: None,
         };
-        let inner = make_basicauth_block(None, users, None);
-        let parent = make_parent_with_basicauth(inner);
+        let inner = make_basic_auth_block(None, users, None);
+        let parent = make_parent_with_basic_auth(inner);
         let mut used = HashSet::new();
         let validator = BasicAuthValidator;
         let err = validator
@@ -479,7 +479,7 @@ mod tests {
             matchers: StdHashMap::new(),
             span: None,
         };
-        let parent = make_parent_with_basicauth(inner);
+        let parent = make_parent_with_basic_auth(inner);
         let mut used = HashSet::new();
         let validator = BasicAuthValidator;
         let err = validator
@@ -492,8 +492,8 @@ mod tests {
     fn rejects_invalid_hash_format() {
         // $md5$ is not a supported format
         let users = make_users_block(vec![("alice", "$md5$abc123")]);
-        let inner = make_basicauth_block(None, users, None);
-        let parent = make_parent_with_basicauth(inner);
+        let inner = make_basic_auth_block(None, users, None);
+        let parent = make_parent_with_basic_auth(inner);
         let mut used = HashSet::new();
         let validator = BasicAuthValidator;
         let err = validator
@@ -506,8 +506,8 @@ mod tests {
     #[test]
     fn accepts_pbkdf2_hash() {
         let users = make_users_block(vec![("alice", "$pbkdf2-sha256$abc123")]);
-        let inner = make_basicauth_block(None, users, None);
-        let parent = make_parent_with_basicauth(inner);
+        let inner = make_basic_auth_block(None, users, None);
+        let parent = make_parent_with_basic_auth(inner);
         let mut used = HashSet::new();
         let validator = BasicAuthValidator;
         assert!(validator.validate_block(&parent, &mut used, false).is_ok());
@@ -516,8 +516,8 @@ mod tests {
     #[test]
     fn accepts_scrypt_hash() {
         let users = make_users_block(vec![("alice", "$scrypt$abc123")]);
-        let inner = make_basicauth_block(None, users, None);
-        let parent = make_parent_with_basicauth(inner);
+        let inner = make_basic_auth_block(None, users, None);
+        let parent = make_parent_with_basic_auth(inner);
         let mut used = HashSet::new();
         let validator = BasicAuthValidator;
         assert!(validator.validate_block(&parent, &mut used, false).is_ok());
@@ -538,8 +538,8 @@ mod tests {
             matchers: StdHashMap::new(),
             span: None,
         };
-        let inner = make_basicauth_block(None, users, Some(bf_block));
-        let parent = make_parent_with_basicauth(inner);
+        let inner = make_basic_auth_block(None, users, Some(bf_block));
+        let parent = make_parent_with_basic_auth(inner);
         let mut used = HashSet::new();
         let validator = BasicAuthValidator;
         let err = validator
@@ -549,7 +549,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_block_without_basicauth() {
+    fn skips_block_without_basic_auth() {
         let block = ServerConfigurationBlock {
             directives: Arc::new(StdHashMap::new()),
             matchers: StdHashMap::new(),
