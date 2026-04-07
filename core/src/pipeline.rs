@@ -132,6 +132,7 @@ impl<C> Pipeline<C> {
     /// Stages are executed in order until one returns `Ok(false)` or an error.
     /// After execution completes (successfully or with error), inverse operations
     /// are run for all executed stages in reverse order.
+    #[inline]
     pub async fn execute(&self, ctx: &mut C) -> Result<(), PipelineError> {
         let mut executed_stages = vec![];
         for stage in &self.stages {
@@ -154,6 +155,7 @@ impl<C> Pipeline<C> {
     ///
     /// This allows manual control over when inverse operations are run.
     /// Use with `execute_inverse` to separate stage execution from cleanup.
+    #[inline]
     pub async fn execute_without_inverse<'a>(
         &'a self,
         ctx: &mut C,
@@ -171,6 +173,7 @@ impl<C> Pipeline<C> {
     }
 
     /// Execute inverse operations for the given stages in reverse order.
+    #[inline]
     pub async fn execute_inverse<'a>(
         &'a self,
         ctx: &mut C,
@@ -183,6 +186,7 @@ impl<C> Pipeline<C> {
     }
 
     /// Execute inverse operations for the given stages with per-stage hooks.
+    #[inline]
     pub async fn execute_inverse_with_hooks<'a, H: StageHooks<C>>(
         &'a self,
         ctx: &mut C,
@@ -204,6 +208,7 @@ impl<C> Pipeline<C> {
     /// provided `hooks` before and after each stage's `run` and `run_inverse`
     /// methods. This allows callers to instrument stage execution (e.g., emit
     /// per-stage trace spans) without coupling the Pipeline to observability code.
+    #[inline]
     pub async fn execute_with_hooks<H: StageHooks<C>>(
         &self,
         ctx: &mut C,
@@ -236,6 +241,7 @@ impl<C> Pipeline<C> {
     ///
     /// Behaves identically to [`execute_without_inverse`](Self::execute_without_inverse),
     /// but invokes the provided `hooks` before and after each stage's `run` method.
+    #[inline]
     pub async fn execute_without_inverse_with_hooks<'a, H: StageHooks<C>>(
         &'a self,
         ctx: &mut C,

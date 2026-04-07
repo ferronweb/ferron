@@ -121,6 +121,7 @@ impl Stage<HttpContext> for ForwardProxyStage {
         )]
     }
 
+    #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let config = match config::parse_forward_proxy_config(ctx) {
             Ok(Some(cfg)) => cfg,
@@ -146,6 +147,7 @@ impl Stage<HttpContext> for ForwardProxyStage {
         }
     }
 
+    #[inline]
     async fn run_inverse(&self, _ctx: &mut HttpContext) -> Result<(), PipelineError> {
         Ok(())
     }

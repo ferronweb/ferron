@@ -598,6 +598,7 @@ mod tests {
             fn name(&self) -> &str {
                 "hello"
             }
+            #[inline]
             async fn run(&self, _ctx: &mut ()) -> Result<bool, PipelineError> {
                 Ok(true)
             }
@@ -612,6 +613,7 @@ mod tests {
             fn constraints(&self) -> Vec<StageConstraint> {
                 vec![StageConstraint::Before("hello".to_string())]
             }
+            #[inline]
             async fn run(&self, _ctx: &mut ()) -> Result<bool, PipelineError> {
                 Ok(true)
             }
@@ -626,6 +628,7 @@ mod tests {
             fn constraints(&self) -> Vec<StageConstraint> {
                 vec![StageConstraint::After("hello".to_string())]
             }
+            #[inline]
             async fn run(&self, _ctx: &mut ()) -> Result<bool, PipelineError> {
                 Ok(true)
             }
@@ -651,6 +654,7 @@ mod tests {
             fn name(&self) -> &str {
                 "logging"
             }
+            #[inline]
             async fn run(&self, _ctx: &mut ()) -> Result<bool, PipelineError> {
                 Ok(true)
             }

@@ -618,10 +618,12 @@ async fn handle_http2_connection<S>(
     }
 }
 
+#[inline]
 fn build_http1_options(connection_options: &HttpConnectionOptions) -> Http1Options {
     Http1Options::default().enable_early_hints(connection_options.h1_enable_early_hints)
 }
 
+#[inline]
 fn build_http2_options(connection_options: &HttpConnectionOptions) -> Http2Options {
     let mut options = Http2Options::default();
     let builder = options.h2_builder();
@@ -643,6 +645,7 @@ fn build_http2_options(connection_options: &HttpConnectionOptions) -> Http2Optio
     options
 }
 
+#[inline]
 fn build_request_handler(
     state: Arc<RequestHandlerState>,
 ) -> impl Fn(Request<vibeio_http::Incoming>) -> RequestHandlerFuture {
@@ -676,6 +679,7 @@ fn build_request_handler(
     }
 }
 
+#[inline]
 fn resolve_http_connection_options(
     resolver: &RadixTree<HttpConnectionOptions>,
     ip: IpAddr,
@@ -693,6 +697,7 @@ fn resolve_http_connection_options(
 }
 
 /// Initialize event sinks from provider entries (called at request/connection time).
+#[inline]
 fn initialize_sinks_from_providers(
     entries: &[ObservabilityProviderEntry],
 ) -> Vec<Arc<dyn EventSink>> {
@@ -712,6 +717,7 @@ fn initialize_sinks_from_providers(
 }
 
 /// Helper to resolve root-level observability sinks (for pre-connection errors).
+#[inline]
 fn resolve_root_observability_sink(
     observability_resolver: &RadixTree<Vec<ObservabilityProviderEntry>>,
 ) -> CompositeEventSink {
@@ -722,6 +728,7 @@ fn resolve_root_observability_sink(
     CompositeEventSink::new(sinks)
 }
 
+#[inline]
 fn resolve_observability_sink(
     observability_resolver: &RadixTree<Vec<ObservabilityProviderEntry>>,
     ip: Option<IpAddr>,
@@ -746,6 +753,7 @@ fn resolve_observability_sink(
     }
 }
 
+#[inline]
 fn request_hostname_for_lookup<B>(
     request: &Request<B>,
     hinted_hostname: Option<&str>,
@@ -765,6 +773,7 @@ fn request_hostname_for_lookup<B>(
         .or_else(|| hinted_hostname.map(std::borrow::ToOwned::to_owned))
 }
 
+#[inline]
 fn emit_error(observability: &CompositeEventSink, message: impl Into<String>) {
     observability.emit(Event::Log(LogEvent {
         level: LogLevel::Error,
@@ -773,6 +782,7 @@ fn emit_error(observability: &CompositeEventSink, message: impl Into<String>) {
     }));
 }
 
+#[inline]
 fn normalize_host_for_lookup(host: &str) -> Option<String> {
     let host = host.trim();
     if host.is_empty() {
@@ -804,6 +814,7 @@ fn normalize_host_for_lookup(host: &str) -> Option<String> {
 pub struct NoCertResolver;
 
 impl rustls::server::ResolvesServerCert for NoCertResolver {
+    #[inline]
     fn resolve(
         &self,
         _client_hello: rustls::server::ClientHello<'_>,

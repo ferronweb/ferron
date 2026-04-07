@@ -132,6 +132,10 @@ impl EventSink for OtlpEventSink {
             });
         }
     }
+
+    fn processes_traces(&self) -> bool {
+        true
+    }
 }
 
 /// Parse the OTLP backend configuration from a ServerConfigurationBlock

@@ -39,6 +39,7 @@ impl Stage<HttpErrorContext> for ErrorPageStage {
         vec![]
     }
 
+    #[inline]
     async fn run(&self, ctx: &mut HttpErrorContext) -> Result<bool, PipelineError> {
         // Skip if a response has already been set
         if ctx.res.is_some() {

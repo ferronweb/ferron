@@ -39,6 +39,7 @@ impl Stage<HttpContext> for AcmeHttp01ChallengeStage {
         ]
     }
 
+    #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let Some(req) = ctx.req.as_ref() else {
             return Ok(true);

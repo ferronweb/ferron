@@ -35,6 +35,7 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
         vec![StageConstraint::Before("static_file".to_string())]
     }
 
+    #[inline]
     async fn run(&self, ctx: &mut HttpFileContext) -> Result<bool, PipelineError> {
         // Skip if root is not configured
         if ctx.http.configuration.get_value("root", true).is_none() {

@@ -232,6 +232,7 @@ impl Stage<HttpContext> for HttpResponseStage {
         ]
     }
 
+    #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         // 1. Check abort directive — if true, immediately abort
         if !Self::evaluate_abort(ctx)? {

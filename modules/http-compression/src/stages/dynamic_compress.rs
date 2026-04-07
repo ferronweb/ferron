@@ -137,7 +137,6 @@ impl Compression {
 pub(crate) struct CapturedState {
     pub(crate) accept_encoding: Option<String>,
     pub(crate) user_agent: Option<String>,
-    pub(crate) compression_enabled: bool,
 }
 
 struct CapturedStateKey;
@@ -177,6 +176,7 @@ impl Stage<HttpContext> for DynamicCompressionStage {
         ]
     }
 
+    #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let accept_encoding = ctx
             .req
@@ -194,24 +194,22 @@ impl Stage<HttpContext> for DynamicCompressionStage {
 
         let compression_enabled = ctx.configuration.get_flag("dynamic_compressed", true);
 
-        ctx.extensions.insert::<CapturedStateKey>(CapturedState {
-            accept_encoding,
-            user_agent,
-            compression_enabled,
-        });
+        if compression_enabled {
+            ctx.extensions.insert::<CapturedStateKey>(CapturedState {
+                accept_encoding,
+                user_agent,
+            });
+        }
 
         Ok(true)
     }
 
+    #[inline]
     async fn run_inverse(&self, ctx: &mut HttpContext) -> Result<(), PipelineError> {
         let state = match ctx.extensions.remove::<CapturedStateKey>() {
             Some(s) => s,
             None => return Ok(()),
         };
-
-        if !state.compression_enabled {
-            return Ok(());
-        }
 
         // Extract the response, compress, and put it back
         let response = match ctx.res {

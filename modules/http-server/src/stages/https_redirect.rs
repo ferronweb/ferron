@@ -95,6 +95,7 @@ impl Stage<HttpContext> for HttpsRedirectStage {
         ]
     }
 
+    #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         // Skip if:
         // - no https_port configured (TLS not enabled for this listener)

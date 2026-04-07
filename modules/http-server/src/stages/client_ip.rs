@@ -161,6 +161,7 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
         vec![StageConstraint::Before("https_redirect".to_string())]
     }
 
+    #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let header_type = match resolve_header_from_config(ctx) {
             Some(h) => h,

@@ -35,7 +35,11 @@ struct PerStageSpanHooks<'a> {
 
 #[async_trait::async_trait(?Send)]
 impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
+    #[inline]
     async fn before_stage(&mut self, stage: &dyn Stage<HttpContext>) {
+        if !self.events.has_trace_sinks() {
+            return;
+        }
         let stage_name = stage.name();
         self.events.emit(Event::Trace(TraceEvent::StartSpan {
             name: Cow::Owned(format!("ferron.stage.{}", stage_name)),
@@ -47,11 +51,15 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
         }));
     }
 
+    #[inline]
     async fn after_stage(
         &mut self,
         stage: &dyn Stage<HttpContext>,
         result: &Result<bool, PipelineError>,
     ) {
+        if !self.events.has_trace_sinks() {
+            return;
+        }
         self.events.emit(Event::Trace(TraceEvent::EndSpan {
             name: Cow::Owned(format!("ferron.stage.{}", stage.name())),
             error: result.as_ref().err().map(|e| e.to_string()),
@@ -59,7 +67,11 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
         }));
     }
 
+    #[inline]
     async fn before_stage_inverse(&mut self, stage: &dyn Stage<HttpContext>) {
+        if !self.events.has_trace_sinks() {
+            return;
+        }
         let stage_name = stage.name();
         self.events.emit(Event::Trace(TraceEvent::StartSpan {
             name: Cow::Owned(format!("ferron.stage.{}.inverse", stage_name)),
@@ -71,11 +83,15 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
         }));
     }
 
+    #[inline]
     async fn after_stage_inverse(
         &mut self,
         stage: &dyn Stage<HttpContext>,
         result: &Result<(), PipelineError>,
     ) {
+        if !self.events.has_trace_sinks() {
+            return;
+        }
         self.events.emit(Event::Trace(TraceEvent::EndSpan {
             name: Cow::Owned(format!("ferron.stage.{}.inverse", stage.name())),
             error: result.as_ref().err().map(|e| e.to_string()),

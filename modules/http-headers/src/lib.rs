@@ -43,6 +43,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
         ]
     }
 
+    #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let config = match config::parse_headers_config(ctx) {
             Ok(Some(cfg)) => cfg,
@@ -82,6 +83,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
         Ok(true)
     }
 
+    #[inline]
     async fn run_inverse(&self, ctx: &mut HttpContext) -> Result<(), PipelineError> {
         let config = match config::parse_headers_config(ctx) {
             Ok(Some(cfg)) => cfg,

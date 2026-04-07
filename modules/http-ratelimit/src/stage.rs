@@ -205,6 +205,7 @@ impl Stage<HttpContext> for RateLimitStage {
         ]
     }
 
+    #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         if let Some(response) = self.engine.check_rate_limits(ctx) {
             ctx.res = Some(response);

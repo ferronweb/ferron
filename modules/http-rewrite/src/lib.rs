@@ -61,6 +61,7 @@ impl Stage<HttpContext> for RewriteStage {
         ]
     }
 
+    #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let rules = parse_rewrite_config(&ctx.configuration);
         if rules.is_empty() {
