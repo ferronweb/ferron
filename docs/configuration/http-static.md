@@ -7,6 +7,7 @@ These directives configure static file serving, directory listings, compression,
 - Index resolution: `index`
 - Directory listings: `directory_listing`
 - Compression: `compressed`, `precompressed`
+- Dynamic content compression: `dynamic_compressed`
 - Caching headers: `etag`, `file_cache_control`
 - MIME types: `mime_type`
 - Error pages: `error_page`
@@ -102,6 +103,30 @@ Notes:
 - If a matching sidecar file exists, it is served directly with the appropriate `Content-Encoding` header.
 - This avoids CPU overhead from on-the-fly compression for static assets.
 - If no pre-compressed variant is found, the original file is served uncompressed (or on-the-fly compressed if `compressed` is also enabled).
+
+## `dynamic_compressed`
+
+Syntax:
+
+```ferron
+example.com {
+    dynamic_compressed
+}
+```
+
+| Arguments | Description | Default |
+| --- | --- | --- |
+| *(optional)* `<boolean>` | Enables or disables on-the-fly compression for dynamic (non-static) response bodies, such as responses from reverse proxies or application handlers. | `false` |
+
+Notes:
+
+- Supported algorithms: `gzip`, `brotli`, `deflate`, `zstd`. The best algorithm is selected from the client's `Accept-Encoding` header, respecting q-value priorities.
+- Compression is only applied to responses with compressible MIME types. Already-compressed formats (images, video, archives, PDFs) are excluded automatically.
+- A `Vary: Accept-Encoding` header is added when compression is possible.
+- The `Content-Length` header is removed when compression is applied, since the compressed size differs from the original.
+- A suffix is appended to the ETag (e.g., `W/"abc123-dynamic-br"` for Brotli) to distinguish compressed variants.
+- Known broken clients (Netscape 4.x, w3m) are detected via `User-Agent` and compression is skipped for them.
+- If a response already has a `Content-Encoding` header, it is not re-compressed.
 
 ## `etag`
 

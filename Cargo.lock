@@ -1087,6 +1087,7 @@ dependencies = [
  "ferron-config-json",
  "ferron-core",
  "ferron-http-basicauth",
+ "ferron-http-compression",
  "ferron-http-fproxy",
  "ferron-http-headers",
  "ferron-http-proxy",
@@ -1211,6 +1212,23 @@ dependencies = [
  "tokio",
  "typemap_rev",
  "vibeio",
+]
+
+[[package]]
+name = "ferron-http-compression"
+version = "0.1.0"
+dependencies = [
+ "async-compression",
+ "async-trait",
+ "bytes",
+ "ferron-core",
+ "ferron-http",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "tokio-util",
+ "typemap_rev",
 ]
 
 [[package]]
