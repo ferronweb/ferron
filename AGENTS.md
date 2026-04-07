@@ -15,7 +15,7 @@ The project is organized as a Rust workspace with the following key components:
   - Observability: `observability-consolelog`, `observability-logfile`, `observability-otlp`, `observability-format-json`, `observability-format-text`, `observability-process-metrics`
   - Admin: `admin-api`
 - **`types/`** - Shared domain types for HTTP, TLS, DNS, OCSP, observability, and admin.
-- **`docs/`** - Project documentation and configuration reference.
+- **`docs/`** - Project documentation and configuration reference. Styled after `ferron/docs` (sentence-case headers, YAML frontmatter, user-facing tone, `**Configuration example:**` blocks, `## Notes and troubleshooting` sections). Navigation structure in `docs/docLinks.ts`.
 
 ## Building and Running
 
@@ -57,7 +57,7 @@ Ferron uses a flexible configuration system with multiple adapters:
 
 Configuration is loaded from `./ferron.conf` by default. Use `--config` / `-c` to specify a different path, and `--config-adapter` to force a specific adapter. The `--verbose` flag enables debug-level logging.
 
-See [docs/configuration/README.md](docs/configuration/README.md) for the full configuration reference.
+See [docs/configuration/index.md](docs/configuration/index.md) for the full configuration reference.
 
 > **IMPORTANT:** Before implementing any feature that introduces or modifies configuration directives, **read the relevant documentation in `docs/configuration/` first.** This prevents introducing invalid or inconsistent configuration syntax, directive naming, or scoping. The configuration reference defines the accepted directive names, scopes (global, admin, HTTP host), and syntax conventions that all implementations must follow.
 
@@ -71,6 +71,20 @@ See [docs/configuration/README.md](docs/configuration/README.md) for the full co
 - Benchmarks live in `modules/http-server/benches/`.
 - Parser, registry, runtime, and TLS changes should always include tests.
 - **Documentation is written after implementation is complete.** Implement the feature first, then update the relevant `docs/configuration/` pages to reflect the final behavior and syntax.
+
+### Documentation style
+
+- **Sentence case** for all headers (only first word, proper nouns, acronyms, and directive names capitalized).
+- **YAML frontmatter** on every page (`title` and `description`).
+- **User-facing tone** — second-person ("you", "your"), approachable intros.
+- **`ferron` code blocks** for all configuration examples (````ferron`).
+- **Directive tables** for directive/subdirective definitions (Arguments | Description | Default).
+- **H3 category groupings** — related directives grouped under semantic H3 headings.
+- **`**Configuration example:**`** block after each directive group, showing complete working examples.
+- **`## Notes and troubleshooting`** section at the end of every page.
+- **Cross-references** use relative `./file.md` paths within configuration directory.
+- `docs/docLinks.ts` defines the sidebar navigation structure.
+- Directive descriptions follow the pattern: "This directive specifies [description]. Default: `value`".
 
 ## Architecture Highlights
 
