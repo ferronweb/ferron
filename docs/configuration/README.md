@@ -14,6 +14,7 @@ It is split by topic and by scope so the directive reference is easier to scan.
 - [HTTP Response Control](./http-response.md)
 - [URL Rewriting](./http-rewrite.md)
 - [Reverse Proxy Directives](./http-proxy.md)
+- [Forward Proxy Directives](./http-fproxy.md)
 - [Static File Serving Directives](./http-static.md)
 - [TLS Crypto Settings and mTLS](./tls-crypto.md)
 - [ACME Automatic TLS](./tls-acme.md)

@@ -417,6 +417,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bstr"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63044e1ae8e69f3b5a92c736ca6269b8d12fa7efe39bf34ddb06d102cf0e2cab"
+dependencies = [
+ "memchr",
+ "serde",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1009,6 +1019,7 @@ dependencies = [
  "ferron-config-ferronconf",
  "ferron-config-json",
  "ferron-core",
+ "ferron-http-fproxy",
  "ferron-http-headers",
  "ferron-http-proxy",
  "ferron-http-ratelimit",
@@ -1113,6 +1124,27 @@ dependencies = [
  "http-body-util",
  "typemap_rev",
  "vibeio",
+]
+
+[[package]]
+name = "ferron-http-fproxy"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "globset",
+ "http",
+ "http-body-util",
+ "hyper",
+ "ipnet",
+ "tokio",
+ "url",
+ "vibeio",
+ "vibeio-http",
+ "vibeio-hyper",
 ]
 
 [[package]]
@@ -1651,6 +1683,19 @@ name = "glob"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
+
+[[package]]
+name = "globset"
+version = "0.4.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52dfc19153a48bde0cbd630453615c8151bce3a5adfac7a0aebfbf0a1e1f57e3"
+dependencies = [
+ "aho-corasick",
+ "bstr",
+ "log",
+ "regex-automata",
+ "regex-syntax",
+]
 
 [[package]]
 name = "h2"

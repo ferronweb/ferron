@@ -14,6 +14,7 @@ use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_core::{log_debug, log_info, log_warn};
+use ferron_http_fproxy::ForwardProxyModuleLoader;
 use ferron_http_headers::HttpHeadersModuleLoader;
 use ferron_http_proxy::ReverseProxyModuleLoader;
 use ferron_http_ratelimit::HttpRateLimitModuleLoader;
@@ -252,6 +253,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(StaticFileModuleLoader::default()),
         Box::new(HttpHeadersModuleLoader::default()),
         Box::new(ReverseProxyModuleLoader::default()),
+        Box::new(ForwardProxyModuleLoader::default()),
         Box::new(AdminApiModuleLoader::default()),
         Box::new(JsonConfigurationAdapterModuleLoader),
         Box::new(FerronConfConfigurationAdapterModuleLoader),
