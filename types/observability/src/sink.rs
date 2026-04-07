@@ -55,6 +55,11 @@ impl CompositeEventSink {
     }
 
     #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.sinks.is_empty()
+    }
+
+    #[inline]
     pub fn emit(&self, event: Event) {
         match self.sinks.len() {
             0 => {}

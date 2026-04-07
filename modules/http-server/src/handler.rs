@@ -259,6 +259,7 @@ impl AccessEvent for HttpAccessLog {
 }
 
 /// Canonicalize an IP address: convert IPv4-mapped IPv6 (`::ffff:x.x.x.x`) to IPv4.
+#[inline]
 fn canonicalize_ip(ip: std::net::IpAddr) -> String {
     match ip {
         std::net::IpAddr::V4(_) => ip.to_string(),
@@ -273,6 +274,7 @@ fn canonicalize_ip(ip: std::net::IpAddr) -> String {
 }
 
 /// Format HTTP version as a string (e.g. `HTTP/1.1`).
+#[inline]
 fn http_version_access_string(version: http::Version) -> &'static str {
     match version {
         http::Version::HTTP_09 => "HTTP/0.9",
@@ -285,6 +287,7 @@ fn http_version_access_string(version: http::Version) -> &'static str {
 }
 
 /// HTTP version string for metric attributes.
+#[inline]
 fn http_version_string(version: http::Version) -> Option<&'static str> {
     match version {
         http::Version::HTTP_09 => Some("0.9"),
@@ -297,6 +300,7 @@ fn http_version_string(version: http::Version) -> Option<&'static str> {
 }
 
 /// Build the common metric attributes shared across all HTTP metrics.
+#[inline]
 fn build_metric_attributes(
     request: &HttpRequest,
     encrypted: bool,
@@ -354,10 +358,11 @@ pub async fn request_handler(
         .map_or(path.clone(), |pq| pq.to_string());
     let version = http_version_access_string(request.version());
     let scheme: &'static str = if encrypted { "https" } else { "http" };
+    // Canonicalize IPs once for reuse in access log and trace attributes
     let server_ip = local_address.ip().to_string();
     let server_port = local_address.port();
     let server_ip_canonical = canonicalize_ip(local_address.ip());
-    let client_ip_canonical = canonicalize_ip(remote_address.ip());
+    let initial_client_ip_canonical = canonicalize_ip(remote_address.ip());
 
     // Start tracing span
     events.emit(Event::Trace(TraceEvent::StartSpan {
@@ -377,7 +382,7 @@ pub async fn request_handler(
             ("server.port", TraceAttributeValue::I64(server_port as i64)),
             (
                 "client.address",
-                TraceAttributeValue::String(client_ip_canonical.clone()),
+                TraceAttributeValue::String(initial_client_ip_canonical.clone()),
             ),
         ],
     }));
@@ -395,17 +400,21 @@ pub async fn request_handler(
     let request_timer = std::time::Instant::now();
 
     // Collect request headers before moving `request` into handler_inner
-    // (only needed for access logging later)
-    let request_headers: Vec<(String, String)> = request
-        .headers()
-        .iter()
-        .filter_map(|(name, value)| {
-            value
-                .to_str()
-                .ok()
-                .map(|v| (name.to_string(), v.to_string()))
-        })
-        .collect();
+    // (only needed for access logging later — skip if no access sinks configured)
+    let request_headers: Vec<(String, String)> = if !events.is_empty() {
+        request
+            .headers()
+            .iter()
+            .filter_map(|(name, value)| {
+                value
+                    .to_str()
+                    .ok()
+                    .map(|v| (name.to_string(), v.to_string()))
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     let (mut response_result, auth_user, final_remote_address) = request_handler_inner(
         request,
@@ -649,7 +658,7 @@ async fn request_handler_inner(
         }
     }
 
-    let mut variables = HashMap::new();
+    let mut variables = HashMap::with_capacity(6);
     if let Some(hostname) = hostname.as_ref() {
         variables.insert("request.host".to_string(), hostname.clone());
     }

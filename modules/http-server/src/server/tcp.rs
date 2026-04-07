@@ -32,18 +32,26 @@ use crate::util::proxy_protocol::read_proxy_header;
 /// Cloning a single `Arc<RequestHandlerState>` replaces cloning 6 individual
 /// `Arc`s plus a `String` and a `CompositeEventSink`, reducing atomic
 /// refcount contention at high RPS.
+///
+/// # Performance optimization
+/// Connection-scoped radix tree lookups (observability, HTTP connection options)
+/// are resolved once at connection setup and cached here, avoiding redundant
+/// tree traversals on every HTTP request within the same connection.
 struct RequestHandlerState {
     pipeline: Arc<Pipeline<HttpContext>>,
     file_pipeline: Arc<Pipeline<HttpFileContext>>,
     error_pipeline: Arc<Pipeline<HttpErrorContext>>,
     config_resolver: Arc<ThreeStageResolver>,
+    /// Pre-resolved observability sinks for this connection's IP + SNI hostname.
+    connection_observability: CompositeEventSink,
+    /// Kept for virtual-hosting lookups when request Host header differs from SNI.
     observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
     local_address: SocketAddr,
     remote_address: SocketAddr,
+    /// Pre-normalized hostname from TLS SNI (available for per-request Host header overrides).
     hinted_hostname: Option<String>,
     encrypted: bool,
     https_port: u16,
-    default_observability: CompositeEventSink,
 }
 
 // Type alias for the config ArcSwap
@@ -513,7 +521,7 @@ async fn handle_http1_connection<S>(
     https_port: u16,
     connection_options: HttpConnectionOptions,
     observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
-    default_observability: CompositeEventSink,
+    connection_observability: CompositeEventSink,
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
 ) where
@@ -525,18 +533,18 @@ async fn handle_http1_connection<S>(
         file_pipeline,
         error_pipeline,
         config_resolver,
+        connection_observability,
         observability_resolver,
         local_address,
         remote_address,
         hinted_hostname,
         encrypted,
         https_port,
-        default_observability: default_observability.clone(),
     });
     let mut connection_future = Box::pin(
         Http1::new(socket, build_http1_options(&connection_options))
             .graceful_shutdown_token(graceful_shutdown.clone())
-            .handle(build_request_handler(handler_state)),
+            .handle(build_request_handler(handler_state.clone())),
     );
     let connection_result = tokio::select! {
         result = &mut connection_future => result,
@@ -552,7 +560,7 @@ async fn handle_http1_connection<S>(
 
     if let Err(error) = connection_result {
         emit_error(
-            &default_observability,
+            &handler_state.connection_observability,
             format!("HTTP/1 connection error: {error}"),
         );
     }
@@ -572,7 +580,7 @@ async fn handle_http2_connection<S>(
     https_port: u16,
     connection_options: HttpConnectionOptions,
     observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
-    default_observability: CompositeEventSink,
+    connection_observability: CompositeEventSink,
     shutdown_token: CancellationToken,
     reload_token: CancellationToken,
 ) where
@@ -584,18 +592,18 @@ async fn handle_http2_connection<S>(
         file_pipeline,
         error_pipeline,
         config_resolver,
+        connection_observability,
         observability_resolver,
         local_address,
         remote_address,
         hinted_hostname,
         encrypted,
         https_port,
-        default_observability: default_observability.clone(),
     });
     let mut connection_future = Box::pin(
         Http2::new(socket, build_http2_options(&connection_options))
             .graceful_shutdown_token(graceful_shutdown.clone())
-            .handle(build_request_handler(handler_state)),
+            .handle(build_request_handler(handler_state.clone())),
     );
     let connection_result = tokio::select! {
         result = &mut connection_future => result,
@@ -611,7 +619,7 @@ async fn handle_http2_connection<S>(
 
     if let Err(error) = connection_result {
         emit_error(
-            &default_observability,
+            &handler_state.connection_observability,
             format!("HTTP/2 connection error: {error}"),
         );
     }
@@ -652,12 +660,19 @@ fn build_request_handler(
         let state = Arc::clone(&state);
         Box::pin(async move {
             let hostname = request_hostname_for_lookup(&request, state.hinted_hostname.as_deref());
-            let request_observability = resolve_observability_sink(
-                &state.observability_resolver,
-                Some(state.local_address.ip()),
-                hostname.as_deref(),
-                &state.default_observability,
-            );
+            // Reuse the connection-level observability sink; only re-resolve if the request
+            // Host header differs from the SNI hostname (virtual hosting on the same connection).
+            let request_observability = match hostname.as_deref() {
+                Some(host) if state.hinted_hostname.as_deref() != Some(host) => {
+                    resolve_observability_sink_with_normalized(
+                        &state.observability_resolver,
+                        &state.connection_observability,
+                        state.local_address.ip(),
+                        Some(host),
+                    )
+                }
+                _ => state.connection_observability.clone(),
+            };
             let (parts, body) = request.into_parts();
             let request = Request::from_parts(parts, body.boxed_unsync());
             request_handler(
@@ -734,8 +749,52 @@ fn resolve_observability_sink(
     hostname: Option<&str>,
     fallback: &CompositeEventSink,
 ) -> CompositeEventSink {
+    // Normalize hostname once to avoid redundant string operations
     let normalized_hostname = hostname.and_then(normalize_host_for_lookup);
-    let entries = match (ip, normalized_hostname.as_deref()) {
+    resolve_observability_sink_with_normalized_and_resolver(
+        observability_resolver,
+        ip,
+        normalized_hostname.as_deref(),
+        fallback,
+    )
+}
+
+/// Optimized variant that accepts a pre-normalized hostname.
+/// When the hostname matches the connection's SNI, returns the connection-level
+/// sink directly without any radix tree lookup. Otherwise performs a fresh lookup.
+#[inline]
+fn resolve_observability_sink_with_normalized(
+    observability_resolver: &RadixTree<Vec<ObservabilityProviderEntry>>,
+    connection_observability: &CompositeEventSink,
+    ip: IpAddr,
+    hostname: Option<&str>,
+) -> CompositeEventSink {
+    // Fast path: if hostname matches SNI, return connection-level sink
+    if hostname.is_none() {
+        return connection_observability.clone();
+    }
+
+    // Slow path: hostname differs from SNI, need to lookup
+    let entries = observability_resolver.lookup_ip_and_hostname(ip, hostname.unwrap());
+    let sinks = entries
+        .map(|e| initialize_sinks_from_providers(&e))
+        .unwrap_or_default();
+    if sinks.is_empty() {
+        connection_observability.clone()
+    } else {
+        CompositeEventSink::new(sinks)
+    }
+}
+
+/// Core implementation that performs the radix tree lookup with pre-normalized values.
+#[inline]
+fn resolve_observability_sink_with_normalized_and_resolver(
+    observability_resolver: &RadixTree<Vec<ObservabilityProviderEntry>>,
+    ip: Option<IpAddr>,
+    hostname: Option<&str>,
+    fallback: &CompositeEventSink,
+) -> CompositeEventSink {
+    let entries = match (ip, hostname) {
         (Some(ip), Some(hostname)) => observability_resolver.lookup_ip_and_hostname(ip, hostname),
         (Some(ip), None) => observability_resolver.lookup_ip(ip),
         (None, Some(hostname)) => observability_resolver.lookup_hostname(hostname),
