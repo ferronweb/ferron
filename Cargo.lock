@@ -1545,6 +1545,7 @@ dependencies = [
  "anyhow",
  "ferron-core",
  "ferron-observability",
+ "hex",
  "http-body-util",
  "hyper",
  "hyper-rustls",

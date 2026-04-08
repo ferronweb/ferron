@@ -28,8 +28,10 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as _;
-use ferron_core::log_warn;
-use ferron_observability::{CompositeEventSink, Event, LogEvent, LogLevel};
+use ferron_observability::{
+    CompositeEventSink, Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
+    MetricValue,
+};
 use hyper::body::Bytes;
 use hyper::Request;
 use hyper_util::client::legacy::Client;
@@ -319,9 +321,19 @@ async fn background_ocsp_task(
 
     let sleep_duration = Duration::from_secs(60); // default check interval
 
+    emit_log(
+        &event_sink,
+        LogLevel::Info,
+        "OCSP background task started",
+        "ferron_ocsp",
+    );
+
     loop {
         let received_certified_key = tokio::select! {
-            _ = cancel_token.cancelled() => return,
+            _ = cancel_token.cancelled() => {
+                emit_log(&event_sink, LogLevel::Info, "OCSP background task shutting down", "ferron_ocsp");
+                return;
+            }
             _ = tokio::time::sleep(sleep_duration) => None,
             res = receiver.recv() => match res {
                 Some(chain) => Some(chain),
@@ -335,6 +347,13 @@ async fn background_ocsp_task(
             if let Some(leaf) = chain.first() {
                 let key: Vec<u8> = leaf.to_vec();
                 if !known_certs.contains_key(&key) {
+                    let ident = cert_identifier(chain);
+                    emit_log(
+                        &event_sink,
+                        LogLevel::Debug,
+                        &format!("OCSP fetch triggered for certificate {ident}"),
+                        "ferron_ocsp",
+                    );
                     known_certs.insert(key.clone(), certified_key);
                     // Trigger immediate fetch
                     next_updates.insert(key, SystemTime::now());
@@ -352,8 +371,39 @@ async fn background_ocsp_task(
 
         for key in updates_to_fetch {
             if let Some(certified_key) = known_certs.get(&key) {
+                let start = std::time::Instant::now();
                 match fetch_ocsp_response(&client, &certified_key.cert).await {
                     Ok(Some((response_der, next_update_time))) => {
+                        let duration = start.elapsed().as_secs_f64();
+                        let ident = cert_identifier(&certified_key.cert);
+                        emit_log(
+                            &event_sink,
+                            LogLevel::Debug,
+                            &format!("OCSP response cached for {ident}, valid until {next_update_time:?}"),
+                            "ferron_ocsp",
+                        );
+                        emit_metric(
+                            &event_sink,
+                            "ferron.ocsp.fetches_total",
+                            MetricValue::U64(1),
+                            MetricType::Counter,
+                            Some("{fetch}"),
+                            Some("Total OCSP fetch attempts"),
+                            vec![(
+                                "ferron.ocsp.status",
+                                MetricAttributeValue::StaticStr("success"),
+                            )],
+                        );
+                        emit_metric(
+                            &event_sink,
+                            "ferron.ocsp.fetch_duration_seconds",
+                            MetricValue::F64(duration),
+                            MetricType::Histogram(None),
+                            Some("s"),
+                            Some("Time to fetch OCSP response"),
+                            vec![],
+                        );
+
                         let mut new_certified_key = certified_key.clone();
                         new_certified_key.ocsp = Some(response_der);
                         cache
@@ -362,20 +412,59 @@ async fn background_ocsp_task(
                         next_updates.insert(key, next_update_time);
                     }
                     Ok(None) => {
+                        let ident = cert_identifier(&certified_key.cert);
+                        emit_log(
+                            &event_sink,
+                            LogLevel::Debug,
+                            &format!("OCSP stapling skipped — no OCSP URL in certificate {ident}"),
+                            "ferron_ocsp",
+                        );
+                        emit_metric(
+                            &event_sink,
+                            "ferron.ocsp.fetches_total",
+                            MetricValue::U64(1),
+                            MetricType::Counter,
+                            Some("{fetch}"),
+                            Some("Total OCSP fetch attempts"),
+                            vec![(
+                                "ferron.ocsp.status",
+                                MetricAttributeValue::StaticStr("skipped"),
+                            )],
+                        );
                         // No OCSP possible (e.g. no OCSP URL in cert)
                         cache.write().insert(key.clone(), None);
                         next_updates.remove(&key);
                     }
                     Err(e) => {
-                        if let Some(ref sink) = event_sink {
-                            sink.emit(Event::Log(LogEvent {
-                                level: LogLevel::Warn,
-                                message: format!("OCSP fetch failed: {e}"),
-                                target: "ferron_ocsp",
-                            }));
-                        } else {
-                            log_warn!("OCSP fetch failed: {e}");
-                        }
+                        let duration = start.elapsed().as_secs_f64();
+                        let ident = cert_identifier(&certified_key.cert);
+                        emit_log(
+                            &event_sink,
+                            LogLevel::Warn,
+                            &format!("OCSP fetch failed for {ident}: {e}"),
+                            "ferron_ocsp",
+                        );
+                        emit_metric(
+                            &event_sink,
+                            "ferron.ocsp.fetches_total",
+                            MetricValue::U64(1),
+                            MetricType::Counter,
+                            Some("{fetch}"),
+                            Some("Total OCSP fetch attempts"),
+                            vec![(
+                                "ferron.ocsp.status",
+                                MetricAttributeValue::StaticStr("error"),
+                            )],
+                        );
+                        emit_metric(
+                            &event_sink,
+                            "ferron.ocsp.fetch_duration_seconds",
+                            MetricValue::F64(duration),
+                            MetricType::Histogram(None),
+                            Some("s"),
+                            Some("Time to fetch OCSP response"),
+                            vec![],
+                        );
                         // Retry later with randomness to avoid refresh storms
                         let jitter = rand::random_range(100..=500);
                         next_updates.insert(key, now + Duration::from_secs(jitter));
@@ -383,7 +472,89 @@ async fn background_ocsp_task(
                 }
             }
         }
+
+        // Emit gauge metrics each cycle
+        let stapled_count = cache.read().iter().filter(|(_, v)| v.is_some()).count();
+        emit_metric(
+            &event_sink,
+            "ferron.ocsp.cached_certificates",
+            MetricValue::U64(known_certs.len() as u64),
+            MetricType::Gauge,
+            Some("{certificate}"),
+            Some("Number of certificates in OCSP cache"),
+            vec![],
+        );
+        emit_metric(
+            &event_sink,
+            "ferron.ocsp.certificates_with_stapling",
+            MetricValue::U64(stapled_count as u64),
+            MetricType::Gauge,
+            Some("{certificate}"),
+            Some("Number of certificates with valid OCSP stapling"),
+            vec![],
+        );
     }
+}
+
+/// Helper to emit log events through the event sink if available.
+fn emit_log(
+    event_sink: &Option<Arc<CompositeEventSink>>,
+    level: LogLevel,
+    message: &str,
+    target: &'static str,
+) {
+    if let Some(ref sink) = event_sink {
+        sink.emit(Event::Log(LogEvent {
+            level,
+            message: message.to_string(),
+            target,
+        }));
+    }
+}
+
+/// Helper to emit metric events through the event sink if available.
+fn emit_metric(
+    event_sink: &Option<Arc<CompositeEventSink>>,
+    name: &'static str,
+    value: MetricValue,
+    ty: MetricType,
+    unit: Option<&'static str>,
+    description: Option<&'static str>,
+    attributes: Vec<(&'static str, MetricAttributeValue)>,
+) {
+    if let Some(ref sink) = event_sink {
+        sink.emit(Event::Metric(MetricEvent {
+            name,
+            attributes,
+            ty,
+            value,
+            unit,
+            description,
+        }));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Certificate identification helper
+// ---------------------------------------------------------------------------
+
+/// Compute a short identifier for a certificate chain (used in logs/metrics).
+/// Returns the leaf subject CN if available, otherwise a hex prefix of the SPKI hash.
+fn cert_identifier(chain: &[CertificateDer<'_>]) -> String {
+    if let Some(leaf) = chain.first() {
+        if let Ok((_, cert)) = X509Certificate::from_der(leaf) {
+            if let Some(cn) = cert.subject().iter_common_name().next() {
+                if let Ok(cn_str) = cn.as_str() {
+                    return cn_str.to_string();
+                }
+            }
+            // Fallback: first 8 bytes of SHA-256 SPKI hash
+            let pub_key = &cert.public_key().subject_public_key.data;
+            let hash = Sha256::digest(pub_key);
+            return format!("<SPKI {}>", hex::encode(&hash[..4]));
+        }
+    }
+    "<unknown>".to_string()
 }
 
 // ---------------------------------------------------------------------------

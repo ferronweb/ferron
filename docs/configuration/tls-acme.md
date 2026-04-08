@@ -218,13 +218,46 @@ If only one path is given, the key path defaults to the certificate path with a 
 
 ### "ACME certificate provisioning error: ..."
 
-Certificate issuance failed. Check the error message for details (DNS resolution, ACME server errors, etc.).
+Certificate issuance failed. The log message includes the affected domains. Check the error message for details (DNS resolution, ACME server errors, etc.). At debug log level (`--verbose`), you'll also see per-step messages for account loading, order creation, challenge solving, and certificate installation.
 
 ### DNS-01 issues
 
 - Ensure the DNS provider is configured correctly with valid credentials.
 - Check that the provider has permission to create TXT records for the domain.
 - DNS propagation may take longer than 60 seconds for some providers — the ACME CA will retry validation.
+
+### Observability
+
+The ACME background task emits log events and metrics through the configured observability pipeline:
+
+**Log events:**
+
+| Level | Message | When |
+|-------|---------|------|
+| `INFO` | `ACME background task started with N configuration(s) for domains: ...` | Service initialization |
+| `INFO` | `On-demand certificate requested for SNI <host>:<port>` | On-demand certificate request received |
+| `INFO` | `ACME certificate issued for domains: ...` | Successful certificate issuance |
+| `INFO` | `ACME account created for directory ..., contact: ...` | New ACME account registration |
+| `INFO` | `Post-obtain command started for ...: <cmd>` | Post-obtain hook execution |
+| `WARN` | `ACME certificate provisioning error for ...: <error>` | Certificate issuance failure |
+| `WARN` | `ACME account not found on server for ..., recreating` | Account expired/removed on CA side |
+| `WARN` | `Post-obtain command failed for ...: <error>` | Post-obtain hook error |
+| `DEBUG` | `ACME provisioning cycle started — checking N configurations` | Each background loop iteration |
+| `DEBUG` | `ACME account loaded from cache for ...` | Account reused from cache |
+| `DEBUG` | `ACME certificate still valid or loaded from cache for ...` | No issuance needed |
+| `DEBUG` | `ACME order created for domains: ...` | New order placed with CA |
+| `DEBUG` | `ACME <type> challenge initiated for ...` | Challenge setup started |
+| `DEBUG` | `ACME <type> challenge solved for ...` | Challenge ready for validation |
+| `DEBUG` | `DNS-01 record created for _acme-challenge.<domain>, TTL <ttl>` | DNS record published |
+| `DEBUG` | `DNS-01 record cleanup completed for _acme-challenge.<domain>` | DNS record removed |
+| `DEBUG` | `Certificate installed for ..., chain length: N` | Certificate loaded into TLS config |
+
+**Metrics:**
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `ferron.acme.certificates_issued_total` | Counter | `status` (`success`, `error`), `challenge_type` | Certificate issuance outcomes |
+| `ferron.acme.on_demand_requests_total` | Counter | — | On-demand certificate requests |
 
 ### Verifying certificates
 

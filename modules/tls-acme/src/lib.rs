@@ -36,7 +36,10 @@ use ferron_core::providers::Provider;
 use ferron_core::registry::{ProviderRegistry, Registry, RegistryBuilder};
 use ferron_core::{runtime::Runtime, Module};
 use ferron_dns::{DnsClient, DnsContext};
-use ferron_observability::build_composite_sink;
+use ferron_observability::{
+    build_composite_sink, Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
+    MetricValue,
+};
 use ferron_tls::TcpTlsContext;
 use instant_acme::ChallengeType;
 use tokio::sync::RwLock;
@@ -274,14 +277,29 @@ impl Module for TlsAcmeModule {
     }
 
     fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
-        let configs_count = self.task_state.configs.blocking_read().len();
+        let configs_guard = self.task_state.configs.blocking_read();
+        let configs_count = configs_guard.len();
         if configs_count == 0 {
             return Ok(());
         }
 
-        ferron_core::log_debug!(
-            "ACME background task started with {} configuration(s)",
-            configs_count
+        let domains: Vec<_> = configs_guard
+            .iter()
+            .flat_map(|c| c.domains.iter())
+            .cloned()
+            .collect();
+        drop(configs_guard);
+
+        let event_sink = self.task_state.event_sink.clone();
+        emit_log(
+            &event_sink,
+            LogLevel::Info,
+            &format!(
+                "ACME background task started with {} configuration(s) for domains: {}",
+                configs_count,
+                domains.join(", ")
+            ),
+            "ferron_tls_acme",
         );
 
         // Clone all state needed for the background task
@@ -314,6 +332,7 @@ impl Module for TlsAcmeModule {
 }
 
 /// Runs the ACME provisioning loop for both eager and on-demand configs.
+#[allow(clippy::too_many_arguments)]
 async fn run_acme_background_task(
     configs: Arc<RwLock<Vec<crate::config::AcmeConfig>>>,
     on_demand_rx: async_channel::Receiver<OnDemandRequest>,
@@ -337,10 +356,33 @@ async fn run_acme_background_task(
         }
     }
 
+    emit_log(
+        &event_sink,
+        LogLevel::Debug,
+        "ACME provisioning cycle started",
+        "ferron_tls_acme",
+    );
+
     // Main provisioning loop
     loop {
         // Try to receive on-demand requests (non-blocking check first)
         if let Ok((sni_hostname, port)) = on_demand_rx.try_recv() {
+            emit_log(
+                &event_sink,
+                LogLevel::Info,
+                &format!("On-demand certificate requested for SNI {sni_hostname}:{port}"),
+                "ferron_tls_acme",
+            );
+            emit_metric(
+                &event_sink,
+                "ferron.acme.on_demand_requests_total",
+                MetricValue::U64(1),
+                MetricType::Counter,
+                Some("{request}"),
+                Some("Total on-demand certificate requests"),
+                vec![],
+            );
+
             if !existing_combinations.contains(&(sni_hostname.clone(), port)) {
                 existing_combinations.insert((sni_hostname.clone(), port));
 
@@ -379,24 +421,117 @@ async fn run_acme_background_task(
         // Provision certificates for all eager configs
         {
             let mut configs_guard = configs.write().await;
+            emit_log(
+                &event_sink,
+                LogLevel::Debug,
+                &format!(
+                    "ACME provisioning cycle started — checking {} configurations",
+                    configs_guard.len()
+                ),
+                "ferron_tls_acme",
+            );
+
             for config in configs_guard.iter_mut() {
                 if config.domains.is_empty() {
                     continue;
                 }
-                if let Err(e) = crate::provision::provision_certificate(config).await {
-                    event_sink.emit(ferron_observability::Event::Log(
-                        ferron_observability::LogEvent {
-                            level: ferron_observability::LogLevel::Warn,
-                            message: format!("ACME certificate provisioning error: {e}"),
-                            target: "ferron_tls_acme",
-                        },
-                    ));
+
+                let domains = config.domains.join(", ");
+                let challenge_type = format!("{:?}", config.challenge_type).to_lowercase();
+
+                match crate::provision::provision_certificate(config).await {
+                    Ok(()) => {
+                        emit_log(
+                            &event_sink,
+                            LogLevel::Info,
+                            &format!("ACME certificate issued for domains: {domains}"),
+                            "ferron_tls_acme",
+                        );
+                        emit_metric(
+                            &event_sink,
+                            "ferron.acme.certificates_issued_total",
+                            MetricValue::U64(1),
+                            MetricType::Counter,
+                            Some("{certificate}"),
+                            Some("Total ACME certificate issuance outcomes"),
+                            vec![
+                                (
+                                    "ferron.acme.status",
+                                    MetricAttributeValue::StaticStr("success"),
+                                ),
+                                (
+                                    "ferron.acme.challenge_type",
+                                    MetricAttributeValue::String(challenge_type),
+                                ),
+                            ],
+                        );
+                    }
+                    Err(e) => {
+                        emit_log(
+                            &event_sink,
+                            LogLevel::Warn,
+                            &format!("ACME certificate provisioning error for {domains}: {e}"),
+                            "ferron_tls_acme",
+                        );
+                        emit_metric(
+                            &event_sink,
+                            "ferron.acme.certificates_issued_total",
+                            MetricValue::U64(1),
+                            MetricType::Counter,
+                            Some("{certificate}"),
+                            Some("Total ACME certificate issuance outcomes"),
+                            vec![
+                                (
+                                    "ferron.acme.status",
+                                    MetricAttributeValue::StaticStr("error"),
+                                ),
+                                (
+                                    "ferron.acme.challenge_type",
+                                    MetricAttributeValue::String(challenge_type),
+                                ),
+                            ],
+                        );
+                    }
                 }
             }
         }
 
         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
     }
+}
+
+/// Helper to emit log events through the event sink.
+fn emit_log(
+    event_sink: &Arc<ferron_observability::CompositeEventSink>,
+    level: LogLevel,
+    message: &str,
+    target: &'static str,
+) {
+    event_sink.emit(Event::Log(LogEvent {
+        level,
+        message: message.to_string(),
+        target,
+    }));
+}
+
+/// Helper to emit metric events through the event sink.
+fn emit_metric(
+    event_sink: &Arc<ferron_observability::CompositeEventSink>,
+    name: &'static str,
+    value: MetricValue,
+    ty: MetricType,
+    unit: Option<&'static str>,
+    description: Option<&'static str>,
+    attributes: Vec<(&'static str, MetricAttributeValue)>,
+) {
+    event_sink.emit(Event::Metric(MetricEvent {
+        name,
+        attributes,
+        ty,
+        value,
+        unit,
+        description,
+    }));
 }
 
 /// Module loader for the ACME TLS provider.

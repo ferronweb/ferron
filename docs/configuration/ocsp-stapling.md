@@ -122,11 +122,35 @@ If no OCSP URL is found in the certificate, OCSP stapling is silently skipped fo
 
 ### "OCSP fetch failed: ..."
 
-The OCSP responder returned an error or was unreachable. The service will retry with jitter. Common causes:
+The OCSP responder returned an error or was unreachable. The service will retry with jitter. The log message includes the certificate's subject common name (or a SPKI hash prefix if the CN is unavailable) to help identify which certificate is affected. Common causes:
 
 - Network issues
 - CA's OCSP responder is down
 - Certificate has no OCSP URL in AIA extension
+
+### Observability
+
+The OCSP background task emits log events and metrics through the configured observability pipeline:
+
+**Log events:**
+
+| Level | Message | When |
+|-------|---------|------|
+| `INFO` | `OCSP background task started` | Service initialization |
+| `INFO` | `OCSP background task shutting down` | Graceful shutdown |
+| `DEBUG` | `OCSP fetch triggered for certificate <ident>` | Certificate preloaded into service |
+| `DEBUG` | `OCSP response cached for <ident>, valid until <time>` | Successful OCSP fetch |
+| `DEBUG` | `OCSP stapling skipped — no OCSP URL in certificate <ident>` | Certificate lacks OCSP URL |
+| `WARN` | `OCSP fetch failed for <ident>: <error>` | Fetch error (retried with jitter) |
+
+**Metrics:**
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `ferron.ocsp.fetches_total` | Counter | `status` (`success`, `error`, `skipped`) | Total OCSP fetch attempts |
+| `ferron.ocsp.fetch_duration_seconds` | Histogram | — | Time to fetch OCSP response |
+| `ferron.ocsp.cached_certificates` | Gauge | — | Number of certificates tracked |
+| `ferron.ocsp.certificates_with_stapling` | Gauge | — | Certificates with valid stapled responses |
 
 ### Verifying stapling
 

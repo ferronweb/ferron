@@ -13,6 +13,7 @@ use std::{
 };
 
 use bytes::Bytes;
+use ferron_core::{log_debug, log_error, log_info, log_warn};
 use hyper::Request;
 use hyper_util::client::legacy::Client as HyperClient;
 use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
@@ -124,12 +125,17 @@ async fn install_certified_key(
     private_key: PrivateKeyDer<'static>,
     cache_data: &CertificateCacheData,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let domains = config.domains.join(", ");
+    let chain_len = certs.len();
+
     let signing_key = rustls::crypto::aws_lc_rs::default_provider()
         .key_provider
         .load_private_key(private_key)?;
 
     *config.certified_key_lock.write().await =
         Some(Arc::new(CertifiedKey::new(certs, signing_key)));
+
+    log_debug!("Certificate installed for {domains}, chain length: {chain_len}");
 
     // Save to files if configured
     if let Some((cert_path, key_path)) = &config.save_paths {
@@ -147,14 +153,23 @@ async fn install_certified_key(
         file.flush().await.unwrap_or_default();
 
         if let Some(command) = &config.post_obtain_command {
-            tokio::process::Command::new(command)
+            log_info!("Post-obtain command started for {domains}: {command}");
+            match tokio::process::Command::new(command)
                 .env("FERRON_ACME_DOMAIN", config.domains.join(","))
                 .env("FERRON_ACME_CERT_PATH", cert_path)
                 .env("FERRON_ACME_KEY_PATH", key_path)
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
-                .spawn()?;
+                .spawn()
+            {
+                Ok(mut child) => {
+                    let _ = child.wait().await;
+                }
+                Err(e) => {
+                    log_warn!("Post-obtain command failed for {domains}: {e}");
+                }
+            }
         }
     }
 
@@ -165,6 +180,7 @@ async fn install_certified_key(
 pub async fn provision_certificate(
     config: &mut AcmeConfig,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let domains = config.domains.join(", ");
     let account_cache_key = get_account_cache_key(&config.contact, &config.directory);
     let certificate_cache_key =
         get_certificate_cache_key(&config.domains, config.profile.as_deref());
@@ -181,6 +197,7 @@ pub async fn provision_certificate(
             if let Ok(credentials) =
                 serde_json::from_slice::<AccountCredentials>(&credentials_bytes)
             {
+                log_debug!("ACME account loaded from cache for {domains}");
                 account_builder.from_credentials(credentials).await?
             } else {
                 create_new_account(config, account_builder, &account_cache_key).await?
@@ -194,6 +211,7 @@ pub async fn provision_certificate(
 
     // Step 2: Check if current cert is still valid or cached
     if check_certificate_validity_or_install_cached(config).await? {
+        log_debug!("ACME certificate still valid or loaded from cache for {domains}");
         return Ok(());
     }
 
@@ -215,12 +233,17 @@ pub async fn provision_certificate(
         new_order = new_order.profile(profile);
     }
 
+    log_debug!("ACME order created for domains: {domains}");
     let mut order = match acme_account.new_order(&new_order).await {
         Ok(o) => o,
         Err(instant_acme::Error::Api(ref problem))
             if problem.r#type.as_deref()
                 == Some("urn:ietf:params:acme:error:accountDoesNotExist") =>
         {
+            log_warn!(
+                "ACME account not found on server for {directory}, recreating",
+                directory = config.directory
+            );
             config.account_cache.remove(&account_cache_key).await;
             let account_builder = Account::builder_with_http(Box::new(HttpsClientForAcme::new(
                 config.rustls_client_config.clone(),
@@ -257,6 +280,11 @@ pub async fn provision_certificate(
 
         let key_authorization = challenge.key_authorization();
 
+        log_debug!(
+            "ACME {:?} challenge initiated for {domains}",
+            config.challenge_type
+        );
+
         match config.challenge_type {
             instant_acme::ChallengeType::TlsAlpn01 => {
                 let (certified_key, _ident) =
@@ -277,14 +305,18 @@ pub async fn provision_certificate(
                     let _ = dns_client.delete_record(&challenge_domain, "TXT").await;
 
                     let dns_value = key_authorization.dns_value();
+                    let ttl = dns_client.minimum_ttl().max(60);
+                    let challenge_domain_log = challenge_domain.clone();
                     dns_client
                         .update_record(&ferron_dns::DnsRecord {
                             name: challenge_domain,
                             record_type: ferron_dns::DnsRecordType::TXT,
                             value: dns_value,
-                            ttl: dns_client.minimum_ttl().max(60),
+                            ttl,
                         })
                         .await?;
+
+                    log_debug!("DNS-01 record created for {challenge_domain_log}, TTL {ttl}");
 
                     // Wait for DNS propagation
                     tokio::time::sleep(Duration::from_secs(60)).await;
@@ -299,14 +331,24 @@ pub async fn provision_certificate(
         }
 
         challenge.set_ready().await?;
+        log_debug!(
+            "ACME {:?} challenge solved for {domains}",
+            config.challenge_type
+        );
     }
 
     // Step 5: Wait for order to be ready
     let order_status = order.poll_ready(&RetryPolicy::default()).await?;
     match order_status {
         OrderStatus::Ready => {}
-        OrderStatus::Invalid => return Err(anyhow::anyhow!("ACME order is invalid").into()),
-        _ => return Err(anyhow::anyhow!("ACME order is not ready").into()),
+        OrderStatus::Invalid => {
+            log_error!("ACME order failed — status: invalid, domains: {domains}");
+            return Err(anyhow::anyhow!("ACME order is invalid").into());
+        }
+        _ => {
+            log_error!("ACME order failed — status: {order_status:?}, domains: {domains}");
+            return Err(anyhow::anyhow!("ACME order is not ready").into());
+        }
     }
 
     // Step 6: Finalize and obtain certificate
@@ -361,6 +403,7 @@ async fn cleanup_challenge_data(config: &AcmeConfig, dns_01_domains: &[String]) 
                 for domain in dns_01_domains {
                     let challenge_domain = format!("_acme-challenge.{domain}");
                     let _ = dns_client.delete_record(&challenge_domain, "TXT").await;
+                    log_debug!("DNS-01 record cleanup completed for {challenge_domain}");
                 }
             }
         }
@@ -391,6 +434,12 @@ async fn create_new_account(
         .account_cache
         .set(account_cache_key, serde_json::to_vec(&credentials)?)
         .await?;
+
+    log_info!(
+        "ACME account created for directory {}, contact: {}",
+        config.directory,
+        config.contact.first().map(|s| s.as_str()).unwrap_or("none")
+    );
 
     Ok(account)
 }
