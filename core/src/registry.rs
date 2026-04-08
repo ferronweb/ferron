@@ -200,6 +200,9 @@ impl<C> StageRegistry<C> {
     ///
     /// Stages are ordered according to their Before/After constraints using Kahn's algorithm.
     /// If cycles are detected, returns stages in registration order as fallback.
+    ///
+    /// # Panics
+    /// - If a cycle is detected during the topological sort.
     pub fn get_ordered_factories(&self) -> Vec<StageFactory<C>> {
         let stages = self.stages.read();
 
