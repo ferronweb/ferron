@@ -139,7 +139,7 @@ impl<C> Pipeline<C> {
     /// are run for all executed stages in reverse order.
     #[inline]
     pub async fn execute(&self, ctx: &mut C) -> Result<(), PipelineError> {
-        let mut executed_stages = vec![];
+        let mut executed_stages = Vec::with_capacity(self.stages.len());
         for stage in &self.stages {
             executed_stages.push(stage);
             match stage.run(ctx).await {
@@ -165,7 +165,7 @@ impl<C> Pipeline<C> {
         &'a self,
         ctx: &mut C,
     ) -> Result<Vec<&'a Arc<dyn Stage<C>>>, PipelineError> {
-        let mut executed_stages = vec![];
+        let mut executed_stages = Vec::with_capacity(self.stages.len());
         for stage in &self.stages {
             executed_stages.push(stage);
             match stage.run(ctx).await {
@@ -219,7 +219,7 @@ impl<C> Pipeline<C> {
         ctx: &mut C,
         hooks: &mut H,
     ) -> Result<(), PipelineError> {
-        let mut executed_stages = vec![];
+        let mut executed_stages = Vec::with_capacity(self.stages.len());
         for stage in &self.stages {
             hooks.before_stage(stage.as_ref()).await;
             let result = stage.run(ctx).await;
@@ -252,7 +252,7 @@ impl<C> Pipeline<C> {
         ctx: &mut C,
         hooks: &mut H,
     ) -> Result<Vec<&'a Arc<dyn Stage<C>>>, PipelineError> {
-        let mut executed_stages = vec![];
+        let mut executed_stages = Vec::with_capacity(self.stages.len());
         for stage in &self.stages {
             hooks.before_stage(stage.as_ref()).await;
             let result = stage.run(ctx).await;
