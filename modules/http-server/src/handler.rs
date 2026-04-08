@@ -671,16 +671,15 @@ async fn request_handler_inner(
     variables.insert("remote.ip".to_string(), remote_address.ip().to_string());
     variables.insert("remote.port".to_string(), remote_address.port().to_string());
 
-    let resolver_request = match build_resolver_request(&request) {
-        Ok(r) => r,
-        Err(e) => return (Err(e), None, None),
-    };
+    let resolver_variables = (request, variables);
     let resolution = config_resolver.resolve(
         local_address.ip(),
         hostname.as_deref().unwrap_or(""),
-        request.uri().path(),
-        &(resolver_request, variables.clone()),
+        resolver_variables.0.uri().path(),
+        &resolver_variables,
     );
+    let request = resolver_variables.0;
+    let variables = resolver_variables.1;
 
     let Some(resolution) = resolution else {
         if let Some(response) = execute_error_pipeline(
@@ -772,35 +771,19 @@ async fn request_handler_inner(
             ctx.previous_error = Some(status);
             ctx.req = Some(cloned_request);
             // Rebuild the resolver request from the current request in context
-            if let Some(ref req) = ctx.req {
-                let error_resolver_request = match build_resolver_request(req) {
-                    Ok(r) => r,
-                    Err(_) => {
-                        let auth_user = ctx.auth_user.clone();
-                        return (
-                            Ok(builtin_error_response(
-                                500,
-                                None,
-                                config_resolver.global().and_then(|g| {
-                                    g.get_value("admin_email").and_then(|v| {
-                                        v.as_string_with_interpolations(&HashMap::new())
-                                    })
-                                }),
-                            )),
-                            auth_user,
-                            Some(ctx.remote_address),
-                        );
-                    }
-                };
+            if let Some(req) = ctx.req.take() {
+                let error_resolver_variables = (
+                    req,
+                    ctx.variables.clone().into_iter().collect::<HashMap<_, _>>(),
+                );
                 let error_resolution = config_resolver.resolve_error_scoped(
                     local_address.ip(),
                     ctx.hostname.as_deref().unwrap_or(""),
                     status,
-                    &(
-                        error_resolver_request,
-                        ctx.variables.clone().into_iter().collect::<HashMap<_, _>>(),
-                    ),
+                    &error_resolver_variables,
                 );
+                ctx.req = Some(error_resolver_variables.0);
+
                 if let Some(error_resolution) = error_resolution {
                     ctx.configuration = error_resolution.configuration;
                     ctx.res = None;
@@ -1546,24 +1529,7 @@ fn is_options_star_request(request: &HttpRequest) -> bool {
     request.method() == http::Method::OPTIONS && request.uri().path() == "*"
 }
 
-fn build_resolver_request(request: &HttpRequest) -> Result<HttpRequest, io::Error> {
-    let mut builder = http::Request::builder()
-        .method(request.method().clone())
-        .uri(request.uri().clone())
-        .version(request.version());
-    for (name, value) in request.headers() {
-        builder = builder.header(name, value);
-    }
-
-    builder
-        .body(
-            http_body_util::Empty::<Bytes>::new()
-                .map_err(|e| match e {})
-                .boxed_unsync(),
-        )
-        .map_err(|error| io::Error::other(error.to_string()))
-}
-
+#[inline]
 fn builtin_error_response(
     status: u16,
     headers: Option<&HeaderMap>,
@@ -1591,6 +1557,7 @@ fn builtin_error_response(
         .unwrap_or_else(|_| builtin_error_response(500, None, admin_email))
 }
 
+#[inline]
 fn emit_error(events: &CompositeEventSink, message: impl Into<String>) {
     events.emit(Event::Log(LogEvent {
         level: LogLevel::Error,
