@@ -1544,6 +1544,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ferron-core",
+ "ferron-observability",
  "http-body-util",
  "hyper",
  "hyper-rustls",
@@ -1570,6 +1571,7 @@ name = "ferron-ocsp-stapler"
 version = "0.1.0"
 dependencies = [
  "ferron-core",
+ "ferron-observability",
  "ferron-ocsp",
 ]
 
@@ -1603,6 +1605,7 @@ dependencies = [
  "ferron-core",
  "ferron-dns",
  "ferron-http",
+ "ferron-observability",
  "ferron-ocsp",
  "ferron-tls",
  "http",
@@ -1611,6 +1614,7 @@ dependencies = [
  "hyper-rustls",
  "hyper-util",
  "instant-acme",
+ "parking_lot",
  "rcgen",
  "rustls",
  "rustls-native-certs",

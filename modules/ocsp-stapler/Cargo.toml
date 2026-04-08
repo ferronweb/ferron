@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 ferron-core = { path = "../../core" }
 ferron-ocsp = { path = "../../types/ocsp" }
+ferron-observability = { path = "../../types/observability" }

@@ -8,6 +8,7 @@ ferron-core = { path = "../../core" }
 ferron-tls = { path = "../../types/tls" }
 ferron-dns = { path = "../../types/dns" }
 ferron-http = { path = "../../types/http" }
+ferron-observability = { path = "../../types/observability" }
 ferron-ocsp = { path = "../../types/ocsp", optional = true }
 
 # ACME protocol
@@ -57,6 +58,7 @@ bytes = "1"
 anyhow = "1.0"
 dirs = "6.0"
 async-channel = "2.3"
+parking_lot = "0.12"
 
 [features]
 default = ["ocsp"]

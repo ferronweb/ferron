@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 ferron-core = { path = "../../core" }
+ferron-observability = { path = "../observability" }
 tokio = { version = "1", features = ["sync", "time", "macros", "rt"] }
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["client", "tokio"] }

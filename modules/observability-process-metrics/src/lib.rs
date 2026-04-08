@@ -4,8 +4,6 @@ use ferron_core::{loader::ModuleLoader, registry::Registry, Module};
 use ferron_observability::build_composite_sink;
 
 #[cfg(test)]
-use ferron_core::config::ServerConfigurationBlock;
-#[cfg(test)]
 use ferron_observability::ObservabilityContext;
 
 #[cfg(target_os = "linux")]

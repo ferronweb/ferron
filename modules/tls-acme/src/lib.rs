@@ -36,6 +36,7 @@ use ferron_core::providers::Provider;
 use ferron_core::registry::{ProviderRegistry, Registry, RegistryBuilder};
 use ferron_core::{runtime::Runtime, Module};
 use ferron_dns::{DnsClient, DnsContext};
+use ferron_observability::build_composite_sink;
 use ferron_tls::TcpTlsContext;
 use instant_acme::ChallengeType;
 use tokio::sync::RwLock;
@@ -62,6 +63,8 @@ pub struct AcmeTaskState {
     pub memory_account_cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
     /// Shared SNI resolver lock.
     pub sni_resolver_lock: SniResolverLock,
+    /// Event sink for observability.
+    pub event_sink: Arc<ferron_observability::CompositeEventSink>,
 }
 
 /// Global registry for DNS provider lookup, set once during module initialization.
@@ -69,12 +72,15 @@ static GLOBAL_REGISTRY: std::sync::OnceLock<Arc<Registry>> = std::sync::OnceLock
 
 impl Default for AcmeTaskState {
     fn default() -> Self {
-        Self::new()
+        // Default creates with an empty event sink - should be overridden before use
+        Self::new(Arc::new(ferron_observability::CompositeEventSink::new(
+            Vec::new(),
+        )))
     }
 }
 
 impl AcmeTaskState {
-    pub fn new() -> Self {
+    pub fn new(event_sink: Arc<ferron_observability::CompositeEventSink>) -> Self {
         let (tx, rx) = async_channel::unbounded();
         Self {
             configs: Arc::new(RwLock::new(Vec::new())),
@@ -85,17 +91,57 @@ impl AcmeTaskState {
             http_01_resolvers: Arc::new(RwLock::new(Vec::new())),
             memory_account_cache: Arc::new(RwLock::new(HashMap::new())),
             sni_resolver_lock: Arc::new(RwLock::new(HashMap::new())),
+            event_sink,
         }
     }
 }
 
+/// Global AcmeTaskState holder with interior mutability for the event sink.
+struct GlobalTaskState {
+    inner: std::sync::OnceLock<Arc<AcmeTaskState>>,
+    event_sink: parking_lot::Mutex<Option<Arc<ferron_observability::CompositeEventSink>>>,
+}
+
+impl GlobalTaskState {
+    fn new() -> Self {
+        Self {
+            inner: std::sync::OnceLock::new(),
+            event_sink: parking_lot::Mutex::new(None),
+        }
+    }
+
+    fn set_event_sink(&self, event_sink: Arc<ferron_observability::CompositeEventSink>) {
+        *self.event_sink.lock() = Some(event_sink);
+    }
+
+    fn get_or_init(&self) -> Arc<AcmeTaskState> {
+        self.inner
+            .get_or_init(|| {
+                let event_sink = self.event_sink.lock().clone().unwrap_or_else(|| {
+                    Arc::new(ferron_observability::CompositeEventSink::new(Vec::new()))
+                });
+                Arc::new(AcmeTaskState::new(event_sink))
+            })
+            .clone()
+    }
+
+    #[allow(dead_code)]
+    fn get(&self) -> Option<Arc<AcmeTaskState>> {
+        self.inner.get().cloned()
+    }
+}
+
 /// Global ACME task state, lazily initialized.
-static ACME_TASK_STATE: std::sync::OnceLock<Arc<AcmeTaskState>> = std::sync::OnceLock::new();
+static GLOBAL_TASK_STATE: std::sync::LazyLock<GlobalTaskState> =
+    std::sync::LazyLock::new(GlobalTaskState::new);
+
+/// Set the event sink for the ACME module. Call during module initialization.
+pub fn set_event_sink(event_sink: Arc<ferron_observability::CompositeEventSink>) {
+    GLOBAL_TASK_STATE.set_event_sink(event_sink);
+}
 
 fn get_or_init_task_state() -> Arc<AcmeTaskState> {
-    ACME_TASK_STATE
-        .get_or_init(|| Arc::new(AcmeTaskState::new()))
-        .clone()
+    GLOBAL_TASK_STATE.get_or_init()
 }
 
 /// ACME TLS provider.
@@ -247,6 +293,7 @@ impl Module for TlsAcmeModule {
         let sni_resolver_lock = state.sni_resolver_lock.clone();
         let tls_alpn_01_resolvers = state.tls_alpn_01_resolvers.clone();
         let http_01_resolvers = state.http_01_resolvers.clone();
+        let event_sink = state.event_sink.clone();
 
         runtime.spawn_secondary_task(async move {
             run_acme_background_task(
@@ -257,6 +304,7 @@ impl Module for TlsAcmeModule {
                 sni_resolver_lock,
                 tls_alpn_01_resolvers,
                 http_01_resolvers,
+                event_sink,
             )
             .await;
         });
@@ -274,6 +322,7 @@ async fn run_acme_background_task(
     sni_resolver_lock: Arc<RwLock<HashMap<String, Arc<dyn rustls::server::ResolvesServerCert>>>>,
     tls_alpn_01_resolvers: Arc<RwLock<Vec<crate::challenge::TlsAlpn01DataLock>>>,
     http_01_resolvers: Arc<RwLock<Vec<crate::challenge::Http01DataLock>>>,
+    event_sink: Arc<ferron_observability::CompositeEventSink>,
 ) {
     // Track which (hostname, port) combinations we've already processed
     let mut existing_combinations = std::collections::HashSet::new();
@@ -335,7 +384,13 @@ async fn run_acme_background_task(
                     continue;
                 }
                 if let Err(e) = crate::provision::provision_certificate(config).await {
-                    ferron_core::log_warn!("ACME certificate provisioning error: {}", e);
+                    event_sink.emit(ferron_observability::Event::Log(
+                        ferron_observability::LogEvent {
+                            level: ferron_observability::LogLevel::Warn,
+                            message: format!("ACME certificate provisioning error: {e}"),
+                            target: "ferron_tls_acme",
+                        },
+                    ));
                 }
             }
         }
@@ -365,11 +420,15 @@ impl ModuleLoader for TlsAcmeModuleLoader {
         &mut self,
         registry: Arc<ferron_core::registry::Registry>,
         modules: &mut Vec<Arc<dyn ferron_core::Module>>,
-        _config: Arc<ferron_core::config::ServerConfiguration>,
+        config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Store the global registry for later resolution of DNS providers
         // from nested dns { } blocks in TLS configurations.
-        GLOBAL_REGISTRY.set(registry).ok();
+        GLOBAL_REGISTRY.set(registry.clone()).ok();
+
+        // Build the composite event sink from observability providers
+        let event_sink = build_composite_sink(&registry, &config.global_config)?;
+        set_event_sink(event_sink);
 
         // Create and cache the module — the actual task spawning happens in start()
         if MODULE_CACHE.get().is_none() {
@@ -447,7 +506,9 @@ mod tests {
 
     #[test]
     fn test_task_state_initialization() {
-        let state = AcmeTaskState::new();
+        let state = AcmeTaskState::new(Arc::new(ferron_observability::CompositeEventSink::new(
+            Vec::new(),
+        )));
         assert!(state.configs.blocking_read().is_empty());
         assert!(state.tls_alpn_01_resolvers.blocking_read().is_empty());
         assert!(state.http_01_resolvers.blocking_read().is_empty());

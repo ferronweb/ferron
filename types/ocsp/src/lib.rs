@@ -29,6 +29,7 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::Context as _;
 use ferron_core::log_warn;
+use ferron_observability::{CompositeEventSink, Event, LogEvent, LogLevel};
 use hyper::body::Bytes;
 use hyper::Request;
 use hyper_util::client::legacy::Client;
@@ -76,6 +77,7 @@ struct GlobalState {
     receiver: std::sync::Mutex<Option<mpsc::UnboundedReceiver<CertifiedKey>>>,
     cache: OcspCache,
     cancel_token: CancellationToken,
+    event_sink: parking_lot::Mutex<Option<Arc<CompositeEventSink>>>,
 }
 
 static GLOBAL_STATE: std::sync::OnceLock<GlobalState> = std::sync::OnceLock::new();
@@ -88,8 +90,18 @@ fn get_or_init_global() -> &'static GlobalState {
             receiver: std::sync::Mutex::new(Some(receiver)),
             cache: Arc::new(RwLock::new(HashMap::new())),
             cancel_token: CancellationToken::new(),
+            event_sink: parking_lot::Mutex::new(None),
         }
     })
+}
+
+/// Set the event sink for the OCSP service. Call before `init_ocsp_service`.
+///
+/// This allows the OCSP background task to emit log events through the
+/// observability system instead of using `log_*` macros directly.
+pub fn set_event_sink(event_sink: Arc<CompositeEventSink>) {
+    let state = get_or_init_global();
+    *state.event_sink.lock() = Some(event_sink);
 }
 
 /// Initialize the OCSP service. Call once during startup.
@@ -114,10 +126,13 @@ pub fn init_ocsp_service(
         .take()
         .ok_or(AlreadyInitialized)?;
 
+    let event_sink = state.event_sink.lock().clone();
+
     runtime.spawn_secondary_task(background_ocsp_task(
         receiver,
         state.cache.clone(),
         state.cancel_token.clone(),
+        event_sink,
     ));
 
     Ok(())
@@ -134,6 +149,7 @@ pub fn get_service_handle() -> Option<OcspServiceHandle> {
         sender: state.sender.clone(),
         cache: state.cache.clone(),
         cancel_token: state.cancel_token.clone(),
+        event_sink: state.event_sink.lock().clone(),
     })
 }
 
@@ -148,6 +164,8 @@ pub struct OcspServiceHandle {
     cache: OcspCache,
     #[allow(dead_code)]
     cancel_token: CancellationToken,
+    #[allow(dead_code)]
+    event_sink: Option<Arc<CompositeEventSink>>,
 }
 
 impl OcspServiceHandle {
@@ -285,6 +303,7 @@ async fn background_ocsp_task(
     mut receiver: mpsc::UnboundedReceiver<CertifiedKey>,
     cache: OcspCache,
     cancel_token: CancellationToken,
+    event_sink: Option<Arc<CompositeEventSink>>,
 ) {
     // Track next-update times per cert
     let mut next_updates: HashMap<Vec<u8>, SystemTime> = HashMap::new();
@@ -348,7 +367,15 @@ async fn background_ocsp_task(
                         next_updates.remove(&key);
                     }
                     Err(e) => {
-                        log_warn!("OCSP fetch failed: {e}");
+                        if let Some(ref sink) = event_sink {
+                            sink.emit(Event::Log(LogEvent {
+                                level: LogLevel::Warn,
+                                message: format!("OCSP fetch failed: {e}"),
+                                target: "ferron_ocsp",
+                            }));
+                        } else {
+                            log_warn!("OCSP fetch failed: {e}");
+                        }
                         // Retry later with randomness to avoid refresh storms
                         let jitter = rand::random_range(100..=500);
                         next_updates.insert(key, now + Duration::from_secs(jitter));

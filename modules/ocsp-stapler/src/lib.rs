@@ -9,9 +9,12 @@
 
 use std::sync::Arc;
 
-use ferron_core::{loader::ModuleLoader, log_debug, Module};
+use ferron_core::{loader::ModuleLoader, log_debug, registry::Registry, Module};
+use ferron_observability::build_composite_sink;
 
-struct OcspStaplerModule;
+struct OcspStaplerModule {
+    event_sink: Arc<ferron_observability::CompositeEventSink>,
+}
 
 impl Module for OcspStaplerModule {
     fn name(&self) -> &str {
@@ -26,6 +29,9 @@ impl Module for OcspStaplerModule {
         &self,
         runtime: &mut ferron_core::runtime::Runtime,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        // Configure the event sink for the OCSP service before initialization
+        ferron_ocsp::set_event_sink(self.event_sink.clone());
+
         match ferron_ocsp::init_ocsp_service(runtime) {
             Ok(()) => log_debug!("OCSP stapling service initialized"),
             Err(ferron_ocsp::AlreadyInitialized) => {
@@ -42,11 +48,13 @@ pub struct OcspStaplerModuleLoader;
 impl ModuleLoader for OcspStaplerModuleLoader {
     fn register_modules(
         &mut self,
-        _registry: Arc<ferron_core::registry::Registry>,
+        registry: Arc<Registry>,
         modules: &mut Vec<Arc<dyn ferron_core::Module>>,
-        _config: Arc<ferron_core::config::ServerConfiguration>,
+        config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        modules.push(Arc::new(OcspStaplerModule));
+        // Build the composite event sink from observability providers
+        let event_sink = build_composite_sink(&registry, &config.global_config)?;
+        modules.push(Arc::new(OcspStaplerModule { event_sink }));
         Ok(())
     }
 }
