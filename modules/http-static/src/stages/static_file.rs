@@ -72,7 +72,7 @@ impl Stage<HttpFileContext> for StaticFileStage {
         if method == Method::OPTIONS {
             let res = Response::builder()
                 .status(StatusCode::NO_CONTENT)
-                .header(header::ALLOW, "GET, HEAD, OPTIONS")
+                .header(header::ALLOW, "GET, HEAD, POST, OPTIONS")
                 .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
                 .expect("failed to build OPTIONS response");
             ctx.http.req = Some(request);
@@ -81,11 +81,11 @@ impl Stage<HttpFileContext> for StaticFileStage {
         }
 
         // Only handle GET and HEAD
-        if method != Method::GET && method != Method::HEAD {
+        if method != Method::GET && method != Method::HEAD && method != Method::POST {
             let mut allow_headers = http::HeaderMap::new();
             allow_headers.insert(
                 header::ALLOW,
-                HeaderValue::from_static("GET, HEAD, OPTIONS"),
+                HeaderValue::from_static("GET, HEAD, POST, OPTIONS"),
             );
             ctx.http.req = Some(request);
             ctx.http.res = Some(HttpResponse::BuiltinError(405, Some(allow_headers)));

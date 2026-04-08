@@ -10,7 +10,7 @@ use ferron_core::StageConstraint;
 use ferron_http::format_page;
 use ferron_http::util::anti_xss::anti_xss;
 use ferron_http::{HttpFileContext, HttpResponse};
-use http::header;
+use http::{header, HeaderValue};
 use http::{Method, Response, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
 
@@ -50,6 +50,32 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
         if ctx.path_info.is_some() || !ctx.metadata.is_dir() {
             ctx.http.req = Some(request);
             return Ok(true);
+        }
+
+        let method = request.method().clone();
+
+        // Handle OPTIONS
+        if method == Method::OPTIONS {
+            let res = Response::builder()
+                .status(StatusCode::NO_CONTENT)
+                .header(header::ALLOW, "GET, HEAD, POST, OPTIONS")
+                .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
+                .expect("failed to build OPTIONS response");
+            ctx.http.req = Some(request);
+            ctx.http.res = Some(HttpResponse::Custom(res));
+            return Ok(false);
+        }
+
+        // Only handle GET and HEAD
+        if method != Method::GET && method != Method::HEAD && method != Method::POST {
+            let mut allow_headers = http::HeaderMap::new();
+            allow_headers.insert(
+                header::ALLOW,
+                HeaderValue::from_static("GET, HEAD, POST, OPTIONS"),
+            );
+            ctx.http.req = Some(request);
+            ctx.http.res = Some(HttpResponse::BuiltinError(405, Some(allow_headers)));
+            return Ok(false);
         }
 
         // Check if directory listing is enabled
