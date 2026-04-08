@@ -231,16 +231,18 @@ impl<C> StageRegistry<C> {
                         // This stage must come before 'other'
                         // Edge: this -> other
                         if let Some(&other_idx) = name_to_idx.get(other.as_str()) {
-                            graph.entry(i).or_default().insert(other_idx);
-                            *in_degree.entry(other_idx).or_insert(0) += 1;
+                            if graph.entry(i).or_default().insert(other_idx) {
+                                *in_degree.entry(other_idx).or_insert(0) += 1;
+                            }
                         }
                     }
                     StageConstraint::After(other) => {
                         // This stage must come after 'other'
                         // Edge: other -> this
                         if let Some(&other_idx) = name_to_idx.get(other.as_str()) {
-                            graph.entry(other_idx).or_default().insert(i);
-                            *in_degree.entry(i).or_insert(0) += 1;
+                            if graph.entry(other_idx).or_default().insert(i) {
+                                *in_degree.entry(i).or_insert(0) += 1;
+                            }
                         }
                     }
                 }
@@ -277,9 +279,13 @@ impl<C> StageRegistry<C> {
             }
         }
 
-        // Check for cycles - fall back to registration order
+        // Check for cycles - panic if there are
         if result.len() != stage_instances.len() {
-            stages.iter().map(|e| e.factory.clone()).collect()
+            panic!(
+                "Cycle detected in pipeline stages. This may be caused by a \
+                constraints conflict between two or more stages. Try compiling \
+                Ferron with some conflicting modules disabled."
+            );
         } else {
             result
                 .into_iter()
