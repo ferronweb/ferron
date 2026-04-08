@@ -45,7 +45,7 @@ futures-util = { version = "0.3.31", features = ["sink"] }
 pin-project-lite = "0.2.16"
 tokio-util = { version = "0.7.15", features = ["compat"] }
 vibeio = { version = "0.2.5", optional = true }
-vibeio-hyper = { version = "0.2.5", optional = true }
+vibeio-hyper = { version = "0.2.7", optional = true }
 
 
 # Process & System Integration

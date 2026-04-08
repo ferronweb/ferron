@@ -4814,9 +4814,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vibeio"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d5b44e953b7f31cd083e16b3350234b6723c4ca4a70a522821ba8e7fffea16b"
+checksum = "388fef37de48f0eaeb9212ba7d7bfa0be13f3834bbadb29bbd7b7f9c778ace44"
 dependencies = [
  "async-channel",
  "crossbeam-queue",
@@ -4859,9 +4859,9 @@ dependencies = [
 
 [[package]]
 name = "vibeio-hyper"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "486e9abe87a9cd3a8a9a1bd6888b4a6c7a582624c0e9d149a709e94fa5b63f11"
+checksum = "e11a4414b263f0c506cf8cc3b52505e00e029e6c84b11ad5eeb61e61ef09b663"
 dependencies = [
  "hyper",
  "tokio",
