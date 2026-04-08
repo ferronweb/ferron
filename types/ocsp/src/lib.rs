@@ -475,7 +475,7 @@ async fn fetch_ocsp_response_inner(
     }
 
     let next_update =
-        min_next_update.unwrap_or_else(|| SystemTime::now() + Duration::from_hours(12));
+        min_next_update.unwrap_or_else(|| SystemTime::now() + Duration::from_secs(43200));
     Ok(Some((response_der, next_update)))
 }
 
