@@ -2,3 +2,6 @@
 /ferron.conf
 /access.log
 /error.log
+
+# TODO: this is a temporary ignore
+/ferron
