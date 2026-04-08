@@ -51,7 +51,7 @@ struct RequestHandlerState {
     /// Pre-normalized hostname from TLS SNI (available for per-request Host header overrides).
     hinted_hostname: Option<String>,
     encrypted: bool,
-    https_port: u16,
+    https_port: Option<u16>,
 }
 
 // Type alias for the config ArcSwap
@@ -518,7 +518,7 @@ async fn handle_http1_connection<S>(
     local_address: SocketAddr,
     hinted_hostname: Option<String>,
     encrypted: bool,
-    https_port: u16,
+    https_port: Option<u16>,
     connection_options: HttpConnectionOptions,
     observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
     connection_observability: CompositeEventSink,
@@ -577,7 +577,7 @@ async fn handle_http2_connection<S>(
     local_address: SocketAddr,
     hinted_hostname: Option<String>,
     encrypted: bool,
-    https_port: u16,
+    https_port: Option<u16>,
     connection_options: HttpConnectionOptions,
     observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
     connection_observability: CompositeEventSink,
@@ -685,7 +685,7 @@ fn build_request_handler(
                 state.remote_address,
                 hostname,
                 state.encrypted,
-                Some(state.https_port),
+                state.https_port,
                 request_observability,
             )
             .await

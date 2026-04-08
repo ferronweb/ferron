@@ -15,10 +15,10 @@ This page documents directives that belong in top-level global blocks:
 
 ### Default ports
 
-- `default_http_port <port: integer>`
-  - This directive specifies the default HTTP port when no port is specified in a host block. Must be a positive integer ≤ 65535. Default: `default_http_port 80`
-- `default_https_port <port: integer>`
-  - This directive specifies the default HTTPS port used for HTTP-to-HTTPS redirects and URL generation. Must be a positive integer ≤ 65535. Default: `default_https_port 443`
+- `default_http_port <port: integer | false>`
+  - This directive specifies the default HTTP port when no port is specified in a host block. Must be a positive integer ≤ 65535, or `false` to disable the default HTTP listener entirely. Default: `default_http_port 80`
+- `default_https_port <port: integer | false>`
+  - This directive specifies the default HTTPS port used for HTTP-to-HTTPS redirects and URL generation. Must be a positive integer ≤ 65535, or `false` to disable the default HTTPS listener entirely. Default: `default_https_port 443`
 
 **Configuration example:**
 
@@ -33,6 +33,26 @@ Notes:
 
 - When no explicit port is specified for a host, Ferron starts both an HTTP listener on `default_http_port` and an HTTPS listener on `default_https_port`.
 - The redirect stage constructs `https://` URLs using this port (omitting it when the value is `443`).
+- Setting `default_http_port false` disables the automatic HTTP listener for hosts without explicit ports.
+- Setting `default_https_port false` disables the automatic HTTPS listener and HTTP-to-HTTPS redirects for hosts without explicit ports.
+- If **both** directives are set to `false`, host blocks without explicit ports will not create any listeners and a warning is logged.
+
+**Disable default HTTP listener (HTTPS only):**
+
+```ferron
+{
+    default_http_port false
+}
+```
+
+**Disable both default listeners (only explicit ports work):**
+
+```ferron
+{
+    default_http_port false
+    default_https_port false
+}
+```
 
 ### Runtime
 

@@ -25,29 +25,54 @@ fn is_localhost_host(hostname: &str) -> bool {
 }
 
 /// Resolve the default HTTP port from global configuration.
-fn resolve_default_http_port(config: &ferron_core::config::ServerConfiguration) -> u16 {
-    config
+/// Returns `None` if `default_http_port false` is set.
+fn resolve_default_http_port(config: &ferron_core::config::ServerConfiguration) -> Option<u16> {
+    match config
         .global_config
         .directives
         .get("default_http_port")
         .and_then(|entries| entries.first())
         .and_then(|entry| entry.args.first())
-        .and_then(|v| v.as_number())
-        .and_then(|n| u16::try_from(n).ok())
-        .unwrap_or(DEFAULT_HTTP_PORT)
+    {
+        Some(v) => {
+            if let Some(b) = v.as_boolean() {
+                // `false` means disabled, `true` would be odd but use default
+                if b {
+                    Some(DEFAULT_HTTP_PORT)
+                } else {
+                    None
+                }
+            } else {
+                v.as_number().and_then(|n| u16::try_from(n).ok())
+            }
+        }
+        None => Some(DEFAULT_HTTP_PORT),
+    }
 }
 
 /// Resolve the default HTTPS port from global configuration.
-fn resolve_default_https_port(config: &ferron_core::config::ServerConfiguration) -> u16 {
-    config
+/// Returns `None` if `default_https_port false` is set.
+fn resolve_default_https_port(config: &ferron_core::config::ServerConfiguration) -> Option<u16> {
+    match config
         .global_config
         .directives
         .get("default_https_port")
         .and_then(|entries| entries.first())
         .and_then(|entry| entry.args.first())
-        .and_then(|v| v.as_number())
-        .and_then(|n| u16::try_from(n).ok())
-        .unwrap_or(DEFAULT_HTTPS_PORT)
+    {
+        Some(v) => {
+            if let Some(b) = v.as_boolean() {
+                if b {
+                    Some(DEFAULT_HTTPS_PORT)
+                } else {
+                    None
+                }
+            } else {
+                v.as_number().and_then(|n| u16::try_from(n).ok())
+            }
+        }
+        None => Some(DEFAULT_HTTPS_PORT),
+    }
 }
 
 #[derive(Default)]
@@ -68,29 +93,32 @@ impl ModuleLoader for BasicHttpModuleLoader {
         let mut blocks = Vec::new();
         if let Some(ports) = config.ports.get("http") {
             for port in ports {
+                // Skip host blocks that won't create any listeners
+                let effective_port = port.port.or(default_port);
+                if effective_port.is_none() {
+                    // Both defaults disabled and no explicit port — skip
+                    continue;
+                }
+
                 for (filters, host) in &port.hosts {
                     // Build descriptive block name based on filters
                     let block_name = match (&filters.host, &filters.ip) {
                         (Some(hostname), Some(ip)) => {
                             format!(
                                 "port {} host {} ip {}",
-                                port.port.unwrap_or(default_port),
+                                effective_port.unwrap(),
                                 hostname,
                                 ip
                             )
                         }
                         (Some(hostname), None) => {
-                            format!(
-                                "port {} host {}",
-                                port.port.unwrap_or(default_port),
-                                hostname
-                            )
+                            format!("port {} host {}", effective_port.unwrap(), hostname)
                         }
                         (None, Some(ip)) => {
-                            format!("port {} ip {}", port.port.unwrap_or(default_port), ip)
+                            format!("port {} ip {}", effective_port.unwrap(), ip)
                         }
                         (None, None) => {
-                            format!("port {}", port.port.unwrap_or(default_port))
+                            format!("port {}", effective_port.unwrap())
                         }
                     };
                     blocks.push((block_name, host));
@@ -140,14 +168,14 @@ impl ModuleLoader for BasicHttpModuleLoader {
             let default_https = resolve_default_https_port(&config);
 
             // Expand port configs: when no port is specified, create both HTTP and HTTPS
-            // entries.  Localhost-like hostnames are excluded from the HTTPS listener.
+            // entries. Localhost-like hostnames are excluded from the HTTPS listener.
             let mut expanded: Vec<ServerConfigurationPort> = Vec::new();
             for port_config in &port_configs {
                 if port_config.port.is_some() {
                     // Explicit port — use as-is (no automatic TLS expansion)
                     expanded.push(port_config.clone());
                 } else {
-                    // Split hosts: localhost hosts go only to HTTP, others go to both.
+                    // No explicit port — expand based on default port settings
                     let mut http_hosts = Vec::new();
                     let mut https_hosts = Vec::new();
 
@@ -159,20 +187,31 @@ impl ModuleLoader for BasicHttpModuleLoader {
                         }
                     }
 
-                    // HTTP listener gets all hosts (including localhost)
-                    if !http_hosts.is_empty() {
-                        let mut http_config = port_config.clone();
-                        http_config.port = Some(default_port);
-                        http_config.hosts = http_hosts;
-                        expanded.push(http_config);
+                    // HTTP listener gets all hosts (including localhost) — only if default HTTP port is enabled
+                    if let Some(http_port) = default_port {
+                        if !http_hosts.is_empty() {
+                            let mut http_config = port_config.clone();
+                            http_config.port = Some(http_port);
+                            http_config.hosts = http_hosts;
+                            expanded.push(http_config);
+                        }
                     }
 
-                    // HTTPS listener only gets non-localhost hosts
-                    if !https_hosts.is_empty() {
-                        let mut https_config = port_config.clone();
-                        https_config.port = Some(default_https);
-                        https_config.hosts = https_hosts;
-                        expanded.push(https_config);
+                    // HTTPS listener only gets non-localhost hosts — only if default HTTPS port is enabled
+                    if let Some(https_port) = default_https {
+                        if !https_hosts.is_empty() {
+                            let mut https_config = port_config.clone();
+                            https_config.port = Some(https_port);
+                            https_config.hosts = https_hosts;
+                            expanded.push(https_config);
+                        }
+                    }
+
+                    // Warn if neither default is enabled and no explicit port was set
+                    if default_port.is_none() && default_https.is_none() {
+                        ferron_core::log_warn!(
+                            "Host block without explicit port will be skipped because both default_http_port and default_https_port are disabled"
+                        );
                     }
                 }
             }
@@ -224,11 +263,12 @@ impl ModuleLoader for BasicHttpModuleLoader {
                 // use the HTTPS default so redirects target the HTTPS listener.
                 // For explicit port configs (single listener), set it equal to the listener
                 // port so the redirect stage skips (no separate HTTPS listener exists).
+                // If default_https_port is false, set to None to disable redirects.
                 let is_explicit_port = port_configs.iter().any(|pc| pc.port == Some(port));
                 let https_port = if is_explicit_port {
-                    port // Same port → redirect stage will skip
+                    Some(port) // Same port → redirect stage will skip
                 } else {
-                    default_https
+                    default_https // May be None if default_https_port false
                 };
 
                 if let Some(cached) = self.cache.get(&port) {
@@ -255,5 +295,247 @@ impl ModuleLoader for BasicHttpModuleLoader {
         }
         self.cache = new_cache;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferron_core::config::{
+        ServerConfiguration, ServerConfigurationBlock, ServerConfigurationDirectiveEntry,
+        ServerConfigurationHostFilters, ServerConfigurationPort, ServerConfigurationValue,
+    };
+    use std::collections::BTreeMap;
+    use std::collections::HashMap as StdHashMap;
+    use std::sync::Arc;
+
+    fn make_config_with_directives(
+        directives: StdHashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
+        ports: BTreeMap<String, Vec<ServerConfigurationPort>>,
+    ) -> Arc<ServerConfiguration> {
+        Arc::new(ServerConfiguration {
+            global_config: Arc::new(ServerConfigurationBlock {
+                directives: Arc::new(directives),
+                matchers: StdHashMap::new(),
+                span: None,
+            }),
+            ports,
+        })
+    }
+
+    fn make_host_block(
+        hostname: Option<&str>,
+        directives: StdHashMap<String, Vec<ServerConfigurationDirectiveEntry>>,
+    ) -> (ServerConfigurationHostFilters, ServerConfigurationBlock) {
+        let filters = ServerConfigurationHostFilters {
+            host: hostname.map(|s| s.to_string()),
+            ip: None,
+        };
+        let block = ServerConfigurationBlock {
+            directives: Arc::new(directives),
+            matchers: StdHashMap::new(),
+            span: None,
+        };
+        (filters, block)
+    }
+
+    #[test]
+    fn test_resolve_default_http_port_number() {
+        let mut directives = StdHashMap::new();
+        directives.insert(
+            "default_http_port".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::Number(8080, None)],
+                children: None,
+                span: None,
+            }],
+        );
+        let config = make_config_with_directives(directives, BTreeMap::new());
+        assert_eq!(resolve_default_http_port(&config), Some(8080));
+    }
+
+    #[test]
+    fn test_resolve_default_http_port_false() {
+        let mut directives = StdHashMap::new();
+        directives.insert(
+            "default_http_port".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::Boolean(false, None)],
+                children: None,
+                span: None,
+            }],
+        );
+        let config = make_config_with_directives(directives, BTreeMap::new());
+        assert_eq!(resolve_default_http_port(&config), None);
+    }
+
+    #[test]
+    fn test_resolve_default_http_port_true() {
+        let mut directives = StdHashMap::new();
+        directives.insert(
+            "default_http_port".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::Boolean(true, None)],
+                children: None,
+                span: None,
+            }],
+        );
+        let config = make_config_with_directives(directives, BTreeMap::new());
+        assert_eq!(resolve_default_http_port(&config), Some(DEFAULT_HTTP_PORT));
+    }
+
+    #[test]
+    fn test_resolve_default_http_port_missing() {
+        let config = make_config_with_directives(StdHashMap::new(), BTreeMap::new());
+        assert_eq!(resolve_default_http_port(&config), Some(DEFAULT_HTTP_PORT));
+    }
+
+    #[test]
+    fn test_resolve_default_https_port_number() {
+        let mut directives = StdHashMap::new();
+        directives.insert(
+            "default_https_port".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::Number(8443, None)],
+                children: None,
+                span: None,
+            }],
+        );
+        let config = make_config_with_directives(directives, BTreeMap::new());
+        assert_eq!(resolve_default_https_port(&config), Some(8443));
+    }
+
+    #[test]
+    fn test_resolve_default_https_port_false() {
+        let mut directives = StdHashMap::new();
+        directives.insert(
+            "default_https_port".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::Boolean(false, None)],
+                children: None,
+                span: None,
+            }],
+        );
+        let config = make_config_with_directives(directives, BTreeMap::new());
+        assert_eq!(resolve_default_https_port(&config), None);
+    }
+
+    #[test]
+    fn test_register_blocks_with_disabled_defaults() {
+        // Test that host blocks without explicit ports are skipped when both defaults are false
+        let mut directives = StdHashMap::new();
+        directives.insert(
+            "default_http_port".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::Boolean(false, None)],
+                children: None,
+                span: None,
+            }],
+        );
+        directives.insert(
+            "default_https_port".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::Boolean(false, None)],
+                children: None,
+                span: None,
+            }],
+        );
+
+        let mut ports = BTreeMap::new();
+        let host = make_host_block(Some("example.com"), StdHashMap::new());
+        ports.insert(
+            "http".to_string(),
+            vec![ServerConfigurationPort {
+                port: None,
+                hosts: vec![host],
+            }],
+        );
+
+        let config = make_config_with_directives(directives, ports);
+        let mut loader = BasicHttpModuleLoader::default();
+        let mut registry = StdHashMap::new();
+
+        loader.register_per_protocol_configuration_blocks(&config, &mut registry);
+
+        // Should be empty because both defaults are disabled and no explicit port
+        assert!(registry.is_empty() || registry.get("http").is_none_or(|v| v.is_empty()));
+    }
+
+    #[test]
+    fn test_register_blocks_with_explicit_port_and_disabled_defaults() {
+        // Test that explicit ports still work when defaults are disabled
+        let mut directives = StdHashMap::new();
+        directives.insert(
+            "default_http_port".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::Boolean(false, None)],
+                children: None,
+                span: None,
+            }],
+        );
+        directives.insert(
+            "default_https_port".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::Boolean(false, None)],
+                children: None,
+                span: None,
+            }],
+        );
+
+        let mut ports = BTreeMap::new();
+        let host = make_host_block(Some("example.com"), StdHashMap::new());
+        ports.insert(
+            "http".to_string(),
+            vec![ServerConfigurationPort {
+                port: Some(9090),
+                hosts: vec![host],
+            }],
+        );
+
+        let config = make_config_with_directives(directives, ports);
+        let mut loader = BasicHttpModuleLoader::default();
+        let mut registry = StdHashMap::new();
+
+        loader.register_per_protocol_configuration_blocks(&config, &mut registry);
+
+        // Should have one block for the explicit port
+        let blocks = registry.get("http").expect("http key should exist");
+        assert_eq!(blocks.len(), 1);
+        assert!(blocks[0].0.contains("port 9090"));
+    }
+
+    #[test]
+    fn test_register_blocks_with_http_enabled_https_disabled() {
+        // Test that only HTTP listener is created when HTTPS is disabled
+        let mut directives = StdHashMap::new();
+        directives.insert(
+            "default_https_port".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::Boolean(false, None)],
+                children: None,
+                span: None,
+            }],
+        );
+
+        let mut ports = BTreeMap::new();
+        let host = make_host_block(Some("example.com"), StdHashMap::new());
+        ports.insert(
+            "http".to_string(),
+            vec![ServerConfigurationPort {
+                port: None,
+                hosts: vec![host],
+            }],
+        );
+
+        let config = make_config_with_directives(directives, ports);
+        let mut loader = BasicHttpModuleLoader::default();
+        let mut registry = StdHashMap::new();
+
+        loader.register_per_protocol_configuration_blocks(&config, &mut registry);
+
+        // Should have one block for HTTP on default port 80
+        let blocks = registry.get("http").expect("http key should exist");
+        assert_eq!(blocks.len(), 1);
+        assert!(blocks[0].0.contains("port 80"));
     }
 }

@@ -45,7 +45,8 @@ pub struct HttpServerConfig {
     pub reload_token: CancellationToken,
     /// The canonical HTTPS port for this server (default: 443).
     /// Used for HTTP-to-HTTPS redirects and URL generation.
-    pub https_port: u16,
+    /// `None` if HTTPS is disabled or not applicable for this listener.
+    pub https_port: Option<u16>,
 }
 
 type ConfigArcSwap = Arc<ArcSwap<HttpServerConfig>>;
@@ -229,7 +230,7 @@ impl BasicHttpModule {
         registry: &ferron_core::registry::Registry,
         port_config: &ferron_core::config::ServerConfigurationPort,
         global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
-        https_port: u16,
+        https_port: Option<u16>,
     ) -> Result<HttpServerConfig, Box<dyn std::error::Error>> {
         let mut enable_tls = false;
         let mut http_connection_options_resolver = RadixTree::new();
@@ -306,7 +307,7 @@ impl BasicHttpModule {
             // Only process TLS directives on the HTTPS listener.
             // The plaintext HTTP listener (port != https_port) ignores all `tls` directives,
             // including explicit configurations and automatic ACME.
-            if port_config.port == Some(https_port) {
+            if https_port.is_some() && port_config.port == https_port {
                 if let Some(tls) = host_config.1.directives.get("tls") {
                     for tls1 in tls {
                         // Handle explicit `tls false` — skip TLS entirely
@@ -587,7 +588,7 @@ impl BasicHttpModule {
         port_config: ferron_core::config::ServerConfigurationPort,
         global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
         port: u16,
-        https_port: u16,
+        https_port: Option<u16>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let config = Self::build_config(registry, &port_config, global_config, https_port)?;
         Ok(Self {
@@ -605,7 +606,7 @@ impl BasicHttpModule {
         registry: &ferron_core::registry::Registry,
         port_config: ferron_core::config::ServerConfigurationPort,
         global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
-        https_port: u16,
+        https_port: Option<u16>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Cancel the old reload token to trigger graceful shutdown of existing connections
         let old_config = self.config.load();

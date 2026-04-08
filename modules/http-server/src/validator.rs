@@ -13,10 +13,12 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         if is_global {
             validate_directive!(config, used_directives, default_http_port, optional args(1) => [
                 ServerConfigurationValue::Number(_, _)
+                    | ServerConfigurationValue::Boolean(_, _)
             ], {});
 
             validate_directive!(config, used_directives, default_https_port, optional args(1) => [
                 ServerConfigurationValue::Number(_, _)
+                    | ServerConfigurationValue::Boolean(_, _)
             ], {});
         }
 
