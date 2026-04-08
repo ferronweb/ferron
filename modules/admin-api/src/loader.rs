@@ -3,7 +3,7 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
-use ferron_admin::ADMIN_METRICS;
+use ferron_core::admin::ADMIN_METRICS;
 use ferron_core::loader::ModuleLoader;
 
 use crate::config::AdminConfig;

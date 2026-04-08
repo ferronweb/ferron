@@ -93,6 +93,9 @@ pub enum Commands {
         #[command(subcommand)]
         subcommand: WinServiceCommands,
     },
+    /// Prints version and build information
+    #[command(name = "version")]
+    Version,
 }
 
 #[cfg(windows)]

@@ -584,7 +584,7 @@ async fn request_handler_inner(
     Option<SocketAddr>,
 ) {
     // Increment request counter for admin API /status endpoint
-    ferron_admin::ADMIN_METRICS
+    ferron_core::admin::ADMIN_METRICS
         .requests_total
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 

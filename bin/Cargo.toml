@@ -10,9 +10,10 @@ serde_json = "1"
 tokio-util = "0.7.18"
 anyhow = "1.0.102"
 malloc-best-effort = "0.1.4"
+backtrace = "0.3.76"
+shadow-rs = { version = "1.2.0", default-features = false }
 
 ferron-core = { path = "../core" }
-ferron-admin = { path = "../types/admin" }
 
 ferron-http-server = { path = "../modules/http-server" }
 ferron-http-static = { path = "../modules/http-static" }
@@ -43,3 +44,9 @@ windows-service = "0.8"
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["fs", "signal", "process"] }
 signal-hook = "0.4"
+
+[build-dependencies]
+winresource = "0.1.19"
+shadow-rs = { version = "1.2.0", default-features = false, features = [
+    "build",
+] }

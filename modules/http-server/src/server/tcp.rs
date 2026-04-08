@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
-use ferron_admin::ADMIN_METRICS;
+use ferron_core::admin::ADMIN_METRICS;
 use ferron_core::pipeline::Pipeline;
 use ferron_core::providers::Provider;
 use ferron_core::runtime::Runtime;

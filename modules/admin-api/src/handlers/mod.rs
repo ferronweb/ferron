@@ -1,10 +1,13 @@
 //! Admin API axum handlers.
 
 mod config;
+mod status;
 
 use axum::extract::State;
 use axum::http::StatusCode;
 use ferron_core::config::ServerConfiguration;
+
+use self::status::StatusResponse;
 
 /// Shared state passed to all admin handlers via axum `State` extractor.
 #[derive(Clone)]
@@ -25,7 +28,7 @@ pub async fn health_handler(State(_state): State<AdminState>) -> (StatusCode, &'
 
 /// `GET /status` — returns JSON with uptime, connection counts, and reload stats.
 pub async fn status_handler(State(_state): State<AdminState>) -> axum::Json<serde_json::Value> {
-    let metrics = ferron_admin::StatusResponse::from_global();
+    let metrics = StatusResponse::from_global();
     axum::Json(serde_json::json!({
         "uptime_sec": metrics.uptime_sec,
         "connections_active": metrics.connections_active,

@@ -1,11 +1,13 @@
+mod cli;
+#[cfg(unix)]
+mod daemon;
+mod panic;
+mod service;
+
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use clap::Parser;
-use ferron_admin_api::AdminApiModuleLoader;
-use ferron_config_ferronconf::FerronConfConfigurationAdapterModuleLoader;
-use ferron_config_json::JsonConfigurationAdapterModuleLoader;
-use ferron_core::builtin::BuiltinModuleLoader;
 use ferron_core::config::adapter::ConfigurationAdapter;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::loader::ModuleLoader;
@@ -14,6 +16,12 @@ use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_core::{log_debug, log_info, log_warn};
+use malloc_best_effort::BEMalloc;
+
+use ferron_admin_api::AdminApiModuleLoader;
+use ferron_config_ferronconf::FerronConfConfigurationAdapterModuleLoader;
+use ferron_config_json::JsonConfigurationAdapterModuleLoader;
+use ferron_core::builtin::BuiltinModuleLoader;
 use ferron_http_basicauth::HttpBasicAuthModuleLoader;
 use ferron_http_compression::HttpCompressionModuleLoader;
 use ferron_http_fproxy::ForwardProxyModuleLoader;
@@ -24,33 +32,30 @@ use ferron_http_response::HttpResponseModuleLoader;
 use ferron_http_rewrite::HttpRewriteModuleLoader;
 use ferron_http_server::BasicHttpModuleLoader;
 use ferron_http_static::StaticFileModuleLoader;
+use ferron_observability_consolelog::ConsoleObservabilityModuleLoader;
 use ferron_observability_format_json::JsonFormatObservabilityModuleLoader;
 use ferron_observability_format_text::TextFormatObservabilityModuleLoader;
 use ferron_observability_logfile::LogFileObservabilityModuleLoader;
-use ferron_tls_acme::TlsAcmeModuleLoader;
-use malloc_best_effort::BEMalloc;
-
-mod cli;
-mod service;
-
-#[cfg(unix)]
-mod daemon;
-
-use cli::{parse_config_params, Cli, Commands};
-
-#[cfg(windows)]
-use cli::WinServiceCommands;
-use ferron_observability_consolelog::ConsoleObservabilityModuleLoader;
 use ferron_observability_otlp::OtlpObservabilityModuleLoader;
 use ferron_observability_process_metrics::ProcessMetricsModuleLoader;
 use ferron_ocsp_stapler::OcspStaplerModuleLoader;
+use ferron_tls_acme::TlsAcmeModuleLoader;
 use ferron_tls_manual::TlsManualModuleLoader;
+
+#[cfg(windows)]
+use crate::cli::WinServiceCommands;
+use crate::cli::{parse_config_params, Cli, Commands};
+use crate::panic::install_panic_hook;
 
 #[global_allocator]
 static GLOBAL: BEMalloc = BEMalloc::new();
 
+shadow_rs::shadow!(build);
+
 fn main() {
     BEMalloc::init();
+
+    install_panic_hook();
 
     if let Err(e) = main_inner() {
         if !ferron_core::logging::is_init() {
@@ -114,6 +119,9 @@ fn main_inner() -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(windows)]
         Commands::WinService { subcommand } => {
             winservice(subcommand)?;
+        }
+        Commands::Version => {
+            print_version();
         }
     }
 
@@ -663,10 +671,22 @@ fn load_modules(
             return Ok(());
         } else {
             // Increment reload counter for admin API /status endpoint
-            ferron_admin::ADMIN_METRICS
+            ferron_core::admin::ADMIN_METRICS
                 .reloads
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             log_info!("Reloading configuration...");
         }
+    }
+}
+
+fn print_version() {
+    println!("Ferron {}", build::PKG_VERSION);
+    println!("  Compiled on: {}", build::BUILD_TIME);
+    println!("  Git commit: {}", build::COMMIT_HASH);
+    println!("  Build target: {}", build::BUILD_TARGET);
+    println!("  Rust version: {}", build::RUST_VERSION);
+    println!("  Build host: {}", build::BUILD_OS);
+    if shadow_rs::is_debug() {
+        println!("WARNING: This is a debug build. It is not recommended for production use.");
     }
 }

@@ -8,9 +8,11 @@
 //! - Logging with Windows Event Log and stdio backends
 //! - Runtime management with primary and secondary task execution
 //! - Utility functions for common operations (e.g., duration parsing)
+//! - Atomic admin metric counter
 
 #[macro_use]
 pub mod config;
+pub mod admin;
 pub mod builtin;
 pub mod loader;
 pub mod logging;

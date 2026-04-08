@@ -11,4 +11,3 @@ tokio-util = "0.7"
 arc-swap = "1.7"
 
 ferron-core = { path = "../../core" }
-ferron-admin = { path = "../../types/admin" }
