@@ -708,6 +708,25 @@ async fn request_handler_inner(
         );
     };
 
+    // Handle OPTIONS * requests (RFC 2616 Section 9.2)
+    // Early response before pipeline execution
+    if is_options_star_request(&request) {
+        let allow_header = resolution
+            .configuration
+            .get_value("options_allowed_methods", false)
+            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+            .unwrap_or_else(|| "GET, HEAD, POST, OPTIONS".to_string());
+
+        let response = Response::builder()
+            .status(200)
+            .header("Allow", &allow_header)
+            .header("Content-Length", "0")
+            .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
+            .expect("failed to build OPTIONS * response");
+
+        return (Ok(response), None, None);
+    }
+
     let request_uri = request.uri().clone();
     let (request_parts, body) = request.into_parts();
     let cloned_request = http::Request::from_parts(
@@ -1521,6 +1540,12 @@ fn sanitize_request_url(
     Ok(())
 }
 
+/// Check if this is an OPTIONS * request (server-wide OPTIONS per RFC 2616 Section 9.2)
+#[inline]
+fn is_options_star_request(request: &HttpRequest) -> bool {
+    request.method() == http::Method::OPTIONS && request.uri().path() == "*"
+}
+
 fn build_resolver_request(request: &HttpRequest) -> Result<HttpRequest, io::Error> {
     let mut builder = http::Request::builder()
         .method(request.method().clone())
@@ -1704,5 +1729,49 @@ mod tests {
             .expect_err("symlink escape should be rejected");
 
         assert!(matches!(error, FilePipelineExecutionError::Forbidden));
+    }
+
+    #[test]
+    fn is_options_star_request_detects_asterisk_options() {
+        let request = http::Request::builder()
+            .method(http::Method::OPTIONS)
+            .uri("*")
+            .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
+            .expect("valid request");
+
+        assert!(is_options_star_request(&request));
+    }
+
+    #[test]
+    fn is_options_star_request_rejects_other_methods() {
+        let request = http::Request::builder()
+            .method(http::Method::GET)
+            .uri("*")
+            .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
+            .expect("valid request");
+
+        assert!(!is_options_star_request(&request));
+    }
+
+    #[test]
+    fn is_options_star_request_rejects_other_paths() {
+        let request = http::Request::builder()
+            .method(http::Method::OPTIONS)
+            .uri("/path")
+            .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
+            .expect("valid request");
+
+        assert!(!is_options_star_request(&request));
+    }
+
+    #[test]
+    fn is_options_star_request_rejects_empty_path() {
+        let request = http::Request::builder()
+            .method(http::Method::OPTIONS)
+            .uri("/")
+            .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
+            .expect("valid request");
+
+        assert!(!is_options_star_request(&request));
     }
 }

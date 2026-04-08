@@ -45,6 +45,12 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         validate_directive!(config, used_directives, http, no_args, {
             validate_nested!(http, protocols, args(*) => [ServerConfigurationValue::String(_, _)]);
 
+            // OPTIONS * allowed methods
+            validate_nested!(http, options_allowed_methods, args(1) => [
+                ServerConfigurationValue::String(_, _)
+                    | ServerConfigurationValue::InterpolatedString(_, _)
+            ]);
+
             // Timeout
             validate_nested!(http, timeout, args(1) => [
                 ServerConfigurationValue::Number(_, _)

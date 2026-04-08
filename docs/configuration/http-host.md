@@ -107,6 +107,8 @@ Reads the `Forwarded` header and extracts the first `for=` token. Both quoted an
 
 - `protocols <protocols: string>...`
   - This directive specifies the enabled HTTP protocols. Currently supported values are `h1` and `h2`. Default: `protocols h1 h2`
+- `options_allowed_methods <methods: string>`
+  - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests (per RFC 2616 Section 9.2). The methods are returned as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not resource-specific `OPTIONS /path` requests. Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`
 - `timeout <duration>`
   - This directive specifies the pipeline execution timeout. Accepts a duration string (e.g. `30m`, `1h`, `90s`), a number in milliseconds, or `false` to disable. Default: `timeout 300000` (5 minutes)
 - `h1_enable_early_hints <bool>`
@@ -128,6 +130,7 @@ Reads the `Forwarded` header and extracts the first `for=` token. Both quoted an
 example.com {
     http {
         protocols h1 h2
+        options_allowed_methods "GET, HEAD, POST, PUT, DELETE, OPTIONS"
         timeout 30m
         h1_enable_early_hints false
     }
@@ -138,6 +141,7 @@ Notes:
 
 - `protocols` must leave at least one supported protocol enabled.
 - `h3` is currently rejected.
+- The default `options_allowed_methods` value (`GET, HEAD, POST, OPTIONS`) intentionally excludes methods like `PUT`, `DELETE`, `PATCH`, `CONNECT`, and `TRACE` to reduce the attack surface reported by security scanners. You can customize this list based on your server's requirements.
 
 ### TLS
 
