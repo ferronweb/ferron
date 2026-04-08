@@ -1,7 +1,7 @@
 //! HTTP response control module.
 //!
 //! Provides directives for returning custom status codes, aborting connections,
-//! and IP-based access control.
+//! IP-based access control, and 103 Early Hints.
 //!
 //! ## Supported Directives
 //!
@@ -9,11 +9,13 @@
 //! - `block "ip" "cidr"` — Block listed IPs/CIDRs
 //! - `allow "ip" "cidr"` — Allow listed IPs/CIDRs only
 //! - `status <code> { url|regex|body|location }` — Return a custom status code
+//! - `early_hints { link "..." }` — Send 103 Early Hints with Link headers
 
 mod config;
 mod stage;
 mod validator;
 
+pub use stage::EarlyHintsStage;
 pub use stage::HttpResponseStage;
 pub use stage::ResponseEngine;
 pub use validator::HttpResponseValidator;
@@ -44,8 +46,10 @@ impl ModuleLoader for HttpResponseModuleLoader {
 
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         let engine = Arc::new(ResponseEngine::new());
-        registry.with_stage::<ferron_http::HttpContext, _>(move || {
-            Arc::new(HttpResponseStage::new(engine.clone()))
-        })
+        registry
+            .with_stage::<ferron_http::HttpContext, _>(move || {
+                Arc::new(HttpResponseStage::new(engine.clone()))
+            })
+            .with_stage::<ferron_http::HttpContext, _>(|| Arc::new(EarlyHintsStage::new()))
     }
 }

@@ -56,7 +56,7 @@ export default [
     href: "/docs/v3/configuration/http-response",
     target: "_self",
     sub: true,
-    label: "HTTP response control",
+    label: "HTTP response control and early hints",
   },
   {
     href: "/docs/v3/configuration/http-rewrite",

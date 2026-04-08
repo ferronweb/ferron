@@ -1329,6 +1329,7 @@ dependencies = [
  "rustc-hash",
  "tokio",
  "typemap_rev",
+ "vibeio-http",
 ]
 
 [[package]]

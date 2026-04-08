@@ -65,6 +65,9 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             // HTTP/1.x settings
             validate_nested!(http, h1_enable_early_hints, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
 
+            // 103 Early Hints
+            validate_nested!(http, early_hints, optional);
+
             // HTTP/2 settings
             validate_nested!(http, h2_initial_window_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
             validate_nested!(http, h2_max_frame_size, args(1) => [ServerConfigurationValue::Number(_, _)]);

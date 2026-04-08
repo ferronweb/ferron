@@ -1,9 +1,9 @@
 ---
 title: "Configuration: HTTP response control"
-description: "Custom status codes, connection aborting, and IP-based access control directives."
+description: "Custom status codes, connection aborting, IP-based access control, and 103 Early Hints."
 ---
 
-This page documents directives for returning custom status codes, aborting connections, and IP-based access control.
+This page documents directives for returning custom status codes, aborting connections, IP-based access control, and 103 Early Hints responses.
 
 ## Directives
 
@@ -99,9 +99,54 @@ example.com {
 
 In this example: `192.168.1.50` → allowed, `192.168.1.100` → blocked, `10.0.0.1` → denied.
 
+### 103 Early Hints
+
+- `early_hints` (`ferron-http-response`)
+  - This directive specifies a 103 Early Hints response to send before the final response is ready. The 103 response includes `Link` headers that allow the browser to begin preloading resources (stylesheets, scripts, fonts, etc.) while the server is still preparing the final response. Default: none
+
+#### Subdirectives
+
+| Subdirective | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `link` | `<string>` | A `Link` header value to include in the 103 response. Multiple `link` entries produce multiple `Link` headers. | none |
+
+**Configuration example:**
+
+```ferron
+example.com {
+    early_hints {
+        link "</assets/main.css>; rel=preload; as=style"
+        link "</assets/main.js>; rel=preload; as=script"
+        link "</fonts/inter.woff2>; rel=preload; as=font; crossorigin"
+    }
+}
+```
+
+Multiple `link` entries can be defined within a single `early_hints` block. Multiple `early_hints` blocks can also be defined at different scoping levels (host, `location`, `if` / `if_not`).
+
+#### HTTP/1.1 support
+
+By default, 103 Early Hints is supported natively on HTTP/2 and HTTP/3 connections. For HTTP/1.1, you must enable support via the [`h1_enable_early_hints`](/docs/v3/configuration/http-host) directive in your `http` block:
+
+```ferron
+http {
+    h1_enable_early_hints true
+}
+```
+
+Without this option, 103 Early Hints is silently skipped on HTTP/1.1 connections (a warning is logged).
+
+#### Scoping
+
+The `early_hints` directive can be placed at different configuration levels:
+
+- **Host level** — applies to all requests for that host
+- **`location` block** — applies only to requests matching that path prefix
+- **`if` / `if_not` blocks** — applies conditionally based on a matcher
+
 ## Scoping
 
-All directives (`status`, `abort`, `block`, `allow`) can be placed at different configuration levels:
+All directives (`status`, `abort`, `block`, `allow`, `early_hints`) can be placed at different configuration levels:
 
 - **Host level** — applies to all requests for that host
 - **`location` block** — applies only to requests matching that path prefix
@@ -119,4 +164,7 @@ All directives (`status`, `abort`, `block`, `allow`) can be placed at different 
 
 - For `location`, `if`, and `if_not` syntax, see [Routing and URL processing](/docs/v3/configuration/routing-url-processing).
 - For conditionals and matchers, see [Conditionals and variables](/docs/v3/configuration/conditionals).
-- For HTTP host directives, see [HTTP host directives](/docs/v3/configuration/http-host).
+- For HTTP host directives including `h1_enable_early_hints`, see [HTTP host directives](/docs/v3/configuration/http-host).
+- 103 Early Hints is only effective on HTTP/2+ connections by default. Most browsers restrict 103 to HTTP/2 or later for security reasons. See [RFC 8297 Section 3](https://www.rfc-editor.org/rfc/rfc8297#section-3).
+- If 103 Early Hints is not being sent on HTTP/1.1, ensure `h1_enable_early_hints true` is set in your `http` block.
+- If `send_early_hints` fails (e.g., connection already closing), a warning is logged and the request continues normally.

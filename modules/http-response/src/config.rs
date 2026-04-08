@@ -73,11 +73,30 @@ impl IpAccessConfig {
     }
 }
 
+/// Parsed configuration for the `early_hints` directive.
+pub struct EarlyHintsConfig {
+    /// Raw `Link` header values to send in a 103 Early Hints response.
+    pub links: Vec<String>,
+}
+
+impl Default for EarlyHintsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EarlyHintsConfig {
+    pub fn new() -> Self {
+        Self { links: Vec::new() }
+    }
+}
+
 /// Parsed configuration for the http-response module.
 pub struct ResponseConfig {
     pub abort: AbortConfig,
     pub ip_access: IpAccessConfig,
     pub status_rules: Vec<StatusRule>,
+    pub early_hints: EarlyHintsConfig,
 }
 
 impl ResponseConfig {
@@ -86,11 +105,13 @@ impl ResponseConfig {
         let abort = parse_abort_config(config);
         let ip_access = parse_ip_access_config(config);
         let status_rules = parse_status_rules(config);
+        let early_hints = parse_early_hints_config(config);
 
         Self {
             abort,
             ip_access,
             status_rules,
+            early_hints,
         }
     }
 }
@@ -211,6 +232,28 @@ fn parse_status_rules(config: &LayeredConfiguration) -> Vec<StatusRule> {
     rules
 }
 
+fn parse_early_hints_config(config: &LayeredConfiguration) -> EarlyHintsConfig {
+    let mut links = Vec::new();
+    let early_hints_entries = config.get_entries("early_hints", true);
+
+    for entry in &early_hints_entries {
+        // Collect `link` directives from child block
+        if let Some(children) = &entry.children {
+            if let Some(link_entries) = children.directives.get("link") {
+                for link_entry in link_entries {
+                    for arg in &link_entry.args {
+                        if let Some(link_value) = arg.as_str() {
+                            links.push(link_value.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    EarlyHintsConfig { links }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,6 +271,20 @@ mod tests {
 
     fn make_value_bool(b: bool) -> ServerConfigurationValue {
         ServerConfigurationValue::Boolean(b, None)
+    }
+
+    fn make_child_block(
+        directives: Vec<(&str, Vec<ServerConfigurationDirectiveEntry>)>,
+    ) -> ServerConfigurationBlock {
+        let mut d = HashMap::new();
+        for (name, entries) in directives {
+            d.insert(name.to_string(), entries);
+        }
+        ServerConfigurationBlock {
+            directives: Arc::new(d),
+            matchers: HashMap::new(),
+            span: None,
+        }
     }
 
     fn make_config_with_status(
@@ -385,5 +442,119 @@ mod tests {
         assert!(ip_access.is_blocked("192.168.1.100".parse().unwrap()));
         // Other IPs in the allow list should pass
         assert!(!ip_access.is_blocked("192.168.1.50".parse().unwrap()));
+    }
+
+    #[test]
+    fn parses_early_hints_with_single_link() {
+        let link_child = make_child_block(vec![(
+            "link",
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![make_value_string("</style.css>; rel=preload; as=style")],
+                children: None,
+                span: None,
+            }],
+        )]);
+
+        let mut directives = HashMap::new();
+        directives.insert(
+            "early_hints".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(link_child),
+                span: None,
+            }],
+        );
+
+        let mut config = LayeredConfiguration::new();
+        config.layers.push(Arc::new(ServerConfigurationBlock {
+            directives: Arc::new(directives),
+            matchers: HashMap::new(),
+            span: None,
+        }));
+
+        let early_hints = parse_early_hints_config(&config);
+        assert_eq!(early_hints.links.len(), 1);
+        assert_eq!(early_hints.links[0], "</style.css>; rel=preload; as=style");
+    }
+
+    #[test]
+    fn parses_early_hints_with_multiple_links() {
+        let link_child = make_child_block(vec![(
+            "link",
+            vec![
+                ServerConfigurationDirectiveEntry {
+                    args: vec![make_value_string("</style.css>; rel=preload; as=style")],
+                    children: None,
+                    span: None,
+                },
+                ServerConfigurationDirectiveEntry {
+                    args: vec![make_value_string("</script.js>; rel=preload; as=script")],
+                    children: None,
+                    span: None,
+                },
+            ],
+        )]);
+
+        let mut directives = HashMap::new();
+        directives.insert(
+            "early_hints".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(link_child),
+                span: None,
+            }],
+        );
+
+        let mut config = LayeredConfiguration::new();
+        config.layers.push(Arc::new(ServerConfigurationBlock {
+            directives: Arc::new(directives),
+            matchers: HashMap::new(),
+            span: None,
+        }));
+
+        let early_hints = parse_early_hints_config(&config);
+        assert_eq!(early_hints.links.len(), 2);
+        assert_eq!(early_hints.links[0], "</style.css>; rel=preload; as=style");
+        assert_eq!(early_hints.links[1], "</script.js>; rel=preload; as=script");
+    }
+
+    #[test]
+    fn parses_empty_early_hints() {
+        let empty_child = make_child_block(vec![]);
+
+        let mut directives = HashMap::new();
+        directives.insert(
+            "early_hints".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(empty_child),
+                span: None,
+            }],
+        );
+
+        let mut config = LayeredConfiguration::new();
+        config.layers.push(Arc::new(ServerConfigurationBlock {
+            directives: Arc::new(directives),
+            matchers: HashMap::new(),
+            span: None,
+        }));
+
+        let early_hints = parse_early_hints_config(&config);
+        assert!(early_hints.links.is_empty());
+    }
+
+    #[test]
+    fn parses_no_early_hints() {
+        let directives = HashMap::new();
+
+        let mut config = LayeredConfiguration::new();
+        config.layers.push(Arc::new(ServerConfigurationBlock {
+            directives: Arc::new(directives),
+            matchers: HashMap::new(),
+            span: None,
+        }));
+
+        let early_hints = parse_early_hints_config(&config);
+        assert!(early_hints.links.is_empty());
     }
 }

@@ -148,6 +148,38 @@ impl ConfigurationValidator for HttpResponseValidator {
             }
         }
 
+        // Validate `early_hints` directives
+        if let Some(entries) = config.directives.get("early_hints") {
+            for entry in entries {
+                if let Some(children) = &entry.children {
+                    if let Some(link_entries) = children.directives.get("link") {
+                        for link_entry in link_entries {
+                            if link_entry.args.is_empty() {
+                                return Err(
+                                    "Invalid `link` — requires a Link header value as argument"
+                                        .into(),
+                                );
+                            }
+                            for arg in &link_entry.args {
+                                if arg.as_str().is_none() {
+                                    return Err("Invalid `link` — value must be a string".into());
+                                }
+                            }
+                        }
+                    }
+                    // Check for unknown child directives
+                    for child_name in children.directives.keys() {
+                        if child_name != "link" {
+                            return Err(
+                                format!("Invalid `{child_name}` — unknown directive inside `early_hints` block").into(),
+                            );
+                        }
+                    }
+                }
+            }
+            used_directives.insert("early_hints".to_string());
+        }
+
         Ok(())
     }
 }
@@ -369,5 +401,133 @@ mod tests {
         let mut used = HashSet::new();
         let validator = HttpResponseValidator;
         assert!(validator.validate_block(&block, &mut used, false).is_ok());
+    }
+
+    #[test]
+    fn accepts_valid_early_hints() {
+        let link_child = make_block(vec![(
+            "link",
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![make_value_string("</style.css>; rel=preload; as=style")],
+                children: None,
+                span: None,
+            }],
+        )]);
+
+        let block = make_block(vec![(
+            "early_hints",
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(link_child),
+                span: None,
+            }],
+        )]);
+        let mut used = HashSet::new();
+        let validator = HttpResponseValidator;
+        assert!(validator.validate_block(&block, &mut used, false).is_ok());
+        assert!(used.contains("early_hints"));
+    }
+
+    #[test]
+    fn accepts_early_hints_with_multiple_links() {
+        let link_child = make_block(vec![(
+            "link",
+            vec![
+                ServerConfigurationDirectiveEntry {
+                    args: vec![make_value_string("</style.css>; rel=preload; as=style")],
+                    children: None,
+                    span: None,
+                },
+                ServerConfigurationDirectiveEntry {
+                    args: vec![make_value_string("</script.js>; rel=preload; as=script")],
+                    children: None,
+                    span: None,
+                },
+            ],
+        )]);
+
+        let block = make_block(vec![(
+            "early_hints",
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(link_child),
+                span: None,
+            }],
+        )]);
+        let mut used = HashSet::new();
+        let validator = HttpResponseValidator;
+        assert!(validator.validate_block(&block, &mut used, false).is_ok());
+    }
+
+    #[test]
+    fn rejects_early_hints_with_empty_link() {
+        let link_child = make_block(vec![(
+            "link",
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: None,
+                span: None,
+            }],
+        )]);
+
+        let block = make_block(vec![(
+            "early_hints",
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(link_child),
+                span: None,
+            }],
+        )]);
+        let mut used = HashSet::new();
+        let validator = HttpResponseValidator;
+        assert!(validator.validate_block(&block, &mut used, false).is_err());
+    }
+
+    #[test]
+    fn rejects_early_hints_with_non_string_link() {
+        let link_child = make_block(vec![(
+            "link",
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![make_value_number(42)],
+                children: None,
+                span: None,
+            }],
+        )]);
+
+        let block = make_block(vec![(
+            "early_hints",
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(link_child),
+                span: None,
+            }],
+        )]);
+        let mut used = HashSet::new();
+        let validator = HttpResponseValidator;
+        assert!(validator.validate_block(&block, &mut used, false).is_err());
+    }
+
+    #[test]
+    fn rejects_early_hints_with_unknown_child() {
+        let link_child = make_block(vec![(
+            "foo",
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![make_value_string("bar")],
+                children: None,
+                span: None,
+            }],
+        )]);
+
+        let block = make_block(vec![(
+            "early_hints",
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![],
+                children: Some(link_child),
+                span: None,
+            }],
+        )]);
+        let mut used = HashSet::new();
+        let validator = HttpResponseValidator;
+        assert!(validator.validate_block(&block, &mut used, false).is_err());
     }
 }
