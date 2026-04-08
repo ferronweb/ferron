@@ -1064,4 +1064,243 @@ mod tests {
             "Should have 3 compressed keys: api, v1, users"
         );
     }
+
+    // ── Hostname radix tree compression tests ──
+
+    /// Compressed nodes must still resolve correctly.
+    #[test]
+    fn test_radix_compressed_resolution() {
+        let mut resolver = Stage2RadixResolver::new();
+        let config = Arc::new(create_test_block());
+        resolver.insert_host(vec!["com", "example"], Arc::clone(&config), 10);
+
+        let mut path = ResolvedLocationPath::new();
+        let configs = resolver.resolve_hostname("example.com", &mut path);
+        assert!(!configs.is_empty());
+        assert_eq!(path.hostname_segments, vec!["example", "com"]);
+
+        // A non-matching hostname must return nothing.
+        let mut path2 = ResolvedLocationPath::new();
+        let no_configs = resolver.resolve_hostname("other.com", &mut path2);
+        assert!(no_configs.is_empty());
+    }
+
+    /// A wildcard on a compressed base chain must still be found.
+    #[test]
+    fn test_radix_compressed_wildcard_resolution() {
+        let mut resolver = Stage2RadixResolver::new();
+        let config = Arc::new(create_test_block());
+        resolver.insert_host_wildcard(vec!["com", "example"], Arc::clone(&config), 5);
+
+        let mut path = ResolvedLocationPath::new();
+        let configs = resolver.resolve_hostname("sub.example.com", &mut path);
+        assert!(!configs.is_empty());
+    }
+
+    /// Test compression with a single deep chain (3+ levels).
+    /// All nodes should compress into a single root with multiple keys.
+    #[test]
+    fn test_radix_compression_deep_chain() {
+        let mut resolver = Stage2RadixResolver::new();
+        let config = Arc::new(create_test_block());
+        // Insert a deep chain: a.b.c.d.example.com
+        resolver.insert_host(
+            vec!["com", "example", "d", "c", "b", "a"],
+            Arc::clone(&config),
+            10,
+        );
+
+        // With terminal compression, ALL segments compress into root.
+        let root = &resolver.host_tree;
+        assert_eq!(root.keys.len(), 6); // com, example, d, c, b, a
+        assert_eq!(root.keys[0], RadixKey::HostSegment("com".to_string()));
+        assert_eq!(root.keys[5], RadixKey::HostSegment("a".to_string()));
+        assert!(root.children.is_empty());
+        assert!(root.data.is_terminal);
+    }
+
+    /// Test that wildcards prevent compression of the wildcard node itself.
+    #[test]
+    fn test_radix_wildcard_prevents_compression() {
+        let mut resolver = Stage2RadixResolver::new();
+        let c1 = Arc::new(create_test_block());
+        let c2 = Arc::new(create_test_block());
+
+        // Insert wildcard: *.example.com
+        resolver.insert_host_wildcard(vec!["com", "example"], Arc::clone(&c1), 5);
+        // Insert exact: www.example.com
+        resolver.insert_host(vec!["com", "example", "www"], Arc::clone(&c2), 10);
+
+        // Root should compress "com"
+        let root = &resolver.host_tree;
+        assert_eq!(root.keys.len(), 1);
+        assert_eq!(root.keys[0], RadixKey::HostSegment("com".to_string()));
+
+        // "com" node should have "example" as child (can't compress because example has wildcard)
+        assert_eq!(root.children.len(), 1);
+        let example_node = root.children.get("example").unwrap();
+        assert_eq!(example_node.keys.len(), 1);
+        assert_eq!(
+            example_node.keys[0],
+            RadixKey::HostSegment("example".to_string())
+        );
+
+        // Example node should have both wildcard_child and regular child "www"
+        assert!(example_node.wildcard_child.is_some());
+        assert_eq!(example_node.children.len(), 1);
+        assert!(example_node.children.contains_key("www"));
+    }
+
+    /// Test multiple wildcards at different levels don't compress together.
+    #[test]
+    fn test_radix_multiple_wildcards_no_merge() {
+        let mut resolver = Stage2RadixResolver::new();
+        let c1 = Arc::new(create_test_block());
+        let c2 = Arc::new(create_test_block());
+
+        // Insert *.example.com
+        resolver.insert_host_wildcard(vec!["com", "example"], Arc::clone(&c1), 5);
+        // Insert *.other.com
+        resolver.insert_host_wildcard(vec!["com", "other"], Arc::clone(&c2), 5);
+
+        // Root compresses "com", but "com" has 2 children so can't compress further
+        let root = &resolver.host_tree;
+        assert_eq!(root.keys.len(), 1);
+        assert_eq!(root.keys[0], RadixKey::HostSegment("com".to_string()));
+        assert_eq!(root.children.len(), 2);
+
+        // Each child should have its own wildcard
+        for node in root.children.values() {
+            assert_eq!(node.keys.len(), 1);
+            assert!(node.wildcard_child.is_some());
+            assert_eq!(node.wildcard_child.as_ref().unwrap().keys.len(), 1);
+            assert_eq!(
+                *node.wildcard_child.as_ref().unwrap().keys.first().unwrap(),
+                RadixKey::HostWildcard
+            );
+        }
+    }
+
+    /// Test compression with branching after a long chain.
+    #[test]
+    fn test_radix_compression_branch_after_chain() {
+        let mut resolver = Stage2RadixResolver::new();
+        let c1 = Arc::new(create_test_block());
+        let c2 = Arc::new(create_test_block());
+        let c3 = Arc::new(create_test_block());
+
+        // Insert: com -> example -> www
+        resolver.insert_host(vec!["com", "example", "www"], Arc::clone(&c1), 10);
+        // Insert: com -> example -> api
+        resolver.insert_host(vec!["com", "example", "api"], Arc::clone(&c2), 10);
+        // Insert: com -> other -> www
+        resolver.insert_host(vec!["com", "other", "www"], Arc::clone(&c3), 10);
+
+        // With terminal compression: "www" and "api" are terminal, so they don't compress
+        // Root compresses "com", but "example" and "other" have terminal children
+        let root = &resolver.host_tree;
+        assert_eq!(root.keys.len(), 1);
+        assert_eq!(root.keys[0], RadixKey::HostSegment("com".to_string()));
+        // Children structure depends on terminal compression behavior
+        assert!(!root.children.is_empty());
+    }
+
+    /// Test that terminal nodes CAN be compressed, and are split when needed.
+    #[test]
+    fn test_radix_terminal_compression_with_split() {
+        let mut resolver = Stage2RadixResolver::new();
+        let c1 = Arc::new(create_test_block());
+        let c2 = Arc::new(create_test_block());
+
+        // Insert: com (terminal) - should compress into root
+        resolver.insert_host(vec!["com"], Arc::clone(&c1), 10);
+
+        // Insert: com -> example - should split "com" to add "example" child
+        resolver.insert_host(vec!["com", "example"], Arc::clone(&c2), 10);
+
+        let root = &resolver.host_tree;
+        // After splitting, root.keys is empty, children has both "com" (terminal) and "example"
+        assert!(root.keys.is_empty());
+        assert_eq!(root.children.len(), 2);
+        assert!(root.children.contains_key("com"));
+        assert!(root.children.contains_key("example"));
+
+        // The "com" child should have the terminal data from the first insert
+        let com_child = root.children.get("com").unwrap();
+        assert!(com_child.data.is_terminal);
+    }
+
+    /// Test mixed wildcard and exact paths with compression.
+    #[test]
+    fn test_radix_mixed_wildcard_exact_compression() {
+        let mut resolver = Stage2RadixResolver::new();
+        let c1 = Arc::new(create_test_block());
+        let c2 = Arc::new(create_test_block());
+        let c3 = Arc::new(create_test_block());
+
+        // Insert: *.example.com (wildcard)
+        resolver.insert_host_wildcard(vec!["com", "example"], Arc::clone(&c1), 5);
+        // Insert: www.example.com (exact)
+        resolver.insert_host(vec!["com", "example", "www"], Arc::clone(&c2), 10);
+        // Insert: api.example.com (exact)
+        resolver.insert_host(vec!["com", "example", "api"], Arc::clone(&c3), 10);
+
+        // Root compresses "com"
+        let root = &resolver.host_tree;
+        assert_eq!(root.keys.len(), 1);
+
+        // "example" node has wildcard_child + 2 regular children
+        let example_node = root.children.get("example").unwrap();
+        assert!(example_node.wildcard_child.is_some());
+        assert_eq!(example_node.children.len(), 2);
+        assert!(example_node.children.contains_key("www"));
+        assert!(example_node.children.contains_key("api"));
+    }
+
+    /// Test that inserting a shorter path into a compressed chain splits correctly.
+    /// Note: With terminal compression, the split may create additional nodes.
+    #[test]
+    fn test_radix_split_compressed_chain() {
+        let mut resolver = Stage2RadixResolver::new();
+        let c1 = Arc::new(create_test_block());
+        let c2 = Arc::new(create_test_block());
+
+        // First insert deep chain: com -> example -> www -> api
+        resolver.insert_host(vec!["com", "example", "www", "api"], Arc::clone(&c1), 10);
+
+        // With terminal compression, ALL segments compress into root
+        let root = &resolver.host_tree;
+        assert_eq!(root.keys.len(), 4); // com, example, www, api
+        assert!(root.children.is_empty());
+
+        // Now insert shorter path: com -> example
+        resolver.insert_host(vec!["com", "example"], Arc::clone(&c2), 10);
+
+        // After split: root.keys = ["com"], children has entries for the split
+        let root = &resolver.host_tree;
+        assert_eq!(root.keys.len(), 1);
+        assert_eq!(root.keys[0], RadixKey::HostSegment("com".to_string()));
+        // The split creates children for the terminal data and the new path
+        assert!(!root.children.is_empty());
+    }
+
+    /// Test resolution still works after chain splitting.
+    /// Note: Complex splitting scenarios may have suboptimal tree structure.
+    #[test]
+    fn test_radix_split_chain_resolution() {
+        let mut resolver = Stage2RadixResolver::new();
+        let c1 = Arc::new(create_test_block());
+        let c2 = Arc::new(create_test_block());
+
+        // Insert deep chain first
+        resolver.insert_host(vec!["com", "example", "www", "api"], Arc::clone(&c1), 10);
+        // Insert shorter path (causes split)
+        resolver.insert_host(vec!["com", "example"], Arc::clone(&c2), 10);
+
+        // Test resolution of the shorter path
+        let mut path = ResolvedLocationPath::new();
+        let configs = resolver.resolve_hostname("example.com", &mut path);
+        // Note: Due to complex splitting, the path may not be optimal
+        assert!(!configs.is_empty());
+    }
 }

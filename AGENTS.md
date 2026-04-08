@@ -72,6 +72,16 @@ See [docs/configuration/index.md](docs/configuration/index.md) for the full conf
 - Parser, registry, runtime, and TLS changes should always include tests.
 - **Documentation is written after implementation is complete.** Implement the feature first, then update the relevant `docs/configuration/` pages to reflect the final behavior and syntax.
 
+### Unneeded and redundant tests
+
+To maintain a clean and efficient test suite, avoid adding or maintaining tests in the following categories:
+
+- **Trivial Delegation Tests:** Avoid tests that merely verify that a wrapper method correctly delegates to an underlying library (e.g., `HttpContext` methods wrapping `typemap-rev`). These should be covered by integration tests rather than repetitive unit tests.
+- **Internal Component Duplication:** Keep unit tests close to the components they test (e.g., in `stage2.rs` for radix tree logic). Avoid duplicating detailed internal tests in high-level integration files like `resolver.rs`.
+- **Trivial Property Tests:** Do not add tests for fundamental language features or trivial struct initialization (e.g., "roundtrip" tests that only verify field assignment).
+- **Inefficient Concurrent Tests:** Avoid tests that use `thread::sleep` for timing. Use proper synchronization or mock clocks if timing is necessary.
+- **Standard Library Behavior:** Do not test the parsing or error-handling logic of the Rust standard library (e.g., bare `IpAddr` or `SocketAddr` parsing).
+
 ### Documentation style
 
 - **Sentence case** for all headers (only first word, proper nouns, acronyms, and directive names capitalized).

@@ -177,26 +177,6 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_bucket_consumption() {
-        let bucket = ConcurrentTokenBucket::new(100, 0.0);
-        let mut handles = Vec::new();
-
-        for _ in 0..10 {
-            let b = bucket.clone();
-            handles.push(thread::spawn(move || b.try_consume(10)));
-        }
-
-        let successes: usize = handles
-            .into_iter()
-            .map(|h| h.join().unwrap())
-            .filter(|&s| s)
-            .count();
-
-        // Exactly 10 threads each consuming 1 token from 100 → all should succeed
-        assert_eq!(successes, 10);
-    }
-
-    #[test]
     fn concurrent_bucket_exhaustion() {
         let bucket = ConcurrentTokenBucket::new(5, 0.0);
         let mut handles = Vec::new();

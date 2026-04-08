@@ -45,20 +45,6 @@ impl Default for ClientIpFromHeaderStage {
     }
 }
 
-/// Parse an IP address string, optionally with a port. If no port is present,
-/// append port 0 to produce a valid `SocketAddr`.
-#[cfg(test)]
-fn parse_ip_with_optional_port(s: &str, fallback_port: u16) -> Option<SocketAddr> {
-    // Try parsing as a full SocketAddr first (e.g. "192.0.2.1:1234" or "[::1]:8080")
-    if let Ok(addr) = s.parse::<SocketAddr>() {
-        return Some(addr);
-    }
-
-    // Try parsing as bare IP (no port)
-    let ip: IpAddr = s.parse().ok()?;
-    Some(SocketAddr::new(ip, fallback_port))
-}
-
 /// Extract the client IP from an `X-Forwarded-For` header value.
 ///
 /// `X-Forwarded-For` format: `client, proxy1, proxy2`
@@ -425,7 +411,7 @@ mod tests {
         assert_eq!(ctx.remote_address.ip().to_string(), "10.0.0.1");
     }
 
-    // ── Helper function tests ──
+    // ── Helper tests ──
 
     #[test]
     fn client_ip_header_from_str_valid() {
@@ -452,39 +438,6 @@ mod tests {
         assert_eq!(ClientIpHeader::from_str("x-real-ip"), None);
         assert_eq!(ClientIpHeader::from_str("cf-connecting-ip"), None);
         assert_eq!(ClientIpHeader::from_str(""), None);
-    }
-
-    #[test]
-    fn parse_ip_with_optional_port_bare_ipv4() {
-        let addr = parse_ip_with_optional_port("192.0.2.1", 0).unwrap();
-        assert_eq!(addr.ip().to_string(), "192.0.2.1");
-        assert_eq!(addr.port(), 0);
-    }
-
-    #[test]
-    fn parse_ip_with_optional_port_bare_ipv6() {
-        let addr = parse_ip_with_optional_port("2001:db8::1", 0).unwrap();
-        assert_eq!(addr.ip().to_string(), "2001:db8::1");
-        assert_eq!(addr.port(), 0);
-    }
-
-    #[test]
-    fn parse_ip_with_optional_port_with_port() {
-        let addr = parse_ip_with_optional_port("192.0.2.1:8080", 0).unwrap();
-        assert_eq!(addr.ip().to_string(), "192.0.2.1");
-        assert_eq!(addr.port(), 8080);
-    }
-
-    #[test]
-    fn parse_ip_with_optional_port_ipv6_with_port() {
-        let addr = parse_ip_with_optional_port("[2001:db8::1]:8080", 0).unwrap();
-        assert_eq!(addr.ip().to_string(), "2001:db8::1");
-        assert_eq!(addr.port(), 8080);
-    }
-
-    #[test]
-    fn parse_ip_with_optional_port_invalid() {
-        assert!(parse_ip_with_optional_port("not-an-ip", 0).is_none());
     }
 
     #[test]
