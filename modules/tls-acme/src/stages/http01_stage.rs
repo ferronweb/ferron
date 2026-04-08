@@ -39,6 +39,14 @@ impl Stage<HttpContext> for AcmeHttp01ChallengeStage {
         ]
     }
 
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        let Some(c) = config else { return false };
+        c.has_directive("tls")
+    }
+
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let Some(req) = ctx.req.as_ref() else {

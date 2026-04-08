@@ -95,6 +95,13 @@ impl Stage<HttpContext> for HttpsRedirectStage {
         ]
     }
 
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        config.is_some_and(|c| c.has_directive("https_redirect"))
+    }
+
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         // Skip if:

@@ -305,6 +305,32 @@ impl<C> StageRegistry<C> {
         pipeline
     }
 
+    /// Build a pipeline with only applicable stages based on configuration.
+    ///
+    /// Each stage factory is instantiated once to call `is_applicable(config)`.
+    /// Stages that return `false` are excluded from the pipeline. The remaining
+    /// stages are ordered via topological sort.
+    pub fn build_with_config(
+        &self,
+        config: Option<&crate::config::ServerConfigurationBlock>,
+    ) -> crate::pipeline::Pipeline<C>
+    where
+        C: 'static,
+    {
+        let factories = self.get_ordered_factories();
+
+        let mut pipeline = crate::pipeline::Pipeline::new();
+
+        for factory in factories {
+            let stage = factory();
+            if stage.is_applicable(config) {
+                pipeline = pipeline.add_stage(stage);
+            }
+        }
+
+        pipeline
+    }
+
     /// Get the number of registered stages.
     #[inline]
     pub fn len(&self) -> usize {

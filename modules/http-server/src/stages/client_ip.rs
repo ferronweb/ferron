@@ -161,6 +161,13 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
         vec![StageConstraint::Before("https_redirect".to_string())]
     }
 
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        config.is_some_and(|c| c.has_directive("client_ip_from_header"))
+    }
+
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let header_type = match resolve_header_from_config(ctx) {

@@ -43,6 +43,14 @@ impl ferron_core::pipeline::Stage<HttpContext> for HeadersStage {
         ]
     }
 
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        let Some(c) = config else { return false };
+        c.has_directive("header") || c.has_directive("cors")
+    }
+
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let config = match config::parse_headers_config(ctx) {

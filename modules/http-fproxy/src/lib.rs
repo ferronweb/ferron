@@ -121,6 +121,13 @@ impl Stage<HttpContext> for ForwardProxyStage {
         )]
     }
 
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        config.is_some_and(|c| c.has_directive("forward_proxy"))
+    }
+
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let config = match config::parse_forward_proxy_config(ctx) {

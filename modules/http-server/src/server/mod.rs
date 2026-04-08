@@ -429,17 +429,24 @@ impl BasicHttpModule {
                 }
             }
         }
+        // Build a merged config from global + all host blocks so that
+        // `is_applicable` includes a stage if *any* host uses its directive.
+        let port_config_merged = ferron_core::config::ServerConfigurationBlock::merge_from(
+            std::iter::once(global_config.as_ref())
+                .chain(port_config.hosts.iter().map(|(_, block)| block)),
+        );
+        let merged_config = Some(&port_config_merged);
         let pipeline = registry
             .get_stage_registry::<HttpContext>()
             .expect("HTTP stage registry not found")
-            .build_all();
+            .build_with_config(merged_config);
         let file_pipeline = registry
             .get_stage_registry::<HttpFileContext>()
-            .map(|registry| registry.build_all())
+            .map(|registry| registry.build_with_config(merged_config))
             .unwrap_or_else(Pipeline::new);
         let error_pipeline = registry
             .get_stage_registry::<HttpErrorContext>()
-            .map(|registry| registry.build_all())
+            .map(|registry| registry.build_with_config(merged_config))
             .unwrap_or_else(Pipeline::new);
 
         Ok(HttpServerConfig {

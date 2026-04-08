@@ -176,6 +176,13 @@ impl Stage<HttpContext> for DynamicCompressionStage {
         ]
     }
 
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        config.is_some_and(|c| c.has_directive("dynamic_compressed"))
+    }
+
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let accept_encoding = ctx

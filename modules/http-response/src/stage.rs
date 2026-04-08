@@ -232,6 +232,17 @@ impl Stage<HttpContext> for HttpResponseStage {
         ]
     }
 
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        let Some(c) = config else { return false };
+        c.has_directive("abort")
+            || c.has_directive("block")
+            || c.has_directive("allow")
+            || c.has_directive("status")
+    }
+
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         // 1. Check abort directive — if true, immediately abort

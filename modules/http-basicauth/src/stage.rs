@@ -111,6 +111,13 @@ impl Stage<HttpContext> for BasicAuthStage {
         ]
     }
 
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        config.is_some_and(|c| c.has_directive("basic_auth"))
+    }
+
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         let config = match parse_basicauth_config(&ctx.configuration) {

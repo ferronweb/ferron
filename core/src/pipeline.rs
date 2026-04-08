@@ -6,7 +6,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::StageConstraint;
+use crate::{config::ServerConfigurationBlock, StageConstraint};
 
 /// Error type for pipeline execution failures.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,6 +72,11 @@ pub trait Stage<C>: Send + Sync {
     #[inline]
     async fn run_inverse(&self, _ctx: &mut C) -> Result<(), PipelineError> {
         Ok(())
+    }
+
+    #[inline]
+    fn is_applicable(&self, _config: Option<&ServerConfigurationBlock>) -> bool {
+        true
     }
 }
 

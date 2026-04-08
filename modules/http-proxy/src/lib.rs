@@ -254,6 +254,13 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
         "reverse_proxy"
     }
 
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        config.is_some_and(|c| c.has_directive("proxy"))
+    }
+
     async fn run(
         &self,
         ctx: &mut HttpContext,

@@ -129,6 +129,45 @@ impl ServerConfigurationBlock {
             false
         }
     }
+
+    /// Check if a directive is present anywhere in this block tree (recursively).
+    ///
+    /// Returns `true` if the directive exists at this level or in any nested child block.
+    pub fn has_directive(&self, directive: &str) -> bool {
+        if self.directives.contains_key(directive) {
+            return true;
+        }
+        self.directives.values().any(|entries| {
+            entries.iter().any(|e| {
+                e.children
+                    .as_ref()
+                    .is_some_and(|c| c.has_directive(directive))
+            })
+        })
+    }
+
+    /// Build a merged block containing the union of all directive keys from
+    /// multiple configuration blocks.
+    ///
+    /// This is useful for `is_applicable` checks at server initialization: if
+    /// any host block (or the global config) uses a directive, the
+    /// corresponding stage should be included in the pipeline.
+    ///
+    /// The merged block has empty directive entries (only keys matter), since
+    /// `has_directive` only checks key presence.
+    pub fn merge_from<'a>(blocks: impl IntoIterator<Item = &'a Self>) -> Self {
+        let mut all_keys = std::collections::HashMap::new();
+        for block in blocks {
+            for key in block.directives.keys() {
+                all_keys.entry(key.clone()).or_insert_with(Vec::new);
+            }
+        }
+        ServerConfigurationBlock {
+            directives: Arc::new(all_keys),
+            matchers: HashMap::new(),
+            span: None,
+        }
+    }
 }
 
 /// A single directive entry with arguments and optional nested configuration.

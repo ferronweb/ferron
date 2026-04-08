@@ -205,6 +205,13 @@ impl Stage<HttpContext> for RateLimitStage {
         ]
     }
 
+    fn is_applicable(
+        &self,
+        config: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ) -> bool {
+        config.is_some_and(|c| c.has_directive("rate_limit"))
+    }
+
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         if let Some(response) = self.engine.check_rate_limits(ctx) {
