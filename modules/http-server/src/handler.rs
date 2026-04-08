@@ -738,6 +738,7 @@ async fn request_handler_inner(
         .configuration
         .get_value("admin_email", false)
         .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
+    let resolution_configuration2 = resolution.configuration.clone();
     let mut ctx = HttpContext {
         req: Some(request),
         res: None,
@@ -785,18 +786,28 @@ async fn request_handler_inner(
                 ctx.req = Some(error_resolver_variables.0);
 
                 if let Some(error_resolution) = error_resolution {
-                    ctx.configuration = error_resolution.configuration;
-                    ctx.res = None;
+                    let execute_error_config = if let (Some(config1), Some(config2)) = (
+                        error_resolution.configuration.layers.last(),
+                        resolution_configuration2.layers.last(),
+                    ) {
+                        Arc::ptr_eq(&config1, &config2)
+                    } else {
+                        false
+                    };
+                    if execute_error_config {
+                        ctx.configuration = error_resolution.configuration;
+                        ctx.res = None;
 
-                    execute_pipeline_stages(
-                        &mut ctx,
-                        pipeline.as_ref(),
-                        file_pipeline.as_ref(),
-                        &events,
-                        "Error ",
-                        &resolution.location_path.path_segments,
-                    )
-                    .await;
+                        execute_pipeline_stages(
+                            &mut ctx,
+                            pipeline.as_ref(),
+                            file_pipeline.as_ref(),
+                            &events,
+                            "Error ",
+                            &resolution.location_path.path_segments,
+                        )
+                        .await;
+                    }
                 }
             }
         }
