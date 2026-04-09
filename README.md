@@ -141,12 +141,10 @@ Planned direction:
 - HTTP/3 and QUIC support
 - Additional observability backends (Prometheus, Jaeger/Zipkin?)
 - More authentication methods (JWT?, OAuth2?, mTLS?)
-- HTTP response caching
 
 ## Known limitations
 
 - Alpha quality — not battle-tested, expect bugs.
-- Admin API has no authentication — bind it to localhost.
 - All modules are compiled into the binary; no runtime plugin loading yet.
 - Primary testing target is Linux. Windows and macOS receive less coverage.
 

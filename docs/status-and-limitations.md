@@ -58,14 +58,10 @@ The following features are implemented and functional in Ferron 3:
 ## Known limitations
 
 - **Alpha quality** — not battle-tested; expect bugs and configuration changes between releases.
-- **Admin API has no authentication** — bind it to localhost (`127.0.0.1:8081`) or restrict access via firewall rules.
 - **All modules are compiled into the binary** — no runtime plugin loading yet. Every module ships with the default build.
 - **Primary testing target is Linux** — Windows and macOS receive less coverage and may have edge-case issues.
 - **HTTP/3 is not yet supported** — only HTTP/1.1 and HTTP/2 are available.
 - **No DNS provider modules** — the DNS-01 ACME challenge type is defined, but no DNS provider backends (Cloudflare, Route 53, etc.) are implemented yet. If you need wildcard certificates, obtain them externally and use [Manual TLS](/docs/v3/use-cases/manual-tls).
-- **Rate limiting is per-server-instance** — buckets are stored in memory and not shared across multiple Ferron instances. For distributed rate limiting, use an external service (e.g. Redis).
-- **HTTP response caching** — a full HTTP cache module is planned but not yet implemented. The `file_cache_control` directive only sets `Cache-Control` headers; it does not perform server-side caching of proxied responses.
-- **`client_auth` is per-host** — mTLS is configured inside individual `tls` blocks. There is no global mTLS toggle that applies to all hosts.
 
 ## Roadmap
 
@@ -75,7 +71,6 @@ Planned direction for future releases:
 - HTTP/3 and QUIC support
 - Additional observability backends (Prometheus, Jaeger/Zipkin?)
 - More authentication methods (JWT?, OAuth2?)
-- Full HTTP response caching module
 
 ## Upgrading from Ferron 2
 
