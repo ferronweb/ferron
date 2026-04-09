@@ -11,7 +11,7 @@ To explore the documentation, either click on one of the positions in the sideba
 
 ## First time?
 
-**Are you new to Ferron? No problem.** Start by [installing Ferron](/docs/v3/installation/builing-from-source) on your system.
+**Are you new to Ferron? No problem.** Start by [installing Ferron](/docs/v3/installation/building-from-source) on your system.
 
 Once you have Ferron installed, read about the [configuration syntax](/docs/v3/configuration/syntax) to understand how Ferron configuration files are structured.
 
