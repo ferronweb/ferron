@@ -310,7 +310,9 @@ pub fn flush() {
 #[macro_export]
 macro_rules! log_info {
     ($($arg:tt)*) => {
-        $crate::logging::log($crate::logging::LogLevel::Info, &format!($($arg)*));
+        if $crate::logging::enabled($crate::logging::LogLevel::Info) {
+            $crate::logging::log($crate::logging::LogLevel::Info, &format!($($arg)*));
+        }
     };
 }
 
@@ -318,7 +320,9 @@ macro_rules! log_info {
 #[macro_export]
 macro_rules! log_error {
     ($($arg:tt)*) => {
-        $crate::logging::log($crate::logging::LogLevel::Error, &format!($($arg)*));
+        if $crate::logging::enabled($crate::logging::LogLevel::Error) {
+            $crate::logging::log($crate::logging::LogLevel::Error, &format!($($arg)*));
+        }
     };
 }
 
@@ -326,7 +330,9 @@ macro_rules! log_error {
 #[macro_export]
 macro_rules! log_debug {
     ($($arg:tt)*) => {
-        $crate::logging::log($crate::logging::LogLevel::Debug, &format!($($arg)*));
+        if $crate::logging::enabled($crate::logging::LogLevel::Debug) {
+            $crate::logging::log($crate::logging::LogLevel::Debug, &format!($($arg)*));
+        }
     };
 }
 
@@ -334,6 +340,8 @@ macro_rules! log_debug {
 #[macro_export]
 macro_rules! log_warn {
     ($($arg:tt)*) => {
-        $crate::logging::log($crate::logging::LogLevel::Warn, &format!($($arg)*));
+        if $crate::logging::enabled($crate::logging::LogLevel::Warn) {
+            $crate::logging::log($crate::logging::LogLevel::Warn, &format!($($arg)*));
+        }
     };
 }

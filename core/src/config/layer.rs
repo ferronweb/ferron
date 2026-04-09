@@ -78,8 +78,19 @@ impl LayeredConfiguration {
         directive: &str,
         inherit: bool,
     ) -> Option<&'a crate::config::ServerConfigurationDirectiveEntry> {
-        let mut entries = self.get_entries(directive, inherit);
-        entries.pop()
+        for layer in self.layers.iter().rev() {
+            if let Some(entry) = layer
+                .directives
+                .get(directive)
+                .and_then(|entries| entries.last())
+            {
+                return Some(entry);
+            }
+            if !inherit {
+                break;
+            }
+        }
+        None
     }
 
     /// Get the first value for a directive across layers.
@@ -98,11 +109,20 @@ impl LayeredConfiguration {
         directive: &str,
         inherit: bool,
     ) -> Option<&crate::config::ServerConfigurationValue> {
-        if let Some(entry) = self.get_entry(directive, inherit) {
-            entry.args.first()
-        } else {
-            None
+        for layer in self.layers.iter().rev() {
+            if let Some(value) = layer
+                .directives
+                .get(directive)
+                .and_then(|entries| entries.last())
+                .and_then(|entry| entry.args.first())
+            {
+                return Some(value);
+            }
+            if !inherit {
+                break;
+            }
         }
+        None
     }
 
     /// Get a directive as a boolean flag across layers.
@@ -117,15 +137,71 @@ impl LayeredConfiguration {
     /// The boolean value if found, or true as default for flag-style directives.
     #[inline]
     pub fn get_flag(&self, directive: &str, inherit: bool) -> bool {
-        if let Some(entry) = self.get_entry(directive, inherit) {
-            if let Some(crate::config::ServerConfigurationValue::Boolean(value, _)) =
-                entry.args.first()
+        for layer in self.layers.iter().rev() {
+            if let Some(entry) = layer
+                .directives
+                .get(directive)
+                .and_then(|entries| entries.last())
             {
-                return *value;
-            } else {
+                if let Some(crate::config::ServerConfigurationValue::Boolean(value, _)) =
+                    entry.args.first()
+                {
+                    return *value;
+                }
                 return true;
+            }
+            if !inherit {
+                break;
             }
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LayeredConfiguration;
+    use crate::config::ServerConfigurationBlockBuilder;
+
+    #[test]
+    fn get_value_prefers_last_entry_in_highest_priority_layer() {
+        let low = ServerConfigurationBlockBuilder::new()
+            .directive_str("root", vec!["/srv/low"])
+            .build();
+        let high = ServerConfigurationBlockBuilder::new()
+            .directive_str("root", vec!["/srv/high-initial"])
+            .directive_str("root", vec!["/srv/high-final"])
+            .build();
+
+        let mut layered = LayeredConfiguration::new();
+        layered.add_layer(std::sync::Arc::new(low));
+        layered.add_layer(std::sync::Arc::new(high));
+
+        assert_eq!(
+            layered
+                .get_value("root", true)
+                .and_then(|value| value.as_str()),
+            Some("/srv/high-final")
+        );
+    }
+
+    #[test]
+    fn get_value_without_inheritance_only_checks_highest_priority_layer() {
+        let low = ServerConfigurationBlockBuilder::new()
+            .directive_str("root", vec!["/srv/low"])
+            .build();
+        let high = ServerConfigurationBlockBuilder::new().build();
+
+        let mut layered = LayeredConfiguration::new();
+        layered.add_layer(std::sync::Arc::new(low));
+        layered.add_layer(std::sync::Arc::new(high));
+
+        assert!(layered.get_value("root", false).is_none());
+        assert_eq!(
+            layered
+                .get_value("root", true)
+                .and_then(|value| value.as_str()),
+            Some("/srv/low")
+        );
     }
 }

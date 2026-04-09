@@ -1,6 +1,8 @@
 //! Directory listing generation stage
 
 use std::io;
+use std::path::PathBuf;
+use std::time::SystemTime;
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -15,6 +17,18 @@ use http::{Method, Response, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
 
 pub struct DirectoryListingStage;
+
+struct DirectoryListingEntry {
+    filename: String,
+    extension: Option<String>,
+    metadata: Option<DirectoryListingMetadata>,
+}
+
+struct DirectoryListingMetadata {
+    is_dir: bool,
+    size: Option<u64>,
+    modified: Option<SystemTime>,
+}
 
 impl Default for DirectoryListingStage {
     #[inline]
@@ -87,10 +101,10 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
 
         let method = request.method().clone();
 
-        // Read directory contents
-        let read_dir = vibeio::spawn_blocking({
+        // Read directory contents and metadata in one blocking pass.
+        let entries = vibeio::spawn_blocking({
             let dir_path = ctx.file_path.clone();
-            move || std::fs::read_dir(&dir_path)
+            move || read_directory_entries(dir_path)
         })
         .await
         .map_err(|e| PipelineError::custom(format!("failed to spawn blocking task: {e}")))
@@ -103,9 +117,7 @@ impl Stage<HttpFileContext> for DirectoryListingStage {
         // Get original request path for links
         let request_path = (ctx.http.original_uri.as_ref().unwrap_or(request.uri())).path();
 
-        let html = generate_directory_listing(read_dir, request_path, description)
-            .await
-            .map_err(|e| PipelineError::custom(e.to_string()))?;
+        let html = generate_directory_listing(entries, request_path, description);
 
         let content_length = html.len() as u64;
         let body_bytes = Bytes::from(html);
@@ -170,11 +182,11 @@ fn file_icon(ext: Option<&str>, is_dir: bool) -> &'static str {
 }
 
 /// Generate an HTML directory listing
-async fn generate_directory_listing(
-    directory: std::fs::ReadDir,
+fn generate_directory_listing(
+    entries: Vec<DirectoryListingEntry>,
     request_path: &str,
     description: Option<String>,
-) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+) -> String {
     // Strip trailing slashes
     let mut path_without_slashes = request_path;
     while path_without_slashes.ends_with('/') {
@@ -196,42 +208,24 @@ async fn generate_directory_listing(
     }
     let min_rows = rows.len();
 
-    // Collect and sort entries by filename
-    let mut entries: Vec<_> = directory.filter_map(|e| e.ok()).collect();
-    entries.sort_by_cached_key(|e| e.file_name().to_string_lossy().to_string());
-
-    for entry in &entries {
-        let filename = entry.file_name().to_string_lossy().to_string();
-        if filename.starts_with('.') {
+    for entry in entries {
+        let filename = entry.filename;
+        let Some(metadata) = entry.metadata else {
+            let link = format!(
+                "⚠️ <a href=\"{}/{}\">{}</a>",
+                path_without_slashes,
+                anti_xss(urlencoding::encode(&filename).as_ref()),
+                anti_xss(&filename)
+            );
+            rows.push(format!(
+                "<tr><td class=\"directory-filename\">{link}</td>\
+                 <td class=\"directory-size\">-</td><td class=\"directory-date\">-</td></tr>"
+            ));
             continue;
-        }
-
-        let entry_path = entry.path();
-        let entry_path_clone = entry_path.clone();
-        let metadata = match vibeio::spawn_blocking(move || std::fs::metadata(&entry_path_clone))
-            .await
-            .map_err(|e| -> io::Error { io::Error::other(format!("spawn blocking failed: {e}")) })
-            .and_then(|r| r)
-        {
-            Ok(m) => m,
-            Err(_) => {
-                // Can't read metadata, show warning
-                let link = format!(
-                    "⚠️ <a href=\"{}/{}\">{}</a>",
-                    path_without_slashes,
-                    anti_xss(urlencoding::encode(&filename).as_ref()),
-                    anti_xss(&filename)
-                );
-                rows.push(format!(
-                    "<tr><td class=\"directory-filename\">{link}</td>\
-                     <td class=\"directory-size\">-</td><td class=\"directory-date\">-</td></tr>"
-                ));
-                continue;
-            }
         };
 
-        let is_dir = metadata.is_dir();
-        let icon = file_icon(entry_path.extension().and_then(|e| e.to_str()), is_dir);
+        let is_dir = metadata.is_dir;
+        let icon = file_icon(entry.extension.as_deref(), is_dir);
         let suffix = if is_dir { "/" } else { "" };
 
         let link = format!(
@@ -243,13 +237,13 @@ async fn generate_directory_listing(
             anti_xss(&filename)
         );
 
-        let size = if metadata.is_file() {
-            anti_xss(&sizify(metadata.len(), false))
+        let size = if let Some(size) = metadata.size {
+            anti_xss(&sizify(size, false))
         } else {
             "-".to_string()
         };
 
-        let date = if let Ok(mtime) = metadata.modified() {
+        let date = if let Some(mtime) = metadata.modified {
             let dt: DateTime<Local> = mtime.into();
             anti_xss(&dt.format("%a %b %d %Y").to_string())
         } else {
@@ -289,11 +283,47 @@ async fn generate_directory_listing(
     let css_common = ferron_http::util::CSS_COMMON;
     let css_directory = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/directory.css"));
 
-    Ok(format_page!(
+    format_page!(
         body,
         &format!("Directory: {request_path}"),
         vec![css_common, css_directory]
-    ))
+    )
+}
+
+fn read_directory_entries(dir_path: PathBuf) -> io::Result<Vec<DirectoryListingEntry>> {
+    let mut entries = Vec::new();
+    for entry in std::fs::read_dir(dir_path)? {
+        let Ok(entry) = entry else {
+            continue;
+        };
+        let filename = entry.file_name().to_string_lossy().to_string();
+        if filename.starts_with('.') {
+            continue;
+        }
+
+        let path = entry.path();
+        let extension = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(str::to_owned);
+        let metadata = entry
+            .metadata()
+            .ok()
+            .map(|metadata| DirectoryListingMetadata {
+                is_dir: metadata.is_dir(),
+                size: metadata.is_file().then_some(metadata.len()),
+                modified: metadata.modified().ok(),
+            });
+
+        entries.push(DirectoryListingEntry {
+            filename,
+            extension,
+            metadata,
+        });
+    }
+
+    entries.sort_by(|left, right| left.filename.cmp(&right.filename));
+    Ok(entries)
 }
 
 // Sizify function taken from SVR.JS and rewritten from JavaScript to Rust

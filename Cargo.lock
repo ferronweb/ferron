@@ -1347,6 +1347,7 @@ dependencies = [
  "http",
  "http-body-util",
  "hyper",
+ "parking_lot",
  "rand 0.10.0",
  "rustls",
  "rustls-native-certs",

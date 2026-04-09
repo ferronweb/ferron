@@ -2,10 +2,9 @@
 
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use connpool::Pool;
-use tokio::sync::RwLock;
 
 use crate::send_request::SendRequestWrapper;
 use crate::upstream::UpstreamInner;
@@ -32,8 +31,11 @@ impl ConnectionManager {
     }
 
     /// Set a per-upstream local connection limit.
-    pub async fn set_local_limit(&self, upstream: &UpstreamInner, limit: usize) -> usize {
-        let mut limits = self.local_limits.write().await;
+    pub fn set_local_limit(&self, upstream: &UpstreamInner, limit: usize) -> usize {
+        let mut limits = self
+            .local_limits
+            .write()
+            .expect("local_limits lock poisoned");
         if let Some(&idx) = limits.get(upstream) {
             return idx;
         }
@@ -45,8 +47,12 @@ impl ConnectionManager {
     }
 
     /// Get the local limit index for an upstream.
-    pub async fn get_local_limit(&self, upstream: &UpstreamInner) -> Option<usize> {
-        self.local_limits.read().await.get(upstream).copied()
+    pub fn get_local_limit(&self, upstream: &UpstreamInner) -> Option<usize> {
+        self.local_limits
+            .read()
+            .expect("local_limits lock poisoned")
+            .get(upstream)
+            .copied()
     }
 
     /// Pull a connection from the pool, waiting if necessary.

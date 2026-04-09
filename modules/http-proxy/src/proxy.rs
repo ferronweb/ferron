@@ -1,9 +1,10 @@
 //! Core proxy logic: request transformation, TLS, connection establishment, and forwarding.
 
 use std::cell::UnsafeCell;
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -34,6 +35,9 @@ use crate::util::TtlCache;
 use crate::ProxyMetrics;
 
 const LOG_TARGET: &str = "ferron-proxy";
+
+static TLS_CLIENT_CONFIG_CACHE: LazyLock<Mutex<HashMap<(bool, bool, bool), Arc<ClientConfig>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Check whether `client_ip_from_header` is configured.
 fn client_ip_from_header_enabled(ctx: &HttpContext) -> bool {
@@ -303,6 +307,24 @@ fn build_tls_config(http2: bool, http2_only: bool, no_verification: bool) -> Cli
     tls_client_config
 }
 
+fn cached_tls_config(http2: bool, http2_only: bool, no_verification: bool) -> Arc<ClientConfig> {
+    let cache_key = (http2, http2_only, no_verification);
+    if let Some(config) = TLS_CLIENT_CONFIG_CACHE
+        .lock()
+        .expect("TLS client config cache lock poisoned")
+        .get(&cache_key)
+        .cloned()
+    {
+        return config;
+    }
+
+    let config = Arc::new(build_tls_config(http2, http2_only, no_verification));
+    let mut cache = TLS_CLIENT_CONFIG_CACHE
+        .lock()
+        .expect("TLS client config cache lock poisoned");
+    Arc::clone(cache.entry(cache_key).or_insert(config))
+}
+
 #[derive(Debug)]
 struct NoServerVerifier;
 
@@ -381,7 +403,7 @@ pub async fn execute_proxy(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
     cm: &ConnectionManager,
-    failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>>,
+    failed_backends: Arc<parking_lot::RwLock<TtlCache<UpstreamInner, u64>>>,
     algorithm: &LoadBalancerAlgorithmInner,
     conn_state: Option<&ConnectionsTrackState>,
 ) -> Result<(HttpResponse, ProxyMetrics), Box<dyn std::error::Error + Send + Sync>> {
@@ -412,9 +434,7 @@ pub async fn execute_proxy(
         config.lb_health_check_max_fails,
         algorithm,
         conn_state,
-    )
-    .await
-    else {
+    ) else {
         ctx.events.emit(Event::Log(LogEvent {
             level: LogLevel::Error,
             message: "Reverse proxy: all upstream backends are unhealthy".to_string(),
@@ -432,7 +452,7 @@ pub async fn execute_proxy(
         .map_err(|e| format!("Invalid upstream URL '{}': {e}", selected.upstream.proxy_to))?;
     let is_https = proxy_request_url.scheme_str() == Some("https");
     let client_ip = config.proxy_header.map(|_| ctx.remote_address.ip());
-    let local_limit_idx = cm.get_local_limit(&selected.upstream).await;
+    let local_limit_idx = cm.get_local_limit(&selected.upstream);
     let idle_timeout = idle_timeout_for_upstream(config, &selected.upstream);
 
     match try_send_with_pool(
@@ -458,8 +478,7 @@ pub async fn execute_proxy(
                 config.lb_health_check,
                 &selected.upstream,
                 &mut metrics,
-            )
-            .await;
+            );
             let (status, reason) = e.downcast_ref::<std::io::Error>().map_or(
                 (StatusCode::BAD_GATEWAY, "Bad gateway"),
                 |io_err| {
@@ -720,9 +739,11 @@ async fn establish_and_send(
         let drop_guard = unsafe { stream.get_drop_guard() };
 
         if is_https {
-            let tls_config =
-                build_tls_config(config.http2, config.http2_only, config.no_verification);
-            let connector = TlsConnector::from(Arc::new(tls_config));
+            let connector = TlsConnector::from(cached_tls_config(
+                config.http2,
+                config.http2_only,
+                config.no_verification,
+            ));
             let domain = ServerName::try_from(host.to_string())
                 .map_err(|e| format!("Invalid server name: {e}"))?;
             let tls_stream = connector.connect(domain, stream).await.map_err(|e| {

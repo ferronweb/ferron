@@ -21,6 +21,7 @@ pub type ProviderFactory<P> = Arc<dyn Fn() -> Arc<dyn crate::providers::Provider
 /// Entry for a registered provider factory.
 pub struct ProviderEntry<P> {
     pub factory: ProviderFactory<P>,
+    pub name: String,
 }
 
 /// Registry for providers organized by type.
@@ -63,8 +64,10 @@ impl<P: 'static> ProviderRegistry<P> {
     where
         F: Fn() -> Arc<dyn crate::providers::Provider<P>> + Send + Sync + 'static,
     {
+        let instance = factory();
         self.providers.write().push(ProviderEntry {
             factory: Arc::new(factory),
+            name: instance.name().to_string(),
         });
     }
 
@@ -74,9 +77,8 @@ impl<P: 'static> ProviderRegistry<P> {
     pub fn get(&self, name: &str) -> Option<Arc<dyn crate::providers::Provider<P>>> {
         let providers = self.providers.read();
         for entry in providers.iter() {
-            let instance = (entry.factory)();
-            if instance.name() == name {
-                return Some(instance);
+            if entry.name == name {
+                return Some((entry.factory)());
             }
         }
         None
@@ -145,6 +147,8 @@ pub type StageFactory<C> = Arc<dyn Fn() -> Arc<dyn crate::pipeline::Stage<C>> + 
 /// Entry for a registered stage.
 pub struct StageEntry<C> {
     pub factory: StageFactory<C>,
+    pub name: String,
+    pub constraints: Vec<StageConstraint>,
 }
 
 /// Registry for pipeline stages with DAG-based topological ordering.
@@ -191,8 +195,12 @@ impl<C> StageRegistry<C> {
     where
         F: Fn() -> Arc<dyn crate::pipeline::Stage<C>> + Send + Sync + 'static,
     {
+        let factory = Arc::new(factory);
+        let stage = factory();
         self.stages.write().push(StageEntry {
-            factory: Arc::new(factory),
+            factory,
+            name: stage.name().to_string(),
+            constraints: stage.constraints(),
         });
     }
 
@@ -206,14 +214,11 @@ impl<C> StageRegistry<C> {
     pub fn get_ordered_factories(&self) -> Vec<StageFactory<C>> {
         let stages = self.stages.read();
 
-        // Create instances to get names and constraints
-        let stage_instances: Vec<_> = stages.iter().map(|entry| (entry.factory)()).collect();
-
         // Build name-to-index mapping
-        let name_to_idx: HashMap<&str, usize> = stage_instances
+        let name_to_idx: HashMap<&str, usize> = stages
             .iter()
             .enumerate()
-            .map(|(i, s)| (s.name(), i))
+            .map(|(i, stage)| (stage.name.as_str(), i))
             .collect();
 
         // Build adjacency list and in-degree count
@@ -221,14 +226,14 @@ impl<C> StageRegistry<C> {
         let mut in_degree: HashMap<usize, usize> = HashMap::new();
 
         // Initialize all nodes
-        for i in 0..stage_instances.len() {
+        for i in 0..stages.len() {
             in_degree.entry(i).or_insert(0);
             graph.entry(i).or_default();
         }
 
         // Build edges based on constraints
-        for (i, stage) in stage_instances.iter().enumerate() {
-            for constraint in stage.constraints() {
+        for (i, stage) in stages.iter().enumerate() {
+            for constraint in &stage.constraints {
                 match constraint {
                     StageConstraint::Before(other) => {
                         // This stage must come before 'other'
@@ -260,7 +265,7 @@ impl<C> StageRegistry<C> {
             .collect();
 
         // Sort queue for deterministic order when multiple stages have same priority
-        queue.sort_by(|&a, &b| stage_instances[a].name().cmp(stage_instances[b].name()));
+        queue.sort_by(|&a, &b| stages[a].name.cmp(&stages[b].name));
 
         let mut result = Vec::new();
 
@@ -273,9 +278,7 @@ impl<C> StageRegistry<C> {
                         *deg -= 1;
                         if *deg == 0 {
                             queue.push(neighbor);
-                            queue.sort_by(|&a, &b| {
-                                stage_instances[a].name().cmp(stage_instances[b].name())
-                            });
+                            queue.sort_by(|&a, &b| stages[a].name.cmp(&stages[b].name));
                         }
                     }
                 }
@@ -283,7 +286,7 @@ impl<C> StageRegistry<C> {
         }
 
         // Check for cycles - panic if there are
-        if result.len() != stage_instances.len() {
+        if result.len() != stages.len() {
             panic!(
                 "Cycle detected in pipeline stages. This may be caused by a \
                 constraints conflict between two or more stages. Try compiling \

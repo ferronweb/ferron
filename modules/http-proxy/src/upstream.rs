@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::RwLock;
+use parking_lot::RwLock;
 
 use crate::util::TtlCache;
 
@@ -221,7 +221,7 @@ async fn resolve_srv(
             }
 
             // Filter out unhealthy backends
-            let failed = failed_backends.read().await;
+            let failed = failed_backends.read();
             let healthy: Vec<(UpstreamInner, u16, u16)> = candidates
                 .into_iter()
                 .filter(|(upstream, _, _)| {
@@ -295,7 +295,7 @@ pub async fn resolve_upstreams(
 /// For LeastConnections and TwoRandomChoices, also initializes the connection
 /// tracker `Arc<()>` in the map if missing, so that the caller can simply
 /// clone the existing entry without a second lock acquisition.
-async fn select_backend_index(
+fn select_backend_index(
     load_balancer_algorithm: &LoadBalancerAlgorithmInner,
     backends: &[UpstreamInner],
     conn_state: Option<&ConnectionsTrackState>,
@@ -312,15 +312,12 @@ async fn select_backend_index(
             let mut min_indexes = Vec::new();
             let mut min_connections = None;
             for (index, upstream) in backends.iter().enumerate() {
-                let connection_track_read = conn_state.read().await;
+                let connection_track_read = conn_state.read();
                 let connection_count = if let Some(tracker) = connection_track_read.get(upstream) {
                     Arc::strong_count(tracker) - 1
                 } else {
                     drop(connection_track_read);
-                    conn_state
-                        .write()
-                        .await
-                        .insert(upstream.clone(), Arc::new(()));
+                    conn_state.write().insert(upstream.clone(), Arc::new(()));
                     0
                 };
                 if min_connections.is_none_or(|min| connection_count < min) {
@@ -342,13 +339,10 @@ async fn select_backend_index(
             };
             if backends.len() < 2 {
                 // Initialize tracker for single backend
-                let read = conn_state.read().await;
+                let read = conn_state.read();
                 if read.get(&backends[0]).is_none() {
                     drop(read);
-                    conn_state
-                        .write()
-                        .await
-                        .insert(backends[0].clone(), Arc::new(()));
+                    conn_state.write().insert(backends[0].clone(), Arc::new(()));
                 }
                 return 0;
             }
@@ -360,14 +354,13 @@ async fn select_backend_index(
 
             // Get count for first backend
             let (count1, _read_dropped) = {
-                let read = conn_state.read().await;
+                let read = conn_state.read();
                 if let Some(t) = read.get(&backends[idx1]) {
                     (Arc::strong_count(t) - 1, false)
                 } else {
                     drop(read);
                     conn_state
                         .write()
-                        .await
                         .insert(backends[idx1].clone(), Arc::new(()));
                     (0, true)
                 }
@@ -375,14 +368,13 @@ async fn select_backend_index(
 
             // Get count for second backend
             let count2 = {
-                let read = conn_state.read().await;
+                let read = conn_state.read();
                 if let Some(t) = read.get(&backends[idx2]) {
                     Arc::strong_count(t) - 1
                 } else {
                     drop(read);
                     conn_state
                         .write()
-                        .await
                         .insert(backends[idx2].clone(), Arc::new(()));
                     0
                 }
@@ -410,7 +402,7 @@ pub struct SelectedBackend {
 ///
 /// Returns the selected upstream and its connection tracker (if applicable).
 /// Filters out unhealthy backends when health checking is enabled.
-pub async fn determine_proxy_to(
+pub fn determine_proxy_to(
     upstreams: &[UpstreamInner],
     failed_backends: &RwLock<TtlCache<UpstreamInner, u64>>,
     health_check_enabled: bool,
@@ -424,7 +416,7 @@ pub async fn determine_proxy_to(
 
     // Build a mutable copy of healthy backends for the selection loop
     let mut healthy: Vec<UpstreamInner> = if health_check_enabled {
-        let failed = failed_backends.read().await;
+        let failed = failed_backends.read();
         upstreams
             .iter()
             .filter(|u| {
@@ -444,7 +436,7 @@ pub async fn determine_proxy_to(
 
     if healthy.len() == 1 {
         // Single backend — initialize tracker if needed
-        let tracker = initialize_tracker(conn_state, &healthy[0]).await;
+        let tracker = initialize_tracker(conn_state, &healthy[0]);
         return Some(SelectedBackend {
             upstream: healthy.remove(0),
             tracker,
@@ -456,11 +448,11 @@ pub async fn determine_proxy_to(
         if healthy.is_empty() {
             return None;
         }
-        let index = select_backend_index(algorithm, &healthy, conn_state).await;
+        let index = select_backend_index(algorithm, &healthy, conn_state);
         let upstream = healthy.remove(index);
 
         if health_check_enabled {
-            let failed = failed_backends.read().await;
+            let failed = failed_backends.read();
             if let Some(fails) = failed.get(&upstream) {
                 if fails > health_check_max_fails {
                     continue; // Skip unhealthy, try next
@@ -469,41 +461,38 @@ pub async fn determine_proxy_to(
         }
 
         // Get the tracker (already initialized by select_backend_index)
-        let tracker = get_tracker(conn_state, &upstream).await;
+        let tracker = get_tracker(conn_state, &upstream);
         return Some(SelectedBackend { upstream, tracker });
     }
 }
 
 /// Get or create the connection tracker for an upstream.
-async fn initialize_tracker(
+fn initialize_tracker(
     conn_state: Option<&ConnectionsTrackState>,
     upstream: &UpstreamInner,
 ) -> Option<Arc<()>> {
     let conn_state = conn_state?;
-    let read = conn_state.read().await;
+    let read = conn_state.read();
     if read.get(upstream).is_some() {
         return None; // Tracker already exists, caller will clone it
     }
     drop(read);
-    conn_state
-        .write()
-        .await
-        .insert(upstream.clone(), Arc::new(()));
+    conn_state.write().insert(upstream.clone(), Arc::new(()));
     None
 }
 
 /// Clone an existing connection tracker for an upstream.
-async fn get_tracker(
+fn get_tracker(
     conn_state: Option<&ConnectionsTrackState>,
     upstream: &UpstreamInner,
 ) -> Option<Arc<()>> {
     let conn_state = conn_state?;
-    conn_state.read().await.get(upstream).map(Arc::clone)
+    conn_state.read().get(upstream).map(Arc::clone)
 }
 
 /// Mark a backend as failed.
-pub async fn mark_backend_failure(
-    failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>>,
+pub fn mark_backend_failure(
+    failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>>,
     health_check_enabled: bool,
     upstream: &UpstreamInner,
     metrics: &mut crate::ProxyMetrics,
@@ -512,7 +501,7 @@ pub async fn mark_backend_failure(
         return;
     }
     metrics.unhealthy_backends.push(upstream.clone());
-    let mut failed = failed_backends.write().await;
+    let mut failed = failed_backends.write();
     let current = failed.get(upstream).unwrap_or(0);
     failed.insert(upstream.clone(), current + 1);
 }
@@ -528,8 +517,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_select_backend_index_random() {
+    #[test]
+    fn test_select_backend_index_random() {
         let backends = vec![
             make_upstream("http://backend1"),
             make_upstream("http://backend2"),
@@ -539,13 +528,13 @@ mod tests {
 
         // Random should return a valid index
         for _ in 0..100 {
-            let idx = select_backend_index(&algorithm, &backends, None).await;
+            let idx = select_backend_index(&algorithm, &backends, None);
             assert!(idx < backends.len());
         }
     }
 
-    #[tokio::test]
-    async fn test_select_backend_index_round_robin() {
+    #[test]
+    fn test_select_backend_index_round_robin() {
         let backends = vec![
             make_upstream("http://backend1"),
             make_upstream("http://backend2"),
@@ -555,14 +544,14 @@ mod tests {
         let algorithm = LoadBalancerAlgorithmInner::RoundRobin(counter);
 
         // Should cycle through backends
-        assert_eq!(select_backend_index(&algorithm, &backends, None).await, 0);
-        assert_eq!(select_backend_index(&algorithm, &backends, None).await, 1);
-        assert_eq!(select_backend_index(&algorithm, &backends, None).await, 2);
-        assert_eq!(select_backend_index(&algorithm, &backends, None).await, 0);
+        assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
+        assert_eq!(select_backend_index(&algorithm, &backends, None), 1);
+        assert_eq!(select_backend_index(&algorithm, &backends, None), 2);
+        assert_eq!(select_backend_index(&algorithm, &backends, None), 0);
     }
 
-    #[tokio::test]
-    async fn test_select_backend_index_least_connections() {
+    #[test]
+    fn test_select_backend_index_least_connections() {
         let backends = vec![
             make_upstream("http://backend1"),
             make_upstream("http://backend2"),
@@ -571,7 +560,7 @@ mod tests {
         let algorithm = LoadBalancerAlgorithmInner::LeastConnections;
 
         // With no connections, should return first backend (both have 0 connections)
-        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state)).await;
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
         assert!(idx < backends.len());
 
         // Simulate more active connections on backend1 by cloning the tracker Arc
@@ -579,7 +568,6 @@ mod tests {
         let tracker1 = Arc::new(());
         conn_state
             .write()
-            .await
             .insert(backends[0].clone(), tracker1.clone());
         // Clone to simulate 2 active connections (strong_count = 3, so 3-1 = 2)
         let _clone1 = tracker1.clone();
@@ -587,12 +575,12 @@ mod tests {
 
         // backend2 has 0 connections (not in map), backend1 has 2
         // Should prefer backend2 (less connections)
-        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state)).await;
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
         assert_eq!(idx, 1);
     }
 
-    #[tokio::test]
-    async fn test_select_backend_index_two_random_choices() {
+    #[test]
+    fn test_select_backend_index_two_random_choices() {
         let backends = vec![
             make_upstream("http://backend1"),
             make_upstream("http://backend2"),
@@ -603,38 +591,36 @@ mod tests {
 
         // Should return valid indices
         for _ in 0..100 {
-            let idx = select_backend_index(&algorithm, &backends, Some(&conn_state)).await;
+            let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
             assert!(idx < backends.len());
         }
     }
 
-    #[tokio::test]
-    async fn test_select_backend_single_backend() {
+    #[test]
+    fn test_select_backend_single_backend() {
         let backends = vec![make_upstream("http://backend1")];
         let conn_state: ConnectionsTrackState = Arc::new(RwLock::new(HashMap::new()));
         let algorithm = LoadBalancerAlgorithmInner::TwoRandomChoices;
 
-        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state)).await;
+        let idx = select_backend_index(&algorithm, &backends, Some(&conn_state));
         assert_eq!(idx, 0);
     }
 
-    #[tokio::test]
-    async fn test_determine_proxy_to_no_upstreams() {
-        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
-            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
-        );
+    #[test]
+    fn test_determine_proxy_to_no_upstreams() {
+        let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+            Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
         let algorithm = LoadBalancerAlgorithmInner::Random;
 
-        let result = determine_proxy_to(&[], &failed_backends, false, 3, &algorithm, None).await;
+        let result = determine_proxy_to(&[], &failed_backends, false, 3, &algorithm, None);
         assert!(result.is_none());
     }
 
-    #[tokio::test]
-    async fn test_determine_proxy_to_single_backend() {
+    #[test]
+    fn test_determine_proxy_to_single_backend() {
         let upstreams = vec![make_upstream("http://backend1")];
-        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
-            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
-        );
+        let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+            Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
         let algorithm = LoadBalancerAlgorithmInner::Random;
         let conn_state: ConnectionsTrackState = Arc::new(RwLock::new(HashMap::new()));
 
@@ -645,26 +631,24 @@ mod tests {
             3,
             &algorithm,
             Some(&conn_state),
-        )
-        .await;
+        );
         assert!(result.is_some());
         let selected = result.unwrap();
         assert_eq!(selected.upstream.proxy_to, "http://backend1");
     }
 
-    #[tokio::test]
-    async fn test_determine_proxy_to_health_check_filters_unhealthy() {
+    #[test]
+    fn test_determine_proxy_to_health_check_filters_unhealthy() {
         let upstreams = vec![
             make_upstream("http://backend1"),
             make_upstream("http://backend2"),
         ];
-        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
-            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
-        );
+        let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+            Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
 
         // Mark backend1 as unhealthy (exceeds max_fails)
         {
-            let mut failed = failed_backends.write().await;
+            let mut failed = failed_backends.write();
             failed.insert(make_upstream("http://backend1"), 5);
         }
 
@@ -678,25 +662,23 @@ mod tests {
             3, // max_fails
             &algorithm,
             None,
-        )
-        .await;
+        );
         assert!(result.is_some());
         assert_eq!(result.unwrap().upstream.proxy_to, "http://backend2");
     }
 
-    #[tokio::test]
-    async fn test_determine_proxy_to_all_unhealthy() {
+    #[test]
+    fn test_determine_proxy_to_all_unhealthy() {
         let upstreams = vec![
             make_upstream("http://backend1"),
             make_upstream("http://backend2"),
         ];
-        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
-            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
-        );
+        let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+            Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
 
         // Mark all backends as unhealthy
         {
-            let mut failed = failed_backends.write().await;
+            let mut failed = failed_backends.write();
             failed.insert(make_upstream("http://backend1"), 5);
             failed.insert(make_upstream("http://backend2"), 5);
         }
@@ -710,24 +692,22 @@ mod tests {
             3, // max_fails
             &algorithm,
             None,
-        )
-        .await;
+        );
         assert!(result.is_none());
     }
 
-    #[tokio::test]
-    async fn test_determine_proxy_to_health_check_disabled() {
+    #[test]
+    fn test_determine_proxy_to_health_check_disabled() {
         let upstreams = vec![
             make_upstream("http://backend1"),
             make_upstream("http://backend2"),
         ];
-        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
-            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
-        );
+        let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+            Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
 
         // Mark backend1 as unhealthy, but health check is disabled so it should still be selected
         {
-            let mut failed = failed_backends.write().await;
+            let mut failed = failed_backends.write();
             failed.insert(make_upstream("http://backend1"), 100);
         }
 
@@ -740,35 +720,32 @@ mod tests {
             3,
             &algorithm,
             None,
-        )
-        .await;
+        );
         assert!(result.is_some());
     }
 
-    #[tokio::test]
-    async fn test_mark_backend_failure() {
-        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
-            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
-        );
+    #[test]
+    fn test_mark_backend_failure() {
+        let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+            Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
         let upstream = make_upstream("http://backend1");
         let mut metrics = crate::ProxyMetrics::new();
 
-        mark_backend_failure(Arc::clone(&failed_backends), true, &upstream, &mut metrics).await;
+        mark_backend_failure(Arc::clone(&failed_backends), true, &upstream, &mut metrics);
 
         assert_eq!(metrics.unhealthy_backends.len(), 1);
-        assert_eq!(failed_backends.read().await.get(&upstream), Some(1));
+        assert_eq!(failed_backends.read().get(&upstream), Some(1));
 
         // Second failure
-        mark_backend_failure(Arc::clone(&failed_backends), true, &upstream, &mut metrics).await;
+        mark_backend_failure(Arc::clone(&failed_backends), true, &upstream, &mut metrics);
 
-        assert_eq!(failed_backends.read().await.get(&upstream), Some(2));
+        assert_eq!(failed_backends.read().get(&upstream), Some(2));
     }
 
-    #[tokio::test]
-    async fn test_mark_backend_failure_health_check_disabled() {
-        let failed_backends: Arc<tokio::sync::RwLock<TtlCache<UpstreamInner, u64>>> = Arc::new(
-            tokio::sync::RwLock::new(TtlCache::new(Duration::from_secs(60))),
-        );
+    #[test]
+    fn test_mark_backend_failure_health_check_disabled() {
+        let failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>> =
+            Arc::new(RwLock::new(TtlCache::new(Duration::from_secs(60))));
         let upstream = make_upstream("http://backend1");
         let mut metrics = crate::ProxyMetrics::new();
 
@@ -777,11 +754,10 @@ mod tests {
             false, // health check disabled
             &upstream,
             &mut metrics,
-        )
-        .await;
+        );
 
         assert_eq!(metrics.unhealthy_backends.len(), 0);
-        assert_eq!(failed_backends.read().await.get(&upstream), None);
+        assert_eq!(failed_backends.read().get(&upstream), None);
     }
 
     #[test]

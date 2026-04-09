@@ -31,13 +31,14 @@ type ResponseBody = UnsyncBoxBody<Bytes, io::Error>;
 /// Per-stage hooks that emit trace spans around each pipeline stage.
 struct PerStageSpanHooks<'a> {
     events: &'a CompositeEventSink,
+    has_traces: bool,
 }
 
 #[async_trait::async_trait(?Send)]
 impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
     #[inline]
     async fn before_stage(&mut self, stage: &dyn Stage<HttpContext>) {
-        if !self.events.has_trace_sinks() {
+        if !self.has_traces {
             return;
         }
         let stage_name = stage.name();
@@ -57,7 +58,7 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
         stage: &dyn Stage<HttpContext>,
         result: &Result<bool, PipelineError>,
     ) {
-        if !self.events.has_trace_sinks() {
+        if !self.has_traces {
             return;
         }
         self.events.emit(Event::Trace(TraceEvent::EndSpan {
@@ -69,7 +70,7 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
 
     #[inline]
     async fn before_stage_inverse(&mut self, stage: &dyn Stage<HttpContext>) {
-        if !self.events.has_trace_sinks() {
+        if !self.has_traces {
             return;
         }
         let stage_name = stage.name();
@@ -89,7 +90,7 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
         stage: &dyn Stage<HttpContext>,
         result: &Result<(), PipelineError>,
     ) {
-        if !self.events.has_trace_sinks() {
+        if !self.has_traces {
             return;
         }
         self.events.emit(Event::Trace(TraceEvent::EndSpan {
@@ -348,54 +349,77 @@ pub async fn request_handler(
     https_port: Option<u16>,
     events: CompositeEventSink,
 ) -> Result<Response<ResponseBody>, io::Error> {
-    // Build metric attributes from the original request before consuming it
-    let metric_attrs = build_metric_attributes(&request, encrypted, None);
-    let method = request.method().clone();
-    let path = request.uri().path().to_string();
-    let path_and_query = request
-        .uri()
-        .path_and_query()
-        .map_or(path.clone(), |pq| pq.to_string());
-    let version = http_version_access_string(request.version());
+    let has_events = !events.is_empty();
+    let has_traces = events.has_trace_sinks();
+
     let scheme: &'static str = if encrypted { "https" } else { "http" };
-    // Canonicalize IPs once for reuse in access log and trace attributes
-    let server_ip = local_address.ip().to_string();
-    let server_port = local_address.port();
-    let server_ip_canonical = canonicalize_ip(local_address.ip());
-    let initial_client_ip_canonical = canonicalize_ip(remote_address.ip());
+    // Build observability payloads from the original request before consuming it.
+    let metric_attrs = has_events.then(|| build_metric_attributes(&request, encrypted, None));
+    let method = has_events.then(|| request.method().clone());
+    let path = has_events.then(|| request.uri().path().to_string());
+    let path_and_query = has_events.then(|| {
+        request
+            .uri()
+            .path_and_query()
+            .map_or_else(|| request.uri().path().to_string(), |pq| pq.to_string())
+    });
+    let version = has_events.then(|| http_version_access_string(request.version()));
+    let server_ip = has_events.then(|| local_address.ip().to_string());
+    let server_port = has_events.then_some(local_address.port());
+    let server_ip_canonical = has_events.then(|| canonicalize_ip(local_address.ip()));
+    let initial_client_ip_canonical = has_events.then(|| canonicalize_ip(remote_address.ip()));
 
     // Start tracing span
-    events.emit(Event::Trace(TraceEvent::StartSpan {
-        name: Cow::Borrowed("ferron.request_handler"),
-        parent_span_id: None,
-        attributes: vec![
-            (
-                "http.request.method",
-                TraceAttributeValue::String(method.as_str().to_string()),
-            ),
-            ("url.path", TraceAttributeValue::String(path.clone())),
-            ("url.scheme", TraceAttributeValue::StaticStr(scheme)),
-            (
-                "server.address",
-                TraceAttributeValue::String(server_ip.clone()),
-            ),
-            ("server.port", TraceAttributeValue::I64(server_port as i64)),
-            (
-                "client.address",
-                TraceAttributeValue::String(initial_client_ip_canonical.clone()),
-            ),
-        ],
-    }));
+    if has_traces {
+        let method = method
+            .as_ref()
+            .expect("trace events require request metadata to be initialized");
+        let path = path
+            .as_ref()
+            .expect("trace events require request metadata to be initialized");
+        let server_ip = server_ip
+            .as_ref()
+            .expect("trace events require request metadata to be initialized");
+        let server_port =
+            server_port.expect("trace events require request metadata to be initialized");
+        let initial_client_ip_canonical = initial_client_ip_canonical
+            .as_ref()
+            .expect("trace events require request metadata to be initialized");
+
+        events.emit(Event::Trace(TraceEvent::StartSpan {
+            name: Cow::Borrowed("ferron.request_handler"),
+            parent_span_id: None,
+            attributes: vec![
+                (
+                    "http.request.method",
+                    TraceAttributeValue::String(method.as_str().to_string()),
+                ),
+                ("url.path", TraceAttributeValue::String(path.clone())),
+                ("url.scheme", TraceAttributeValue::StaticStr(scheme)),
+                (
+                    "server.address",
+                    TraceAttributeValue::String(server_ip.clone()),
+                ),
+                ("server.port", TraceAttributeValue::I64(server_port as i64)),
+                (
+                    "client.address",
+                    TraceAttributeValue::String(initial_client_ip_canonical.clone()),
+                ),
+            ],
+        }));
+    }
 
     // Increment active requests counter
-    events.emit(Event::Metric(MetricEvent {
-        name: "http.server.active_requests",
-        attributes: metric_attrs.clone(),
-        ty: MetricType::UpDownCounter,
-        value: MetricValue::I64(1),
-        unit: Some("{request}"),
-        description: Some("Number of active HTTP server requests."),
-    }));
+    if let Some(metric_attrs) = metric_attrs.as_ref() {
+        events.emit(Event::Metric(MetricEvent {
+            name: "http.server.active_requests",
+            attributes: metric_attrs.clone(),
+            ty: MetricType::UpDownCounter,
+            value: MetricValue::I64(1),
+            unit: Some("{request}"),
+            description: Some("Number of active HTTP server requests."),
+        }));
+    }
 
     let request_timer = std::time::Instant::now();
 
@@ -431,130 +455,142 @@ pub async fn request_handler(
     )
     .await;
 
-    // Compute duration and extract response info
-    let duration_secs = request_timer.elapsed().as_secs_f64();
-    let timestamp = chrono::Local::now();
+    if let Some(metric_attrs) = metric_attrs {
+        // Compute duration and extract response info only when some sink may consume them.
+        let duration_secs = request_timer.elapsed().as_secs_f64();
+        let timestamp = chrono::Local::now();
 
-    // Use the potentially modified remote_address (e.g. from X-Forwarded-For stage)
-    // for access log fields, falling back to the original if not provided.
-    let effective_remote = final_remote_address.unwrap_or(remote_address);
-    let client_ip = effective_remote.ip().to_string();
-    let client_port = effective_remote.port();
-    let client_ip_canonical = canonicalize_ip(effective_remote.ip());
-    let (status_code, content_length) = match &response_result {
-        Ok(r) => {
-            let status = r.status().as_u16();
-            let content_length = r
-                .headers()
-                .get(http::header::CONTENT_LENGTH)
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.parse().ok());
-            (status, content_length)
-        }
-        Err(_) => (500, None),
-    };
+        // Use the potentially modified remote_address (e.g. from X-Forwarded-For stage)
+        // for access log fields, falling back to the original if not provided.
+        let effective_remote = final_remote_address.unwrap_or(remote_address);
+        let client_ip = effective_remote.ip().to_string();
+        let client_port = effective_remote.port();
+        let client_ip_canonical = canonicalize_ip(effective_remote.ip());
+        let (status_code, content_length) = match &response_result {
+            Ok(r) => {
+                let status = r.status().as_u16();
+                let content_length = r
+                    .headers()
+                    .get(http::header::CONTENT_LENGTH)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|s| s.parse().ok());
+                (status, content_length)
+            }
+            Err(_) => (500, None),
+        };
 
-    // Build request_count-specific attributes
-    let mut request_count_attrs = metric_attrs.clone();
-    request_count_attrs.push((
-        "http.response.status_code",
-        MetricAttributeValue::I64(status_code as i64),
-    ));
-    if status_code >= 400 {
+        // Build request_count-specific attributes
+        let mut request_count_attrs = metric_attrs.clone();
         request_count_attrs.push((
-            "error.type",
-            MetricAttributeValue::String(status_code.to_string()),
+            "http.response.status_code",
+            MetricAttributeValue::I64(status_code as i64),
         ));
-    }
+        if status_code >= 400 {
+            request_count_attrs.push((
+                "error.type",
+                MetricAttributeValue::String(status_code.to_string()),
+            ));
+        }
 
-    // Build duration-specific attributes (includes status_code for OTel compliance)
-    let mut duration_attrs = metric_attrs.clone();
-    duration_attrs.push((
-        "http.response.status_code",
-        MetricAttributeValue::I64(status_code as i64),
-    ));
-    if status_code >= 400 {
+        // Build duration-specific attributes (includes status_code for OTel compliance)
+        let mut duration_attrs = metric_attrs.clone();
         duration_attrs.push((
-            "error.type",
-            MetricAttributeValue::String(status_code.to_string()),
+            "http.response.status_code",
+            MetricAttributeValue::I64(status_code as i64),
         ));
+        if status_code >= 400 {
+            duration_attrs.push((
+                "error.type",
+                MetricAttributeValue::String(status_code.to_string()),
+            ));
+        }
+
+        // Decrement active requests
+        events.emit(Event::Metric(MetricEvent {
+            name: "http.server.active_requests",
+            attributes: metric_attrs.clone(),
+            ty: MetricType::UpDownCounter,
+            value: MetricValue::I64(-1),
+            unit: Some("{request}"),
+            description: Some("Number of active HTTP server requests."),
+        }));
+
+        // Emit request duration histogram
+        events.emit(Event::Metric(MetricEvent {
+            name: "http.server.request.duration",
+            attributes: duration_attrs,
+            ty: MetricType::Histogram(Some(vec![
+                0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
+            ])),
+            value: MetricValue::F64(duration_secs),
+            unit: Some("s"),
+            description: Some("Duration of HTTP server requests."),
+        }));
+
+        // Emit request count
+        events.emit(Event::Metric(MetricEvent {
+            name: "ferron.http.server.request_count",
+            attributes: request_count_attrs,
+            ty: MetricType::Counter,
+            value: MetricValue::U64(1),
+            unit: Some("{request}"),
+            description: Some("Number of HTTP server requests."),
+        }));
+
+        // Emit access log
+        events.emit(Event::Access(Arc::new(HttpAccessLog {
+            path: path.expect("request metadata should be initialized when events are enabled"),
+            path_and_query: path_and_query
+                .expect("request metadata should be initialized when events are enabled"),
+            method: method
+                .expect("request metadata should be initialized when events are enabled")
+                .as_str()
+                .to_string(),
+            version: Cow::Borrowed(
+                version.expect("request metadata should be initialized when events are enabled"),
+            ),
+            scheme: Cow::Borrowed(scheme),
+            client_ip,
+            client_port,
+            client_ip_canonical,
+            server_ip: server_ip
+                .expect("request metadata should be initialized when events are enabled"),
+            server_port: server_port
+                .expect("request metadata should be initialized when events are enabled"),
+            server_ip_canonical: server_ip_canonical
+                .expect("request metadata should be initialized when events are enabled"),
+            auth_user,
+            status: status_code,
+            content_length,
+            duration_secs,
+            request_headers,
+            timestamp,
+        })));
+
+        if has_traces {
+            let error_description = response_result.as_ref().err().map(|e| e.to_string());
+            let mut end_attrs = Vec::with_capacity(3);
+            end_attrs.push((
+                "http.response.status_code",
+                TraceAttributeValue::I64(status_code as i64),
+            ));
+            end_attrs.push((
+                "http.route",
+                TraceAttributeValue::String(hostname.as_deref().unwrap_or("*").to_string()),
+            ));
+            if status_code >= 400 {
+                end_attrs.push((
+                    "error.type",
+                    TraceAttributeValue::String(status_code.to_string()),
+                ));
+            }
+            events.emit(Event::Trace(TraceEvent::EndSpan {
+                name: Cow::Borrowed("ferron.request_handler"),
+                error: error_description,
+                attributes: end_attrs,
+            }));
+        }
     }
-
-    // Decrement active requests
-    events.emit(Event::Metric(MetricEvent {
-        name: "http.server.active_requests",
-        attributes: metric_attrs.clone(),
-        ty: MetricType::UpDownCounter,
-        value: MetricValue::I64(-1),
-        unit: Some("{request}"),
-        description: Some("Number of active HTTP server requests."),
-    }));
-
-    // Emit request duration histogram
-    events.emit(Event::Metric(MetricEvent {
-        name: "http.server.request.duration",
-        attributes: duration_attrs,
-        ty: MetricType::Histogram(Some(vec![
-            0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0,
-        ])),
-        value: MetricValue::F64(duration_secs),
-        unit: Some("s"),
-        description: Some("Duration of HTTP server requests."),
-    }));
-
-    // Emit request count
-    events.emit(Event::Metric(MetricEvent {
-        name: "ferron.http.server.request_count",
-        attributes: request_count_attrs,
-        ty: MetricType::Counter,
-        value: MetricValue::U64(1),
-        unit: Some("{request}"),
-        description: Some("Number of HTTP server requests."),
-    }));
-
-    // Emit access log
-    events.emit(Event::Access(Arc::new(HttpAccessLog {
-        path,
-        path_and_query,
-        method: method.as_str().to_string(),
-        version: Cow::Borrowed(version),
-        scheme: Cow::Borrowed(scheme),
-        client_ip,
-        client_port,
-        client_ip_canonical,
-        server_ip,
-        server_port,
-        server_ip_canonical,
-        auth_user,
-        status: status_code,
-        content_length,
-        duration_secs,
-        request_headers,
-        timestamp,
-    })));
-
-    // End tracing span
-    let error_description = response_result.as_ref().err().map(|e| e.to_string());
-    let mut end_attrs = Vec::with_capacity(3);
-    end_attrs.push((
-        "http.response.status_code",
-        TraceAttributeValue::I64(status_code as i64),
-    ));
-    end_attrs.push((
-        "http.route",
-        TraceAttributeValue::String(hostname.as_deref().unwrap_or("*").to_string()),
-    ));
-    if status_code >= 400 {
-        end_attrs.push((
-            "error.type",
-            TraceAttributeValue::String(status_code.to_string()),
-        ));
-    }
-    events.emit(Event::Trace(TraceEvent::EndSpan {
-        name: Cow::Borrowed("ferron.request_handler"),
-        error: error_description,
-        attributes: end_attrs,
-    }));
 
     if let Ok(response) = &mut response_result {
         // TODO: add Alt-Svc for HTTP/3
@@ -852,15 +888,19 @@ async fn execute_pipeline_stages(
     log_prefix: &str,
     path_segments: &[String],
 ) {
+    let has_traces = events.has_trace_sinks();
+
     // Start pipeline execution span
-    events.emit(Event::Trace(TraceEvent::StartSpan {
-        name: Cow::Borrowed("ferron.pipeline.execute"),
-        parent_span_id: None,
-        attributes: vec![(
-            "ferron.pipeline.log_prefix",
-            TraceAttributeValue::String(log_prefix.to_string()),
-        )],
-    }));
+    if has_traces {
+        events.emit(Event::Trace(TraceEvent::StartSpan {
+            name: Cow::Borrowed("ferron.pipeline.execute"),
+            parent_span_id: None,
+            attributes: vec![(
+                "ferron.pipeline.log_prefix",
+                TraceAttributeValue::String(log_prefix.to_string()),
+            )],
+        }));
+    }
 
     // Remove the base URL if path segments were matched
     if !path_segments.is_empty() {
@@ -868,21 +908,8 @@ async fn execute_pipeline_stages(
             let (mut parts, body) = req.into_parts();
             let mut uri_parts = parts.uri.into_parts();
             if let Some(path_and_query) = uri_parts.path_and_query {
-                let mut path_split = path_and_query.path().split('/').collect::<Vec<_>>();
-                let mut new_path_split = Vec::with_capacity(path_split.len() - path_segments.len());
-                new_path_split.push("");
-                new_path_split.extend(path_split.split_off(path_segments.len() + 1));
-                let new_path = new_path_split.join("/");
-                uri_parts.path_and_query = format!(
-                    "{new_path}{}",
-                    if let Some(q) = path_and_query.query() {
-                        format!("?{q}")
-                    } else {
-                        "".to_string()
-                    }
-                )
-                .try_into()
-                .ok();
+                uri_parts.path_and_query =
+                    strip_matched_path_prefix(&path_and_query, path_segments.len());
                 if uri_parts.path_and_query.is_none() {
                     ctx.res = Some(HttpResponse::BuiltinError(400, None));
                     return;
@@ -921,7 +948,7 @@ async fn execute_pipeline_stages(
     let instant = std::time::Instant::now();
 
     // Per-stage span hooks — emit StartSpan/EndSpan around each stage
-    let mut stage_hooks = PerStageSpanHooks { events };
+    let mut stage_hooks = PerStageSpanHooks { events, has_traces };
 
     let executed_stages = match if let Some(timeout_duration) =
         timeout_duration.map(|d| d.saturating_sub(instant.elapsed()))
@@ -1002,14 +1029,18 @@ async fn execute_pipeline_stages(
     }
 
     // End pipeline execution span
-    events.emit(Event::Trace(TraceEvent::EndSpan {
-        name: Cow::Borrowed("ferron.pipeline.execute"),
-        error: ctx.res.as_ref().and_then(|r| match r {
-            HttpResponse::BuiltinError(s, _) if *s >= 400 => Some(format!("builtin error {}", s)),
-            _ => None,
-        }),
-        attributes: vec![],
-    }));
+    if has_traces {
+        events.emit(Event::Trace(TraceEvent::EndSpan {
+            name: Cow::Borrowed("ferron.pipeline.execute"),
+            error: ctx.res.as_ref().and_then(|r| match r {
+                HttpResponse::BuiltinError(s, _) if *s >= 400 => {
+                    Some(format!("builtin error {}", s))
+                }
+                _ => None,
+            }),
+            attributes: vec![],
+        }));
+    }
 }
 
 async fn execute_http_file_pipeline(
@@ -1395,6 +1426,42 @@ fn build_path_info(request_segments: &[String], trailing_slash: bool) -> Option<
     Some(path_info)
 }
 
+fn strip_matched_path_prefix(
+    path_and_query: &http::uri::PathAndQuery,
+    matched_segments: usize,
+) -> Option<http::uri::PathAndQuery> {
+    if matched_segments == 0 {
+        return Some(path_and_query.clone());
+    }
+
+    let path = path_and_query.path();
+    let path_bytes = path.as_bytes();
+    let mut offset = 0;
+
+    for _ in 0..matched_segments {
+        if offset >= path_bytes.len() || path_bytes[offset] != b'/' {
+            return None;
+        }
+        offset += 1;
+        while offset < path_bytes.len() && path_bytes[offset] != b'/' {
+            offset += 1;
+        }
+    }
+
+    let stripped_path = if offset >= path.len() {
+        "/"
+    } else {
+        &path[offset..]
+    };
+    let stripped_path_and_query = if let Some(query) = path_and_query.query() {
+        format!("{stripped_path}?{query}")
+    } else {
+        stripped_path.to_string()
+    };
+
+    stripped_path_and_query.try_into().ok()
+}
+
 fn is_not_directory_like(error: &io::Error) -> bool {
     #[cfg(unix)]
     if error.raw_os_error() == Some(20) {
@@ -1584,15 +1651,19 @@ async fn execute_error_pipeline(
     configuration: LayeredConfiguration,
     events: &CompositeEventSink,
 ) -> Option<Response<ResponseBody>> {
+    let has_traces = events.has_trace_sinks();
+
     // Start error pipeline execution span
-    events.emit(Event::Trace(TraceEvent::StartSpan {
-        name: Cow::Borrowed("ferron.pipeline.execute_error"),
-        parent_span_id: None,
-        attributes: vec![(
-            "http.response.status_code",
-            TraceAttributeValue::I64(error_code as i64),
-        )],
-    }));
+    if has_traces {
+        events.emit(Event::Trace(TraceEvent::StartSpan {
+            name: Cow::Borrowed("ferron.pipeline.execute_error"),
+            parent_span_id: None,
+            attributes: vec![(
+                "http.response.status_code",
+                TraceAttributeValue::I64(error_code as i64),
+            )],
+        }));
+    }
 
     let mut error_ctx = HttpErrorContext {
         error_code,
@@ -1606,11 +1677,13 @@ async fn execute_error_pipeline(
     }
 
     // End error pipeline execution span
-    events.emit(Event::Trace(TraceEvent::EndSpan {
-        name: Cow::Borrowed("ferron.pipeline.execute_error"),
-        error: None,
-        attributes: vec![],
-    }));
+    if has_traces {
+        events.emit(Event::Trace(TraceEvent::EndSpan {
+            name: Cow::Borrowed("ferron.pipeline.execute_error"),
+            error: None,
+            attributes: vec![],
+        }));
+    }
 
     error_ctx.res
 }
@@ -1751,5 +1824,29 @@ mod tests {
             .expect("valid request");
 
         assert!(!is_options_star_request(&request));
+    }
+
+    #[test]
+    fn strip_matched_path_prefix_preserves_root_when_location_matches_entire_path() {
+        let path_and_query = "/api/users?expand=true"
+            .parse()
+            .expect("valid path and query");
+
+        let stripped = strip_matched_path_prefix(&path_and_query, 2)
+            .expect("matched prefix should strip cleanly");
+
+        assert_eq!(stripped.as_str(), "/?expand=true");
+    }
+
+    #[test]
+    fn strip_matched_path_prefix_preserves_remaining_suffix() {
+        let path_and_query = "/api/users/profile/avatar"
+            .parse()
+            .expect("valid path and query");
+
+        let stripped = strip_matched_path_prefix(&path_and_query, 2)
+            .expect("matched prefix should strip cleanly");
+
+        assert_eq!(stripped.as_str(), "/profile/avatar");
     }
 }

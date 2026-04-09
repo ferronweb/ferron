@@ -12,21 +12,20 @@ mod upstream;
 mod util;
 
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+
+use parking_lot::RwLock;
 
 use crate::config::ProxyConfig;
 use crate::upstream::LoadBalancerAlgorithmInner;
+pub use config::ProxyConfigurationValidator;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_http::HttpContext;
-use tokio::sync::RwLock;
-
-pub use config::ProxyConfigurationValidator;
 
 /// Metrics collected during a proxy request, emitted after completion.
 pub struct ProxyMetrics {
@@ -114,10 +113,9 @@ struct ProxyState {
     failed_backends: Arc<RwLock<crate::util::TtlCache<upstream::UpstreamInner, u64>>>,
     /// Connection tracking state for LeastConnections/TwoRandomChoices.
     conn_state: upstream::ConnectionsTrackState,
-    /// Load balancing algorithm (shared across all requests).
-    /// Contains the `AtomicUsize` counter for RoundRobin, so it must be
-    /// constructed once and reused — not per-request.
-    lb_algorithm: RwLock<Option<Arc<LoadBalancerAlgorithmInner>>>,
+    /// Load balancing algorithms cached per resolved configuration.
+    /// Round-robin counters must remain shared for a given config key.
+    lb_algorithms: RwLock<HashMap<usize, Arc<LoadBalancerAlgorithmInner>>>,
     /// Cache of parsed proxy configurations, keyed by the `Arc` pointer
     /// identity of the `LayeredConfiguration`. Config only changes on reload,
     /// so the parsed result can be reused indefinitely.
@@ -132,20 +130,20 @@ impl ProxyState {
                 DEFAULT_KEEPALIVE_IDLE_TIMEOUT,
             ))),
             conn_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
-            lb_algorithm: RwLock::new(None),
+            lb_algorithms: RwLock::new(HashMap::new()),
             parsed_configs: RwLock::new(HashMap::new()),
         }
     }
 
     /// Get or create the connection manager using the globally configured limit.
-    async fn get_conn_manager(&self) -> Arc<crate::connections::ConnectionManager> {
-        let guard = self.conn_manager.read().await;
+    fn get_conn_manager(&self) -> Arc<crate::connections::ConnectionManager> {
+        let guard = self.conn_manager.read();
         if let Some(cm) = &*guard {
             return Arc::clone(cm);
         }
         drop(guard);
 
-        let mut guard = self.conn_manager.write().await;
+        let mut guard = self.conn_manager.write();
         if let Some(cm) = &*guard {
             return Arc::clone(cm);
         }
@@ -281,7 +279,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
 
         // Check the parsed config cache before re-parsing
         let config = {
-            let guard = self.state.parsed_configs.read().await;
+            let guard = self.state.parsed_configs.read();
             guard.get(&config_key).cloned()
         };
 
@@ -302,13 +300,14 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                         return Ok(true);
                     }
                 };
-                let mut guard = self.state.parsed_configs.write().await;
+                let mut guard = self.state.parsed_configs.write();
                 guard.insert(config_key, Arc::clone(&parsed));
                 parsed
             }
         };
 
         // Set per-upstream local limits (idempotent — only registered once)
+        let conn_manager = self.state.get_conn_manager();
         for uc in &config.upstreams {
             let limit = match uc {
                 upstream::Upstream::Static(s) => s.limit,
@@ -323,32 +322,27 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     )
                     .await;
                 for resolved_upstream in resolved {
-                    let conn_manager = self.state.get_conn_manager().await;
-                    conn_manager
-                        .set_local_limit(&resolved_upstream, limit)
-                        .await;
+                    conn_manager.set_local_limit(&resolved_upstream, limit);
                 }
             }
         }
 
         let algorithm = {
-            let guard = self.state.lb_algorithm.read().await;
-            if let Some(alg) = &*guard {
+            let guard = self.state.lb_algorithms.read();
+            if let Some(alg) = guard.get(&config_key) {
                 Arc::clone(alg)
             } else {
                 drop(guard);
-                let mut guard = self.state.lb_algorithm.write().await;
-                // Double-check after upgrading the lock
-                if let Some(alg) = &*guard {
+                let mut guard = self.state.lb_algorithms.write();
+                if let Some(alg) = guard.get(&config_key) {
                     Arc::clone(alg)
                 } else {
                     let alg = Arc::new(config.lb_algorithm.into());
-                    *guard = Some(Arc::clone(&alg));
+                    guard.insert(config_key, Arc::clone(&alg));
                     alg
                 }
             }
         };
-        let conn_manager = self.state.get_conn_manager().await;
 
         let result = proxy::execute_proxy(
             ctx,
