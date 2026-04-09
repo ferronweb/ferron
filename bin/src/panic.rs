@@ -31,7 +31,14 @@ Oh no... Your Ferron web server just crashed...
 "#
     );
 
-    let payload = panic_info.payload_as_str();
+    let payload_any = panic_info.payload();
+    let payload: Option<&str> = if let Some(s) = payload_any.downcast_ref::<&str>() {
+        Some(s)
+    } else if let Some(s) = payload_any.downcast_ref::<String>() {
+        Some(s)
+    } else {
+        None
+    };
     eprintln!(
         "{} (at {})",
         payload.unwrap_or("<unknown crash>"),
