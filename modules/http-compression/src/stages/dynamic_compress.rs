@@ -269,6 +269,9 @@ impl Stage<HttpContext> for DynamicCompressionStage {
 
         let (mut parts, body) = response.into_parts();
 
+        // Prevent zerocopy from interfering with the module
+        parts.extensions.clear();
+
         // Update Vary header
         update_vary_header(&mut parts.headers);
 
