@@ -2,6 +2,7 @@
 
 use std::cell::UnsafeCell;
 use std::net::IpAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -108,11 +109,26 @@ fn construct_proxy_request(
         Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync(),
     );
 
-    let mut uri_parts = proxy_request_url.clone().into_parts();
-    if let Some(pq) = parts.uri.path_and_query() {
-        uri_parts.path_and_query = Some(pq.clone());
-    }
-    parts.uri = http::Uri::from_parts(uri_parts)?;
+    let request_path = parts.uri.path();
+    let path = match request_path.as_bytes().first() {
+        Some(b'/') => {
+            let mut proxy_request_path = proxy_request_url.path();
+            while proxy_request_path.as_bytes().last().copied() == Some(b'/') {
+                proxy_request_path = &proxy_request_path[..(proxy_request_path.len() - 1)];
+            }
+            format!("{proxy_request_path}{request_path}")
+        }
+        _ => request_path.to_string(),
+    };
+
+    parts.uri = http::Uri::from_str(&format!(
+        "{}{}",
+        path,
+        match parts.uri.query() {
+            Some(query) => format!("?{query}"),
+            None => "".to_string(),
+        }
+    ))?;
 
     // Remove headers
     for name in &config.headers_to_remove {
