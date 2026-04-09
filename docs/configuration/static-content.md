@@ -11,7 +11,7 @@ This page documents directives that configure static file serving, directory lis
 
 - `index <filename: string>...`
   - This directive specifies one or more filenames to try when a request path resolves to a directory. Files are tried in order; the first existing file replaces the directory path in the file context. Only applies when the resolved path is a directory and no `path_info` is present. Default: `index index.html index.htm index.xhtml`
-- `directory_listing [bool: boolean]` (`ferron-http-static`)
+- `directory_listing [bool: boolean]` (`http-static`)
   - This directive specifies whether auto-generated HTML directory listings are enabled when a request path resolves to a directory and no index file is found. When omitted, defaults to `true`. Default: `directory_listing false`
 
 **Configuration example:**
@@ -32,11 +32,11 @@ Notes:
 
 ### Compression
 
-- `compressed [bool: boolean]` (`ferron-http-static`)
+- `compressed [bool: boolean]` (`http-static`)
   - This directive specifies whether on-the-fly response body compression is enabled based on the `Accept-Encoding` request header. Supported algorithms: `gzip`, `brotli`, `deflate`, `zstd`. When omitted, defaults to `true`. Default: `compressed true`
-- `precompressed [bool: boolean]` (`ferron-http-static`)
+- `precompressed [bool: boolean]` (`http-static`)
   - This directive specifies whether serving pre-compressed sidecar files (e.g. `style.css.gz`, `app.js.br`) instead of compressing on the fly is enabled. When omitted, defaults to `true`. Default: `precompressed false`
-- `dynamic_compressed [bool: boolean]` (`ferron-http-static`)
+- `dynamic_compressed [bool: boolean]` (`http-static`)
   - This directive specifies whether on-the-fly compression is enabled for dynamic (non-static) response bodies, such as responses from reverse proxies or application handlers. Supported algorithms: `gzip`, `brotli`, `deflate`, `zstd`. Default: `dynamic_compressed false`
 
 **Configuration example:**
@@ -57,9 +57,9 @@ Notes:
 
 ### Caching headers
 
-- `etag [bool: boolean]` (`ferron-http-static`)
+- `etag [bool: boolean]` (`http-static`)
   - This directive specifies whether ETag generation for static file responses is enabled. ETags are weak ETags (`W/"..."`) generated from an xxHash3 hash of the file path, size, and modification time. When omitted, defaults to `true`. Default: `etag true`
-- `file_cache_control <value: string>` (`ferron-http-static`)
+- `file_cache_control <value: string>` (`http-static`)
   - This directive specifies the `Cache-Control` response header for all static file responses. The value is passed through as-is. Default: not set
 
 **Configuration example:**
@@ -80,7 +80,7 @@ Notes:
 
 ### MIME types
 
-- `mime_type <extension: string> <mime-type: string>` (`ferron-http-static`)
+- `mime_type <extension: string> <mime-type: string>` (`http-static`)
   - This directive maps a file extension (with or without leading dot) to a MIME type. Custom MIME type mappings override the built-in database for matching extensions. Multiple `mime_type` directives can be used to map different extensions. Default: built-in MIME database
 
 **Configuration example:**

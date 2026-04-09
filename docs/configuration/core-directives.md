@@ -123,15 +123,15 @@ Notes:
 
 The `admin` block configures the built-in administration endpoints. If the `admin` block is absent, the admin API is **disabled** entirely.
 
-- `listen <address: string>` (`ferron-admin-api`)
+- `listen <address: string>` (`admin-api`)
   - This directive specifies the socket address for the admin HTTP listener. Default: `listen 127.0.0.1:8081`
-- `health <bool>` (`ferron-admin-api`)
+- `health <bool>` (`admin-api`)
   - This directive specifies whether the `GET /health` endpoint is enabled. Returns `200 OK` or `503 Service Unavailable` during shutdown. Default: `health true`
-- `status <bool>` (`ferron-admin-api`)
+- `status <bool>` (`admin-api`)
   - This directive specifies whether the `GET /status` endpoint is enabled. Returns JSON with uptime, active connections, request count, and reload count. Default: `status true`
-- `config <bool>` (`ferron-admin-api`)
+- `config <bool>` (`admin-api`)
   - This directive specifies whether the `GET /config` endpoint is enabled. Returns the current effective configuration as sanitized JSON (sensitive fields redacted). Default: `config true`
-- `reload <bool>` (`ferron-admin-api`)
+- `reload <bool>` (`admin-api`)
   - This directive specifies whether the `POST /reload` endpoint is enabled. Triggers a configuration reload equivalent to SIGHUP. Default: `reload true`
 
 **Configuration example:**

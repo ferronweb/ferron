@@ -116,7 +116,7 @@ Notes:
 
 ## Feature flags
 
-The `ferron-tls-manual` crate enables the following features by default:
+The `tls-manual` crate enables the following features by default:
 
 | Feature | Description |
 |---------|-------------|

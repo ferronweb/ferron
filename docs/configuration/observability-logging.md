@@ -53,7 +53,7 @@ Each access log entry contains the following fields:
 
 #### `json`
 
-The JSON formatter serializes each access log entry as a single-line JSON object. Provided by the `ferron-observability-format-json` module.
+The JSON formatter serializes each access log entry as a single-line JSON object. Provided by the `observability-format-json` module.
 
 ```ferron
 example.com {
@@ -73,7 +73,7 @@ Use the `fields` directive to limit which fields appear in the JSON output. If `
 
 #### `text`
 
-The text formatter generates each access log entry as a plain text string using a configurable pattern. Provided by the `ferron-observability-format-text` module.
+The text formatter generates each access log entry as a plain text string using a configurable pattern. Provided by the `observability-format-text` module.
 
 By default, it uses the **Combined Log Format (CLF)**, the same format used by Apache and Nginx.
 

@@ -9,7 +9,7 @@ This page documents directives for returning custom status codes, aborting conne
 
 ### Custom status codes
 
-- `status <code: integer>` (`ferron-http-response`)
+- `status <code: integer>` (`http-response`)
   - This directive specifies an HTTP status code to return. In block form, supports nested `url`, `regex`, `body`, and `location` directives. Default: none
 
 #### Block form options
@@ -50,7 +50,7 @@ Multiple `status` directives can be defined. They are evaluated in order — the
 
 ### Connection abort
 
-- `abort [bool: boolean]` (`ferron-http-response`)
+- `abort [bool: boolean]` (`http-response`)
   - This directive specifies whether the connection is immediately closed without sending any response. When `true` or when omitted, the connection is terminated immediately. Default: `abort false`
 
 **Configuration example:**
@@ -65,9 +65,9 @@ When `abort` is set, the connection is terminated immediately with no HTTP respo
 
 ### IP access control
 
-- `block <ip-or-cidr: string>...` (`ferron-http-response`)
+- `block <ip-or-cidr: string>...` (`http-response`)
   - This directive specifies one or more IP addresses or CIDR ranges to block. Blocked IPs receive a **403 Forbidden** response. Default: none
-- `allow <ip-or-cidr: string>...` (`ferron-http-response`)
+- `allow <ip-or-cidr: string>...` (`http-response`)
   - This directive specifies one or more IP addresses or CIDR ranges to allow. When configured, **only** the listed IPs/CIDRs are permitted. All other IPs receive a **403 Forbidden** response. Default: none (all allowed)
 
 **Configuration example:**
@@ -101,7 +101,7 @@ In this example: `192.168.1.50` → allowed, `192.168.1.100` → blocked, `10.0.
 
 ### 103 Early Hints
 
-- `early_hints` (`ferron-http-response`)
+- `early_hints` (`http-response`)
   - This directive specifies a 103 Early Hints response to send before the final response is ready. The 103 response includes `Link` headers that allow the browser to begin preloading resources (stylesheets, scripts, fonts, etc.) while the server is still preparing the final response. Default: none
 
 #### Subdirectives
