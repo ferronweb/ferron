@@ -416,7 +416,7 @@ fn run_configuration_validators(
                                 "Invalid configuration ({}): {e}",
                                 format_location(
                                     Some(&format!("{protocol} {}", block.0)),
-                                    config.global_config.span.as_ref()
+                                    block.1.span.as_ref()
                                 )
                             )
                         })?;
@@ -433,7 +433,7 @@ fn run_configuration_validators(
                         "Unused directive ({}): {directive}",
                         format_location(
                             Some(&format!("{protocol} {}", block.0)),
-                            config.global_config.span.as_ref()
+                            block.1.span.as_ref()
                         )
                     );
                 }
