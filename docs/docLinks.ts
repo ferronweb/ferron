@@ -122,6 +122,12 @@ export default [
     label: "Static file serving",
   },
   {
+    href: "/docs/v3/configuration/http-cache",
+    target: "_self",
+    sub: true,
+    label: "HTTP cache",
+  },
+  {
     href: "/docs/v3/configuration/http-headers",
     target: "_self",
     sub: true,

@@ -18,6 +18,7 @@ This reference describes the configuration surface for Ferron 3. Directives are 
 - [Reverse proxy](/docs/v3/configuration/reverse-proxying)
 - [Forward proxy](/docs/v3/configuration/http-fproxy)
 - [HTTP basic authentication](/docs/v3/configuration/http-basicauth)
+- [HTTP cache](/docs/v3/configuration/http-cache)
 - [Static file serving](/docs/v3/configuration/static-content)
 - [HTTP headers and CORS](/docs/v3/configuration/http-headers)
 - [Rate limiting](/docs/v3/configuration/http-ratelimit)

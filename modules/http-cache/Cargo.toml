@@ -1,0 +1,24 @@
+[package]
+name = "ferron-http-cache"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+bytes = "1"
+futures-util = "0.3"
+http = "1"
+http-body = "1"
+http-body-util = "0.1"
+httpdate = "1"
+parking_lot = "0.12"
+quick_cache = "0.6"
+rustc-hash = "2"
+typemap_rev = "0.4"
+
+ferron-core = { path = "../../core" }
+ferron-http = { path = "../../types/http" }
+ferron-observability = { path = "../../types/observability" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }
