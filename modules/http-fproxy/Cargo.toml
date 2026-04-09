@@ -18,4 +18,3 @@ ferron-observability = { path = "../../types/observability" }
 tokio = { version = "1", features = ["rt", "io-util", "sync", "macros", "time", "net"] }
 ipnet = "2"
 globset = "0.4"
-url = "2"
