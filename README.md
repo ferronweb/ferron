@@ -25,9 +25,11 @@
 
 ## Why Ferron 3?
 
+- **High performance** - thoroughly optimized for speed with support for high concurrency.
+- **Easy configuration** - simple, intuitive configuration with sensible, secure defaults and [comprehensive documentation](https://ferron.sh/docs).
 - **Modular architecture** - pipeline stages and providers registered at runtime, no recompilation needed.
 - **Observability by design** - structured logs, metrics, and tracing through a unified event system.
-- **Layered configuration** - composable `.conf` with snippets, conditionals, and host scopes.
+- **Layered configuration** - composable `ferron.conf` with snippets, conditionals, and host scopes.
 - **Automatic TLS** - ACME certificate acquisition and renewal with Let's Encrypt.
 - **Powerful reverse proxy** - load balancing, health checks, and connection pooling.
 - **Memory-safe** - built with [Rust](https://rust-lang.org/).
