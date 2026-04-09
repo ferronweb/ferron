@@ -99,7 +99,9 @@ When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferr
 
 Ferron supports DNS-01 ACME challenge for automatic TLS, which is required for wildcard certificates. The DNS-01 challenge requires a DNS provider to be configured inside the `tls` block.
 
-Below is the example Ferron configuration with Cloudflare as the DNS provider:
+> **Note:** No DNS provider modules are currently implemented. The DNS-01 challenge type and `dns` directive are defined but require a DNS provider backend (e.g. Cloudflare, Route 53) to function. These modules are planned for a future release. If you need wildcard certificates today, you will need to obtain them externally and use [Manual TLS](/docs/v3/use-cases/manual-tls).
+
+Below is the planned configuration format for DNS-01 with Cloudflare:
 
 ```ferron
 *.example.com:443 {

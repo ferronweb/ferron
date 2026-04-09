@@ -6,6 +6,11 @@ export default [
     label: "Welcome to the documentation!",
   },
   {
+    href: "/docs/v3/status-and-limitations",
+    target: "_self",
+    label: "Status and limitations",
+  },
+  {
     label: "Installation",
     category: true,
   },

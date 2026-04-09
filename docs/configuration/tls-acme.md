@@ -51,6 +51,8 @@ example.com:443 {
 
 Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge type that supports wildcard certificates.
 
+> **Note:** No DNS provider modules are currently implemented. The DNS-01 challenge type is defined but requires a DNS provider module (e.g. Cloudflare, Route 53) to function. These modules are planned for a future release.
+
 ```ferron
 *.example.com:443 {
     tls {
@@ -221,6 +223,8 @@ If only one path is given, the key path defaults to the certificate path with a 
 Certificate issuance failed. The log message includes the affected domains. Check the error message for details (DNS resolution, ACME server errors, etc.). At debug log level (`--verbose`), you'll also see per-step messages for account loading, order creation, challenge solving, and certificate installation.
 
 ### DNS-01 issues
+
+> **Note:** DNS provider modules are not yet implemented. The DNS-01 challenge is defined in the ACME module but has no available DNS provider backends. See the [Status and limitations](/docs/v3/status-and-limitations) page for details.
 
 - Ensure the DNS provider is configured correctly with valid credentials.
 - Check that the provider has permission to create TXT records for the domain.
