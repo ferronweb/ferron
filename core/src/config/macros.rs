@@ -286,7 +286,7 @@ macro_rules! validate_directive {
                         }
                     }
                 )+
-                if !matched {
+                if !matched && !directive.args.is_empty() {
                     return Err(format!(
                         "Invalid directive '{}': argument count or type mismatch (expected one of the valid signatures)",
                         stringify!($name)
