@@ -6,16 +6,12 @@ export default [
     label: "Welcome to the documentation!",
   },
   {
-    label: "Getting started",
+    label: "Installation",
     category: true,
-  },
-  {
-    label: "Installing Ferron",
   },
   {
     href: "/docs/v3/installation/building-from-source",
     target: "_self",
-    sub: true,
     label: "Building from source",
   },
   {
