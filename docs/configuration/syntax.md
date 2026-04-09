@@ -7,7 +7,7 @@ This page covers the Ferron configuration file format, how blocks and directives
 
 ## Ferron configuration files
 
-Ferron uses `.conf` files parsed by the `ferronconf` adapter. A configuration file is made of top-level statements that define global blocks, host blocks, matchers, and snippets.
+Ferron uses `.conf` files parsed by the `config-ferronconf` adapter. A configuration file is made of top-level statements that define global blocks, host blocks, matchers, and snippets.
 
 ```ferron
 include "shared.conf"

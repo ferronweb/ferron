@@ -111,6 +111,12 @@ export default [
     label: "Syntax and file structure",
   },
   {
+    href: "/docs/v3/configuration/json-config",
+    target: "_self",
+    sub: true,
+    label: "JSON configuration",
+  },
+  {
     href: "/docs/v3/configuration/conditionals",
     target: "_self",
     label: "Conditionals and variables",
