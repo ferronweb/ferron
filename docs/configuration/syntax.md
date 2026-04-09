@@ -151,6 +151,12 @@ Ferron applies inheritance by block context:
 - When a child block defines a directive with the same name as one in the parent, the child's directives take precedence in that block.
 - For conditional branches, it is often clearer to explicitly `use` shared snippets inside each `if`/`if_not` branch.
 
+## Notes
+
+- Where validation and runtime behavior differ, the directive pages call that out explicitly.
+- Duration strings accept suffixes like `30m`, `1h`, `90s`, `1d`. Plain numbers without a suffix are treated as hours.
+- Boolean directives can be written as bare flags (equivalent to `true`), or explicitly as `true` or `false`.
+
 ## See also
 
 - [Conditionals and variables](/docs/v3/configuration/conditionals)

@@ -3,7 +3,7 @@ title: Ferron 3 documentation
 description: "Documentation for the Ferron web server: configuration reference, syntax, directives, and feature guides."
 ---
 
-**Welcome to the Ferron documentation!** Ferron is a fast, modern, and easily configurable web server with support for automatic TLS certificate management. If you’re new to Ferron, the way you serve your websites is about to change - you’d be able to quickly make your websites go live.
+**Welcome to the Ferron documentation!** Ferron is a fast, modern, and easily configurable web server with support for automatic TLS certificate management. If you're new to Ferron, the way you serve your websites is about to change - you'd be able to quickly make your websites go live.
 
 To explore the documentation, either click on one of the positions in the sidebar, or go into the menu on the top right, and click on one of the positions in the menu.
 
@@ -11,7 +11,9 @@ To explore the documentation, either click on one of the positions in the sideba
 
 ## First time?
 
-**Are you new to Ferron? No problem.** Start by reading about the [configuration syntax](/docs/v3/configuration/syntax) to understand how Ferron configuration files are structured.
+**Are you new to Ferron? No problem.** Start by [installing Ferron](/docs/v3/installation/builing-from-source) on your system.
+
+Once you have Ferron installed, read about the [configuration syntax](/docs/v3/configuration/syntax) to understand how Ferron configuration files are structured.
 
 If you'd like to learn more about Ferron's configuration directives, you can read about them in the [configuration reference](/docs/configuration/).
 
