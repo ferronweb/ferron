@@ -45,9 +45,7 @@ impl DnsProvider for DesecDnsProvider {
       .client
       .create(
         full_domain,
-        dns_update::DnsRecord::TXT {
-          content: dns_value.to_string(),
-        },
+        dns_update::DnsRecord::TXT(dns_value.to_string()),
         3600,
         domain_name,
       )
