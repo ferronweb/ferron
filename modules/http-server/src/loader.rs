@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use ferron_core::builtin::BuiltinConfigurationValidator;
 use ferron_core::config::ServerConfigurationPort;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;
@@ -146,6 +147,10 @@ impl ModuleLoader for BasicHttpModuleLoader {
             .entry("http")
             .or_default()
             .push(Box::new(HttpConfigurationValidator));
+        registry
+            .entry("http")
+            .or_default()
+            .push(Box::new(BuiltinConfigurationValidator));
     }
 
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {

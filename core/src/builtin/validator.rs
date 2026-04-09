@@ -1,8 +1,8 @@
 use crate::{config::ServerConfigurationValue, validate_directive, validate_nested};
 
-pub struct BuiltinGlobalConfigurationValidator;
+pub struct BuiltinConfigurationValidator;
 
-impl crate::config::validator::ConfigurationValidator for BuiltinGlobalConfigurationValidator {
+impl crate::config::validator::ConfigurationValidator for BuiltinConfigurationValidator {
     fn validate_block(
         &self,
         config: &crate::config::ServerConfigurationBlock,

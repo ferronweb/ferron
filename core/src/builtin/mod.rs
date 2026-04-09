@@ -2,6 +2,8 @@ use crate::loader::ModuleLoader;
 
 mod validator;
 
+pub use validator::*;
+
 #[derive(Default)]
 pub struct BuiltinModuleLoader;
 
@@ -10,6 +12,6 @@ impl ModuleLoader for BuiltinModuleLoader {
         &mut self,
         registry: &mut Vec<Box<dyn crate::config::validator::ConfigurationValidator>>,
     ) {
-        registry.push(Box::new(validator::BuiltinGlobalConfigurationValidator));
+        registry.push(Box::new(validator::BuiltinConfigurationValidator));
     }
 }
