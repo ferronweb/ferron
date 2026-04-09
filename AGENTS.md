@@ -1,8 +1,8 @@
-# Ferron "Titanium" - Web Server
+# Ferron 3 - Web Server
 
 ## Project Overview
 
-Ferron "Titanium" is a high-performance, modular web server written in Rust. It features a plugin-based architecture that supports HTTP serving, reverse proxying, static file serving, automatic TLS via ACME, rate limiting, URL rewriting, and comprehensive observability (logging, metrics, OTLP export).
+Ferron 3 is a high-performance, modular web server written in Rust. It features a plugin-based architecture that supports HTTP serving, reverse proxying, static file serving, automatic TLS via ACME, rate limiting, URL rewriting, and comprehensive observability (logging, metrics, OTLP export).
 
 The project is organized as a Rust workspace with the following key components:
 
