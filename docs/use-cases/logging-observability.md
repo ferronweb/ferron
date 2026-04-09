@@ -17,9 +17,7 @@ example.com {
         format "text"
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 
@@ -35,9 +33,7 @@ example.com {
         format "json"
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 
@@ -56,9 +52,7 @@ example.com {
         fields "method" "path" "status" "duration_secs" "client_ip"
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 
@@ -73,9 +67,7 @@ example.com {
         access_pattern "%client_ip - %auth_user [%{%d/%b/%Y:%H:%M:%S %z}t] \"%method %path_and_query %version\" %status %content_length \"%{Referer}i\" \"%{User-Agent}i\""
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 
@@ -103,9 +95,7 @@ example.com {
         service_name "ferron-prod"
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 
@@ -164,9 +154,7 @@ example.com {
         service_name "ferron-prod"
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 

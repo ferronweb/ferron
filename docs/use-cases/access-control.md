@@ -37,12 +37,10 @@ When both `block` and `allow` are configured:
 
 ```ferron
 example.com {
-    location / {
-        root /var/www/html
+    root /var/www/html
 
-        allow "192.168.1.0/24"
-        block "192.168.1.100"
-    }
+    allow "192.168.1.0/24"
+    block "192.168.1.100"
 }
 ```
 
@@ -150,13 +148,11 @@ match sensitive_path {
 }
 
 example.com {
-    location / {
-        root /var/www/html
+    root /var/www/html
 
-        if sensitive_path {
-            status 403 {
-                body "Access denied"
-            }
+    if sensitive_path {
+        status 403 {
+            body "Access denied"
         }
     }
 }

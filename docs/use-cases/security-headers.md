@@ -9,9 +9,7 @@ Ferron can add, remove, and replace response headers. This is useful for baselin
 
 ```ferron
 example.com {
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 
     header "X-Content-Type-Options" "nosniff"
     header "X-Frame-Options" "DENY"
@@ -26,9 +24,7 @@ example.com {
 
 ```ferron
 app.example.com {
-    location / {
-        proxy http://127.0.0.1:3000
-    }
+    proxy http://127.0.0.1:3000
 
     # Remove or normalize headers from upstream responses.
     header -X-Powered-By
@@ -45,9 +41,7 @@ The `header` directive supports three forms:
 
 ```ferron
 example.com {
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 
     location /admin {
         header "Cache-Control" "no-store"
@@ -62,9 +56,7 @@ For APIs that need cross-origin access, use the `cors` directive:
 
 ```ferron
 api.example.com {
-    location / {
-        proxy http://localhost:3000
-    }
+    proxy http://localhost:3000
 
     cors {
         origins "https://app.example.com" "https://admin.example.com"
@@ -81,9 +73,7 @@ To allow all origins (use with caution for public APIs):
 
 ```ferron
 api.example.com {
-    location / {
-        proxy http://localhost:3000
-    }
+    proxy http://localhost:3000
 
     cors {
         origins "*"
@@ -100,9 +90,7 @@ Header values support interpolation with `{{...}}` syntax:
 
 ```ferron
 example.com {
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 
     header +X-Client-IP "{{remote_address}}"
     header X-Powered-By "Ferron"

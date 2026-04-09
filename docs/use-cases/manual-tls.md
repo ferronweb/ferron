@@ -18,9 +18,7 @@ manual-tls.example.com:443 {
         key "/etc/ssl/private/manual-tls.example.com.key"
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 
@@ -34,9 +32,7 @@ manual-tls.example.com:443 {
         key "{{env.TLS_KEY}}"
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 

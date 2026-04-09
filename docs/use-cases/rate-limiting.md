@@ -11,15 +11,13 @@ Apply stricter limits to authentication paths than to the rest of the site:
 
 ```ferron
 example.com {
-    location / {
-        root /var/www/html
+    root /var/www/html
 
-        # General traffic limit for the site.
-        rate_limit {
-            rate 50
-            burst 100
-            key remote_address
-        }
+    # General traffic limit for the site.
+    rate_limit {
+        rate 50
+        burst 100
+        key remote_address
     }
 
     # Tighter limits for login endpoints.
@@ -83,14 +81,12 @@ You can also key rate limits off request headers (for example, API keys):
 
 ```ferron
 api.example.com {
-    location / {
-        proxy http://localhost:3000
+    proxy http://localhost:3000
 
-        rate_limit {
-            rate 50
-            burst 100
-            key request.header.X-Api-Key
-        }
+    rate_limit {
+        rate 50
+        burst 100
+        key request.header.X-Api-Key
     }
 }
 ```

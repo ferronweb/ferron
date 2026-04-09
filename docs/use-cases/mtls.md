@@ -21,9 +21,7 @@ admin.example.com:443 {
         client_auth_ca "/etc/ssl/internal-client-ca.pem"
     }
 
-    location / {
-        proxy http://127.0.0.1:9000
-    }
+    proxy http://127.0.0.1:9000
 }
 ```
 
@@ -40,9 +38,7 @@ admin.example.com:443 {
         client_auth_ca system  // or "webpki" for Mozilla's root bundle
     }
 
-    location / {
-        proxy http://127.0.0.1:9000
-    }
+    proxy http://127.0.0.1:9000
 }
 ```
 
@@ -64,9 +60,7 @@ internal-api.example.com:443 {
         client_auth_ca "/etc/ssl/internal-ca-bundle.pem"
     }
 
-    location / {
-        proxy http://127.0.0.1:9000
-    }
+    proxy http://127.0.0.1:9000
 }
 ```
 
@@ -83,9 +77,7 @@ example.com:443 {
         contact "admin@example.com"
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 
 // Internal admin — requires client certificate
@@ -99,9 +91,7 @@ admin.example.com:443 {
         client_auth_ca "/etc/ssl/internal-client-ca.pem"
     }
 
-    location / {
-        proxy http://127.0.0.1:9000
-    }
+    proxy http://127.0.0.1:9000
 }
 ```
 

@@ -9,9 +9,7 @@ Custom error pages make failures clearer for users and reduce confusion during i
 
 ```ferron
 example.com {
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 
     error_page 404 /custom/404.html
     error_page 500 502 503 504 /custom/50x.html

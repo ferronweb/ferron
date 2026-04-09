@@ -21,9 +21,7 @@ example.com:443 {
         contact "admin@example.com"
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 
@@ -41,9 +39,7 @@ example.com:443 {
         contact "admin@example.com"
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 
@@ -64,9 +60,7 @@ example.com:443 {
         # post_obtain_command "/etc/reload-server.sh"
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 
@@ -89,9 +83,7 @@ When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferr
         on_demand_ask "https://auth.example.com/check-cert"
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 
@@ -115,9 +107,7 @@ Below is the planned configuration format for DNS-01 with Cloudflare:
         }
     }
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 
