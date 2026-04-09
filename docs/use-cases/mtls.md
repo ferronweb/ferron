@@ -10,7 +10,7 @@ Mutual TLS (mTLS) adds client certificate verification on top of normal server T
 Configure client certificate validation against your internal CA inside the `tls` block:
 
 ```ferron
-// Replace "admin.example.com" with your domain name.
+# Replace "admin.example.com" with your domain name.
 admin.example.com:443 {
     tls {
         provider "manual"

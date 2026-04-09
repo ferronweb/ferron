@@ -10,7 +10,7 @@ For many use cases, automatic TLS with ACME is the easiest way to get HTTPS work
 To enable manual TLS for a host, configure the `tls` directive with the `"manual"` provider and certificate/private key paths:
 
 ```ferron
-// Replace "manual-tls.example.com" with your domain name.
+# Replace "manual-tls.example.com" with your domain name.
 manual-tls.example.com:443 {
     tls {
         provider "manual"

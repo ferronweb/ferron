@@ -10,7 +10,7 @@ Ferron supports several access control patterns, from simple IP-based `block`/`a
 Use `block` and `allow` directives to control access by IP or CIDR range:
 
 ```ferron
-// Replace "example.com" with your domain name.
+# Replace "example.com" with your domain name.
 example.com {
     location / {
         root /var/www/html
@@ -64,7 +64,7 @@ Use a global block to deny access across all hosts:
 Use the `basic_auth` directive to require HTTP Basic Authentication:
 
 ```ferron
-// Replace "example.com" with your domain name.
+# Replace "example.com" with your domain name.
 example.com {
     location / {
         root /var/www/html
