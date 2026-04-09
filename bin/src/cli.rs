@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "ferron")]
-#[command(about = "Ferron web server CLI", long_about = None)]
+#[command(about = "A fast, modern, and easily configurable web server with automatic TLS", long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,

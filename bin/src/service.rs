@@ -30,7 +30,7 @@ pub const SERVICE_DISPLAY_NAME: &str = "Ferron web server";
 
 /// Service description
 pub const SERVICE_DESCRIPTION: &str =
-    "Ferron web server with graceful shutdown and config reload support"; // TODO: replace with actual description
+    "Ferron is a fast, modern, and easily configurable web server with automatic TLS.";
 
 #[allow(clippy::type_complexity)]
 pub static PARAMS: OnceLock<(Option<String>, Option<String>, Option<String>, bool)> =
