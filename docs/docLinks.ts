@@ -15,6 +15,84 @@ export default [
     label: "Building from source",
   },
   {
+    label: "Common use cases",
+    category: true,
+  },
+  {
+    label: "Static & content",
+  },
+  {
+    href: "/docs/v3/use-cases/static-file-serving",
+    target: "_self",
+    label: "Static file serving",
+    sub: true,
+  },
+  {
+    label: "Traffic & routing",
+  },
+  {
+    href: "/docs/v3/use-cases/reverse-proxy",
+    target: "_self",
+    label: "Reverse proxying",
+    sub: true,
+  },
+  {
+    href: "/docs/v3/use-cases/url-rewriting",
+    target: "_self",
+    label: "URL rewriting",
+    sub: true,
+  },
+  {
+    href: "/docs/v3/use-cases/error-pages",
+    target: "_self",
+    label: "Error pages",
+    sub: true,
+  },
+  {
+    label: "Security",
+  },
+  {
+    href: "/docs/v3/use-cases/automatic-tls",
+    target: "_self",
+    label: "Automatic TLS",
+    sub: true,
+  },
+  {
+    href: "/docs/v3/use-cases/rate-limiting",
+    target: "_self",
+    label: "Rate limiting",
+    sub: true,
+  },
+  {
+    href: "/docs/v3/use-cases/security-headers",
+    target: "_self",
+    label: "Security headers",
+    sub: true,
+  },
+  {
+    href: "/docs/v3/use-cases/manual-tls",
+    target: "_self",
+    label: "Manual TLS",
+    sub: true,
+  },
+  {
+    href: "/docs/v3/use-cases/mtls",
+    target: "_self",
+    label: "mTLS (mutual TLS)",
+    sub: true,
+  },
+  {
+    href: "/docs/v3/use-cases/access-control",
+    target: "_self",
+    label: "Access control",
+    sub: true,
+  },
+  {
+    href: "/docs/v3/use-cases/logging-observability",
+    target: "_self",
+    label: "Logging & observability",
+  },
+  {
     label: "Configuration",
     category: true,
   },
