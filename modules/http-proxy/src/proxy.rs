@@ -22,7 +22,9 @@ use vibeio_hyper::VibeioIo;
 
 use crate::config::{HeaderAction, ProxyConfig};
 use crate::connections::{ConnectionManager, PoolKey};
-use crate::send_net_io::{SendTcpStreamPoll, SendUnixStreamPoll};
+use crate::send_net_io::SendTcpStreamPoll;
+#[cfg(unix)]
+use crate::send_net_io::SendUnixStreamPoll;
 use crate::send_request::{
     http1_handshake, http2_handshake, ProxyBody, SendRequestWrapper, TrackedBody,
 };

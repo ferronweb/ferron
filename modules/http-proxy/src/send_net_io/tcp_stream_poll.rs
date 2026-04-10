@@ -2,7 +2,9 @@ use std::mem::ManuallyDrop;
 #[cfg(unix)]
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, RawFd};
 #[cfg(windows)]
-use std::os::fd::{AsRawSocket, AsSocket, BorrowedSocket, FromRawSocket, IntoRawSocket, RawSocket};
+use std::os::windows::io::{
+    AsRawSocket, AsSocket, BorrowedSocket, FromRawSocket, IntoRawSocket, RawSocket,
+};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -191,7 +193,7 @@ impl AsFd for SendTcpStreamPoll {
 #[cfg(not(unix))]
 impl AsRawSocket for SendTcpStreamPoll {
     #[inline]
-    fn as_raw_socket(&self) -> RawFd {
+    fn as_raw_socket(&self) -> RawSocket {
         self.inner_socket
     }
 }
@@ -199,7 +201,7 @@ impl AsRawSocket for SendTcpStreamPoll {
 #[cfg(not(unix))]
 impl AsSocket for SendTcpStreamPoll {
     #[inline]
-    fn as_socket(&self) -> BorrowedFd<'_> {
+    fn as_socket(&self) -> BorrowedSocket<'_> {
         // Safety: inner_fd is valid, as it is taken from the inner value
         unsafe { BorrowedSocket::borrow_raw(self.inner_fd) }
     }
