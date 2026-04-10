@@ -416,6 +416,12 @@ The adapter is auto-detected from the `.json` extension.
 
 JSON configuration files support hot-reload. When the file changes, Ferron detects the update and reloads the configuration gracefully. The `ConfigurationWatcher` monitors the file for modifications.
 
+To enable hot reloading, specify a `watch` configuration adapter parameter:
+
+```bash
+ferron run --config-params 'watch=1;file=ferron.conf'
+```
+
 ## Notes and troubleshooting
 
 - The JSON output from `ferron adapt` is a faithful representation of the parsed configuration, including all span metadata for error reporting.
