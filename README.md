@@ -13,7 +13,7 @@
 * * *
 
 <p align="center">
-  <a href="https://ferron.sh/docs" target="_blank"><img alt="Static Badge" src="https://img.shields.io/badge/Documentation-orange?style=for-the-badge"></a>
+  <a href="https://ferron.sh/docs/v3" target="_blank"><img alt="Static Badge" src="https://img.shields.io/badge/Documentation-orange?style=for-the-badge"></a>
   <a href="https://ferron.sh" target="_blank"><img alt="Website" src="https://img.shields.io/website?url=https%3A%2F%2Fferron.sh&style=for-the-badge"></a>
   <a href="https://matrix.to/#/#ferronweb:matrix.org" target="_blank"><img alt="Chat" src="https://img.shields.io/matrix/ferronweb%3Amatrix.org?style=for-the-badge"></a>
   <a href="https://x.com/ferron_web" target="_blank"><img alt="X (formerly Twitter) Follow" src="https://img.shields.io/twitter/follow/ferron_web?style=for-the-badge"></a>
