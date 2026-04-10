@@ -42,7 +42,7 @@ jobs:
 
           If you want to contribute to the documentation, please open a pull request on the Ferron repository, not on the website repository.
           EOF
-          cat << EOF > website/src/content/changelogs/index.md
+          cat << EOF > website/src/content/changelogs/v3.md
           ---
           subject: Ferron 3
           ---
