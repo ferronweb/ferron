@@ -97,15 +97,14 @@ Example output:
 
 The `access_pattern` directive supports the following tokens:
 
-| Token | Description | Example |
-| --- | --- | --- |
-| `%field_name` | Access log field | `%client_ip`, `%status`, `%method` |
-| `%{Header-Name}i` | Request header | `%{Referer}i`, `%{User-Agent}i` |
-| `%{format}t` | Timestamp with custom format | `%{%Y-%m-%d %H:%M:%S}t` |
-| `%t` | Timestamp (uses `timestamp_format` or CLF default) | `%t` |
-| `%%` | Literal `%` character | `%%` |
-
-| Other text | Passed through literally | `"`, ``, `-` |
+| Token             | Description                                        | Example                            |
+| ----------------- | -------------------------------------------------- | ---------------------------------- |
+| `%field_name`     | Access log field                                   | `%client_ip`, `%status`, `%method` |
+| `%{Header-Name}i` | Request header                                     | `%{Referer}i`, `%{User-Agent}i`    |
+| `%{format}t`      | Timestamp with custom format                       | `%{%Y-%m-%d %H:%M:%S}t`            |
+| `%t`              | Timestamp (uses `timestamp_format` or CLF default) | `%t`                               |
+| `%%`              | Literal `%` character                              | `%%`                               |
+| Other text        | Passed through literally                           | `"`, ``, `-`                       |
 
 Request headers are available via the `%{Header-Name}i` syntax. The header name is case-insensitive and hyphens are converted to underscores internally.
 
