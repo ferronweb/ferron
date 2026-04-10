@@ -43,6 +43,7 @@ tls {
 ```
 
 This configuration:
+
 - Generates initial keys if the file doesn't exist
 - Automatically rotates keys every 12 hours
 - Keeps up to 3 keys for seamless decryption of old tickets
@@ -108,7 +109,7 @@ When `auto_rotate` is enabled:
 
 With `rotation_interval = "12h"` and `max_keys = 3`:
 
-```
+```text
 T=0h:   [Key_A, Key_B, Key_C]     ← Encrypt with Key_A
 T=12h:  [Key_D, Key_A, Key_B]     ← Encrypt with Key_D, decrypt with A/B
 T=24h:  [Key_E, Key_D, Key_A]     ← Encrypt with Key_E, decrypt with A/D/E
@@ -120,6 +121,7 @@ Tickets issued with `Key_A` at T=0h remain valid until ~T=24h (2× interval).
 ### Rotation duration format
 
 The `rotation_interval` parameter accepts:
+
 - `"12h"` or `"12H"` — hours
 - `"30m"` or `"30M"` — minutes
 - `"90s"` or `"90S"` — seconds
@@ -173,7 +175,7 @@ ferron run --verbose
 
 You should see messages like:
 
-```
+```text
 INFO Generating initial ticket keys at /path/to/session_tickets.keys (3 keys)
 INFO Loaded 3 ticket keys from /path/to/session_tickets.keys (rotation interval: 12h)
 INFO TLS session ticket keys rotated successfully

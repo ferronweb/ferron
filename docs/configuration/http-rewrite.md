@@ -91,7 +91,7 @@ example.com {
 
 Example log output:
 
-```
+```text
 URL rewritten from "/old-path/users" to "/new-path/users"
 ```
 

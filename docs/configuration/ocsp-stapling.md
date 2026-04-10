@@ -26,6 +26,7 @@ example.com {
 ```
 
 The server will:
+
 1. Extract the OCSP responder URL from the certificate's AIA extension
 2. Fetch an OCSP response on startup
 3. Cache and staple the response during TLS handshakes

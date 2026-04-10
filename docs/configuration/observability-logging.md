@@ -89,7 +89,7 @@ example.com {
 
 Example output:
 
-```
+```text
 127.0.0.1 - frank [05/Apr/2026:14:32:01 +0200] "GET /index.html HTTP/1.1" 200 1234 "http://www.example.com/start.html" "Mozilla/5.0"
 ```
 
@@ -104,7 +104,8 @@ The `access_pattern` directive supports the following tokens:
 | `%{format}t` | Timestamp with custom format | `%{%Y-%m-%d %H:%M:%S}t` |
 | `%t` | Timestamp (uses `timestamp_format` or CLF default) | `%t` |
 | `%%` | Literal `%` character | `%%` |
-| Other text | Passed through literally | `"`, ` `, `-` |
+
+| Other text | Passed through literally | `"`, ``, `-` |
 
 Request headers are available via the `%{Header-Name}i` syntax. The header name is case-insensitive and hyphens are converted to underscores internally.
 

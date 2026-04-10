@@ -164,7 +164,7 @@ tls {
 
 The cache directory structure:
 
-```
+```text
 /var/cache/ferron-acme/
 ├── account_<hash>          # ACME account credentials
 └── certificate_<hash>      # Certificate chain + private key (JSON)
