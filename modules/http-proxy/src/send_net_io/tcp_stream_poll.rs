@@ -23,6 +23,8 @@ pub struct SendTcpStreamPoll {
     is_write_vectored: bool,
     #[cfg(unix)]
     inner_fd: RawFd,
+    #[cfg(windows)]
+    inner_fd: RawSocket,
     obtained_dropped: bool,
     marked_dropped: Arc<AtomicBool>,
 }
@@ -33,6 +35,8 @@ impl SendTcpStreamPoll {
     pub fn new_comp_io(inner: TcpStream) -> Result<Self, std::io::Error> {
         #[cfg(unix)]
         let inner_fd = inner.as_raw_fd();
+        #[cfg(not(unix))]
+        let inner_fd = inner.as_raw_socket();
         let inner = inner.into_poll()?;
         let is_write_vectored = inner.is_write_vectored();
         Ok(SendTcpStreamPoll {
@@ -91,8 +95,8 @@ impl SendTcpStreamPoll {
             // Safety: The inner TcpStreamPoll is manually dropped, so it's safe to use the raw fd
             #[cfg(unix)]
             let std_tcp_stream = unsafe { std::net::TcpStream::from_raw_fd(self.inner_fd) };
-            #[cfg(not(unix))]
-            let std_tcp_stream = unsafe { std::net::TcpStream::from_raw_fd(self.inner_fd as _) };
+            #[cfg(windows)]
+            let std_tcp_stream = unsafe { std::net::TcpStream::from_raw_socket(self.inner_fd) };
             let _ = std_tcp_stream.set_nonblocking(true);
 
             let tcp_stream_poll = TcpStream::from_std(std_tcp_stream)
@@ -179,6 +183,23 @@ impl AsFd for SendTcpStreamPoll {
     fn as_fd(&self) -> BorrowedFd<'_> {
         // Safety: inner_fd is valid, as it is taken from the inner value
         unsafe { BorrowedFd::borrow_raw(self.inner_fd) }
+    }
+}
+
+#[cfg(not(unix))]
+impl AsRawSocket for SendTcpStreamPoll {
+    #[inline]
+    fn as_raw_socket(&self) -> RawFd {
+        self.inner_socket
+    }
+}
+
+#[cfg(not(unix))]
+impl AsSocket for SendTcpStreamPoll {
+    #[inline]
+    fn as_socket(&self) -> BorrowedFd<'_> {
+        // Safety: inner_fd is valid, as it is taken from the inner value
+        unsafe { BorrowedSocket::borrow_raw(self.inner_fd) }
     }
 }
 

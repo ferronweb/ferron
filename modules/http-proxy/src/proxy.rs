@@ -24,9 +24,10 @@ use crate::config::{HeaderAction, ProxyConfig};
 use crate::connections::{ConnectionManager, PoolKey};
 use crate::send_net_io::{SendTcpStreamPoll, SendUnixStreamPoll};
 use crate::send_request::{
-    http1_handshake, http1_handshake_unix, http2_handshake, http2_handshake_unix, ProxyBody,
-    SendRequestWrapper, TrackedBody,
+    http1_handshake, http2_handshake, ProxyBody, SendRequestWrapper, TrackedBody,
 };
+#[cfg(unix)]
+use crate::send_request::{http1_handshake_unix, http2_handshake_unix};
 use crate::upstream::{
     determine_proxy_to, mark_backend_failure, resolve_upstreams, ConnectionsTrackState,
     LoadBalancerAlgorithmInner, UpstreamInner,
