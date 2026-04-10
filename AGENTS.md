@@ -103,7 +103,3 @@ To maintain a clean and efficient test suite, avoid adding or maintaining tests 
 - **Hot-reload support**: Configuration changes trigger graceful reload without full restart.
 - **Cross-platform**: Supports Unix (daemon mode with PID file, signal handling) and Windows (native service management).
 - **Custom allocator**: Uses `malloc-best-effort` (`BEMalloc`) as the global allocator.
-
-## Notes
-
-- The `ferron/` subdirectory is a separate nested git repository and is **not** part of this workspace.
