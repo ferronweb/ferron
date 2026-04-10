@@ -1,6 +1,8 @@
 use std::mem::ManuallyDrop;
 #[cfg(unix)]
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, RawFd};
+#[cfg(windows)]
+use std::os::fd::{AsRawSocket, AsSocket, BorrowedSocket, FromRawSocket, IntoRawSocket, RawSocket};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
