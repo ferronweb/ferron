@@ -48,7 +48,6 @@ impl SendTcpStreamPoll {
             inner: Some(inner),
             prev_inner: None,
             is_write_vectored,
-            #[cfg(unix)]
             inner_fd,
             obtained_dropped: false,
             marked_dropped: Arc::new(AtomicBool::new(false)),
@@ -194,7 +193,7 @@ impl AsFd for SendTcpStreamPoll {
 impl AsRawSocket for SendTcpStreamPoll {
     #[inline]
     fn as_raw_socket(&self) -> RawSocket {
-        self.inner_socket
+        self.inner_fd
     }
 }
 
