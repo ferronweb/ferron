@@ -1,162 +1,151 @@
 ---
 title: Reverse proxying
-description: "Configure Ferron as a reverse proxy with WebSocket support, optional static/SPA hosting, multiple locations, and precompressed assets."
+description: "Configure Ferron as a reverse proxy with WebSocket support, optional static/SPA hosting, multiple locations, load balancing, and header manipulation."
 ---
 
-Configuring Ferron as a reverse proxy is straightforward - you just need to specify the backend server URL in `proxy` directive. To configure Ferron as a reverse proxy, you can use the configuration below:
+Configuring Ferron as a reverse proxy is straightforward — you just need to specify the backend server URL using the `proxy` directive. To configure Ferron as a reverse proxy, you can use the configuration below:
 
-```kdl
-// Example configuration with reverse proxy. Replace "example.com" with your domain name.
+```ferron
 example.com {
-    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+    proxy http://localhost:3000
 }
 ```
 
-The WebSocket protocol is supported out of the box in this configuration example - no additional configuration is required.
+The WebSocket protocol is supported out of the box in this configuration — no additional configuration is required.
 
 ## Reverse proxy with static file serving support
 
-Ferron supports serving static files and reverse proxying at once. You can use this configuration for this use case:
+Ferron supports serving static files and reverse proxying at once. You can use separate `location` blocks for this:
 
-```kdl
-// Example configuration with reverse proxy and static file serving. Replace "example.com" with your domain name.
+```ferron
 example.com {
-    // The "/api" location is used for reverse proxying
-    // For example, the "/api/login" endpoint is proxied to "http://localhost:3000/api/login"
-    location "/api" remove_base=#true {
-        proxy "http://localhost:3000/api" // Replace "http://localhost:3000/api" with the backend API URL
+    # The "/api" location is used for reverse proxying
+    # For example, "/api/login" is proxied to "http://localhost:3000/api/login"
+    location /api {
+        proxy http://localhost:3000/api
     }
 
-    // The "/" location is used for serving static files
-    location "/" {
-        root "/var/www/html" // Replace "/var/www/html" with the directory containing your static files
+    # The "/" location is used for serving static files
+    location / {
+        root /var/www/html
     }
 }
 ```
 
 ## Reverse proxy with a single-page application
 
-Ferron supports serving a single-page application and reverse proxying at once. You can use this configuration for this use case:
+Ferron supports serving a single-page application and reverse proxying at once. You can use this configuration:
 
-```kdl
-// Example configuration with reverse proxy and static file serving. Replace "example.com" with your domain name.
+```ferron
 example.com {
-    // The "/api" location is used for reverse proxying
-    // For example, the "/api/login" endpoint is proxied to "http://localhost:3000/api/login"
-    location "/api" remove_base=#true {
-        proxy "http://localhost:3000/api" // Replace "http://localhost:3000/api" with the backend API URL
+    # The "/api" location is used for reverse proxying
+    location /api {
+        proxy http://localhost:3000/api
     }
 
-    // The "/" location is used for serving static files
-    location "/" {
-        root "/var/www/html" // Replace "/var/www/html" with the directory containing your static files
-        rewrite "^/.*" "/" directory=#false file=#false last=#true
+    # The "/" location is used for serving static files with SPA fallback
+    location / {
+        root /var/www/html
+        rewrite "^/.*" "/" {
+            last true
+            directory false
+            file false
+        }
     }
 }
 ```
 
 ## Load balancing
 
-Ferron supports load balancing by specifying multiple backend servers in the `proxy` directive. To configure Ferron as a load balancer, you can use the configuration below:
+Ferron supports load balancing by specifying multiple upstream backends inside a `proxy` block. To configure Ferron as a load balancer, you can use the configuration below:
 
-```kdl
-// Example configuration with load balancing. Replace "example.com" with your domain name.
+```ferron
 example.com {
-    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
-    proxy "http://localhost:3001/" // Replace "http://localhost:3001" with the second backend server URL
+    proxy {
+        upstream http://localhost:3000
+        upstream http://localhost:3001
+
+        lb_algorithm two_random
+    }
 }
 ```
 
+### Load balancing algorithms
+
+| Algorithm | Description |
+| --- | --- |
+| `random` | Selects a backend randomly for each request. |
+| `round_robin` | Cycles through backends in order. |
+| `least_conn` | Selects the backend with the fewest active tracked connections. |
+| `two_random` | Picks two random backends and selects the less loaded one. |
+
 ## Health checks
 
-Ferron supports passive health checks; you can enable it using `lb_health_check` directive. To configure Ferron as a load balancer with passive health checking, you can use the configuration below:
+Ferron supports passive health checks. To enable passive health checking:
 
-```kdl
-// Example configuration with load balancing and passive health checking. Replace "example.com" with your domain name.
+```ferron
 example.com {
-    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
-    proxy "http://localhost:3001/" // Replace "http://localhost:3001" with the second backend server URL
-    lb_health_check
+    proxy {
+        upstream http://localhost:3000
+        upstream http://localhost:3001
+
+        lb_health_check
+        lb_health_check_max_fails 3
+        lb_health_check_window 5s
+    }
 }
 ```
 
 ## Caching reverse proxy
 
-Ferron supports in-memory caching for speeding up websites. To enable in-memory caching for the reverse proxy, you can use this configuration:
+Ferron supports in-memory caching for speeding up websites. To enable caching for the reverse proxy, you can use the [HTTP cache module](/docs/v3/configuration/http-cache):
 
-```kdl
-// Example configuration with caching reverse proxy. Replace "example.com" with your domain name.
+```ferron
 example.com {
-    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
-    cache
-    // Optional: set Cache-Control header if you want to also cache responses from backend servers without the Cache-Control header
+    location / {
+        proxy http://localhost:3000
+    }
+
+    # Optional: set Cache-Control header if you want to cache responses from backend
     header "Cache-Control" "max-age=3600"
-}
-```
-
-## HTTPS reverse proxying with intact "Host" header
-
-Ferron by default rewrites the "Host" header before sending the request to the backend server (if the backend server uses HTTPS protocol), and preserves the original "Host" header value in the "X-Forwarded-Host" header.
-
-However, there are web applications that may not work with this configuration. This can result in host header mismatch errors, and other issues.
-
-In such cases, you can set the "Host" header value to the original value:
-
-```kdl
-// Example configuration with HTTPS reverse proxy and intact "Host" header. Replace "example.com" with your domain name.
-example.com {
-    proxy "https://localhost:8443/" // Replace "https://localhost:8443" with the backend server URL
-    proxy_request_header_replace "Host" "{header:Host}"
-}
-```
-
-## Reverse proxying with intact request URL
-
-Ferron by default rewrites the request URL before sending the request to the backend server, to protect against path traversal attacks.
-
-However, there are web applications that may not work with this default configuration. This can result in 404 Not Found errors, and other issues.
-
-In such cases, you can disable the URL sanitizer (although Ferron won't protect the backend server from path traversal attacks, the backend server must protect itself against such attacks):
-
-```kdl
-// Example configuration with reverse proxy and intact request URL. Replace "example.com" with your domain name.
-example.com {
-    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
-    disable_url_sanitizer
 }
 ```
 
 ## Reverse proxy to backends listening on Unix sockets
 
-Ferron supports reverse proxying to backends listening on Unix sockets. To configure Ferron for reverse proxying to backends listening on Unix sockets, you can use this configuration:
+Ferron supports reverse proxying to backends listening on Unix sockets:
 
-```kdl
-// Example configuration with reverse proxy to backends listening on Unix sockets. Replace "example.com" with your domain name.
+```ferron
 example.com {
-    proxy "http://example.com" unix="/run/backend/web.sock" // The "example.com" in the backend URL can be replaced with an arbitrary domain name
+    proxy http://backend {
+        upstream http://backend {
+            unix /run/backend/web.sock
+        }
+    }
 }
 ```
 
 ## Reverse proxy to gRPC backends
 
-Ferron supports reverse proxying to gRPC backends that accept HTTP/2 requests either via HTTPS, or plaintext with prior knowledge. To configure Ferron for reverse proxying to gRPC backends, you can use this configuration:
+Ferron supports reverse proxying to gRPC backends that accept HTTP/2 requests:
 
-```kdl
-// Example configuration with reverse proxy to gRPC backends. Replace "grpc.example.com" with your domain name.
+```ferron
 grpc.example.com {
-    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
-    proxy_http2_only // Enables HTTP/2-only proxying to support gRPC proxying
+    proxy http://localhost:3000 {
+        http2_only true
+    }
 }
 ```
 
 ## Reverse proxy to dynamic backends (via SRV records)
 
-Ferron supports reverse proxying to dynamic backends via SRV records. To configure Ferron for reverse proxying to dynamic backends, you can use this configuration:
+Ferron supports reverse proxying to dynamic backends via DNS SRV records (requires `srv-lookup` feature):
 
-```kdl
-// Example configuration with reverse proxy to dynamic backends. Replace "example.com" with your domain name.
+```ferron
 example.com {
-    proxy_srv "http://_backend._tcp.example.com/" // Replace "_backend._tcp.example.com" with the actual SRV record for your backend servers
+    proxy {
+        srv _backend._tcp.example.com
+    }
 }
 ```
 
@@ -172,40 +161,47 @@ Below are assumptions made for this example:
 
 You can configure Ferron like this:
 
-```kdl
+```ferron
 * {
-    tls "/path/to/certificate.crt" "/path/to/private.key"
+    tls {
+        provider "manual"
+        cert "/path/to/certificate.crt"
+        key "/path/to/private.key"
+    }
 }
 
 example.com {
-    location "/agenda" {
-        // It proxies /agenda/example to http://calender.example.net:5000/agenda/example
-        proxy "http://calender.example.net:5000"
+    location /agenda {
+        # It proxies /agenda/example to http://calender.example.net:5000/agenda/example
+        proxy http://calender.example.net:5000
     }
 
-    location "/" {
-        // Catch-all path
-        proxy "http://localhost:3000/"
+    location / {
+        # Catch-all path
+        proxy http://localhost:3000
     }
 }
 
 foo.example.com {
-    proxy "https://saas.foo.net"
+    location / {
+        proxy https://saas.foo.net
+    }
 }
 
 bar.example.com {
-    proxy "http://backend.example.net:4000"
+    location / {
+        proxy http://backend.example.net:4000
+    }
 }
 ```
 
-For `http://calender.example.net:5000/agenda/example`, you will probably have to either configure the calendar service to strip 'agenda/' or configure URL rewriting in Ferron.
+For `http://calender.example.net:5000/agenda/example`, you will probably have to either configure the calendar service to strip `agenda/` or configure URL rewriting in Ferron.
 
 ## Notes and troubleshooting
 
-- If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the backend URL/port, make sure the backend process is running, and confirm network/firewall access from Ferron to the backend.
-- If only some paths fail, review `location` matching order and `remove_base` behavior so forwarded paths match what the backend expects.
-- If your backend application reports host mismatch errors or wrong absolute URLs, use `proxy_request_header_replace "Host" "{header:Host}"` (see the intact Host header section).
-- If requests return unexpected `404 Not Found` at the backend, test with and without `disable_url_sanitizer` and confirm backend path handling before disabling URL sanitization.
+- If you get `502 Bad Gateway` or `504 Gateway Timeout`, verify the `upstream` URL is reachable and check `lb_health_check_max_fails` settings.
+- If only some paths fail, review `location` matching order — more specific locations win over less specific ones.
 - For mixed static + API setups, keep API routes in a dedicated prefix like `/api` and use a catch-all `/` location for static files or SPA fallback.
-- For gRPC upstreams, enable `proxy_http2_only`; without HTTP/2-only proxying, many gRPC backends will fail.
-- If Ferron is behind an HTTPS-terminating proxy and you also use automatic TLS, use HTTP-01 challenge instead of TLS-ALPN-01. See [Automatic TLS](/docs/use-cases/automatic-tls#note-about-cloudflare-proxies-and-other-https-proxies).
+- For gRPC upstreams, enable `http2_only`; without HTTP/2-only proxying, many gRPC backends will fail.
+- If Ferron is behind an HTTPS-terminating proxy and you also use automatic TLS, use HTTP-01 challenge instead of TLS-ALPN-01. See [Automatic TLS](/docs/v3/use-cases/automatic-tls#note-about-cloudflare-proxies-and-other-https-proxies).
+- For upstream header forwarding details, see [Reverse proxying configuration reference](/docs/v3/configuration/reverse-proxying).

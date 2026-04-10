@@ -1,107 +1,144 @@
 ---
-title: "Configuration: static & content handling"
-description: "Static file serving, cache directives, and response content processing in KDL configuration."
+title: "Configuration: static file serving"
+description: "Static file serving, directory listings, compression, caching headers, MIME types, and error pages."
 ---
 
-This page describes KDL directives for serving static assets, tuning response caching, and controlling content processing.
-
-## Global-only directives
-
-### Caching
-
-- `cache_max_entries <cache_max_entries: integer|null>` (_cache_ module)
-  - This directive specifies the maximum number of entries that can be stored in the HTTP cache. If set as `cache_max_entries #null`, the cache can theoretically store an unlimited number of entries. The cache keys for entries depend on the request method, the rewritten request URL, the "Host" header value, and varying request headers. Default: `cache_max_entries 1024`
-
-**Configuration example:**
-
-```kdl
-* {
-    cache_max_entries 2048
-}
-```
+This page documents directives that configure static file serving, directory listings, compression, caching behavior, and custom error pages for requests resolved to the filesystem (via `root`).
 
 ## Directives
 
-### Static file serving
+### Index and directory listings
 
-- `root <webroot: string|null>`
-  - This directive specifies the webroot from which static files are served. If set as `root #null`, the static file serving functionality is disabled. Default: none
-- `etag [enable_etag: bool]` (_static_ module)
-  - This directive specifies whether the ETag header is enabled. Default: `etag #true`
-- `compressed [enable_compression: bool]` (_static_ module)
-  - This directive specifies whether the HTTP compression for static files is enabled. Default: `compressed #true`
-- `directory_listing [enable_directory_listing: bool]` (_static_ module)
-  - This directive specifies whether the directory listings are enabled. Default: `directory_listing #false`
-- `precompressed [enable_precompression: bool]` (_static_ module)
-  - This directive specifies whether serving the precompressed static files is enabled. The precompressed static files would additionally have `.gz` extension for gzip, `.deflate` for Deflate, `.br` for Brotli, or `.zst` for Zstandard. Default: `precompressed #false`
-- `mime_type <file_extension: string> <mime_type: string>` (_static_ module; Ferron 2.1.0 or newer)
-  - This directive specifies an additional MIME type corresponding to a file extension (like `.html`) for static files. Default: none
-- `index <index_file: string> [<another_index_file: string> ...]` (_static_ module; Ferron 2.1.0 or newer)
-  - This directive specifies the index files to be used when a directory is requested. Default: `index "index.html" "index.htm" "index.html"` (static file serving), `index "index.php" "index.cgi" "index.html" "index.htm" "index.html"` (CGI, FastCGI)
-- `dynamic_compressed [enable_dynamic_content_compression: bool]` (_dcompress_ module; Ferron 2.1.0 or newer)
-  - This directive specifies whether the HTTP compression for dynamic content is enabled. Default: `dynamic_compressed #false`
+- `index <filename: string>...`
+  - This directive specifies one or more filenames to try when a request path resolves to a directory. Files are tried in order; the first existing file replaces the directory path in the file context. Only applies when the resolved path is a directory and no `path_info` is present. Default: `index index.html index.htm index.xhtml`
+- `directory_listing [bool: boolean]` (`http-static`)
+  - This directive specifies whether auto-generated HTML directory listings are enabled when a request path resolves to a directory and no index file is found. When omitted, defaults to `true`. Default: `directory_listing false`
 
 **Configuration example:**
 
-```kdl
+```ferron
 example.com {
-    root "/var/www/example.com"
-    etag
-    compressed
-    directory_listing #false
+    root /srv/www/example
+    index index.html index.htm
+    directory_listing
+}
+```
 
-    // Set "Cache-Control" header for static files
+Notes:
+
+- Only generates a listing if no `index` file was found for the directory.
+- Dotfiles (names starting with `.`) are excluded from the listing, except `.maindesc` which is read as a description.
+- A `.maindesc` file in the directory, if present, is displayed as a `<pre>` block below the file table.
+
+### Compression
+
+- `compressed [bool: boolean]` (`http-static`)
+  - This directive specifies whether on-the-fly response body compression is enabled based on the `Accept-Encoding` request header. Supported algorithms: `gzip`, `brotli`, `deflate`, `zstd`. When omitted, defaults to `true`. Default: `compressed true`
+- `precompressed [bool: boolean]` (`http-static`)
+  - This directive specifies whether serving pre-compressed sidecar files (e.g. `style.css.gz`, `app.js.br`) instead of compressing on the fly is enabled. When omitted, defaults to `true`. Default: `precompressed false`
+- `dynamic_compressed [bool: boolean]` (`http-static`)
+  - This directive specifies whether on-the-fly compression is enabled for dynamic (non-static) response bodies, such as responses from reverse proxies or application handlers. Supported algorithms: `gzip`, `brotli`, `deflate`, `zstd`. Default: `dynamic_compressed false`
+
+**Configuration example:**
+
+```ferron
+example.com {
+    root /srv/www/example
+    compressed
+    precompressed
+}
+```
+
+Notes:
+
+- `compressed`: applied to files larger than 256 bytes with compressible extensions. A `Vary: Accept-Encoding` header is added when compression is possible.
+- `precompressed`: when enabled, the server checks for a pre-compressed file alongside the original based on the client's `Accept-Encoding` preference.
+- `dynamic_compressed`: compression is only applied to responses with compressible MIME types. A suffix is appended to the ETag (e.g. `W/"abc123-dynamic-br"`) to distinguish compressed variants.
+
+### Caching headers
+
+- `etag [bool: boolean]` (`http-static`)
+  - This directive specifies whether ETag generation for static file responses is enabled. ETags are weak ETags (`W/"..."`) generated from an xxHash3 hash of the file path, size, and modification time. When omitted, defaults to `true`. Default: `etag true`
+- `file_cache_control <value: string>` (`http-static`)
+  - This directive specifies the `Cache-Control` response header for all static file responses. The value is passed through as-is. Default: not set
+
+**Configuration example:**
+
+```ferron
+example.com {
+    root /srv/www/example
+    etag
     file_cache_control "public, max-age=3600"
 }
 ```
 
-### Caching
+Notes:
 
-- `cache [enable_cache: bool]` (_cache_ module)
-  - This directive specifies whether the HTTP cache is enabled. Default: `cache #false`
-- `cache_max_response_size <cache_max_response_size: integer|null>` (_cache_ module)
-  - This directive specifies the maximum size of the response (in bytes) that can be stored in the HTTP cache. If set as `cache_max_response_size #null`, the cache can theoretically store responses of any size. Default: `cache_max_response_size 2097152`
-- `cache_vary <varying_request_header: string> [<varying_request_header: string> ...]` (_cache_ module)
-  - This directive specifies the request headers that are used to vary the cache entries. This directive can be specified multiple times. Default: none
-- `cache_ignore <ignored_response_header: string> [<ignored_response_header: string> ...]` (_cache_ module)
-  - This directive specifies the response headers that are ignored when caching the response. This directive can be specified multiple times. Default: none
-- `file_cache_control <cache_control: string|null>` (_static_ module)
-  - This directive specifies the Cache-Control header value for static files. If set as `file_cache_control #null`, the Cache-Control header is not set. Default: `file_cache_control #null`
+- When compression is used, a suffix is appended to the ETag (e.g. `W/"abc123-br"` for Brotli).
+- `If-None-Match` requests that match the current ETag return `304 Not Modified`.
+- Pre-compressed sidecar files receive their own ETag based on the sidecar file's own metadata.
+
+### MIME types
+
+- `mime_type <extension: string> <mime-type: string>` (`http-static`)
+  - This directive maps a file extension (with or without leading dot) to a MIME type. Custom MIME type mappings override the built-in database for matching extensions. Multiple `mime_type` directives can be used to map different extensions. Default: built-in MIME database
 
 **Configuration example:**
 
-```kdl
+```ferron
 example.com {
-    cache
-    cache_max_response_size 2097152
-    cache_vary "Accept-Encoding" "Accept-Language"
-    cache_ignore "Set-Cookie" "Cache-Control"
+    root /srv/www/example
+    mime_type .wasm application/wasm
+    mime_type .webmanifest application/manifest+json
 }
 ```
 
-### Content processing
+Notes:
 
-Disabling HTTP compression is required for string replacement.
+- If the extension is not found in custom mappings, the built-in database is used as a fallback.
+- If neither custom nor built-in mappings match, the response is sent with no `Content-Type` header.
 
-- `replace <searched_string: string> <replaced_string: string> [once=<replace_once: bool>]` (_replace_ module)
-  - This directive specifies the string to be replaced in a response body, and a replacement string. The `once` prop specifies whether the string will be replaced once, by default this prop is set to `#true`. This directive can be specified multiple times. Default: none
-- `replace_last_modified [preserve_last_modified: bool]` (_replace_ module)
-  - This directive specifies whether to preserve the "Last-Modified" header in the response. Default: `replace_last_modified #false`
-- `replace_filter_types <filter_type: string> [<filter_type: string> ...]` (_replace_ module)
-  - This directive specifies the response MIME type filters. The filter can be either a specific MIME type (like `text/html`) or a wildcard (`*`) specifying that responses with all MIME types are processed for replacement. This directive can be specified multiple times. Default: `replace_filter_types "text/html"`
+### Error pages
+
+- `error_page <status-code: integer>... <file-path: string>`
+  - This directive specifies one or more HTTP status codes followed by a file path to serve as the error response body. The last argument is always the file path; all preceding arguments are status codes. Default: built-in error pages
 
 **Configuration example:**
 
-```kdl
+```ferron
 example.com {
-    // Disabling HTTP compression is required for string replacement
-    compressed #false
-
-    // String replacement in response bodies (works with HTTP compression disabled)
-    replace "old-company-name" "new-company-name" once=#false
-    replace "http://old-domain.com" "https://new-domain.com" once=#true
-
-    replace_last_modified
-    replace_filter_types "text/html" "text/css" "application/javascript"
+    root /srv/www/example
+    error_page 404 /custom/404.html
+    error_page 500 502 503 504 /custom/50x.html
 }
 ```
+
+Notes:
+
+- Only applies when an error response is being generated and no custom response has already been set.
+- The file path is absolute or relative to the current working directory.
+- If the specified error page file does not exist, the directive is skipped and the built-in error page is used.
+- Multiple status codes can be mapped to the same error page in a single directive.
+
+## Observability
+
+### Metrics
+
+#### Static file serving
+
+- `ferron.static.files_served` (Counter) — number of static files served.
+  - Attributes: `ferron.compression` (`"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`), `ferron.cache_hit` (`"true"` or `"false"`)
+- `ferron.static.bytes_sent` (Histogram) — bytes sent for static file responses. Buckets: 1KB, 10KB, 100KB, 1MB, 10MB, 100MB.
+  - Attributes: same as above
+
+### Logs
+
+- **`WARN`**: logged when an `error_page` file cannot be opened. The directive is skipped and the built-in error page is used instead.
+
+## Notes and troubleshooting
+
+- The `root` directive is defined in [Routing and URL processing](/docs/v3/configuration/routing-url-processing).
+- For the full HTTP response cache module, see [/docs/v3/configuration/http-cache.md](/docs/v3/configuration/http-cache.md).
+- For `trailing_slash_redirect`, see [Routing and URL processing](/docs/v3/configuration/routing-url-processing#url-sanitation-and-redirects).
+- For response control (`status`, `abort`), see [HTTP response control](/docs/v3/configuration/http-response).
+- For URL rewriting, see [URL rewriting](/docs/v3/configuration/http-rewrite).

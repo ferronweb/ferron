@@ -7,13 +7,32 @@ Manual TLS is useful when you already have certificates and private keys, or whe
 
 For many use cases, automatic TLS with ACME is the easiest way to get HTTPS working. However, if you have specific requirements or existing certificates, you can configure Ferron to use them directly.
 
-To enable manual TLS for a host, configure the `tls` directive with the certificate and private key paths:
+To enable manual TLS for a host, configure the `tls` directive with the `"manual"` provider and certificate/private key paths:
 
-```kdl
-// Replace "manual-tls.example.com" with your domain name.
-manual-tls.example.com {
-    tls "/etc/ssl/certs/manual-tls.example.com.crt" "/etc/ssl/private/manual-tls.example.com.key"
-    root "/var/www/html" // Replace "/var/www/html" with your website root directory
+```ferron
+# Replace "manual-tls.example.com" with your domain name.
+manual-tls.example.com:443 {
+    tls {
+        provider "manual"
+        cert "/etc/ssl/certs/manual-tls.example.com.crt"
+        key "/etc/ssl/private/manual-tls.example.com.key"
+    }
+
+    root /var/www/html
+}
+```
+
+You can also use environment variable interpolation for the paths:
+
+```ferron
+manual-tls.example.com:443 {
+    tls {
+        provider "manual"
+        cert "{{env.TLS_CERT}}"
+        key "{{env.TLS_KEY}}"
+    }
+
+    root /var/www/html
 }
 ```
 
@@ -21,24 +40,65 @@ The certificate and private key must match. If they do not match, TLS handshakes
 
 ## Manual TLS with multiple hosts
 
-You can configure manual TLS per virtual host. This is useful when each domain uses different certificates.
+You can configure manual TLS per virtual host. This is useful when each domain uses different certificates:
 
-```kdl
-example.com {
-    tls "/etc/ssl/certs/example.com.crt" "/etc/ssl/private/example.com.key"
-    root "/var/www/example"
+```ferron
+example.com:443 {
+    tls {
+        provider "manual"
+        cert "/etc/ssl/certs/example.com.crt"
+        key "/etc/ssl/private/example.com.key"
+    }
+
+    location / {
+        root /var/www/example
+    }
 }
 
-api.example.com {
-    tls "/etc/ssl/certs/api.example.com.crt" "/etc/ssl/private/api.example.com.key"
-    proxy "http://localhost:3000/"
+api.example.com:443 {
+    tls {
+        provider "manual"
+        cert "/etc/ssl/certs/api.example.com.crt"
+        key "/etc/ssl/private/api.example.com.key"
+    }
+
+    location / {
+        proxy http://localhost:3000
+    }
+}
+```
+
+## Manual TLS with custom crypto settings
+
+You can combine manual TLS with custom cipher suites, ECDH curves, and protocol version restrictions:
+
+```ferron
+api.example.com:443 {
+    tls {
+        provider "manual"
+        cert "/etc/ssl/certs/api.example.com.crt"
+        key "/etc/ssl/private/api.example.com.key"
+
+        min_version TLSv1.3
+        max_version TLSv1.3
+
+        cipher_suite TLS_AES_256_GCM_SHA384
+        cipher_suite TLS_CHACHA20_POLY1305_SHA256
+
+        ecdh_curve x25519
+    }
+
+    location / {
+        proxy http://localhost:3000
+    }
 }
 ```
 
 ## Notes and troubleshooting
 
-- Make sure Ferron can read both files from the `tls` directive path.
+- Make sure Ferron can read both the certificate and key files.
 - Ensure the certificate file includes any required intermediate certificates when needed by your CA.
 - If you rotate certificates externally, reload or restart Ferron so updated files are used.
-- If you do not want automatic TLS on a host, set `auto_tls #false` explicitly.
-- For all TLS-related directives (`tls`, `tls_min_version`, `tls_max_version`, `tls_client_certificate`, `ocsp_stapling`), see [Configuration: security & TLS](/docs/configuration/security-tls).
+- If you do not want automatic TLS on a host, do not use `provider "acme"` — use `provider "manual"` instead.
+- For all TLS-related directives (`cipher_suite`, `ecdh_curve`, `min_version`, `max_version`, `client_auth`), see [Security and TLS](/docs/v3/configuration/security-tls).
+- For ACME automatic TLS, see [ACME automatic TLS](/docs/v3/configuration/tls-acme).

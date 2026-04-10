@@ -1,136 +1,201 @@
 ---
 title: "Configuration: reverse proxying"
-description: "Reverse proxy, load balancing, forward proxy, and forwarded-authentication directives."
+description: "Reverse proxy, load balancing, upstream backends, header manipulation, and connection pooling directives."
 ---
 
-This page documents KDL directives for reverse proxying, backend balancing, forward proxying, and external auth forwarding.
-
-## Global-only directives
-
-### Reverse proxy & load balancing
-
-- `proxy_concurrent_conns <proxy_concurrent_conns: integer|null>` (_rproxy_ module; Ferron 2.3.0 or newer)
-  - This directive specifies the limit of TCP connections being established to backend servers, to prevent exhaustion of network resources. If set as `proxy_concurrent_conns #null`, the reverse proxy can theoretically establish an unlimited number of connections. Default: `proxy_concurrent_conns 16384`
-
-**Configuration example:**
-
-```kdl
-* {
-    proxy_concurrent_conns 16384
-}
-```
-
-### Authentication forwarding
-
-- `auth_to_concurrent_conns <auth_to_concurrent_conns: integer|null>` (_fauth_ module; Ferron 2.4.0 or newer)
-  - This directive specifies the limit of TCP connections being established to backend servers (for forwarded authentication), to prevent exhaustion of network resources. If set as `auth_to_concurrent_conns #null`, the reverse proxy can theoretically establish an unlimited number of connections. Default: `auth_to_concurrent_conns 16384`
-
-**Configuration example:**
-
-```kdl
-* {
-    auth_to_concurrent_conns 16384
-}
-```
+This page documents directives for forwarding incoming HTTP requests to one or more upstream backend servers. It supports load balancing, connection pooling with keep-alive reuse, health checking, and TLS upstream connections.
 
 ## Directives
 
-### Reverse proxy & load balancing
+### Reverse proxy and load balancing
 
-- `proxy <proxy_to: string|null> [unix=<unix_socket_path: string>] [limit=<conn_limit: integer|null>] [idle_timeout=<idle_timeout: integer|null>]` (_rproxy_ module)
-  - This directive specifies the URL to which the reverse proxy should forward requests. HTTP (for example `http://localhost:3000/`) and HTTPS URLs (for example `https://localhost:3000/`) are supported. Unix sockets are also supported via the `unix` prop set to the path to the socket (and the main value is set to the URL of the website), supported only on Unix and Unix-like systems. Established connections can be limited by the `limit` prop (Ferron 2.3.0 and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron 2.3.0 and newer); by default it is set to `60000` (60 seconds). This directive can be specified multiple times. Default: none
-- `lb_health_check [enable_lb_health_check: bool]` (_rproxy_ module)
-  - This directive specifies whether the load balancer passive health check is enabled. Default: `lb_health_check #false`
-- `lb_health_check_max_fails <max_fails: integer>` (_rproxy_ module)
-  - This directive specifies the maximum number of consecutive failures before the load balancer marks a backend as unhealthy. Default: `lb_health_check_max_fails 3`
-- `proxy_no_verification [proxy_no_verification: bool]` (_rproxy_ module)
-  - This directive specifies whether the reverse proxy should not verify the TLS certificate of the backend. Default: `proxy_no_verification #false`
-- `proxy_intercept_errors [proxy_intercept_errors: bool]` (_rproxy_ module)
-  - This directive specifies whether the reverse proxy should intercept errors from the backend. Default: `proxy_intercept_errors #false`
-- `proxy_request_header <header_name: string> <header_value: string>` (_rproxy_ module)
-  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy. The header values supports placeholders like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
-- `proxy_request_header_remove <header_name: string>` (_rproxy_ module)
-  - This directive specifies a header to be removed from HTTP requests sent by the reverse proxy. This directive can be specified multiple times. Default: none
-- `proxy_keepalive [proxy_keepalive: bool]` (_rproxy_ module)
-  - This directive specifies whether the reverse proxy should keep the connection to the backend alive. Default: `proxy_keepalive #true`
-- `proxy_request_header_replace <header_name: string> <header_value: string>` (_rproxy_ module)
-  - This directive specifies a header to be added to HTTP requests sent by the reverse proxy, potentially replacing existing headers. The header values supports placeholders like `{path}` which will be replaced with the request path. This directive can be specified multiple times. Default: none
-- `proxy_http2 [enable_proxy_http2: bool]` (_rproxy_ module)
-  - This directive specifies whether the reverse proxy can use HTTP/2 protocol when connecting to backend servers. This directive would have effect only if the backend server supports HTTP/2 and is connected via HTTPS. Default: `proxy_http2 #false`
-- `lb_retry_connection [enable_lb_retry_connection: bool]` (_rproxy_ module)
-  - This directive specifies whether the load balancer should retry connections to another backend server, in case of TCP connection or TLS handshake failure. Default: `lb_retry_connection #true`
-- `lb_algorithm <lb_algorithm: string>` (_rproxy_ module)
-  - This directive specifies the load balancing algorithm to be used. The supported algorithms are `random` (random selection), `round_robin` (round-robin), `least_conn` (least connections, "connections" would mean concurrent requests here), and `two_random` (power of two random choices; after two random choices, the backend server with the least concurrent requests is chosen). Default: `lb_algorithm "two_random"`
-- `lb_health_check_window <lb_health_check_window: integer>` (_rproxy_ module)
-  - This directive specifies the window size (in milliseconds) for load balancer health checks. Default: `lb_health_check_window 5000`
-- `proxy_keepalive_idle_conns <proxy_keepalive_idle_conns: integer>` (_rproxy_ module; Ferron 2.2.1 or older; **REMOVED**) - This directive used to specify the maximum number of idle connections to backend servers to keep alive. The default was `proxy_keepalive_idle_conns 48`. In Ferron 2.3.0 and newer, this directive is no longer supported.
-- `proxy_http2_only [enable_proxy_http2_only: bool]` (_rproxy_ module; Ferron 2.1.0 or newer)
-  - This directive specifies whether the reverse proxy uses HTTP/2 protocol (without HTTP/1.1 fallback) when connecting to backend servers. When the backend server is connected via HTTPS, the reverse proxy negotiates HTTP/2 during the TLS handshake. When the backend server is connected via HTTP, the reverse proxy uses HTTP/2 with prior knowledge. This directive can be used when proxying gRPC requests. Default: `proxy_http2_only #false`
-- `proxy_proxy_header <proxy_version_version: string|null>` (_rproxy_ module; Ferron 2.1.0 or newer)
-  - This directive specifies the version of the PROXY protocol header to be sent to backend servers when acting as a reverse proxy. Supported versions are `"v1"` (PROXY protocol version 1) and `"v2"` (PROXY protocol version 2). If specified with `#null` value, no PROXY protocol header is sent. Default: `proxy_proxy_header #null`
-- `proxy_srv <proxy_srv_to: string|null> [limit=<conn_limit: integer|null>] [idle_timeout=<idle_timeout: integer|null> [dns_servers=<dns_servers: string|null>]` (_rproxy_ module)
-  - This directive specifies the URL (with hostname leading to an SRV record) to which the reverse proxy should forward requests. HTTP (for example `http://_http._tcp.example.com/`) and HTTPS URLs (for example `https://_https._tcp.example.com/`) are supported. Established connections can be limited by the `limit` prop (Ferron 2.3.0 and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron 2.3.0 and newer); by default it is set to `60000` (60 seconds). Custom DNS resolvers are also supported via specifying comma-separated IP addresses of DNS servers in the `dns_server` prop. This directive can be specified multiple times. Default: none
+- `proxy` (`http-proxy`)
+  - This directive configures the reverse proxy with one or more upstream backends. Supports block form with nested directives or shorthand form with upstreams as arguments. Default: none
+- `upstream <url: string>` (`http-proxy`)
+  - This directive specifies a backend upstream server URL. Accepts `http://` or `https://` URLs. Can be nested inside a `proxy` block with optional `limit`, `idle_timeout`, and `unix` properties. Default: none
+- `srv <name: string>` (`http-proxy`; requires `srv-lookup` feature)
+  - This directive specifies a dynamic upstream resolved via DNS SRV records. Supports `dns_servers`, `limit`, and `idle_timeout` nested directives. Default: none
+- `lb_algorithm <algorithm: string>` (`http-proxy`)
+  - This directive specifies the load balancing strategy. Supported values: `random`, `round_robin`, `least_conn`, `two_random`. Default: `lb_algorithm two_random`
+- `lb_health_check [bool: boolean]` (`http-proxy`)
+  - This directive specifies whether passive health checking is enabled. Failed backends are temporarily excluded. When omitted, defaults to `true`. Default: `lb_health_check false`
+- `lb_health_check_max_fails <count: integer>` (`http-proxy`)
+  - This directive specifies the maximum consecutive failures before a backend is marked unhealthy. Default: `lb_health_check_max_fails 3`
+- `lb_health_check_window <duration: string>` (`http-proxy`)
+  - This directive specifies the time window for the failure counter. After this duration, the failure count resets. Default: `lb_health_check_window 5s`
+- `lb_retry_connection [bool: boolean]` (`http-proxy`)
+  - This directive specifies whether to retry on connection failure if alternative backends are available. When omitted, defaults to `true`. Default: `lb_retry_connection true`
 
 **Configuration example:**
 
-```kdl
-api.example.com {
-    // Backends for load balancing
-    // (or you can also use a single backend by specifying only one `proxy` directive)
-    proxy "http://backend1:8080"
-    proxy "http://backend2:8080"
-    proxy "http://backend3:8080"
+```ferron
+example.com {
+    proxy {
+        upstream http://localhost:8080
+        upstream http://localhost:8081 {
+            limit 100
+            idle_timeout 30s
+        }
 
-    // Health check configuration
-    lb_health_check
-    lb_health_check_max_fails 3
-    lb_health_check_window 5000
-
-    // Proxy settings
-    proxy_no_verification #false
-    proxy_intercept_errors #false
-    proxy_keepalive
-    proxy_http2 #false
-
-    // Proxy headers
-    proxy_request_header "X-Custom-Header" "CustomValue"
-
-    proxy_request_header_remove "X-Internal-Token"
-    proxy_request_header_replace "X-Real-IP" "{client_ip}"
+        lb_algorithm two_random
+        lb_health_check
+        lb_health_check_max_fails 3
+        lb_health_check_window 5s
+    }
 }
 ```
 
-### Forward proxy
+### Connection behavior
 
-- `forward_proxy [enable_forward_proxy: bool]` (_fproxy_ module)
-  - This directive specifies whether the forward proxy functionality is enabled. Default: `forward_proxy #false`
-- `forward_proxy_auth [enable_forward_proxy_auth: bool] [realm=<realm: string>] [brute_protection=<enable_brute_protection: bool>] [users=<users: string>]` (_fproxyauth_ module; Ferron 2.4.0 or newer)
-  - This directive specifies whether the forward proxy authentication (HTTP Basic authentication) is enabled. The `realm` prop specifies the HTTP basic authentication realm. The `brute_protection` prop specifies whether the brute-force protection is enabled. The `users` prop is a comma-separated list of allowed users for HTTP authentication. Default: `forward_proxy #false`
+- `keepalive [bool: boolean]` (`http-proxy`)
+  - This directive specifies whether HTTP keep-alive connection pooling is enabled. When omitted, defaults to `true`. Default: `keepalive true`
+- `http2 [bool: boolean]` (`http-proxy`)
+  - This directive specifies whether HTTP/2 is enabled for upstream connections. When omitted, defaults to `true`. Default: `http2 false`
+- `http2_only [bool: boolean]` (`http-proxy`)
+  - This directive specifies whether only HTTP/2 is used for upstream connections. When omitted, defaults to `true`. Default: `http2_only false`
+- `intercept_errors [bool: boolean]` (`http-proxy`)
+  - This directive specifies whether upstream error responses (4xx/5xx) are passed through to the client as-is. When omitted, defaults to `true`. Default: `intercept_errors false`
+
+### TLS
+
+- `no_verification [bool: boolean]` (`http-proxy`)
+  - This directive specifies whether TLS certificate verification is disabled for HTTPS upstreams. When omitted, defaults to `true`. Default: `no_verification false`
+
+**Warning:** Only use `no_verification true` in testing or trusted internal networks.
+
+### PROXY protocol
+
+- `proxy_header <version: string>` (`http-proxy`)
+  - This directive specifies whether to prepend HAProxy PROXY protocol header to upstream connections. Supported versions: `v1`, `v2`. Default: disabled
+
+### Header manipulation
+
+- `request_header` (`http-proxy`)
+  - This directive manipulates request headers before forwarding to upstream. Three forms are supported:
+    - `request_header +Name "value"` — **add** header (appends, allows duplicates)
+    - `request_header -Name` — **remove** all instances of the header
+    - `request_header Name "value"` — **replace** header (removes existing, sets new value)
+  - Default: none
 
 **Configuration example:**
 
-```kdl
-* {
-    forward_proxy
+```ferron
+example.com {
+    proxy http://localhost:8080 {
+        request_header +X-Custom-Header "value"
+        request_header -X-Sensitive-Header
+        request_header Host "new-host.example.com"
+    }
 }
 ```
 
-### Authentication forwarding
+### Global connection limit
 
-- `auth_to <auth_to: string|null> [unix=<unix_socket_path: string>] [limit=<conn_limit: integer|null>] [idle_timeout=<idle_timeout: integer|null>]` (_fauth_ module)
-  - This directive specifies the URL to which the web server should send requests for forwarded authentication. Unix sockets are also supported via the `unix` prop set to the path to the socket (and the main value is set to the URL of the website), supported only on Unix and Unix-like systems (Ferron 2.6.0 and newer). Established connections can be limited by the `limit` prop (Ferron 2.4.0 and newer); this can be useful for backend server that don't utilize event-driven I/O. Timeout for idle kept-alive connections (in milliseconds) can also be specified via the `idle_timeout` prop (Ferron 2.4.0 and newer); by default it is set to `60000` (60 seconds). Default: none
-- `auth_to_no_verification [auth_to_no_verification: bool]` (_fauth_ module)
-  - This directive specifies whether the server should not verify the TLS certificate of the backend authentication server. Default: `auth_to_no_verification #false`
-- `auth_to_copy <request_header_to_copy: string> [<request_header_to_copy: string> ...]` (_fauth_ module)
-  - This directive specifies the request headers that will be copied and sent to the forwarded authentication backend server. This directive can be specified multiple times. Default: none
+- `proxy_concurrent_conns <limit: integer>` (global scope)
+  - This directive specifies the global maximum number of concurrent TCP connections maintained in the keep-alive connection pool across all upstream backends. Unix socket connections are always unbounded. Default: `proxy_concurrent_conns 16384`
 
 **Configuration example:**
 
-```kdl
-app.example.com {
-    // Forward authentication to external service
-    auth_to "https://auth.example.com/validate"
-    auth_to_no_verification #false
-    auth_to_copy "Authorization" "X-User-Token" "X-Session-ID"
+```ferron
+{
+    proxy_concurrent_conns 10000
+}
+
+example.com {
+    proxy http://localhost:8080 {
+        keepalive true
+    }
 }
 ```
+
+## Upstream nested properties
+
+### `upstream`
+
+Defines a static backend server.
+
+```ferron
+upstream http://localhost:8080 {
+    limit 100
+    idle_timeout 30s
+    unix /var/run/backend.sock
+}
+```
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `limit` | `<number>` | Maximum concurrent connections to this specific upstream. | unlimited |
+| `idle_timeout` | `<duration>` | Keep-alive idle timeout. Connections idle longer than this are evicted from the pool. | `60s` |
+| `unix` | `<path>` | Connect via Unix domain socket instead of TCP. The URL scheme is still required. | TCP |
+
+### `srv` (feature-gated)
+
+Defines a dynamic upstream resolved via DNS SRV records.
+
+```ferron
+srv _http._tcp.example.com {
+    dns_servers 8.8.8.8,8.8.4.4
+    limit 100
+    idle_timeout 30s
+}
+```
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `dns_servers` | `<string>` | Comma-separated DNS server IPs. Uses system resolver if empty. | system |
+| `limit` | `<number>` | Maximum concurrent connections per resolved backend. | unlimited |
+| `idle_timeout` | `<duration>` | Keep-alive idle timeout per resolved backend. | `60s` |
+
+## Load balancing algorithms
+
+| Algorithm | Description |
+| --- | --- |
+| `random` | Selects a backend randomly for each request. |
+| `round_robin` | Cycles through backends in order. |
+| `least_conn` | Selects the backend with the fewest active tracked connections. |
+| `two_random` | Picks two random backends and selects the less loaded one. |
+
+## Forwarding headers
+
+The reverse proxy module automatically manages standard forwarding headers:
+
+| Header | Behavior |
+| --- | --- |
+| `X-Forwarded-For` | When `client_ip_from_header` is enabled, appends the extracted client IP to the existing chain. Otherwise, sets it to the direct connecting peer IP. |
+| `X-Forwarded-Proto` | Always set to the incoming request scheme (`http` or `https`). |
+| `X-Real-IP` | Always set to the client IP. |
+| `Forwarded` (RFC 7239) | When `client_ip_from_header` is enabled, appends a new element (`for=...;proto=...;by=...`). Otherwise, sets a single element. IPv6 addresses are quoted per RFC 7239. |
+
+## Connection pooling
+
+Ferron maintains a keep-alive connection pool for upstream backends. Key behaviors:
+
+- **Connection reuse**: Pooled connections are automatically reused for subsequent requests to the same upstream.
+- **Idle eviction**: Connections idle longer than `idle_timeout` are evicted from the pool.
+- **HTTP/2 multiplexing**: HTTP/2 connections share a single TCP connection for multiple concurrent requests.
+
+## Health checking
+
+Passive health checking tracks connection failures per backend:
+
+1. Each failed connection increments a counter for that backend.
+2. If the counter exceeds `lb_health_check_max_fails` within `lb_health_check_window`, the backend is temporarily excluded from selection.
+3. After the window expires, the counter resets and the backend becomes eligible again.
+4. When `lb_retry_connection` is enabled and the selected backend fails, Ferron tries the next available backend.
+
+## Observability
+
+### Metrics
+
+In addition to the existing proxy metrics (`ferron.proxy.backends.selected`, `ferron.proxy.backends.unhealthy`), the following metrics are emitted:
+
+- `ferron.proxy.requests` (Counter) — now includes the `http.response.status_code` and `ferron.proxy.status_code` attributes for upstream response tracking, in addition to `ferron.proxy.connection_reused`.
+- `ferron.proxy.tls_handshake_failures` (Counter) — TLS handshake failures with upstream backends.
+- `ferron.proxy.pool.waits` (Counter) — times the connection pool was exhausted and a request had to wait.
+- `ferron.proxy.pool.wait_time` (Histogram) — duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s.
+
+## Notes and troubleshooting
+
+- If you get 502 errors from backends, verify the `upstream` URLs are reachable and check `lb_health_check_max_fails` settings.
+- For the global connection limit (`concurrent_conns`), see [Core directives](/docs/v3/configuration/core-directives#reverse-proxy-connection-limits).
+- For forward proxy configuration, see [Forward proxy](/docs/v3/configuration/http-fproxy).

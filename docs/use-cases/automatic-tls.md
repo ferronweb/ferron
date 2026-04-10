@@ -1,154 +1,140 @@
 ---
 title: Automatic TLS
-description: "Set up automatic TLS in Ferron with Let's Encrypt and ACME challenges (TLS-ALPN-01, HTTP-01, DNS-01)."
+description: "Set up automatic TLS in Ferron with Let's Encrypt and ACME challenges (HTTP-01, TLS-ALPN-01, DNS-01)."
 ---
 
-Ferron supports automatic TLS via Let's Encrypt, and TLS-ALPN-01, HTTP-01 (Ferron 1.1.0 and newer) and DNS-01 (Ferron 2.0.0 and newer) ACME challenges. The domain names for the certificate will be extracted from the host configuration (wildcard domains are ignored for TLS-ALPN-01 and HTTP-01 ACME challenges).
+Ferron supports automatic TLS via ACME-compatible Certificate Authorities such as **Let's Encrypt**. It supports three challenge types:
 
-The automatic TLS functionality is used to obtain TLS certificates automatically, without needing to manually import TLS certificates or use an external tool to obtain TLS certificates, like Certbot. This makes the process of obtaining TLS certificate more convenient and efficient.
+- **HTTP-01** (default) — serves a token at `/.well-known/acme-challenge/`
+- **TLS-ALPN-01** — responds with a self-signed cert during the TLS handshake
+- **DNS-01** — creates a TXT record at `_acme-challenge.<domain>` (required for wildcard domains)
 
-Ferron supports both production and staging Let's Encrypt directories. The staging Let's Encrypt directory can be used for testing purposes and to verify that the server and automatic TLS is configured correctly.
+Certificates are cached and automatically renewed before expiration.
 
-Also, Ferron 2.0.0 and newer support a default OS-specific ACME cache directory in a home directory of a user that Ferron runs as (if the home directory is available), making automatic TLS require less setup.
+Below is the example Ferron configuration that configures automatic TLS with the production Let's Encrypt directory:
 
-Below is the example Ferron configuration that configures automatic TLS with production Let's Encrypt directory:
+```ferron
+example.com:443 {
+    tls {
+        provider "acme"
+        challenge http-01
+        contact "admin@example.com"
+    }
 
-```kdl
-globals {
-    // The directive below is optional.
-    // Ferron enables automatic TLS by default without needing to specify this directive, unless it's explicitly disabled.
-    //auto_tls
-
-    // Optionally, specify the contact email address for ACME registration and expiration notices.
-    //auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-
-    // Optionally, specify the ACME cache directory
-    //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
-
-    // Production Let's Encrypt directory is used by default, so the directive below is optional, unless using staging Let's Encrypt directory for testing purposes.
-    //auto_tls_letsencrypt_production
-}
-
-// Replace "example.com" with your website's domain name
-example.com {
-    root "/var/www/html"
+    root /var/www/html
 }
 ```
 
 ## Note about Cloudflare proxies (and other HTTPS proxies)
 
-Ferron uses TLS-ALPN-01 ACME challenge for automatic TLS by default, however this wouldn't work if your website is behind a proxy that terminates TLS, as TLS-ALPN-01 challenge works on TLS handshake level.
+Ferron uses HTTP-01 ACME challenge by default, which requires the server to be reachable on port 80. If your website is behind a proxy that terminates TLS (like Cloudflare's proxy mode), the HTTP-01 challenge may not work unless port 80 is accessible.
 
-You can use HTTP-01 challenge instead, which works on HTTP level. You can add a `auto_tls_challenge "http-01"` global configuration directive, for example like this:
+You can use TLS-ALPN-01 challenge instead, which works at the TLS handshake level and only requires port 443:
 
-```kdl
-globals {
-    // The directive below is optional.
-    // Ferron enables automatic TLS by default without needing to specify this directive, unless it's explicitly disabled.
-    //auto_tls
+```ferron
+example.com:443 {
+    tls {
+        provider "acme"
+        challenge tls-alpn-01
+        contact "admin@example.com"
+    }
 
-    // Optionally, specify the contact email address for ACME registration and expiration notices.
-    //auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
-
-    // Optionally, specify the ACME cache directory
-    //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
-
-    // Use HTTP-01 challenge instead of TLS-ALPN-01, because the server is behind an HTTPS proxy.
-    auto_tls_challenge "http-01"
-}
-
-// Replace "example.com" with your website's domain name
-example.com {
-    root "/var/www/html"
+    root /var/www/html
 }
 ```
 
 ## Using Ferron as an ACME client for other servers
 
-If you run other servers (alongside Ferron) that support TLS, but not automatic TLS functionality, you can use Ferron 2.5.0 and newer as an ACME client to obtain TLS certificates for those servers, like this:
+If you run other servers (alongside Ferron) that support TLS, but not automatic TLS functionality, you can use Ferron as an ACME client to obtain TLS certificates for those servers:
 
-```kdl
-// Replace "example.com" with your website's domain name
-example.com {
-    auto_tls_save_data "/tmp/server.crt" "/tmp/server.key" // Replace "/tmp/server.crt" and "/tmp/server.key" with actual paths to the certificate and private key files.
+```ferron
+example.com:443 {
+    tls {
+        provider "acme"
+        challenge http-01
+        contact "admin@example.com"
 
-    // Optionally, you can also specify the command to run after saving the certificate and private key, for example to reload the server that uses the obtained TLS certificate.
-    // These environment variables are supplied to the command:
-    // - FERRON_ACME_DOMAIN - the domain name for which the certificate was obtained; comma-separated if multiple domain names
-    // - FERRON_ACME_CERT_PATH - the path to the obtained TLS certificate
-    // - FERRON_ACME_KEY_PATH - the path to the obtained private key
+        save "/tmp/server.crt" "/tmp/server.key"
 
-    //auto_tls_post_obtain_command "/etc/reload-server.sh"
+        # Optionally, run a command after obtaining the certificate:
+        # post_obtain_command "/etc/reload-server.sh"
+    }
 
-    root "/var/www/html"
+    root /var/www/html
 }
 ```
+
+If only one path is given for `save`, the key path defaults to the certificate path with a `.key` extension. After a certificate is obtained, the private key is written with `0600` permissions on Unix.
 
 ## Automatic TLS on demand
 
-Ferron can also obtain certificates on demand when a hostname is accessed for the first time (`auto_tls_on_demand`). This is useful for multi-tenant setups where hostnames are not fully known in advance.
+Ferron can also obtain certificates on demand when a hostname is accessed for the first time (`on_demand`). This is useful for multi-tenant setups where hostnames are not fully known in advance.
 
-When enabling on-demand issuance, configure `auto_tls_on_demand_ask` to avoid abuse. Ferron will call the configured URL with the `domain` query parameter, and your endpoint should allow or deny issuance for that domain.
+When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferron will call the configured URL with the `domain` query parameter, and your endpoint should allow or deny issuance for that domain.
 
-```kdl
-globals {
-    // The directive below is optional.
-    // Ferron enables automatic TLS by default without needing to specify this directive, unless it's explicitly disabled.
-    //auto_tls
+```ferron
+*.example.com:443 {
+    tls {
+        provider "acme"
+        challenge http-01
+        contact "admin@example.com"
 
-    // Optionally, specify the contact email address for ACME registration and expiration notices.
-    //auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
+        on_demand
+        on_demand_ask "https://auth.example.com/check-cert"
+    }
 
-    // Optionally, specify the ACME cache directory
-    //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
-
-    // Ask endpoint to authorize per-domain issuance, e.g. https://auth.example.com/check?domain=example.com
-    auto_tls_on_demand_ask "https://auth.example.com/check"
-    auto_tls_on_demand_ask_no_verification #false // Keep verification enabled unless you explicitly need otherwise
-}
-
-example.com,*.example.com {
-    auto_tls_on_demand
-    root "/var/www/html"
+    root /var/www/html
 }
 ```
 
-## DNS providers
+## DNS providers (DNS-01 challenge)
 
-Ferron 2.0.0 and newer supports DNS-01 ACME challenge for automatic TLS. The DNS-01 ACME challenge requires a DNS provider to be configured in the `provider` prop in the `auto_tls_challenge` directive.
+Ferron supports DNS-01 ACME challenge for automatic TLS, which is required for wildcard certificates. The DNS-01 challenge requires a DNS provider to be configured inside the `tls` block.
 
-Below is the example Ferron configuration that configures automatic TLS with production Let's Encrypt directory and hypothetical `example` DNS provider:
+> **Note:** No DNS provider modules are currently implemented. The DNS-01 challenge type and `dns` directive are defined but require a DNS provider backend (e.g. Cloudflare, Route 53) to function. These modules are planned for a future release. If you need wildcard certificates today, you will need to obtain them externally and use [Manual TLS](/docs/v3/use-cases/manual-tls).
 
-```kdl
-globals {
-    auto_tls
-    auto_tls_contact "someone@example.com" // Replace "someone@example.com" with actual email address
+Below is the planned configuration format for DNS-01 with Cloudflare:
 
-    // Optionally, specify the ACME cache directory
-    //auto_tls_cache "/path/to/letsencrypt-cache" // Replace "/path/to/letsencrypt-cache" with actual cache directory.
+```ferron
+*.example.com:443 {
+    tls {
+        provider "acme"
+        challenge dns-01
+        contact "admin@example.com"
 
-    auto_tls_challenge "dns-01" provider="example" some_prop="value" // The "some_prop" prop is used to configure the DNS provider
-}
+        dns "cloudflare" {
+            api_key "EXAMPLE_API_KEY"
+        }
+    }
 
-// Replace "example.com" with your website's domain name
-example.com {
-    root "/var/www/html"
+    root /var/www/html
 }
 ```
 
-For the reference of supported DNS providers and their configuration properties, see the [configuration reference](/docs/configuration/security-tls#dns-providers-for-acme-dns-01-challenge)
+For the reference of supported DNS providers and their configuration properties, see the [configuration reference](/docs/v3/configuration/tls-acme).
+
+## Certificate caching
+
+Certificates are cached both in-memory and on disk (when a `cache` path is configured). This ensures certificates survive restarts and are automatically renewed.
+
+```ferron
+example.com:443 {
+    tls {
+        provider "acme"
+        challenge http-01
+        contact "admin@example.com"
+        cache "/var/cache/ferron-acme"
+    }
+}
+```
 
 ## Notes and troubleshooting
 
-- Use Let's Encrypt staging first (`auto_tls_letsencrypt_production #false`) to validate configuration and avoid production rate limits during setup/testing.
+- The default HTTP-01 challenge requires port 80 to be reachable. TLS-ALPN-01 only needs port 443.
 - Ensure your public DNS records point to the Ferron server before requesting certificates; ACME challenges will fail if traffic goes elsewhere.
-- TLS-ALPN-01 and HTTP-01 require reachable public endpoints. Make sure inbound traffic to the required ports is not blocked by firewall rules or provider security groups.
-- If your site is behind an HTTPS-terminating proxy (for example Cloudflare proxy mode), switch to `auto_tls_challenge "http-01"` (or DNS-01) because TLS-ALPN-01 will not work through TLS termination.
-- If you need wildcard certificates, use DNS-01 challenge; wildcard domains are ignored for TLS-ALPN-01 and HTTP-01.
-- Keep `auto_tls_cache` on persistent storage and ensure Ferron can read/write it, otherwise certificate renewals may fail or repeat unnecessarily.
-- For DNS-01 failures, verify provider credentials/props and allow time for DNS propagation before retrying.
-
-### Notes for on-demand mode
-
-- Prefer `auto_tls_challenge "tls-alpn-01"` (default) or `auto_tls_challenge "http-01"` for faster validation. DNS-01 can be slower due to DNS propagation.
-- `auto_tls_save_data` is not supported together with `auto_tls_on_demand`.
+- If your site is behind an HTTPS-terminating proxy (for example Cloudflare proxy mode), use `challenge tls-alpn-01` (or DNS-01) because HTTP-01 may not work through TLS termination unless port 80 is also accessible.
+- If you need wildcard certificates, use DNS-01 challenge; HTTP-01 and TLS-ALPN-01 do not support wildcard domains.
+- Keep `cache` on persistent storage and ensure Ferron can read/write it, otherwise certificate renewals may fail or repeat unnecessarily.
+- For DNS-01 failures, verify provider credentials and allow time for DNS propagation before retrying.
+- For cipher suites, ECDH curves, and mTLS, see [Security and TLS](/docs/v3/configuration/security-tls).
+- For TLS session ticket keys, see [TLS session ticket keys](/docs/v3/configuration/tls-session-tickets).

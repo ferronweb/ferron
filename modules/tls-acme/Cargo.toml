@@ -1,0 +1,68 @@
+[package]
+name = "ferron-tls-acme"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ferron-core = { path = "../../core" }
+ferron-tls = { path = "../../types/tls" }
+ferron-dns = { path = "../../types/dns" }
+ferron-http = { path = "../../types/http" }
+ferron-observability = { path = "../../types/observability" }
+ferron-ocsp = { path = "../../types/ocsp", optional = true }
+
+# ACME protocol
+instant-acme = { version = "0.8.4", default-features = false, features = [
+    "hyper-rustls",
+    "aws-lc-rs",
+    "rcgen",
+    "time",
+    "x509-parser",
+] }
+
+# TLS
+rustls = { version = "0.23.37", default-features = false, features = ["tls12", "std", "aws_lc_rs"] }
+rustls-pki-types = "1.14.0"
+rustls-native-certs = "0.8"
+webpki-roots = "1"
+
+# Certificate generation
+rcgen = { version = "0.14.1", default-features = false, features = ["crypto", "aws_lc_rs", "pem"] }
+
+# Async
+async-trait = "0.1"
+tokio = { version = "1", features = ["fs", "sync", "time", "rt", "process"] }
+tokio-rustls = "0.26.4"
+vibeio = "0.2.6"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Hashing & encoding
+base64 = "0.22"
+xxhash-rust = { version = "0.8", features = ["std", "xxh3"] }
+
+# Certificate parsing
+x509-parser = "0.18"
+
+# HTTP (for ACME client and HTTP-01 challenge)
+hyper = { version = "1", features = ["client", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["client", "tokio", "server", "http1"] }
+hyper-rustls = "0.27.7"
+http = "1"
+http-body-util = "0.1"
+bytes = "1"
+
+# Misc
+anyhow = "1.0"
+dirs = "6.0"
+async-channel = "2.3"
+parking_lot = "0.12"
+
+[features]
+default = ["ocsp"]
+ocsp = ["dep:ferron-ocsp"]
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }

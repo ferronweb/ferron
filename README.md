@@ -21,163 +21,137 @@
   <a href="https://github.com/ferronweb/ferron" target="_blank"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/ferronweb/ferron?style=for-the-badge"></a>
 </p>
 
-## Why Ferron?
+> **Status: Alpha** — This is an early development release. Not production-ready. APIs and configuration may change.
+
+## Why Ferron 3?
 
 - **High performance** - thoroughly optimized for speed with support for high concurrency.
-- **Memory-safe** - built with [Rust](https://rust-lang.org/), which is a programming language that can offer strong memory safety guarantees.
-- **Automatic TLS** - automatic SSL/TLS certificate acquisition and renewal with [Let's Encrypt](https://letsencrypt.org/) integration.
 - **Easy configuration** - simple, intuitive configuration with sensible, secure defaults and [comprehensive documentation](https://ferron.sh/docs).
-- **Extensibility** - modular architecture for easy customization.
-- **Powerful reverse proxy** - advanced reverse proxy capabilities with support for load balancing and health checks.
+- **Modular architecture** - pipeline stages and providers registered at runtime, no recompilation needed.
+- **Observability by design** - structured logs, metrics, and tracing through a unified event system.
+- **Layered configuration** - composable `ferron.conf` with snippets, conditionals, and host scopes.
+- **Automatic TLS** - ACME certificate acquisition and renewal with Let's Encrypt.
+- **Powerful reverse proxy** - load balancing, health checks, and connection pooling.
+- **Memory-safe** - built with [Rust](https://rust-lang.org/).
 
-## Installing Ferron from pre-built binaries
+## What's different from Ferron 2
 
-The easiest way to install Ferron is installing it from pre-built binaries.
+Ferron 3 is a complete rewrite. It shares the vision but not the code:
 
-Below are the different ways to install Ferron:
-
-- [Installer (GNU/Linux)
-](https://ferron.sh/docs/installation/installer-linux)
-- [Installer (Windows Server)
-](https://ferron.sh/docs/installation/installer-windows)
-- [Package managers (Debian/Ubuntu)](https://ferron.sh/docs/installation/debian)
-- [Package managers (RHEL/Fedora)](https://ferron.sh/docs/installation/rpm)
-- [Docker](https://ferron.sh/docs/installation/docker)
-- [Package managers (community)](https://ferron.sh/docs/installation/package-managers)
-- [Manual installation](https://ferron.sh/docs/installation/manual)
+| Aspect | Ferron 2 | Ferron 3 |
+| --- | --- | --- |
+| Architecture | Monolithic | Module-driven, pluggable |
+| Observability | Basic logging | Structured events with multiple backends |
+| Configuration | KDL-based | Custom `.conf`, layered scopes, snippets |
+| Extensibility | Compile-time modules | Runtime-registered stages and providers |
+| Request Processing | Linear pipeline | DAG-ordered stages with inverse cleanup |
 
 ## Configuration examples
 
-### Basic static file serving
+### Static file serving
 
-```kdl
-// Example configuration with static file serving. Replace "example.com" with your domain name.
+```ferron
 example.com {
-    root "/var/www/html" // Replace "/var/www/html" with the directory containing your static files
+    root "/var/www/html"
+    directory_listing
+
+    tls true {
+        provider acme
+        email "admin@example.com"
+    }
 }
 ```
 
-### Basic reverse proxying
+### Reverse proxy
 
-```kdl
-// Example configuration with reverse proxy. Replace "example.com" with your domain name.
-example.com {
-    proxy "http://localhost:3000/" // Replace "http://localhost:3000" with the backend server URL
+```ferron
+api.example.com {
+    proxy http://localhost:8080 {
+        keepalive true
+    }
 }
 ```
 
-### More examples
+More examples are available in the [configuration documentation](https://ferron.sh/docs/v3/configuration).
 
-You can find more configuration examples for common use cases in the [Ferron documentation](https://ferron.sh/docs).
-
-## Building Ferron from source
-
-You can clone the repository and explore the existing code:
+## Building from source
 
 ```sh
-git clone https://github.com/ferronweb/ferron.git
+git clone https://github.com/ferronweb/ferron -b develop-3.x
 cd ferron
+cargo build --workspace
 ```
 
-You can then build and run the web server using Cargo:
+Run the server:
 
 ```sh
-cargo run --manifest-path build/prepare/Cargo.toml
-cd build/workspace
-cargo update # If you experience crate conflicts
-cargo build -r --target-dir ../../target
-cd ..
-cp configs/ferron.test.kdl ferron.kdl
-target/release/ferron
+cargo run -p ferron -- run -c ferron.conf
+cargo run -p ferron -- run -c ferron.conf --verbose  # with debug logging
 ```
 
-You can also, for convenience, use `make`:
+Other CLI commands:
 
 ```sh
-make build # Build the web server
-make build-dev # Build the web server, for development and debugging
-make run # Run the web server
-make run-dev # Run the web server, for development and debugging
-make smoketest # Perform a smoke test
-make smoketest-dev # Perform a smoke test, for development and debugging
-make package # Package the web server to a ZIP archive (run it after building it)
-make package-deb # Package the web server to a Debian package (run it after building it)
-make package-rpm # Package the web server to an RPM package (run it after building it)
-make installer # Build installers for Ferron 2
+cargo run -p ferron -- validate -c ferron.conf   # validate without starting
+cargo run -p ferron -- adapt -c ferron.conf      # output config as JSON
+cargo run -p ferron -- daemon -c ferron.conf --pid-file /var/run/ferron.pid  # Unix daemon
 ```
 
-Or a `build.ps1` build script, if you're on Windows:
-```batch
-REM Build the web server
-powershell -ExecutionPolicy Bypass .\build.ps1 Build
-
-REM Build the web server, for development and debugging
-powershell -ExecutionPolicy Bypass .\build.ps1 BuildDev
-
-REM Run the web server
-powershell -ExecutionPolicy Bypass .\build.ps1 Run
-
-REM Run the web server, for development and debugging
-powershell -ExecutionPolicy Bypass .\build.ps1 RunDev
-
-REM Perform a smoke test
-powershell -ExecutionPolicy Bypass .\build.ps1 Smoketest
-
-REM Perform a smoke test, for development and debugging
-powershell -ExecutionPolicy Bypass .\build.ps1 SmoketestDev
-
-REM Package the web server to a ZIP archive (run it after building it)
-powershell -ExecutionPolicy Bypass .\build.ps1 Package
-
-REM Build installers for Ferron 2
-powershell -ExecutionPolicy Bypass .\build.ps1 Installer
-```
-
-You can also create a ZIP archive that can be used by the Ferron installer:
+Run tests and checks:
 
 ```sh
-make build-with-package
+cargo test --workspace
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Or if you're on Windows:
+## Features
 
-```batch
-powershell -ExecutionPolicy Bypass .\build.ps1 BuildWithPackage
-```
+What currently works in this alpha:
 
-The ZIP archive will be located in the `dist` directory.
+| Category | Modules |
+| --- | --- |
+| HTTP | static files, reverse proxy, forward proxy, compression, rate limiting, headers/CORS, URL rewriting, basic auth, response control |
+| TLS | manual certificates, ACME automatic TLS, OCSP stapling |
+| Observability | console log, file log (with rotation), OTLP export, process metrics |
+| Admin | health, status, config dump, hot reload |
+| Runtime | io_uring (Linux), PROXY protocol v1/v2, SIGHUP hot reload |
 
-You can also cross-compile the web server for a different target:
+## Observability
 
-```sh
-# Replace "i686-unknown-linux-gnu" with the target (as defined by the Rust target triple) you want to build for
-make build TARGET="i686-unknown-linux-gnu" CARGO_FINAL="cross"
-```
+Ferron 3 emits structured events through a unified pipeline. Every HTTP request generates access logs, metrics, and trace spans — all tagged with the same `trace_id` for correlated queries.
 
-It's also possible to use only Cargo to build the web server, although you wouldn't be able to use external modules:
-```sh
-cargo build -r
-./target/release/ferron
-```
+Backends: console, file (JSON or Combined Log Format), and OTLP (OpenTelemetry Protocol).
 
-For compilation notes, see the [compilation notes page](./COMPILATION.md).
+See the [observability documentation](https://ferron.sh/docs/v3/configuration/observability) for details.
 
-## Modules
+## Configuration reference
 
-If you would like to develop Ferron modules, you can find the [Ferron module development notes](./MODULES.md).
+The full directive reference is in [docs/configuration/](https://ferron.sh/docs/v3/configuration). Scopes:
 
-## Server configuration
+- **Global** — `{ ... }` blocks (runtime, TCP listeners, admin API)
+- **HTTP host** — `example.com { ... }` blocks (TLS, proxy, static, logging)
+- **Location/conditional** — `location`, `if`, `if_not` blocks inside hosts
 
-You can check the [Ferron documentation](https://ferron.sh/docs/configuration/fundamentals) to see configuration properties used by Ferron.
+## Roadmap
+
+Planned direction:
+
+- Dynamically loadable modules (WebAssembly?)
+- HTTP/3 and QUIC support
+- Additional observability backends (Prometheus, Jaeger/Zipkin?)
+- More authentication methods (JWT?, OAuth2?, mTLS?)
+
+## Known limitations
+
+- Alpha quality — not battle-tested, expect bugs.
+- All modules are compiled into the binary; no runtime plugin loading yet.
+- Primary testing target is Linux. Windows and macOS receive less coverage.
 
 ## Contributing
 
-See [Ferron contribution page](https://ferron.sh/contribute) for details.
-
-Below is a list of contributors to Ferron. **Thank you to all of them!**
-
-[![Contributor list](./CONTRIBUTORS.svg)](https://github.com/ferronweb/ferron/graphs/contributors)
+Feedback, bug reports, and testing are welcome. When reporting issues, include your configuration file, `--verbose` output, and steps to reproduce.
 
 ## License
 
-Ferron is licensed under the MIT License. See `LICENSE` for details.
+MIT. See `LICENSE` for details.

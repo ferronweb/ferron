@@ -1,0 +1,14 @@
+[package]
+name = "ferron-config-ferronconf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.89"
+anyhow = "1"
+notify = "8.2"
+notify-debouncer-mini = "0.7"
+tokio = { version = "1", features = ["sync"] }
+ferronconf = "0.1.0"
+
+ferron-core = { path = "../../core" }

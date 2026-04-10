@@ -1,0 +1,20 @@
+[package]
+name = "ferron-http-fproxy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+vibeio = { version = "0.2.6", default-features = false, features = ["time"] }
+vibeio-hyper = { version = "0.2.7" }
+vibeio-http = { version = "0.3.0", default-features = false, features = ["h1"] }
+hyper = { version = "1", features = ["client", "http1", "http2"] }
+http = "1"
+http-body-util = "0.1"
+bytes = "1"
+ferron-core = { path = "../../core" }
+ferron-http = { path = "../../types/http" }
+ferron-observability = { path = "../../types/observability" }
+tokio = { version = "1", features = ["rt", "io-util", "sync", "macros", "time", "net"] }
+ipnet = "2"
+globset = "0.4"

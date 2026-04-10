@@ -1,0 +1,22 @@
+[package]
+name = "ferron-http-rewrite"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+fancy-regex = "0.17"
+parking_lot = "0.12"
+tokio = { version = "1", features = ["fs"] }
+http = "1"
+
+ferron-core = { path = "../../core" }
+ferron-http = { path = "../../types/http" }
+ferron-observability = { path = "../../types/observability" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }
+typemap_rev = "0.4"
+bytes = "1"
+http-body-util = "0.1.3"
+rustc-hash = "2"

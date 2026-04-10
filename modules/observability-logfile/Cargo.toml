@@ -1,0 +1,12 @@
+[package]
+name = "ferron-observability-logfile"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ferron-observability = { path = "../../types/observability" }
+ferron-core = { path = "../../core" }
+tokio-util = "0.7.18"
+tokio = { version = "1.50.0", features = ["fs", "macros", "time"] }
+chrono = "0.4.44"
+async-channel = "2.5.0"

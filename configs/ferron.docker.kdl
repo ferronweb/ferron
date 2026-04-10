@@ -1,8 +1,0 @@
-globals {
-  log "/var/log/ferron/access.log"
-  error_log "/var/log/ferron/error.log"
-}
-
-:80 {
-  root "/var/www/ferron"
-}

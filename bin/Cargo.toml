@@ -1,0 +1,53 @@
+[package]
+name = "ferron"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["rt"] }
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"
+tokio-util = "0.7.18"
+anyhow = "1.0.102"
+malloc-best-effort = "0.1.4"
+backtrace = "0.3.76"
+shadow-rs = { version = "1.2.0", default-features = false }
+
+ferron-core = { path = "../core" }
+
+ferron-http-server = { path = "../modules/http-server" }
+ferron-http-static = { path = "../modules/http-static" }
+ferron-http-proxy = { path = "../modules/http-proxy" }
+ferron-http-fproxy = { path = "../modules/http-fproxy" }
+ferron-http-basicauth = { path = "../modules/http-basicauth" }
+ferron-http-cache = { path = "../modules/http-cache" }
+ferron-http-headers = { path = "../modules/http-headers" }
+ferron-http-ratelimit = { path = "../modules/http-ratelimit" }
+ferron-http-response = { path = "../modules/http-response" }
+ferron-http-rewrite = { path = "../modules/http-rewrite" }
+ferron-http-compression = { path = "../modules/http-compression" }
+ferron-admin-api = { path = "../modules/admin-api" }
+ferron-config-json = { path = "../modules/config-json" }
+ferron-config-ferronconf = { path = "../modules/config-ferronconf" }
+ferron-tls-manual = { path = "../modules/tls-manual" }
+ferron-tls-acme = { path = "../modules/tls-acme" }
+ferron-ocsp-stapler = { path = "../modules/ocsp-stapler" }
+ferron-observability-consolelog = { path = "../modules/observability-consolelog" }
+ferron-observability-logfile = { path = "../modules/observability-logfile" }
+ferron-observability-otlp = { path = "../modules/observability-otlp" }
+ferron-observability-format-json = { path = "../modules/observability-format-json" }
+ferron-observability-format-text = { path = "../modules/observability-format-text" }
+ferron-observability-process-metrics = { path = "../modules/observability-process-metrics" }
+
+[target.'cfg(windows)'.dependencies]
+windows-service = "0.8"
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31", features = ["fs", "signal", "process"] }
+signal-hook = "0.4"
+
+[build-dependencies]
+winresource = "0.1.19"
+shadow-rs = { version = "1.2.0", default-features = false, features = [
+    "build",
+] }

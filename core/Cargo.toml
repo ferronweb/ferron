@@ -1,0 +1,23 @@
+[package]
+name = "ferron-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+parking_lot = "0.12"
+tokio = { version = "1", features = ["rt", "rt-multi-thread"] }
+serde = { version = "1.0.228", features = ["derive", "rc"] }
+arc-swap = "1.9.0"
+tokio-util = "0.7.18"
+anyhow = "1.0"
+chrono = "0.4"
+vibeio = { version = "0.2.6", default-features = false, features = ["time", "blocking-default"] }
+core_affinity = "0.8.3"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_System_EventLog",
+    "Win32_Security",
+] }
