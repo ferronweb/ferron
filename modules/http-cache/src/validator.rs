@@ -73,14 +73,13 @@ impl ConfigurationValidator for HttpCacheConfigurationValidator {
         if let Some(entries) = config.directives.get("cache") {
             used_directives.insert("cache".to_string());
             for entry in entries {
-                if entry.children.is_some() {
+                if let Some(children) = &entry.children {
                     if !entry.args.is_empty() {
                         return Err(
                             "Invalid `cache` - block form does not accept boolean arguments".into(),
                         );
                     }
 
-                    let children = entry.children.as_ref().expect("children checked above");
                     validate_cache_block(children, HOST_CACHE_DIRECTIVES, "`cache`")?;
                 } else {
                     if entry.args.len() > 1 {

@@ -39,6 +39,7 @@ use crate::ProxyMetrics;
 
 const LOG_TARGET: &str = "ferron-proxy";
 
+#[allow(clippy::type_complexity)]
 static TLS_CLIENT_CONFIG_CACHE: LazyLock<Mutex<HashMap<(bool, bool, bool), Arc<ClientConfig>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 

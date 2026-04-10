@@ -115,8 +115,10 @@ impl CacheStore {
         cookies: &FxHashMap<String, String>,
         private_key: Option<&str>,
     ) -> (Option<LookupEntry>, StoreStats, usize) {
-        let mut stats = StoreStats::default();
-        stats.expired_evictions = self.cleanup_expired();
+        let stats = StoreStats {
+            expired_evictions: self.cleanup_expired(),
+            ..Default::default()
+        };
 
         let variants = self
             .variants_by_base
@@ -183,8 +185,10 @@ impl CacheStore {
         request_headers: &HeaderMap,
         request_cookies: &FxHashMap<String, String>,
     ) -> (StoreStats, usize) {
-        let mut stats = StoreStats::default();
-        stats.expired_evictions = self.cleanup_expired();
+        let mut stats = StoreStats {
+            expired_evictions: self.cleanup_expired(),
+            ..Default::default()
+        };
 
         let max_entries = self.max_entries.load(Ordering::Relaxed);
         if max_entries == 0 {

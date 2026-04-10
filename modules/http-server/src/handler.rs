@@ -826,7 +826,7 @@ async fn request_handler_inner(
                         error_resolution.configuration.layers.last(),
                         resolution_configuration2.layers.last(),
                     ) {
-                        Arc::ptr_eq(&config1, &config2)
+                        Arc::ptr_eq(config1, config2)
                     } else {
                         false
                     };

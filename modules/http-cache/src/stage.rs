@@ -277,7 +277,7 @@ impl Stage<HttpContext> for HttpCacheStage {
             LookupResult::Bypass
         };
 
-        let stop = matches!(lookup_result, LookupResult::Hit { .. });
+        let stop = matches!(lookup_result, LookupResult::Hit);
         ctx.extensions.insert::<RequestStateKey>(RequestState {
             config,
             base_key,
@@ -359,9 +359,9 @@ impl Stage<HttpContext> for HttpCacheStage {
             }));
         }
         let has_set_cookie = response.headers().contains_key(header::SET_COOKIE);
-        let decision = if (matches!(state.lookup_result, LookupResult::Bypass)
-            && !(!state.request_policy.allow_lookup && state.request_policy.allow_store))
-            || !state.request_policy.allow_store
+        let decision = if !state.request_policy.allow_store
+            || (matches!(state.lookup_result, LookupResult::Bypass)
+                && state.request_policy.allow_lookup)
             || state.head_only
             || has_unsupported_vary_value
         {
@@ -414,6 +414,7 @@ impl Stage<HttpContext> for HttpCacheStage {
                     let stored_entry = StoredEntry {
                         scope,
                         base_key: state.base_key.clone(),
+                        #[allow(clippy::unnecessary_unwrap)]
                         vary: vary_rule.expect("vary rule must exist"),
                         status: outgoing_response.status(),
                         headers: stored_headers,
