@@ -1670,9 +1670,10 @@ dependencies = [
 [[package]]
 name = "ferronconf"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e016b064191a2e9ca4ef77a0de4dc45b65784f8214eba1c6b959aee8c82e9b3"
 dependencies = [
  "indenter",
- "reiterator",
 ]
 
 [[package]]
@@ -3549,12 +3550,6 @@ name = "regex-syntax"
 version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
-
-[[package]]
-name = "reiterator"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "028b23ade895f2751497651053218787cb377043c8555175f97ea433253e4605"
 
 [[package]]
 name = "resolv-conf"
