@@ -1,0 +1,56 @@
+name: Sync with Ferron website (Ferron 3.x)
+
+on:
+  push:
+    branches: ["3.x"]
+    paths:
+      - "docs/**"
+      - "CHANGELOG.md"
+      - ".github/workflows/sync-website.yml"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: 3.x
+          path: ferron
+
+      - name: Checkout Ferron website
+        uses: actions/checkout@v6
+        with:
+          repository: ferronweb/ferron.sh
+          token: ${{ secrets.GIT_TOKEN }}
+          ref: main
+          path: website
+
+      - name: Sync website
+        run: |
+          rm -rf website/src/content/docs/v3
+          cp -r ferron/docs website/src/content/docs/v3
+          cat << EOF > website/src/content/docs/v3/README.md
+          # Ferron documentation
+
+          This Ferron documentation is automatically synchronized with https://github.com/ferronweb/ferron/tree/3.x.
+
+          If you want to contribute to the documentation, please open a pull request on the Ferron repository, not on the website repository.
+          EOF
+          cat << EOF > website/src/content/changelogs/index.md
+          ---
+          subject: Ferron 3
+          ---
+          EOF
+          cat ferron/CHANGELOG.md | grep -vE '^# ' >> website/src/content/changelogs/v3.md
+          cd website
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m 'chore: sync from https://github.com/ferronweb/ferron/tree/3.x'
+          git push origin main

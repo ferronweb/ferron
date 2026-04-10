@@ -1,0 +1,84 @@
+name: Rust (Ferron 3.x)
+
+on:
+  push:
+    branches: ["develop-3.x"]
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "bin/**"
+      - "core/**"
+      - "modules/**"
+      - "types/**"
+      - ".github/workflows/rust.yml"
+  pull_request:
+    branches: ["develop-3.x"]
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "bin/**"
+      - "core/**"
+      - "modules/**"
+      - "types/**"
+      - ".github/workflows/rust.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run Cargo tests
+        run: cargo test --workspace --verbose
+
+      # - name: Build binaries
+      #   shell: bash
+      #   run: |
+      #     make build-dev CARGO_FINAL_EXTRA_ARGS="--verbose"
+
+      # - name: Smoke test the binary
+      #   shell: bash
+      #   run: |
+      #     FERRON="$(pwd)/target/debug/ferron" bash smoketest/smoketest.sh
+
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check linting
+        run: cargo clippy --workspace -- -D warnings
+
+  depcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install "cargo shear"
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cargo-shear --force
+
+      - name: Check for unused dependencies
+        run: cargo shear
