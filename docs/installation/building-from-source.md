@@ -17,7 +17,7 @@ Before building Ferron, make sure you have the following installed:
 Clone the Ferron repository and check out the latest development branch:
 
 ```sh
-git clone https://github.com/ferronweb/ferron -b develop-3.x
+git clone https://github.com/ferronweb/ferron -b 3.x
 cd ferron
 ```
 
