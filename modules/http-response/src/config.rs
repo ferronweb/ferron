@@ -1,11 +1,13 @@
 //! Configuration parsing for `status`, `abort`, `block`, and `allow` directives.
 
+use std::collections::HashMap;
 use std::net::IpAddr;
 
 use cidr::IpCidr;
 use fancy_regex::Regex;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::ServerConfigurationValue;
+use ferron_http::HttpContext;
 
 /// A rule for returning a custom status code.
 pub struct StatusRule {
@@ -104,7 +106,22 @@ impl ResponseConfig {
     pub fn from_config(config: &LayeredConfiguration) -> Self {
         let abort = parse_abort_config(config);
         let ip_access = parse_ip_access_config(config);
-        let status_rules = parse_status_rules(config);
+        let status_rules = parse_status_rules(config, None);
+        let early_hints = parse_early_hints_config(config);
+
+        Self {
+            abort,
+            ip_access,
+            status_rules,
+            early_hints,
+        }
+    }
+
+    pub fn from_http_context(ctx: &HttpContext) -> Self {
+        let config = &ctx.configuration;
+        let abort = parse_abort_config(config);
+        let ip_access = parse_ip_access_config(config);
+        let status_rules = parse_status_rules(config, Some(ctx));
         let early_hints = parse_early_hints_config(config);
 
         Self {
@@ -169,7 +186,7 @@ fn parse_ip_access_config(config: &LayeredConfiguration) -> IpAccessConfig {
     ip_access
 }
 
-fn parse_status_rules(config: &LayeredConfiguration) -> Vec<StatusRule> {
+fn parse_status_rules(config: &LayeredConfiguration, ctx: Option<&HttpContext>) -> Vec<StatusRule> {
     let mut rules = Vec::new();
     let status_entries = config.get_entries("status", true);
 
@@ -204,10 +221,13 @@ fn parse_status_rules(config: &LayeredConfiguration) -> Vec<StatusRule> {
                 .get_value("location")
                 .and_then(|v| v.as_str())
                 .map(String::from);
-            body = children
-                .get_value("body")
-                .and_then(|v| v.as_str())
-                .map(String::from);
+            body = children.get_value("body").and_then(|v| {
+                if let Some(ctx) = ctx {
+                    v.as_string_with_interpolations(ctx)
+                } else {
+                    v.as_string_with_interpolations(&HashMap::new())
+                }
+            });
 
             if let Some(regex_str) = children.get_value("regex").and_then(|v| v.as_str()) {
                 match Regex::new(regex_str) {
@@ -310,7 +330,7 @@ mod tests {
             span: None,
         }]);
 
-        let rules = parse_status_rules(&config);
+        let rules = parse_status_rules(&config, None);
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0].status_code, 403);
         assert!(rules[0].url.is_none());
@@ -347,7 +367,7 @@ mod tests {
             span: None,
         }]);
 
-        let rules = parse_status_rules(&config);
+        let rules = parse_status_rules(&config, None);
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0].status_code, 404);
         assert_eq!(rules[0].url.as_deref(), Some("/missing"));

@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use cidr::IpCidr;
 use ferron_core::config::validator::ConfigurationValidator;
-use ferron_core::config::ServerConfigurationBlock;
+use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationValue};
 
 /// Validator for http-response related directives.
 #[derive(Default)]
@@ -113,7 +113,16 @@ impl ConfigurationValidator for HttpResponseValidator {
                                             )
                                             .into());
                                         }
-                                        if child_entry.args[0].as_str().is_none() {
+                                        if child_entry.args[0].as_str().is_none()
+                                            && (child_name.as_str() != "body"
+                                                || !matches!(
+                                                    child_entry.args[0],
+                                                    ServerConfigurationValue::InterpolatedString(
+                                                        _,
+                                                        _,
+                                                    ),
+                                                ))
+                                        {
                                             return Err(format!(
                                                 "Invalid `{child_name}` — value must be a string"
                                             )
