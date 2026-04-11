@@ -179,8 +179,8 @@ fn parse_cors_block(
 pub fn parse_headers_config(
     ctx: &ferron_http::HttpContext,
 ) -> Result<Option<HeadersConfig>, Box<dyn Error + Send + Sync>> {
-    let header_entries = ctx.configuration.get_entries("header", true);
-    let cors_entries = ctx.configuration.get_entries("cors", true);
+    let header_entries = ctx.configuration.get_entries("header", false);
+    let cors_entries = ctx.configuration.get_entries("cors", false);
 
     if header_entries.is_empty() && cors_entries.is_empty() {
         return Ok(None);

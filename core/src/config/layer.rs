@@ -39,7 +39,8 @@ impl LayeredConfiguration {
     /// # Arguments
     ///
     /// * `directive` - The directive name to search for
-    /// * `inherit` - If true, search all layers in reverse order. If false, search only the first layer.
+    /// * `inherit` - If true, search all layers in reverse order. If false, search only
+    ///   the first layer containing the directive.
     ///
     /// # Returns
     ///

@@ -147,7 +147,7 @@ fn parse_ip_access_config(config: &LayeredConfiguration) -> IpAccessConfig {
 
     // Parse `block` directives — can have multiple values on a single directive
     // e.g. `block "10.0.0.0/8" "192.168.1.100"`
-    let block_entries = config.get_entries("block", true);
+    let block_entries = config.get_entries("block", false);
     for entry in &block_entries {
         for arg in &entry.args {
             if let Some(cidr) = parse_ip_from_value(arg) {
@@ -157,7 +157,7 @@ fn parse_ip_access_config(config: &LayeredConfiguration) -> IpAccessConfig {
     }
 
     // Parse `allow` directives
-    let allow_entries = config.get_entries("allow", true);
+    let allow_entries = config.get_entries("allow", false);
     for entry in &allow_entries {
         for arg in &entry.args {
             if let Some(cidr) = parse_ip_from_value(arg) {
