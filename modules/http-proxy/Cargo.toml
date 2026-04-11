@@ -26,6 +26,7 @@ rand = "0.10"
 hickory-resolver = { version = "0.25", optional = true }
 hickory-proto = { version = "0.25", optional = true }
 parking_lot = "0.12"
+ppp = "2.2"
 
 [features]
 default = ["srv-lookup"]

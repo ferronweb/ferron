@@ -430,78 +430,122 @@ pub async fn execute_proxy(
         return Ok((HttpResponse::BuiltinError(502, None), metrics));
     }
 
-    // Select upstream via load balancing (tracker already initialized inside)
-    let Some(selected) = determine_proxy_to(
-        &upstreams,
-        &failed_backends,
-        config.lb_health_check,
-        config.lb_health_check_max_fails,
-        algorithm,
-        conn_state,
-    ) else {
-        ctx.events.emit(Event::Log(LogEvent {
-            level: LogLevel::Error,
-            message: "Reverse proxy: all upstream backends are unhealthy".to_string(),
-            target: LOG_TARGET,
-        }));
-        return Ok((HttpResponse::BuiltinError(503, None), metrics));
-    };
-
-    metrics.selected_backends.push(selected.upstream.clone());
-
-    let proxy_request_url: http::Uri = selected
-        .upstream
-        .proxy_to
-        .parse()
-        .map_err(|e| format!("Invalid upstream URL '{}': {e}", selected.upstream.proxy_to))?;
-    let is_https = proxy_request_url.scheme_str() == Some("https");
-    let client_ip = config.proxy_header.map(|_| ctx.remote_address.ip());
-    let local_limit_idx = cm.get_local_limit(&selected.upstream);
-    let idle_timeout = idle_timeout_for_upstream(config, &selected.upstream);
-
-    match try_send_with_pool(
-        ctx,
-        config,
-        cm,
-        &selected.upstream,
-        &proxy_request_url,
-        client_ip,
-        local_limit_idx,
-        idle_timeout,
-        is_https,
-        conn_state,
-        selected.tracker,
-        &mut metrics,
-    )
-    .await
-    {
-        Ok(resp) => Ok((resp, metrics)),
-        Err(e) => {
-            mark_backend_failure(
-                Arc::clone(&failed_backends),
-                config.lb_health_check,
-                &selected.upstream,
-                &mut metrics,
-            );
-            let (status, reason) = e.downcast_ref::<std::io::Error>().map_or(
-                (StatusCode::BAD_GATEWAY, "Bad gateway"),
-                |io_err| {
-                    let (st, r) = io_error_status(io_err);
-                    (st, r)
-                },
-            );
+    // Backend selection loop — retries on connection failure when lb_retry_connection is enabled
+    loop {
+        // Select upstream via load balancing (tracker already initialized inside)
+        let Some(selected) = determine_proxy_to(
+            &upstreams,
+            &failed_backends,
+            config.lb_health_check,
+            config.lb_health_check_max_fails,
+            algorithm,
+            conn_state,
+        ) else {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Error,
-                message: format!(
-                    "Reverse proxy: {reason} — upstream: {url}: {err}",
-                    url = selected.upstream.proxy_to,
-                    err = e
-                ),
+                message: "Reverse proxy: all upstream backends are unhealthy".to_string(),
                 target: LOG_TARGET,
             }));
-            Ok((HttpResponse::BuiltinError(status.as_u16(), None), metrics))
+            return Ok((HttpResponse::BuiltinError(503, None), metrics));
+        };
+
+        metrics.selected_backends.push(selected.upstream.clone());
+
+        let proxy_request_url: http::Uri =
+            selected.upstream.proxy_to.parse().map_err(|e| {
+                format!("Invalid upstream URL '{}': {e}", selected.upstream.proxy_to)
+            })?;
+        let is_https = proxy_request_url.scheme_str() == Some("https");
+        let client_ip = config.proxy_header.map(|_| ctx.remote_address.ip());
+        let local_limit_idx = cm.get_local_limit(&selected.upstream);
+        let idle_timeout = idle_timeout_for_upstream(config, &selected.upstream);
+
+        match try_send_with_pool(
+            ctx,
+            config,
+            cm,
+            &selected.upstream,
+            &proxy_request_url,
+            client_ip,
+            local_limit_idx,
+            idle_timeout,
+            is_https,
+            conn_state,
+            selected.tracker,
+            &mut metrics,
+        )
+        .await
+        {
+            Ok(resp) => return Ok((resp, metrics)),
+            Err(e) => {
+                mark_backend_failure(
+                    Arc::clone(&failed_backends),
+                    config.lb_health_check,
+                    &selected.upstream,
+                    &mut metrics,
+                );
+
+                // Check if we should retry with another backend
+                if config.lb_retry_connection {
+                    // Count how many healthy backends remain
+                    let healthy_count = count_healthy_backends(
+                        &upstreams,
+                        &failed_backends,
+                        config.lb_health_check_max_fails,
+                    );
+
+                    if healthy_count > 0 {
+                        ctx.events.emit(Event::Log(LogEvent {
+                            level: LogLevel::Warn,
+                            message: format!(
+                                "Reverse proxy: backend failed, retrying with another — upstream: {url}: {err}",
+                                url = selected.upstream.proxy_to,
+                                err = e
+                            ),
+                            target: LOG_TARGET,
+                        }));
+                        continue; // Loop back to select next backend
+                    }
+                }
+
+                // No retry or no more backends — return error
+                let (status, reason) = e.downcast_ref::<std::io::Error>().map_or(
+                    (StatusCode::BAD_GATEWAY, "Bad gateway"),
+                    |io_err| {
+                        let (st, r) = io_error_status(io_err);
+                        (st, r)
+                    },
+                );
+                ctx.events.emit(Event::Log(LogEvent {
+                    level: LogLevel::Error,
+                    message: format!(
+                        "Reverse proxy: {reason} — upstream: {url}: {err}",
+                        url = selected.upstream.proxy_to,
+                        err = e
+                    ),
+                    target: LOG_TARGET,
+                }));
+                return Ok((HttpResponse::BuiltinError(status.as_u16(), None), metrics));
+            }
         }
     }
+}
+
+/// Count how many backends are currently healthy (not exceeding failure threshold).
+fn count_healthy_backends(
+    upstreams: &[UpstreamInner],
+    failed_backends: &parking_lot::RwLock<TtlCache<UpstreamInner, u64>>,
+    health_check_max_fails: u64,
+) -> usize {
+    let failed = failed_backends.read();
+    upstreams
+        .iter()
+        .filter(|u| {
+            failed
+                .get(*u)
+                .is_none_or(|fails| fails <= health_check_max_fails)
+        })
+        .count()
 }
 
 /// Try to send a request using the connection pool with racing of
@@ -661,6 +705,69 @@ async fn wait_for_any_ready(
     }
 }
 
+/// Build a PROXY protocol header for the given version and connection details.
+fn build_proxy_protocol_header(
+    version: crate::upstream::ProxyHeader,
+    client_ip: IpAddr,
+    local_ip: IpAddr,
+    client_port: u16,
+    local_port: u16,
+) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+    match version {
+        crate::upstream::ProxyHeader::V1 => {
+            let is_ipv4 = client_ip.is_ipv4() && local_ip.is_ipv4();
+            let proto = if is_ipv4 { "TCP4" } else { "TCP6" };
+            let client_str = client_ip.to_string();
+            let local_str = local_ip.to_string();
+            Ok(
+                format!("PROXY {proto} {client_str} {local_str} {client_port} {local_port}\r\n")
+                    .into_bytes(),
+            )
+        }
+        crate::upstream::ProxyHeader::V2 => {
+            let is_ipv4 = client_ip.is_ipv4() && local_ip.is_ipv4();
+            let addresses = if is_ipv4 {
+                let client_v4 = match client_ip {
+                    IpAddr::V4(addr) => addr,
+                    _ => return Err("Client IP is not IPv4".into()),
+                };
+                let local_v4 = match local_ip {
+                    IpAddr::V4(addr) => addr,
+                    _ => return Err("Local IP is not IPv4".into()),
+                };
+                ppp::v2::Addresses::IPv4(ppp::v2::IPv4::new(
+                    client_v4,
+                    local_v4,
+                    client_port,
+                    local_port,
+                ))
+            } else {
+                let client_v6 = match client_ip {
+                    IpAddr::V6(addr) => addr,
+                    _ => return Err("Client IP is not IPv6".into()),
+                };
+                let local_v6 = match local_ip {
+                    IpAddr::V6(addr) => addr,
+                    _ => return Err("Local IP is not IPv6".into()),
+                };
+                ppp::v2::Addresses::IPv6(ppp::v2::IPv6::new(
+                    client_v6,
+                    local_v6,
+                    client_port,
+                    local_port,
+                ))
+            };
+            let header = ppp::v2::Builder::with_addresses(
+                ppp::v2::Version::Two | ppp::v2::Command::Proxy,
+                ppp::v2::Protocol::Stream,
+                addresses,
+            )
+            .build()?;
+            Ok(header)
+        }
+    }
+}
+
 /// Establish a new connection and send the request.
 ///
 /// If `existing_item` is provided, it is reused instead of pulling a new one
@@ -714,6 +821,24 @@ async fn establish_and_send(
 
             let drop_guard = unsafe { stream.get_drop_guard() };
 
+            // Write PROXY protocol header if configured (before HTTP handshake)
+            if let Some(proxy_header_version) = config.proxy_header {
+                if let Some(cip) = client_ip {
+                    let local_addr = ctx.local_address;
+                    let header_bytes = build_proxy_protocol_header(
+                        proxy_header_version,
+                        cip,
+                        local_addr.ip(),
+                        ctx.remote_address.port(),
+                        local_addr.port(),
+                    )?;
+                    use tokio::io::AsyncWriteExt;
+                    stream.write_all(&header_bytes).await.map_err(|e| {
+                        std::io::Error::other(format!("PROXY header write failed: {e}"))
+                    })?;
+                }
+            }
+
             if config.http2_only || config.http2 {
                 http2_handshake_unix(stream, drop_guard).await?
             } else {
@@ -741,6 +866,24 @@ async fn establish_and_send(
             .map_err(|e| std::io::Error::other(format!("Wrap failed: {e}")))?;
 
         let drop_guard = unsafe { stream.get_drop_guard() };
+
+        // Write PROXY protocol header if configured (before TLS or HTTP handshake)
+        if let Some(proxy_header_version) = config.proxy_header {
+            if let Some(cip) = client_ip {
+                let local_addr = ctx.local_address;
+                let header_bytes = build_proxy_protocol_header(
+                    proxy_header_version,
+                    cip,
+                    local_addr.ip(),
+                    ctx.remote_address.port(),
+                    local_addr.port(),
+                )?;
+                use tokio::io::AsyncWriteExt;
+                stream.write_all(&header_bytes).await.map_err(|e| {
+                    std::io::Error::other(format!("PROXY header write failed: {e}"))
+                })?;
+            }
+        }
 
         if is_https {
             let connector = TlsConnector::from(cached_tls_config(
@@ -816,6 +959,14 @@ async fn send_via_wrapper(
     if status == StatusCode::SWITCHING_PROTOCOLS {
         handle_upgrade(response, ctx, item).await?;
         return Ok(HttpResponse::BuiltinError(101, None));
+    }
+
+    // Intercept upstream error responses if configured.
+    // When intercept_errors is false (default), upstream 4xx/5xx responses
+    // are replaced with Ferron's built-in error response.
+    // When intercept_errors is true, the full upstream response is passed through.
+    if !config.intercept_errors && status.as_u16() >= 400 {
+        return Ok(HttpResponse::BuiltinError(status.as_u16(), None));
     }
 
     let (parts, body) = response.into_parts();
@@ -1124,5 +1275,158 @@ mod tests {
             }
             _ => panic!("Expected Custom response variant"),
         }
+    }
+
+    #[test]
+    fn test_build_proxy_protocol_header_v1_ipv4() {
+        let client_ip = IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 100));
+        let local_ip = IpAddr::V4(std::net::Ipv4Addr::new(10, 0, 0, 1));
+        let header = build_proxy_protocol_header(
+            crate::upstream::ProxyHeader::V1,
+            client_ip,
+            local_ip,
+            12345,
+            80,
+        )
+        .unwrap();
+
+        let header_str = String::from_utf8(header).unwrap();
+        assert_eq!(header_str, "PROXY TCP4 192.168.1.100 10.0.0.1 12345 80\r\n");
+    }
+
+    #[test]
+    fn test_build_proxy_protocol_header_v1_ipv6() {
+        let client_ip = IpAddr::V6(std::net::Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1));
+        let local_ip = IpAddr::V6(std::net::Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
+        let header = build_proxy_protocol_header(
+            crate::upstream::ProxyHeader::V1,
+            client_ip,
+            local_ip,
+            443,
+            8080,
+        )
+        .unwrap();
+
+        let header_str = String::from_utf8(header).unwrap();
+        assert!(header_str.starts_with("PROXY TCP6"));
+        assert!(header_str.contains("2001:db8::1"));
+        assert!(header_str.contains("::1"));
+        assert!(header_str.contains("443"));
+        assert!(header_str.contains("8080"));
+        assert!(header_str.ends_with("\r\n"));
+    }
+
+    #[test]
+    fn test_build_proxy_protocol_header_v2_ipv4() {
+        let client_ip = IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 100));
+        let local_ip = IpAddr::V4(std::net::Ipv4Addr::new(10, 0, 0, 1));
+        let header = build_proxy_protocol_header(
+            crate::upstream::ProxyHeader::V2,
+            client_ip,
+            local_ip,
+            12345,
+            80,
+        )
+        .unwrap();
+
+        // PROXY protocol v2 signature: \r\n\r\n\0\r\nQUIT\n
+        assert!(header.len() >= 16);
+        assert_eq!(&header[0..12], b"\r\n\r\n\x00\r\nQUIT\n");
+    }
+
+    #[test]
+    fn test_build_proxy_protocol_header_v2_ipv6() {
+        let client_ip = IpAddr::V6(std::net::Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1));
+        let local_ip = IpAddr::V6(std::net::Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
+        let header = build_proxy_protocol_header(
+            crate::upstream::ProxyHeader::V2,
+            client_ip,
+            local_ip,
+            443,
+            8080,
+        )
+        .unwrap();
+
+        // IPv6 v2 header is larger than IPv4
+        assert!(header.len() >= 16);
+        // Same signature for v2
+        assert_eq!(&header[0..12], b"\r\n\r\n\x00\r\nQUIT\n");
+    }
+
+    #[test]
+    fn test_count_healthy_backends_all_healthy() {
+        use crate::upstream::UpstreamInner;
+        use crate::util::TtlCache;
+        use std::time::Duration;
+
+        let upstreams = vec![
+            UpstreamInner {
+                proxy_to: "http://backend1".to_string(),
+                proxy_unix: None,
+            },
+            UpstreamInner {
+                proxy_to: "http://backend2".to_string(),
+                proxy_unix: None,
+            },
+        ];
+
+        let failed_backends = parking_lot::RwLock::new(TtlCache::new(Duration::from_secs(60)));
+        let count = count_healthy_backends(&upstreams, &failed_backends, 3);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_count_healthy_backends_some_unhealthy() {
+        use crate::upstream::UpstreamInner;
+        use crate::util::TtlCache;
+        use std::time::Duration;
+
+        let upstreams = vec![
+            UpstreamInner {
+                proxy_to: "http://backend1".to_string(),
+                proxy_unix: None,
+            },
+            UpstreamInner {
+                proxy_to: "http://backend2".to_string(),
+                proxy_unix: None,
+            },
+        ];
+
+        let failed_backends = parking_lot::RwLock::new(TtlCache::new(Duration::from_secs(60)));
+        {
+            let mut failed = failed_backends.write();
+            failed.insert(upstreams[0].clone(), 5); // Exceeds max_fails of 3
+        }
+
+        let count = count_healthy_backends(&upstreams, &failed_backends, 3);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_count_healthy_backends_all_unhealthy() {
+        use crate::upstream::UpstreamInner;
+        use crate::util::TtlCache;
+        use std::time::Duration;
+
+        let upstreams = vec![
+            UpstreamInner {
+                proxy_to: "http://backend1".to_string(),
+                proxy_unix: None,
+            },
+            UpstreamInner {
+                proxy_to: "http://backend2".to_string(),
+                proxy_unix: None,
+            },
+        ];
+
+        let failed_backends = parking_lot::RwLock::new(TtlCache::new(Duration::from_secs(60)));
+        {
+            let mut failed = failed_backends.write();
+            failed.insert(upstreams[0].clone(), 5);
+            failed.insert(upstreams[1].clone(), 10);
+        }
+
+        let count = count_healthy_backends(&upstreams, &failed_backends, 3);
+        assert_eq!(count, 0);
     }
 }
