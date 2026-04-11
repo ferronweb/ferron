@@ -87,7 +87,7 @@ impl HttpResponseStage {
     }
 
     fn evaluate_status_rules(ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        let config = ResponseConfig::from_http_context(&ctx);
+        let config = ResponseConfig::from_http_context(ctx);
         if config.status_rules.is_empty() {
             return Ok(true);
         }
