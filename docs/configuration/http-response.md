@@ -129,8 +129,10 @@ Multiple `link` entries can be defined within a single `early_hints` block. Mult
 By default, 103 Early Hints is supported natively on HTTP/2 and HTTP/3 connections. For HTTP/1.1, you must enable support via the [`h1_enable_early_hints`](/docs/v3/configuration/http-host) directive in your `http` block:
 
 ```ferron
-http {
-    h1_enable_early_hints true
+{
+    http {
+        h1_enable_early_hints true
+    }
 }
 ```
 
