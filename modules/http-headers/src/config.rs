@@ -5,10 +5,8 @@ use std::error::Error;
 use std::str::FromStr;
 
 use ferron_core::config::validator::ConfigurationValidator;
-use ferron_core::config::{
-    ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
-    Variables,
-};
+use ferron_core::config::{ServerConfigurationBlock, ServerConfigurationDirectiveEntry};
+use ferron_http::HttpContext;
 use http::header::HeaderName;
 
 /// A response header action.
@@ -46,21 +44,11 @@ pub struct HeadersConfig {
     pub cors: Option<CorsConfig>,
 }
 
-/// Resolve a config value as a string, interpolating `{{env.*}}` variables only.
-fn resolve_config_value_with_env(value: &ServerConfigurationValue) -> Option<String> {
-    struct EnvResolver;
-    impl Variables for EnvResolver {
-        fn resolve(&self, _name: &str) -> Option<String> {
-            None
-        }
-    }
-    value.as_string_with_interpolations(&EnvResolver)
-}
-
 /// Parse header actions from a directive entry.
 fn parse_header_entry(
     entry: &ServerConfigurationDirectiveEntry,
     cfg: &mut HeadersConfig,
+    ctx: &HttpContext,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     if entry.args.is_empty() {
         return Err("header requires at least one argument".into());
@@ -76,7 +64,7 @@ fn parse_header_entry(
             let value = entry
                 .args
                 .get(1)
-                .and_then(resolve_config_value_with_env)
+                .and_then(|v| v.as_string_with_interpolations(ctx))
                 .ok_or("header +Name requires a value")?;
             let header_name = HeaderName::from_str(name)
                 .map_err(|e| format!("Invalid header name '{name}': {e}"))?;
@@ -94,7 +82,7 @@ fn parse_header_entry(
             let value = entry
                 .args
                 .get(1)
-                .and_then(resolve_config_value_with_env)
+                .and_then(|v| v.as_string_with_interpolations(ctx))
                 .ok_or("header Name requires a value")?;
             let header_name = HeaderName::from_str(name)
                 .map_err(|e| format!("Invalid header name '{name}': {e}"))?;
@@ -110,13 +98,14 @@ fn parse_header_entry(
 fn parse_cors_block(
     block: &ServerConfigurationBlock,
     cors: &mut CorsConfig,
+    ctx: &HttpContext,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     for (name, entries) in block.directives.iter() {
         match name.as_str() {
             "origins" => {
                 for entry in entries {
                     for arg in &entry.args {
-                        if let Some(val) = resolve_config_value_with_env(arg) {
+                        if let Some(val) = arg.as_string_with_interpolations(ctx) {
                             cors.origins.push(val);
                         }
                     }
@@ -189,13 +178,13 @@ pub fn parse_headers_config(
     let mut cfg = HeadersConfig::default();
 
     for entry in &header_entries {
-        parse_header_entry(entry, &mut cfg)?;
+        parse_header_entry(entry, &mut cfg, ctx)?;
     }
 
     for entry in &cors_entries {
         let mut cors = CorsConfig::default();
         if let Some(block) = &entry.children {
-            parse_cors_block(block, &mut cors)?;
+            parse_cors_block(block, &mut cors, ctx)?;
         }
         cfg.cors = Some(cors);
     }

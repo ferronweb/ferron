@@ -8,6 +8,7 @@
 
 - `map` directive for mapping variables.
 - Support for body interpolation in `status` directives.
+- Support for interpolated strings in header values.
 
 ### Fixed
 
