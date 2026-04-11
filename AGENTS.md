@@ -2,19 +2,19 @@
 
 ## Project Overview
 
-Ferron 3 is a high-performance, modular web server written in Rust. It features a plugin-based architecture that supports HTTP serving, reverse proxying, static file serving, automatic TLS via ACME, rate limiting, URL rewriting, and comprehensive observability (logging, metrics, OTLP export).
+Ferron 3 is a high-performance, modular web server written in Rust. It features a plugin-based architecture that supports HTTP serving, reverse proxying, static file serving, automatic TLS via ACME, rate limiting, URL rewriting, compression, basic authentication, caching, and comprehensive observability (logging, metrics, OTLP export).
 
 The project is organized as a Rust workspace with the following key components:
 
 - **`bin/`** - The `ferron` CLI and service entrypoints (daemon mode, Windows service support).
 - **`core/`** - Shared runtime, module registry, logging, shutdown handling, and configuration infrastructure.
 - **`modules/`** - Pluggable feature crates including:
-  - HTTP: `http-server`, `http-static`, `http-proxy`, `http-headers`, `http-ratelimit`, `http-response`, `http-rewrite`
+  - HTTP: `http-server`, `http-static`, `http-proxy`, `http-fproxy`, `http-headers`, `http-ratelimit`, `http-response`, `http-rewrite`, `http-basicauth`, `http-cache`, `http-compression`
   - Config: `config-json`, `config-ferronconf`
   - TLS: `tls-manual`, `tls-acme`, `ocsp-stapler`
   - Observability: `observability-consolelog`, `observability-logfile`, `observability-otlp`, `observability-format-json`, `observability-format-text`, `observability-process-metrics`
   - Admin: `admin-api`
-- **`types/`** - Shared domain types for HTTP, TLS, DNS, OCSP, observability, and admin.
+- **`types/`** - Shared domain types for HTTP, TLS, DNS, OCSP, and observability (`ferron-http`, `ferron-tls`, `ferron-dns`, `ferron-ocsp`, `ferron-observability`).
 - **`docs/`** - Project documentation and configuration reference. Styled after `ferron/docs` (sentence-case headers, YAML frontmatter, user-facing tone, `**Configuration example:**` blocks, `## Notes and troubleshooting` sections). Navigation structure in `docs/docLinks.ts`.
 
 ## Building and Running
