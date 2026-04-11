@@ -27,6 +27,7 @@ use ferron_http_cache::HttpCacheModuleLoader;
 use ferron_http_compression::HttpCompressionModuleLoader;
 use ferron_http_fproxy::ForwardProxyModuleLoader;
 use ferron_http_headers::HttpHeadersModuleLoader;
+use ferron_http_map::HttpMapModuleLoader;
 use ferron_http_proxy::ReverseProxyModuleLoader;
 use ferron_http_ratelimit::HttpRateLimitModuleLoader;
 use ferron_http_response::HttpResponseModuleLoader;
@@ -261,6 +262,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(HttpRateLimitModuleLoader),
         Box::new(HttpResponseModuleLoader),
         Box::new(HttpRewriteModuleLoader),
+        Box::new(HttpMapModuleLoader),
         Box::new(HttpCacheModuleLoader),
         Box::new(HttpCompressionModuleLoader),
         Box::new(StaticFileModuleLoader),

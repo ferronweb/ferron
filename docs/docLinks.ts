@@ -158,6 +158,12 @@ export default [
     label: "URL rewriting",
   },
   {
+    href: "/docs/v3/configuration/http-map",
+    target: "_self",
+    sub: true,
+    label: "HTTP map",
+  },
+  {
     label: "Proxying",
   },
   {

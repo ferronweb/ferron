@@ -1135,6 +1135,7 @@ dependencies = [
  "ferron-http-compression",
  "ferron-http-fproxy",
  "ferron-http-headers",
+ "ferron-http-map",
  "ferron-http-proxy",
  "ferron-http-ratelimit",
  "ferron-http-response",
@@ -1327,6 +1328,23 @@ dependencies = [
  "ferron-observability",
  "http",
  "http-body-util",
+ "typemap_rev",
+]
+
+[[package]]
+name = "ferron-http-map"
+version = "3.0.0-alpha.1"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "fancy-regex",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "http",
+ "http-body-util",
+ "rustc-hash",
+ "tokio",
  "typemap_rev",
 ]
 

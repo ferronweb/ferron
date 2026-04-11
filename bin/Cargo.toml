@@ -25,6 +25,7 @@ ferron-http-headers = { path = "../modules/http-headers" }
 ferron-http-ratelimit = { path = "../modules/http-ratelimit" }
 ferron-http-response = { path = "../modules/http-response" }
 ferron-http-rewrite = { path = "../modules/http-rewrite" }
+ferron-http-map = { path = "../modules/http-map" }
 ferron-http-compression = { path = "../modules/http-compression" }
 ferron-admin-api = { path = "../modules/admin-api" }
 ferron-config-json = { path = "../modules/config-json" }
