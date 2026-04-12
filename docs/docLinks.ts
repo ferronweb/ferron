@@ -233,6 +233,12 @@ export default [
     label: "HTTP buffering",
   },
   {
+    href: "/docs/v3/configuration/http-replace",
+    target: "_self",
+    sub: true,
+    label: "HTTP response body replacement",
+  },
+  {
     href: "/docs/v3/configuration/http-headers",
     target: "_self",
     sub: true,

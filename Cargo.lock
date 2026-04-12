@@ -1139,6 +1139,7 @@ dependencies = [
  "ferron-http-map",
  "ferron-http-proxy",
  "ferron-http-ratelimit",
+ "ferron-http-replace",
  "ferron-http-response",
  "ferron-http-rewrite",
  "ferron-http-server",
@@ -1410,6 +1411,27 @@ dependencies = [
  "http",
  "http-body-util",
  "parking_lot",
+ "rustc-hash",
+ "tokio",
+ "typemap_rev",
+]
+
+[[package]]
+name = "ferron-http-replace"
+version = "3.0.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "memchr",
+ "pin-project-lite",
  "rustc-hash",
  "tokio",
  "typemap_rev",
