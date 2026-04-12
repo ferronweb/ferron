@@ -551,7 +551,7 @@ pub fn determine_proxy_to(
 
     // Build a mutable copy of healthy backends for the selection loop
     let mut healthy: Vec<UpstreamInner> = {
-        let mut failed = if health_check_enabled {
+        let failed = if health_check_enabled {
             Some(failed_backends.read())
         } else {
             None
@@ -560,7 +560,7 @@ pub fn determine_proxy_to(
             .iter()
             .filter(|u| {
                 // Check passive failure cache
-                let not_failed = failed.take().is_none_or(|failed| {
+                let not_failed = failed.as_ref().is_none_or(|failed| {
                     failed
                         .get(*u)
                         .is_none_or(|fails| fails <= health_check_max_fails)
