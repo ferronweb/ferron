@@ -1558,8 +1558,11 @@ fn normalize_host_header(
     request: &mut HttpRequest,
     _events: &CompositeEventSink,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let host_header_option = request.headers().get(http::header::HOST);
-    if let Some(header_data) = host_header_option {
+    let mut host_header_option = request.headers().get_all(http::header::HOST).iter();
+    if let Some(header_data) = host_header_option.next() {
+        if host_header_option.next().is_some() {
+            Err(anyhow::anyhow!("Multiple Host headers found"))?;
+        }
         let host_header = header_data.to_str()?;
         let host_header_lower_case = host_header.to_lowercase();
         let host_header_without_dot = host_header_lower_case
