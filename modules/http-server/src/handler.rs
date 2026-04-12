@@ -24,9 +24,26 @@ use typemap_rev::TypeMap;
 use crate::config::ThreeStageResolver;
 use crate::util::canonicalize_url::canonicalize_path;
 use crate::util::error_pages::generate_default_error_page;
-use crate::util::url_sanitizer::sanitize_url;
 
 const LOG_TARGET: &str = "ferron-http-server";
+
+// Percent-encoding set for *path segment output only*.
+// Assumes path has already been canonicalized and split into segments.
+// '/' is NOT handled here because it is a structural delimiter.
+const PATH_ENCODE_SET: percent_encoding::AsciiSet = percent_encoding::CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'<')
+    .add(b'>')
+    .add(b'`')
+    .add(b'[')
+    .add(b']')
+    .add(b'{')
+    .add(b'}')
+    .add(b'|')
+    .add(b'^')
+    .add(b'\\');
+
 type ResponseBody = UnsyncBoxBody<Bytes, io::Error>;
 
 /// Per-stage hooks that emit trace spans around each pipeline stage.
@@ -661,40 +678,6 @@ async fn request_handler_inner(
         );
     }
 
-    // Sanitize URL (unless disabled by configuration)
-    let url_sanitize_enabled = config_resolver
-        .global()
-        .and_then(|g| get_http_nested_boolean(&g, "url_sanitize"))
-        .unwrap_or(true);
-    if url_sanitize_enabled {
-        if let Err(e) = sanitize_request_url(&mut request, &events) {
-            emit_error(&events, format!("URL sanitization error: {}", e));
-            if let Some(response) = execute_error_pipeline(
-                error_pipeline.as_ref(),
-                400,
-                None,
-                LayeredConfiguration::default(),
-                &events,
-            )
-            .await
-            {
-                return (Ok(response), None, None);
-            }
-            return (
-                Ok(builtin_error_response(
-                    400,
-                    None,
-                    config_resolver.global().and_then(|g| {
-                        g.get_value("admin_email")
-                            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                    }),
-                )),
-                None,
-                None,
-            );
-        }
-    }
-
     // Decode location for configuration resolution
     let decoded_path = match canonicalize_path(request.uri().path()) {
         Ok(path) => path,
@@ -728,6 +711,40 @@ async fn request_handler_inner(
             );
         }
     };
+
+    // Sanitize URL (unless disabled by configuration)
+    let url_sanitize_enabled = config_resolver
+        .global()
+        .and_then(|g| get_http_nested_boolean(&g, "url_sanitize"))
+        .unwrap_or(true);
+    if url_sanitize_enabled {
+        if let Err(e) = sanitize_request_url(&mut request, &decoded_path) {
+            emit_error(&events, format!("URL sanitization error: {}", e));
+            if let Some(response) = execute_error_pipeline(
+                error_pipeline.as_ref(),
+                400,
+                None,
+                LayeredConfiguration::default(),
+                &events,
+            )
+            .await
+            {
+                return (Ok(response), None, None);
+            }
+            return (
+                Ok(builtin_error_response(
+                    400,
+                    None,
+                    config_resolver.global().and_then(|g| {
+                        g.get_value("admin_email")
+                            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                    }),
+                )),
+                None,
+                None,
+            );
+        }
+    }
 
     let mut variables = HashMap::with_capacity(6);
     if let Some(hostname) = hostname.as_ref() {
@@ -1609,10 +1626,11 @@ fn get_http_nested_boolean(
 /// and normalizes slashes and percent-encoding.
 fn sanitize_request_url(
     request: &mut HttpRequest,
-    _events: &CompositeEventSink,
+    decoded_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let url_pathname = request.uri().path();
-    let sanitized_url_pathname = sanitize_url(url_pathname, false)?;
+    let sanitized_url_pathname =
+        percent_encoding::utf8_percent_encode(decoded_path, &PATH_ENCODE_SET).to_string();
 
     if sanitized_url_pathname != url_pathname {
         // We need to reconstruct the URI with the sanitized path

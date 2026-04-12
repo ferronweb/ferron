@@ -36,6 +36,7 @@ quick_cache = "0.6"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 rustc-hash = "2"
 thiserror = "2.0.18"
+percent-encoding = "2.3.2"
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }

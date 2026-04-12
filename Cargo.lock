@@ -1494,6 +1494,7 @@ dependencies = [
  "http",
  "http-body-util",
  "parking_lot",
+ "percent-encoding",
  "ppp",
  "quick_cache",
  "rustc-hash",
