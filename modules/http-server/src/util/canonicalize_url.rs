@@ -8,6 +8,9 @@ pub enum CanonError {
     #[error("invalid percent encoding")]
     InvalidPercentEncoding,
 
+    #[error("invalid utf-8 after decoding")]
+    InvalidUtf8,
+
     #[error("encoded reserved character in path: {0}")]
     EncodedReserved(u8),
 }
@@ -85,6 +88,8 @@ fn decode_segment(segment: &[u8]) -> Result<Vec<u8>, CanonError> {
 pub fn canonicalize_path(input: &str) -> Result<String, CanonError> {
     if input.is_empty() {
         return Err(CanonError::EmptyPath);
+    } else if input == "*" {
+        return Ok("*".to_string());
     }
 
     let bytes = input.as_bytes();
@@ -136,7 +141,7 @@ pub fn canonicalize_path(input: &str) -> Result<String, CanonError> {
         if i > 0 {
             result.push('/');
         }
-        result.push_str(&String::from_utf8_lossy(seg));
+        result.push_str(&str::from_utf8(seg).map_err(|_| CanonError::InvalidUtf8)?);
     }
 
     Ok(result)
@@ -156,6 +161,11 @@ mod tests {
     #[test]
     fn test_root_path() {
         assert_eq!(canonicalize_path("/").unwrap(), "/");
+    }
+
+    #[test]
+    fn test_asterisk() {
+        assert_eq!(canonicalize_path("*").unwrap(), "*");
     }
 
     #[test]
@@ -364,10 +374,8 @@ mod tests {
 
     #[test]
     fn test_malformed_utf8() {
-        // %C0 is an invalid UTF-8 start byte (overlong encoding)
-        // from_utf8_lossy will replace it with
-        let result = canonicalize_path("/foo%C0").unwrap();
-        assert!(result.starts_with("/foo"));
+        let err = canonicalize_path("/foo%C0").unwrap_err();
+        assert!(matches!(err, CanonError::InvalidUtf8));
     }
 
     #[test]
