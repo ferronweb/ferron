@@ -92,6 +92,7 @@ pub(crate) struct TcpListenerOptions {
     pub address: SocketAddr,
     pub send_buffer_size: Option<usize>,
     pub recv_buffer_size: Option<usize>,
+    pub backlog: Option<i32>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -175,6 +176,7 @@ impl TcpListenerHandle {
         let listener = build_tcp_listener(
             options.address,
             (options.send_buffer_size, options.recv_buffer_size),
+            options.backlog,
         )?;
 
         if config.load().tls_resolver.is_some() {
@@ -473,6 +475,7 @@ impl TcpListenerHandle {
 fn build_tcp_listener(
     address: SocketAddr,
     tcp_buffer_sizes: (Option<usize>, Option<usize>),
+    backlog: Option<i32>,
 ) -> Result<std::net::TcpListener, io::Error> {
     let listener_socket = socket2::Socket::new(
         if address.is_ipv6() {
@@ -502,7 +505,7 @@ fn build_tcp_listener(
     }
 
     listener_socket.bind(&address.into())?;
-    listener_socket.listen(1024)?;
+    listener_socket.listen(backlog.unwrap_or(1024))?;
 
     Ok(listener_socket.into())
 }
