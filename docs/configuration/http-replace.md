@@ -24,7 +24,7 @@ This page documents the `replace`, `replace_last_modified`, and `replace_filter_
 example.com {
     # Replace all occurrences
     replace "old-company-name" "new-company-name"
-    
+
     # Replace only the first occurrence
     replace "http://old-domain.com" "https://new-domain.com" {
         once true
@@ -75,7 +75,7 @@ The replacements are applied in order. A response body containing `foo and foo` 
 ```ferron
 example.com {
     replace_filter_types "text/html" "text/css" "application/javascript"
-    
+
     replace "old" "new"
 }
 ```
@@ -86,7 +86,7 @@ example.com {
 example.com {
     # Process all response types
     replace_filter_types "*"
-    
+
     replace "footer-old" "footer-new"
 }
 ```
@@ -112,7 +112,7 @@ example.com {
 ```ferron
 example.com {
     replace_last_modified true
-    
+
     replace "old" "new"
 }
 ```
@@ -129,13 +129,13 @@ The `replace`, `replace_last_modified`, and `replace_filter_types` directives ca
 example.com {
     # Global replacements for all requests
     replace "old-brand" "new-brand"
-    
+
     location /api {
         # API-specific replacements
         replace_filter_types "application/json"
         replace "v1" "v2"
     }
-    
+
     location /legacy {
         replace "deprecated" "archived"
         replace_last_modified false
@@ -153,10 +153,10 @@ If you need to replace strings in responses that would otherwise be compressed, 
 example.com {
     # Disable static file compression
     compressed false
-    
+
     # Disable dynamic content compression
     dynamic_compressed false
-    
+
     # Now replacement can work safely
     replace "old" "new"
 }
