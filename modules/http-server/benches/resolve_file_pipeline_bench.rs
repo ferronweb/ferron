@@ -33,7 +33,7 @@ fn bench_resolve_file_pipeline(c: &mut Criterion) {
         let rt = &rt;
         let root = root_path.clone();
         c.bench_function("resolve_index_file", move |b| {
-            b.iter(|| {
+            b.iter(move || {
                 rt.block_on(async {
                     let res = ferron_http_server::bench_resolve_http_file_target(&*root, "/index.html", None).await;
                     black_box(res).ok();
@@ -46,7 +46,7 @@ fn bench_resolve_file_pipeline(c: &mut Criterion) {
         let rt = &rt;
         let root = root_path.clone();
         c.bench_function("resolve_nested_file", move |b| {
-            b.iter(|| {
+            b.iter(move || {
                 rt.block_on(async {
                     let res = ferron_http_server::bench_resolve_http_file_target(&*root, "/static/file.js", None).await;
                     black_box(res).ok();
