@@ -3,7 +3,7 @@ title: "Configuration: TLS session ticket keys"
 description: "Stateless TLS session resumption with automatic key rotation and file-backed persistence."
 ---
 
-This page documents TLS session ticket key management. TLS session tickets enable **stateless session resumption**, allowing clients to resume previous TLS sessions without a full handshake. This improves performance and reduces latency for returning clients.
+This page documents TLS session ticket key management (`tls-manual` module). TLS session tickets enable **stateless session resumption**, allowing clients to resume previous TLS sessions without a full handshake. This improves performance and reduces latency for returning clients.
 
 ## Configuration
 

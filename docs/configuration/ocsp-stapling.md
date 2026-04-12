@@ -3,7 +3,7 @@ title: "Configuration: OCSP stapling"
 description: "OCSP stapling for TLS — attaching signed OCSP responses during the TLS handshake."
 ---
 
-This page documents OCSP stapling configuration. OCSP stapling allows the TLS server to **attach a signed OCSP response** during the TLS handshake, eliminating the need for clients to contact the CA's OCSP responder directly. This improves:
+This page documents OCSP stapling configuration (`ocsp-stapler` module). OCSP stapling allows the TLS server to **attach a signed OCSP response** during the TLS handshake, eliminating the need for clients to contact the CA's OCSP responder directly. This improves:
 
 - **Privacy** — clients no longer reveal their browsing habits to the CA
 - **Performance** — eliminates the extra round-trip to the OCSP responder

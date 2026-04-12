@@ -3,7 +3,7 @@ title: "Configuration: security and TLS"
 description: "Cipher suites, ECDH curves, TLS protocol versions, and client certificate authentication (mTLS)."
 ---
 
-This page documents the TLS crypto directives available inside a `tls { ... }` block. These settings are optional — safe defaults are used when omitted.
+This page documents the TLS crypto directives available inside a `tls { ... }` block. These settings are optional — safe defaults are used when omitted. The TLS crypto configuration is handled by the `tls-manual` module.
 
 ## Directives
 

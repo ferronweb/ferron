@@ -3,7 +3,7 @@ title: "Configuration: conditionals and variables"
 description: "Named matchers, conditional operators, built-in variables, and interpolated string syntax."
 ---
 
-This page describes how to define and use conditional matchers in Ferron configuration. Named matchers let you apply configuration selectively based on request properties.
+This page describes how to define and use conditional matchers in Ferron configuration. Named matchers let you apply configuration selectively based on request properties. The matcher system is part of the `http-server` module's request resolution pipeline.
 
 ## Named matchers
 

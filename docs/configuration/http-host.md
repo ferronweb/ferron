@@ -145,8 +145,8 @@ Notes:
 
 ### TLS
 
-- `provider <name: string>`
-  - This directive specifies the TLS provider name. Required when TLS is enabled through the block form. Supported providers: `manual`, `acme`. Default: none
+- `provider <name: string>` (`tls-manual`, `tls-acme`)
+  - This directive specifies the TLS provider name. Required when TLS is enabled through the block form. Supported providers: `manual` (`tls-manual`), `acme` (`tls-acme`). Default: none
 
 For crypto settings (`cipher_suite`, `ecdh_curve`, `min_version`, `max_version`, `client_auth`, `client_auth_ca`), see [Security and TLS](/docs/v3/configuration/security-tls).
 
@@ -162,5 +162,6 @@ For session ticket keys, see [TLS session ticket keys](/docs/v3/configuration/tl
 ## Notes and troubleshooting
 
 - These directives are host-scoped rather than global.
+- The HTTP server engine (`http-server` module) handles connection management, request routing, TLS termination, and HTTP/1 and HTTP/2 protocol support.
 - For ACME configuration details, see [ACME automatic TLS](/docs/v3/configuration/tls-acme).
 - For crypto and mTLS settings, see [Security and TLS](/docs/v3/configuration/security-tls).

@@ -3,7 +3,7 @@ title: "Configuration: routing and URL processing"
 description: "Request matching, conditional configuration, error handling, web root, and URL sanitation."
 ---
 
-This page documents directives that affect HTTP request matching and configuration layering inside host blocks.
+This page documents directives that affect HTTP request matching and configuration layering inside host blocks. These directives are processed by the `http-server` module's radix tree resolver.
 
 ## Directives
 

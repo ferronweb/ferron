@@ -3,7 +3,7 @@ title: "Configuration: ACME automatic TLS"
 description: "Automatic TLS certificate issuance via ACME, including HTTP-01, TLS-ALPN-01, and DNS-01 challenges."
 ---
 
-This page documents the ACME TLS provider, which automatically obtains TLS certificates from ACME-compatible Certificate Authorities (CAs) such as **Let's Encrypt**. It supports both **eager** (startup-time) and **on-demand** (lazy, first-connection) certificate issuance, with three challenge types:
+This page documents the ACME TLS provider (`tls-acme` module), which automatically obtains TLS certificates from ACME-compatible Certificate Authorities (CAs) such as **Let's Encrypt**. It supports both **eager** (startup-time) and **on-demand** (lazy, first-connection) certificate issuance, with three challenge types:
 
 - **HTTP-01** — serves a token at `/.well-known/acme-challenge/` (default)
 - **TLS-ALPN-01** — responds with a self-signed cert during the TLS handshake

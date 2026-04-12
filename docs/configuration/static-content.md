@@ -32,11 +32,11 @@ Notes:
 
 ### Compression
 
-- `compressed [bool: boolean]` (`http-static`)
+- `compressed [bool: boolean]` (`http-compression`)
   - This directive specifies whether on-the-fly response body compression is enabled based on the `Accept-Encoding` request header. Supported algorithms: `gzip`, `brotli`, `deflate`, `zstd`. Default: `compressed true`
-- `precompressed [bool: boolean]` (`http-static`)
+- `precompressed [bool: boolean]` (`http-compression`)
   - This directive specifies whether serving pre-compressed sidecar files (e.g. `style.css.gz`, `app.js.br`) instead of compressing on the fly is enabled. Default: `precompressed false`
-- `dynamic_compressed [bool: boolean]` (`http-static`)
+- `dynamic_compressed [bool: boolean]` (`http-compression`)
   - This directive specifies whether on-the-fly compression is enabled for dynamic (non-static) response bodies, such as responses from reverse proxies or application handlers. Supported algorithms: `gzip`, `brotli`, `deflate`, `zstd`. Default: `dynamic_compressed false`
 
 **Configuration example:**
@@ -138,6 +138,8 @@ Notes:
 ## Notes and troubleshooting
 
 - The `root` directive is defined in [Routing and URL processing](/docs/v3/configuration/routing-url-processing).
+- Static file serving is handled by the `http-static` module, which includes MIME type detection, directory listings, and ETag generation.
+- For response body compression (gzip, brotli, deflate, zstd), see the `http-compression` module documentation.
 - For the full HTTP response cache module, see [/docs/v3/configuration/http-cache.md](/docs/v3/configuration/http-cache.md).
 - For `trailing_slash_redirect`, see [Routing and URL processing](/docs/v3/configuration/routing-url-processing#url-sanitation-and-redirects).
 - For response control (`status`, `abort`), see [HTTP response control](/docs/v3/configuration/http-response).

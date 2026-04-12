@@ -3,7 +3,7 @@ title: "JSON configuration and adapt command"
 description: "Using ferron adapt to output configuration as JSON, and working with JSON-formatted configurations."
 ---
 
-This page covers the `ferron adapt` command, the JSON configuration format, and how to work with JSON-based configurations.
+This page covers the `ferron adapt` command, the JSON configuration format, and how to work with JSON-based configurations. Configuration file parsing is handled by the `config-ferronconf` module (for `.conf` files) or the `config-json` module (for `.json` files).
 
 ## The adapt command
 

@@ -191,8 +191,8 @@ Triggers a configuration reload, equivalent to sending `SIGHUP` to the daemon pr
 
 The `observability` block configures per-host event sinks for logging and metrics. Multiple `observability` directives for the same host accumulate event sinks.
 
-- `provider <name: string>`
-  - This directive specifies the observability provider name. Required when observability is enabled through the block form. Supported providers: `console`, `file`. Default: none
+- `provider <name: string>` (`observability-consolelog`, `observability-logfile`)
+  - This directive specifies the observability provider name. Required when observability is enabled through the block form. Supported providers: `console` (`observability-consolelog`), `file` (`observability-logfile`). Default: none
 
 **Configuration example:**
 
@@ -206,11 +206,11 @@ example.com {
 
 #### `provider console`
 
-The bundled `console` provider takes no additional subdirectives and writes supported observability events to Ferron's logs.
+The bundled `console` provider (`observability-consolelog`) takes no additional subdirectives and writes supported observability events to Ferron's logs.
 
 #### `provider file`
 
-The bundled `file` provider writes observability events to specified log files.
+The bundled `file` provider (`observability-logfile`) writes observability events to specified log files.
 
 | Nested directive | Arguments | Description | Default |
 | --- | --- | --- | --- |
@@ -340,5 +340,6 @@ observability {
 - These directives affect startup and listener construction, not per-request routing.
 - The built-in blank configuration enables `runtime.io_uring true`.
 - During configuration reload (SIGHUP), the existing admin listener is gracefully shut down and a new one is started if the `admin` block is still present.
+- Configuration file parsing is handled by the `config-ferronconf` module (for `.conf` files) or `config-json` module (for `.json` files).
 - For observability-specific configuration (log formatters, OTLP export), see [Observability and logging](/docs/v3/configuration/observability-logging).
 - For per-host HTTP settings, see [HTTP host directives](/docs/v3/configuration/http-host).
