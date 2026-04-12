@@ -1131,6 +1131,7 @@ dependencies = [
  "ferron-config-json",
  "ferron-core",
  "ferron-http-basicauth",
+ "ferron-http-buffer",
  "ferron-http-cache",
  "ferron-http-compression",
  "ferron-http-fproxy",
@@ -1257,6 +1258,25 @@ dependencies = [
  "tokio",
  "typemap_rev",
  "vibeio",
+]
+
+[[package]]
+name = "ferron-http-buffer"
+version = "3.0.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "rustc-hash",
+ "tokio",
+ "typemap_rev",
 ]
 
 [[package]]

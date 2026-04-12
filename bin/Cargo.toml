@@ -27,6 +27,7 @@ ferron-http-response = { path = "../modules/http-response" }
 ferron-http-rewrite = { path = "../modules/http-rewrite" }
 ferron-http-map = { path = "../modules/http-map" }
 ferron-http-compression = { path = "../modules/http-compression" }
+ferron-http-buffer = { path = "../modules/http-buffer" }
 ferron-admin-api = { path = "../modules/admin-api" }
 ferron-config-json = { path = "../modules/config-json" }
 ferron-config-ferronconf = { path = "../modules/config-ferronconf" }

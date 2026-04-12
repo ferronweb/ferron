@@ -1,0 +1,24 @@
+[package]
+name = "ferron-http-buffer"
+version = "3.0.0-alpha.1"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+bytes = "1"
+futures-util = "0.3"
+http = "1"
+http-body = "1"
+http-body-util = "0.1"
+anyhow = "1"
+typemap_rev = "0.4"
+
+ferron-core = { path = "../../core" }
+ferron-http = { path = "../../types/http" }
+ferron-observability = { path = "../../types/observability" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }
+ferron-observability = { path = "../../types/observability" }
+typemap_rev = "0.4"
+rustc-hash = "2"

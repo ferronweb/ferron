@@ -23,6 +23,7 @@ use ferron_config_ferronconf::FerronConfConfigurationAdapterModuleLoader;
 use ferron_config_json::JsonConfigurationAdapterModuleLoader;
 use ferron_core::builtin::BuiltinModuleLoader;
 use ferron_http_basicauth::HttpBasicAuthModuleLoader;
+use ferron_http_buffer::HttpBufferModuleLoader;
 use ferron_http_cache::HttpCacheModuleLoader;
 use ferron_http_compression::HttpCompressionModuleLoader;
 use ferron_http_fproxy::ForwardProxyModuleLoader;
@@ -264,6 +265,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(HttpRewriteModuleLoader),
         Box::new(HttpMapModuleLoader),
         Box::new(HttpCacheModuleLoader),
+        Box::new(HttpBufferModuleLoader),
         Box::new(HttpCompressionModuleLoader),
         Box::new(StaticFileModuleLoader),
         Box::new(HttpHeadersModuleLoader),

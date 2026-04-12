@@ -227,6 +227,12 @@ export default [
     label: "HTTP cache",
   },
   {
+    href: "/docs/v3/configuration/http-buffer",
+    target: "_self",
+    sub: true,
+    label: "HTTP buffering",
+  },
+  {
     href: "/docs/v3/configuration/http-headers",
     target: "_self",
     sub: true,
