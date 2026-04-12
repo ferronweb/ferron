@@ -18,7 +18,10 @@ use http::header::HeaderName;
 
 #[cfg(feature = "srv-lookup")]
 use crate::upstream::SrvUpstreamData;
-use crate::upstream::{LoadBalancerAlgorithm, ProxyHeader, Upstream, UpstreamConfig};
+use crate::upstream::{
+    ExpectedStatusCodes, HealthCheckMethod, LoadBalancerAlgorithm, ProxyHeader, Upstream,
+    UpstreamConfig, UpstreamHealthCheckConfig,
+};
 
 /// Default keep-alive idle timeout in milliseconds.
 const DEFAULT_KEEPALIVE_IDLE_TIMEOUT_MS: u64 = 60_000;
@@ -96,6 +99,55 @@ fn resolve_config_value_with_env(value: &ServerConfigurationValue) -> Option<Str
     value.as_string_with_interpolations(&EnvResolver)
 }
 
+/// Parse expected status codes from a string.
+/// Accepts:
+/// - "2xx" for 200-299
+/// - "3xx" for 300-399
+/// - "4xx" for 400-499
+/// - "5xx" for 500-599
+/// - "2xx,3xx" for multiple ranges
+/// - "200,201,204" for specific codes
+/// - "200-299" for a range
+fn parse_expected_status(s: &str) -> Result<ExpectedStatusCodes, Box<dyn Error + Send + Sync>> {
+    let s = s.trim();
+
+    // Check for common shorthands
+    if s == "2xx" {
+        return Ok(ExpectedStatusCodes::Successful);
+    }
+    if s == "2xx,3xx" || s == "3xx,2xx" {
+        return Ok(ExpectedStatusCodes::SuccessfulOrRedirect);
+    }
+
+    // Try to parse as a range (e.g., "200-299")
+    if let Some(idx) = s.find('-') {
+        let start_str = &s[..idx].trim();
+        let end_str = &s[idx + 1..].trim();
+        if let (Ok(start), Ok(end)) = (start_str.parse::<u16>(), end_str.parse::<u16>()) {
+            if start <= end && start >= 100 && end < 600 {
+                return Ok(ExpectedStatusCodes::Range(start, end));
+            }
+        }
+    }
+
+    // Try to parse as comma-separated values
+    if s.contains(',') {
+        let mut codes = Vec::new();
+        for part in s.split(',') {
+            let code: u16 = part.trim().parse()?;
+            codes.push(code);
+        }
+        if codes.len() == 1 {
+            return Ok(ExpectedStatusCodes::Specific(codes[0]));
+        }
+        return Ok(ExpectedStatusCodes::Any(codes));
+    }
+
+    // Try to parse as a single status code
+    let code: u16 = s.parse()?;
+    Ok(ExpectedStatusCodes::Specific(code))
+}
+
 /// Parse proxy configuration from a server configuration block.
 pub fn parse_proxy_config(
     ctx: &ferron_http::HttpContext,
@@ -117,6 +169,7 @@ pub fn parse_proxy_config(
                 unix_socket: None,
                 limit: None,
                 idle_timeout: Some(default_timeout),
+                health_check_config: UpstreamHealthCheckConfig::default(),
             }));
             cfg.idle_timeout_map.insert(url, default_timeout);
         }
@@ -313,6 +366,7 @@ fn parse_upstream_entry(
     let mut limit: Option<usize> = None;
     let mut idle_timeout: Option<Duration> = None;
     let mut unix_socket: Option<String> = None;
+    let mut health_check_config = UpstreamHealthCheckConfig::default();
 
     if let Some(block) = &entry.children {
         for (name, entries) in block.directives.iter() {
@@ -349,6 +403,123 @@ fn parse_upstream_entry(
                         unix_socket = Some(val);
                     }
                 }
+                "health_check" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v| v.as_boolean())
+                    {
+                        health_check_config.enabled = val;
+                    }
+                }
+                "health_check_uri" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v| v.as_str())
+                    {
+                        health_check_config.uri = val.to_string();
+                    }
+                }
+                "health_check_method" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v| v.as_str())
+                    {
+                        health_check_config.method = match val.to_uppercase().as_str() {
+                            "GET" => HealthCheckMethod::Get,
+                            "HEAD" => HealthCheckMethod::Head,
+                            _ => {
+                                return Err(format!(
+                                    "Invalid health_check_method: {val}, must be GET or HEAD"
+                                )
+                                .into())
+                            }
+                        };
+                    }
+                }
+                "health_check_interval" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v| v.as_str())
+                    {
+                        health_check_config.interval = parse_duration(val)
+                            .map_err(|e| format!("Invalid health_check_interval: {e}"))?;
+                    }
+                }
+                "health_check_timeout" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v| v.as_str())
+                    {
+                        health_check_config.timeout = parse_duration(val)
+                            .map_err(|e| format!("Invalid health_check_timeout: {e}"))?;
+                    }
+                }
+                "health_check_expect_status" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v| v.as_str())
+                    {
+                        health_check_config.expect_status = parse_expected_status(val)?;
+                    }
+                }
+                "health_check_response_time_threshold" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v| v.as_str())
+                    {
+                        health_check_config.response_time_threshold =
+                            Some(parse_duration(val).map_err(|e| {
+                                format!("Invalid health_check_response_time_threshold: {e}")
+                            })?);
+                    }
+                }
+                "health_check_body_match" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v| v.as_str())
+                    {
+                        health_check_config.body_match = Some(val.to_string());
+                    }
+                }
+                "health_check_consecutive_fails" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v: &ServerConfigurationValue| v.as_number())
+                    {
+                        if val > 0 {
+                            health_check_config.consecutive_fails = val as u64;
+                        }
+                    }
+                }
+                "health_check_consecutive_passes" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v: &ServerConfigurationValue| v.as_number())
+                    {
+                        if val > 0 {
+                            health_check_config.consecutive_passes = val as u64;
+                        }
+                    }
+                }
+                "health_check_no_verification" => {
+                    if let Some(val) = entries
+                        .first()
+                        .and_then(|e| e.args.first())
+                        .and_then(|v| v.as_boolean())
+                    {
+                        health_check_config.no_verification = val;
+                    }
+                }
                 _ => {}
             }
         }
@@ -363,6 +534,7 @@ fn parse_upstream_entry(
         unix_socket,
         limit,
         idle_timeout,
+        health_check_config,
     }));
 
     // Populate the O(1) lookup map
@@ -759,4 +931,57 @@ fn validate_srv_block(
     validate_duration(block, used, "idle_timeout")?;
     validate_str(block, used, "dns_servers")?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_expected_status_2xx() {
+        let status = parse_expected_status("2xx").unwrap();
+        assert!(status.matches(200));
+        assert!(status.matches(299));
+        assert!(!status.matches(300));
+    }
+
+    #[test]
+    fn test_parse_expected_status_2xx_3xx() {
+        let status = parse_expected_status("2xx,3xx").unwrap();
+        assert!(status.matches(200));
+        assert!(status.matches(399));
+        assert!(!status.matches(400));
+    }
+
+    #[test]
+    fn test_parse_expected_status_specific() {
+        let status = parse_expected_status("200").unwrap();
+        assert!(status.matches(200));
+        assert!(!status.matches(201));
+    }
+
+    #[test]
+    fn test_parse_expected_status_list() {
+        let status = parse_expected_status("200,201,204").unwrap();
+        assert!(status.matches(200));
+        assert!(status.matches(201));
+        assert!(status.matches(204));
+        assert!(!status.matches(202));
+    }
+
+    #[test]
+    fn test_parse_expected_status_range() {
+        let status = parse_expected_status("200-299").unwrap();
+        assert!(status.matches(200));
+        assert!(status.matches(250));
+        assert!(status.matches(299));
+        assert!(!status.matches(199));
+        assert!(!status.matches(300));
+    }
+
+    #[test]
+    fn test_parse_expected_status_invalid_code() {
+        let result = parse_expected_status("invalid");
+        assert!(result.is_err());
+    }
 }

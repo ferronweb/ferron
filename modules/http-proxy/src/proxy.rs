@@ -32,12 +32,12 @@ use crate::send_request::{
 use crate::send_request::{http1_handshake_unix, http2_handshake_unix};
 use crate::upstream::{
     determine_proxy_to, mark_backend_failure, resolve_upstreams, ConnectionsTrackState,
-    LoadBalancerAlgorithmInner, UpstreamInner,
+    HealthCheckStateMap, LoadBalancerAlgorithmInner, UpstreamInner,
 };
 use crate::util::TtlCache;
 use crate::ProxyMetrics;
 
-const LOG_TARGET: &str = "ferron-proxy";
+const LOG_TARGET: &str = "ferron-http-proxy";
 
 #[allow(clippy::type_complexity)]
 static TLS_CLIENT_CONFIG_CACHE: LazyLock<Mutex<HashMap<(bool, bool, bool), Arc<ClientConfig>>>> =
@@ -403,6 +403,7 @@ fn idle_timeout_for_upstream(config: &ProxyConfig, upstream: &UpstreamInner) -> 
 /// Main proxy execution.
 ///
 /// Returns the HTTP response and collected metrics for post-request emission.
+#[allow(clippy::too_many_arguments)]
 pub async fn execute_proxy(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
@@ -410,6 +411,8 @@ pub async fn execute_proxy(
     failed_backends: Arc<parking_lot::RwLock<TtlCache<UpstreamInner, u64>>>,
     algorithm: &LoadBalancerAlgorithmInner,
     conn_state: Option<&ConnectionsTrackState>,
+    health_check_state: Option<&HealthCheckStateMap>,
+    active_unhealthy_counter: Option<&parking_lot::Mutex<HashMap<String, u64>>>,
 ) -> Result<(HttpResponse, ProxyMetrics), Box<dyn std::error::Error + Send + Sync>> {
     let mut metrics = ProxyMetrics::new();
 
@@ -427,6 +430,12 @@ pub async fn execute_proxy(
             message: "Reverse proxy: no healthy upstream backends available".to_string(),
             target: LOG_TARGET,
         }));
+        // Collect active health check unhealthy metrics
+        if let Some(counter) = active_unhealthy_counter {
+            let guard = counter.lock();
+            metrics.active_unhealthy_backends =
+                guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
+        }
         return Ok((HttpResponse::BuiltinError(502, None), metrics));
     }
 
@@ -440,12 +449,20 @@ pub async fn execute_proxy(
             config.lb_health_check_max_fails,
             algorithm,
             conn_state,
+            health_check_state,
+            &metrics.selected_backends,
         ) else {
             ctx.events.emit(Event::Log(LogEvent {
                 level: LogLevel::Error,
                 message: "Reverse proxy: all upstream backends are unhealthy".to_string(),
                 target: LOG_TARGET,
             }));
+            // Collect active health check unhealthy metrics
+            if let Some(counter) = active_unhealthy_counter {
+                let guard = counter.lock();
+                metrics.active_unhealthy_backends =
+                    guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
+            }
             return Ok((HttpResponse::BuiltinError(503, None), metrics));
         };
 
@@ -476,7 +493,15 @@ pub async fn execute_proxy(
         )
         .await
         {
-            Ok(resp) => return Ok((resp, metrics)),
+            Ok(resp) => {
+                // Collect active health check unhealthy metrics
+                if let Some(counter) = active_unhealthy_counter {
+                    let guard = counter.lock();
+                    metrics.active_unhealthy_backends =
+                        guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
+                }
+                return Ok((resp, metrics));
+            }
             Err(e) => {
                 mark_backend_failure(
                     Arc::clone(&failed_backends),
@@ -525,6 +550,12 @@ pub async fn execute_proxy(
                     ),
                     target: LOG_TARGET,
                 }));
+                // Collect active health check unhealthy metrics
+                if let Some(counter) = active_unhealthy_counter {
+                    let guard = counter.lock();
+                    metrics.active_unhealthy_backends =
+                        guard.iter().map(|(k, v)| (k.clone(), *v)).collect();
+                }
                 return Ok((HttpResponse::BuiltinError(status.as_u16(), None), metrics));
             }
         }

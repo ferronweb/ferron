@@ -1385,6 +1385,8 @@ dependencies = [
  "http",
  "http-body-util",
  "hyper",
+ "hyper-rustls",
+ "hyper-util",
  "parking_lot",
  "ppp",
  "rand 0.10.0",

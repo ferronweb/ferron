@@ -16,7 +16,7 @@ use vibeio_hyper::VibeioIo;
 
 use crate::config::{domain_matches, ip_denied, port_allowed, ForwardProxyConfig};
 
-const LOG_TARGET: &str = "ferron-fproxy";
+const LOG_TARGET: &str = "ferron-http-fproxy";
 
 /// Type alias for the HTTP request body used by Ferron's HTTP pipeline.
 type HttpBody = UnsyncBoxBody<Bytes, std::io::Error>;

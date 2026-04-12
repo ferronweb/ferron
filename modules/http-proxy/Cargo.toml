@@ -19,6 +19,8 @@ connpool = "0.2"
 futures-util = "0.3"
 tokio = { version = "1", features = ["rt", "io-util", "sync", "macros", "time"] }
 tokio-rustls = "0.26"
+hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "http2", "tokio"] }
+hyper-rustls = { version = "0.27", features = ["http1", "http2"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
 rustls-native-certs = "0.8"
 webpki-roots = "1.0"

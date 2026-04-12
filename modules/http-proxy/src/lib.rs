@@ -5,6 +5,7 @@
 
 mod config;
 mod connections;
+mod health_check;
 mod proxy;
 mod send_net_io;
 mod send_request;
@@ -27,12 +28,17 @@ use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_http::HttpContext;
 
+/// Shared counter type for tracking active health check unhealthy events.
+type ActiveUnhealthyCounters = parking_lot::Mutex<std::collections::HashMap<String, u64>>;
+
 /// Metrics collected during a proxy request, emitted after completion.
 pub struct ProxyMetrics {
     /// Backends selected during load balancing.
     pub selected_backends: Vec<upstream::UpstreamInner>,
-    /// Backends marked as unhealthy due to failures.
+    /// Backends marked as unhealthy due to passive failures (request-time).
     pub unhealthy_backends: Vec<upstream::UpstreamInner>,
+    /// Backends marked as unhealthy due to active health check probes, with counts.
+    pub active_unhealthy_backends: Vec<(String, u64)>,
     /// Whether a pooled connection was reused.
     pub connection_reused: bool,
     /// TLS handshake failure count for this request.
@@ -56,6 +62,7 @@ impl ProxyMetrics {
         Self {
             selected_backends: Vec::new(),
             unhealthy_backends: Vec::new(),
+            active_unhealthy_backends: Vec::new(),
             connection_reused: false,
             tls_handshake_failures: 0,
             pool_waits: 0,
@@ -120,6 +127,14 @@ struct ProxyState {
     /// identity of the `LayeredConfiguration`. Config only changes on reload,
     /// so the parsed result can be reused indefinitely.
     parsed_configs: RwLock<HashMap<usize, Arc<ProxyConfig>>>,
+    /// Active health check state tracking per upstream URL.
+    active_health_check_state: upstream::HealthCheckStateMap,
+    /// Background health check task handles, keyed by configuration pointer.
+    /// Used to clean up tasks on reload.
+    health_check_tasks: RwLock<HashMap<usize, tokio::task::JoinHandle<()>>>,
+    /// Counters for active health check unhealthy events, keyed by configuration pointer.
+    #[allow(clippy::type_complexity)]
+    active_unhealthy_counters: RwLock<HashMap<usize, Arc<ActiveUnhealthyCounters>>>,
 }
 
 impl ProxyState {
@@ -132,6 +147,9 @@ impl ProxyState {
             conn_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
             lb_algorithms: RwLock::new(HashMap::new()),
             parsed_configs: RwLock::new(HashMap::new()),
+            active_health_check_state: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            health_check_tasks: RwLock::new(HashMap::new()),
+            active_unhealthy_counters: RwLock::new(HashMap::new()),
         }
     }
 
@@ -157,6 +175,64 @@ impl ProxyState {
         ));
         *guard = Some(Arc::clone(&cm));
         cm
+    }
+
+    /// Spawn health check task for the given config (idempotent).
+    ///
+    /// If a task is already running for this config, does nothing.
+    fn ensure_health_check_task(&self, config_key: usize, upstreams: &[upstream::Upstream]) {
+        // Check if task already exists
+        {
+            let guard = self.health_check_tasks.read();
+            if guard.contains_key(&config_key) {
+                return;
+            }
+        }
+
+        // Check if any upstream has health checks enabled
+        let has_health_checks = upstreams.iter().any(|u| match u {
+            upstream::Upstream::Static(cfg) => cfg.health_check_config.enabled,
+            #[cfg(feature = "srv-lookup")]
+            upstream::Upstream::Srv(_) => false, // SRV health checks not yet supported
+        });
+
+        if !has_health_checks {
+            return;
+        }
+
+        // Get the secondary runtime handle for spawning the health check task
+        let runtime_handle = match try_get_secondary_runtime_handle() {
+            Some(h) => h,
+            None => {
+                ferron_core::log_warn!(
+                    "Health check task not spawned — secondary runtime not yet available"
+                );
+                return;
+            }
+        };
+
+        // Spawn the health check task with a callback to update the shared counter
+        let counter: Arc<ActiveUnhealthyCounters> =
+            Arc::new(ActiveUnhealthyCounters::new(HashMap::new()));
+        let counter_clone = Arc::clone(&counter);
+        let task = health_check::spawn_health_check_task(
+            upstreams.to_vec(),
+            Arc::clone(&self.active_health_check_state),
+            Some(Arc::new(move |url: &str, _is_active: bool| {
+                let mut guard = counter_clone.lock();
+                *guard.entry(url.to_string()).or_insert(0) += 1;
+            })),
+            &runtime_handle,
+        );
+
+        // Store the counter so we can read it during request processing
+        {
+            let mut guard = self.active_unhealthy_counters.write();
+            guard.insert(config_key, counter);
+        }
+
+        let mut guard = self.health_check_tasks.write();
+        guard.insert(config_key, task);
     }
 }
 
@@ -302,6 +378,12 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 };
                 let mut guard = self.state.parsed_configs.write();
                 guard.insert(config_key, Arc::clone(&parsed));
+                drop(guard);
+
+                // Spawn health check task for this config if needed
+                self.state
+                    .ensure_health_check_task(config_key, &parsed.upstreams);
+
                 parsed
             }
         };
@@ -344,6 +426,12 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }
         };
 
+        // Get the active unhealthy counter for this config
+        let active_unhealthy_counter = {
+            let guard = self.state.active_unhealthy_counters.read();
+            guard.get(&config_key).cloned()
+        };
+
         let result = proxy::execute_proxy(
             ctx,
             &config,
@@ -351,6 +439,8 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             Arc::clone(&self.state.failed_backends),
             &algorithm,
             Some(&self.state.conn_state),
+            Some(&self.state.active_health_check_state),
+            active_unhealthy_counter.as_deref(),
         )
         .await;
 
@@ -396,9 +486,9 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                 }));
         }
 
-        // Emit per-backend unhealthy metrics
+        // Emit per-backend unhealthy metrics (passive failures)
         for backend in &metrics.unhealthy_backends {
-            let mut attrs = Vec::with_capacity(2);
+            let mut attrs = Vec::with_capacity(3);
             attrs.push((
                 "ferron.proxy.backend_url",
                 MetricAttributeValue::String(backend.proxy_to.clone()),
@@ -409,12 +499,39 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     MetricAttributeValue::String(unix_path.clone()),
                 ));
             }
+            attrs.push((
+                "ferron.proxy.health_check_type",
+                MetricAttributeValue::String("passive".to_string()),
+            ));
             ctx.events
                 .emit(ferron_observability::Event::Metric(MetricEvent {
                     name: "ferron.proxy.backends.unhealthy",
                     attributes: attrs,
                     ty: MetricType::Counter,
                     value: MetricValue::U64(1),
+                    unit: Some("{backend}"),
+                    description: Some("Number of health check failures for a backend server."),
+                }));
+        }
+
+        // Emit per-backend active health check unhealthy metrics
+        for (backend_url, count) in &metrics.active_unhealthy_backends {
+            let attrs = vec![
+                (
+                    "ferron.proxy.backend_url",
+                    MetricAttributeValue::String(backend_url.clone()),
+                ),
+                (
+                    "ferron.proxy.health_check_type",
+                    MetricAttributeValue::String("active".to_string()),
+                ),
+            ];
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.backends.unhealthy",
+                    attributes: attrs,
+                    ty: MetricType::Counter,
+                    value: MetricValue::U64(*count),
                     unit: Some("{backend}"),
                     description: Some("Number of health check failures for a backend server."),
                 }));

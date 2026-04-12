@@ -176,12 +176,69 @@ Ferron maintains a keep-alive connection pool for upstream backends. Key behavio
 
 ## Health checking
 
+### Passive health checking
+
 Passive health checking tracks connection failures per backend:
 
 1. Each failed connection increments a counter for that backend.
 2. If the counter exceeds `lb_health_check_max_fails` within `lb_health_check_window`, the backend is temporarily excluded from selection.
 3. After the window expires, the counter resets and the backend becomes eligible again.
 4. When `lb_retry_connection` is enabled and the selected backend fails, Ferron tries the next available backend.
+
+### Active health checking
+
+Active health checks proactively probe backend health on a schedule, independent of incoming traffic. This allows quick detection of backend failures before they affect client requests.
+
+#### Directives
+
+- `health_check [bool: boolean]` (`http-proxy`)
+  - This directive specifies whether active health checking is enabled for this upstream. Default: `health_check false`
+- `health_check_method <method: string>` (`http-proxy`)
+  - This directive specifies the HTTP method for probe requests. Supported values: `GET`, `HEAD`. Default: `health_check_method GET`
+- `health_check_uri <path: string>` (`http-proxy`)
+  - This directive specifies the endpoint to probe for health checks. Default: `health_check_uri /health`
+- `health_check_interval <duration: string>` (`http-proxy`)
+  - This directive specifies the interval between health check probes. Default: `health_check_interval 10s`
+- `health_check_timeout <duration: string>` (`http-proxy`)
+  - This directive specifies the maximum wait time for a probe response. Default: `health_check_timeout 5s`
+- `health_check_expect_status <status: string>` (`http-proxy`)
+  - This directive specifies the expected HTTP status code(s) for a successful probe. Supports: `2xx`, `3xx`, `2xx,3xx`, specific codes (`200,201`), or ranges (`200-299`). Default: `health_check_expect_status 2xx,3xx`
+- `health_check_response_time_threshold <duration: string>` (`http-proxy`)
+  - This directive specifies an optional response time threshold; if exceeded, the probe is marked unhealthy. Default: disabled
+- `health_check_body_match <substring: string>` (`http-proxy`)
+  - This directive specifies an optional substring to match in the response body (GET only). Default: disabled
+- `health_check_consecutive_fails <count: integer>` (`http-proxy`)
+  - This directive specifies the number of consecutive failures before marking an upstream as unhealthy. Default: `health_check_consecutive_fails 2`
+- `health_check_consecutive_passes <count: integer>` (`http-proxy`)
+  - This directive specifies the number of consecutive successes before marking an upstream as healthy when recovering. Default: `health_check_consecutive_passes 2`
+- `health_check_no_verification <boolean>` (`http-proxy`)
+  - This directive specifies whether TLS certificate verification should be skipped for HTTPS health check probes. When set to `true`, the health check will accept any TLS certificate without validation. Default: `health_check_no_verification false`
+
+**Configuration example:**
+
+```ferron
+example.com {
+    proxy {
+        upstream http://localhost:3000 {
+            health_check true
+            health_check_uri "/health"
+            health_check_interval 10s
+            health_check_timeout 5s
+            health_check_expect_status "200,204"
+            health_check_consecutive_fails 2
+            health_check_consecutive_passes 2
+        }
+        upstream https://localhost:3001 {
+            health_check true
+            health_check_uri "/api/status"
+            health_check_method HEAD
+            health_check_response_time_threshold 1s
+            health_check_no_verification true
+        }
+        lb_algorithm two_random
+    }
+}
+```
 
 ## Observability
 
@@ -190,12 +247,21 @@ Passive health checking tracks connection failures per backend:
 In addition to the existing proxy metrics (`ferron.proxy.backends.selected`, `ferron.proxy.backends.unhealthy`), the following metrics are emitted:
 
 - `ferron.proxy.requests` (Counter) — now includes the `http.response.status_code` and `ferron.proxy.status_code` attributes for upstream response tracking, in addition to `ferron.proxy.connection_reused`.
+- `ferron.proxy.backends.unhealthy` (Counter) — includes the `ferron.proxy.health_check_type` attribute to distinguish between `"passive"` (request-time failures) and `"active"` (health check probe failures).
 - `ferron.proxy.tls_handshake_failures` (Counter) — TLS handshake failures with upstream backends.
 - `ferron.proxy.pool.waits` (Counter) — times the connection pool was exhausted and a request had to wait.
 - `ferron.proxy.pool.wait_time` (Histogram) — duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s.
 
 ## Notes and troubleshooting
 
-- If you get 502 errors from backends, verify the `upstream` URLs are reachable and check `lb_health_check_max_fails` settings.
+- If you get 502 errors from backends, verify the `upstream` URLs are reachable and check passive health check settings (`lb_health_check_max_fails`).
+- For active health checks:
+  - Ensure the probe endpoint is configured and reachable on all backends (e.g., `/health` must return 2xx by default).
+  - If upstreams are incorrectly marked unhealthy, check logs for "marked unhealthy" messages and verify the `health_check_expect_status` and response times.
+  - Probe endpoints should be lightweight and low-latency to avoid impacting performance.
+  - Use HEAD requests when the response body is not needed for faster probes.
+  - Optional: Use `health_check_body_match` to ensure critical responses contain expected content (e.g., `"ok"` or `"healthy"`).
+  - For HTTPS probes with self-signed certificates, use `health_check_no_verification true` to skip TLS certificate validation.
+  - Both passive and active health checks work together: either can mark a backend as unhealthy.
 - For the global connection limit (`concurrent_conns`), see [Core directives](/docs/v3/configuration/core-directives#reverse-proxy-connection-limits).
 - For forward proxy configuration, see [Forward proxy](/docs/v3/configuration/http-fproxy).
