@@ -232,7 +232,9 @@ fn resolve_dot_segments(segments: &[String]) -> Result<Vec<String>, Canonicaliza
 /// - The special asterisk form `*` used for server-wide OPTIONS requests
 ///
 /// See `URL_CANONICALIZE_SPEC.md` for the full specification.
-pub fn canonicalize_path_routing(raw_path: &str) -> Result<(String, String), CanonicalizationError> {
+pub fn canonicalize_path_routing(
+    raw_path: &str,
+) -> Result<(String, String), CanonicalizationError> {
     // Step 0: Asterisk short-circuit
     if raw_path == "*" {
         return Ok(("*".to_owned(), "*".to_owned()));

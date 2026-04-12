@@ -22,8 +22,8 @@ use rustc_hash::FxHashMap;
 use typemap_rev::TypeMap;
 
 use crate::config::ThreeStageResolver;
-use crate::util::canonicalize_url::canonicalize_path;
 use crate::util::canonicalize_cache::canonicalize_path_routing_cached;
+use crate::util::canonicalize_url::canonicalize_path;
 use crate::util::error_pages::generate_default_error_page;
 
 const LOG_TARGET: &str = "ferron-http-server";
@@ -106,7 +106,8 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
 /// Cache for path canonicalization results.
 /// Keys: (canonical_root, request_path), Value: Timestamped<ResolvedHttpFile>
 /// TTL default: 100 milliseconds to balance performance with filesystem change detection.
-static PATH_RESOLVE_CACHE_TTL_MILLIS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(100);
+static PATH_RESOLVE_CACHE_TTL_MILLIS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(100);
 
 fn path_resolve_cache_ttl() -> Duration {
     Duration::from_millis(PATH_RESOLVE_CACHE_TTL_MILLIS.load(std::sync::atomic::Ordering::Relaxed))
@@ -671,7 +672,8 @@ async fn request_handler_inner(
     }
 
     // Decode location for configuration resolution (routing-only, compute forwarding lazily)
-    let (routing_str, _original_str) = match canonicalize_path_routing_cached(request.uri().path()) {
+    let (routing_str, _original_str) = match canonicalize_path_routing_cached(request.uri().path())
+    {
         Ok((routing, original)) => (routing, original),
         Err(e) => {
             emit_error(

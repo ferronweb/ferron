@@ -1,4 +1,3 @@
-
 /// Small bounded cache for routing-only canonicalization results.
 /// Key: raw request path string. Value: (routing_view, original)
 /// Bounded by approximate byte weight to avoid unbounded memory growth.
@@ -12,11 +11,12 @@ impl quick_cache::Weighter<String, (String, String)> for CanonicalizeCacheWeight
     }
 }
 
-static CANONICALIZE_CACHE: std::sync::LazyLock<quick_cache::sync::Cache<String, (String, String), CanonicalizeCacheWeighter>> =
-    std::sync::LazyLock::new(|| {
-        // Initial capacity 2048 entries, max weight ~4 MiB
-        quick_cache::sync::Cache::with_weighter(2048, 4 * 1024 * 1024, CanonicalizeCacheWeighter)
-    });
+static CANONICALIZE_CACHE: std::sync::LazyLock<
+    quick_cache::sync::Cache<String, (String, String), CanonicalizeCacheWeighter>,
+> = std::sync::LazyLock::new(|| {
+    // Initial capacity 2048 entries, max weight ~4 MiB
+    quick_cache::sync::Cache::with_weighter(2048, 4 * 1024 * 1024, CanonicalizeCacheWeighter)
+});
 
 /// Routing-only canonicalization with a bounded global cache.
 /// Returns (routing_view, original) on success.
