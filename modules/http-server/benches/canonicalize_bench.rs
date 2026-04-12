@@ -1,4 +1,5 @@
-use criterion::{criterion_group, criterion_main, Criterion, black_box};
+use std::hint::black_box;
+use criterion::{criterion_group, criterion_main, Criterion};
 
 use ferron_http_server::util::canonicalize_url::{canonicalize_path, canonicalize_path_routing};
 

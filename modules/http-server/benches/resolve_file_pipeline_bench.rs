@@ -1,9 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::fs;
-use std::sync::Arc;
 use std::hint::black_box;
+use std::sync::Arc;
 use vibeio::blocking::DefaultBlockingThreadPool;
-use std::path::PathBuf;
 
 fn bench_resolve_file_pipeline(c: &mut Criterion) {
     // Create a unique temporary directory for the bench
@@ -37,7 +36,12 @@ fn bench_resolve_file_pipeline(c: &mut Criterion) {
             b.iter(move || {
                 let value = value_outer.clone();
                 rt.block_on(async move {
-                    let res = ferron_http_server::bench_resolve_http_file_target(&*value, "/index.html", None).await;
+                    let res = ferron_http_server::bench_resolve_http_file_target(
+                        &*value,
+                        "/index.html",
+                        None,
+                    )
+                    .await;
                     black_box(res).ok();
                 });
             })
@@ -52,7 +56,12 @@ fn bench_resolve_file_pipeline(c: &mut Criterion) {
             b.iter(move || {
                 let value = value_outer.clone();
                 rt.block_on(async move {
-                    let res = ferron_http_server::bench_resolve_http_file_target(&*value, "/static/file.js", None).await;
+                    let res = ferron_http_server::bench_resolve_http_file_target(
+                        &*value,
+                        "/static/file.js",
+                        None,
+                    )
+                    .await;
                     black_box(res).ok();
                 });
             })

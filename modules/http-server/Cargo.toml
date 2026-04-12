@@ -42,3 +42,13 @@ criterion = { version = "0.8", features = ["html_reports"] }
 name = "resolver_bench"
 harness = false
 required-features = ["bench"]
+
+[[bench]]
+name = "canonicalize_bench"
+harness = false
+required-features = ["bench"]
+
+[[bench]]
+name = "resolve_file_pipeline_bench"
+harness = false
+required-features = ["bench"]
