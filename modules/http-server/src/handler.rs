@@ -22,6 +22,7 @@ use rustc_hash::FxHashMap;
 use typemap_rev::TypeMap;
 
 use crate::config::ThreeStageResolver;
+use crate::util::canonicalize_url::canonicalize_path;
 use crate::util::error_pages::generate_default_error_page;
 use crate::util::url_sanitizer::sanitize_url;
 
@@ -695,8 +696,8 @@ async fn request_handler_inner(
     }
 
     // Decode location for configuration resolution
-    let decoded_path = match urlencoding::decode(request.uri().path()) {
-        Ok(path) => path.into_owned(),
+    let decoded_path = match canonicalize_path(request.uri().path()) {
+        Ok(path) => path,
         Err(e) => {
             emit_error(
                 &events,
