@@ -141,7 +141,7 @@ pub fn canonicalize_path(input: &str) -> Result<String, CanonError> {
         if i > 0 {
             result.push('/');
         }
-        result.push_str(&str::from_utf8(seg).map_err(|_| CanonError::InvalidUtf8)?);
+        result.push_str(str::from_utf8(seg).map_err(|_| CanonError::InvalidUtf8)?);
     }
 
     Ok(result)

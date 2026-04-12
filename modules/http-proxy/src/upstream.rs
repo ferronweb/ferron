@@ -535,6 +535,7 @@ pub struct SelectedBackend {
 /// Returns the selected upstream and its connection tracker (if applicable).
 /// Filters out unhealthy backends when health checking is enabled, consulting
 /// both the passive failure cache and active health check state.
+#[allow(clippy::too_many_arguments)]
 pub fn determine_proxy_to(
     upstreams: &[UpstreamInner],
     failed_backends: &RwLock<TtlCache<UpstreamInner, u64>>,
