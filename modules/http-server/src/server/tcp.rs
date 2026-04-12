@@ -505,7 +505,7 @@ fn build_tcp_listener(
     }
 
     listener_socket.bind(&address.into())?;
-    listener_socket.listen(backlog.unwrap_or(1024))?;
+    listener_socket.listen(backlog.unwrap_or(-1))?;
 
     Ok(listener_socket.into())
 }

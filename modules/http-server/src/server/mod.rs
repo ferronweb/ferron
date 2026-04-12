@@ -468,7 +468,10 @@ impl BasicHttpModule {
             .unwrap_or_else(Pipeline::new);
 
         // Optional: allow configuring path resolve cache TTL via `http.path_resolve_cache_ttl_ms`
-        if let Ok(Some(ms)) = resolve_http_u32(http_config(global_config.as_ref()), "path_resolve_cache_ttl_ms") {
+        if let Ok(Some(ms)) = resolve_http_u32(
+            http_config(global_config.as_ref()),
+            "path_resolve_cache_ttl_ms",
+        ) {
             // Set global TTL (milliseconds) used by the path resolution cache.
             crate::handler::set_path_resolve_cache_ttl_millis(ms as u64);
         }

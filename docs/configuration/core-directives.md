@@ -77,6 +77,8 @@ Notes:
   - This directive specifies the TCP send buffer size. Must resolve to a non-negative integer at runtime. Default: OS default
 - `recv_buf <size: integer>`
   - This directive specifies the TCP receive buffer size. Must resolve to a non-negative integer at runtime. Default: OS default
+- `backlog <size: integer>`
+  - This directive specifies the maximum number of pending connections allowed on the listener socket. Default: `-1` (unlimited)
 
 **Configuration example:**
 
