@@ -14,6 +14,7 @@
 
 ### Changed
 
+- Improved the request URL normalization.
 - Requests with multiple Host headers are now rejected.
 
 ### Fixed
