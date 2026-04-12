@@ -1,8 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::fs;
-use std::path::PathBuf;
+use std::sync::Arc;
 use std::hint::black_box;
 use vibeio::blocking::DefaultBlockingThreadPool;
+use std::path::PathBuf;
 
 fn bench_resolve_file_pipeline(c: &mut Criterion) {
     // Create a unique temporary directory for the bench
@@ -26,25 +27,33 @@ fn bench_resolve_file_pipeline(c: &mut Criterion) {
         .build()
         .expect("failed to create vibeio runtime");
 
-    let root_path = tmp_base.clone();
+    let root_path = Arc::new(tmp_base.clone());
 
-    c.bench_function("resolve_index_file", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                let res = ferron_http_server::bench_resolve_http_file_target(&root_path, "/index.html", None).await;
-                black_box(res).ok();
-            });
-        })
-    });
+    {
+        let rt = &rt;
+        let root = root_path.clone();
+        c.bench_function("resolve_index_file", move |b| {
+            b.iter(|| {
+                rt.block_on(async {
+                    let res = ferron_http_server::bench_resolve_http_file_target(&*root, "/index.html", None).await;
+                    black_box(res).ok();
+                });
+            })
+        });
+    }
 
-    c.bench_function("resolve_nested_file", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                let res = ferron_http_server::bench_resolve_http_file_target(&root_path, "/static/file.js", None).await;
-                black_box(res).ok();
-            });
-        })
-    });
+    {
+        let rt = &rt;
+        let root = root_path.clone();
+        c.bench_function("resolve_nested_file", move |b| {
+            b.iter(|| {
+                rt.block_on(async {
+                    let res = ferron_http_server::bench_resolve_http_file_target(&*root, "/static/file.js", None).await;
+                    black_box(res).ok();
+                });
+            })
+        });
+    }
 }
 
 criterion_group!(benches, bench_resolve_file_pipeline);
