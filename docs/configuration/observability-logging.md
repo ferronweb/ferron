@@ -110,65 +110,15 @@ Request headers are available via the `%{Header-Name}i` syntax. The header name 
 
 ### Metrics
 
-The HTTP server emits the following OpenTelemetry-style metrics via the observability event system:
+Ferron emits OpenTelemetry-style metrics through the observability event system. Each module documents its own metrics:
 
-| Metric | Type | Unit | Description |
-| --- | --- | --- | --- |
-| `http.server.active_requests` | UpDownCounter | `{request}` | Number of active HTTP requests. |
-| `http.server.request.duration` | Histogram | `s` | Duration of HTTP requests. |
-| `ferron.http.server.request_count` | Counter | `{request}` | Total number of HTTP requests completed. |
-
-All metrics include attributes for `http.request.method`, `url.scheme`, `network.protocol.name`, and `network.protocol.version`. The `http.server.request.duration` and `ferron.http.server.request_count` metrics also include `http.response.status_code` and `error.type` (for 4xx/5xx responses).
-
-#### Rate limiting metrics
-
-The `http-ratelimit` module emits counters for allowed and rejected requests:
-
-| Metric | Type | Description | Attributes |
-| --- | --- | --- | --- |
-| `ferron.ratelimit.allowed` | Counter | Requests that passed rate limiting. | `ferron.ratelimit.key_type`: `"ip"`, `"header"`, or `"uri"` |
-| `ferron.ratelimit.rejected` | Counter | Requests rejected due to exhausted rate limit buckets or registry at capacity. | `ferron.ratelimit.key_type`: `"ip"`, `"header"`, or `"uri"` |
-
-#### Response control metrics
-
-The `http-response` module emits metrics for security and policy enforcement:
-
-| Metric | Type | Description | Attributes |
-| --- | --- | --- | --- |
-| `ferron.response.aborted` | Counter | Connections aborted via the `abort` directive. | _none_ |
-| `ferron.response.ip_blocked` | Counter | Connections blocked via `block`/`allow` directives. | _none_ (raw IPs are not included in metrics) |
-| `ferron.response.status_rule_matched` | Counter | Custom status codes returned via the `status` directive. | `http.response.status_code`, `ferron.rule_id` |
-
-#### Static file metrics
-
-The `http-static` module emits metrics for file serving:
-
-| Metric | Type | Unit | Description | Attributes |
-| --- | --- | --- | --- | --- |
-| `ferron.static.files_served` | Counter | `{file}` | Number of static files served. | `ferron.compression`: `"identity"`, `"gzip"`, `"br"`, `"deflate"`, `"zstd"`; `ferron.cache_hit`: `"true"` or `"false"` |
-| `ferron.static.bytes_sent` | Histogram | `By` | Bytes sent for static file responses. Buckets: 1KB, 10KB, 100KB, 1MB, 10MB, 100MB. | Same as above |
-
-#### Rewrite metrics
-
-The `http-rewrite` module emits counters for URL rewrites:
-
-| Metric | Type | Description | Attributes |
-| --- | --- | --- | --- |
-| `ferron.rewrite.rewrites_applied` | Counter | URLs successfully rewritten. | _none_ |
-| `ferron.rewrite.invalid` | Counter | Rewrite rules that resulted in an invalid path (400 response). | _none_ |
-
-#### Proxy metrics
-
-The `http-proxy` module emits the following metrics:
-
-| Metric | Type | Unit | Description | Attributes |
-| --- | --- | --- | --- | --- |
-| `ferron.proxy.backends.selected` | Counter | `{backend}` | Backends selected during load balancing. | Backend URL/unix path |
-| `ferron.proxy.backends.unhealthy` | Counter | `{backend}` | Backends marked as unhealthy. | Backend URL/unix path |
-| `ferron.proxy.requests` | Counter | `{request}` | Upstream proxy requests completed. | `ferron.proxy.connection_reused`: `true`/`false`; `http.response.status_code`; `ferron.proxy.status_code` |
-| `ferron.proxy.tls_handshake_failures` | Counter | `{handshake}` | TLS handshake failures with upstream backends. | _none_ |
-| `ferron.proxy.pool.waits` | Counter | `{wait}` | Times the connection pool was exhausted and a request had to wait. | _none_ |
-| `ferron.proxy.pool.wait_time` | Histogram | `s` | Duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s. | _none_ |
+- **Core HTTP server metrics** — active requests, request duration, and request count. See [HTTP host directives](/docs/v3/configuration/http-host#metrics).
+- **Rate limiting metrics** — allowed and rejected requests. See [Rate limiting](/docs/v3/configuration/http-ratelimit#metrics).
+- **Response control metrics** — aborted connections, IP blocks, and status rule matches. See [HTTP response control](/docs/v3/configuration/http-response#metrics).
+- **Static file metrics** — files served and bytes sent, with compression and cache hit attributes. See [Static file serving](/docs/v3/configuration/static-content#metrics).
+- **Rewrite metrics** — applied rewrites and invalid rewrite errors. See [URL rewriting](/docs/v3/configuration/http-rewrite#metrics).
+- **Proxy metrics** — backend selection, health, connection pooling, and TLS failures. See [Reverse proxying](/docs/v3/configuration/reverse-proxying#metrics).
+- **Process metrics** — CPU time, CPU utilization, and memory usage from `/proc/self/stat`. See [Process metrics](#process-metrics) below.
 
 #### Process metrics
 
@@ -176,12 +126,12 @@ The `observability-process-metrics` module collects process-level metrics automa
 
 **Platform support:** Linux only. On other platforms, the module is a no-op.
 
-| Metric | Type | Unit | Description | Attributes |
-| --- | --- | --- | --- | --- |
-| `process.cpu.time` | Counter | `s` | Total CPU seconds broken down by different states. | `cpu.mode`: `"user"` or `"system"` |
-| `process.cpu.utilization` | Gauge | `1` | CPU utilization since the last measurement. | `cpu.mode`: `"user"` or `"system"` |
-| `process.memory.usage` | UpDownCounter | `By` | The change in physical memory (RSS) since the last measurement. | _none_ |
-| `process.memory.virtual` | UpDownCounter | `By` | The change in committed virtual memory (VMS) since the last measurement. | _none_ |
+- `process.cpu.time` (Counter) — total CPU seconds broken down by different states.
+  - Attributes: `cpu.mode` (`"user"` or `"system"`)
+- `process.cpu.utilization` (Gauge) — CPU utilization since the last measurement.
+  - Attributes: `cpu.mode` (`"user"` or `"system"`)
+- `process.memory.usage` (UpDownCounter) — the change in physical memory (RSS) since the last measurement.
+- `process.memory.virtual` (UpDownCounter) — the change in committed virtual memory (VMS) since the last measurement.
 
 ### Tracing
 

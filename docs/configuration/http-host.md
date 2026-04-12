@@ -159,6 +159,16 @@ For session ticket keys, see [TLS session ticket keys](/docs/v3/configuration/tl
 - `admin_email <email: string>`
   - This directive specifies the server administrator's email address. Used in built-in error responses. Interpolation is supported. Default: none
 
+### Metrics
+
+The HTTP server emits the following OpenTelemetry-style metrics via the observability event system:
+
+- `http.server.active_requests` (UpDownCounter) — number of active HTTP requests.
+- `http.server.request.duration` (Histogram) — duration of HTTP requests in seconds.
+- `ferron.http.server.request_count` (Counter) — total number of HTTP requests completed.
+
+All metrics include attributes for `http.request.method`, `url.scheme`, `network.protocol.name`, and `network.protocol.version`. The `http.server.request.duration` and `ferron.http.server.request_count` metrics also include `http.response.status_code` and `error.type` (for 4xx/5xx responses).
+
 ## Notes and troubleshooting
 
 - These directives are host-scoped rather than global.

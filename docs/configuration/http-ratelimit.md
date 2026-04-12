@@ -128,8 +128,9 @@ Limits login to 3 requests burst, then 2/second. Returns 429 when exceeded.
 The rate limiting module emits the following metrics:
 
 - `ferron.ratelimit.allowed` (Counter) — requests that passed rate limiting.
+  - Attributes: `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`)
 - `ferron.ratelimit.rejected` (Counter) — requests rejected due to exhausted buckets or registry at capacity.
-  - Both include the `ferron.ratelimit.key_type` attribute: `"ip"`, `"header"`, or `"uri"`.
+  - Attributes: `ferron.ratelimit.key_type` (`"ip"`, `"header"`, or `"uri"`)
 
 ### Logs
 

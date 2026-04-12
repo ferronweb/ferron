@@ -244,10 +244,14 @@ example.com {
 
 ### Metrics
 
-In addition to the existing proxy metrics (`ferron.proxy.backends.selected`, `ferron.proxy.backends.unhealthy`), the following metrics are emitted:
+The proxy module emits the following metrics:
 
-- `ferron.proxy.requests` (Counter) — now includes the `http.response.status_code` and `ferron.proxy.status_code` attributes for upstream response tracking, in addition to `ferron.proxy.connection_reused`.
-- `ferron.proxy.backends.unhealthy` (Counter) — includes the `ferron.proxy.health_check_type` attribute to distinguish between `"passive"` (request-time failures) and `"active"` (health check probe failures).
+- `ferron.proxy.backends.selected` (Counter) — backends selected during load balancing.
+  - Attributes: backend URL or unix socket path
+- `ferron.proxy.backends.unhealthy` (Counter) — backends marked as unhealthy.
+  - Attributes: backend URL or unix socket path; `ferron.proxy.health_check_type` (`"passive"` for request-time failures, `"active"` for health check probe failures)
+- `ferron.proxy.requests` (Counter) — upstream proxy requests completed.
+  - Attributes: `ferron.proxy.connection_reused` (`true`/`false`), `http.response.status_code`, `ferron.proxy.status_code`
 - `ferron.proxy.tls_handshake_failures` (Counter) — TLS handshake failures with upstream backends.
 - `ferron.proxy.pool.waits` (Counter) — times the connection pool was exhausted and a request had to wait.
 - `ferron.proxy.pool.wait_time` (Histogram) — duration spent waiting for a pooled connection. Buckets: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s.
