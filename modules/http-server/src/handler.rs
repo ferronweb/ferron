@@ -1616,6 +1616,18 @@ fn normalize_host_header(
     Ok(())
 }
 
+#[cfg(any(test, feature = "bench"))]
+pub async fn bench_resolve_http_file_target(
+    root_path: &std::path::Path,
+    request_path: &str,
+    index_files: Option<&[String]>,
+) -> Result<bool, String> {
+    match resolve_http_file_target(root_path, request_path, index_files).await {
+        Ok(opt) => Ok(opt.is_some()),
+        Err(e) => Err(format!("{:?}", e)),
+    }
+}
+
 /// Get a nested boolean value from an HTTP configuration block.
 ///
 /// Looks up `http.<directive>` within the given configuration block

@@ -22,3 +22,6 @@ mod util;
 mod validator;
 
 pub use loader::BasicHttpModuleLoader;
+
+#[cfg(any(test, feature = "bench"))]
+pub use handler::bench_resolve_http_file_target;
