@@ -22,7 +22,7 @@ use rustc_hash::FxHashMap;
 use typemap_rev::TypeMap;
 
 use crate::config::ThreeStageResolver;
-use crate::util::canonicalize_url::canonicalize_path;
+use crate::util::canonicalize_url::{canonicalize_path, canonicalize_path_routing};
 use crate::util::error_pages::generate_default_error_page;
 
 const LOG_TARGET: &str = "ferron-http-server";
@@ -661,9 +661,9 @@ async fn request_handler_inner(
         );
     }
 
-    // Decode location for configuration resolution
-    let decoded_path = match canonicalize_path(request.uri().path()) {
-        Ok(path) => path,
+    // Decode location for configuration resolution (routing-only, compute forwarding lazily)
+    let (routing_str, _original_str) = match canonicalize_path_routing(request.uri().path()) {
+        Ok((routing, original)) => (routing, original),
         Err(e) => {
             emit_error(
                 &events,
@@ -701,31 +701,65 @@ async fn request_handler_inner(
         .and_then(|g| get_http_nested_boolean(&g, "url_sanitize"))
         .unwrap_or(true);
     if url_sanitize_enabled {
-        if let Err(e) = sanitize_request_url(&mut request, &decoded_path.forwarding) {
-            emit_error(&events, format!("URL sanitization error: {}", e));
-            if let Some(response) = execute_error_pipeline(
-                error_pipeline.as_ref(),
-                400,
-                None,
-                LayeredConfiguration::default(),
-                &events,
-            )
-            .await
-            {
-                return (Ok(response), None, None);
+        // Compute full canonicalized path (forwarding) only when sanitization is enabled.
+        match canonicalize_path(request.uri().path()) {
+            Ok(full_path) => {
+                if let Err(e) = sanitize_request_url(&mut request, &full_path.forwarding) {
+                    emit_error(&events, format!("URL sanitization error: {}", e));
+                    if let Some(response) = execute_error_pipeline(
+                        error_pipeline.as_ref(),
+                        400,
+                        None,
+                        LayeredConfiguration::default(),
+                        &events,
+                    )
+                    .await
+                    {
+                        return (Ok(response), None, None);
+                    }
+                    return (
+                        Ok(builtin_error_response(
+                            400,
+                            None,
+                            config_resolver.global().and_then(|g| {
+                                g.get_value("admin_email")
+                                    .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                            }),
+                        )),
+                        None,
+                        None,
+                    );
+                }
             }
-            return (
-                Ok(builtin_error_response(
+            Err(e) => {
+                emit_error(
+                    &events,
+                    format!("Invalid request URL percent-encoding: {}", e),
+                );
+                if let Some(response) = execute_error_pipeline(
+                    error_pipeline.as_ref(),
                     400,
                     None,
-                    config_resolver.global().and_then(|g| {
-                        g.get_value("admin_email")
-                            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
-                    }),
-                )),
-                None,
-                None,
-            );
+                    LayeredConfiguration::default(),
+                    &events,
+                )
+                .await
+                {
+                    return (Ok(response), None, None);
+                }
+                return (
+                    Ok(builtin_error_response(
+                        400,
+                        None,
+                        config_resolver.global().and_then(|g| {
+                            g.get_value("admin_email")
+                                .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                        }),
+                    )),
+                    None,
+                    None,
+                );
+            }
         }
     }
 
@@ -746,7 +780,7 @@ async fn request_handler_inner(
     let resolution = config_resolver.resolve(
         local_address.ip(),
         hostname.as_deref().unwrap_or(""),
-        &decoded_path.routing,
+        &routing_str,
         &resolver_variables,
     );
     let request = resolver_variables.0;
@@ -819,7 +853,7 @@ async fn request_handler_inner(
         variables: variables.into_iter().collect(),
         previous_error: None,
         original_uri: Option::from(request_uri),
-        routing_uri: decoded_path.routing.parse().ok(),
+        routing_uri: routing_str.parse().ok(),
         encrypted,
         local_address,
         remote_address,
@@ -852,7 +886,7 @@ async fn request_handler_inner(
                 let error_resolution = config_resolver.resolve_error_scoped(
                     local_address.ip(),
                     ctx.hostname.as_deref().unwrap_or(""),
-                    &decoded_path.routing,
+                    &routing_str,
                     status,
                     &error_resolver_variables,
                 );

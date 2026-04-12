@@ -166,6 +166,39 @@ fn decode_segment(segment: &str) -> (String, String) {
     (routing, forwarding)
 }
 
+/// Decode only routing view of a single segment (no forwarding allocation).
+fn decode_segment_routing(segment: &str) -> String {
+    if !segment.contains('%') {
+        return segment.to_owned();
+    }
+
+    let bytes = segment.as_bytes();
+    let mut routing = String::with_capacity(segment.len());
+
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let h1 = bytes[i + 1];
+            let h2 = bytes[i + 2];
+            let value = (hex_value(h1) << 4) | hex_value(h2);
+
+            if is_unreserved(value) {
+                routing.push(value as char);
+            } else {
+                routing.push('%');
+                routing.push(h1.to_ascii_uppercase() as char);
+                routing.push(h2.to_ascii_uppercase() as char);
+            }
+            i += 3;
+        } else {
+            routing.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+
+    routing
+}
+
 /// Resolves dot-segments from a list of decoded segments using a stack.
 ///
 /// - `.` and empty segments are skipped.
@@ -190,6 +223,77 @@ fn resolve_dot_segments(segments: &[String]) -> Result<Vec<String>, Canonicaliza
     }
 
     Ok(stack)
+}
+
+/// Canonicalizes a raw HTTP request target path.
+///
+/// Supports:
+/// - Absolute paths beginning with `/`
+/// - The special asterisk form `*` used for server-wide OPTIONS requests
+///
+/// See `URL_CANONICALIZE_SPEC.md` for the full specification.
+pub fn canonicalize_path_routing(raw_path: &str) -> Result<(String, String), CanonicalizationError> {
+    // Step 0: Asterisk short-circuit
+    if raw_path == "*" {
+        return Ok(("*".to_owned(), "*".to_owned()));
+    }
+
+    // Step 1: Syntax validation
+    if !raw_path.starts_with('/') {
+        return Err(CanonicalizationError::MalformedPath);
+    }
+
+    // Reject null bytes and control characters
+    for &b in raw_path.as_bytes() {
+        if b == 0 || b < 0x20 || b == 0x7F {
+            return Err(CanonicalizationError::MalformedPath);
+        }
+    }
+
+    // Step 2: Structural segmentation (split on literal '/')
+    let segments: Vec<&str> = raw_path.split('/').collect();
+
+    // Track trailing slash: present if path ends with `/` and is not just `/`
+    let trailing_slash = raw_path.ends_with('/') && raw_path != "/";
+
+    // Step 3: Per-segment validation and decoding (routing only)
+    let mut routing_segments: Vec<String> = Vec::with_capacity(segments.len());
+
+    for (idx, segment) in segments.iter().enumerate() {
+        // The first segment is always empty (before the leading `/`)
+        if idx == 0 {
+            // Validate encoding even for the empty first segment
+            validate_segment_encoding(segment)?;
+            routing_segments.push(String::new());
+            continue;
+        }
+
+        // Validate percent-encoding
+        validate_segment_encoding(segment)?;
+
+        // Decode segment for routing view only
+        let decoded = decode_segment_routing(segment);
+        routing_segments.push(decoded);
+    }
+
+    // Step 4: Dot-segment resolution (skip the first empty segment representing root)
+    let dot_segments = &routing_segments[1..];
+    let resolved = resolve_dot_segments(dot_segments)?;
+
+    // Step 5: Canonical reconstruction (routing only)
+    let mut routing = String::with_capacity(raw_path.len());
+    routing.push('/');
+    for (i, seg) in resolved.iter().enumerate() {
+        if i > 0 {
+            routing.push('/');
+        }
+        routing.push_str(seg);
+    }
+    if trailing_slash && routing != "/" {
+        routing.push('/');
+    }
+
+    Ok((routing, raw_path.to_owned()))
 }
 
 /// Canonicalizes a raw HTTP request target path.
