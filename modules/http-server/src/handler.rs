@@ -694,6 +694,40 @@ async fn request_handler_inner(
         }
     }
 
+    // Decode location for configuration resolution
+    let decoded_path = match urlencoding::decode(request.uri().path()) {
+        Ok(path) => path.into_owned(),
+        Err(e) => {
+            emit_error(
+                &events,
+                format!("Invalid request URL percent-encoding: {}", e),
+            );
+            if let Some(response) = execute_error_pipeline(
+                error_pipeline.as_ref(),
+                400,
+                None,
+                LayeredConfiguration::default(),
+                &events,
+            )
+            .await
+            {
+                return (Ok(response), None, None);
+            }
+            return (
+                Ok(builtin_error_response(
+                    400,
+                    None,
+                    config_resolver.global().and_then(|g| {
+                        g.get_value("admin_email")
+                            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                    }),
+                )),
+                None,
+                None,
+            );
+        }
+    };
+
     let mut variables = HashMap::with_capacity(6);
     if let Some(hostname) = hostname.as_ref() {
         variables.insert("request.host".to_string(), hostname.clone());
@@ -711,7 +745,7 @@ async fn request_handler_inner(
     let resolution = config_resolver.resolve(
         local_address.ip(),
         hostname.as_deref().unwrap_or(""),
-        resolver_variables.0.uri().path(),
+        &decoded_path,
         &resolver_variables,
     );
     let request = resolver_variables.0;
@@ -816,6 +850,7 @@ async fn request_handler_inner(
                 let error_resolution = config_resolver.resolve_error_scoped(
                     local_address.ip(),
                     ctx.hostname.as_deref().unwrap_or(""),
+                    &decoded_path,
                     status,
                     &error_resolver_variables,
                 );

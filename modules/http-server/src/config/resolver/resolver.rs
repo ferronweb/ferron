@@ -475,12 +475,14 @@ impl ThreeStageResolver {
     /// # Arguments
     /// * `ip` - Client IP address for Stage 1
     /// * `hostname` - Request hostname for Stage 2
+    /// * `path` - Request path for Stage 2
     /// * `error_code` - Error code for Stage 3
     /// * `variables` - Variables for conditional evaluation
     pub fn resolve_error(
         &self,
         ip: IpAddr,
         hostname: &str,
+        path: &str,
         error_code: u16,
         variables: &ResolverVariables,
     ) -> Option<ResolutionResult> {
@@ -494,7 +496,7 @@ impl ThreeStageResolver {
         // Stage 2: Hostname, path, and conditional resolution
         let (stage2_config, stage2_path) = self.stage2_radix.resolve(
             Some(hostname),
-            "/",
+            path,
             Arc::clone(host_config_arc),
             variables,
             None,
@@ -541,12 +543,14 @@ impl ThreeStageResolver {
     /// # Arguments
     /// * `ip` - Client IP address for Stage 1
     /// * `hostname` - Request hostname for Stage 2
+    /// * `path` - Request path for Stage 2
     /// * `error_code` - Error code for Stage 3
     /// * `variables` - Variables for conditional evaluation
     pub fn resolve_error_scoped(
         &self,
         ip: IpAddr,
         hostname: &str,
+        path: &str,
         error_code: u16,
         variables: &ResolverVariables,
     ) -> Option<ResolutionResult> {
@@ -560,7 +564,7 @@ impl ThreeStageResolver {
         // Stage 2: Hostname, path, and conditional resolution
         let (stage2_config, stage2_path) = self.stage2_radix.resolve(
             Some(hostname),
-            "/",
+            path,
             Arc::clone(host_config_arc),
             variables,
             None,
@@ -1983,6 +1987,7 @@ mod tests {
         let result_api = resolver.resolve_error_scoped(
             "192.168.1.1".parse().unwrap(),
             "api.com",
+            "/",
             404,
             &variables,
         );
@@ -1990,6 +1995,7 @@ mod tests {
         let result_web = resolver.resolve_error_scoped(
             "192.168.1.1".parse().unwrap(),
             "web.com",
+            "/",
             404,
             &variables,
         );
