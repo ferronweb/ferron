@@ -15,6 +15,9 @@ mod handler;
 mod loader;
 mod server;
 mod stages;
+#[cfg(any(test, feature = "bench"))]
+pub mod util;
+#[cfg(not(any(test, feature = "bench")))]
 mod util;
 mod validator;
 
