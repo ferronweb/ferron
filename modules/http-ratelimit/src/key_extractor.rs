@@ -49,7 +49,10 @@ impl KeyExtractor {
     pub fn extract(&self, ctx: &HttpContext) -> Option<String> {
         match self {
             KeyExtractor::RemoteAddress => Some(ctx.remote_address.ip().to_string()),
-            KeyExtractor::Uri => ctx.req.as_ref().map(|r| r.uri().path().to_string()),
+            KeyExtractor::Uri => match &ctx.routing_uri {
+                Some(uri) => Some(uri.path().to_string()),
+                None => ctx.req.as_ref().map(|r| r.uri().path().to_string()),
+            },
             KeyExtractor::Header(name) => ctx.req.as_ref().and_then(|r| {
                 r.headers()
                     .get(name.as_str())
@@ -93,6 +96,7 @@ mod tests {
             variables: FxHashMap::default(),
             previous_error: None,
             original_uri: None,
+            routing_uri: None,
             encrypted: false,
             local_address: "0.0.0.0:80".parse().unwrap(),
             remote_address: "192.0.2.1:12345".parse().unwrap(),
@@ -145,6 +149,15 @@ mod tests {
         let ctx = make_test_context(vec![]);
         let extractor = KeyExtractor::Uri;
         assert_eq!(extractor.extract(&ctx), Some("/api/v1/users".to_string()));
+    }
+
+    #[test]
+    fn extract_uri_uses_routing_uri_over_req() {
+        // routing_uri should take precedence when set
+        let mut ctx = make_test_context(vec![]);
+        ctx.routing_uri = Some("/canonical/path".parse().unwrap());
+        let extractor = KeyExtractor::Uri;
+        assert_eq!(extractor.extract(&ctx), Some("/canonical/path".to_string()));
     }
 
     #[test]

@@ -240,7 +240,12 @@ impl Stage<HttpContext> for HttpCacheStage {
             .path_and_query()
             .map(|value| value.as_str().to_string())
             .unwrap_or_else(|| request.uri().path().to_string());
-        let base_key = build_base_key(ctx.encrypted, &request_headers, request.uri());
+        let base_key = build_base_key(
+            ctx.encrypted,
+            &request_headers,
+            ctx.routing_uri.as_ref(),
+            request.uri(),
+        );
         let private_key = Some(build_private_cache_key(
             &request_cookies,
             ctx.remote_address.ip(),
@@ -546,7 +551,13 @@ fn build_cached_response(
         .map_err(|error| PipelineError::custom(error.to_string()))
 }
 
-fn build_base_key(encrypted: bool, headers: &HeaderMap, uri: &http::Uri) -> String {
+fn build_base_key(
+    encrypted: bool,
+    headers: &HeaderMap,
+    routing_uri: Option<&http::Uri>,
+    fallback_uri: &http::Uri,
+) -> String {
+    let uri = routing_uri.unwrap_or(fallback_uri);
     let scheme = if encrypted { "https" } else { "http" };
     let host = headers
         .get(header::HOST)
@@ -790,6 +801,7 @@ mod tests {
             variables: FxHashMap::default(),
             previous_error: None,
             original_uri: None,
+            routing_uri: None,
             encrypted: true,
             local_address: "127.0.0.1:443".parse::<SocketAddr>().unwrap(),
             remote_address: "127.0.0.2:12345".parse::<SocketAddr>().unwrap(),
@@ -827,7 +839,21 @@ mod tests {
     fn base_key_uses_scheme_host_and_path() {
         let ctx = test_context("/test?q=1");
         let request = ctx.req.as_ref().unwrap();
-        let key = build_base_key(ctx.encrypted, request.headers(), request.uri());
+        let key = build_base_key(ctx.encrypted, request.headers(), None, request.uri());
         assert_eq!(key, "https://example.com/test?q=1");
+    }
+
+    #[test]
+    fn base_key_prefers_routing_uri() {
+        let mut ctx = test_context("/rewritten/path");
+        ctx.routing_uri = Some("/canonical/path".parse().unwrap());
+        let request = ctx.req.as_ref().unwrap();
+        let key = build_base_key(
+            ctx.encrypted,
+            request.headers(),
+            ctx.routing_uri.as_ref(),
+            request.uri(),
+        );
+        assert_eq!(key, "https://example.com/canonical/path");
     }
 }

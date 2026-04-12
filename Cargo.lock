@@ -1265,7 +1265,6 @@ dependencies = [
 name = "ferron-http-buffer"
 version = "3.0.0-alpha.1"
 dependencies = [
- "anyhow",
  "async-trait",
  "bytes",
  "ferron-core",
@@ -1422,7 +1421,6 @@ dependencies = [
 name = "ferron-http-replace"
 version = "3.0.0-alpha.1"
 dependencies = [
- "anyhow",
  "async-trait",
  "bytes",
  "ferron-core",
@@ -1494,14 +1492,11 @@ dependencies = [
  "http",
  "http-body-util",
  "parking_lot",
- "percent-encoding",
  "ppp",
  "quick_cache",
  "rustc-hash",
  "rustls",
- "smallvec",
  "socket2",
- "thiserror 2.0.18",
  "tokio",
  "tokio-rustls",
  "tokio-util",

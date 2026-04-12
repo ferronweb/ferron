@@ -1,413 +1,512 @@
-use thiserror::Error;
+use std::fmt;
 
-#[derive(Debug, Error)]
-pub enum CanonError {
-    #[error("empty path")]
-    EmptyPath,
+/// Authoritative semantic path for routing, ACLs, cache keys, and scope checks.
+#[derive(Debug, PartialEq)]
+pub struct CanonicalizedPath {
+    /// Authoritative semantic path for routing, ACLs, cache keys, and scope checks.
+    ///
+    /// For `"*"` input: exactly `"*"`
+    /// For `"/"` paths:
+    /// - Unreserved characters decoded
+    /// - Reserved characters preserved as encoded
+    /// - Dot-segments resolved
+    /// - Root escape rejected
+    /// - Trailing slash preserved
+    pub routing: String,
 
-    #[error("invalid percent encoding")]
-    InvalidPercentEncoding,
+    /// Wire-safe serialization for upstream HTTP request line or `:path`.
+    ///
+    /// For `"*"` input: exactly `"*"`
+    /// For `"/"` paths:
+    /// - Derived from the same canonical segment structure as `routing`
+    /// - Reserved characters remain encoded
+    /// - Hex digits uppercased for determinism
+    /// - Trailing slash preserved
+    ///
+    /// Do not parse this value for security decisions.
+    pub forwarding: String,
 
-    #[error("invalid utf-8 after decoding")]
-    InvalidUtf8,
-
-    #[error("encoded reserved character in path: {0}")]
-    EncodedReserved(u8),
+    /// Untouched client input for audit logging, HMAC verification, and debugging.
+    /// Never use for routing, ACLs, or cache keys.
+    pub original: String,
 }
 
-/// Reserved characters that MUST NOT appear via decoding in routing layer.
-/// We forbid them because they affect structure.
-#[inline]
-fn is_reserved(b: u8) -> bool {
-    matches!(b, b'/' | b'\\' | b'?' | b'#')
+/// Errors that can occur during path canonicalization.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CanonicalizationError {
+    /// Input does not start with `/` or contains invalid characters.
+    MalformedPath,
+    /// Malformed percent-encoding such as `%`, `%G`, `%2`, or incomplete triplets.
+    MalformedPercent,
+    /// Dot-segment resolution would escape above root (e.g., `/../admin`).
+    RootEscape,
+    /// Excessive nested encoding such as `%25xx` that would create a second decoding layer.
+    ExcessiveEncoding,
 }
 
-/// Convert two hex chars into a byte
-#[inline]
-fn hex_pair(a: u8, b: u8) -> Result<u8, CanonError> {
-    fn val(c: u8) -> Option<u8> {
-        match c {
-            b'0'..=b'9' => Some(c - b'0'),
-            b'a'..=b'f' => Some(10 + (c - b'a')),
-            b'A'..=b'F' => Some(10 + (c - b'A')),
-            _ => None,
+impl fmt::Display for CanonicalizationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CanonicalizationError::MalformedPath => write!(f, "malformed request path"),
+            CanonicalizationError::MalformedPercent => write!(f, "malformed percent-encoding"),
+            CanonicalizationError::RootEscape => write!(f, "path escapes above root"),
+            CanonicalizationError::ExcessiveEncoding => write!(f, "excessive nested encoding"),
         }
     }
-
-    let hi = val(a).ok_or(CanonError::InvalidPercentEncoding)?;
-    let lo = val(b).ok_or(CanonError::InvalidPercentEncoding)?;
-
-    Ok((hi << 4) | lo)
 }
 
-/// Decode a single segment safely (NO structural characters allowed to emerge)
-#[inline]
-fn decode_segment(segment: &[u8]) -> Result<Vec<u8>, CanonError> {
-    let mut out = Vec::with_capacity(segment.len());
+impl std::error::Error for CanonicalizationError {}
 
+/// Returns true if the byte is an unreserved character per RFC 3986.
+fn is_unreserved(b: u8) -> bool {
+    matches!(b,
+        b'A'..=b'Z'
+        | b'a'..=b'z'
+        | b'0'..=b'9'
+        | b'-'
+        | b'.'
+        | b'_'
+        | b'~'
+    )
+}
+
+fn is_hex_digit(b: u8) -> bool {
+    b.is_ascii_hexdigit()
+}
+
+fn hex_value(b: u8) -> u8 {
+    match b {
+        b'0'..=b'9' => b - b'0',
+        b'a'..=b'f' => b - b'a' + 10,
+        b'A'..=b'F' => b - b'A' + 10,
+        _ => unreachable!(),
+    }
+}
+
+/// Validates that a raw segment has well-formed percent-encoding and
+/// rejects excessive nested encoding (`%25xx` patterns).
+fn validate_segment_encoding(segment: &str) -> Result<(), CanonicalizationError> {
+    let bytes = segment.as_bytes();
     let mut i = 0;
-    while i < segment.len() {
-        if segment[i] == b'%' {
-            if i + 2 >= segment.len() {
-                return Err(CanonError::InvalidPercentEncoding);
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
+            // Need at least 2 more bytes for a valid triplet
+            if i + 2 >= bytes.len() {
+                return Err(CanonicalizationError::MalformedPercent);
             }
-
-            let byte = hex_pair(segment[i + 1], segment[i + 2])?;
-
-            // Reject encoded reserved characters (critical safety rule)
-            if is_reserved(byte) {
-                return Err(CanonError::EncodedReserved(byte));
+            let h1 = bytes[i + 1];
+            let h2 = bytes[i + 2];
+            if !is_hex_digit(h1) || !is_hex_digit(h2) {
+                return Err(CanonicalizationError::MalformedPercent);
             }
-
-            // Drop null bytes
-            if byte == 0 {
-                i += 3;
-                continue;
+            // Check for excessive encoding: %25 followed by two hex digits
+            // This would decode to %xx on a second pass, which is dangerous.
+            if h1 == b'2' && h2 == b'5' && i + 4 < bytes.len() {
+                let h3 = bytes[i + 3];
+                let h4 = bytes[i + 4];
+                if is_hex_digit(h3) && is_hex_digit(h4) {
+                    return Err(CanonicalizationError::ExcessiveEncoding);
+                }
             }
-
-            out.push(byte);
             i += 3;
         } else {
-            let b = segment[i];
+            i += 1;
+        }
+    }
+    Ok(())
+}
 
-            // Also reject raw reserved chars
-            if is_reserved(b) {
-                return Err(CanonError::EncodedReserved(b));
+/// Decodes a single segment, returning (routing_decoded, forwarding_encoded).
+///
+/// - Unreserved characters are decoded in the routing view.
+/// - Reserved characters remain encoded in both views.
+/// - Hex digits are uppercased in the forwarding view.
+fn decode_segment(segment: &str) -> (String, String) {
+    if !segment.contains('%') {
+        return (segment.to_owned(), segment.to_owned());
+    }
+
+    let bytes = segment.as_bytes();
+    let mut routing = String::with_capacity(segment.len());
+    let mut forwarding = String::with_capacity(segment.len());
+
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let h1 = bytes[i + 1];
+            let h2 = bytes[i + 2];
+            let value = (hex_value(h1) << 4) | hex_value(h2);
+
+            if is_unreserved(value) {
+                // Decode unreserved characters for routing
+                routing.push(value as char);
+                // Forwarding keeps the encoding but uppercased
+                forwarding.push('%');
+                forwarding.push(h1.to_ascii_uppercase() as char);
+                forwarding.push(h2.to_ascii_uppercase() as char);
+            } else {
+                // Reserved characters stay encoded in both views
+                routing.push('%');
+                routing.push(h1.to_ascii_uppercase() as char);
+                routing.push(h2.to_ascii_uppercase() as char);
+
+                forwarding.push('%');
+                forwarding.push(h1.to_ascii_uppercase() as char);
+                forwarding.push(h2.to_ascii_uppercase() as char);
             }
-
-            out.push(b);
+            i += 3;
+        } else {
+            let c = bytes[i] as char;
+            routing.push(c);
+            forwarding.push(c);
             i += 1;
         }
     }
 
-    Ok(out)
+    (routing, forwarding)
 }
 
-/// Main canonicalization function
-#[inline]
-pub fn canonicalize_path(input: &str) -> Result<String, CanonError> {
-    if input.is_empty() {
-        return Err(CanonError::EmptyPath);
-    } else if input == "*" {
-        return Ok("*".to_string());
-    }
+/// Resolves dot-segments from a list of decoded segments using a stack.
+///
+/// - `.` and empty segments are skipped.
+/// - `..` pops the previous segment.
+/// - If `..` would pop above root, returns `RootEscape`.
+fn resolve_dot_segments(segments: &[String]) -> Result<Vec<String>, CanonicalizationError> {
+    let mut stack: Vec<String> = Vec::new();
 
-    let bytes = input.as_bytes();
-
-    let mut segments: Vec<Vec<u8>> = Vec::new();
-    let mut current = Vec::new();
-
-    // -----------------------------
-    // 1. Split raw input by '/'
-    // -----------------------------
-    for &b in bytes {
-        if b == b'/' {
-            if !current.is_empty() {
-                let decoded = decode_segment(&current)?;
-                segments.push(decoded);
-                current.clear();
-            }
-        } else {
-            current.push(b);
-        }
-    }
-
-    if !current.is_empty() {
-        let decoded = decode_segment(&current)?;
-        segments.push(decoded);
-    }
-
-    // -----------------------------
-    // 2. Normalize dot segments
-    // -----------------------------
-    let mut stack: Vec<Vec<u8>> = Vec::new();
-
-    for seg in segments {
-        if seg == b"." {
+    for segment in segments {
+        if segment == "." || segment.is_empty() {
+            // Skip current-dir and empty segments
             continue;
-        } else if seg == b".." {
+        } else if segment == ".." {
+            // Pop the previous segment; reject if at root
+            if stack.is_empty() {
+                return Err(CanonicalizationError::RootEscape);
+            }
             stack.pop();
-        } else if !seg.is_empty() {
-            stack.push(seg);
+        } else {
+            stack.push(segment.clone());
         }
     }
 
-    // -----------------------------
-    // 3. Rebuild canonical path
-    // -----------------------------
-    let mut result = String::from("/");
+    Ok(stack)
+}
 
-    for (i, seg) in stack.iter().enumerate() {
+/// Canonicalizes a raw HTTP request target path.
+///
+/// Supports:
+/// - Absolute paths beginning with `/`
+/// - The special asterisk form `*` used for server-wide OPTIONS requests
+///
+/// See `URL_CANONICALIZE_SPEC.md` for the full specification.
+pub fn canonicalize_path(raw_path: &str) -> Result<CanonicalizedPath, CanonicalizationError> {
+    // Step 0: Asterisk short-circuit
+    if raw_path == "*" {
+        return Ok(CanonicalizedPath {
+            routing: "*".to_owned(),
+            forwarding: "*".to_owned(),
+            original: raw_path.to_owned(),
+        });
+    }
+
+    // Step 1: Syntax validation
+    // Must start with `/`
+    if !raw_path.starts_with('/') {
+        return Err(CanonicalizationError::MalformedPath);
+    }
+
+    // Reject null bytes and control characters
+    for &b in raw_path.as_bytes() {
+        if b == 0 || b < 0x20 || b == 0x7F {
+            return Err(CanonicalizationError::MalformedPath);
+        }
+    }
+
+    // Step 2: Structural segmentation
+    // Split on literal `/` only
+    let segments: Vec<&str> = raw_path.split('/').collect();
+
+    // Track trailing slash: present if path ends with `/` and is not just `"/"`
+    let trailing_slash = raw_path.ends_with('/') && raw_path != "/";
+
+    // Step 3: Per-segment validation and decoding
+    let mut routing_segments: Vec<String> = Vec::with_capacity(segments.len());
+    let mut forwarding_segments: Vec<String> = Vec::with_capacity(segments.len());
+
+    for (idx, segment) in segments.iter().enumerate() {
+        // The first segment is always empty (before the leading `/`)
+        if idx == 0 {
+            // Validate encoding even for the empty first segment
+            validate_segment_encoding(segment)?;
+            routing_segments.push(String::new());
+            forwarding_segments.push(String::new());
+            continue;
+        }
+
+        // Validate percent-encoding
+        validate_segment_encoding(segment)?;
+
+        // Decode the segment
+        let (decoded, encoded) = decode_segment(segment);
+        routing_segments.push(decoded);
+        forwarding_segments.push(encoded);
+    }
+
+    // Step 4: Dot-segment resolution (skip the first empty segment representing root)
+    // We resolve dots on segments[1..] and keep the root empty segment
+    let dot_segments = &routing_segments[1..];
+    let resolved = resolve_dot_segments(dot_segments)?;
+
+    // Step 5: Canonical reconstruction
+    // routing: join resolved decoded segments, prepend `/`, add trailing slash if flagged
+    let mut routing = String::with_capacity(raw_path.len());
+    routing.push('/');
+    for (i, seg) in resolved.iter().enumerate() {
         if i > 0 {
-            result.push('/');
+            routing.push('/');
         }
-        result.push_str(str::from_utf8(seg).map_err(|_| CanonError::InvalidUtf8)?);
+        routing.push_str(seg);
+    }
+    if trailing_slash && routing != "/" {
+        routing.push('/');
     }
 
-    Ok(result)
+    // forwarding: same segment structure but with encoded segments
+    // We need to resolve dots on the encoded segments too, but they have the same structure
+    // (same number and position of segments after dot resolution)
+    let encoded_dot_segments = &forwarding_segments[1..];
+    let resolved_encoded = resolve_dot_segments(encoded_dot_segments)?;
+
+    let mut forwarding = String::with_capacity(raw_path.len());
+    forwarding.push('/');
+    for (i, seg) in resolved_encoded.iter().enumerate() {
+        if i > 0 {
+            forwarding.push('/');
+        }
+        forwarding.push_str(seg);
+    }
+    if trailing_slash && forwarding != "/" {
+        forwarding.push('/');
+    }
+
+    Ok(CanonicalizedPath {
+        routing,
+        forwarding,
+        original: raw_path.to_owned(),
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // --- Basic path normalization ---
+    #[test]
+    fn test_asterisk_form() {
+        let result = canonicalize_path("*").unwrap();
+        assert_eq!(result.routing, "*");
+        assert_eq!(result.forwarding, "*");
+        assert_eq!(result.original, "*");
+    }
 
     #[test]
-    fn test_simple_path() {
-        assert_eq!(canonicalize_path("/foo/bar").unwrap(), "/foo/bar");
+    fn test_double_asterisk_rejected() {
+        assert!(matches!(
+            canonicalize_path("**"),
+            Err(CanonicalizationError::MalformedPath)
+        ));
+    }
+
+    #[test]
+    fn test_asterisk_with_space_rejected() {
+        assert!(matches!(
+            canonicalize_path("* "),
+            Err(CanonicalizationError::MalformedPath)
+        ));
+        assert!(matches!(
+            canonicalize_path(" *"),
+            Err(CanonicalizationError::MalformedPath)
+        ));
     }
 
     #[test]
     fn test_root_path() {
-        assert_eq!(canonicalize_path("/").unwrap(), "/");
+        let result = canonicalize_path("/").unwrap();
+        assert_eq!(result.routing, "/");
+        assert_eq!(result.forwarding, "/");
+        assert_eq!(result.original, "/");
     }
 
     #[test]
-    fn test_asterisk() {
-        assert_eq!(canonicalize_path("*").unwrap(), "*");
+    fn test_simple_path() {
+        let result = canonicalize_path("/api/v2").unwrap();
+        assert_eq!(result.routing, "/api/v2");
+        assert_eq!(result.forwarding, "/api/v2");
+        assert_eq!(result.original, "/api/v2");
     }
 
     #[test]
-    fn test_single_segment() {
-        assert_eq!(canonicalize_path("/hello").unwrap(), "/hello");
+    fn test_trailing_slash_preserved() {
+        let result = canonicalize_path("/users/").unwrap();
+        assert_eq!(result.routing, "/users/");
+        assert_eq!(result.forwarding, "/users/");
+        assert_eq!(result.original, "/users/");
     }
 
     #[test]
-    fn test_path_without_leading_slash() {
-        assert_eq!(canonicalize_path("foo/bar").unwrap(), "/foo/bar");
-    }
-
-    // --- Dot segment normalization ---
-
-    #[test]
-    fn test_current_directory_dot() {
-        assert_eq!(canonicalize_path("/foo/./bar").unwrap(), "/foo/bar");
+    fn test_percent_encoded_reserved() {
+        let result = canonicalize_path("/api%2Fv2").unwrap();
+        assert_eq!(result.routing, "/api%2Fv2");
+        assert_eq!(result.forwarding, "/api%2Fv2");
     }
 
     #[test]
-    fn test_parent_directory_double_dot() {
-        assert_eq!(canonicalize_path("/foo/bar/../baz").unwrap(), "/foo/baz");
+    fn test_percent_encoded_unreserved_decoded() {
+        let result = canonicalize_path("/%41pi").unwrap();
+        assert_eq!(result.routing, "/Api");
+        assert_eq!(result.forwarding, "/%41pi");
+    }
+
+    #[test]
+    fn test_hex_uppercased() {
+        let result = canonicalize_path("/%2f").unwrap();
+        assert_eq!(result.routing, "/%2F");
+        assert_eq!(result.forwarding, "/%2F");
+    }
+
+    #[test]
+    fn test_malformed_percent_incomplete() {
+        assert!(matches!(
+            canonicalize_path("/%2"),
+            Err(CanonicalizationError::MalformedPercent)
+        ));
+    }
+
+    #[test]
+    fn test_malformed_percent_no_hex() {
+        assert!(matches!(
+            canonicalize_path("/%GH"),
+            Err(CanonicalizationError::MalformedPercent)
+        ));
+    }
+
+    #[test]
+    fn test_malformed_percent_bare() {
+        assert!(matches!(
+            canonicalize_path("/path%"),
+            Err(CanonicalizationError::MalformedPercent)
+        ));
+    }
+
+    #[test]
+    fn test_excessive_encoding_rejected() {
+        assert!(matches!(
+            canonicalize_path("/%252Ftest"),
+            Err(CanonicalizationError::ExcessiveEncoding)
+        ));
+    }
+
+    #[test]
+    fn test_double_percent_25() {
+        assert!(matches!(
+            canonicalize_path("/%25AB"),
+            Err(CanonicalizationError::ExcessiveEncoding)
+        ));
+    }
+
+    #[test]
+    fn test_dot_segment_current_dir() {
+        let result = canonicalize_path("/a/./b").unwrap();
+        assert_eq!(result.routing, "/a/b");
+        assert_eq!(result.forwarding, "/a/b");
+    }
+
+    #[test]
+    fn test_dot_segment_parent_dir() {
+        let result = canonicalize_path("/a/../b").unwrap();
+        assert_eq!(result.routing, "/b");
+        assert_eq!(result.forwarding, "/b");
+    }
+
+    #[test]
+    fn test_root_escape_rejected() {
+        assert!(matches!(
+            canonicalize_path("/../admin"),
+            Err(CanonicalizationError::RootEscape)
+        ));
     }
 
     #[test]
     fn test_multiple_dot_segments() {
-        assert_eq!(canonicalize_path("/a/./b/../c/./d").unwrap(), "/a/c/d");
+        let result = canonicalize_path("/a/b/../../c").unwrap();
+        assert_eq!(result.routing, "/c");
+        assert_eq!(result.forwarding, "/c");
     }
 
     #[test]
-    fn test_double_dot_at_root() {
-        assert_eq!(canonicalize_path("/../foo").unwrap(), "/foo");
+    fn test_empty_interior_segments_collapsed() {
+        let result = canonicalize_path("/api//v2").unwrap();
+        assert_eq!(result.routing, "/api/v2");
+        assert_eq!(result.forwarding, "/api/v2");
     }
 
     #[test]
-    fn test_only_dots() {
-        assert_eq!(canonicalize_path("/././.").unwrap(), "/");
+    fn test_multiple_empty_segments() {
+        let result = canonicalize_path("/a///b").unwrap();
+        assert_eq!(result.routing, "/a/b");
+        assert_eq!(result.forwarding, "/a/b");
     }
 
     #[test]
-    fn test_double_dot_escaping_root() {
-        assert_eq!(canonicalize_path("/a/../../b").unwrap(), "/b");
-    }
-
-    // --- Percent encoding ---
-
-    #[test]
-    fn test_percent_encoded_space() {
-        assert_eq!(canonicalize_path("/foo%20bar").unwrap(), "/foo bar");
+    fn test_null_byte_rejected() {
+        assert!(matches!(
+            canonicalize_path("/path\u{0000}to"),
+            Err(CanonicalizationError::MalformedPath)
+        ));
     }
 
     #[test]
-    fn test_percent_encoded_uppercase() {
-        assert_eq!(canonicalize_path("/foo%20bar").unwrap(), "/foo bar");
+    fn test_control_char_rejected() {
+        assert!(matches!(
+            canonicalize_path("/path\u{0001}to"),
+            Err(CanonicalizationError::MalformedPath)
+        ));
     }
 
     #[test]
-    fn test_percent_encoded_lowercase() {
-        assert_eq!(canonicalize_path("/foo%20bar").unwrap(), "/foo bar");
+    fn test_del_rejected() {
+        assert!(matches!(
+            canonicalize_path("/path\u{007F}to"),
+            Err(CanonicalizationError::MalformedPath)
+        ));
     }
 
     #[test]
-    fn test_mixed_case_percent_encoding() {
-        // %fO = 0xf0 = 'ð' is wrong; %f0 = 0xf0, %4F = 'O'
-        // Actually: %f0 = byte 0xf0, %4f = byte 0x4f = 'O'
-        // Let's use a simpler example: %2f = '/', but that's reserved
-        // Using: %41 = 'A', %62 = 'b'
-        assert_eq!(canonicalize_path("/%4F%6b").unwrap(), "/Ok");
+    fn test_relative_path_rejected() {
+        assert!(matches!(
+            canonicalize_path("relative/path"),
+            Err(CanonicalizationError::MalformedPath)
+        ));
     }
 
     #[test]
-    fn test_multiple_percent_encodings() {
-        assert_eq!(canonicalize_path("/foo%20bar%21").unwrap(), "/foo bar!");
-    }
-
-    // --- Reserved character rejection ---
-
-    #[test]
-    fn test_reject_encoded_slash() {
-        let err = canonicalize_path("/foo%2Fbar").unwrap_err();
-        assert!(matches!(err, CanonError::EncodedReserved(b'/')));
+    fn test_path_with_query_still_processed() {
+        let result = canonicalize_path("/path?query=1").unwrap();
+        assert_eq!(result.routing, "/path?query=1");
+        assert_eq!(result.original, "/path?query=1");
     }
 
     #[test]
-    fn test_reject_encoded_backslash() {
-        let err = canonicalize_path("/foo%5Cbar").unwrap_err();
-        assert!(matches!(err, CanonError::EncodedReserved(b'\\')));
+    fn test_original_preserved() {
+        let result = canonicalize_path("/a/../b/").unwrap();
+        assert_eq!(result.routing, "/b/");
+        assert_eq!(result.forwarding, "/b/");
+        assert_eq!(result.original, "/a/../b/");
     }
 
     #[test]
-    fn test_reject_encoded_question_mark() {
-        let err = canonicalize_path("/foo%3Fbar").unwrap_err();
-        assert!(matches!(err, CanonError::EncodedReserved(b'?')));
-    }
-
-    #[test]
-    fn test_reject_encoded_hash() {
-        let err = canonicalize_path("/foo%23bar").unwrap_err();
-        assert!(matches!(err, CanonError::EncodedReserved(b'#')));
-    }
-
-    #[test]
-    fn test_reject_raw_backslash() {
-        let err = canonicalize_path("/foo\\bar").unwrap_err();
-        assert!(matches!(err, CanonError::EncodedReserved(b'\\')));
-    }
-
-    #[test]
-    fn test_reject_raw_question_mark() {
-        let err = canonicalize_path("/foo?bar").unwrap_err();
-        assert!(matches!(err, CanonError::EncodedReserved(b'?')));
-    }
-
-    #[test]
-    fn test_reject_raw_hash() {
-        let err = canonicalize_path("/foo#bar").unwrap_err();
-        assert!(matches!(err, CanonError::EncodedReserved(b'#')));
-    }
-
-    // --- Null byte handling ---
-
-    #[test]
-    fn test_null_byte_dropped() {
-        assert_eq!(canonicalize_path("/foo%00bar").unwrap(), "/foobar");
-    }
-
-    #[test]
-    fn test_multiple_null_bytes_dropped() {
-        assert_eq!(canonicalize_path("/%00%00%00").unwrap(), "/");
-    }
-
-    // --- Invalid percent encoding ---
-
-    #[test]
-    fn test_incomplete_percent_encoding_truncated() {
-        let err = canonicalize_path("/foo%2").unwrap_err();
-        assert!(matches!(err, CanonError::InvalidPercentEncoding));
-    }
-
-    #[test]
-    fn test_incomplete_percent_encoding_single_char() {
-        let err = canonicalize_path("/foo%A").unwrap_err();
-        assert!(matches!(err, CanonError::InvalidPercentEncoding));
-    }
-
-    #[test]
-    fn test_invalid_hex_chars() {
-        let err = canonicalize_path("/foo%GGbar").unwrap_err();
-        assert!(matches!(err, CanonError::InvalidPercentEncoding));
-    }
-
-    #[test]
-    fn test_percent_at_end_of_path() {
-        let err = canonicalize_path("/foo%").unwrap_err();
-        assert!(matches!(err, CanonError::InvalidPercentEncoding));
-    }
-
-    // --- Path traversal prevention ---
-
-    #[test]
-    fn test_encoded_dot_segments() {
-        // Encoded dots should be decoded and treated as literal dots, not navigation
-        assert_eq!(canonicalize_path("/%2e%2e/foo").unwrap(), "/foo");
-    }
-
-    #[test]
-    fn test_encoded_double_dot_in_segment() {
-        assert_eq!(canonicalize_path("/foo/%2e%2e/bar").unwrap(), "/bar");
-    }
-
-    #[test]
-    fn test_mixed_encoded_and_literal_dots() {
-        // /a/%2e/b/../c → /a/./b/../c → /a/c
-        assert_eq!(canonicalize_path("/a/%2e/b/../c").unwrap(), "/a/c");
-    }
-
-    // --- Multiple slashes ---
-
-    #[test]
-    fn test_multiple_consecutive_slashes() {
-        assert_eq!(canonicalize_path("/foo//bar").unwrap(), "/foo/bar");
-    }
-
-    #[test]
-    fn test_many_consecutive_slashes() {
-        assert_eq!(canonicalize_path("/////").unwrap(), "/");
-    }
-
-    #[test]
-    fn test_trailing_slash() {
-        assert_eq!(canonicalize_path("/foo/").unwrap(), "/foo");
-    }
-
-    // --- Edge cases ---
-
-    #[test]
-    fn test_empty_path_error() {
-        let err = canonicalize_path("").unwrap_err();
-        assert!(matches!(err, CanonError::EmptyPath));
-    }
-
-    #[test]
-    fn test_unicode_segment() {
-        assert_eq!(canonicalize_path("/caf%C3%A9").unwrap(), "/café");
-    }
-
-    #[test]
-    fn test_malformed_utf8() {
-        let err = canonicalize_path("/foo%C0").unwrap_err();
-        assert!(matches!(err, CanonError::InvalidUtf8));
-    }
-
-    #[test]
-    fn test_percent_encoded_slash_in_middle() {
-        let err = canonicalize_path("/a/b%2Fc/d").unwrap_err();
-        assert!(matches!(err, CanonError::EncodedReserved(b'/')));
-    }
-
-    #[test]
-    fn test_complex_real_world_path() {
-        // /api/v1/../v2/users/./42/../profile
-        // → /api/v2/users/42/../profile
-        // → /api/v2/users/profile
-        assert_eq!(
-            canonicalize_path("/api/v1/../v2/users/./42/../profile").unwrap(),
-            "/api/v2/users/profile"
-        );
-    }
-
-    #[test]
-    fn test_special_characters_preserved() {
-        assert_eq!(
-            canonicalize_path("/foo-bar_baz.qux").unwrap(),
-            "/foo-bar_baz.qux"
-        );
-    }
-
-    #[test]
-    fn test_double_encoding_detects_slash() {
-        // %252F decodes to %2F (literal percent-two-F), not slash
-        // This is correct: after first decode we get literal "%2F" string
-        // which doesn't contain encoded slash
-        assert_eq!(canonicalize_path("/foo%252Fbar").unwrap(), "/foo%2Fbar");
+    fn test_trailing_slash_with_dot_segments() {
+        let result = canonicalize_path("/a/b/../c/").unwrap();
+        assert_eq!(result.routing, "/a/c/");
+        assert_eq!(result.forwarding, "/a/c/");
     }
 }

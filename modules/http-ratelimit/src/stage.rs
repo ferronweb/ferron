@@ -257,6 +257,7 @@ mod tests {
             variables: FxHashMap::default(),
             previous_error: None,
             original_uri: None,
+            routing_uri: None,
             encrypted: false,
             local_address: "0.0.0.0:80".parse().unwrap(),
             remote_address: remote_address.parse().unwrap(),

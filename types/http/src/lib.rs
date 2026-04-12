@@ -30,6 +30,7 @@ pub struct HttpContext {
     pub variables: FxHashMap<String, String>,
     pub previous_error: Option<u16>,
     pub original_uri: Option<Uri>,
+    pub routing_uri: Option<Uri>,
     pub encrypted: bool,
     pub local_address: SocketAddr,
     pub remote_address: SocketAddr,

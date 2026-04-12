@@ -330,6 +330,7 @@ mod tests {
             variables: Default::default(),
             previous_error: None,
             original_uri: None,
+            routing_uri: None,
             encrypted: false,
             local_address: "127.0.0.1:8080".parse().unwrap(),
             remote_address: "127.0.0.1:12345".parse().unwrap(),

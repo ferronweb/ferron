@@ -27,23 +27,6 @@ use crate::util::error_pages::generate_default_error_page;
 
 const LOG_TARGET: &str = "ferron-http-server";
 
-// Percent-encoding set for *path segment output only*.
-// Assumes path has already been canonicalized and split into segments.
-// '/' is NOT handled here because it is a structural delimiter.
-const PATH_ENCODE_SET: percent_encoding::AsciiSet = percent_encoding::CONTROLS
-    .add(b' ')
-    .add(b'"')
-    .add(b'<')
-    .add(b'>')
-    .add(b'`')
-    .add(b'[')
-    .add(b']')
-    .add(b'{')
-    .add(b'}')
-    .add(b'|')
-    .add(b'^')
-    .add(b'\\');
-
 type ResponseBody = UnsyncBoxBody<Bytes, io::Error>;
 
 /// Per-stage hooks that emit trace spans around each pipeline stage.
@@ -718,7 +701,7 @@ async fn request_handler_inner(
         .and_then(|g| get_http_nested_boolean(&g, "url_sanitize"))
         .unwrap_or(true);
     if url_sanitize_enabled {
-        if let Err(e) = sanitize_request_url(&mut request, &decoded_path) {
+        if let Err(e) = sanitize_request_url(&mut request, &decoded_path.forwarding) {
             emit_error(&events, format!("URL sanitization error: {}", e));
             if let Some(response) = execute_error_pipeline(
                 error_pipeline.as_ref(),
@@ -763,7 +746,7 @@ async fn request_handler_inner(
     let resolution = config_resolver.resolve(
         local_address.ip(),
         hostname.as_deref().unwrap_or(""),
-        &decoded_path,
+        &decoded_path.routing,
         &resolver_variables,
     );
     let request = resolver_variables.0;
@@ -836,6 +819,7 @@ async fn request_handler_inner(
         variables: variables.into_iter().collect(),
         previous_error: None,
         original_uri: Option::from(request_uri),
+        routing_uri: decoded_path.routing.parse().ok(),
         encrypted,
         local_address,
         remote_address,
@@ -868,7 +852,7 @@ async fn request_handler_inner(
                 let error_resolution = config_resolver.resolve_error_scoped(
                     local_address.ip(),
                     ctx.hostname.as_deref().unwrap_or(""),
-                    &decoded_path,
+                    &decoded_path.routing,
                     status,
                     &error_resolver_variables,
                 );
@@ -1257,6 +1241,7 @@ async fn apply_resolved_file_to_context(
         variables: FxHashMap::default(),
         previous_error: None,
         original_uri: None,
+        routing_uri: None,
         encrypted: ctx.encrypted,
         local_address: ctx.local_address,
         remote_address: ctx.remote_address,
@@ -1629,10 +1614,8 @@ fn sanitize_request_url(
     decoded_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let url_pathname = request.uri().path();
-    let sanitized_url_pathname =
-        percent_encoding::utf8_percent_encode(decoded_path, &PATH_ENCODE_SET).to_string();
 
-    if sanitized_url_pathname != url_pathname {
+    if decoded_path != url_pathname {
         // We need to reconstruct the URI with the sanitized path
         let orig_uri = request.uri().clone();
         let mut uri_parts = orig_uri.into_parts();
@@ -1640,7 +1623,7 @@ fn sanitize_request_url(
         // Reconstruct the path_and_query with sanitized path and original query
         let new_path_and_query = format!(
             "{}{}",
-            sanitized_url_pathname,
+            decoded_path,
             uri_parts
                 .path_and_query
                 .as_ref()

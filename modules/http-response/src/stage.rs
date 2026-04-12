@@ -92,11 +92,14 @@ impl HttpResponseStage {
             return Ok(true);
         }
 
-        let request_path = ctx
-            .req
-            .as_ref()
-            .map(|req| req.uri().path().to_string())
-            .unwrap_or_default();
+        let request_path = match &ctx.routing_uri {
+            Some(uri) => uri.path().to_string(),
+            None => ctx
+                .req
+                .as_ref()
+                .map(|req| req.uri().path().to_string())
+                .unwrap_or_default(),
+        };
 
         for rule in &config.status_rules {
             if !Self::rule_matches(rule, &request_path) {
@@ -311,6 +314,7 @@ mod tests {
             variables: FxHashMap::default(),
             previous_error: None,
             original_uri: None,
+            routing_uri: None,
             encrypted: false,
             local_address: "0.0.0.0:80".parse().unwrap(),
             remote_address: "192.168.1.50:12345".parse().unwrap(),
@@ -536,6 +540,38 @@ mod tests {
         let mut ctx2 = make_test_context_with_request("/other");
         ctx2.configuration = make_config_with_layer(directives);
         assert!(stage.run(&mut ctx2).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn status_url_match_uses_routing_uri_not_req_uri() {
+        let engine = Arc::new(ResponseEngine::new());
+        let stage = HttpResponseStage::new(engine);
+
+        let child = make_child_block(vec![(
+            "url",
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![make_value_string("/canonical/secret")],
+                children: None,
+                span: None,
+            }],
+        )]);
+
+        let mut directives = HashMap::new();
+        directives.insert(
+            "status".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![make_value_number(403)],
+                children: Some(child),
+                span: None,
+            }],
+        );
+
+        // req.uri() is "/rewritten/path" but routing_uri is "/canonical/secret"
+        // The rule should match based on routing_uri.
+        let mut ctx = make_test_context_with_request("/rewritten/path");
+        ctx.routing_uri = Some("/canonical/secret".parse().unwrap());
+        ctx.configuration = make_config_with_layer(directives);
+        assert!(!stage.run(&mut ctx).await.unwrap());
     }
 
     #[tokio::test]
