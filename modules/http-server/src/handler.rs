@@ -22,7 +22,8 @@ use rustc_hash::FxHashMap;
 use typemap_rev::TypeMap;
 
 use crate::config::ThreeStageResolver;
-use crate::util::canonicalize_url::{canonicalize_path, canonicalize_path_routing};
+use crate::util::canonicalize_url::canonicalize_path;
+use crate::util::canonicalize_cache::canonicalize_path_routing_cached;
 use crate::util::error_pages::generate_default_error_page;
 
 const LOG_TARGET: &str = "ferron-http-server";
@@ -670,7 +671,7 @@ async fn request_handler_inner(
     }
 
     // Decode location for configuration resolution (routing-only, compute forwarding lazily)
-    let (routing_str, _original_str) = match canonicalize_path_routing(request.uri().path()) {
+    let (routing_str, _original_str) = match canonicalize_path_routing_cached(request.uri().path()) {
         Ok((routing, original)) => (routing, original),
         Err(e) => {
             emit_error(
