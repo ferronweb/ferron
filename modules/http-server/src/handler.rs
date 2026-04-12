@@ -104,8 +104,16 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
 
 /// Cache for path canonicalization results.
 /// Keys: (canonical_root, request_path), Value: Timestamped<ResolvedHttpFile>
-/// TTL: 100 milliseconds to balance performance with filesystem change detection.
-const PATH_RESOLVE_CACHE_TTL: Duration = Duration::from_millis(100);
+/// TTL default: 100 milliseconds to balance performance with filesystem change detection.
+static PATH_RESOLVE_CACHE_TTL_MILLIS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(100);
+
+fn path_resolve_cache_ttl() -> Duration {
+    Duration::from_millis(PATH_RESOLVE_CACHE_TTL_MILLIS.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+pub fn set_path_resolve_cache_ttl_millis(ms: u64) {
+    PATH_RESOLVE_CACHE_TTL_MILLIS.store(ms, std::sync::atomic::Ordering::Relaxed);
+}
 
 static PATH_RESOLVE_CACHE: std::sync::LazyLock<
     quick_cache::sync::Cache<
@@ -1139,7 +1147,7 @@ async fn execute_http_file_pipeline(
     // Check cache first
     let cache_key = (root_path.clone(), request_path.clone());
     let resolved_file = match PATH_RESOLVE_CACHE.get(&cache_key) {
-        Some(timestamped) if !timestamped.is_expired(PATH_RESOLVE_CACHE_TTL) => {
+        Some(timestamped) if !timestamped.is_expired(path_resolve_cache_ttl()) => {
             // Re-validate metadata to detect file changes/deletions
             let cache_path = &timestamped.value.file_path;
             match vibeio::fs::metadata(cache_path).await {
