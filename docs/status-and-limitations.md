@@ -16,12 +16,16 @@ The following features are implemented and functional in Ferron 3:
 | Static file serving | `http-static` | `root`, compression, ETags, directory listings, MIME types, precompressed sidecar files |
 | Reverse proxy | `http-proxy` | `proxy` with load balancing, health checks, connection pooling, keepalive reuse, header manipulation |
 | Forward proxy | `http-fproxy` | CONNECT method support with optional authentication |
-| Compression | `http-static` | On-the-fly gzip, brotli, deflate, zstd based on `Accept-Encoding` |
+| Compression | `http-compression` | On-the-fly gzip, brotli, deflate, zstd based on `Accept-Encoding`; precompressed sidecar files |
 | Rate limiting | `http-ratelimit` | Token bucket algorithm keyed on IP, URI, or request header |
 | Headers and CORS | `http-headers` | Add, remove, replace headers; full CORS preflight handling |
 | URL rewriting | `http-rewrite` | Regex-based rewrite with `last`, `file`, `directory` options |
 | Basic authentication | `http-basicauth` | Argon2, PBKDF2, scrypt password hashes with brute-force protection |
 | Response control | `http-response` | Custom status codes, connection abort, IP block/allow, 103 Early Hints |
+| Response body replacement | `http-replace` | String replacement in response bodies with MIME type filtering, `once` mode, `Last-Modified` preservation |
+| Variable mapping | `http-map` | Create variables from patterns (exact, wildcard, regex with captures) matched against source variables |
+| HTTP buffering | `http-buffer` | Request and response body buffering with configurable byte limits |
+| HTTP caching | `http-cache` | In-memory response cache with RFC 9111 semantics, LSCache override, vary headers, private/public cache partitioning |
 
 ### TLS
 
@@ -32,6 +36,7 @@ The following features are implemented and functional in Ferron 3:
 | OCSP stapling | `ocsp-stapler` | Automatic OCSP response fetching and stapling |
 | mTLS | `tls-manual` | Client certificate authentication with configurable trust store |
 | Custom crypto | `tls-manual` | Cipher suite selection, ECDH curves, TLS version restrictions |
+| Session tickets | `tls-manual` | Stateless TLS session resumption with automatic key rotation and file-backed persistence |
 
 ### Observability
 
