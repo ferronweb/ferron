@@ -6,9 +6,15 @@
 
 ### Added
 
+- Active health checking in reverse proxy support
 - `map` directive for mapping variables.
+- Response body string replacement support
 - Support for body interpolation in `status` directives.
 - Support for interpolated strings in header values.
+
+### Changed
+
+- Requests with multiple Host headers are now rejected.
 
 ### Fixed
 
