@@ -45,6 +45,7 @@ pub enum CanonicalizationError {
 }
 
 impl fmt::Display for CanonicalizationError {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CanonicalizationError::MalformedPath => write!(f, "malformed request path"),
@@ -58,6 +59,7 @@ impl fmt::Display for CanonicalizationError {
 impl std::error::Error for CanonicalizationError {}
 
 /// Returns true if the byte is an unreserved character per RFC 3986.
+#[inline]
 fn is_unreserved(b: u8) -> bool {
     matches!(b,
         b'A'..=b'Z'
@@ -70,10 +72,12 @@ fn is_unreserved(b: u8) -> bool {
     )
 }
 
+#[inline]
 fn is_hex_digit(b: u8) -> bool {
     b.is_ascii_hexdigit()
 }
 
+#[inline]
 fn hex_value(b: u8) -> u8 {
     match b {
         b'0'..=b'9' => b - b'0',
@@ -85,6 +89,7 @@ fn hex_value(b: u8) -> u8 {
 
 /// Validates that a raw segment has well-formed percent-encoding and
 /// rejects excessive nested encoding (`%25xx` patterns).
+#[inline]
 fn validate_segment_encoding(segment: &str) -> Result<(), CanonicalizationError> {
     let bytes = segment.as_bytes();
     let mut i = 0;
@@ -121,6 +126,7 @@ fn validate_segment_encoding(segment: &str) -> Result<(), CanonicalizationError>
 /// - Unreserved characters are decoded in the routing view.
 /// - Reserved characters remain encoded in both views.
 /// - Hex digits are uppercased in the forwarding view.
+#[inline]
 fn decode_segment(segment: &str) -> (String, String) {
     if !segment.contains('%') {
         return (segment.to_owned(), segment.to_owned());
@@ -167,6 +173,7 @@ fn decode_segment(segment: &str) -> (String, String) {
 }
 
 /// Decode only routing view of a single segment (no forwarding allocation).
+#[inline]
 fn decode_segment_routing(segment: &str) -> String {
     if !segment.contains('%') {
         return segment.to_owned();
@@ -204,6 +211,7 @@ fn decode_segment_routing(segment: &str) -> String {
 /// - `.` and empty segments are skipped.
 /// - `..` pops the previous segment.
 /// - If `..` would pop above root, returns `RootEscape`.
+#[inline]
 fn resolve_dot_segments(segments: &[String]) -> Result<Vec<String>, CanonicalizationError> {
     let mut stack: Vec<String> = Vec::new();
 
@@ -230,8 +238,6 @@ fn resolve_dot_segments(segments: &[String]) -> Result<Vec<String>, Canonicaliza
 /// Supports:
 /// - Absolute paths beginning with `/`
 /// - The special asterisk form `*` used for server-wide OPTIONS requests
-///
-/// See `URL_CANONICALIZE_SPEC.md` for the full specification.
 pub fn canonicalize_path_routing(
     raw_path: &str,
 ) -> Result<(String, String), CanonicalizationError> {
@@ -303,8 +309,6 @@ pub fn canonicalize_path_routing(
 /// Supports:
 /// - Absolute paths beginning with `/`
 /// - The special asterisk form `*` used for server-wide OPTIONS requests
-///
-/// See `URL_CANONICALIZE_SPEC.md` for the full specification.
 pub fn canonicalize_path(raw_path: &str) -> Result<CanonicalizedPath, CanonicalizationError> {
     // Step 0: Asterisk short-circuit
     if raw_path == "*" {
