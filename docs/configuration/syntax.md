@@ -151,6 +151,16 @@ Ferron applies inheritance by block context:
 - When a child block defines a directive with the same name as one in the parent, the child's directives take precedence in that block.
 - For conditional branches, it is often clearer to explicitly `use` shared snippets inside each `if`/`if_not` branch.
 
+### Hot-reload support
+
+Ferron `.conf` configuration files support hot-reload. When the file changes, Ferron detects the update and reloads the configuration gracefully. The `ConfigurationWatcher` monitors the file for modifications.
+
+To enable hot reloading, specify a `watch` configuration adapter parameter:
+
+```bash
+ferron run --config-params 'watch=1;file=ferron.conf' --config-adapter ferronconf
+```
+
 ## Notes
 
 - Where validation and runtime behavior differ, the directive pages call that out explicitly.

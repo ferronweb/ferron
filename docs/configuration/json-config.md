@@ -419,7 +419,7 @@ JSON configuration files support hot-reload. When the file changes, Ferron detec
 To enable hot reloading, specify a `watch` configuration adapter parameter:
 
 ```bash
-ferron run --config-params 'watch=1;file=ferron.conf'
+ferron run --config-params 'watch=1;file=ferron.json' --config-adapter json
 ```
 
 ## Notes and troubleshooting
