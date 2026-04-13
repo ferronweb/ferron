@@ -23,8 +23,13 @@ pub struct ConnectionManager {
 
 impl ConnectionManager {
     pub fn with_global_limit(global_limit: usize) -> Self {
-        let shards = std::cmp::max(1, num_cpus::get());
-        let per_shard = if shards > 0 { (global_limit + shards - 1) / shards } else { global_limit };
+        Self::with_global_limit_and_shards(global_limit, std::cmp::max(1, num_cpus::get()))
+    }
+
+    /// Like with_global_limit but allows overriding the number of shards (useful for tests/benches).
+    pub fn with_global_limit_and_shards(global_limit: usize, shards: usize) -> Self {
+        let shards = std::cmp::max(1, shards);
+        let per_shard = if shards > 0 { global_limit.div_ceil(shards) } else { global_limit };
         let mut conns = Vec::with_capacity(shards);
         for _ in 0..shards {
             conns.push(Arc::new(Pool::new(per_shard)));
