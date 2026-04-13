@@ -157,73 +157,78 @@ fn construct_proxy_request(
     config: &ProxyConfig,
     proxy_request_url: &http::Uri,
 ) -> Result<Request<ProxyBody>, Box<dyn std::error::Error + Send + Sync>> {
-    let req = ctx.req.take().ok_or("no request in context")?;
-    let (mut parts, body) = req.into_parts();
-    let req_clone = Request::from_parts(
-        parts.clone(),
-        Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync(),
-    );
+    // Ensure a request exists (borrow for interpolation), but defer taking ownership
+    // until after header interpolation/validation to avoid cloning header maps.
+    let req_ref = ctx.req.as_ref().ok_or("no request in context")?;
 
-    let request_path = parts.uri.path();
-    let path = match request_path.as_bytes().first() {
-        Some(b'/') => {
-            let mut proxy_request_path = proxy_request_url.path();
-            while proxy_request_path.as_bytes().last().copied() == Some(b'/') {
-                proxy_request_path = &proxy_request_path[..(proxy_request_path.len() - 1)];
-            }
-            format!("{proxy_request_path}{request_path}")
+    // Build new request path and URI string without allocations where possible.
+    let request_path = req_ref.uri().path();
+    let path = if request_path.as_bytes().first() == Some(&b'/') {
+        let mut proxy_request_path = proxy_request_url.path();
+        while proxy_request_path.as_bytes().last().copied() == Some(b'/') {
+            proxy_request_path = &proxy_request_path[..(proxy_request_path.len() - 1)];
         }
-        _ => request_path.to_string(),
+        let mut s = String::with_capacity(proxy_request_path.len() + request_path.len());
+        s.push_str(proxy_request_path);
+        s.push_str(request_path);
+        s
+    } else {
+        request_path.to_string()
     };
 
-    parts.uri = http::Uri::from_str(&format!(
-        "{}{}",
-        path,
-        match parts.uri.query() {
-            Some(query) => format!("?{query}"),
-            None => "".to_string(),
-        }
-    ))?;
+    // Pre-build final URI string (path + optional ?query) while still borrowing req.
+    let final_uri = if let Some(query) = req_ref.uri().query() {
+        let mut u = String::with_capacity(path.len() + 1 + query.len());
+        u.push_str(&path);
+        u.push('?');
+        u.push_str(query);
+        u
+    } else {
+        path.clone()
+    };
 
-    // Remove headers
+    // Prepare header modifications by resolving templates up-front while ctx.req is present
+    // so that variables can resolve against the original request without cloning it.
+    let mut replace_values: Vec<(HeaderName, HeaderValue)> = Vec::with_capacity(config.headers_to_replace.len());
+    for (name, value) in &config.headers_to_replace {
+        let resolved = interpolate_header_value(value, ctx);
+        let hv = HeaderValue::from_str(&resolved).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Invalid header value: {e}")))?;
+        replace_values.push((name.clone(), hv));
+    }
+
+    let mut add_values: Vec<(HeaderName, HeaderValue)> = Vec::with_capacity(config.headers_to_add.len());
+    for action in &config.headers_to_add {
+        if let HeaderAction::Append(name, v) = action {
+            let resolved = interpolate_header_value(v, ctx);
+            let hv = HeaderValue::from_str(&resolved).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Invalid header value: {e}")))?;
+            add_values.push((name.clone(), hv));
+        }
+    }
+
+    // All header templates validated — take ownership of the original request now.
+    let req = ctx.req.take().ok_or("no request in context")?;
+    let (mut parts, body) = req.into_parts();
+
+    // Set the rewritten URI
+    parts.uri = http::Uri::from_str(&final_uri)?;
+
+    // Remove configured headers
     for name in &config.headers_to_remove {
         parts.headers.remove(name);
     }
 
-    ctx.req = Some(req_clone);
-
-    // Replace headers (with interpolation)
-    for (name, value) in &config.headers_to_replace {
-        parts.headers.remove(name);
-        let resolved = interpolate_header_value(value, ctx);
-        parts.headers.insert(
-            name.clone(),
-            HeaderValue::from_str(&resolved).map_err(|e| {
-                ctx.req = None;
-                format!("Invalid header value: {e}")
-            })?,
-        );
+    // Apply replace headers
+    for (name, hv) in replace_values {
+        parts.headers.remove(&name);
+        parts.headers.insert(name, hv);
     }
 
-    // Add headers (with interpolation)
-    for action in &config.headers_to_add {
-        let resolved = match action {
-            HeaderAction::Append(_, v) => interpolate_header_value(v, ctx),
-        };
-        let (name, value) = match action {
-            HeaderAction::Append(n, _) => (n.clone(), resolved),
-        };
-        parts.headers.append(
-            name,
-            HeaderValue::from_str(&value).map_err(|e| {
-                ctx.req = None;
-                format!("Invalid header value: {e}")
-            })?,
-        );
+    // Apply add/append headers
+    for (name, hv) in add_values {
+        parts.headers.append(name, hv);
     }
 
-    ctx.req = None;
-
+    // X-Forwarded / X-Real headers
     let client_ip = ctx.remote_address.ip();
     let proto = if ctx.encrypted { "https" } else { "http" };
 
