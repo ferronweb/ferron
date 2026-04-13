@@ -10,7 +10,7 @@ bench = []
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "macros"] }
 vibeio = { version = "0.2.6", default-features = false, features = ["time"] }
-vibeio-http = { version = "0.3.0", default-features = false, features = ["h1", "h2"] }
+vibeio-http = { version = "0.3.0", default-features = false, features = ["h1", "h1-zerocopy", "h2"] }
 parking_lot = "0.12"
 arc-swap = "1.7"
 http = "1"
@@ -25,15 +25,15 @@ fancy-regex = "0.17"
 urlencoding = "2.1.3"
 ppp = "2.3.0"
 typemap_rev = "0.4"
+chrono = "0.4"
+quick_cache = "0.6"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+rustc-hash = "2"
 
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }
 ferron-http = { path = "../../types/http", features = ["util"] }
 ferron-tls = { path = "../../types/tls" }
-chrono = "0.4"
-quick_cache = "0.6"
-xxhash-rust = { version = "0.8", features = ["xxh3"] }
-rustc-hash = "2"
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }

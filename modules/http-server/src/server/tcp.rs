@@ -440,7 +440,7 @@ impl TcpListenerHandle {
                                 );
                                 return;
                             }
-                            handle_http1_connection(
+                            handle_http1_connection_zerocopy(
                                 socket,
                                 remote_addr,
                                 server_config.pipeline.clone(),
@@ -508,6 +508,113 @@ fn build_tcp_listener(
     listener_socket.listen(backlog.unwrap_or(-1))?;
 
     Ok(listener_socket.into())
+}
+
+#[cfg(not(target_os = "linux"))]
+#[allow(clippy::too_many_arguments)]
+#[inline]
+async fn handle_http1_connection_zerocopy<S>(
+    socket: S,
+    remote_address: SocketAddr,
+    pipeline: Arc<Pipeline<HttpContext>>,
+    file_pipeline: Arc<Pipeline<HttpFileContext>>,
+    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
+    config_resolver: Arc<ThreeStageResolver>,
+    local_address: SocketAddr,
+    hinted_hostname: Option<String>,
+    encrypted: bool,
+    https_port: Option<u16>,
+    connection_options: HttpConnectionOptions,
+    observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
+    connection_observability: CompositeEventSink,
+    shutdown_token: CancellationToken,
+    reload_token: CancellationToken,
+) where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static,
+{
+    handle_http1_connection(
+        socket,
+        remote_address,
+        pipeline,
+        file_pipeline,
+        error_pipeline,
+        config_resolver,
+        local_address,
+        hinted_hostname,
+        encrypted,
+        https_port,
+        connection_options,
+        observability_resolver,
+        connection_observability,
+        shutdown_token,
+        reload_token,
+    )
+    .await
+}
+
+#[cfg(target_os = "linux")]
+#[allow(clippy::too_many_arguments)]
+async fn handle_http1_connection_zerocopy<S>(
+    socket: S,
+    remote_address: SocketAddr,
+    pipeline: Arc<Pipeline<HttpContext>>,
+    file_pipeline: Arc<Pipeline<HttpFileContext>>,
+    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
+    config_resolver: Arc<ThreeStageResolver>,
+    local_address: SocketAddr,
+    hinted_hostname: Option<String>,
+    encrypted: bool,
+    https_port: Option<u16>,
+    connection_options: HttpConnectionOptions,
+    observability_resolver: Arc<RadixTree<Vec<ObservabilityProviderEntry>>>,
+    connection_observability: CompositeEventSink,
+    shutdown_token: CancellationToken,
+    reload_token: CancellationToken,
+) where
+    for<'a> S: tokio::io::AsyncRead
+        + tokio::io::AsyncWrite
+        + vibeio::io::AsInnerRawHandle<'a>
+        + Unpin
+        + 'static,
+{
+    let graceful_shutdown = CancellationToken::new();
+    let handler_state = Arc::new(RequestHandlerState {
+        pipeline,
+        file_pipeline,
+        error_pipeline,
+        config_resolver,
+        connection_observability,
+        observability_resolver,
+        local_address,
+        remote_address,
+        hinted_hostname,
+        encrypted,
+        https_port,
+    });
+    let mut connection_future = Box::pin(
+        Http1::new(socket, build_http1_options(&connection_options))
+            .graceful_shutdown_token(graceful_shutdown.clone())
+            .zerocopy()
+            .handle(build_request_handler(handler_state.clone())),
+    );
+    let connection_result = tokio::select! {
+        result = &mut connection_future => result,
+        _ = shutdown_token.cancelled() => {
+            graceful_shutdown.cancel();
+            connection_future.await
+        }
+        _ = reload_token.cancelled() => {
+            graceful_shutdown.cancel();
+            connection_future.await
+        }
+    };
+
+    if let Err(error) = connection_result {
+        emit_error(
+            &handler_state.connection_observability,
+            format!("HTTP/1 connection error: {error}"),
+        );
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

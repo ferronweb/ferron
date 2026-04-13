@@ -20,6 +20,7 @@
 ### Fixed
 
 - PROXY protocol setting, connection retry setting and error interception weren't working for reverse proxy.
+- Zerocopy static file serving wasn't working properly on Linux, because it wasn't enabled.
 
 ## Ferron 3.0.0-alpha.1
 
