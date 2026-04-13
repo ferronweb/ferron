@@ -1162,7 +1162,11 @@ async fn execute_http_file_pipeline(
         Some(timestamped) if !timestamped.is_expired(path_resolve_cache_ttl()) => {
             // Re-validate metadata to detect file changes/deletions
             let cache_path = &timestamped.value.file_path;
-            match vibeio::fs::metadata(cache_path).await {
+            match vibeio::fs::symlink_metadata(cache_path).await {
+                Ok(current_metadata) if current_metadata.is_symlink() => {
+                    // Prevent TOCTOU
+                    return Err(FilePipelineExecutionError::Forbidden);
+                }
                 Ok(current_metadata)
                     if current_metadata.len() == timestamped.value.metadata.len()
                         && current_metadata.modified().ok()

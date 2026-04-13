@@ -36,7 +36,7 @@ default = ["srv-lookup"]
 srv-lookup = ["hickory-resolver", "hickory-proto"]
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = "0.8"
 
 [[bench]]
 name = "sendnetio_bench"
