@@ -34,7 +34,14 @@ async fn probe_upstream(upstream_url: &str, config: &UpstreamHealthCheckConfig) 
 
     let full_url = format!("{}{}", upstream_url.trim_end_matches('/'), uri);
 
-    let result = execute_probe_request(&full_url, method, timeout, no_verification).await;
+    let result = execute_probe_request(
+        &full_url,
+        method,
+        timeout,
+        no_verification,
+        config.body_match.as_deref(),
+    )
+    .await;
 
     let response_time = start
         .elapsed()
@@ -65,6 +72,7 @@ async fn execute_probe_request(
     method: &str,
     timeout: Duration,
     no_verification: bool,
+    body_match: Option<&str>,
 ) -> Result<(u16, Option<Vec<u8>>), String> {
     use bytes::Bytes;
     use http_body_util::Full;
@@ -88,7 +96,11 @@ async fn execute_probe_request(
         }
     };
 
-    let resp = if url_parsed.scheme_str() == Some("https") {
+    let client_is_https = url_parsed.scheme_str() == Some("https");
+
+    // Build a client for the request. Building the TLS ClientConfig is cached in
+    // build_https_connector to avoid repeated native cert loading.
+    let resp = if client_is_https {
         let connector = build_https_connector(no_verification)
             .map_err(|e| format!("Failed to build TLS connector: {}", e))?;
         let client: Client<_, Full<Bytes>> = Client::builder(TokioExecutor::new()).build(connector);
@@ -122,7 +134,9 @@ async fn execute_probe_request(
 
     let status_code = resp.status().as_u16();
 
-    let body = if method.to_uppercase() == "GET" {
+    // Only read body when necessary (GET + body_match present). This avoids
+    // allocating and reading the full body when probes do not require it.
+    let body = if method.eq_ignore_ascii_case("GET") && body_match.is_some() {
         use http_body_util::BodyExt;
         match resp.collect().await {
             Ok(body_bytes) => {
@@ -153,8 +167,70 @@ fn build_https_connector(
     use hyper_rustls::HttpsConnectorBuilder;
     use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
     use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+    use std::sync::LazyLock;
 
-    let tls_config = if no_verification {
+    // Cache built HttpsConnector instances to avoid repeated TLS config and
+    // connector builder work. Two variants: normal verification and no_verification.
+    static DEFAULT_HTTPS_CONNECTOR: LazyLock<
+        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+    > = LazyLock::new(|| {
+        // Build default root store once
+        let mut root_store = rustls::RootCertStore::empty();
+        let mut found_any = false;
+
+        match rustls_native_certs::load_native_certs() {
+            cert_result if !cert_result.errors.is_empty() => {
+                ferron_core::log_debug!(
+                    "Health check: native root CA loading errors: {:?}",
+                    cert_result.errors
+                );
+            }
+            cert_result if cert_result.certs.is_empty() => {
+                ferron_core::log_debug!("Health check: no native root CA certificates found");
+            }
+            cert_result => {
+                for cert in cert_result.certs {
+                    if let Err(err) = root_store.add(cert) {
+                        ferron_core::log_debug!(
+                            "Health check: certificate parsing failed: {:?}",
+                            err
+                        );
+                    } else {
+                        found_any = true;
+                    }
+                }
+            }
+        }
+
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+
+        if !found_any {
+            ferron_core::log_debug!(
+                "Health check: using webpki-roots as fallback (no native root CAs available)"
+            );
+        }
+
+        let tls_config = if root_store.is_empty() {
+            rustls::ClientConfig::builder()
+                .with_root_certificates(rustls::RootCertStore::empty())
+                .with_no_client_auth()
+        } else {
+            rustls::ClientConfig::builder()
+                .with_root_certificates(root_store)
+                .with_no_client_auth()
+        };
+
+        HttpsConnectorBuilder::new()
+            .with_tls_config(tls_config)
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .build()
+    });
+
+    static NO_VERIFY_HTTPS_CONNECTOR: LazyLock<
+        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+    > = LazyLock::new(|| {
         #[derive(Debug)]
         struct NoServerVerifier;
         impl ServerCertVerifier for NoServerVerifier {
@@ -199,61 +275,27 @@ fn build_https_connector(
                 ]
             }
         }
-        rustls::ClientConfig::builder()
+
+        let tls_config = rustls::ClientConfig::builder()
             .dangerous()
             .with_custom_certificate_verifier(std::sync::Arc::new(NoServerVerifier))
-            .with_no_client_auth()
+            .with_no_client_auth();
+
+        HttpsConnectorBuilder::new()
+            .with_tls_config(tls_config)
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .build()
+    });
+
+    let connector = if no_verification {
+        NO_VERIFY_HTTPS_CONNECTOR.clone()
     } else {
-        let mut root_store = rustls::RootCertStore::empty();
-        let mut found_any = false;
-
-        match rustls_native_certs::load_native_certs() {
-            cert_result if !cert_result.errors.is_empty() => {
-                ferron_core::log_debug!(
-                    "Health check: native root CA loading errors: {:?}",
-                    cert_result.errors
-                );
-            }
-            cert_result if cert_result.certs.is_empty() => {
-                ferron_core::log_debug!("Health check: no native root CA certificates found");
-            }
-            cert_result => {
-                for cert in cert_result.certs {
-                    if let Err(err) = root_store.add(cert) {
-                        ferron_core::log_debug!(
-                            "Health check: certificate parsing failed: {:?}",
-                            err
-                        );
-                    } else {
-                        found_any = true;
-                    }
-                }
-            }
-        }
-
-        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-
-        if !found_any {
-            ferron_core::log_debug!(
-                "Health check: using webpki-roots as fallback (no native root CAs available)"
-            );
-        }
-
-        if root_store.is_empty() {
-            return Err("No root certificates available".into());
-        }
-
-        rustls::ClientConfig::builder()
-            .with_root_certificates(root_store)
-            .with_no_client_auth()
+        DEFAULT_HTTPS_CONNECTOR.clone()
     };
 
-    Ok(HttpsConnectorBuilder::new()
-        .with_tls_config(tls_config)
-        .https_or_http()
-        .enable_http1()
-        .enable_http2()
-        .build())
+    Ok(connector)
 }
 
 /// Process a probe result and update health check state.
