@@ -21,6 +21,8 @@ use parking_lot::RwLock;
 use crate::config::ProxyConfig;
 use crate::upstream::LoadBalancerAlgorithmInner;
 pub use config::ProxyConfigurationValidator;
+pub use connections::ConnectionManager;
+pub use upstream::UpstreamInner;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;

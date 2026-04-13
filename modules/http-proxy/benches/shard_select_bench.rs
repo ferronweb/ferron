@@ -1,8 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::net::IpAddr;
 
-use ferron_http_proxy::connections::ConnectionManager;
-use ferron_http_proxy::upstream::UpstreamInner;
+use ferron_http_proxy::ConnectionManager;
+use ferron_http_proxy::UpstreamInner;
 
 fn bench_select_pool(c: &mut Criterion) {
     let cm = ConnectionManager::with_global_limit_and_shards(100, 8);
