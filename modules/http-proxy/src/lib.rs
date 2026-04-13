@@ -43,10 +43,14 @@ pub struct ProxyMetrics {
     pub connection_reused: bool,
     /// TLS handshake failure count for this request.
     pub tls_handshake_failures: u64,
+    /// Total time spent in TLS handshake(s) for this request (in seconds).
+    pub tls_handshake_time_secs: f64,
     /// Number of times the pool was exhausted and had to wait.
     pub pool_waits: u64,
     /// Total time spent waiting for pooled connections (in seconds).
     pub pool_wait_time_secs: f64,
+    /// Total time spent waiting for the upstream request/response (in seconds).
+    pub upstream_time_secs: f64,
     /// HTTP response status code from the upstream.
     pub status_code: Option<u16>,
 }
@@ -65,8 +69,10 @@ impl ProxyMetrics {
             active_unhealthy_backends: Vec::new(),
             connection_reused: false,
             tls_handshake_failures: 0,
+            tls_handshake_time_secs: 0.0,
             pool_waits: 0,
             pool_wait_time_secs: 0.0,
+            upstream_time_secs: 0.0,
             status_code: None,
         }
     }
@@ -603,6 +609,36 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     value: MetricValue::F64(metrics.pool_wait_time_secs),
                     unit: Some("s"),
                     description: Some("Duration spent waiting for a pooled connection."),
+                }));
+        }
+
+        // Emit upstream duration histogram
+        if metrics.upstream_time_secs > 0.0 {
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.upstream.duration",
+                    attributes: vec![],
+                    ty: MetricType::Histogram(Some(vec![
+                        0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0,
+                    ])),
+                    value: MetricValue::F64(metrics.upstream_time_secs),
+                    unit: Some("s"),
+                    description: Some("Duration of upstream request-response."),
+                }));
+        }
+
+        // Emit TLS handshake duration histogram
+        if metrics.tls_handshake_time_secs > 0.0 {
+            ctx.events
+                .emit(ferron_observability::Event::Metric(MetricEvent {
+                    name: "ferron.proxy.tls.handshake_time",
+                    attributes: vec![],
+                    ty: MetricType::Histogram(Some(vec![
+                        0.001, 0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0,
+                    ])),
+                    value: MetricValue::F64(metrics.tls_handshake_time_secs),
+                    unit: Some("s"),
+                    description: Some("TLS handshake duration for upstream connection."),
                 }));
         }
 

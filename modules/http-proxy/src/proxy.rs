@@ -4,7 +4,8 @@ use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::str::FromStr;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, LazyLock};
+use parking_lot::RwLock;
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -40,8 +41,8 @@ use crate::ProxyMetrics;
 const LOG_TARGET: &str = "ferron-http-proxy";
 
 #[allow(clippy::type_complexity)]
-static TLS_CLIENT_CONFIG_CACHE: LazyLock<Mutex<HashMap<(bool, bool, bool), Arc<ClientConfig>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static TLS_CLIENT_CONFIG_CACHE: LazyLock<RwLock<HashMap<(bool, bool, bool), Arc<ClientConfig>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// Check whether `client_ip_from_header` is configured.
 fn client_ip_from_header_enabled(ctx: &HttpContext) -> bool {
@@ -313,20 +314,16 @@ fn build_tls_config(http2: bool, http2_only: bool, no_verification: bool) -> Cli
 
 fn cached_tls_config(http2: bool, http2_only: bool, no_verification: bool) -> Arc<ClientConfig> {
     let cache_key = (http2, http2_only, no_verification);
-    if let Some(config) = TLS_CLIENT_CONFIG_CACHE
-        .lock()
-        .expect("TLS client config cache lock poisoned")
-        .get(&cache_key)
-        .cloned()
     {
-        return config;
+        let cache_read = TLS_CLIENT_CONFIG_CACHE.read();
+        if let Some(config) = cache_read.get(&cache_key).cloned() {
+            return config;
+        }
     }
 
     let config = Arc::new(build_tls_config(http2, http2_only, no_verification));
-    let mut cache = TLS_CLIENT_CONFIG_CACHE
-        .lock()
-        .expect("TLS client config cache lock poisoned");
-    Arc::clone(cache.entry(cache_key).or_insert(config))
+    let mut cache_write = TLS_CLIENT_CONFIG_CACHE.write();
+    Arc::clone(cache_write.entry(cache_key).or_insert(config))
 }
 
 #[derive(Debug)]
@@ -924,15 +921,22 @@ async fn establish_and_send(
             ));
             let domain = ServerName::try_from(host.to_string())
                 .map_err(|e| format!("Invalid server name: {e}"))?;
-            let tls_stream = connector.connect(domain, stream).await.map_err(|e| {
-                metrics.tls_handshake_failures += 1;
-                ctx.events.emit(Event::Log(LogEvent {
-                    level: LogLevel::Warn,
-                    message: format!("Reverse proxy: TLS handshake with {addr} failed: {e}"),
-                    target: LOG_TARGET,
-                }));
-                std::io::Error::other(format!("TLS handshake failed: {e}"))
-            })?;
+            let tls_start = std::time::Instant::now();
+            let tls_stream = match connector.connect(domain, stream).await {
+                Ok(s) => {
+                    metrics.tls_handshake_time_secs += tls_start.elapsed().as_secs_f64();
+                    s
+                }
+                Err(e) => {
+                    metrics.tls_handshake_failures += 1;
+                    ctx.events.emit(Event::Log(LogEvent {
+                        level: LogLevel::Warn,
+                        message: format!("Reverse proxy: TLS handshake with {addr} failed: {e}"),
+                        target: LOG_TARGET,
+                    }));
+                    return Err(std::io::Error::other(format!("TLS handshake failed: {e}")).into());
+                }
+            };
 
             let negotiated_h2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
             let use_http2 = (config.http2 || config.http2_only) && negotiated_h2;
@@ -976,8 +980,12 @@ async fn send_via_wrapper(
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     let request = construct_proxy_request(ctx, config, proxy_url)?;
 
+    let start = std::time::Instant::now();
     let response = match wrapper.send_request(request).await {
-        Ok(resp) => resp,
+        Ok(resp) => {
+            metrics.upstream_time_secs = start.elapsed().as_secs_f64();
+            resp
+        }
         Err(e) => {
             return Err(format!("Bad gateway: {e}").into());
         }
@@ -1459,5 +1467,19 @@ mod tests {
 
         let count = count_healthy_backends(&upstreams, &failed_backends, 3);
         assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn bench_cached_tls_config() {
+        use std::time::Instant;
+        // Warm up the cache
+        let _ = cached_tls_config(true, false, false);
+        let iterations = 100usize;
+        let start = Instant::now();
+        for _ in 0..iterations {
+            let _ = cached_tls_config(true, false, false);
+        }
+        let elapsed = start.elapsed();
+        println!("cached_tls_config {} iters: {:?}", iterations, elapsed);
     }
 }

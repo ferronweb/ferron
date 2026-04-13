@@ -131,4 +131,22 @@ mod tests {
         }
         assert_eq!(cache.cache.len(), 100);
     }
+
+    #[test]
+    fn bench_ttlcache_insert_get() {
+        use std::time::Instant;
+        let mut cache = TtlCache::new(Duration::from_secs(60));
+        let n = 100_000usize;
+        let start = Instant::now();
+        for i in 0..n {
+            cache.insert(format!("key{}", i), i);
+        }
+        let insert_elapsed = start.elapsed();
+        let start = Instant::now();
+        for i in 0..n {
+            let _ = cache.get(&format!("key{}", i));
+        }
+        let get_elapsed = start.elapsed();
+        println!("ttlcache insert for {} items: {:?}, get: {:?}", n, insert_elapsed, get_elapsed);
+    }
 }
