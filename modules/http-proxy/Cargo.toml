@@ -34,3 +34,6 @@ ppp = "2.2"
 [features]
 default = ["srv-lookup"]
 srv-lookup = ["hickory-resolver", "hickory-proto"]
+
+[dev-dependencies]
+criterion = "0.4"
