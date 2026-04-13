@@ -219,7 +219,7 @@ fn construct_proxy_request(
 
     // Apply replace headers
     for (name, hv) in replace_values {
-        parts.headers.remove(&name);
+        // Insert replaces existing header if present, avoiding an extra remove
         parts.headers.insert(name, hv);
     }
 
