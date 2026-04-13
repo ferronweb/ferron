@@ -15,7 +15,7 @@ This page documents the `buffer_request` and `buffer_response` directives for co
 
 example.com {
     buffer_request 16384
-    buffer_response #null
+    buffer_response 0
 }
 ```
 

@@ -54,7 +54,7 @@ example.com {
 - `http2_only [bool: boolean]` (`http-proxy`)
   - This directive specifies whether only HTTP/2 is used for upstream connections. Default: `http2_only false`
 - `intercept_errors [bool: boolean]` (`http-proxy`)
-  - This directive specifies whether upstream error responses (4xx/5xx) are passed through to the client as-is. Default: `intercept_errors false`
+  - This directive specifies whether upstream error responses (4xx/5xx) are passed through to the client unchanged. When `false` (default), Ferron replaces upstream error responses with built-in error pages. When `true`, the full upstream response body and headers are passed through. Default: `intercept_errors false`
 
 ### TLS
 

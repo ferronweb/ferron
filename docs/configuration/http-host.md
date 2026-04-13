@@ -111,6 +111,9 @@ Reads the `Forwarded` header and extracts the first `for=` token. Both quoted an
   - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests (per RFC 2616 Section 9.2). The methods are returned as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not resource-specific `OPTIONS /path` requests. Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`
 - `timeout <duration>`
   - This directive specifies the pipeline execution timeout. Accepts a duration string (e.g. `30m`, `1h`, `90s`), a number in milliseconds, or `false` to disable. Default: `timeout 300000` (5 minutes)
+
+  > **Warning:** A bare number without a suffix is interpreted as **hours** by the duration parser (e.g. `timeout 5` means 5 hours, not 5ms). Always use an explicit suffix like `300s` or `5m` for timeouts.
+
 - `h1_enable_early_hints <bool>`
   - This directive specifies whether HTTP/1.1 early hints support is enabled. Default: `h1_enable_early_hints false`
 - `h2_initial_window_size <size: integer>`

@@ -36,7 +36,7 @@ snippet common_http {
 example.com {
     use common_http
 
-    tls true {
+    tls {
         provider manual
         cert "{{env.TLS_CERT}}"
         key "{{env.TLS_KEY}}"
