@@ -62,6 +62,7 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             // URL sanitization
             if is_global {
                 validate_nested!(http, url_sanitize, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(http, url_reject_backslash, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
             }
 
             // HTTP/1.x settings

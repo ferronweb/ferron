@@ -706,6 +706,38 @@ async fn request_handler_inner(
         }
     };
 
+    // Reject backslashes in URL (unless disabled by configuration)
+    let reject_backslash = config_resolver
+        .global()
+        .and_then(|g| get_http_nested_boolean(&g, "url_reject_backslash"))
+        .unwrap_or(true);
+    if let Err(e) = check_backslash_in_path(request.uri().path(), reject_backslash) {
+        emit_error(&events, format!("Invalid request URL: {}", e));
+        if let Some(response) = execute_error_pipeline(
+            error_pipeline.as_ref(),
+            400,
+            None,
+            LayeredConfiguration::default(),
+            &events,
+        )
+        .await
+        {
+            return (Ok(response), None, None);
+        }
+        return (
+            Ok(builtin_error_response(
+                400,
+                None,
+                config_resolver.global().and_then(|g| {
+                    g.get_value("admin_email")
+                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                }),
+            )),
+            None,
+            None,
+        );
+    }
+
     // Sanitize URL (unless disabled by configuration)
     let url_sanitize_enabled = config_resolver
         .global()
@@ -1662,10 +1694,48 @@ fn get_http_nested_boolean(
         })
 }
 
+/// Check the request URL path for backslash characters.
+///
+/// Rejects both literal backslashes (`\`, byte `0x5C`) and percent-encoded
+/// backslashes (`%5C`/`%5c`). This prevents path interpretation issues on
+/// Windows backends where backslashes may be treated as path separators.
+#[inline]
+fn check_backslash_in_path(raw_path: &str, reject: bool) -> Result<(), &'static str> {
+    if !reject {
+        return Ok(());
+    }
+
+    let bytes = raw_path.as_bytes();
+
+    // Check for literal backslash
+    if bytes.contains(&b'\\') {
+        return Err("backslash not allowed in URL path");
+    }
+
+    // Check for percent-encoded backslash (%5C or %5c)
+    let mut i = 0;
+    while i + 2 < bytes.len() {
+        if bytes[i] == b'%' && bytes[i + 1].is_ascii_hexdigit() && bytes[i + 2].is_ascii_hexdigit()
+        {
+            let h1 = bytes[i + 1].to_ascii_lowercase();
+            let h2 = bytes[i + 2].to_ascii_lowercase();
+            if h1 == b'5' && h2 == b'c' {
+                return Err("percent-encoded backslash not allowed in URL path");
+            }
+            i += 3;
+        } else {
+            i += 1;
+        }
+    }
+
+    Ok(())
+}
+
 /// Sanitize the request URL path
 ///
 /// Removes dangerous sequences like path traversal attempts (../, .\\, etc.)
 /// and normalizes slashes and percent-encoding.
+#[inline]
 fn sanitize_request_url(
     request: &mut HttpRequest,
     decoded_path: &str,
@@ -1945,5 +2015,40 @@ mod tests {
             .expect("matched prefix should strip cleanly");
 
         assert_eq!(stripped.as_str(), "/profile/avatar");
+    }
+
+    #[test]
+    fn check_backslash_in_path_rejects_literal_backslash() {
+        assert!(check_backslash_in_path("/path\\to\\resource", true).is_err());
+        assert!(check_backslash_in_path("/foo\\bar", true).is_err());
+        assert!(check_backslash_in_path("\\leading", true).is_err());
+        assert!(check_backslash_in_path("/trailing\\", true).is_err());
+    }
+
+    #[test]
+    fn check_backslash_in_path_rejects_percent_encoded_backslash() {
+        assert!(check_backslash_in_path("/path%5Cto%5Cresource", true).is_err());
+        assert!(check_backslash_in_path("/path%5cto%5cresource", true).is_err());
+        assert!(check_backslash_in_path("/path%5Cto", true).is_err());
+        assert!(check_backslash_in_path("/path%5cto", true).is_err());
+    }
+
+    #[test]
+    fn check_backslash_in_path_allows_normal_paths() {
+        assert!(check_backslash_in_path("/", true).is_ok());
+        assert!(check_backslash_in_path("/api/v2", true).is_ok());
+        assert!(check_backslash_in_path("/users/123", true).is_ok());
+        assert!(check_backslash_in_path("/path?query=1", true).is_ok());
+    }
+
+    #[test]
+    fn check_backslash_in_path_allows_backslash_when_disabled() {
+        assert!(check_backslash_in_path("/path\\to\\resource", false).is_ok());
+        assert!(check_backslash_in_path("/path%5Cto", false).is_ok());
+    }
+
+    #[test]
+    fn check_backslash_in_path_asterisk() {
+        assert!(check_backslash_in_path("*", true).is_ok());
     }
 }

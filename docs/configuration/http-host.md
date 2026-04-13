@@ -125,6 +125,8 @@ Reads the `Forwarded` header and extracts the first `for=` token. Both quoted an
   - This directive specifies whether the HTTP/2 extended CONNECT protocol setting is enabled. Default: `h2_enable_connect_protocol false`
 - `url_sanitize [bool: boolean]`
   - This directive specifies whether URL path sanitization is enabled. When enabled (the default), dangerous sequences such as path traversal attempts (`../`, `..\\`), null bytes, and invalid percent-encodings are removed or normalized. This directive is applicable only for global scope. Default: `url_sanitize true`
+- `url_reject_backslash [bool: boolean]`
+  - This directive specifies whether URLs containing backslashes are rejected. When enabled (the default), requests with literal `\` or percent-encoded backslashes (`%5C`) in the path are rejected with a 400 Bad Request response. This prevents path interpretation issues on Windows backends where backslashes may be treated as path separators. This directive is applicable only for global scope. Default: `url_reject_backslash true`
 
 **Configuration example:**
 
@@ -152,6 +154,13 @@ Notes for `url_sanitize`:
 - Disabling URL sanitization may improve RFC 3986 compliance for URLs that use valid but unusual encodings.
 - **Warning:** When disabled, Ferron will not protect backend services from path traversal attacks if reverse proxying is implemented. Use with caution.
 - Even when disabled, the file resolution stage still canonicalizes paths and rejects requests that escape the configured webroot.
+
+Notes for `url_reject_backslash`:
+
+- Backslash rejection is applied early in request processing, before configuration resolution and URL sanitization.
+- This directive is only read from the **global** configuration block. Per-host settings are not currently supported.
+- Both literal backslashes (`\`) and percent-encoded backslashes (`%5C`/`%5c`) are rejected.
+- Disabling this directive may be necessary if you have Windows backends that legitimately use backslashes in URLs, but **warning**: this can expose backends to path interpretation vulnerabilities.
 
 ### TLS
 
