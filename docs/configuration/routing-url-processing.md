@@ -83,10 +83,8 @@ Notes:
 - If a request continues below a matched file path, the unmatched suffix is carried into the file-stage context as `path_info`.
 - Additional static file behavior (index resolution, compression, ETags, directory listings, MIME types) is controlled by separate directives. See [Static file serving](/docs/v3/configuration/static-content).
 
-### URL sanitation and redirects
+### URL redirects
 
-- `url_sanitize [bool: boolean]`
-  - This directive specifies whether URL path sanitization is enabled. When enabled (the default), dangerous sequences such as path traversal attempts (`../`, `..\\`), null bytes, and invalid percent-encodings are removed or normalized. When omitted, defaults to `true`. Default: `url_sanitize true`
 - `trailing_slash_redirect [bool: boolean]`
   - This directive specifies whether automatic 301 redirects from directory paths without a trailing slash to the same path with a trailing slash are enabled. When omitted, defaults to `true`. Default: `trailing_slash_redirect true`
 
@@ -98,14 +96,6 @@ example.com {
     trailing_slash_redirect
 }
 ```
-
-Notes for `url_sanitize`:
-
-- URL sanitization is applied early in request processing, before configuration resolution.
-- This directive is only read from the **global** configuration block. Per-host settings are not currently supported.
-- Disabling URL sanitization may improve RFC 3986 compliance for URLs that use valid but unusual encodings.
-- **Warning:** When disabled, Ferron will not protect backend services from path traversal attacks if reverse proxying is implemented. Use with caution.
-- Even when disabled, the file resolution stage still canonicalizes paths and rejects requests that escape the configured webroot.
 
 Notes for `trailing_slash_redirect`:
 

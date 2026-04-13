@@ -123,6 +123,8 @@ Reads the `Forwarded` header and extracts the first `for=` token. Both quoted an
   - This directive specifies the HTTP/2 maximum header list size. Default: unset
 - `h2_enable_connect_protocol <bool>`
   - This directive specifies whether the HTTP/2 extended CONNECT protocol setting is enabled. Default: `h2_enable_connect_protocol false`
+- `url_sanitize [bool: boolean]`
+  - This directive specifies whether URL path sanitization is enabled. When enabled (the default), dangerous sequences such as path traversal attempts (`../`, `..\\`), null bytes, and invalid percent-encodings are removed or normalized. This directive is applicable only for global scope. Default: `url_sanitize true`
 
 **Configuration example:**
 
@@ -142,6 +144,14 @@ Notes:
 - `protocols` must leave at least one supported protocol enabled.
 - `h3` is currently rejected.
 - The default `options_allowed_methods` value (`GET, HEAD, POST, OPTIONS`) intentionally excludes methods like `PUT`, `DELETE`, `PATCH`, `CONNECT`, and `TRACE` to reduce the attack surface reported by security scanners. You can customize this list based on your server's requirements.
+
+Notes for `url_sanitize`:
+
+- URL sanitization is applied early in request processing, before configuration resolution.
+- This directive is only read from the **global** configuration block. Per-host settings are not currently supported.
+- Disabling URL sanitization may improve RFC 3986 compliance for URLs that use valid but unusual encodings.
+- **Warning:** When disabled, Ferron will not protect backend services from path traversal attacks if reverse proxying is implemented. Use with caution.
+- Even when disabled, the file resolution stage still canonicalizes paths and rejects requests that escape the configured webroot.
 
 ### TLS
 
