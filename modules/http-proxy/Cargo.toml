@@ -37,3 +37,13 @@ srv-lookup = ["hickory-resolver", "hickory-proto"]
 
 [dev-dependencies]
 criterion = "0.4"
+
+[[bench]]
+name = "sendnetio_bench"
+harness = false
+required-features = ["bench"]
+
+[[bench]]
+name = "shard_select_bench"
+harness = false
+required-features = ["bench"]

@@ -147,6 +147,9 @@ mod tests {
             let _ = cache.get(&format!("key{}", i));
         }
         let get_elapsed = start.elapsed();
-        println!("ttlcache insert for {} items: {:?}, get: {:?}", n, insert_elapsed, get_elapsed);
+        println!(
+            "ttlcache insert for {} items: {:?}, get: {:?}",
+            n, insert_elapsed, get_elapsed
+        );
     }
 }

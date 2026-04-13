@@ -1,9 +1,9 @@
 //! Connection pool wrapper using connpool.
 
-use std::collections::{HashMap, hash_map::DefaultHasher};
+use std::collections::{hash_map::DefaultHasher, HashMap};
+use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
 use std::sync::{Arc, RwLock};
-use std::hash::{Hash, Hasher};
 
 use connpool::Pool;
 
@@ -29,7 +29,11 @@ impl ConnectionManager {
     /// Like with_global_limit but allows overriding the number of shards (useful for tests/benches).
     pub fn with_global_limit_and_shards(global_limit: usize, shards: usize) -> Self {
         let shards = std::cmp::max(1, shards);
-        let per_shard = if shards > 0 { global_limit.div_ceil(shards) } else { global_limit };
+        let per_shard = if shards > 0 {
+            global_limit.div_ceil(shards)
+        } else {
+            global_limit
+        };
         let mut conns = Vec::with_capacity(shards);
         for _ in 0..shards {
             conns.push(Arc::new(Pool::new(per_shard)));

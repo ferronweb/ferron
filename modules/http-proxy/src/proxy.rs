@@ -1,11 +1,11 @@
 //! Core proxy logic: request transformation, TLS, connection establishment, and forwarding.
 
+use parking_lot::RwLock;
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
-use parking_lot::RwLock;
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -76,7 +76,7 @@ fn compile_template(value: &str) -> Vec<Segment> {
     while let Some(ch) = chars.next() {
         if ch == '{' && chars.peek() == Some(&'{') {
             chars.next(); // consume second '{'
-            // flush current literal
+                          // flush current literal
             if !literal.is_empty() {
                 segs.push(Segment::Literal(std::mem::take(&mut literal)));
             }
@@ -189,20 +189,31 @@ fn construct_proxy_request(
 
     // Prepare header modifications by resolving templates up-front while ctx.req is present
     // so that variables can resolve against the original request without cloning it.
-    let mut replace_values: Vec<(HeaderName, HeaderValue)> = Vec::with_capacity(config.headers_to_replace.len());
+    let mut replace_values: Vec<(HeaderName, HeaderValue)> =
+        Vec::with_capacity(config.headers_to_replace.len());
     for (name, value) in &config.headers_to_replace {
         let resolved = interpolate_header_value(value, ctx);
-        let hv = HeaderValue::from_str(&resolved).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Invalid header value: {e}")))?;
+        let hv = HeaderValue::from_str(&resolved).map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Invalid header value: {e}"),
+            )
+        })?;
         replace_values.push((name.clone(), hv));
     }
 
-    let mut add_values: Vec<(HeaderName, HeaderValue)> = Vec::with_capacity(config.headers_to_add.len());
+    let mut add_values: Vec<(HeaderName, HeaderValue)> =
+        Vec::with_capacity(config.headers_to_add.len());
     for action in &config.headers_to_add {
-        if let HeaderAction::Append(name, v) = action {
-            let resolved = interpolate_header_value(v, ctx);
-            let hv = HeaderValue::from_str(&resolved).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Invalid header value: {e}")))?;
-            add_values.push((name.clone(), hv));
-        }
+        let HeaderAction::Append(name, v) = action;
+        let resolved = interpolate_header_value(v, ctx);
+        let hv = HeaderValue::from_str(&resolved).map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Invalid header value: {e}"),
+            )
+        })?;
+        add_values.push((name.clone(), hv));
     }
 
     // All header templates validated — take ownership of the original request now.

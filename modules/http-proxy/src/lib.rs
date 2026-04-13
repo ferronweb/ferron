@@ -25,16 +25,16 @@ pub use connections::ConnectionManager;
 pub use upstream::UpstreamInner;
 
 // Re-export low-level send_net_io types for benchmarking and external tools
-pub use send_net_io::SendTcpStreamPoll;
-#[cfg(unix)]
-pub use send_net_io::SendUnixStreamPoll;
-pub use send_net_io::SendTcpStreamPollDropGuard;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;
 use ferron_core::runtime::Runtime;
 use ferron_core::Module;
 use ferron_http::HttpContext;
+pub use send_net_io::SendTcpStreamPoll;
+pub use send_net_io::SendTcpStreamPollDropGuard;
+#[cfg(unix)]
+pub use send_net_io::SendUnixStreamPoll;
 
 /// Shared counter type for tracking active health check unhealthy events.
 type ActiveUnhealthyCounters = parking_lot::Mutex<std::collections::HashMap<String, u64>>;
