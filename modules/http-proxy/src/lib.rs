@@ -23,6 +23,12 @@ use crate::upstream::LoadBalancerAlgorithmInner;
 pub use config::ProxyConfigurationValidator;
 pub use connections::ConnectionManager;
 pub use upstream::UpstreamInner;
+
+// Re-export low-level send_net_io types for benchmarking and external tools
+pub use send_net_io::SendTcpStreamPoll;
+#[cfg(unix)]
+pub use send_net_io::SendUnixStreamPoll;
+pub use send_net_io::SendTcpStreamPollDropGuard;
 use ferron_core::config::validator::ConfigurationValidator;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::registry::RegistryBuilder;

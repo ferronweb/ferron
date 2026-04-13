@@ -3,7 +3,7 @@ use std::net::{TcpListener, TcpStream as StdTcpStream};
 use std::thread;
 use vibeio::net::TcpStream as VibeTcpStream;
 
-use ferron_http_proxy::send_net_io::SendTcpStreamPoll;
+use ferron_http_proxy::SendTcpStreamPoll;
 
 fn bench_sendtcp_new(c: &mut Criterion) {
     c.bench_function("sendtcp_new_comp_io", |b| {
