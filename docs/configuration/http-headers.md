@@ -23,7 +23,7 @@ Header values support interpolation with `{{...}}` syntax.
 
 ```ferron
 example.com {
-    header +X-Client-IP "{{remote_address}}"
+    header +X-Client-IP "{{remote.ip}}"
     header X-Powered-By "Ferron"
     header -Server
 }
@@ -33,10 +33,15 @@ example.com {
 
 | Variable | Description |
 | --- | --- |
-| `{{remote_address}}` | The client's IP address |
-| `{{local_address}}` | The server's listening address |
-| `{{hostname}}` | The matched hostname |
+| `{{remote.ip}}` | The client's IP address |
+| `{{remote.port}}` | The client's port |
+| `{{server.ip}}` | The server's listening IP address |
+| `{{server.port}}` | The server's listening port |
+| `{{request.host}}` | The matched hostname |
+| `{{request.scheme}}` | `http` or `https` |
 | `{{env.NAME}}` | Environment variable `NAME` |
+
+For the complete variable reference, see [Conditionals and variables](./conditionals.md#built-in-variables).
 
 Unresolved variables are left as `{{name}}` in the output.
 
@@ -109,5 +114,5 @@ api.example.com {
 ## Notes and troubleshooting
 
 - If CORS headers are not appearing in responses, verify that `origins` is configured (CORS is disabled by default if `origins` is empty).
-- For `header` interpolation variables, see [Conditionals and variables](/docs/v3/configuration/conditionals).
+- For header interpolation, `remote.ip` and `server.ip` automatically canonicalize IPv4-mapped IPv6 addresses to IPv4. See [Conditionals and variables](./conditionals.md#ip-canonicalization) for details.
 - For HTTP host directives, see [HTTP host directives](/docs/v3/configuration/http-host).

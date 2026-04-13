@@ -43,11 +43,7 @@ pub struct HttpContext {
 
 impl Variables for HttpContext {
     fn resolve(&self, key: &str) -> Option<String> {
-        if let Some(req) = &self.req {
-            variables::resolve_variable(key, req, &self.variables)
-        } else {
-            self.variables.get(key).cloned()
-        }
+        variables::resolve_variable(key, self)
     }
 }
 

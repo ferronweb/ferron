@@ -12,6 +12,7 @@
 use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
 use ferron_core::config::{layer::LayeredConfiguration, ServerConfigurationBlock};
+use ferron_http::HttpContext;
 
 use super::super::prepare::{
     HostConfigs, PreparedConfiguration, PreparedHostConfigurationBlock,
@@ -21,7 +22,7 @@ use super::super::prepare::{
 use super::stage1::Stage1IpResolver;
 use super::stage2::Stage2RadixResolver;
 use super::stage3::{ConditionalGroup, ErrorConfigScope, Stage3ErrorResolver};
-use super::types::{ResolutionResult, ResolvedLocationPath, ResolverVariables};
+use super::types::{ResolutionResult, ResolvedLocationPath};
 
 pub struct ThreeStageResolver {
     global: Option<Arc<ServerConfigurationBlock>>,
@@ -347,13 +348,13 @@ impl ThreeStageResolver {
     /// * `ip` - Client IP address for Stage 1
     /// * `hostname` - Request hostname for Stage 2
     /// * `path` - Request path for Stage 2
-    /// * `variables` - Variables for conditional evaluation in Stage 2
+    /// * `ctx` - HTTP context for conditional evaluation in Stage 2
     pub fn resolve(
         &self,
         ip: IpAddr,
         hostname: &str,
         path: &str,
-        variables: &ResolverVariables,
+        ctx: &HttpContext,
     ) -> Option<ResolutionResult> {
         let mut location_path = ResolvedLocationPath::new();
 
@@ -363,13 +364,9 @@ impl ThreeStageResolver {
             .resolve_host(ip, hostname, &mut location_path)?;
 
         // Stage 2: Hostname, path, and conditional resolution (passing Stage 1's config)
-        let (stage2_config, stage2_path) = self.stage2_radix.resolve(
-            Some(hostname),
-            path,
-            Arc::clone(host_config_arc),
-            variables,
-            None,
-        );
+        let (stage2_config, stage2_path) =
+            self.stage2_radix
+                .resolve(Some(hostname), path, Arc::clone(host_config_arc), ctx, None);
 
         // Merge Stage 2 results
         let mut layered_config = LayeredConfiguration::new();
@@ -413,16 +410,16 @@ impl ThreeStageResolver {
     /// * `hostname` - Request hostname to resolve
     /// * `path` - Request path to resolve
     /// * `base_config` - The base prepared host configuration block (Arc for zero-copy sharing)
-    /// * `variables` - Variables for conditional evaluation
+    /// * `ctx` - HTTP context for conditional evaluation
     pub fn resolve_stage2(
         &self,
         hostname: Option<&str>,
         path: &str,
         base_config: Arc<PreparedHostConfigurationBlock>,
-        variables: &ResolverVariables,
+        ctx: &HttpContext,
     ) -> (LayeredConfiguration, ResolvedLocationPath) {
         self.stage2_radix
-            .resolve(hostname, path, base_config, variables, None)
+            .resolve(hostname, path, base_config, ctx, None)
     }
 
     /// Resolve only through Stage 2 (hostname/path/conditionals) with base layered config
@@ -431,18 +428,18 @@ impl ThreeStageResolver {
     /// * `hostname` - Request hostname to resolve
     /// * `path` - Request path to resolve
     /// * `base_config` - The base prepared host configuration block (Arc for zero-copy sharing)
-    /// * `variables` - Variables for conditional evaluation
+    /// * `ctx` - HTTP context for conditional evaluation
     /// * `layered_config` - Optional base layered configuration to add layers to
     pub fn resolve_stage2_layered(
         &self,
         hostname: Option<&str>,
         path: &str,
         base_config: Arc<PreparedHostConfigurationBlock>,
-        variables: &ResolverVariables,
+        ctx: &HttpContext,
         layered_config: Option<LayeredConfiguration>,
     ) -> (LayeredConfiguration, ResolvedLocationPath) {
         self.stage2_radix
-            .resolve(hostname, path, base_config, variables, layered_config)
+            .resolve(hostname, path, base_config, ctx, layered_config)
     }
 
     /// Resolve only through Stage 3 (error configuration)
@@ -477,14 +474,14 @@ impl ThreeStageResolver {
     /// * `hostname` - Request hostname for Stage 2
     /// * `path` - Request path for Stage 2
     /// * `error_code` - Error code for Stage 3
-    /// * `variables` - Variables for conditional evaluation
+    /// * `ctx` - HTTP context for conditional evaluation
     pub fn resolve_error(
         &self,
         ip: IpAddr,
         hostname: &str,
         path: &str,
         error_code: u16,
-        variables: &ResolverVariables,
+        ctx: &HttpContext,
     ) -> Option<ResolutionResult> {
         let mut location_path = ResolvedLocationPath::new();
 
@@ -494,13 +491,9 @@ impl ThreeStageResolver {
             .resolve_host(ip, hostname, &mut location_path)?;
 
         // Stage 2: Hostname, path, and conditional resolution
-        let (stage2_config, stage2_path) = self.stage2_radix.resolve(
-            Some(hostname),
-            path,
-            Arc::clone(host_config_arc),
-            variables,
-            None,
-        );
+        let (stage2_config, stage2_path) =
+            self.stage2_radix
+                .resolve(Some(hostname), path, Arc::clone(host_config_arc), ctx, None);
 
         // Merge Stage 2 results
         let mut layered_config = LayeredConfiguration::new();
@@ -545,14 +538,14 @@ impl ThreeStageResolver {
     /// * `hostname` - Request hostname for Stage 2
     /// * `path` - Request path for Stage 2
     /// * `error_code` - Error code for Stage 3
-    /// * `variables` - Variables for conditional evaluation
+    /// * `ctx` - HTTP context for conditional evaluation
     pub fn resolve_error_scoped(
         &self,
         ip: IpAddr,
         hostname: &str,
         path: &str,
         error_code: u16,
-        variables: &ResolverVariables,
+        ctx: &HttpContext,
     ) -> Option<ResolutionResult> {
         let mut location_path = ResolvedLocationPath::new();
 
@@ -562,13 +555,9 @@ impl ThreeStageResolver {
             .resolve_host(ip, hostname, &mut location_path)?;
 
         // Stage 2: Hostname, path, and conditional resolution
-        let (stage2_config, stage2_path) = self.stage2_radix.resolve(
-            Some(hostname),
-            path,
-            Arc::clone(host_config_arc),
-            variables,
-            None,
-        );
+        let (stage2_config, stage2_path) =
+            self.stage2_radix
+                .resolve(Some(hostname), path, Arc::clone(host_config_arc), ctx, None);
 
         // Merge Stage 2 results
         let mut layered_config = LayeredConfiguration::new();
@@ -589,7 +578,7 @@ impl ThreeStageResolver {
             Some(hostname),
             Some(ip),
             Some(&location_path.path_segments),
-            variables,
+            ctx,
             Some(layered_config),
         );
 
@@ -613,11 +602,17 @@ impl Default for ThreeStageResolver {
 
 #[cfg(test)]
 mod tests {
+    use ferron_core::config::layer::LayeredConfiguration;
     use ferron_core::config::{
         ServerConfigurationMatcherExpr, ServerConfigurationMatcherOperand,
         ServerConfigurationMatcherOperator,
     };
+    use ferron_http::HttpContext;
+    use ferron_http::HttpRequest;
+    use ferron_observability::CompositeEventSink;
     use http_body_util::{BodyExt, Empty};
+    use rustc_hash::FxHashMap;
+    use typemap_rev::TypeMap;
 
     use super::*;
     use crate::config::prepare::{
@@ -625,6 +620,26 @@ mod tests {
     };
     use crate::config::resolver::matcher::CompiledMatcherExpr;
     use std::net::Ipv4Addr;
+
+    fn make_test_context(req: HttpRequest) -> HttpContext {
+        HttpContext {
+            req: Some(req),
+            res: None,
+            events: CompositeEventSink::new(Vec::new()),
+            configuration: LayeredConfiguration::default(),
+            hostname: Some("example.com".to_string()),
+            variables: FxHashMap::default(),
+            previous_error: None,
+            original_uri: None,
+            routing_uri: None,
+            encrypted: false,
+            local_address: "0.0.0.0:80".parse().unwrap(),
+            remote_address: "127.0.0.1:12345".parse().unwrap(),
+            auth_user: None,
+            https_port: None,
+            extensions: TypeMap::new(),
+        }
+    }
 
     fn create_test_block() -> PreparedHostConfigurationBlock {
         PreparedHostConfigurationBlock {
@@ -642,15 +657,13 @@ mod tests {
         resolver.insert_host(vec!["com", "example"], Arc::clone(&config), 10);
 
         let base_block = create_test_block();
-        let variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let ctx = make_test_context(request);
         let (layered_config, path) = resolver.resolve(
             Some("example.com"),
             "/api",
             Arc::new(base_block),
-            &variables,
+            &ctx,
             None,
         );
 
@@ -701,15 +714,13 @@ mod tests {
             .get("example.com")
             .unwrap();
 
-        let variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let ctx = make_test_context(request);
         let (config2, _) = resolver.resolve_stage2_layered(
             Some("example.com"),
             "/api",
             Arc::clone(host_block),
-            &variables,
+            &ctx,
             Some(config1),
         );
 
@@ -738,15 +749,13 @@ mod tests {
             .register_ip("127.0.0.1".parse().unwrap(), hosts);
 
         // Full resolution
-        let variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let ctx = make_test_context(request);
         let result = resolver.resolve(
             "127.0.0.1".parse().unwrap(),
             "example.com",
             "/api/test",
-            &variables,
+            &ctx,
         );
 
         assert!(result.is_some());
@@ -775,14 +784,13 @@ mod tests {
             .insert_if_conditional(vec![expr], config, 10)
             .expect("Valid conditional");
 
-        let mut variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
-        variables.1.insert("method".to_string(), "GET".to_string());
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let mut ctx = make_test_context(request);
+        ctx.variables
+            .insert("method".to_string(), "GET".to_string());
 
         let mut path = ResolvedLocationPath::new();
-        let configs = resolver.resolve_conditionals(&variables, &mut path);
+        let configs = resolver.resolve_conditionals(&ctx, &mut path);
 
         assert!(!configs.is_empty());
         assert!(!path.conditionals.is_empty());
@@ -928,15 +936,13 @@ mod tests {
         });
 
         // Resolve
-        let variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let ctx = make_test_context(request);
         let (layered, path) = resolver.resolve(
             Some("example.com"),
             "/api/users",
             Arc::new(base_block),
-            &variables,
+            &ctx,
             None,
         );
 
@@ -977,31 +983,25 @@ mod tests {
             .expect("Valid regex");
 
         // Create variables with matching path
-        let mut variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
-        variables
-            .1
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let mut ctx = make_test_context(request);
+        ctx.variables
             .insert("path".to_string(), "/api/users".to_string());
 
         let mut path = ResolvedLocationPath::new();
-        let configs = resolver.resolve_conditionals(&variables, &mut path);
+        let configs = resolver.resolve_conditionals(&ctx, &mut path);
 
         // Should match
         assert!(!configs.is_empty(), "Regex pattern should match /api/users");
 
         // Create variables with non-matching path
-        let mut variables2 = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
-        variables2
-            .1
+        let request2 = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let mut ctx2 = make_test_context(request2);
+        ctx2.variables
             .insert("path".to_string(), "/static/file.js".to_string());
 
         let mut path2 = ResolvedLocationPath::new();
-        let configs2 = resolver.resolve_conditionals(&variables2, &mut path2);
+        let configs2 = resolver.resolve_conditionals(&ctx2, &mut path2);
 
         // Should not match
         assert!(
@@ -1031,16 +1031,13 @@ mod tests {
             .expect("Valid regex");
 
         // Create variables with non-admin path (should match)
-        let mut variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
-        variables
-            .1
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let mut ctx = make_test_context(request);
+        ctx.variables
             .insert("path".to_string(), "/public/page".to_string());
 
         let mut path = ResolvedLocationPath::new();
-        let configs = resolver.resolve_conditionals(&variables, &mut path);
+        let configs = resolver.resolve_conditionals(&ctx, &mut path);
 
         // Should match (path does NOT match admin pattern)
         assert!(
@@ -1049,16 +1046,13 @@ mod tests {
         );
 
         // Create variables with admin path (should not match)
-        let mut variables2 = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
-        variables2
-            .1
+        let request2 = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let mut ctx2 = make_test_context(request2);
+        ctx2.variables
             .insert("path".to_string(), "/admin/dashboard".to_string());
 
         let mut path2 = ResolvedLocationPath::new();
-        let configs2 = resolver.resolve_conditionals(&variables2, &mut path2);
+        let configs2 = resolver.resolve_conditionals(&ctx2, &mut path2);
 
         // Should not match (path DOES match admin pattern)
         assert!(
@@ -1113,32 +1107,26 @@ mod tests {
             .expect("Valid regex");
 
         // Should match
-        let mut variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
-        variables
-            .1
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let mut ctx = make_test_context(request);
+        ctx.variables
             .insert("path".to_string(), "/api/users".to_string());
 
         let mut path = ResolvedLocationPath::new();
-        let configs = resolver.resolve_conditionals(&variables, &mut path);
+        let configs = resolver.resolve_conditionals(&ctx, &mut path);
         assert!(
             !configs.is_empty(),
             "Should match path with api but not admin"
         );
 
         // Should not match (contains admin)
-        let mut variables2 = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
-        variables2
-            .1
+        let request2 = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let mut ctx2 = make_test_context(request2);
+        ctx2.variables
             .insert("path".to_string(), "/admin/api/users".to_string());
 
         let mut path2 = ResolvedLocationPath::new();
-        let configs2 = resolver.resolve_conditionals(&variables2, &mut path2);
+        let configs2 = resolver.resolve_conditionals(&ctx2, &mut path2);
         assert!(
             configs2.is_empty(),
             "Should not match path containing admin"
@@ -1281,22 +1269,11 @@ mod tests {
             .stage3()
             .register_error(500, Arc::new(create_test_block()));
 
-        let variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
-        let result1 = resolver.resolve(
-            "192.168.1.1".parse().unwrap(),
-            "example.com",
-            "/api",
-            &variables,
-        );
-        let result2 = resolver.resolve(
-            "192.168.1.2".parse().unwrap(),
-            "other.com",
-            "/static",
-            &variables,
-        );
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let ctx = make_test_context(request);
+        let result1 = resolver.resolve("192.168.1.1".parse().unwrap(), "example.com", "/api", &ctx);
+        let result2 =
+            resolver.resolve("192.168.1.2".parse().unwrap(), "other.com", "/static", &ctx);
 
         assert!(result1.is_some());
         assert!(result2.is_some());
@@ -1377,40 +1354,35 @@ mod tests {
             .insert_if_conditional(vec![post_expr], Arc::clone(&config_post), 10)
             .expect("Valid POST conditional");
 
-        let mut variables_get = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
-        variables_get
-            .1
+        let request_get = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let mut ctx_get = make_test_context(request_get);
+        ctx_get
+            .variables
             .insert("method".to_string(), "GET".to_string());
 
         let mut path_get = ResolvedLocationPath::new();
-        let configs_get = resolver.resolve_conditionals(&variables_get, &mut path_get);
+        let configs_get = resolver.resolve_conditionals(&ctx_get, &mut path_get);
         assert_eq!(configs_get.len(), 1);
 
-        let mut variables_post = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
-        variables_post
-            .1
+        let request_post = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let mut ctx_post = make_test_context(request_post);
+        ctx_post
+            .variables
             .insert("method".to_string(), "POST".to_string());
 
         let mut path_post = ResolvedLocationPath::new();
-        let configs_post = resolver.resolve_conditionals(&variables_post, &mut path_post);
+        let configs_post = resolver.resolve_conditionals(&ctx_post, &mut path_post);
         assert_eq!(configs_post.len(), 1);
 
-        let mut variables_delete = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
-        variables_delete
-            .1
+        let request_delete =
+            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let mut ctx_delete = make_test_context(request_delete);
+        ctx_delete
+            .variables
             .insert("method".to_string(), "DELETE".to_string());
 
         let mut path_delete = ResolvedLocationPath::new();
-        let configs_delete = resolver.resolve_conditionals(&variables_delete, &mut path_delete);
+        let configs_delete = resolver.resolve_conditionals(&ctx_delete, &mut path_delete);
         assert_eq!(configs_delete.len(), 0);
     }
 
@@ -1511,23 +1483,11 @@ mod tests {
             .stage3()
             .register_error(500, Arc::new(create_test_block()));
 
-        let variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let ctx = make_test_context(request);
 
-        let result_a = resolver.resolve(
-            "10.0.0.1".parse().unwrap(),
-            "api.com",
-            "/v1/users",
-            &variables,
-        );
-        let result_b = resolver.resolve(
-            "10.0.0.2".parse().unwrap(),
-            "other.com",
-            "/home",
-            &variables,
-        );
+        let result_a = resolver.resolve("10.0.0.1".parse().unwrap(), "api.com", "/v1/users", &ctx);
+        let result_b = resolver.resolve("10.0.0.2".parse().unwrap(), "other.com", "/home", &ctx);
 
         assert!(result_a.is_some(), "Branch A should resolve");
         assert!(result_b.is_some(), "Branch B should resolve");
@@ -1619,13 +1579,11 @@ mod tests {
             .stage3()
             .register_error(500, Arc::new(create_test_block()));
 
-        let variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let ctx = make_test_context(request);
 
-        let result1 = resolver.resolve("1.1.1.1".parse().unwrap(), "host1.com", "/", &variables);
-        let result2 = resolver.resolve("2.2.2.2".parse().unwrap(), "host2.com", "/", &variables);
+        let result1 = resolver.resolve("1.1.1.1".parse().unwrap(), "host1.com", "/", &ctx);
+        let result2 = resolver.resolve("2.2.2.2".parse().unwrap(), "host2.com", "/", &ctx);
 
         assert!(result1.is_some());
         assert!(result2.is_some());
@@ -1745,26 +1703,14 @@ mod tests {
             }),
         );
 
-        let variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let ctx = make_test_context(request);
 
         // Resolve from IP1
-        let result_ip1 = resolver.resolve(
-            "192.168.1.1".parse().unwrap(),
-            "shared.com",
-            "/",
-            &variables,
-        );
+        let result_ip1 = resolver.resolve("192.168.1.1".parse().unwrap(), "shared.com", "/", &ctx);
 
         // Resolve from IP2
-        let result_ip2 = resolver.resolve(
-            "192.168.1.2".parse().unwrap(),
-            "shared.com",
-            "/",
-            &variables,
-        );
+        let result_ip2 = resolver.resolve("192.168.1.2".parse().unwrap(), "shared.com", "/", &ctx);
 
         assert!(result_ip1.is_some(), "IP1 should resolve");
         assert!(result_ip2.is_some(), "IP2 should resolve");
@@ -1978,10 +1924,8 @@ mod tests {
             }),
         );
 
-        let variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let ctx = make_test_context(request);
 
         // Use the new resolve_error_scoped method
         let result_api = resolver.resolve_error_scoped(
@@ -1989,7 +1933,7 @@ mod tests {
             "api.com",
             "/",
             404,
-            &variables,
+            &ctx,
         );
 
         let result_web = resolver.resolve_error_scoped(
@@ -1997,7 +1941,7 @@ mod tests {
             "web.com",
             "/",
             404,
-            &variables,
+            &ctx,
         );
 
         assert!(result_api.is_some(), "API should resolve");
@@ -2091,30 +2035,28 @@ mod tests {
         // Register the conditional error config
         resolver.register(scope, error_config);
 
-        // Create test variables with a GET request
+        // Create test context with a GET request
         let get_request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
-        let get_variables = (get_request, HashMap::new());
+        let ctx_get = make_test_context(get_request);
 
         // Test that conditional matches for GET request
         let mut path_get = ResolvedLocationPath::new();
-        let result_get =
-            resolver.resolve_scoped(404, None, None, None, &get_variables, &mut path_get);
+        let result_get = resolver.resolve_scoped(404, None, None, None, &ctx_get, &mut path_get);
 
         assert!(
             result_get.is_some(),
             "Should match conditional error config for GET request"
         );
 
-        // Create test variables with a POST request
+        // Create test context with a POST request
         let mut post_request =
             http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
         *post_request.method_mut() = http::Method::POST;
-        let post_variables = (post_request, HashMap::new());
+        let ctx_post = make_test_context(post_request);
 
         // Test that conditional doesn't match for POST request
         let mut path_post = ResolvedLocationPath::new();
-        let result_post =
-            resolver.resolve_scoped(404, None, None, None, &post_variables, &mut path_post);
+        let result_post = resolver.resolve_scoped(404, None, None, None, &ctx_post, &mut path_post);
 
         assert!(
             result_post.is_none(),
@@ -2172,16 +2114,13 @@ mod tests {
         let resolver = ThreeStageResolver::from_prepared(prepared);
 
         // Verify Stage 2 has the conditional registered by resolving it
-        let mut variables = (
-            http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-            HashMap::new(),
-        );
-        variables.1.insert("method".to_string(), "GET".to_string());
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let mut ctx = make_test_context(request);
+        ctx.variables
+            .insert("method".to_string(), "GET".to_string());
 
         let mut path = ResolvedLocationPath::new();
-        let configs = resolver
-            .stage2_ref()
-            .resolve_conditionals(&variables, &mut path);
+        let configs = resolver.stage2_ref().resolve_conditionals(&ctx, &mut path);
         assert!(
             !configs.is_empty(),
             "Stage 2 should have IfConditional registered from from_prepared"
@@ -2237,16 +2176,15 @@ mod tests {
         let resolver = ThreeStageResolver::from_prepared(prepared);
 
         // Verify Stage 3 has the location error config registered
+        let request = http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
+        let ctx = make_test_context(request);
         let mut path = ResolvedLocationPath::new();
         let result = resolver.stage3_ref().resolve_scoped(
             404,
             Some("example.com"),
             None,
             Some(&["/api".to_string()]),
-            &(
-                http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync()),
-                HashMap::new(),
-            ),
+            &ctx,
             &mut path,
         );
         assert!(
@@ -2332,7 +2270,7 @@ mod tests {
         let mut post_request =
             http::Request::new(Empty::new().map_err(|e| match e {}).boxed_unsync());
         *post_request.method_mut() = http::Method::POST;
-        let post_variables = (post_request, HashMap::new());
+        let ctx_post = make_test_context(post_request);
 
         let mut path = ResolvedLocationPath::new();
         let result = resolver.stage3_ref().resolve_scoped(
@@ -2340,7 +2278,7 @@ mod tests {
             Some("example.com"),
             None,
             Some(&["/api".to_string()]),
-            &post_variables,
+            &ctx_post,
             &mut path,
         );
         assert!(

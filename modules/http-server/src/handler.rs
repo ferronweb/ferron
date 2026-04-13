@@ -10,6 +10,7 @@ use bytes::Bytes;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::{Pipeline, PipelineError, Stage, StageHooks};
 use ferron_core::util::parse_duration;
+use ferron_http::variables::canonicalize_ip;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse};
 use ferron_observability::{
     AccessEvent, AccessVisitor, CompositeEventSink, Event, LogEvent, LogLevel,
@@ -266,21 +267,6 @@ impl AccessEvent for HttpAccessLog {
                 &format!("header_{}", name.to_ascii_lowercase().replace("-", "_")),
                 value,
             );
-        }
-    }
-}
-
-/// Canonicalize an IP address: convert IPv4-mapped IPv6 (`::ffff:x.x.x.x`) to IPv4.
-#[inline]
-fn canonicalize_ip(ip: std::net::IpAddr) -> String {
-    match ip {
-        std::net::IpAddr::V4(_) => ip.to_string(),
-        std::net::IpAddr::V6(v6) => {
-            if let Some(v4) = v6.to_ipv4_mapped() {
-                v4.to_string()
-            } else {
-                ip.to_string()
-            }
         }
     }
 }
@@ -806,28 +792,33 @@ async fn request_handler_inner(
         }
     }
 
-    let mut variables = HashMap::with_capacity(6);
-    if let Some(hostname) = hostname.as_ref() {
-        variables.insert("request.host".to_string(), hostname.clone());
-    }
-    variables.insert(
-        "request.scheme".to_string(),
-        if encrypted { "https" } else { "http" }.to_string(),
-    );
-    variables.insert("server.ip".to_string(), local_address.ip().to_string());
-    variables.insert("server.port".to_string(), local_address.port().to_string());
-    variables.insert("remote.ip".to_string(), remote_address.ip().to_string());
-    variables.insert("remote.port".to_string(), remote_address.port().to_string());
+    // Create a partial HttpContext for variable resolution during config resolution.
+    // This enables all interpolation variables (request.*, server.*, remote.*) to be
+    // resolved dynamically from the context rather than pre-populated in a HashMap.
+    let mut ctx = HttpContext {
+        req: Some(request),
+        res: None,
+        events: events.clone(),
+        configuration: LayeredConfiguration::default(),
+        hostname: hostname.clone(),
+        variables: FxHashMap::default(),
+        previous_error: None,
+        original_uri: None,
+        routing_uri: routing_str.parse().ok(),
+        encrypted,
+        local_address,
+        remote_address,
+        auth_user: None,
+        https_port,
+        extensions: TypeMap::new(),
+    };
 
-    let resolver_variables = (request, variables);
     let resolution = config_resolver.resolve(
         local_address.ip(),
         hostname.as_deref().unwrap_or(""),
         &routing_str,
-        &resolver_variables,
+        &ctx,
     );
-    let request = resolver_variables.0;
-    let variables = resolver_variables.1;
 
     let Some(resolution) = resolution else {
         if let Some(response) = execute_error_pipeline(
@@ -847,7 +838,7 @@ async fn request_handler_inner(
                 None,
                 config_resolver.global().and_then(|g| {
                     g.get_value("admin_email")
-                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                        .and_then(|v| v.as_string_with_interpolations(&ctx))
                 }),
             )),
             None,
@@ -855,13 +846,16 @@ async fn request_handler_inner(
         );
     };
 
+    // Fill in the resolved configuration
+    ctx.configuration = resolution.configuration.clone();
+
     // Handle OPTIONS * requests (RFC 2616 Section 9.2)
     // Early response before pipeline execution
-    if is_options_star_request(&request) {
+    if is_options_star_request(ctx.req.as_ref().expect("invalid HTTP context state")) {
         let allow_header = resolution
             .configuration
             .get_value("options_allowed_methods", false)
-            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+            .and_then(|v| v.as_string_with_interpolations(&ctx))
             .unwrap_or_else(|| "GET, HEAD, POST, OPTIONS".to_string());
 
         let response = Response::builder()
@@ -874,6 +868,7 @@ async fn request_handler_inner(
         return (Ok(response), None, None);
     }
 
+    let request = ctx.req.take().expect("invalid HTTP context state");
     let request_uri = request.uri().clone();
     let (request_parts, body) = request.into_parts();
     let cloned_request = http::Request::from_parts(
@@ -885,25 +880,10 @@ async fn request_handler_inner(
     let admin_email = resolution
         .configuration
         .get_value("admin_email", false)
-        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()));
+        .and_then(|v| v.as_string_with_interpolations(&ctx));
     let resolution_configuration2 = resolution.configuration.clone();
-    let mut ctx = HttpContext {
-        req: Some(request),
-        res: None,
-        events: events.clone(),
-        configuration: resolution.configuration,
-        hostname,
-        variables: variables.into_iter().collect(),
-        previous_error: None,
-        original_uri: Option::from(request_uri),
-        routing_uri: routing_str.parse().ok(),
-        encrypted,
-        local_address,
-        remote_address,
-        auth_user: None,
-        https_port,
-        extensions: TypeMap::new(),
-    };
+    ctx.req = Some(request);
+    ctx.original_uri = Some(request_uri);
 
     execute_pipeline_stages(
         &mut ctx,
@@ -922,18 +902,15 @@ async fn request_handler_inner(
             ctx.req = Some(cloned_request);
             // Rebuild the resolver request from the current request in context
             if let Some(req) = ctx.req.take() {
-                let error_resolver_variables = (
-                    req,
-                    ctx.variables.clone().into_iter().collect::<HashMap<_, _>>(),
-                );
+                // Preserve the request for error resolution
+                ctx.req = Some(req);
                 let error_resolution = config_resolver.resolve_error_scoped(
                     local_address.ip(),
                     ctx.hostname.as_deref().unwrap_or(""),
                     &routing_str,
                     status,
-                    &error_resolver_variables,
+                    &ctx,
                 );
-                ctx.req = Some(error_resolver_variables.0);
 
                 if let Some(error_resolution) = error_resolution {
                     let execute_error_config = if let (Some(config1), Some(config2)) = (

@@ -93,12 +93,12 @@ Header values support interpolation with `{{...}}` syntax:
 example.com {
     root /var/www/html
 
-    header +X-Client-IP "{{remote_address}}"
+    header +X-Client-IP "{{remote.ip}}"
     header X-Powered-By "Ferron"
 }
 ```
 
-Available variables include `{{remote_address}}`, `{{local_address}}`, `{{hostname}}`, and `{{env.NAME}}` for environment variables.
+Available variables include `{{remote.ip}}`, `{{server.ip}}`, `{{request.host}}`, and `{{env.NAME}}` for environment variables. For the complete reference, see [Conditionals and variables](/docs/v3/configuration/conditionals).
 
 ## Notes and troubleshooting
 

@@ -27,4 +27,4 @@ pub use resolver::ThreeStageResolver;
 pub use stage1::Stage1IpResolver;
 pub use stage2::{RadixKey, RadixNodeData, Stage2RadixResolver};
 pub use stage3::{ErrorConfigScope, ErrorConfigScopeKey, Stage3ErrorResolver};
-pub use types::{ResolutionResult, ResolvedLocationPath, ResolverVariables};
+pub use types::{ResolutionResult, ResolvedLocationPath};

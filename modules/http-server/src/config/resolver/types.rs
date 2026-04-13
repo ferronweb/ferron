@@ -1,10 +1,7 @@
-use std::{collections::HashMap, fmt, net::IpAddr};
+use std::{fmt, net::IpAddr};
 
 use ferron_core::config::{layer::LayeredConfiguration, ServerConfigurationMatcherExpr};
-use ferron_http::HttpRequest;
-
-/// Variables that can be used in conditional matching
-pub type ResolverVariables = (HttpRequest, HashMap<String, String>);
+use ferron_http::HttpContext;
 
 /// Represents a resolved location path through the configuration tree
 #[derive(Debug, Clone, Default)]

@@ -6,8 +6,7 @@ use ferron_core::config::{
     ServerConfigurationMatcherOperator,
 };
 use ferron_http::variables::resolve_variable;
-
-use super::types::ResolverVariables;
+use ferron_http::HttpContext;
 
 /// A matcher expression with pre-compiled regex patterns for efficient evaluation.
 ///
@@ -63,23 +62,17 @@ impl CompiledMatcherExpr {
 }
 
 /// Evaluate a collection of conditional expressions with AND logic (all must match).
-pub fn evaluate_matcher_conditions(
-    exprs: &[CompiledMatcherExpr],
-    variables: &ResolverVariables,
-) -> bool {
+pub fn evaluate_matcher_conditions(exprs: &[CompiledMatcherExpr], ctx: &HttpContext) -> bool {
     exprs
         .iter()
-        .all(|expr| evaluate_matcher_condition(expr, variables))
+        .all(|expr| evaluate_matcher_condition(expr, ctx))
 }
 
 /// Evaluate a single conditional matcher expression with given variables.
-pub fn evaluate_matcher_condition(
-    compiled_expr: &CompiledMatcherExpr,
-    variables: &ResolverVariables,
-) -> bool {
+pub fn evaluate_matcher_condition(compiled_expr: &CompiledMatcherExpr, ctx: &HttpContext) -> bool {
     let expr = &compiled_expr.expr;
-    let left_val = resolve_matcher_operand(&expr.left, variables);
-    let right_val = resolve_matcher_operand(&expr.right, variables);
+    let left_val = resolve_matcher_operand(&expr.left, ctx);
+    let right_val = resolve_matcher_operand(&expr.right, ctx);
 
     match &expr.op {
         ServerConfigurationMatcherOperator::Eq => left_val == right_val,
@@ -150,12 +143,10 @@ pub fn evaluate_matcher_condition(
 /// Resolve the string value of a matcher operand from variables or literals.
 pub fn resolve_matcher_operand(
     operand: &ServerConfigurationMatcherOperand,
-    variables: &ResolverVariables,
+    ctx: &HttpContext,
 ) -> Option<String> {
     match operand {
-        ServerConfigurationMatcherOperand::Identifier(name) => {
-            resolve_variable(name, &variables.0, &variables.1)
-        }
+        ServerConfigurationMatcherOperand::Identifier(name) => resolve_variable(name, ctx),
         ServerConfigurationMatcherOperand::String(s) => Some(s.clone()),
         ServerConfigurationMatcherOperand::Integer(n) => Some(n.to_string()),
         ServerConfigurationMatcherOperand::Float(f) => Some(f.to_string()),
@@ -165,9 +156,31 @@ pub fn resolve_matcher_operand(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ferron_core::config::ServerConfigurationMatcherExpr;
+    use ferron_core::config::{layer::LayeredConfiguration, ServerConfigurationMatcherExpr};
     use ferron_http::HttpRequest;
-    use std::collections::HashMap;
+    use ferron_observability::CompositeEventSink;
+    use rustc_hash::FxHashMap;
+    use typemap_rev::TypeMap;
+
+    fn make_test_context() -> HttpContext {
+        HttpContext {
+            req: Some(HttpRequest::default()),
+            res: None,
+            events: CompositeEventSink::new(Vec::new()),
+            configuration: LayeredConfiguration::default(),
+            hostname: None,
+            variables: FxHashMap::default(),
+            previous_error: None,
+            original_uri: None,
+            routing_uri: None,
+            encrypted: false,
+            local_address: "0.0.0.0:80".parse().unwrap(),
+            remote_address: "127.0.0.1:12345".parse().unwrap(),
+            auth_user: None,
+            https_port: None,
+            extensions: TypeMap::new(),
+        }
+    }
 
     #[test]
     fn test_regex_matcher_expr_matching() {
@@ -178,11 +191,9 @@ mod tests {
         };
 
         let compiled = CompiledMatcherExpr::new(expr).unwrap();
+        let ctx = make_test_context();
 
-        let req = HttpRequest::default();
-        let variables = (req, HashMap::new());
-
-        assert!(evaluate_matcher_condition(&compiled, &variables));
+        assert!(evaluate_matcher_condition(&compiled, &ctx));
     }
 
     #[test]
@@ -194,11 +205,9 @@ mod tests {
         };
 
         let compiled = CompiledMatcherExpr::new(expr).unwrap();
+        let ctx = make_test_context();
 
-        let req = HttpRequest::default();
-        let variables = (req, HashMap::new());
-
-        assert!(evaluate_matcher_condition(&compiled, &variables));
+        assert!(evaluate_matcher_condition(&compiled, &ctx));
     }
 
     #[test]
@@ -210,11 +219,9 @@ mod tests {
         };
 
         let compiled = CompiledMatcherExpr::new(expr).unwrap();
+        let ctx = make_test_context();
 
-        let req = HttpRequest::default();
-        let variables = (req, HashMap::new());
-
-        assert!(evaluate_matcher_condition(&compiled, &variables));
+        assert!(evaluate_matcher_condition(&compiled, &ctx));
     }
 
     #[test]
@@ -228,10 +235,9 @@ mod tests {
         };
 
         let compiled = CompiledMatcherExpr::new(expr).unwrap();
-        let req = HttpRequest::default();
-        let variables = (req, HashMap::new());
+        let ctx = make_test_context();
 
-        assert!(evaluate_matcher_condition(&compiled, &variables));
+        assert!(evaluate_matcher_condition(&compiled, &ctx));
     }
 
     #[test]
@@ -245,11 +251,10 @@ mod tests {
         };
 
         let compiled = CompiledMatcherExpr::new(expr).unwrap();
-        let req = HttpRequest::default();
-        let variables = (req, HashMap::new());
+        let ctx = make_test_context();
 
         // Should match "en" from "en-US" base language
-        assert!(evaluate_matcher_condition(&compiled, &variables));
+        assert!(evaluate_matcher_condition(&compiled, &ctx));
     }
 
     #[test]
@@ -263,10 +268,9 @@ mod tests {
         };
 
         let compiled = CompiledMatcherExpr::new(expr).unwrap();
-        let req = HttpRequest::default();
-        let variables = (req, HashMap::new());
+        let ctx = make_test_context();
 
-        assert!(!evaluate_matcher_condition(&compiled, &variables));
+        assert!(!evaluate_matcher_condition(&compiled, &ctx));
     }
 
     #[test]
@@ -280,10 +284,9 @@ mod tests {
         };
 
         let compiled = CompiledMatcherExpr::new(expr).unwrap();
-        let req = HttpRequest::default();
-        let variables = (req, HashMap::new());
+        let ctx = make_test_context();
 
-        assert!(evaluate_matcher_condition(&compiled, &variables));
+        assert!(evaluate_matcher_condition(&compiled, &ctx));
     }
 
     #[test]
@@ -295,10 +298,9 @@ mod tests {
         };
 
         let compiled = CompiledMatcherExpr::new(expr).unwrap();
-        let req = HttpRequest::default();
-        let variables = (req, HashMap::new());
+        let ctx = make_test_context();
 
-        assert!(evaluate_matcher_condition(&compiled, &variables));
+        assert!(evaluate_matcher_condition(&compiled, &ctx));
     }
 
     #[test]
@@ -310,10 +312,9 @@ mod tests {
         };
 
         let compiled = CompiledMatcherExpr::new(expr).unwrap();
-        let req = HttpRequest::default();
-        let variables = (req, HashMap::new());
+        let ctx = make_test_context();
 
-        assert!(!evaluate_matcher_condition(&compiled, &variables));
+        assert!(!evaluate_matcher_condition(&compiled, &ctx));
     }
 
     #[test]
@@ -325,9 +326,8 @@ mod tests {
         };
 
         let compiled = CompiledMatcherExpr::new(expr).unwrap();
-        let req = HttpRequest::default();
-        let variables = (req, HashMap::new());
+        let ctx = make_test_context();
 
-        assert!(evaluate_matcher_condition(&compiled, &variables));
+        assert!(evaluate_matcher_condition(&compiled, &ctx));
     }
 }

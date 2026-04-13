@@ -7,13 +7,14 @@ use ferron_core::config::{
     layer::LayeredConfiguration, ServerConfigurationBlock, ServerConfigurationMatcherExpr,
     ServerConfigurationMatcherOperand,
 };
+use ferron_http::HttpContext;
 
 use super::super::prepare::PreparedHostConfigurationBlock;
 use super::matcher::{
     evaluate_matcher_condition, evaluate_matcher_conditions, resolve_matcher_operand,
     CompiledMatcherExpr,
 };
-use super::types::{ResolvedLocationPath, ResolverVariables};
+use super::types::ResolvedLocationPath;
 
 /// Key types for the radix tree
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -792,17 +793,17 @@ impl Stage2RadixResolver {
         }
     }
 
-    /// Resolve conditionals with given variables
+    /// Resolve conditionals with given context
     pub fn resolve_conditionals(
         &self,
-        variables: &ResolverVariables,
+        ctx: &HttpContext,
         location_path: &mut ResolvedLocationPath,
     ) -> Vec<Arc<PreparedHostConfigurationBlock>> {
         let mut configs = Vec::new();
 
         // Check IfConditional (if directive)
         for (exprs, config, priority) in &self.if_conditionals {
-            if self.evaluate_conditions(exprs, variables) {
+            if self.evaluate_conditions(exprs, ctx) {
                 configs.push((*priority, Arc::clone(config)));
                 // Extract original expressions for tracking
                 let orig_exprs: Vec<ServerConfigurationMatcherExpr> =
@@ -813,7 +814,7 @@ impl Stage2RadixResolver {
 
         // Check IfNotConditional (if_not directive)
         for (exprs, config, priority) in &self.if_not_conditionals {
-            if !self.evaluate_conditions(exprs, variables) {
+            if !self.evaluate_conditions(exprs, ctx) {
                 configs.push((*priority, Arc::clone(config)));
                 // For if_not, we still track the conditionals that were NOT matched
                 let orig_exprs: Vec<ServerConfigurationMatcherExpr> =
@@ -826,13 +827,9 @@ impl Stage2RadixResolver {
         configs.into_iter().map(|(_, c)| c).collect()
     }
 
-    /// Evaluate conditional expressions with given variables
-    fn evaluate_conditions(
-        &self,
-        exprs: &[CompiledMatcherExpr],
-        variables: &ResolverVariables,
-    ) -> bool {
-        evaluate_matcher_conditions(exprs, variables)
+    /// Evaluate conditional expressions with given context
+    fn evaluate_conditions(&self, exprs: &[CompiledMatcherExpr], ctx: &HttpContext) -> bool {
+        evaluate_matcher_conditions(exprs, ctx)
     }
 
     /// Full Stage 2 resolution combining hostname, location, and conditionals
@@ -841,14 +838,14 @@ impl Stage2RadixResolver {
     /// * `hostname` - Request hostname to resolve
     /// * `path` - Request path to resolve
     /// * `base_config` - The base prepared host configuration block
-    /// * `variables` - Variables for conditional evaluation
+    /// * `ctx` - HTTP context for variable resolution and conditional evaluation
     /// * `layered_config` - Optional base layered configuration to add layers to
     pub fn resolve(
         &self,
         hostname: Option<&str>,
         path: &str,
         base_config: Arc<PreparedHostConfigurationBlock>,
-        variables: &ResolverVariables,
+        ctx: &HttpContext,
         layered_config: Option<LayeredConfiguration>,
     ) -> (LayeredConfiguration, ResolvedLocationPath) {
         let mut location_path = ResolvedLocationPath::new();
@@ -879,7 +876,7 @@ impl Stage2RadixResolver {
         }
 
         // Resolve conditionals
-        for config in self.resolve_conditionals(variables, &mut location_path) {
+        for config in self.resolve_conditionals(ctx, &mut location_path) {
             let block = ServerConfigurationBlock {
                 directives: Arc::clone(&config.directives),
                 matchers: HashMap::new(),

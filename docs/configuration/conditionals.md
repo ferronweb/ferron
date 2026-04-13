@@ -53,9 +53,9 @@ Notes:
 - When the right value looks like an `Accept-Language` header (contains quality values or multiple language ranges), `in` performs language matching with support for base language codes (e.g. `en` matches `en-US`).
 - All expressions inside a single `match` block must pass (AND semantics).
 
-## Built-in matcher variables
+## Built-in variables
 
-The HTTP resolver exposes these variables for use in `match` blocks:
+The HTTP resolver exposes these variables for use in `match` blocks and interpolation (`{{...}}`):
 
 | Variable | Value |
 | --- | --- |
@@ -67,9 +67,17 @@ The HTTP resolver exposes these variables for use in `match` blocks:
 | `request.header.<name>` | Request header value |
 | `request.host` | Resolved request hostname |
 | `request.scheme` | `http` or `https` |
+| `request.path_info` | Extra path info after a script match (e.g. `/test` in `/index.php/test`), or empty |
 | `server.ip` | Local listener IP address |
+| `server.port` | Local listener port |
+| `remote.ip` | Client IP address |
+| `remote.port` | Client port |
 
 Header names are normalized by lowercasing them and converting `_` to `-`. For example, `request.header.x_forwarded_for` reads the `x-forwarded-for` header.
+
+### IP canonicalization
+
+The `server.ip` and `remote.ip` variables automatically canonicalize IPv4-mapped IPv6 addresses (`::ffff:x.x.x.x`) to their IPv4 form. For example, if the client connects via `::ffff:192.0.2.1`, `remote.ip` returns `192.0.2.1`.
 
 ## Interpolated strings
 

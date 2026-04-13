@@ -4,13 +4,14 @@ use ferron_core::config::{
     layer::LayeredConfiguration, ServerConfigurationBlock, ServerConfigurationMatcherExpr,
     ServerConfigurationMatcherOperand,
 };
+use ferron_http::HttpContext;
 
 use super::super::prepare::{PreparedHostConfigurationBlock, PreparedHostConfigurationErrorConfig};
 use super::matcher::{
     evaluate_matcher_condition, evaluate_matcher_conditions, resolve_matcher_operand,
     CompiledMatcherExpr,
 };
-use super::types::{ResolvedLocationPath, ResolverVariables};
+use super::types::ResolvedLocationPath;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConditionalGroup {
@@ -614,10 +615,10 @@ impl Stage3ErrorResolver {
     fn evaluate_condition_groups(
         &self,
         compiled_groups: &[CompiledConditionalGroup],
-        variables: &ResolverVariables,
+        ctx: &HttpContext,
     ) -> bool {
         compiled_groups.iter().all(|(group, compiled_exprs)| {
-            let matches = evaluate_matcher_conditions(compiled_exprs, variables);
+            let matches = evaluate_matcher_conditions(compiled_exprs, ctx);
             if group.negated {
                 !matches
             } else {
@@ -647,7 +648,7 @@ impl Stage3ErrorResolver {
         hostname: Option<&str>,
         ip: Option<IpAddr>,
         path_segments: Option<&[String]>,
-        variables: &ResolverVariables,
+        ctx: &HttpContext,
         location_path: &mut ResolvedLocationPath,
     ) -> Option<Arc<PreparedHostConfigurationBlock>> {
         location_path.error_key = Some(error_code);
@@ -672,7 +673,7 @@ impl Stage3ErrorResolver {
             .filter(|(scope, compiled_groups, _, _)| {
                 // Check if scope matches (ignoring conditionals in the key)
                 Self::scope_matches(scope, hostname, ip, path_str_ref, error_code)
-                    && self.evaluate_condition_groups(compiled_groups, variables)
+                    && self.evaluate_condition_groups(compiled_groups, ctx)
             })
             .map(|(_, _, config, priority)| (*priority, Arc::clone(config)))
             .collect();
@@ -751,7 +752,7 @@ impl Stage3ErrorResolver {
         hostname: Option<&str>,
         ip: Option<IpAddr>,
         path_segments: Option<&[String]>,
-        variables: &ResolverVariables,
+        ctx: &HttpContext,
     ) -> Option<Arc<PreparedHostConfigurationBlock>> {
         // Pre-compute the joined path string once to avoid repeated allocations
         let path_str = path_segments.map(|s| {
@@ -773,7 +774,7 @@ impl Stage3ErrorResolver {
             .filter(|(scope, compiled_groups, _, _)| {
                 // Check if scope matches for defaults (error_code = None)
                 Self::scope_matches_for_default(scope, hostname, ip, path_str_ref)
-                    && self.evaluate_condition_groups(compiled_groups, variables)
+                    && self.evaluate_condition_groups(compiled_groups, ctx)
             })
             .map(|(_, _, config, priority)| (*priority, Arc::clone(config)))
             .collect();
@@ -867,7 +868,7 @@ impl Stage3ErrorResolver {
     /// * `hostname` - Optional hostname for scoped lookup
     /// * `ip` - Optional IP for scoped lookup
     /// * `path_segments` - Optional path segments for scoped lookup
-    /// * `variables` - Variables for conditional evaluation
+    /// * `ctx` - HTTP context for conditional evaluation
     /// * `base_config` - Base layered configuration from Stage 2
     pub fn resolve_layered_scoped(
         &self,
@@ -875,7 +876,7 @@ impl Stage3ErrorResolver {
         hostname: Option<&str>,
         ip: Option<IpAddr>,
         path_segments: Option<&[String]>,
-        variables: &ResolverVariables,
+        ctx: &HttpContext,
         base_config: Option<LayeredConfiguration>,
     ) -> (LayeredConfiguration, ResolvedLocationPath) {
         let mut location_path = ResolvedLocationPath::new();
@@ -887,13 +888,13 @@ impl Stage3ErrorResolver {
             hostname,
             ip,
             path_segments,
-            variables,
+            ctx,
             &mut location_path,
         );
 
         // If no specific error config found, try default (also scoped)
-        let error_config = error_config
-            .or_else(|| self.resolve_default_scoped(hostname, ip, path_segments, variables));
+        let error_config =
+            error_config.or_else(|| self.resolve_default_scoped(hostname, ip, path_segments, ctx));
 
         if let Some(config) = error_config {
             let block = ServerConfigurationBlock {
