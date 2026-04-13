@@ -84,9 +84,20 @@ impl SendTcpStreamPoll {
     #[inline]
     fn populate_if_different_thread_or_marked_dropped(&mut self, dropped: bool) {
         let current_thread_id = std::thread::current().id();
-        let marked_dropped = !dropped
-            && self.marked_dropped.swap(false, Ordering::Relaxed)
-            && self.prev_inner.is_none();
+        // Avoid unconditional atomic swap on the hot path. First check whether the
+        // previous-inner state makes it worthwhile to probe the atomic flag, then
+        // only clear it if we observed it set. This reduces atomic writes when
+        // the flag is not set (common case).
+        let marked_dropped = if !dropped && self.prev_inner.is_none() {
+            if self.marked_dropped.load(Ordering::Relaxed) {
+                self.marked_dropped.swap(false, Ordering::Relaxed)
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
         if marked_dropped || current_thread_id != self.thread_id {
             if !self.obtained_dropped {
                 panic!("the TcpStreamPoll can be used only once if drop guard is not obtained")
