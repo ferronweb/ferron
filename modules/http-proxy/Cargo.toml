@@ -16,6 +16,7 @@ ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }
 ferron-observability = { path = "../../types/observability" }
 connpool = "0.2"
+num_cpus = "1.0"
 futures-util = "0.3"
 tokio = { version = "1", features = ["rt", "io-util", "sync", "macros", "time"] }
 tokio-rustls = "0.26"

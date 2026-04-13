@@ -381,12 +381,10 @@ pub fn io_error_status(err: &std::io::Error) -> (StatusCode, &'static str) {
 fn select_pool<'a>(
     cm: &'a ConnectionManager,
     upstream: &UpstreamInner,
+    client_ip: Option<IpAddr>,
 ) -> &'a connpool::Pool<PoolKey, SendRequestWrapper> {
-    #[cfg(unix)]
-    if upstream.proxy_unix.is_some() {
-        return cm.unix_connections();
-    }
-    cm.connections()
+    let arc_pool = cm.select_pool(upstream, client_ip);
+    &*arc_pool
 }
 
 fn idle_timeout_for_upstream(config: &ProxyConfig, upstream: &UpstreamInner) -> Duration {
@@ -598,7 +596,7 @@ async fn try_send_with_pool(
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     let pool_key = (upstream.clone(), client_ip);
-    let pool = select_pool(cm, upstream);
+    let pool = select_pool(cm, upstream, client_ip);
 
     // Collect non-ready-but-alive connections for racing
     let mut pending_items: Vec<connpool::Item<PoolKey, SendRequestWrapper>> = Vec::new();
@@ -816,7 +814,7 @@ async fn establish_and_send(
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     let pool_key = (upstream.clone(), client_ip);
-    let pool = select_pool(cm, upstream);
+    let pool = select_pool(cm, upstream, client_ip);
 
     let mut item = if let Some(it) = existing_item {
         it
