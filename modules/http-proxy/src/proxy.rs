@@ -241,14 +241,19 @@ fn construct_proxy_request(
 
     // X-Forwarded / X-Real headers
     let client_ip = ctx.remote_address.ip();
+    let local_ip = ctx.local_address.ip();
     let proto = if ctx.encrypted { "https" } else { "http" };
 
+    // Pre-format IPs once to avoid repeated allocations in header helpers
+    let client_ip_str = client_ip.to_string();
+    let local_ip_str = local_ip.to_string();
+
     if client_ip_from_header_enabled(ctx) {
-        append_x_forwarded_for(&mut parts.headers, client_ip);
-        append_forwarded(&mut parts.headers, client_ip, proto, ctx.local_address.ip());
+        append_x_forwarded_for(&mut parts.headers, &client_ip_str);
+        append_forwarded(&mut parts.headers, &client_ip_str, proto, &local_ip_str);
     } else {
-        set_x_forwarded_for(&mut parts.headers, client_ip);
-        set_forwarded(&mut parts.headers, client_ip, proto, ctx.local_address.ip());
+        set_x_forwarded_for(&mut parts.headers, &client_ip_str);
+        set_forwarded(&mut parts.headers, &client_ip_str, proto, &local_ip_str);
     }
 
     parts.headers.insert(
@@ -257,20 +262,19 @@ fn construct_proxy_request(
     );
     parts.headers.insert(
         HeaderName::from_static("x-real-ip"),
-        HeaderValue::from_str(&client_ip.to_string())?,
+        HeaderValue::from_str(&client_ip_str)?,
     );
 
     Ok(Request::from_parts(parts, body))
 }
 
-fn set_x_forwarded_for(headers: &mut http::HeaderMap, client_ip: std::net::IpAddr) {
-    if let Ok(hv) = HeaderValue::from_str(&client_ip.to_string()) {
+fn set_x_forwarded_for(headers: &mut http::HeaderMap, client_ip_str: &str) {
+    if let Ok(hv) = HeaderValue::from_str(client_ip_str) {
         headers.insert("x-forwarded-for", hv);
     }
 }
 
-fn append_x_forwarded_for(headers: &mut http::HeaderMap, client_ip: std::net::IpAddr) {
-    let client_ip_str = client_ip.to_string();
+fn append_x_forwarded_for(headers: &mut http::HeaderMap, client_ip_str: &str) {
     if let Some(existing) = headers.get("x-forwarded-for") {
         if let Ok(existing_str) = existing.to_str() {
             let new_value = format!("{}, {}", existing_str, client_ip_str);
@@ -280,18 +284,18 @@ fn append_x_forwarded_for(headers: &mut http::HeaderMap, client_ip: std::net::Ip
             }
         }
     }
-    if let Ok(hv) = HeaderValue::from_str(&client_ip_str) {
+    if let Ok(hv) = HeaderValue::from_str(client_ip_str) {
         headers.insert("x-forwarded-for", hv);
     }
 }
 
 fn set_forwarded(
     headers: &mut http::HeaderMap,
-    client_ip: std::net::IpAddr,
+    client_ip_str: &str,
     proto: &'static str,
-    local_ip: std::net::IpAddr,
+    local_ip_str: &str,
 ) {
-    let element = build_forwarded_element(client_ip, proto, local_ip);
+    let element = build_forwarded_element(client_ip_str, proto, local_ip_str);
     if let Ok(hv) = HeaderValue::from_str(&element) {
         headers.insert("forwarded", hv);
     }
@@ -299,11 +303,11 @@ fn set_forwarded(
 
 fn append_forwarded(
     headers: &mut http::HeaderMap,
-    client_ip: std::net::IpAddr,
+    client_ip_str: &str,
     proto: &'static str,
-    local_ip: std::net::IpAddr,
+    local_ip_str: &str,
 ) {
-    let element = build_forwarded_element(client_ip, proto, local_ip);
+    let element = build_forwarded_element(client_ip_str, proto, local_ip_str);
     if let Some(existing) = headers.get("forwarded") {
         if let Ok(existing_str) = existing.to_str() {
             let new_value = format!("{}, {}", existing_str, element);
@@ -318,20 +322,17 @@ fn append_forwarded(
     }
 }
 
-fn build_forwarded_element(
-    client_ip: std::net::IpAddr,
-    proto: &str,
-    local_ip: std::net::IpAddr,
-) -> String {
-    let for_value = if client_ip.is_ipv6() {
-        format!("\"[{}]\"", client_ip)
+fn build_forwarded_element(client_ip_str: &str, proto: &str, local_ip_str: &str) -> String {
+    // Detect IPv6 from the pre-formatted string
+    let for_value = if client_ip_str.contains(':') {
+        format!("\"[{}]\"", client_ip_str)
     } else {
-        client_ip.to_string()
+        client_ip_str.to_string()
     };
-    let by_value = if local_ip.is_ipv6() {
-        format!("\"[{}]\"", local_ip)
+    let by_value = if local_ip_str.contains(':') {
+        format!("\"[{}]\"", local_ip_str)
     } else {
-        local_ip.to_string()
+        local_ip_str.to_string()
     };
     format!("for={};proto={};by={}", for_value, proto, by_value)
 }
@@ -657,7 +658,7 @@ async fn try_send_with_pool(
     tracked_connection: Option<Arc<()>>,
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
-    let pool_key = (upstream.clone(), client_ip);
+    let pool_key = (Arc::new(upstream.clone()), client_ip);
     let pool = select_pool(cm, upstream, client_ip);
 
     // Collect non-ready-but-alive connections for racing
@@ -875,7 +876,7 @@ async fn establish_and_send(
     existing_item: Option<connpool::Item<PoolKey, SendRequestWrapper>>,
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
-    let pool_key = (upstream.clone(), client_ip);
+    let pool_key = (Arc::new(upstream.clone()), client_ip);
     let pool = select_pool(cm, upstream, client_ip);
 
     let mut item = if let Some(it) = existing_item {
@@ -1195,10 +1196,7 @@ mod tests {
     #[test]
     fn test_set_x_forwarded_for_ipv4() {
         let mut headers = HeaderMap::new();
-        let client_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 1));
-
-        set_x_forwarded_for(&mut headers, client_ip);
-
+        set_x_forwarded_for(&mut headers, "192.168.1.1");
         assert_eq!(
             headers.get("x-forwarded-for").unwrap().to_str().unwrap(),
             "192.168.1.1"
@@ -1208,10 +1206,7 @@ mod tests {
     #[test]
     fn test_set_x_forwarded_for_ipv6() {
         let mut headers = HeaderMap::new();
-        let client_ip = std::net::IpAddr::V6(std::net::Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
-
-        set_x_forwarded_for(&mut headers, client_ip);
-
+        set_x_forwarded_for(&mut headers, "::1");
         assert_eq!(
             headers.get("x-forwarded-for").unwrap().to_str().unwrap(),
             "::1"
@@ -1221,10 +1216,7 @@ mod tests {
     #[test]
     fn test_append_x_forwarded_for_no_existing() {
         let mut headers = HeaderMap::new();
-        let client_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(10, 0, 0, 1));
-
-        append_x_forwarded_for(&mut headers, client_ip);
-
+        append_x_forwarded_for(&mut headers, "10.0.0.1");
         assert_eq!(
             headers.get("x-forwarded-for").unwrap().to_str().unwrap(),
             "10.0.0.1"
@@ -1235,10 +1227,7 @@ mod tests {
     fn test_append_x_forwarded_for_with_existing() {
         let mut headers = HeaderMap::new();
         headers.insert("x-forwarded-for", HeaderValue::from_static("192.168.1.1"));
-        let client_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(10, 0, 0, 1));
-
-        append_x_forwarded_for(&mut headers, client_ip);
-
+        append_x_forwarded_for(&mut headers, "10.0.0.1");
         assert_eq!(
             headers.get("x-forwarded-for").unwrap().to_str().unwrap(),
             "192.168.1.1, 10.0.0.1"
@@ -1247,36 +1236,22 @@ mod tests {
 
     #[test]
     fn test_build_forwarded_element_ipv4() {
-        let client_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 1));
-        let local_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(10, 0, 0, 1));
         let proto = "https";
-
-        let result = build_forwarded_element(client_ip, proto, local_ip);
-
+        let result = build_forwarded_element("192.168.1.1", proto, "10.0.0.1");
         assert_eq!(result, "for=192.168.1.1;proto=https;by=10.0.0.1");
     }
 
     #[test]
     fn test_build_forwarded_element_ipv6() {
-        let client_ip =
-            std::net::IpAddr::V6(std::net::Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1));
-        let local_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(10, 0, 0, 1));
         let proto = "http";
-
-        let result = build_forwarded_element(client_ip, proto, local_ip);
-
+        let result = build_forwarded_element("2001:db8::1", proto, "10.0.0.1");
         assert_eq!(result, "for=\"[2001:db8::1]\";proto=http;by=10.0.0.1");
     }
 
     #[test]
     fn test_set_forwarded_ipv4() {
         let mut headers = HeaderMap::new();
-        let client_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 1));
-        let local_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(10, 0, 0, 1));
-        let proto = "https";
-
-        set_forwarded(&mut headers, client_ip, proto, local_ip);
-
+        set_forwarded(&mut headers, "192.168.1.1", "https", "10.0.0.1");
         assert_eq!(
             headers.get("forwarded").unwrap().to_str().unwrap(),
             "for=192.168.1.1;proto=https;by=10.0.0.1"
@@ -1286,12 +1261,7 @@ mod tests {
     #[test]
     fn test_append_forwarded_no_existing() {
         let mut headers = HeaderMap::new();
-        let client_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 1));
-        let local_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(10, 0, 0, 1));
-        let proto = "http";
-
-        append_forwarded(&mut headers, client_ip, proto, local_ip);
-
+        append_forwarded(&mut headers, "192.168.1.1", "http", "10.0.0.1");
         assert_eq!(
             headers.get("forwarded").unwrap().to_str().unwrap(),
             "for=192.168.1.1;proto=http;by=10.0.0.1"
@@ -1305,12 +1275,7 @@ mod tests {
             "forwarded",
             HeaderValue::from_static("for=192.168.1.1;proto=https;by=10.0.0.1"),
         );
-        let client_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(10, 0, 0, 1));
-        let local_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(172, 16, 0, 1));
-        let proto = "http";
-
-        append_forwarded(&mut headers, client_ip, proto, local_ip);
-
+        append_forwarded(&mut headers, "10.0.0.1", "http", "172.16.0.1");
         assert_eq!(
             headers.get("forwarded").unwrap().to_str().unwrap(),
             "for=192.168.1.1;proto=https;by=10.0.0.1, for=10.0.0.1;proto=http;by=172.16.0.1"

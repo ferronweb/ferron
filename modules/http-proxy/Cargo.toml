@@ -26,6 +26,7 @@ rustls = { version = "0.23", default-features = false, features = ["std", "tls12
 rustls-native-certs = "0.8"
 webpki-roots = "1.0"
 rand = "0.10"
+rustc-hash = "2"
 hickory-resolver = { version = "0.25", optional = true }
 hickory-proto = { version = "0.25", optional = true }
 parking_lot = "0.12"

@@ -1,17 +1,18 @@
 //! Connection pool wrapper using connpool.
 
-use std::collections::{hash_map::DefaultHasher, HashMap};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
 use std::sync::{Arc, RwLock};
 
 use connpool::Pool;
+use rustc_hash::FxHasher;
 
 use crate::send_request::SendRequestWrapper;
 use crate::upstream::UpstreamInner;
 
-/// Connection pool key type: (upstream, optional client IP for PROXY protocol).
-pub type PoolKey = (UpstreamInner, Option<IpAddr>);
+/// Connection pool key type: (upstream via Arc for cheap cloning, optional client IP for PROXY protocol).
+pub type PoolKey = (Arc<UpstreamInner>, Option<IpAddr>);
 
 /// Connection pool manager for the reverse proxy.
 pub struct ConnectionManager {
@@ -86,7 +87,7 @@ impl ConnectionManager {
         upstream: &UpstreamInner,
         client_ip: Option<IpAddr>,
     ) -> connpool::Item<PoolKey, SendRequestWrapper> {
-        let key = (upstream.clone(), client_ip);
+        let key = (Arc::new(upstream.clone()), client_ip);
         #[cfg(unix)]
         if upstream.proxy_unix.is_some() {
             return self.unix_connections.pull(key).await;
@@ -103,7 +104,7 @@ impl ConnectionManager {
         client_ip: Option<IpAddr>,
         local_limit_idx: Option<usize>,
     ) -> connpool::Item<PoolKey, SendRequestWrapper> {
-        let key = (upstream.clone(), client_ip);
+        let key = (Arc::new(upstream.clone()), client_ip);
         #[cfg(unix)]
         if upstream.proxy_unix.is_some() {
             return self
@@ -137,12 +138,12 @@ impl ConnectionManager {
         if upstream.proxy_unix.is_some() {
             return &self.unix_connections;
         }
-        let key = (upstream.clone(), client_ip);
+        let key = (Arc::new(upstream.clone()), client_ip);
         &self.connections[self.shard_for_key(&key)]
     }
 
     fn shard_for_key(&self, key: &PoolKey) -> usize {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = FxHasher::default();
         key.hash(&mut hasher);
         (hasher.finish() as usize) % self.connections.len()
     }

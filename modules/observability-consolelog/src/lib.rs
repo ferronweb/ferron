@@ -60,6 +60,10 @@ impl EventSink for ConsoleEventSink {
             });
         }
     }
+
+    fn processes_access(&self) -> bool {
+        true
+    }
 }
 
 struct ConsoleObservabilityModule {

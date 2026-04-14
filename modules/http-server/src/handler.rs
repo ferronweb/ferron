@@ -307,7 +307,7 @@ fn build_metric_attributes(
     let mut attrs = Vec::with_capacity(5);
     attrs.push((
         "http.request.method",
-        MetricAttributeValue::String(request.method().as_str().to_string()),
+        MetricAttributeValue::String(request.method().as_str().to_owned()),
     ));
     attrs.push((
         "url.scheme",
@@ -421,8 +421,9 @@ pub async fn request_handler(
     let request_timer = std::time::Instant::now();
 
     // Collect request headers before moving `request` into handler_inner
-    // (only needed for access logging later — skip if no access sinks configured)
-    let request_headers: Vec<(String, String)> = if !events.is_empty() {
+    // (only needed for access logging — skip when no access sinks are configured,
+    // even if metrics/traces sinks are present)
+    let request_headers: Vec<(String, String)> = if events.has_access_sinks() {
         request
             .headers()
             .iter()

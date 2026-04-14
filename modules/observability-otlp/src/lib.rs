@@ -136,6 +136,10 @@ impl EventSink for OtlpEventSink {
     fn processes_traces(&self) -> bool {
         true
     }
+
+    fn processes_access(&self) -> bool {
+        true
+    }
 }
 
 /// Parse the OTLP backend configuration from a ServerConfigurationBlock

@@ -66,6 +66,10 @@ impl EventSink for LogFileEventSink {
             });
         }
     }
+
+    fn processes_access(&self) -> bool {
+        true
+    }
 }
 
 /// Rotates the log file if it is too large
