@@ -62,7 +62,7 @@ hyper-rustls = { version = "0.27.7", optional = true, default-features = false, 
     "http2",
     "native-tokio",
 ] }
-rustls = { version = "0.23.27", optional = true, default-features = false, features = [
+rustls = { version = "0.23.38", optional = true, default-features = false, features = [
     "tls12",
     "std",
     "aws-lc-rs",
