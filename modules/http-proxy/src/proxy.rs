@@ -1,7 +1,6 @@
 //! Core proxy logic: request transformation, TLS, connection establishment, and forwarding.
 
 use parking_lot::RwLock;
-use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -22,7 +21,8 @@ use tokio_rustls::TlsConnector;
 use vibeio_hyper::VibeioIo;
 
 use crate::config::{HeaderAction, ProxyConfig};
-use crate::connections::{ConnectionManager, PoolKey};
+use crate::connections::{ConnectionManager, PoolKey, PoolRef};
+use crate::connpool_single::PoolItem;
 use crate::send_net_io::SendTcpStreamPoll;
 #[cfg(unix)]
 use crate::send_net_io::SendUnixStreamPoll;
@@ -441,13 +441,12 @@ pub fn io_error_status(err: &std::io::Error) -> (StatusCode, &'static str) {
     }
 }
 
-fn select_pool<'a>(
-    cm: &'a ConnectionManager,
+fn select_pool(
+    cm: &ConnectionManager,
     upstream: &UpstreamInner,
     client_ip: Option<IpAddr>,
-) -> &'a connpool::Pool<PoolKey, SendRequestWrapper> {
-    let arc_pool = cm.select_pool(upstream, client_ip);
-    arc_pool
+) -> PoolRef {
+    cm.select_pool(upstream, client_ip)
 }
 
 fn idle_timeout_for_upstream(config: &ProxyConfig, upstream: &UpstreamInner) -> Duration {
@@ -662,19 +661,41 @@ async fn try_send_with_pool(
     let pool = select_pool(cm, upstream, client_ip);
 
     // Collect non-ready-but-alive connections for racing
-    let mut pending_items: Vec<connpool::Item<PoolKey, SendRequestWrapper>> = Vec::new();
+    let mut pending_items: Vec<PoolItem<PoolKey, SendRequestWrapper>> = Vec::new();
     // Track a non-ready-but-kept item slot for reuse in establish_and_send
     // (avoids double-pull when the connection is dead and can't be raced).
-    let mut reusable_item: Option<connpool::Item<PoolKey, SendRequestWrapper>> = None;
+    let mut reusable_item: Option<PoolItem<PoolKey, SendRequestWrapper>> = None;
 
     // Pull one connection from the pool and check readiness
     let pull_start = std::time::Instant::now();
-    let mut item = if let Some(idx) = local_limit_idx {
-        pool.pull_with_wait_local_limit(pool_key.clone(), Some(idx))
-            .await
+    let item = if let Some(idx) = local_limit_idx {
+        pool.pull_with_local_limit(pool_key.clone(), Some(idx))
     } else {
-        pool.pull(pool_key.clone()).await
+        pool.pull(pool_key.clone())
     };
+
+    // If pool returned None (at capacity), we'll need to establish a new connection
+    let mut item = match item {
+        Some(i) => i,
+        None => {
+            return establish_and_send(
+                ctx,
+                config,
+                cm,
+                upstream,
+                proxy_url,
+                client_ip,
+                local_limit_idx,
+                is_https,
+                _conn_state,
+                tracked_connection,
+                None,
+                metrics,
+            )
+            .await;
+        }
+    };
+
     let pull_duration = pull_start.elapsed().as_secs_f64();
 
     // Track pool wait metrics when pool was exhausted (no immediate connection available)
@@ -700,6 +721,9 @@ async fn try_send_with_pool(
             proxy_url,
             tracked_connection,
             true,
+            pool.is_unix(),
+            pool.tcp_shard_idx(),
+            local_limit_idx,
             metrics,
         )
         .await;
@@ -730,6 +754,9 @@ async fn try_send_with_pool(
                     proxy_url,
                     tracked_connection,
                     true,
+                    pool.is_unix(),
+                    pool.tcp_shard_idx(),
+                    local_limit_idx,
                     metrics,
                 )
                 .await;
@@ -761,9 +788,9 @@ async fn try_send_with_pool(
 ///
 /// Returns the item if one becomes ready, or `None` if all fail.
 async fn wait_for_any_ready(
-    pending_items: &mut Vec<connpool::Item<PoolKey, SendRequestWrapper>>,
+    pending_items: &mut Vec<PoolItem<PoolKey, SendRequestWrapper>>,
     idle_timeout: Duration,
-) -> Option<connpool::Item<PoolKey, SendRequestWrapper>> {
+) -> Option<PoolItem<PoolKey, SendRequestWrapper>> {
     if pending_items.is_empty() {
         return None;
     }
@@ -873,19 +900,38 @@ async fn establish_and_send(
     is_https: bool,
     _conn_state: Option<&ConnectionsTrackState>,
     tracked_connection: Option<Arc<()>>,
-    existing_item: Option<connpool::Item<PoolKey, SendRequestWrapper>>,
+    existing_item: Option<PoolItem<PoolKey, SendRequestWrapper>>,
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     let pool_key = (Arc::new(upstream.clone()), client_ip);
     let pool = select_pool(cm, upstream, client_ip);
 
-    let mut item = if let Some(it) = existing_item {
-        it
+    let item: Option<PoolItem<PoolKey, SendRequestWrapper>> = if let Some(it) = existing_item {
+        Some(it)
     } else if let Some(idx) = local_limit_idx {
-        pool.pull_with_wait_local_limit(pool_key.clone(), Some(idx))
-            .await
+        pool.pull_with_local_limit(pool_key.clone(), Some(idx))
     } else {
-        pool.pull(pool_key.clone()).await
+        pool.pull(pool_key.clone())
+    };
+
+    // If pool returned None (at capacity), we need to proceed without a pooled item
+    let mut item = match item {
+        Some(i) => i,
+        None => {
+            // No pooled item available, establish connection without pool tracking
+            return establish_connection_without_pool(
+                ctx,
+                config,
+                upstream,
+                proxy_url,
+                client_ip,
+                is_https,
+                _conn_state,
+                tracked_connection,
+                metrics,
+            )
+            .await;
+        }
     };
 
     *item.inner_mut() = None;
@@ -1022,6 +1068,9 @@ async fn establish_and_send(
         proxy_url,
         tracked_connection,
         config.keepalive,
+        is_unix,
+        pool.tcp_shard_idx(),
+        local_limit_idx,
         metrics,
     )
     .await
@@ -1033,10 +1082,13 @@ async fn send_via_wrapper(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
     mut wrapper: SendRequestWrapper,
-    item: connpool::Item<PoolKey, SendRequestWrapper>,
+    item: PoolItem<PoolKey, SendRequestWrapper>,
     proxy_url: &http::Uri,
     tracked_connection: Option<Arc<()>>,
     enable_keepalive: bool,
+    is_unix: bool,
+    tcp_shard_idx: usize,
+    _local_limit_idx: Option<usize>,
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     let request = construct_proxy_request(ctx, config, proxy_url)?;
@@ -1071,21 +1123,27 @@ async fn send_via_wrapper(
 
     let (parts, body) = response.into_parts();
 
-    #[allow(clippy::arc_with_non_send_sync)]
-    let pool_item_arc = if enable_keepalive && !wrapper.is_closed() {
-        let pool_item_unsafe = Arc::new(UnsafeCell::new(item));
-        let pool_item_clone = Arc::clone(&pool_item_unsafe);
-        let pool_item_mut = unsafe { &mut *pool_item_unsafe.get() };
-        pool_item_mut.inner_mut().replace(wrapper);
-        Some(pool_item_clone)
+    // For keepalive, we extract the wrapper and create a PoolReturnInfo.
+    // This prevents the PoolItem's Drop from running, and instead we manually
+    // return the connection via PoolReturnInfo when TrackedBody is dropped.
+    let pool_return_info = if enable_keepalive && !wrapper.is_closed() {
+        Some(crate::send_request::PoolReturnInfo::from_item(
+            item,
+            wrapper,
+            is_unix,
+            tcp_shard_idx,
+        ))
     } else {
+        // Item will be dropped here, returning connection to pool via its Drop impl
+        // (wrapper is consumed by the response and not returned to pool)
+        drop(item);
         None
     };
 
     let tracked_body = TrackedBody::new(
         body.map_err(std::io::Error::other),
         tracked_connection,
-        pool_item_arc,
+        pool_return_info,
     );
 
     let mut builder = Response::builder().status(parts.status);
@@ -1105,7 +1163,7 @@ async fn send_via_wrapper(
 async fn handle_upgrade(
     response: Response<Incoming>,
     ctx: &mut HttpContext,
-    item: connpool::Item<PoolKey, SendRequestWrapper>,
+    mut item: PoolItem<PoolKey, SendRequestWrapper>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (resp_parts, _) = response.into_parts();
     let resp_for_upgrade = Response::from_parts(resp_parts.clone(), ());
@@ -1129,9 +1187,12 @@ async fn handle_upgrade(
 
     let events = ctx.events.clone();
 
-    #[allow(clippy::arc_with_non_send_sync)]
-    let pool_item = Arc::new(UnsafeCell::new(item));
-    let pool_item_for_task = Arc::clone(&pool_item);
+    // Take the inner value to prevent Drop from returning to pool.
+    // For upgrade connections, we don't return them to the pool
+    // (upgrade connections are long-lived, not pooled).
+    let _wrapper = item.inner_mut().take();
+    // Prevent item's Drop from running (we handle cleanup manually)
+    std::mem::forget(item);
 
     vibeio::spawn(async move {
         match hyper::upgrade::on(resp_for_upgrade).await {
@@ -1146,7 +1207,8 @@ async fn handle_upgrade(
                             let mut client = upgraded_client;
 
                             let _ = tokio::io::copy_bidirectional(&mut backend, &mut client).await;
-                            drop(pool_item_for_task);
+                            // Connection not returned to pool for upgrades
+                            // (upgrade connections are long-lived, not pooled)
                         }
                         None => {
                             events.emit(Event::Log(LogEvent {
@@ -1169,6 +1231,209 @@ async fn handle_upgrade(
     });
 
     Ok(())
+}
+
+/// Establish a connection without pool tracking.
+///
+/// This is used when the pool is at capacity and we need to establish
+/// a connection without waiting for a pool slot.
+#[allow(clippy::too_many_arguments)]
+async fn establish_connection_without_pool(
+    ctx: &mut HttpContext,
+    config: &ProxyConfig,
+    upstream: &UpstreamInner,
+    proxy_url: &http::Uri,
+    client_ip: Option<IpAddr>,
+    is_https: bool,
+    _conn_state: Option<&ConnectionsTrackState>,
+    tracked_connection: Option<Arc<()>>,
+    metrics: &mut ProxyMetrics,
+) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
+    // Establish connection without pool tracking
+    // (similar to establish_and_send but without the item handling)
+    #[cfg(unix)]
+    let is_unix = upstream.proxy_unix.is_some();
+    #[cfg(not(unix))]
+    let is_unix = false;
+
+    let wrapper = if is_unix {
+        #[cfg(unix)]
+        {
+            let unix_path = upstream
+                .proxy_unix
+                .as_ref()
+                .ok_or("Unix socket path not set")?;
+            let unix = vibeio::net::UnixStream::connect(unix_path)
+                .await
+                .map_err(|e| std::io::Error::other(format!("Unix connect failed: {e}")))?;
+            let mut stream = SendUnixStreamPoll::new_comp_io(unix)
+                .map_err(|e| std::io::Error::other(format!("Unix wrap failed: {e}")))?;
+
+            let drop_guard = unsafe { stream.get_drop_guard() };
+
+            // Write PROXY protocol header if configured
+            if let Some(proxy_header_version) = config.proxy_header {
+                if let Some(cip) = client_ip {
+                    let local_addr = ctx.local_address;
+                    let header_bytes = build_proxy_protocol_header(
+                        proxy_header_version,
+                        cip,
+                        local_addr.ip(),
+                        ctx.remote_address.port(),
+                        local_addr.port(),
+                    )?;
+                    use tokio::io::AsyncWriteExt;
+                    stream.write_all(&header_bytes).await.map_err(|e| {
+                        std::io::Error::other(format!("PROXY header write failed: {e}"))
+                    })?;
+                }
+            }
+
+            if config.http2_only || config.http2 {
+                http2_handshake_unix(stream, drop_guard).await?
+            } else {
+                http1_handshake_unix(stream, drop_guard).await?
+            }
+        }
+        #[cfg(not(unix))]
+        unreachable!();
+    } else {
+        let host = proxy_url.host().ok_or("upstream URL has no host")?;
+        let port = proxy_url
+            .port_u16()
+            .unwrap_or(if is_https { 443 } else { 80 });
+        let addr = format!("{host}:{port}");
+
+        let tcp = vibeio::net::TcpStream::connect(&addr).await.map_err(|e| {
+            ctx.events.emit(Event::Log(LogEvent {
+                level: LogLevel::Warn,
+                message: format!("Reverse proxy: TCP connect to {addr} failed: {e}"),
+                target: LOG_TARGET,
+            }));
+            std::io::Error::other(format!("Connect failed: {e}"))
+        })?;
+        let mut stream = SendTcpStreamPoll::new_comp_io(tcp)
+            .map_err(|e| std::io::Error::other(format!("Wrap failed: {e}")))?;
+
+        let drop_guard = unsafe { stream.get_drop_guard() };
+
+        // Write PROXY protocol header if configured
+        if let Some(proxy_header_version) = config.proxy_header {
+            if let Some(cip) = client_ip {
+                let local_addr = ctx.local_address;
+                let header_bytes = build_proxy_protocol_header(
+                    proxy_header_version,
+                    cip,
+                    local_addr.ip(),
+                    ctx.remote_address.port(),
+                    local_addr.port(),
+                )?;
+                use tokio::io::AsyncWriteExt;
+                stream.write_all(&header_bytes).await.map_err(|e| {
+                    std::io::Error::other(format!("PROXY header write failed: {e}"))
+                })?;
+            }
+        }
+
+        if is_https {
+            let connector = TlsConnector::from(cached_tls_config(
+                config.http2,
+                config.http2_only,
+                config.no_verification,
+            ));
+            let domain = ServerName::try_from(host.to_string())
+                .map_err(|e| format!("Invalid server name: {e}"))?;
+            let tls_start = std::time::Instant::now();
+            let tls_stream = match connector.connect(domain, stream).await {
+                Ok(s) => {
+                    metrics.tls_handshake_time_secs += tls_start.elapsed().as_secs_f64();
+                    s
+                }
+                Err(e) => {
+                    metrics.tls_handshake_failures += 1;
+                    ctx.events.emit(Event::Log(LogEvent {
+                        level: LogLevel::Warn,
+                        message: format!("Reverse proxy: TLS handshake with {addr} failed: {e}"),
+                        target: LOG_TARGET,
+                    }));
+                    return Err(std::io::Error::other(format!("TLS handshake failed: {e}")).into());
+                }
+            };
+
+            let negotiated_h2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
+            let use_http2 = (config.http2 || config.http2_only) && negotiated_h2;
+
+            if use_http2 {
+                http2_handshake(tls_stream, drop_guard).await?
+            } else {
+                http1_handshake(tls_stream, drop_guard).await?
+            }
+        } else if config.http2_only || config.http2 {
+            http2_handshake(stream, drop_guard).await?
+        } else {
+            http1_handshake(stream, drop_guard).await?
+        }
+    };
+
+    // Send request without pool item (connection won't be returned to pool)
+    send_request_without_pool_item(
+        ctx,
+        config,
+        wrapper,
+        proxy_url,
+        tracked_connection,
+        config.keepalive,
+        metrics,
+    )
+    .await
+}
+
+/// Send request without pool tracking.
+async fn send_request_without_pool_item(
+    ctx: &mut HttpContext,
+    config: &ProxyConfig,
+    mut wrapper: SendRequestWrapper,
+    proxy_url: &http::Uri,
+    _tracked_connection: Option<Arc<()>>,
+    _enable_keepalive: bool,
+    metrics: &mut ProxyMetrics,
+) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
+    let request = construct_proxy_request(ctx, config, proxy_url)?;
+
+    let start = std::time::Instant::now();
+    let response = match wrapper.send_request(request).await {
+        Ok(resp) => {
+            metrics.upstream_time_secs = start.elapsed().as_secs_f64();
+            resp
+        }
+        Err(e) => {
+            return Err(format!("Bad gateway: {e}").into());
+        }
+    };
+
+    let status = response.status();
+    metrics.status_code = Some(status.as_u16());
+
+    // For non-pooled connections, we don't return to pool
+    let (parts, body) = response.into_parts();
+
+    let tracked_body = TrackedBody::new(
+        body.map_err(std::io::Error::other),
+        None, // No connection tracker
+        None, // No pool return info
+    );
+
+    let mut builder = Response::builder().status(parts.status);
+    for (name, value) in parts.headers {
+        if let Some(n) = name {
+            builder = builder.header(n, value);
+        }
+    }
+    let response = builder
+        .body(tracked_body.boxed_unsync())
+        .expect("Failed to build response");
+
+    Ok(HttpResponse::Custom(response))
 }
 
 #[allow(dead_code)]

@@ -5,6 +5,7 @@
 
 mod config;
 mod connections;
+mod connpool_single;
 mod health_check;
 mod proxy;
 mod send_net_io;
@@ -13,6 +14,7 @@ mod upstream;
 mod util;
 
 use std::collections::HashMap;
+use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -90,7 +92,9 @@ const DEFAULT_KEEPALIVE_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 const DEFAULT_CONCURRENT_CONNECTIONS: usize = 16384;
 
 /// Global concurrent connections limit, read from config during `register_modules`.
-static GLOBAL_CONCURRENT_CONNECTIONS: OnceLock<usize> = OnceLock::new();
+/// Uses `AtomicUsize` to allow updates during config reload.
+static GLOBAL_CONCURRENT_CONNECTIONS: AtomicUsize =
+    AtomicUsize::new(DEFAULT_CONCURRENT_CONNECTIONS);
 
 /// Global accessor for the secondary Tokio runtime handle.
 ///
@@ -180,10 +184,7 @@ impl ProxyState {
             return Arc::clone(cm);
         }
 
-        let limit = GLOBAL_CONCURRENT_CONNECTIONS
-            .get()
-            .copied()
-            .unwrap_or(DEFAULT_CONCURRENT_CONNECTIONS);
+        let limit = GLOBAL_CONCURRENT_CONNECTIONS.load(std::sync::atomic::Ordering::Relaxed);
         let cm = Arc::new(crate::connections::ConnectionManager::with_global_limit(
             limit,
         ));
@@ -252,7 +253,10 @@ impl ProxyState {
 
 /// Module loader for the HTTP reverse proxy module.
 #[derive(Default)]
-pub struct ReverseProxyModuleLoader;
+pub struct ReverseProxyModuleLoader {
+    /// Shared proxy state, set during `register_stages` and used in `register_modules`.
+    state: Option<Arc<ProxyState>>,
+}
 
 impl ModuleLoader for ReverseProxyModuleLoader {
     fn register_global_configuration_validators(
@@ -277,6 +281,7 @@ impl ModuleLoader for ReverseProxyModuleLoader {
 
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         let state = Arc::new(ProxyState::new());
+        self.state = Some(Arc::clone(&state));
         registry.with_stage::<HttpContext, _>(move || {
             Arc::new(ReverseProxyStage {
                 state: Arc::clone(&state),
@@ -300,7 +305,19 @@ impl ModuleLoader for ReverseProxyModuleLoader {
             .and_then(|v: &ferron_core::config::ServerConfigurationValue| v.as_number())
         {
             if val > 0 {
-                let _ = GLOBAL_CONCURRENT_CONNECTIONS.set(val as usize);
+                let new_limit = val as usize;
+                let old_limit =
+                    GLOBAL_CONCURRENT_CONNECTIONS.load(std::sync::atomic::Ordering::Relaxed);
+                GLOBAL_CONCURRENT_CONNECTIONS
+                    .store(new_limit, std::sync::atomic::Ordering::Relaxed);
+
+                // If limit changed and conn_manager already exists, update it in place
+                if old_limit != new_limit {
+                    if let Some(ref state) = self.state {
+                        let cm = state.get_conn_manager();
+                        cm.update_global_limit(new_limit);
+                    }
+                }
             }
         }
 

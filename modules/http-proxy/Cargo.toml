@@ -15,7 +15,6 @@ bytes = "1"
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }
 ferron-observability = { path = "../../types/observability" }
-connpool = "0.2"
 num_cpus = "1.0"
 futures-util = "0.3"
 tokio = { version = "1", features = ["rt", "io-util", "sync", "macros", "time"] }
@@ -41,10 +40,5 @@ criterion = "0.8"
 
 [[bench]]
 name = "sendnetio_bench"
-harness = false
-required-features = ["bench"]
-
-[[bench]]
-name = "shard_select_bench"
 harness = false
 required-features = ["bench"]

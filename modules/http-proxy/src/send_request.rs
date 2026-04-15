@@ -1,6 +1,5 @@
 //! Hyper SendRequest wrapper for connection pooling.
 
-use std::cell::UnsafeCell;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
@@ -237,25 +236,73 @@ where
     Ok(SendRequestWrapper::http2(sender))
 }
 
+/// Information needed to return a connection back to the thread-local pool.
+pub struct PoolReturnInfo {
+    /// The upstream and client IP key.
+    key: Option<crate::connections::PoolKey>,
+    /// The connection wrapper to return.
+    wrapper: Option<SendRequestWrapper>,
+    /// Local limit index, if one was applied.
+    local_limit_idx: Option<usize>,
+    /// Whether this is a Unix pool connection.
+    is_unix: bool,
+    /// TCP shard index (only relevant if is_unix is false).
+    tcp_shard_idx: usize,
+}
+
+impl PoolReturnInfo {
+    /// Creates a new `PoolReturnInfo` from a pool item and wrapper.
+    ///
+    /// This consumes the item without running its Drop impl (via `ManuallyDrop`),
+    /// allowing the wrapper to be stored separately and returned later.
+    pub fn from_item(
+        item: crate::connpool_single::PoolItem<crate::connections::PoolKey, SendRequestWrapper>,
+        wrapper: SendRequestWrapper,
+        is_unix: bool,
+        tcp_shard_idx: usize,
+    ) -> Self {
+        // Prevent item's Drop from running (we'll handle return manually)
+        let item = std::mem::ManuallyDrop::new(item);
+
+        Self {
+            key: item.key().cloned(),
+            wrapper: Some(wrapper),
+            local_limit_idx: item.local_limit_index(),
+            is_unix,
+            tcp_shard_idx,
+        }
+    }
+}
+
+impl Drop for PoolReturnInfo {
+    fn drop(&mut self) {
+        if let Some(wrapper) = self.wrapper.take() {
+            if let Some(ref key) = self.key {
+                // Return the connection to the thread-local pool.
+                // This is safe because we're on the same thread that pulled it.
+                crate::connections::return_connection_to_pool(
+                    key,
+                    wrapper,
+                    self.local_limit_idx,
+                    self.is_unix,
+                    self.tcp_shard_idx,
+                );
+            }
+        }
+    }
+}
+
 /// A tracked response body that returns the connection to the pool
 /// after the body is fully consumed, and decrements the connection
 /// tracker for LeastConnections/TwoRandomChoices algorithms.
 pub struct TrackedBody<B> {
     inner: B,
     _tracker: Option<Arc<()>>,
-    #[allow(clippy::type_complexity)]
-    _tracker_pool:
-        Option<Arc<UnsafeCell<connpool::Item<crate::connections::PoolKey, SendRequestWrapper>>>>,
+    _tracker_pool: Option<PoolReturnInfo>,
 }
 
 impl<B> TrackedBody<B> {
-    pub fn new(
-        inner: B,
-        tracker: Option<Arc<()>>,
-        tracker_pool: Option<
-            Arc<UnsafeCell<connpool::Item<crate::connections::PoolKey, SendRequestWrapper>>>,
-        >,
-    ) -> Self {
+    pub fn new(inner: B, tracker: Option<Arc<()>>, tracker_pool: Option<PoolReturnInfo>) -> Self {
         Self {
             inner,
             _tracker: tracker,
@@ -286,8 +333,3 @@ where
         self.inner.size_hint()
     }
 }
-
-// Safety: after construction, the value inside UnsafeCell is never mutated
-// through the Arc. All accesses after sharing are read-only.
-unsafe impl<B> Send for TrackedBody<B> where B: Send {}
-unsafe impl<B> Sync for TrackedBody<B> where B: Sync {}

@@ -271,7 +271,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(HttpReplaceModuleLoader),
         Box::new(StaticFileModuleLoader),
         Box::new(HttpHeadersModuleLoader),
-        Box::new(ReverseProxyModuleLoader),
+        Box::new(ReverseProxyModuleLoader::default()),
         Box::new(ForwardProxyModuleLoader),
         Box::new(HttpBasicAuthModuleLoader),
         Box::new(AdminApiModuleLoader::default()),
