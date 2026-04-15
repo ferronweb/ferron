@@ -10,11 +10,13 @@ use bytes::Bytes;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::pipeline::{Pipeline, PipelineError, Stage, StageHooks};
 use ferron_core::util::parse_duration;
+use ferron_http::trace_context;
 use ferron_http::variables::canonicalize_ip;
 use ferron_http::{HttpContext, HttpErrorContext, HttpFileContext, HttpRequest, HttpResponse};
 use ferron_observability::{
     AccessEvent, AccessVisitor, CompositeEventSink, Event, LogEvent, LogLevel,
-    MetricAttributeValue, MetricEvent, MetricType, MetricValue, TraceAttributeValue, TraceEvent,
+    MetricAttributeValue, MetricEvent, MetricType, MetricValue, Parent, TraceAttributeValue,
+    TraceEvent,
 };
 use http::{HeaderMap, HeaderValue, Response, StatusCode};
 use http_body_util::Empty;
@@ -47,7 +49,7 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
         let stage_name = stage.name();
         self.events.emit(Event::Trace(TraceEvent::StartSpan {
             name: Cow::Owned(format!("ferron.stage.{}", stage_name)),
-            parent_span_id: None,
+            parent: None,
             attributes: vec![(
                 "stage.name",
                 TraceAttributeValue::String(stage_name.to_string()),
@@ -79,7 +81,7 @@ impl StageHooks<HttpContext> for PerStageSpanHooks<'_> {
         let stage_name = stage.name();
         self.events.emit(Event::Trace(TraceEvent::StartSpan {
             name: Cow::Owned(format!("ferron.stage.{}.inverse", stage_name)),
-            parent_span_id: None,
+            parent: None,
             attributes: vec![(
                 "stage.name",
                 TraceAttributeValue::String(stage_name.to_string()),
@@ -366,6 +368,21 @@ pub async fn request_handler(
     let server_ip_canonical = has_events.then(|| canonicalize_ip(local_address.ip()));
     let initial_client_ip_canonical = has_events.then(|| canonicalize_ip(remote_address.ip()));
 
+    // Determine external parent from incoming headers if present (do not generate here)
+    let mut external_parent_outer: Option<Parent> = None;
+    if has_traces {
+        if let Some(tp_val) = request.headers().get("traceparent") {
+            if let Ok(tp_str) = tp_val.to_str() {
+                if let Some(tc) = trace_context::parse_traceparent(tp_str) {
+                    external_parent_outer = Some(Parent::ById {
+                        trace_id: tc.trace_id.clone(),
+                        span_id: tc.span_id.clone(),
+                    });
+                }
+            }
+        }
+    }
+
     // Start tracing span
     if has_traces {
         let method = method
@@ -385,7 +402,7 @@ pub async fn request_handler(
 
         events.emit(Event::Trace(TraceEvent::StartSpan {
             name: Cow::Borrowed("ferron.request_handler"),
-            parent_span_id: None,
+            parent: external_parent_outer.clone(),
             attributes: vec![
                 (
                     "http.request.method",
@@ -796,6 +813,71 @@ async fn request_handler_inner(
     // Create a partial HttpContext for variable resolution during config resolution.
     // This enables all interpolation variables (request.*, server.*, remote.*) to be
     // resolved dynamically from the context rather than pre-populated in a HashMap.
+    // Parse incoming W3C traceparent (trace-context) headers early so spans can be started with external parents
+    let mut parsed_trace_context: Option<trace_context::TraceContext> = None;
+    let mut external_parent: Option<Parent> = None;
+    if events.has_trace_sinks() {
+        let global_config = config_resolver.global();
+        let trace_config_node = global_config.as_ref().and_then(|g| {
+            g.directives
+                .get("http")
+                .and_then(|entries| entries.first())
+                .and_then(|e| e.children.as_ref())
+                .and_then(|c| c.directives.get("trace"))
+                .and_then(|entries| entries.first())
+                .and_then(|e| e.children.as_ref())
+        });
+
+        let generate_enabled = trace_config_node
+            .and_then(|c| c.get_value("generate"))
+            .and_then(|v| v.as_boolean())
+            .unwrap_or(true);
+
+        let default_sampled = trace_config_node
+            .and_then(|c| c.get_value("sampled"))
+            .and_then(|v| v.as_boolean())
+            .unwrap_or(false);
+
+        if let Some(tp_val) = request.headers().get("traceparent") {
+            if let Ok(tp_str) = tp_val.to_str() {
+                if let Some(tc) = trace_context::parse_traceparent(tp_str) {
+                    external_parent = Some(Parent::ById {
+                        trace_id: tc.trace_id.clone(),
+                        span_id: tc.span_id.clone(),
+                    });
+                    parsed_trace_context = Some(tc);
+                }
+            }
+        }
+        // If no incoming context, generate a new one if enabled.
+        if parsed_trace_context.is_none() && generate_enabled {
+            let gen = trace_context::generate_traceparent(default_sampled);
+            external_parent = Some(Parent::ById {
+                trace_id: gen.trace_id.clone(),
+                span_id: gen.span_id.clone(),
+            });
+            parsed_trace_context = Some(gen);
+        }
+    }
+
+    // Start the request span with external parent if available
+    if events.has_trace_sinks() {
+        events.emit(Event::Trace(TraceEvent::StartSpan {
+            name: std::borrow::Cow::Borrowed("ferron.request"),
+            parent: external_parent,
+            attributes: vec![
+                (
+                    "http.request.method",
+                    TraceAttributeValue::String(request.method().to_string()),
+                ),
+                (
+                    "url.full",
+                    TraceAttributeValue::String(request.uri().to_string()),
+                ),
+            ],
+        }));
+    }
+
     let mut ctx = HttpContext {
         req: Some(request),
         res: None,
@@ -813,6 +895,13 @@ async fn request_handler_inner(
         https_port,
         extensions: TypeMap::new(),
     };
+
+    // Attach parsed or generated trace context to the HttpContext extensions so stages/modules can access it.
+    if let Some(tc) = parsed_trace_context {
+        ctx.insert::<trace_context::TraceContextKey>(tc);
+    }
+
+    // When starting the top-level request span later, prefer external_parent if available
 
     let resolution = config_resolver.resolve(
         local_address.ip(),
@@ -943,6 +1032,31 @@ async fn request_handler_inner(
 
     let auth_user = ctx.auth_user.clone();
     let final_remote = ctx.remote_address;
+
+    if events.has_trace_sinks() {
+        let status = match ctx
+            .res
+            .as_ref()
+            .unwrap_or(&HttpResponse::BuiltinError(404, None))
+        {
+            HttpResponse::BuiltinError(status, _) => *status as i64,
+            HttpResponse::Custom(resp) => resp.status().as_u16() as i64,
+            HttpResponse::Abort => 0,
+        };
+        events.emit(Event::Trace(TraceEvent::EndSpan {
+            name: std::borrow::Cow::Borrowed("ferron.request"),
+            attributes: vec![(
+                "http.response.status_code",
+                TraceAttributeValue::I64(status),
+            )],
+            error: if status >= 400 {
+                Some(format!("HTTP error {}", status))
+            } else {
+                None
+            },
+        }));
+    }
+
     (
         match ctx.res.unwrap_or(HttpResponse::BuiltinError(404, None)) {
             HttpResponse::Custom(response) => Ok(response),
@@ -986,7 +1100,7 @@ async fn execute_pipeline_stages(
     if has_traces {
         events.emit(Event::Trace(TraceEvent::StartSpan {
             name: Cow::Borrowed("ferron.pipeline.execute"),
-            parent_span_id: None,
+            parent: Some(Parent::ByName("ferron.request".to_string())),
             attributes: vec![(
                 "ferron.pipeline.log_prefix",
                 TraceAttributeValue::String(log_prefix.to_string()),
@@ -1806,7 +1920,7 @@ async fn execute_error_pipeline(
     if has_traces {
         events.emit(Event::Trace(TraceEvent::StartSpan {
             name: Cow::Borrowed("ferron.pipeline.execute_error"),
-            parent_span_id: None,
+            parent: None,
             attributes: vec![(
                 "http.response.status_code",
                 TraceAttributeValue::I64(error_code as i64),

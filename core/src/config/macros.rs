@@ -1009,6 +1009,23 @@ macro_rules! validate_nested {
         }
     };
 
+    // Optional subdirective with no args and block
+    ($block:expr, $name:ident, optional no_args, $body:block) => {
+        if let Some(directives) = $block.directives.get(stringify!($name)) {
+            for directive in directives {
+                if !directive.args.is_empty() {
+                    return Err(format!(
+                        "Invalid directive '{}': expected no arguments in '{}' subdirective",
+                        stringify!($name), stringify!($name)
+                    ).into());
+                }
+                let __empty = Default::default();
+                let $name = directive.children.as_ref().unwrap_or(&__empty);
+                $body
+            }
+        }
+    };
+
     // Subdirective with no children validation (just check existence)
     ($block:expr, $name:ident) => {
         if let Some(directives) = $block.directives.get(stringify!($name)) {

@@ -255,4 +255,10 @@ export default [
     target: "_self",
     label: "Observability and logging",
   },
+  {
+    href: "/docs/v3/configuration/http-trace",
+    target: "_self",
+    sub: true,
+    label: "Trace context",
+  },
 ];

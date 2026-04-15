@@ -109,11 +109,17 @@ pub enum TraceAttributeValue {
 
 /// Represents a trace event with its name, attributes, and optional span ID.
 #[derive(Clone)]
+pub enum Parent {
+    ByName(String),
+    ById { trace_id: String, span_id: String },
+}
+
+#[derive(Clone)]
 pub enum TraceEvent {
     /// Start a new span with the given name, optional parent, and attributes.
     StartSpan {
         name: Cow<'static, str>,
-        parent_span_id: Option<String>,
+        parent: Option<Parent>,
         attributes: Vec<(&'static str, TraceAttributeValue)>,
     },
     /// End the span with the given name, optional error description, and final attributes.

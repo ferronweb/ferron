@@ -388,6 +388,11 @@ async fn handle_http_forward(
     // Connection: close for HTTP/1.1
     parts.headers.insert(header::CONNECTION, "close".parse()?);
 
+    // W3C Trace Context propagation
+    if let Some(tc) = ctx.get::<ferron_http::trace_context::TraceContextKey>() {
+        ferron_http::trace_context::inject_trace_headers(&mut parts.headers, tc);
+    }
+
     let proxy_request = Request::from_parts(parts, body);
 
     // Forward the request

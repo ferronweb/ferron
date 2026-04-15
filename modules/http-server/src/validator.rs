@@ -77,6 +77,12 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             validate_nested!(http, h2_max_concurrent_streams, args(1) => [ServerConfigurationValue::Number(_, _)]);
             validate_nested!(http, h2_max_header_list_size, args(1) => [ServerConfigurationValue::Number(_, _)]);
             validate_nested!(http, h2_enable_connect_protocol, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+
+            // W3C Trace Context
+            validate_nested!(http, trace, {
+                validate_nested!(trace, generate, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+                validate_nested!(trace, sampled, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+            });
         });
 
         // Webroot

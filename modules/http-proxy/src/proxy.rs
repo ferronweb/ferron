@@ -265,6 +265,11 @@ fn construct_proxy_request(
         HeaderValue::from_str(&client_ip_str)?,
     );
 
+    // W3C Trace Context propagation
+    if let Some(tc) = ctx.get::<ferron_http::trace_context::TraceContextKey>() {
+        ferron_http::trace_context::inject_trace_headers(&mut parts.headers, tc);
+    }
+
     Ok(Request::from_parts(parts, body))
 }
 

@@ -15,7 +15,7 @@ use ferron_core::{
 };
 use ferron_observability::{
     AccessEvent, Event, EventSink, LogEvent, LogLevel, MetricAttributeValue, MetricEvent,
-    MetricType, MetricValue, ObservabilityContext, TraceAttributeValue, TraceEvent,
+    MetricType, MetricValue, ObservabilityContext, TraceAttributeValue, Parent, TraceEvent,
 };
 use hyper::header::HeaderValue;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -1028,32 +1028,54 @@ fn emit_trace(
     match event {
         TraceEvent::StartSpan {
             name,
-            parent_span_id,
+            parent,
             attributes,
         } => {
-            let mut span = if let Some(parent_name) = parent_span_id {
-                // Look up the parent span's trace_id and span_id by name
-                if let Some((trace_id_hex, parent_span_id_hex)) =
-                    correlation.get_parent_ids(parent_name)
-                {
-                    if let (Ok(trace_id), Ok(span_id)) = (
-                        TraceId::from_hex(&trace_id_hex),
-                        SpanId::from_hex(&parent_span_id_hex),
-                    ) {
-                        let parent_ctx = SpanContext::new(
-                            trace_id,
-                            span_id,
-                            TraceFlags::SAMPLED,
-                            true,
-                            TraceState::default(),
-                        );
-                        let parent_cx = Context::new().with_remote_span_context(parent_ctx);
-                        tracer.start_with_context(name.clone(), &parent_cx)
-                    } else {
-                        tracer.start(name.clone())
+            let mut span = if let Some(parent_val) = parent {
+                match parent_val {
+                    Parent::ByName(parent_name) => {
+                        // Look up the parent span's trace_id and span_id by name
+                        if let Some((trace_id_hex, parent_span_id_hex)) =
+                            correlation.get_parent_ids(parent_name)
+                        {
+                            if let (Ok(trace_id), Ok(span_id)) = (
+                                TraceId::from_hex(&trace_id_hex),
+                                SpanId::from_hex(&parent_span_id_hex),
+                            ) {
+                                let parent_ctx = SpanContext::new(
+                                    trace_id,
+                                    span_id,
+                                    TraceFlags::SAMPLED,
+                                    true,
+                                    TraceState::default(),
+                                );
+                                let parent_cx = Context::new().with_remote_span_context(parent_ctx);
+                                tracer.start_with_context(name.clone(), &parent_cx)
+                            } else {
+                                tracer.start(name.clone())
+                            }
+                        } else {
+                            tracer.start(name.clone())
+                        }
                     }
-                } else {
-                    tracer.start(name.clone())
+                    Parent::ById { trace_id: trace_id_hex, span_id: parent_span_id_hex } => {
+                        if let (Ok(trace_id), Ok(span_id)) = (
+                            TraceId::from_hex(&trace_id_hex),
+                            SpanId::from_hex(&parent_span_id_hex),
+                        ) {
+                            let parent_ctx = SpanContext::new(
+                                trace_id,
+                                span_id,
+                                TraceFlags::SAMPLED,
+                                true,
+                                TraceState::default(),
+                            );
+                            let parent_cx = Context::new().with_remote_span_context(parent_ctx);
+                            tracer.start_with_context(name.clone(), &parent_cx)
+                        } else {
+                            tracer.start(name.clone())
+                        }
+                    }
                 }
             } else {
                 tracer.start(name.clone())
@@ -1356,7 +1378,7 @@ mod tests {
 
         let event = TraceEvent::StartSpan {
             name: Cow::Borrowed("test.span"),
-            parent_span_id: None,
+            parent: None,
             attributes: vec![
                 (
                     "http.request.method",
@@ -1386,7 +1408,7 @@ mod tests {
         // Start a span
         let start_event = TraceEvent::StartSpan {
             name: Cow::Borrowed("test.span"),
-            parent_span_id: None,
+            parent: None,
             attributes: vec![(
                 "http.request.method",
                 TraceAttributeValue::String("POST".to_string()),
@@ -1415,7 +1437,7 @@ mod tests {
 
         let start_event = TraceEvent::StartSpan {
             name: Cow::Borrowed("test.span"),
-            parent_span_id: None,
+            parent: None,
             attributes: vec![],
         };
         emit_trace(&provider, &start_event, &correlation);

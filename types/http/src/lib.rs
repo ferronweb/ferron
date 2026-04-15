@@ -1,5 +1,6 @@
 //! HTTP context types
 
+pub mod trace_context;
 #[cfg(feature = "util")]
 pub mod util;
 pub mod variables;
