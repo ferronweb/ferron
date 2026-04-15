@@ -11,6 +11,7 @@
 - Response body string replacement support
 - Support for body interpolation in `status` directives.
 - Support for interpolated strings in header values.
+- W3C Trace Context (traceparent and tracestate) propagation and generation.
 
 ### Changed
 
