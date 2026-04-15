@@ -7,7 +7,7 @@ Ferron 3 supports W3C Trace Context (traceparent and tracestate) propagation and
 
 Incoming `traceparent` and `tracestate` headers are parsed and used as the parent for the internal `ferron.request` span. If missing, a new trace context can be generated (default behavior). These identifiers are then propagated to upstream services when using the reverse proxy modules.
 
-### Trace configuration
+## Trace configuration
 
 These directives are configured within the `http` block.
 
