@@ -21,6 +21,7 @@ use crate::{
     server::tls_resolve::TlsResolverRadixTree,
 };
 
+mod protocols;
 mod tcp;
 mod tls_resolve;
 
@@ -180,15 +181,15 @@ fn resolve_http_u32(
 
 fn resolve_http_protocols(
     http_config: Option<&ServerConfigurationBlock>,
-) -> anyhow::Result<tcp::HttpProtocols> {
+) -> anyhow::Result<protocols::HttpProtocols> {
     let Some(protocols_entry) = http_config
         .and_then(|config| config.directives.get("protocols"))
         .and_then(|entries| entries.first())
     else {
-        return Ok(tcp::HttpProtocols::default());
+        return Ok(protocols::HttpProtocols::default());
     };
 
-    let mut protocols = tcp::HttpProtocols::empty();
+    let mut protocols = protocols::HttpProtocols::empty();
     for value in &protocols_entry.args {
         let protocol = value
             .as_str()
@@ -786,7 +787,7 @@ mod tests {
 
         let options = resolve_http_connection_options(&config).unwrap();
 
-        assert_eq!(options.protocols, tcp::HttpProtocols::default());
+        assert_eq!(options.protocols, protocols::HttpProtocols::default());
         assert_eq!(
             options.alpn_protocols(),
             vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()]
@@ -814,7 +815,7 @@ mod tests {
 
         assert_eq!(
             options.protocols,
-            tcp::HttpProtocols {
+            protocols::HttpProtocols {
                 http1: true,
                 http2: false,
             }
