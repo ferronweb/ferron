@@ -21,7 +21,7 @@ tokio-util = "0.7.15"
 futures-util = { version = "0.3.31", features = ["sink"] }
 regorus = { version = "0.9.1", default-features = false, features = ["arc"] }
 send_wrapper = { version = "0.6.0", optional = true, features = ["futures"] }
-rand = { version = "0.10.0", optional = true }
+rand = { version = "0.10.1", optional = true }
 ppp = { version = "2.3.0", optional = true }
 connpool = { version = "0.2.0", optional = true }
 tokio-rustls = { version = "0.26.2", optional = true, default-features = false, features = [
