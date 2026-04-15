@@ -15,7 +15,7 @@ use ferron_core::{
 };
 use ferron_observability::{
     AccessEvent, Event, EventSink, LogEvent, LogLevel, MetricAttributeValue, MetricEvent,
-    MetricType, MetricValue, ObservabilityContext, TraceAttributeValue, Parent, TraceEvent,
+    MetricType, MetricValue, ObservabilityContext, Parent, TraceAttributeValue, TraceEvent,
 };
 use hyper::header::HeaderValue;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -1058,7 +1058,10 @@ fn emit_trace(
                             tracer.start(name.clone())
                         }
                     }
-                    Parent::ById { trace_id: trace_id_hex, span_id: parent_span_id_hex } => {
+                    Parent::ById {
+                        trace_id: trace_id_hex,
+                        span_id: parent_span_id_hex,
+                    } => {
                         if let (Ok(trace_id), Ok(span_id)) = (
                             TraceId::from_hex(&trace_id_hex),
                             SpanId::from_hex(&parent_span_id_hex),
