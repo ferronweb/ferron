@@ -334,6 +334,44 @@ fn build_metric_attributes(
     attrs
 }
 
+pub async fn bad_request_handler(
+    is_timeout: bool,
+    error_pipeline: Arc<Pipeline<HttpErrorContext>>,
+    events: CompositeEventSink,
+) -> Result<Response<ResponseBody>, io::Error> {
+    let status_code = if is_timeout { 408 } else { 400 };
+    emit_error(
+        &events,
+        format!(
+            "{} request error: {}",
+            status_code,
+            if is_timeout {
+                "request timed out"
+            } else {
+                "bad request"
+            }
+        ),
+    );
+    let mut response = if let Some(response) = execute_error_pipeline(
+        error_pipeline.as_ref(),
+        status_code,
+        None,
+        LayeredConfiguration::default(),
+        &events,
+    )
+    .await
+    {
+        response
+    } else {
+        builtin_error_response(status_code, None, None)
+    };
+    // TODO: Alt-Svc for HTTP/3, maybe?
+    response
+        .headers_mut()
+        .insert(http::header::SERVER, HeaderValue::from_static("Ferron"));
+    Ok(response)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn request_handler(
     request: HttpRequest,

@@ -23,7 +23,7 @@ use tokio_util::sync::CancellationToken;
 use vibeio_http::{Http1, Http1Options, Http2, Http2Options, HttpProtocol};
 
 use crate::config::ThreeStageResolver;
-use crate::handler::request_handler;
+use crate::handler::{bad_request_handler, request_handler};
 use crate::server::tls_resolve::RadixTree;
 use crate::server::HttpServerConfig;
 use crate::util::proxy_protocol::read_proxy_header;
@@ -595,7 +595,10 @@ async fn handle_http1_connection_zerocopy<S>(
         Http1::new(socket, build_http1_options(&connection_options))
             .graceful_shutdown_token(graceful_shutdown.clone())
             .zerocopy()
-            .handle(build_request_handler(handler_state.clone())),
+            .handle_with_error_fn(
+                build_request_handler(handler_state.clone()),
+                build_bad_request_handler(handler_state.clone()),
+            ),
     );
     let connection_result = tokio::select! {
         result = &mut connection_future => result,
@@ -654,7 +657,10 @@ async fn handle_http1_connection<S>(
     let mut connection_future = Box::pin(
         Http1::new(socket, build_http1_options(&connection_options))
             .graceful_shutdown_token(graceful_shutdown.clone())
-            .handle(build_request_handler(handler_state.clone())),
+            .handle_with_error_fn(
+                build_request_handler(handler_state.clone()),
+                build_bad_request_handler(handler_state.clone()),
+            ),
     );
     let connection_result = tokio::select! {
         result = &mut connection_future => result,
@@ -713,7 +719,10 @@ async fn handle_http2_connection<S>(
     let mut connection_future = Box::pin(
         Http2::new(socket, build_http2_options(&connection_options))
             .graceful_shutdown_token(graceful_shutdown.clone())
-            .handle(build_request_handler(handler_state.clone())),
+            .handle_with_error_fn(
+                build_request_handler(handler_state.clone()),
+                build_bad_request_handler(handler_state.clone()),
+            ),
     );
     let connection_result = tokio::select! {
         result = &mut connection_future => result,
@@ -796,6 +805,24 @@ fn build_request_handler(
                 hostname,
                 state.encrypted,
                 state.https_port,
+                request_observability,
+            )
+            .await
+        })
+    }
+}
+
+#[inline]
+fn build_bad_request_handler(
+    state: Arc<RequestHandlerState>,
+) -> impl Fn(bool) -> RequestHandlerFuture {
+    move |is_timeout: bool| {
+        let state = Arc::clone(&state);
+        Box::pin(async move {
+            let request_observability = state.connection_observability.clone();
+            bad_request_handler(
+                is_timeout,
+                state.error_pipeline.clone(),
                 request_observability,
             )
             .await
