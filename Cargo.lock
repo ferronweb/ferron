@@ -1615,7 +1615,6 @@ dependencies = [
 name = "ferron-observability-prometheus"
 version = "3.0.0-alpha.1"
 dependencies = [
- "anyhow",
  "async-channel",
  "axum",
  "ferron-core",

@@ -897,7 +897,7 @@ mod tests {
     #[test]
     fn http_connection_options_reject_unknown_protocols() {
         let http_block = ServerConfigurationBlockBuilder::new()
-            .directive_str("protocols", vec!["h3"])
+            .directive_str("protocols", vec!["unknown"])
             .build();
         let config = ServerConfigurationBlockBuilder::new()
             .directive("http", http_directive(http_block))
@@ -905,7 +905,7 @@ mod tests {
 
         let error = resolve_http_connection_options(&config).unwrap_err();
 
-        assert_eq!(error.to_string(), "Unsupported HTTP protocol 'h3'");
+        assert_eq!(error.to_string(), "Unsupported HTTP protocol 'unknown'");
     }
 
     #[test]

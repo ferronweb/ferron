@@ -21,6 +21,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::endpoint::endpoint_listener_fn;
 
+type PrometheusInstrumentCache =
+    HashMap<(&'static str, Vec<(&'static str, String)>), CachedInstrument>;
 static DROPPED_EVENT: Once = Once::new();
 
 /// Shared configuration for an Prometheus backend instance
@@ -45,42 +47,40 @@ struct PrometheusEventSink {
 
 impl EventSink for PrometheusEventSink {
     fn emit(&self, event: Event) {
-        if matches!(event, Event::Metric(_)) {
-            if self
+        if matches!(event, Event::Metric(_))
+            && self
                 .inner
                 .try_send(ConfiguredEvent {
                     event,
                     log_config: self.log_config.clone(),
                 })
                 .is_err()
-            {
-                DROPPED_EVENT.call_once(|| {
-                    log_warn!(
-                        "Observability event dropped (`prometheus` observability backend). \
+        {
+            DROPPED_EVENT.call_once(|| {
+                log_warn!(
+                    "Observability event dropped (`prometheus` observability backend). \
                     This may be caused by high server load."
-                    )
-                });
-            }
+                )
+            });
         }
     }
 
     fn emit_arc(&self, event: std::sync::Arc<Event>) {
-        if matches!(&*event, Event::Metric(_)) {
-            if self
+        if matches!(&*event, Event::Metric(_))
+            && self
                 .inner
                 .try_send(ConfiguredEvent {
                     event: Arc::unwrap_or_clone(event),
                     log_config: self.log_config.clone(),
                 })
                 .is_err()
-            {
-                DROPPED_EVENT.call_once(|| {
-                    log_warn!(
-                        "Observability event dropped (`prometheus` observability backend). \
+        {
+            DROPPED_EVENT.call_once(|| {
+                log_warn!(
+                    "Observability event dropped (`prometheus` observability backend). \
                     This may be caused by high server load."
-                    )
-                });
-            }
+                )
+            });
         }
     }
 }
@@ -146,15 +146,12 @@ impl Module for PrometheusObservabilityModule {
                     .entry(cache_key)
                     .or_insert_with(|| init_provider(&config, cancel_token.clone()));
 
-                match &msg.event {
-                    Event::Metric(metric_event) => {
-                        emit_metric(
-                            &entry.registry,
-                            metric_event,
-                            &mut entry.metrics_instruments,
-                        );
-                    }
-                    _ => (), // Prometheus supports only metrics
+                if let Event::Metric(metric_event) = &msg.event {
+                    emit_metric(
+                        &entry.registry,
+                        metric_event,
+                        &mut entry.metrics_instruments,
+                    );
                 }
             }
         });
@@ -166,7 +163,7 @@ impl Module for PrometheusObservabilityModule {
 /// Cached Prometheus providers for a given config
 struct PrometheusProviderCache {
     registry: prometheus::Registry,
-    metrics_instruments: HashMap<(&'static str, Vec<(&'static str, String)>), CachedInstrument>,
+    metrics_instruments: PrometheusInstrumentCache,
 }
 
 enum CachedInstrument {
@@ -212,7 +209,7 @@ fn init_provider(
 fn emit_metric(
     registry: &prometheus::Registry,
     event: &MetricEvent,
-    instruments: &mut HashMap<(&'static str, Vec<(&'static str, String)>), CachedInstrument>,
+    instruments: &mut PrometheusInstrumentCache,
 ) {
     let attrs: Vec<(&'static str, String)> = event
         .attributes
@@ -251,7 +248,7 @@ fn emit_metric(
                                 name: event.name.to_string().replace(".", "_"),
                                 help: event
                                     .description
-                                    .unwrap_or_else(|| "No description provided".into())
+                                    .unwrap_or("No description provided")
                                     .to_string(),
                                 const_labels: attrs
                                     .iter()
@@ -287,7 +284,7 @@ fn emit_metric(
                                 name: event.name.to_string().replace(".", "_"),
                                 help: event
                                     .description
-                                    .unwrap_or_else(|| "No description provided".into())
+                                    .unwrap_or("No description provided")
                                     .to_string(),
                                 const_labels: attrs
                                     .iter()
@@ -321,7 +318,7 @@ fn emit_metric(
                                 name: event.name.to_string().replace(".", "_"),
                                 help: event
                                     .description
-                                    .unwrap_or_else(|| "No description provided".into())
+                                    .unwrap_or("No description provided")
                                     .to_string(),
                                 const_labels: attrs
                                     .iter()
@@ -355,7 +352,7 @@ fn emit_metric(
                                 name: event.name.to_string().replace(".", "_"),
                                 help: event
                                     .description
-                                    .unwrap_or_else(|| "No description provided".into())
+                                    .unwrap_or("No description provided")
                                     .to_string(),
                                 const_labels: attrs
                                     .iter()
@@ -389,7 +386,7 @@ fn emit_metric(
                                 name: event.name.to_string().replace(".", "_"),
                                 help: event
                                     .description
-                                    .unwrap_or_else(|| "No description provided".into())
+                                    .unwrap_or("No description provided")
                                     .to_string(),
                                 const_labels: attrs
                                     .iter()
@@ -423,7 +420,7 @@ fn emit_metric(
                                 name: event.name.to_string().replace(".", "_"),
                                 help: event
                                     .description
-                                    .unwrap_or_else(|| "No description provided".into())
+                                    .unwrap_or("No description provided")
                                     .to_string(),
                                 const_labels: attrs
                                     .iter()
@@ -457,7 +454,7 @@ fn emit_metric(
                                 name: event.name.to_string().replace(".", "_"),
                                 help: event
                                     .description
-                                    .unwrap_or_else(|| "No description provided".into())
+                                    .unwrap_or("No description provided")
                                     .to_string(),
                                 const_labels: attrs
                                     .iter()
@@ -490,7 +487,7 @@ fn emit_metric(
                             name: event.name.to_string().replace(".", "_"),
                             help: event
                                 .description
-                                .unwrap_or_else(|| "No description provided".into())
+                                .unwrap_or("No description provided")
                                 .to_string(),
                             const_labels: attrs
                                 .iter()
@@ -533,7 +530,7 @@ fn emit_metric(
                             name: event.name.to_string().replace(".", "_"),
                             help: event
                                 .description
-                                .unwrap_or_else(|| "No description provided".into())
+                                .unwrap_or("No description provided")
                                 .to_string(),
                             const_labels: attrs
                                 .iter()
