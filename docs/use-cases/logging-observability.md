@@ -8,6 +8,7 @@ Ferron supports multiple observability outputs, so you can start with local log 
 This page focuses on common deployment patterns. For directive-level details, see [Configuration: observability and logging](/docs/v3/configuration/observability-logging).
 
 For specific backend configurations:
+
 - [Prometheus metrics](/docs/v3/configuration/observability-prometheus)
 - [OTLP observability](/docs/v3/configuration/observability-otlp)
 
