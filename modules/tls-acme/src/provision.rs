@@ -349,7 +349,10 @@ pub async fn provision_certificate(
             _ => {}
         }
 
-        challenge.set_ready().await?;
+        if let Err(err) = challenge.set_ready().await {
+            log_error!("Failed to set ACME challenge ready for {domains}: {err}");
+            return Err(Box::new(err));
+        };
         log_debug!(
             "ACME {:?} challenge solved for {domains}",
             config.challenge_type
@@ -357,17 +360,25 @@ pub async fn provision_certificate(
     }
 
     // Step 5: Wait for order to be ready
-    let order_status = order.poll_ready(&RetryPolicy::default()).await?;
+    let order_status = match order.poll_ready(&RetryPolicy::default()).await {
+        Ok(status) => status,
+        Err(e) => {
+            log_error!("Failed to finalize ACME order for {domains}: {e}");
+            return Err(Box::new(e));
+        }
+    };
     match order_status {
         OrderStatus::Ready => {}
         OrderStatus::Invalid => {
             log_error!(
                 "ACME order failed — status: invalid, domains: {domains}, reason: {}",
-                order
-                    .state()
-                    .error
-                    .as_ref()
-                    .map_or("unknown".to_string(), |s| s.to_string())
+                order.refresh().await.map_or_else(
+                    |e| e.to_string(),
+                    |s| s.error.as_ref().map_or(
+                        "unknown (failed ACME challenge verification?)".to_string(),
+                        |s| s.to_string()
+                    )
+                )
             );
             return Err(anyhow::anyhow!("ACME order is invalid").into());
         }
@@ -378,8 +389,20 @@ pub async fn provision_certificate(
     }
 
     // Step 6: Finalize and obtain certificate
-    let private_key_pem = order.finalize().await?;
-    let certificate_chain_pem = order.poll_certificate(&RetryPolicy::default()).await?;
+    let private_key_pem = match order.finalize().await {
+        Ok(pem) => pem,
+        Err(e) => {
+            log_error!("Failed to finalize ACME order for {domains}: {e}");
+            return Err(Box::new(e));
+        }
+    };
+    let certificate_chain_pem = match order.poll_certificate(&RetryPolicy::default()).await {
+        Ok(pem) => pem,
+        Err(e) => {
+            log_error!("Failed to obtain ACME certificate for {domains}: {e}");
+            return Err(Box::new(e));
+        }
+    };
 
     let certs = CertificateDer::pem_slice_iter(certificate_chain_pem.as_bytes())
         .collect::<Result<Vec<_>, _>>()
