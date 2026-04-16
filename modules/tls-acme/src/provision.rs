@@ -252,7 +252,10 @@ pub async fn provision_certificate(
                 create_new_account(config, account_builder, &account_cache_key).await?;
             new_account.new_order(&new_order).await?
         }
-        Err(e) => return Err(Box::new(e)),
+        Err(e) => {
+            log_error!("Failed to create ACME order for {domains}: {e}");
+            return Err(Box::new(e));
+        }
     };
 
     // Step 4: Solve challenges
@@ -263,19 +266,35 @@ pub async fn provision_certificate(
         match auth.status {
             AuthorizationStatus::Pending => {}
             AuthorizationStatus::Valid => continue,
-            _ => return Err(anyhow::anyhow!("Invalid ACME authorization status").into()),
+            _ => {
+                log_error!(
+                    "ACME authorization failed — status: {:?}, domains: {domains}",
+                    auth.status,
+                );
+                return Err(anyhow::anyhow!("Invalid ACME authorization status").into());
+            }
         }
 
         let mut challenge = auth
             .challenge(config.challenge_type.clone())
             .ok_or_else(|| {
+                log_error!(
+                    "ACME server doesn't support the requested challenge type {:?} for {domains}",
+                    config.challenge_type
+                );
                 anyhow::anyhow!("The ACME server doesn't support the requested challenge type")
             })?;
 
         let identifier = match &challenge.identifier().identifier {
             Identifier::Dns(name) => name.to_string(),
             Identifier::Ip(ip) => ip.to_string(),
-            _ => return Err(anyhow::anyhow!("Unsupported ACME identifier type").into()),
+            _ => {
+                log_error!(
+                    "Unsupported ACME identifier type for {domains}: {:?}",
+                    challenge.identifier().identifier
+                );
+                return Err(anyhow::anyhow!("Unsupported ACME identifier type").into());
+            }
         };
 
         let key_authorization = challenge.key_authorization();
@@ -342,7 +361,14 @@ pub async fn provision_certificate(
     match order_status {
         OrderStatus::Ready => {}
         OrderStatus::Invalid => {
-            log_error!("ACME order failed — status: invalid, domains: {domains}");
+            log_error!(
+                "ACME order failed — status: invalid, domains: {domains}, reason: {}",
+                order
+                    .state()
+                    .error
+                    .as_ref()
+                    .map_or("unknown".to_string(), |s| s.to_string())
+            );
             return Err(anyhow::anyhow!("ACME order is invalid").into());
         }
         _ => {

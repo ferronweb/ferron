@@ -305,7 +305,13 @@ impl BasicHttpModule {
 
         let mut quic_tls_resolver = None;
         for host_config in &port_config.hosts {
-            let http_connection_options = resolve_http_connection_options(&host_config.1)?;
+            let http_connection_options =
+                resolve_http_connection_options(&host_config.1).map_err(|e| {
+                    anyhow::anyhow!(
+                        "Can't determine HTTP connection options ({}): {e}",
+                        format_location(None, host_config.1.span.as_ref())
+                    )
+                })?;
             match (&host_config.0.host, host_config.0.ip) {
                 (Some(host), Some(ip)) => {
                     http_connection_options_resolver.insert_ip_and_hostname(
@@ -423,7 +429,7 @@ impl BasicHttpModule {
                     let observability_provider = observability_registry
                         .get(observability_provider_name)
                         .ok_or(anyhow::anyhow!(
-                            "Observability provider not found ({})",
+                            "Observability provider '{observability_provider_name}' not found ({})",
                             format_location(None, observability_block.span.as_ref())
                         ))?;
 
@@ -579,7 +585,7 @@ impl BasicHttpModule {
 
         if let Some(tls_registry) = registry.get_provider_registry::<TcpTlsContext>() {
             let tls_provider = tls_registry.get(tls_provider_name).ok_or(anyhow::anyhow!(
-                "TLS provider not found ({})",
+                "TLS provider '{tls_provider_name}' not found ({})",
                 format_location(None, tls1.span.as_ref())
             ))?;
 
@@ -604,7 +610,7 @@ impl BasicHttpModule {
             };
             tls_provider.execute(&mut tls_resolver_ctx)?;
             let tls_resolver_sub = tls_resolver_ctx.resolver.ok_or(anyhow::anyhow!(
-                "TLS resolver not found ({})",
+                "TLS resolver '{tls_provider_name}' not found ({})",
                 format_location(None, tls1.span.as_ref())
             ))?;
             if http_connection_options.protocols.http3 {
