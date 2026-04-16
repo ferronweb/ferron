@@ -419,25 +419,6 @@ impl Stage<HttpFileContext> for StaticFileStage {
             }
         }
 
-        // Full file response — streaming I/O
-        let file = vibeio::fs::File::open(&file_path)
-            .await
-            .map_err(|e| PipelineError::custom(format!("failed to open file: {e}")))?;
-
-        // Extract raw fd for zerocopy (from the vibeio file via its std::fs::File inner)
-        #[cfg(unix)]
-        let raw_fd = {
-            use std::os::fd::AsRawFd;
-            let std_file = file.as_raw_fd();
-            Some(std_file as i64)
-        };
-        #[cfg(windows)]
-        let raw_fd = {
-            use std::os::windows::io::AsRawHandle;
-            let std_file = file.as_raw_handle();
-            Some(std_file as i64)
-        };
-
         let mut builder = Response::builder()
             .status(StatusCode::OK)
             .header(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
@@ -512,6 +493,25 @@ impl Stage<HttpFileContext> for StaticFileStage {
             ctx.http.res = Some(HttpResponse::Custom(response));
             return Ok(false);
         }
+
+        // Full file response — streaming I/O
+        let file = vibeio::fs::File::open(&file_path)
+            .await
+            .map_err(|e| PipelineError::custom(format!("failed to open file: {e}")))?;
+
+        // Extract raw fd for zerocopy (from the vibeio file via its std::fs::File inner)
+        #[cfg(unix)]
+        let raw_fd = {
+            use std::os::fd::AsRawFd;
+            let std_file = file.as_raw_fd();
+            Some(std_file as i64)
+        };
+        #[cfg(windows)]
+        let raw_fd = {
+            use std::os::windows::io::AsRawHandle;
+            let std_file = file.as_raw_handle();
+            Some(std_file as i64)
+        };
 
         // GET body — stream file content
         let body: UnsyncBoxBody<Bytes, io::Error> = if is_precompressed_file {
