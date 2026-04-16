@@ -1063,8 +1063,8 @@ fn emit_trace(
                         span_id: parent_span_id_hex,
                     } => {
                         if let (Ok(trace_id), Ok(span_id)) = (
-                            TraceId::from_hex(&trace_id_hex),
-                            SpanId::from_hex(&parent_span_id_hex),
+                            TraceId::from_hex(trace_id_hex),
+                            SpanId::from_hex(parent_span_id_hex),
                         ) {
                             let parent_ctx = SpanContext::new(
                                 trace_id,

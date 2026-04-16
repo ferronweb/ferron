@@ -7,10 +7,12 @@ edition = "2021"
 bench = []
 
 [dependencies]
+async-channel = "2.5.0"
+send_wrapper = "0.6.0"
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "macros"] }
 vibeio = { version = "0.2.8", default-features = false, features = ["time"] }
-vibeio-http = { version = "0.3.0", default-features = false, features = ["h1", "h1-zerocopy", "h2"] }
+vibeio-http = { version = "0.3.0", default-features = false, features = ["h1", "h1-zerocopy", "h2", "h3"] }
 parking_lot = "0.12"
 arc-swap = "1.7"
 http = "1"
@@ -29,6 +31,14 @@ chrono = "0.4"
 quick_cache = "0.6"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 rustc-hash = "2"
+h3 = "0.0.8"
+h3-quinn = "0.0.10"
+quinn = { version = "0.11.8", default-features = false, features = [
+    "aws-lc-rs",
+    "rustls-aws-lc-rs",
+    "runtime-tokio",
+] }
+oneshot = { version = "0.2.1", features = ["std", "async"] }
 
 ferron-core = { path = "../../core" }
 ferron-observability = { path = "../../types/observability" }

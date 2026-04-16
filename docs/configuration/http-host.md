@@ -13,6 +13,10 @@ http example.com:8080 {
 }
 ```
 
+**Experimental HTTP/3 Support:**
+
+When HTTP/3 is enabled via the `protocols h3` directive, Ferron will also start a QUIC listener on the same port to handle HTTP/3 traffic. This is currently an **experimental feature** and may change in future releases.
+
 ## Directives
 
 ### Automatic TLS
@@ -106,7 +110,7 @@ Reads the `Forwarded` header and extracts the first `for=` token. Both quoted an
 ### HTTP protocol settings
 
 - `protocols <protocols: string>...`
-  - This directive specifies the enabled HTTP protocols. Currently supported values are `h1` and `h2`. Default: `protocols h1 h2`
+  - This directive specifies the enabled HTTP protocols. Supported values are `h1` (HTTP/1.1), `h2` (HTTP/2), and `h3` (HTTP/3, experimental). Default: `protocols h1 h2`
 - `options_allowed_methods <methods: string>`
   - This directive specifies the HTTP methods advertised in the `Allow` header for `OPTIONS *` requests (per RFC 2616 Section 9.2). The methods are returned as a comma-separated list. This only applies to server-wide `OPTIONS *` requests, not resource-specific `OPTIONS /path` requests. Default: `options_allowed_methods "GET, HEAD, POST, OPTIONS"`
 - `timeout <duration>`
@@ -136,7 +140,7 @@ Reads the `Forwarded` header and extracts the first `for=` token. Both quoted an
 ```ferron
 example.com {
     http {
-        protocols h1 h2
+        protocols h1 h2 h3
         options_allowed_methods "GET, HEAD, POST, PUT, DELETE, OPTIONS"
         timeout 30m
         h1_enable_early_hints false
@@ -147,8 +151,9 @@ example.com {
 Notes:
 
 - `protocols` must leave at least one supported protocol enabled.
-- `h3` is currently rejected.
+- HTTP/3 (`h3`) is currently **experimental**. When enabled, Ferron will start an additional QUIC listener on the same port for HTTP/3 traffic.
 - The default `options_allowed_methods` value (`GET, HEAD, POST, OPTIONS`) intentionally excludes methods like `PUT`, `DELETE`, `PATCH`, `CONNECT`, and `TRACE` to reduce the attack surface reported by security scanners. You can customize this list based on your server's requirements.
+- When HTTP/3 is enabled, the server will automatically add an `Alt-Svc` header to responses to advertise HTTP/3 support to clients.
 
 Notes for `url_sanitize`:
 
@@ -194,6 +199,6 @@ All metrics include attributes for `http.request.method`, `url.scheme`, `network
 ## Notes and troubleshooting
 
 - These directives are host-scoped rather than global.
-- The HTTP server engine (`http-server` module) handles connection management, request routing, TLS termination, and HTTP/1 and HTTP/2 protocol support.
+- The HTTP server engine (`http-server` module) handles connection management, request routing, TLS termination, and HTTP/1, HTTP/2, and experimental HTTP/3 protocol support.
 - For ACME configuration details, see [ACME automatic TLS](/docs/v3/configuration/tls-acme).
 - For crypto and mTLS settings, see [Security and TLS](/docs/v3/configuration/security-tls).

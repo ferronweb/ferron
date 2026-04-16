@@ -365,7 +365,6 @@ pub async fn bad_request_handler(
     } else {
         builtin_error_response(status_code, None, None)
     };
-    // TODO: Alt-Svc for HTTP/3, maybe?
     response
         .headers_mut()
         .insert(http::header::SERVER, HeaderValue::from_static("Ferron"));
@@ -383,6 +382,7 @@ pub async fn request_handler(
     remote_address: SocketAddr,
     hostname: Option<String>,
     encrypted: bool,
+    http3_alt_svc: bool,
     https_port: Option<u16>,
     events: CompositeEventSink,
 ) -> Result<Response<ResponseBody>, io::Error> {
@@ -646,7 +646,14 @@ pub async fn request_handler(
     }
 
     if let Ok(response) = &mut response_result {
-        // TODO: add Alt-Svc for HTTP/3
+        add_http3_alt_svc_header(
+            response.headers_mut(),
+            if http3_alt_svc && encrypted {
+                Some(https_port.unwrap_or(local_address.port()))
+            } else {
+                None
+            },
+        );
         response
             .headers_mut()
             .insert(http::header::SERVER, HeaderValue::from_static("Ferron"));
@@ -1258,7 +1265,6 @@ async fn execute_pipeline_stages(
                 }
             }
         }
-        // TODO: execute with timeout END
 
         if let Err(error) = pipeline
             .execute_inverse_with_hooks(ctx, executed_stages, &mut stage_hooks)
@@ -1987,6 +1993,33 @@ async fn execute_error_pipeline(
     }
 
     error_ctx.res
+}
+
+/// Helper function to add HTTP/3 Alt-Svc header
+#[inline]
+fn add_http3_alt_svc_header(headers: &mut HeaderMap, http3_alt_port: Option<u16>) {
+    if let Some(http3_alt_port) = http3_alt_port {
+        if let Ok(header_value) = match headers.get(http::header::ALT_SVC) {
+            Some(value) => {
+                let header_value_old = String::from_utf8_lossy(value.as_bytes());
+                let header_value_new =
+                    format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"");
+
+                if header_value_old != header_value_new {
+                    HeaderValue::from_bytes(
+                        format!("{header_value_old}, {header_value_new}").as_bytes(),
+                    )
+                } else {
+                    HeaderValue::from_bytes(header_value_old.as_bytes())
+                }
+            }
+            None => HeaderValue::from_bytes(
+                format!("h3=\":{http3_alt_port}\", h3-29=\":{http3_alt_port}\"").as_bytes(),
+            ),
+        } {
+            headers.insert(http::header::ALT_SVC, header_value);
+        }
+    }
 }
 
 #[cfg(test)]

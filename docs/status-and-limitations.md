@@ -65,15 +65,17 @@ The following features are implemented and functional in Ferron 3:
 - **Alpha quality** — not battle-tested; expect bugs and configuration changes between releases.
 - **All modules are compiled into the binary** — no runtime plugin loading yet. Every module ships with the default build.
 - **Primary testing target is Linux** — Windows and macOS receive less coverage and may have edge-case issues.
-- **HTTP/3 is not yet supported** — only HTTP/1.1 and HTTP/2 are available.
 - **No DNS provider modules** — the DNS-01 ACME challenge type is defined, but no DNS provider backends (Cloudflare, Route 53, etc.) are implemented yet. If you need wildcard certificates, obtain them externally and use [Manual TLS](/docs/v3/use-cases/manual-tls).
+
+### Experimental features
+
+- **HTTP/3 (QUIC) support** — HTTP/3 is available via the `protocols h3` directive but is **experimental**. When enabled, Ferron binds an additional UDP listener on the same port. This feature may change or be removed in future releases. See [HTTP host directives](/docs/v3/configuration/http-host) for configuration details.
 
 ## Roadmap
 
 Planned direction for future releases:
 
 - Dynamically loadable modules (WebAssembly?)
-- HTTP/3 and QUIC support
 - Additional observability backends (Prometheus, Jaeger/Zipkin?)
 - More authentication methods (JWT?, OAuth2?)
 

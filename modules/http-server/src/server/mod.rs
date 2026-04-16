@@ -15,13 +15,17 @@ use ferron_tls::TcpTlsContext;
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
 
+use crate::server::quic::{QuicTlsResolver, QuicTlsSniResolvers};
+use crate::server::sni::CustomSniResolver;
 use crate::server::tls_resolve::RadixTree;
 use crate::{
     config::{prepare_host_config, ThreeStageResolver},
     server::tls_resolve::TlsResolverRadixTree,
 };
 
-mod protocols;
+mod common;
+mod quic;
+mod sni;
 mod tcp;
 mod tls_resolve;
 
@@ -39,8 +43,9 @@ pub struct HttpServerConfig {
     pub global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
     pub config_resolver: Arc<crate::config::ThreeStageResolver>,
     pub tls_resolver: Option<Arc<self::tls_resolve::TlsResolverRadixTree>>,
+    pub quic_tls_resolver: Option<Arc<QuicTlsResolver>>,
     pub http_connection_options_resolver:
-        Arc<self::tls_resolve::RadixTree<tcp::HttpConnectionOptions>>,
+        Arc<self::tls_resolve::RadixTree<common::HttpConnectionOptions>>,
     pub observability_resolver: Arc<self::tls_resolve::RadixTree<Vec<ObservabilityProviderEntry>>>,
     /// Token that is cancelled when configuration is reloaded to gracefully shut down existing connections.
     pub reload_token: CancellationToken,
@@ -181,15 +186,15 @@ fn resolve_http_u32(
 
 fn resolve_http_protocols(
     http_config: Option<&ServerConfigurationBlock>,
-) -> anyhow::Result<protocols::HttpProtocols> {
+) -> anyhow::Result<common::HttpProtocols> {
     let Some(protocols_entry) = http_config
         .and_then(|config| config.directives.get("protocols"))
         .and_then(|entries| entries.first())
     else {
-        return Ok(protocols::HttpProtocols::default());
+        return Ok(common::HttpProtocols::default());
     };
 
-    let mut protocols = protocols::HttpProtocols::empty();
+    let mut protocols = common::HttpProtocols::empty();
     for value in &protocols_entry.args {
         let protocol = value
             .as_str()
@@ -197,6 +202,7 @@ fn resolve_http_protocols(
         match protocol {
             "h1" => protocols.http1 = true,
             "h2" => protocols.http2 = true,
+            "h3" => protocols.http3 = true,
             unsupported => anyhow::bail!("Unsupported HTTP protocol '{unsupported}'"),
         }
     }
@@ -210,15 +216,15 @@ fn resolve_http_protocols(
 
 fn resolve_http_connection_options(
     config: &ServerConfigurationBlock,
-) -> anyhow::Result<tcp::HttpConnectionOptions> {
+) -> anyhow::Result<common::HttpConnectionOptions> {
     let http_config = http_config(config);
-    Ok(tcp::HttpConnectionOptions {
+    Ok(common::HttpConnectionOptions {
         protocols: resolve_http_protocols(http_config)?,
         h1_enable_early_hints: http_config
             .and_then(|config| config.get_value("h1_enable_early_hints"))
             .and_then(|value| value.as_boolean())
             .unwrap_or(false),
-        h2: tcp::Http2Settings {
+        h2: common::Http2Settings {
             initial_window_size: resolve_http_u32(http_config, "h2_initial_window_size")?,
             max_frame_size: resolve_http_u32(http_config, "h2_max_frame_size")?,
             max_concurrent_streams: resolve_http_u32(http_config, "h2_max_concurrent_streams")?,
@@ -238,6 +244,7 @@ fn resolve_http_connection_options(
 pub struct BasicHttpModule {
     config: ConfigArcSwap,
     listeners: Mutex<Vec<tcp::TcpListenerHandle>>,
+    quic_listeners: Mutex<Vec<quic::QuicListenerHandle>>,
     port: u16,
 }
 
@@ -296,6 +303,7 @@ impl BasicHttpModule {
             observability_resolver.set_root_data(global_observability_entries);
         }
 
+        let mut quic_tls_resolver = None;
         for host_config in &port_config.hosts {
             let http_connection_options = resolve_http_connection_options(&host_config.1)?;
             match (&host_config.0.host, host_config.0.ip) {
@@ -346,6 +354,7 @@ impl BasicHttpModule {
                             &http_connection_options,
                             port_config,
                             &mut tls_resolver,
+                            &mut quic_tls_resolver,
                             &mut enable_tls,
                         )?;
                     }
@@ -386,6 +395,7 @@ impl BasicHttpModule {
                             &http_connection_options,
                             port_config,
                             &mut tls_resolver,
+                            &mut quic_tls_resolver,
                             &mut enable_tls,
                         )?;
                     }
@@ -491,6 +501,11 @@ impl BasicHttpModule {
             } else {
                 None
             },
+            quic_tls_resolver: if let Some(quic_resolver) = quic_tls_resolver {
+                Some(Arc::new(quic_resolver.try_into()?))
+            } else {
+                None
+            },
             http_connection_options_resolver: Arc::new(http_connection_options_resolver),
             observability_resolver: Arc::new(observability_resolver),
             reload_token: CancellationToken::new(),
@@ -499,6 +514,7 @@ impl BasicHttpModule {
     }
 
     /// Process a single TLS directive entry (from either explicit config or synthetic ACME).
+    #[allow(clippy::too_many_arguments)]
     fn process_tls_directive(
         registry: &ferron_core::registry::Registry,
         tls1: &ServerConfigurationDirectiveEntry,
@@ -506,9 +522,10 @@ impl BasicHttpModule {
             ferron_core::config::ServerConfigurationHostFilters,
             Arc<ferron_core::config::ServerConfigurationBlock>,
         ),
-        http_connection_options: &tcp::HttpConnectionOptions,
+        http_connection_options: &common::HttpConnectionOptions,
         port_config: &ferron_core::config::ServerConfigurationPort,
         tls_resolver: &mut TlsResolverRadixTree,
+        quic_tls_resolver: &mut Option<QuicTlsSniResolvers>,
         enable_tls: &mut bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
         *enable_tls = true;
@@ -590,6 +607,38 @@ impl BasicHttpModule {
                 "TLS resolver not found ({})",
                 format_location(None, tls1.span.as_ref())
             ))?;
+            if http_connection_options.protocols.http3 {
+                let quic_tls_resolver = quic_tls_resolver.get_or_insert_default();
+                let tls_resolver_host = tls_resolver_sub.get_tls_config().cert_resolver.clone();
+                match (&host_config.0.host, host_config.0.ip) {
+                    (Some(host), Some(ip)) => {
+                        quic_tls_resolver
+                            .host
+                            .entry(ip)
+                            .or_insert_with(CustomSniResolver::new)
+                            .load_host_resolver(host, tls_resolver_host);
+                    }
+                    (Some(host), None) => {
+                        quic_tls_resolver
+                            .fallback
+                            .get_or_insert_with(CustomSniResolver::new)
+                            .load_host_resolver(host, tls_resolver_host);
+                    }
+                    (None, Some(ip)) => {
+                        quic_tls_resolver
+                            .host
+                            .entry(ip)
+                            .or_insert_with(CustomSniResolver::new)
+                            .load_fallback_resolver(tls_resolver_host);
+                    }
+                    (None, None) => {
+                        quic_tls_resolver
+                            .fallback
+                            .get_or_insert_with(CustomSniResolver::new)
+                            .load_fallback_resolver(tls_resolver_host);
+                    }
+                }
+            }
 
             match (&host_config.0.host, host_config.0.ip) {
                 (Some(host), Some(ip)) => {
@@ -621,6 +670,7 @@ impl BasicHttpModule {
         Ok(Self {
             config: Arc::new(ArcSwap::new(Arc::new(config))),
             listeners: Mutex::new(Vec::new()),
+            quic_listeners: Mutex::new(Vec::new()),
             port,
         })
     }
@@ -658,21 +708,24 @@ impl Module for BasicHttpModule {
     }
 
     fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
-        let ports = if self.port != 0 {
-            vec![self.port]
-        } else {
-            vec![80]
-        };
-        for port in ports {
-            let config = self.config.load();
-            let listener_options = resolve_tcp_listener_options(&config.global_config, port)?;
-            let listener =
-                tcp::TcpListenerHandle::new(listener_options, self.config.clone(), runtime)
-                    .map_err(|e| {
-                        anyhow::anyhow!("Failed to start HTTP server on port {port}: {e}")
-                    })?;
-            self.listeners.lock().push(listener);
-            // TODO: QUIC
+        let port = if self.port != 0 { self.port } else { 80 };
+
+        let config = self.config.load();
+        let has_http3 = config.quic_tls_resolver.is_some();
+        let listener_options = resolve_tcp_listener_options(&config.global_config, port)?;
+        let listener =
+            tcp::TcpListenerHandle::new(listener_options, has_http3, self.config.clone(), runtime)
+                .map_err(|e| anyhow::anyhow!("Failed to start HTTP server on port {port}: {e}"))?;
+        self.listeners.lock().push(listener);
+
+        if has_http3 {
+            let quic_listener = quic::QuicListenerHandle::new(
+                listener_options.address,
+                self.config.clone(),
+                runtime,
+            )
+            .map_err(|e| anyhow::anyhow!("Failed to start HTTP/3 server on port {port}: {e}"))?;
+            self.quic_listeners.lock().push(quic_listener);
         }
 
         Ok(())
@@ -683,6 +736,9 @@ impl Drop for BasicHttpModule {
     fn drop(&mut self) {
         for listener in &*self.listeners.lock() {
             listener.cancel();
+        }
+        for quic_listener in &*self.quic_listeners.lock() {
+            quic_listener.cancel();
         }
     }
 }
@@ -787,13 +843,13 @@ mod tests {
 
         let options = resolve_http_connection_options(&config).unwrap();
 
-        assert_eq!(options.protocols, protocols::HttpProtocols::default());
+        assert_eq!(options.protocols, common::HttpProtocols::default());
         assert_eq!(
             options.alpn_protocols(),
             vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()]
         );
         assert!(!options.h1_enable_early_hints);
-        assert_eq!(options.h2, tcp::Http2Settings::default());
+        assert_eq!(options.h2, common::Http2Settings::default());
     }
 
     #[test]
@@ -815,9 +871,10 @@ mod tests {
 
         assert_eq!(
             options.protocols,
-            protocols::HttpProtocols {
+            common::HttpProtocols {
                 http1: true,
                 http2: false,
+                http3: false,
             }
         );
         assert_eq!(
@@ -827,7 +884,7 @@ mod tests {
         assert!(options.h1_enable_early_hints);
         assert_eq!(
             options.h2,
-            tcp::Http2Settings {
+            common::Http2Settings {
                 initial_window_size: Some(65_535),
                 max_frame_size: Some(32_768),
                 max_concurrent_streams: Some(128),
