@@ -38,6 +38,7 @@ ferron-ocsp-stapler = { path = "../modules/ocsp-stapler" }
 ferron-observability-consolelog = { path = "../modules/observability-consolelog" }
 ferron-observability-logfile = { path = "../modules/observability-logfile" }
 ferron-observability-otlp = { path = "../modules/observability-otlp" }
+ferron-observability-prometheus = { path = "../modules/observability-prometheus" }
 ferron-observability-format-json = { path = "../modules/observability-format-json" }
 ferron-observability-format-text = { path = "../modules/observability-format-text" }
 ferron-observability-process-metrics = { path = "../modules/observability-process-metrics" }

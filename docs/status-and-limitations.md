@@ -46,8 +46,9 @@ The following features are implemented and functional in Ferron 3:
 | File logging | `observability-logfile` | Access and error logs with log rotation support |
 | JSON formatting | `observability-format-json` | JSON-serialized access log entries |
 | Text formatting | `observability-format-text` | Combined Log Format or custom text patterns |
-| OTLP export | `observability-otlp` | Logs, metrics, and traces to OpenTelemetry collectors via gRPC or HTTP |
+| OTLP export | `observability-otlp` | Logs, metrics, and traces to OpenTelemetry collectors via gRPC or HTTP. See [OTLP observability](/docs/v3/configuration/observability-otlp). |
 | Process metrics | `observability-process-metrics` | CPU and memory metrics from `/proc/self/stat` (Linux only) |
+| Prometheus metrics | `observability-prometheus` | Exports metrics in Prometheus format via HTTP endpoint. See [Prometheus metrics](/docs/v3/configuration/observability-prometheus). |
 
 ### Admin and runtime
 
@@ -76,7 +77,7 @@ The following features are implemented and functional in Ferron 3:
 Planned direction for future releases:
 
 - Dynamically loadable modules (WebAssembly?)
-- Additional observability backends (Prometheus, Jaeger/Zipkin?)
+- Additional observability backends (Jaeger/Zipkin?)
 - More authentication methods (JWT?, OAuth2?)
 
 ## Upgrading from Ferron 2

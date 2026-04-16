@@ -169,61 +169,13 @@ Each pipeline stage generates its own forward and inverse span, enabling flame g
 
 Trace events are consumed by observability backends that support tracing (e.g. OTLP). All spans from the same request share the same `trace_id`, enabling correlated queries.
 
+### Prometheus export
+
+For Prometheus-specific metrics export, see [Prometheus metrics](/docs/v3/configuration/observability-prometheus).
+
 ### OTLP export
 
-The `observability-otlp` module exports logs, metrics, and traces to an OTLP collector. Configured via `observability` blocks with `provider "otlp"`.
-
-**Configuration example:**
-
-```ferron
-example.com {
-    observability {
-        provider "otlp"
-
-        logs "https://collector:4318/v1/Logs" {
-            protocol "http/protobuf"
-        }
-
-        metrics "https://collector:4318/v1/Metrics" {
-            protocol "http/protobuf"
-        }
-
-        traces "https://collector:4317" {
-            protocol "grpc"
-        }
-
-        service_name "my-service"
-    }
-}
-```
-
-#### Signal sub-blocks
-
-Each signal type (`logs`, `metrics`, `traces`) is configured independently. Omitting a signal disables it for that host.
-
-| Directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `logs` | `<endpoint>` | OTLP logs endpoint. | disabled |
-| `metrics` | `<endpoint>` | OTLP metrics endpoint. | disabled |
-| `traces` | `<endpoint>` | OTLP traces endpoint. | disabled |
-
-Each signal sub-block supports these nested directives:
-
-| Directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `protocol` | `<string>` | Transport protocol. One of `grpc`, `http/protobuf`, `http/json`. | `grpc` |
-| `authorization` | `<string>` | HTTP `Authorization` header (HTTP) or gRPC metadata (gRPC). | none |
-
-#### Global options
-
-| Directive | Arguments | Description | Default |
-| --- | --- | --- | --- |
-| `service_name` | `<string>` | OTLP resource service name. | `"ferron"` |
-| `no_verify` | `<bool>` | Disable TLS certificate verification. Use with caution. | `false` |
-
-#### Signal correlation
-
-All three signals from the same HTTP request share the same `trace_id`. This enables correlated queries like "show me all logs and metrics for trace `abc123`".
+For OpenTelemetry Protocol (OTLP) export configuration, see [OTLP observability](/docs/v3/configuration/observability-otlp).
 
 ## Notes and troubleshooting
 

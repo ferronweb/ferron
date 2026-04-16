@@ -9,6 +9,7 @@
 - Active health checking in reverse proxy support.
 - Experimental HTTP/3 support.
 - `map` directive for mapping variables.
+- Prometheus metrics export support.
 - Response body string replacement support.
 - Support for body interpolation in `status` directives.
 - Support for interpolated strings in header values.

@@ -251,9 +251,25 @@ export default [
     label: "Rate limiting",
   },
   {
+    label: "Observability",
+  },
+  {
     href: "/docs/v3/configuration/observability-logging",
     target: "_self",
-    label: "Observability and logging",
+    sub: true,
+    label: "Observability & logging",
+  },
+  {
+    href: "/docs/v3/configuration/observability-otlp",
+    target: "_self",
+    sub: true,
+    label: "OTLP observability",
+  },
+  {
+    href: "/docs/v3/configuration/observability-prometheus",
+    target: "_self",
+    sub: true,
+    label: "Prometheus metrics",
   },
   {
     href: "/docs/v3/configuration/http-trace",
