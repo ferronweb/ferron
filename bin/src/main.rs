@@ -45,6 +45,7 @@ use ferron_observability_otlp::OtlpObservabilityModuleLoader;
 use ferron_observability_process_metrics::ProcessMetricsModuleLoader;
 use ferron_ocsp_stapler::OcspStaplerModuleLoader;
 use ferron_tls_acme::TlsAcmeModuleLoader;
+use ferron_tls_local::LocalTlsModuleLoader;
 use ferron_tls_manual::TlsManualModuleLoader;
 
 #[cfg(windows)]
@@ -281,6 +282,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(OcspStaplerModuleLoader),
         Box::new(TlsManualModuleLoader),
         Box::new(TlsAcmeModuleLoader),
+        Box::new(LocalTlsModuleLoader),
         Box::new(ConsoleObservabilityModuleLoader::default()),
         Box::new(LogFileObservabilityModuleLoader::default()),
         Box::new(OtlpObservabilityModuleLoader::default()),

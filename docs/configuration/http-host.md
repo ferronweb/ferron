@@ -28,11 +28,9 @@ When a hostname is specified (e.g. `example.com`) and no explicit port is given,
 
 On the HTTPS listener, if no explicit `tls` directive is present, Ferron **automatically enables TLS via the ACME provider** (Let's Encrypt by default). Certificates are obtained and renewed automatically at startup.
 
-Hostnames that are **exempt** from the HTTPS listener and automatic TLS:
+Hostnames that have **special automatic TLS behavior**:
 
-- `localhost`
-- `127.0.0.1`
-- `::1`
+- `localhost`, `127.0.0.1`, `::1` — These loopback addresses automatically use the **local TLS provider** instead of ACME, enabling HTTPS for development without requiring public certificates.
 
 To disable automatic TLS for a specific host on the HTTPS listener, use `tls false`:
 

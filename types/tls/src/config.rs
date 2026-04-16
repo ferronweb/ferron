@@ -209,33 +209,78 @@ impl TlsClientAuthConfig {
 #[derive(Debug, Clone)]
 pub struct TlsServerConfig {
     /// Path to the server certificate file.
-    pub cert_path: String,
+    pub cert_path: Option<String>,
     /// Path to the server private key file.
-    pub key_path: String,
+    pub key_path: Option<String>,
     /// Crypto provider settings (cipher suites, curves, versions).
     pub crypto: TlsCryptoConfig,
     /// Client authentication (mTLS) settings.
     pub client_auth: TlsClientAuthConfig,
+    /// OCSP stapling settings.
+    pub ocsp: OcspConfig,
+}
+
+/// Configuration for OCSP stapling.
+#[derive(Debug, Clone, Default)]
+pub struct OcspConfig {
+    /// Whether OCSP stapling is enabled (default: true).
+    pub enabled: bool,
+}
+
+impl OcspConfig {
+    /// Parse OCSP stapling configuration from a `ServerConfigurationBlock`.
+    ///
+    /// Looks for a nested `ocsp` block:
+    /// ```text
+    /// tls {
+    ///     cert /path/cert.pem
+    ///     key /path/key.pem
+    ///     ocsp {
+    ///         enabled true
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// Returns `OcspConfig` with `enabled: true` by default if no block is found.
+    pub fn from_config(config: &ServerConfigurationBlock) -> Self {
+        let Some(ocsp_directive) = config.directives.get("ocsp") else {
+            // No `ocsp` block — enabled by default
+            return Self { enabled: true };
+        };
+        let Some(ocsp_entry) = ocsp_directive.first() else {
+            return Self { enabled: true };
+        };
+
+        // Check if it's a nested block (has children)
+        if let Some(ref ocsp_block) = ocsp_entry.children {
+            let enabled = ocsp_block
+                .get_value("enabled")
+                .and_then(|v| v.as_boolean())
+                .unwrap_or(true);
+            Self { enabled }
+        } else {
+            // Bare `ocsp` directive (no children) — treat as enabled
+            Self { enabled: true }
+        }
+    }
 }
 
 impl TlsServerConfig {
     /// Parse full TLS config from a TLS configuration block.
-    ///
-    /// Requires `cert` and `key` directives. All other directives are optional.
     pub fn from_config(config: &ServerConfigurationBlock) -> Result<Self, String> {
-        let cert_path = collect_first_string(config, "cert")
-            .ok_or_else(|| "'cert' TLS parameter missing or invalid".to_string())?;
-        let key_path = collect_first_string(config, "key")
-            .ok_or_else(|| "'key' TLS parameter missing or invalid".to_string())?;
+        let cert_path = collect_first_string(config, "cert");
+        let key_path = collect_first_string(config, "key");
 
         let crypto = TlsCryptoConfig::from_config(config);
         let client_auth = TlsClientAuthConfig::from_config(config);
+        let ocsp = OcspConfig::from_config(config);
 
         Ok(Self {
             cert_path,
             key_path,
             crypto,
             client_auth,
+            ocsp,
         })
     }
 }
@@ -469,8 +514,8 @@ mod tests {
         ]);
 
         let tls_config = TlsServerConfig::from_config(&config).unwrap();
-        assert_eq!(tls_config.cert_path, "/path/cert.pem");
-        assert_eq!(tls_config.key_path, "/path/key.pem");
+        assert_eq!(tls_config.cert_path.as_deref(), Some("/path/cert.pem"));
+        assert_eq!(tls_config.key_path.as_deref(), Some("/path/key.pem"));
         assert_eq!(tls_config.crypto.cipher_suites.len(), 1);
         assert_eq!(tls_config.crypto.kx_groups.len(), 1);
         assert_eq!(tls_config.crypto.min_version, Some(TlsVersion::Tls13));
@@ -479,12 +524,5 @@ mod tests {
             tls_config.client_auth.ca_source,
             TlsClientAuthCaSource::SystemRoots
         ));
-    }
-
-    #[test]
-    fn test_tls_server_config_missing_cert() {
-        let config = make_config(vec![("key", vec!["/path/key.pem"])]);
-        let result = TlsServerConfig::from_config(&config);
-        assert!(result.is_err());
     }
 }

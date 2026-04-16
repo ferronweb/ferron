@@ -262,11 +262,6 @@ impl BasicHttpModule {
         let mut observability_resolver = RadixTree::new();
         let mut tls_resolver = TlsResolverRadixTree::new();
 
-        // Check if the ACME TLS provider is available
-        let acme_provider_available = registry
-            .get_provider_registry::<TcpTlsContext>()
-            .is_some_and(|r| r.get("acme").is_some());
-
         // Process global observability configuration (applies to all hosts)
         let global_observability_extractor = ObservabilityConfigExtractor::new(&global_config);
         let global_observability_entries: Vec<ObservabilityProviderEntry> =
@@ -364,46 +359,50 @@ impl BasicHttpModule {
                             &mut enable_tls,
                         )?;
                     }
-                } else if acme_provider_available {
-                    // No `tls` directive present — automatically enable ACME for
-                    // non-localhost hostnames on the HTTPS listener.
+                } else {
+                    // No `tls` directive present — automatically select provider (ACME or Local)
                     let hostname = host_config.0.host.as_deref();
-                    let is_localhost = hostname
-                        .is_some_and(|h| h == "localhost" || h == "127.0.0.1" || h == "::1");
-                    // Only auto-enable ACME when a hostname is specified and it's not localhost
-                    if !is_localhost && host_config.0.host.is_some() {
-                        // Construct a synthetic ACME TLS configuration block
-                        let synthetic_children = ferron_core::config::ServerConfigurationBlock {
-                            directives: Arc::new(HashMap::from([(
-                                "provider".to_string(),
-                                vec![ServerConfigurationDirectiveEntry {
-                                    args: vec![ServerConfigurationValue::String(
-                                        "acme".to_string(),
-                                        None,
-                                    )],
-                                    ..Default::default()
-                                }],
-                            )])),
-                            matchers: HashMap::new(),
-                            span: None,
-                        };
-                        let synthetic_tls_entry = ServerConfigurationDirectiveEntry {
-                            args: vec![ServerConfigurationValue::Boolean(true, None)],
-                            children: Some(synthetic_children),
-                            span: None,
-                        };
-                        let host_config_with_arc =
-                            (host_config.0.clone(), Arc::new(host_config.1.clone()));
-                        Self::process_tls_directive(
-                            registry,
-                            &synthetic_tls_entry,
-                            &host_config_with_arc,
-                            &http_connection_options,
-                            port_config,
-                            &mut tls_resolver,
-                            &mut quic_tls_resolver,
-                            &mut enable_tls,
-                        )?;
+                    let ip = host_config.0.ip.map(|ip| ip.to_string());
+                    let auto_selection = crate::tls_auto::select_auto_tls_provider(
+                        registry,
+                        hostname,
+                        ip.as_deref(),
+                    );
+
+                    match auto_selection {
+                        crate::tls_auto::TlsAutoSelection::Local => {
+                            let synthetic_tls_entry =
+                                crate::tls_auto::create_synthetic_tls_directive("local");
+                            let host_config_with_arc =
+                                (host_config.0.clone(), Arc::new(host_config.1.clone()));
+                            Self::process_tls_directive(
+                                registry,
+                                &synthetic_tls_entry,
+                                &host_config_with_arc,
+                                &http_connection_options,
+                                port_config,
+                                &mut tls_resolver,
+                                &mut quic_tls_resolver,
+                                &mut enable_tls,
+                            )?;
+                        }
+                        crate::tls_auto::TlsAutoSelection::Acme => {
+                            let synthetic_tls_entry =
+                                crate::tls_auto::create_synthetic_tls_directive("acme");
+                            let host_config_with_arc =
+                                (host_config.0.clone(), Arc::new(host_config.1.clone()));
+                            Self::process_tls_directive(
+                                registry,
+                                &synthetic_tls_entry,
+                                &host_config_with_arc,
+                                &http_connection_options,
+                                port_config,
+                                &mut tls_resolver,
+                                &mut quic_tls_resolver,
+                                &mut enable_tls,
+                            )?;
+                        }
+                        crate::tls_auto::TlsAutoSelection::None => {}
                     }
                 }
             }

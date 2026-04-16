@@ -201,9 +201,9 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
                 let alpn_protocols = ctx.alpn.clone().unwrap_or_default();
 
                 // Parse OCSP and ticket key configuration
-                let ocsp_config = crate::resolver::parse_ocsp_config(ctx.config);
+                let ocsp_config = ferron_tls::config::OcspConfig::from_config(ctx.config);
                 let ocsp_handle = crate::resolver::get_ocsp_handle_if_enabled(&ocsp_config);
-                let ticketer = crate::resolver::build_ticketer(ctx.config);
+                let ticketer = ferron_tls::builder::build_ticketer(ctx.config);
 
                 let acme_resolver = TcpTlsAcmeResolver::new(
                     certified_key_lock,
@@ -236,9 +236,9 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
                 let alpn_protocols = ctx.alpn.clone().unwrap_or_default();
 
                 // Parse OCSP and ticket key configuration
-                let ocsp_config = crate::resolver::parse_ocsp_config(ctx.config);
+                let ocsp_config = ferron_tls::config::OcspConfig::from_config(ctx.config);
                 let ocsp_handle = crate::resolver::get_ocsp_handle_if_enabled(&ocsp_config);
-                let ticketer = crate::resolver::build_ticketer(ctx.config);
+                let ticketer = ferron_tls::builder::build_ticketer(ctx.config);
 
                 let acme_resolver = TcpTlsAcmeResolver::new(
                     certified_key_lock,

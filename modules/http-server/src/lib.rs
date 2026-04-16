@@ -15,6 +15,7 @@ mod handler;
 mod loader;
 mod server;
 mod stages;
+pub mod tls_auto;
 #[cfg(any(test, feature = "bench"))]
 pub mod util;
 #[cfg(not(any(test, feature = "bench")))]

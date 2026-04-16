@@ -43,11 +43,104 @@ use aws_lc_rs::hmac::{self, Key as HmacKey};
 use aws_lc_rs::iv::FixedLength;
 use rustls::server::ProducesTickets;
 use rustls_pki_types::UnixTime;
+use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::sync::RwLock;
+use std::time::Duration;
+
+use ferron_core::config::ServerConfigurationBlock;
+use ferron_core::util::parse_duration;
+
+/// Configuration for automatic ticket key rotation.
+#[derive(Debug, Clone)]
+pub struct TicketKeyRotationConfig {
+    /// Path to the ticket key file
+    pub file: String,
+    /// Whether automatic rotation is enabled
+    pub auto_rotate: bool,
+    /// How often to rotate keys (default: 12 hours)
+    pub rotation_interval: Duration,
+    /// Maximum number of keys to keep (default: 3)
+    pub max_keys: usize,
+}
+
+impl Default for TicketKeyRotationConfig {
+    fn default() -> Self {
+        Self {
+            file: String::new(),
+            auto_rotate: false,
+            rotation_interval: Duration::from_secs(12 * 3600),
+            max_keys: 3,
+        }
+    }
+}
+
+impl TicketKeyRotationConfig {
+    /// Parse ticket key rotation configuration from a ServerConfigurationBlock.
+    pub fn from_config(config: &ServerConfigurationBlock) -> Option<Self> {
+        // Look for ticket_keys nested block
+        let ticket_keys_directive = config.directives.get("ticket_keys")?;
+        let ticket_keys_entry = ticket_keys_directive.first()?;
+        let ticket_keys_block = ticket_keys_entry.children.as_ref()?;
+
+        // Extract file path (required)
+        let file = ticket_keys_block
+            .get_value("file")
+            .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))?;
+
+        // Extract auto_rotate (optional, default: false)
+        let auto_rotate = ticket_keys_block
+            .get_value("auto_rotate")
+            .and_then(|v| v.as_boolean())
+            .unwrap_or(false);
+
+        // Extract rotation_interval (optional, default: 12h)
+        let rotation_interval = ticket_keys_block
+            .get_value("rotation_interval")
+            .and_then(|v| {
+                if let Some(si) = v.as_string_with_interpolations(&HashMap::new()) {
+                    Some(parse_duration(&si).unwrap_or(Duration::from_secs(12 * 3600)))
+                } else {
+                    v.as_number().map(|n| Duration::from_secs(n as u64))
+                }
+            })
+            .unwrap_or(Duration::from_secs(12 * 3600));
+
+        // Extract max_keys (optional, default: 3, range: 2-5)
+        let max_keys = ticket_keys_block
+            .get_value("max_keys")
+            .and_then(|v| v.as_number())
+            .map(|n| {
+                let n = n as usize;
+                if n < 2 {
+                    ferron_core::log_warn!(
+                        "ticket_keys.max_keys={} is too small, using minimum of 2",
+                        n
+                    );
+                    2
+                } else if n > 5 {
+                    ferron_core::log_warn!(
+                        "ticket_keys.max_keys={} is too large, using maximum of 5",
+                        n
+                    );
+                    5
+                } else {
+                    n
+                }
+            })
+            .unwrap_or(3);
+
+        Some(Self {
+            file,
+            auto_rotate,
+            rotation_interval,
+            max_keys,
+        })
+    }
+}
 
 /// The size of a single ticket key record in bytes.
 ///

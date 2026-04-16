@@ -21,15 +21,6 @@ impl Default for HttpsRedirectStage {
     }
 }
 
-/// Returns true if the hostname is a loopback / development name that should
-/// never be redirected to HTTPS (no HTTPS listener is started for it).
-fn is_localhost_hostname(hostname: Option<&str>) -> bool {
-    matches!(
-        hostname,
-        Some("localhost") | Some("127.0.0.1") | Some("::1")
-    )
-}
-
 /// Check whether the request has already been served over HTTPS by examining
 /// the `X-Forwarded-Proto` header.  This prevents redirect loops when the
 /// server sits behind a TLS-terminating reverse proxy.
@@ -108,7 +99,6 @@ impl Stage<HttpContext> for HttpsRedirectStage {
         // - no https_port configured (TLS not enabled for this listener)
         // - already encrypted (came in over HTTPS)
         // - X-Forwarded-Proto: https indicates proxy already handled TLS
-        // - localhost hostname (no HTTPS listener exists for it)
         // - listener port equals https_port (no separate HTTPS listener)
         let https_port = match ctx.https_port {
             Some(p) => p,
@@ -116,7 +106,6 @@ impl Stage<HttpContext> for HttpsRedirectStage {
         };
         if ctx.encrypted
             || is_already_https_via_header(ctx)
-            || is_localhost_hostname(ctx.hostname.as_deref())
             || ctx.local_address.port() == https_port
         {
             return Ok(true);
@@ -321,17 +310,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn skips_localhost_hostname() {
+    async fn redirects_localhost_hostname_to_https() {
+        // Localhost can now have HTTPS with the local TLS provider, so it should be redirected
         for hostname in &["localhost", "127.0.0.1", "::1"] {
             let mut ctx =
                 make_test_context(Some(hostname), false, Some(443), Some(hostname.to_string()));
             let stage = HttpsRedirectStage;
             let result = stage.run(&mut ctx).await.unwrap();
             assert!(
-                result,
-                "should continue pipeline for localhost hostname: {hostname}"
+                !result,
+                "should redirect localhost hostname to HTTPS: {hostname}"
             );
-            assert!(ctx.res.is_none());
+            if let Some(HttpResponse::Custom(resp)) = ctx.res {
+                assert_eq!(resp.status(), 308);
+            } else {
+                panic!("Expected redirect response for localhost");
+            }
         }
     }
 

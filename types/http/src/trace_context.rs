@@ -1,6 +1,6 @@
 use http::header::HeaderValue;
 use http::HeaderMap;
-use rand::RngCore;
+use rand::Rng;
 
 /// Minimal W3C trace context representation used by http-server and other modules.
 #[derive(Debug, Clone)]
@@ -49,7 +49,7 @@ fn bytes_to_hex(buf: &[u8]) -> String {
 
 /// Generate a new traceparent TraceContext (version 00) with random ids.
 pub fn generate_traceparent(sampled: bool) -> TraceContext {
-    let mut rng = rand::rngs::OsRng;
+    let mut rng = rand::rng();
     let mut trace_bytes = [0u8; 16];
     let mut span_bytes = [0u8; 8];
     rng.fill_bytes(&mut trace_bytes);

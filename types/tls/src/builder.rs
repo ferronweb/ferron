@@ -7,9 +7,16 @@
 
 use std::sync::Arc;
 
+use ferron_core::config::ServerConfigurationBlock;
+
 use crate::config::{
     build_root_cert_store, TlsCipherSuite, TlsClientAuthConfig, TlsCryptoConfig, TlsKxGroup,
     TlsVersion,
+};
+
+use crate::tickets::{
+    generate_initial_ticket_keys, load_ticket_keys, validate_ticket_keys_file, TicketKey,
+    TicketKeyRotationConfig, TicketKeyRotator,
 };
 
 use rustls::crypto::aws_lc_rs::cipher_suite::*;
@@ -17,6 +24,7 @@ use rustls::crypto::aws_lc_rs::default_provider;
 use rustls::crypto::aws_lc_rs::kx_group::*;
 use rustls::crypto::CryptoProvider;
 use rustls::server::danger::ClientCertVerifier;
+use rustls::server::ProducesTickets;
 use rustls::server::WebPkiClientVerifier;
 use rustls::version::{TLS12, TLS13};
 
@@ -123,6 +131,91 @@ pub fn resolve_protocol_versions(
     }
 }
 
+/// Build a `ProducesTickets` implementation from a TLS configuration block.
+///
+/// If a `ticket_keys` block is found, attempts to set up a `TicketKeyRotator`.
+/// Falls back to the default rustls ticketer if no block is found or if setup fails.
+pub fn build_ticketer(config: &ServerConfigurationBlock) -> Option<Arc<dyn ProducesTickets>> {
+    let Some(rot_config) = TicketKeyRotationConfig::from_config(config) else {
+        // No ticket_keys block — use rustls default ticketer
+        return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
+    };
+
+    if rot_config.auto_rotate {
+        // Ensure key file exists (generate if missing)
+        if !std::path::Path::new(&rot_config.file).exists() {
+            ferron_core::log_info!(
+                "Generating initial ticket keys at {} ({} keys)",
+                rot_config.file,
+                rot_config.max_keys
+            );
+            if let Err(e) = generate_initial_ticket_keys(&rot_config.file, rot_config.max_keys) {
+                ferron_core::log_warn!("Failed to generate initial ticket keys: {e}");
+                return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
+            }
+        } else {
+            // Validate existing file
+            if let Err(e) = validate_ticket_keys_file(&rot_config.file) {
+                ferron_core::log_warn!("Invalid ticket keys file: {e}");
+                return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
+            }
+        }
+
+        // Load keys and create rotator
+        match load_ticket_keys(&rot_config.file) {
+            Ok(raw_keys) => {
+                ferron_core::log_info!(
+                    "Loaded {} ticket keys from {} (rotation interval: {:?})",
+                    raw_keys.len(),
+                    rot_config.file,
+                    rot_config.rotation_interval
+                );
+
+                let ticket_keys: Vec<TicketKey> = raw_keys
+                    .iter()
+                    .map(|(name, aes, hmac)| TicketKey::new(*name, *aes, *hmac))
+                    .collect();
+
+                match TicketKeyRotator::new(
+                    ticket_keys,
+                    rot_config.rotation_interval,
+                    rot_config.file.clone(),
+                ) {
+                    Ok(rotator) => {
+                        ferron_core::log_info!(
+                            "TLS session ticket key rotation enabled (interval: {:?}, max_keys: {})",
+                            rot_config.rotation_interval,
+                            rot_config.max_keys
+                        );
+                        Some(Arc::new(rotator) as Arc<dyn ProducesTickets>)
+                    }
+                    Err(e) => {
+                        ferron_core::log_warn!("Failed to create ticket key rotator: {e}");
+                        rustls::crypto::aws_lc_rs::Ticketer::new().ok()
+                    }
+                }
+            }
+            Err(e) => {
+                ferron_core::log_warn!("Failed to load ticket keys: {e}");
+                rustls::crypto::aws_lc_rs::Ticketer::new().ok()
+            }
+        }
+    } else {
+        // Static mode: just validate and use default ticketer
+        if std::path::Path::new(&rot_config.file).exists() {
+            if let Err(e) = validate_ticket_keys_file(&rot_config.file) {
+                ferron_core::log_warn!("Invalid ticket keys file: {e}");
+                return rustls::crypto::aws_lc_rs::Ticketer::new().ok();
+            }
+            ferron_core::log_info!(
+                "TLS session ticket keys validated from {} (static mode, no rotation)",
+                rot_config.file
+            );
+        }
+        rustls::crypto::aws_lc_rs::Ticketer::new().ok()
+    }
+}
+
 /// Build a `ClientCertVerifier` from [`TlsClientAuthConfig`].
 ///
 /// When `client_auth.enabled` is `false`, returns `WebPkiClientVerifier::no_client_auth()`.
@@ -150,6 +243,26 @@ pub fn build_client_cert_verifier(
     }
 
     Ok(builder.build()?)
+}
+
+/// Build a `rustls::ConfigBuilder` for a server, pre-configured with
+/// crypto, protocol versions, and client certificate verifier.
+///
+/// This is a common starting point for TLS providers.
+pub fn build_server_config_builder(
+    crypto: &TlsCryptoConfig,
+    client_auth: &TlsClientAuthConfig,
+) -> Result<
+    rustls::ConfigBuilder<rustls::ServerConfig, rustls::server::WantsServerCert>,
+    Box<dyn std::error::Error>,
+> {
+    let provider = Arc::new(build_crypto_provider(crypto)?);
+    let protocol_versions = resolve_protocol_versions(crypto)?;
+    let client_verifier = build_client_cert_verifier(client_auth, &provider)?;
+
+    Ok(rustls::ServerConfig::builder_with_provider(provider)
+        .with_protocol_versions(protocol_versions)?
+        .with_client_cert_verifier(client_verifier))
 }
 
 #[cfg(test)]

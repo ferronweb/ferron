@@ -7,6 +7,7 @@
 ### Added
 
 - Active health checking in reverse proxy support.
+- Automatic TLS with local certificate authority (CA).
 - Experimental HTTP/3 support.
 - `map` directive for mapping variables.
 - Prometheus metrics export support.

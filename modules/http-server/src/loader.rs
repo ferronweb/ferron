@@ -19,12 +19,6 @@ const DEFAULT_HTTP_PORT: u16 = 80;
 /// Default HTTPS port when not explicitly configured.
 const DEFAULT_HTTPS_PORT: u16 = 443;
 
-/// Returns true if the hostname is a loopback / development name that should
-/// never get automatic TLS.
-fn is_localhost_host(hostname: &str) -> bool {
-    matches!(hostname, "localhost" | "127.0.0.1" | "::1")
-}
-
 /// Resolve the default HTTP port from global configuration.
 /// Returns `None` if `default_http_port false` is set.
 fn resolve_default_http_port(config: &ferron_core::config::ServerConfiguration) -> Option<u16> {
@@ -185,9 +179,18 @@ impl ModuleLoader for BasicHttpModuleLoader {
                     let mut https_hosts = Vec::new();
 
                     for (filters, block) in &port_config.hosts {
-                        let is_localhost = filters.host.as_deref().is_some_and(is_localhost_host);
+                        let hostname = filters.host.as_deref();
+                        let ip = filters.ip.map(|s| s.to_string());
+                        let auto_selection = crate::tls_auto::select_auto_tls_provider(
+                            &registry,
+                            hostname,
+                            ip.as_deref(),
+                        );
+
                         http_hosts.push((filters.clone(), block.clone()));
-                        if !is_localhost || block.directives.contains_key("tls") {
+                        if auto_selection != crate::tls_auto::TlsAutoSelection::None
+                            || block.directives.contains_key("tls")
+                        {
                             https_hosts.push((filters.clone(), block.clone()));
                         }
                     }

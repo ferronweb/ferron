@@ -200,6 +200,12 @@ export default [
     label: "ACME automatic TLS",
   },
   {
+    href: "/docs/v3/configuration/tls-local",
+    target: "_self",
+    sub: true,
+    label: "Local development TLS",
+  },
+  {
     href: "/docs/v3/configuration/tls-session-tickets",
     target: "_self",
     sub: true,

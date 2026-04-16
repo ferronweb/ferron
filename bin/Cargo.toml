@@ -34,6 +34,7 @@ ferron-config-json = { path = "../modules/config-json" }
 ferron-config-ferronconf = { path = "../modules/config-ferronconf" }
 ferron-tls-manual = { path = "../modules/tls-manual" }
 ferron-tls-acme = { path = "../modules/tls-acme" }
+ferron-tls-local = { path = "../modules/tls-local" }
 ferron-ocsp-stapler = { path = "../modules/ocsp-stapler" }
 ferron-observability-consolelog = { path = "../modules/observability-consolelog" }
 ferron-observability-logfile = { path = "../modules/observability-logfile" }
