@@ -7,13 +7,17 @@ Ferron supports multiple observability outputs, so you can start with local log 
 
 This page focuses on common deployment patterns. For directive-level details, see [Configuration: observability and logging](/docs/v3/configuration/observability-logging).
 
+For specific backend configurations:
+- [Prometheus metrics](/docs/v3/configuration/observability-prometheus)
+- [OTLP observability](/docs/v3/configuration/observability-otlp)
+
 ## Basic production logs to files
 
 Use this when running Ferron directly on a VM or bare metal and collecting logs from disk:
 
 ```ferron
 example.com {
-    log "access" {
+    log "access.log" {
         format "text"
     }
 
@@ -29,7 +33,7 @@ Use this when you need structured logs for easier parsing by log aggregation too
 
 ```ferron
 example.com {
-    log "access" {
+    log "access.log" {
         format "json"
     }
 
@@ -47,7 +51,7 @@ You can also select specific fields:
 
 ```ferron
 example.com {
-    log "access" {
+    log "access.log" {
         format "json"
         fields "method" "path" "status" "duration_secs" "client_ip"
     }
@@ -62,7 +66,7 @@ You can customize the text log format using the `access_pattern` directive:
 
 ```ferron
 example.com {
-    log "access" {
+    log "access.log" {
         format "text"
         access_pattern "%client_ip - %auth_user [%{%d/%b/%Y:%H:%M:%S %z}t] \"%method %path_and_query %version\" %status %content_length \"%{Referer}i\" \"%{User-Agent}i\""
     }
@@ -126,13 +130,67 @@ example.com {
 }
 ```
 
+## Prometheus metrics monitoring
+
+Use this when you want to expose metrics for Prometheus scraping:
+
+```ferron
+example.com {
+    observability {
+        provider "prometheus"
+        endpoint_listen "127.0.0.1:8889"
+        endpoint_format "text"
+    }
+
+    root /var/www/html
+}
+```
+
+This starts a metrics endpoint at `http://localhost:8889/metrics` that Prometheus can scrape.
+
+### Production Prometheus setup
+
+```ferron
+example.com {
+    observability {
+        provider "prometheus"
+        endpoint_listen "0.0.0.0:8889"
+        endpoint_format "text"
+    }
+
+    root /var/www/html
+}
+```
+
+### Multiple hosts with different metrics ports
+
+```ferron
+# Main website
+example.com {
+    observability {
+        provider "prometheus"
+        endpoint_listen "127.0.0.1:9001"
+    }
+    root /var/www/example
+}
+
+# API service
+api.example.com {
+    observability {
+        provider "prometheus"
+        endpoint_listen "127.0.0.1:9002"
+    }
+    proxy http://backend:3000
+}
+```
+
 ## Hybrid setup: local fallback + OTLP
 
 A practical migration strategy is to keep file logs for local troubleshooting while also exporting telemetry centrally:
 
 ```ferron
 example.com {
-    log "access" {
+    log "access.log" {
         format "json"
     }
 
@@ -158,11 +216,47 @@ example.com {
 }
 ```
 
+### Hybrid setup: Prometheus + OTLP
+
+You can combine both Prometheus and OTLP for maximum flexibility:
+
+```ferron
+example.com {
+    # Local Prometheus metrics
+    observability {
+        provider "prometheus"
+        endpoint_listen "127.0.0.1:8889"
+    }
+
+    # Centralized OTLP export
+    observability {
+        provider "otlp"
+        service_name "ferron-prod"
+
+        logs "http://otel-collector.internal:4318/v1/Logs" {
+            protocol "http/protobuf"
+        }
+
+        metrics "http://otel-collector.internal:4318/v1/Metrics" {
+            protocol "http/protobuf"
+        }
+
+        traces "http://otel-collector.internal:4317" {
+            protocol "grpc"
+        }
+    }
+
+    root /var/www/html
+}
+```
+
 ## Notes and troubleshooting
 
-- Start simple: text or JSON logs first, OTLP second.
+- Start simple: text or JSON logs first, then add Prometheus metrics, then OTLP for full observability.
 - Keep `no_verify false` unless you are in a controlled test environment.
 - If logs are missing, verify the formatter modules are loaded in your Ferron build and check endpoint/protocol pairing.
 - All three signals (logs, metrics, traces) from the same HTTP request share the same `trace_id`, enabling correlated queries.
 - If Ferron is behind a reverse proxy, configure `client_ip_from_header` so Ferron can see real client IPs. See [HTTP host directives](/docs/v3/configuration/http-host).
 - For available access log fields, see [Configuration: observability and logging](/docs/v3/configuration/observability-logging#access-log-fields).
+- For Prometheus metrics configuration, see [Prometheus metrics](/docs/v3/configuration/observability-prometheus).
+- For OTLP configuration details, see [OTLP observability](/docs/v3/configuration/observability-otlp).
