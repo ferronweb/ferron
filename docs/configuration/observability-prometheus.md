@@ -36,6 +36,7 @@ The `endpoint_listen` directive accepts standard Rust socket address syntax:
 - Port-only: `":8889"` (binds to all interfaces)
 
 **Security note:** Binding to `0.0.0.0` or `[::]` exposes the metrics endpoint to all network interfaces. For production deployments, consider:
+
 - Binding to localhost only (`127.0.0.1` or `::1`)
 - Using firewall rules to restrict access
 - Placing Ferron behind a reverse proxy with authentication

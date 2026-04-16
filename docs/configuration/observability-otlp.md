@@ -183,7 +183,7 @@ Ferron automatically:
 
 ### Example trace flow
 
-```
+```text
 Request → Ferron (generates trace_id) → OTLP Collector
     ↓
 Logs (trace_id) → OTLP Collector
@@ -235,7 +235,7 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
-  
+
 exporters:
   prometheus:
     endpoint: "0.0.0.0:8889"
