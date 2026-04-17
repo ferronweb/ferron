@@ -96,21 +96,6 @@ example.com {
 }
 ```
 
-## Caching reverse proxy
-
-Ferron supports in-memory caching for speeding up websites. To enable caching for the reverse proxy, you can use the [HTTP cache module](/docs/v3/configuration/http-cache):
-
-```ferron
-example.com {
-    location / {
-        proxy http://localhost:3000
-    }
-
-    # Optional: set Cache-Control header if you want to cache responses from backend
-    header "Cache-Control" "max-age=3600"
-}
-```
-
 ## Reverse proxy to backends listening on Unix sockets
 
 Ferron supports reverse proxying to backends listening on Unix sockets:

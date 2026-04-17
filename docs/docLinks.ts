@@ -33,6 +33,12 @@ export default [
     sub: true,
   },
   {
+    href: "/docs/v3/use-cases/http-caching",
+    target: "_self",
+    label: "HTTP caching",
+    sub: true,
+  },
+  {
     label: "Traffic & routing",
   },
   {
