@@ -26,9 +26,12 @@ use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use tokio::io::AsyncWriteExt;
 use x509_parser::prelude::{FromDer, X509Certificate};
 
-use crate::cache::{get_account_cache_key, get_certificate_cache_key, CertificateCacheData};
 use crate::challenge::tlsalpn01::TlsAlpn01Resolver;
 use crate::config::AcmeConfig;
+use crate::{
+    cache::{get_account_cache_key, get_certificate_cache_key, CertificateCacheData},
+    errors::acme_error_to_string,
+};
 
 const SECONDS_BEFORE_RENEWAL: u64 = 86400; // 1 day before expiration
 
@@ -253,7 +256,10 @@ pub async fn provision_certificate(
             new_account.new_order(&new_order).await?
         }
         Err(e) => {
-            log_error!("Failed to create ACME order for {domains}: {e}");
+            log_error!(
+                "Failed to create ACME order for {domains}: {}",
+                acme_error_to_string(&e)
+            );
             return Err(Box::new(e));
         }
     };
@@ -350,7 +356,10 @@ pub async fn provision_certificate(
         }
 
         if let Err(err) = challenge.set_ready().await {
-            log_error!("Failed to set ACME challenge ready for {domains}: {err}");
+            log_error!(
+                "Failed to set ACME challenge ready for {domains}: {}",
+                acme_error_to_string(&err)
+            );
             return Err(Box::new(err));
         };
         log_debug!(
@@ -363,7 +372,10 @@ pub async fn provision_certificate(
     let order_status = match order.poll_ready(&RetryPolicy::default()).await {
         Ok(status) => status,
         Err(e) => {
-            log_error!("Failed to finalize ACME order for {domains}: {e}");
+            log_error!(
+                "Failed to finalize ACME order for {domains}: {}",
+                acme_error_to_string(&e)
+            );
             return Err(Box::new(e));
         }
     };
@@ -376,7 +388,7 @@ pub async fn provision_certificate(
                     |e| e.to_string(),
                     |s| s.error.as_ref().map_or(
                         "unknown (failed ACME challenge verification?)".to_string(),
-                        |s| s.to_string()
+                        |s| acme_error_to_string(&instant_acme::Error::Api(s.to_owned()))
                     )
                 )
             );
@@ -392,14 +404,20 @@ pub async fn provision_certificate(
     let private_key_pem = match order.finalize().await {
         Ok(pem) => pem,
         Err(e) => {
-            log_error!("Failed to finalize ACME order for {domains}: {e}");
+            log_error!(
+                "Failed to finalize ACME order for {domains}: {}",
+                acme_error_to_string(&e)
+            );
             return Err(Box::new(e));
         }
     };
     let certificate_chain_pem = match order.poll_certificate(&RetryPolicy::default()).await {
         Ok(pem) => pem,
         Err(e) => {
-            log_error!("Failed to obtain ACME certificate for {domains}: {e}");
+            log_error!(
+                "Failed to obtain ACME certificate for {domains}: {}",
+                acme_error_to_string(&e)
+            );
             return Err(Box::new(e));
         }
     };

@@ -1,8 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
 
-static LOCAL_CA_LOG_ONCE: std::sync::Once = std::sync::Once::new();
-
 pub struct LocalTlsCache {
     path: PathBuf,
 }
@@ -12,13 +10,6 @@ impl LocalTlsCache {
         if !path.exists() {
             fs::create_dir_all(&path).ok();
         }
-        LOCAL_CA_LOG_ONCE.call_once(|| {
-            ferron_core::log_info!(
-                "Local CA certificate can be found in \"{}\". Import the CA certificate into your \
-            system trust store to trust the generated certificates.",
-                path.join("ca.crt").display()
-            );
-        });
         Self { path }
     }
 
@@ -48,5 +39,9 @@ impl LocalTlsCache {
         fs::write(self.path.join(format!("{}.crt", san_hash)), cert)?;
         fs::write(self.path.join(format!("{}.key", san_hash)), key)?;
         Ok(())
+    }
+
+    pub fn ca_path(&self) -> PathBuf {
+        self.path.join("ca.crt")
     }
 }

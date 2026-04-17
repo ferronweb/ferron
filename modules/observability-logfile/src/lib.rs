@@ -322,6 +322,7 @@ impl Module for LogFileObservabilityModule {
                                             .as_string_with_interpolations(&HashMap::new()));
 
                                     if let Some(log_path) = log_path {
+                                        let message = le.message.to_string().replace("\n", "\n  ");
                                         let line = format!("[{} {}] {}\n",
                                             chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                                             match le.level {
@@ -329,7 +330,7 @@ impl Module for LogFileObservabilityModule {
                                             LogLevel::Warn => "WARN",
                                             LogLevel::Info => "INFO",
                                             LogLevel::Debug => "DEBUG",
-                                        },  le.message);
+                                        },  message.trim());
 
                                         // Read rotation config for error log
                                         let rotation = read_rotation_config(

@@ -217,6 +217,10 @@ impl AppLogger {
         }
 
         let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+
+        // Indented message
+        let message = message.to_string().replace("\n", "\n  ");
+
         let formatted = if self.is_tty {
             let color = level.color_code();
             let reset = "\x1b[0m";
@@ -226,10 +230,10 @@ impl AppLogger {
                 timestamp,
                 level.as_str(),
                 reset,
-                message
+                message.trim()
             )
         } else {
-            format!("[{} {}] {}", timestamp, level.as_str(), message)
+            format!("[{} {}] {}", timestamp, level.as_str(), message.trim())
         };
 
         match self.backend {

@@ -23,6 +23,7 @@
 pub mod cache;
 pub mod challenge;
 pub mod config;
+pub mod errors;
 pub mod on_demand;
 pub mod provision;
 pub mod resolver;

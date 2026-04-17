@@ -34,6 +34,11 @@ pub fn provision_local_cert(
 
     // Need to generate/load CA
     let (ca_params, ca_key_pair) = get_or_generate_ca(cache)?;
+    ferron_core::log_info!(
+        "Local CA certificate can be found in \"{}\". Import the CA certificate into your \
+    system trust store to trust the generated certificates.",
+        cache.ca_path().display()
+    );
 
     // Generate leaf cert
     let mut leaf_cert_params = CertificateParams::default();
