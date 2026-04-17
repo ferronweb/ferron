@@ -51,22 +51,21 @@ example.com:443 {
 
 Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge type that supports wildcard certificates.
 
-> **Note:** No DNS provider modules are currently implemented. The DNS-01 challenge type is defined but requires a DNS provider module (e.g. Cloudflare, Route 53) to function. These modules are planned for a future release.
-
 ```ferron
 *.example.com:443 {
     tls {
         provider "acme"
         challenge dns-01
         contact "admin@example.com"
-        dns "cloudflare" {
+        dns {
+            provider "cloudflare"
             api_key "EXAMPLE_API_KEY"
         }
     }
 }
 ```
 
-**Requirements:** A DNS provider module must be configured. Wildcard domains are supported.
+**Requirements:** A DNS provider module must be configured. Wildcard domains are supported. The `dns` block must specify the `provider` name and any provider-specific credentials. See [DNS providers](/docs/v3/configuration/dns-providers) for the full list of supported providers and their directives.
 
 ### Configuration parameters
 
@@ -224,8 +223,6 @@ Certificate issuance failed. The log message includes the affected domains. Chec
 
 ### DNS-01 issues
 
-> **Note:** DNS provider modules are not yet implemented. The DNS-01 challenge is defined in the ACME module but has no available DNS provider backends. See the [Status and limitations](/docs/v3/status-and-limitations) page for details.
-
 - Ensure the DNS provider is configured correctly with valid credentials.
 - Check that the provider has permission to create TXT records for the domain.
 - DNS propagation may take longer than 60 seconds for some providers — the ACME CA will retry validation.
@@ -275,6 +272,7 @@ openssl s_client -connect example.com:443 -status -servername example.com </dev/
 
 ## See also
 
+- [DNS providers](/docs/v3/configuration/dns-providers) — all supported DNS-01 provider backends and their configuration
 - [Security and TLS](/docs/v3/configuration/security-tls) — cipher suites, ECDH curves, mTLS
 - [TLS session ticket keys](/docs/v3/configuration/tls-session-tickets) — session resumption
 - [OCSP stapling](/docs/v3/configuration/ocsp-stapling) — OCSP response stapling

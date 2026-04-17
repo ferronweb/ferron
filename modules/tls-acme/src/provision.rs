@@ -327,7 +327,9 @@ pub async fn provision_certificate(
                 if let Some(ref dns_client) = config.dns_client {
                     // Remove any existing challenge record first
                     let challenge_domain = format!("_acme-challenge.{identifier}");
-                    let _ = dns_client.delete_record(&challenge_domain, "TXT").await;
+                    let _ = dns_client
+                        .delete_record(&challenge_domain, ferron_dns::DnsRecordType::TXT)
+                        .await;
 
                     let dns_value = key_authorization.dns_value();
                     let ttl = dns_client.minimum_ttl().max(60);
@@ -469,7 +471,9 @@ async fn cleanup_challenge_data(config: &AcmeConfig, dns_01_domains: &[String]) 
             if let Some(ref dns_client) = config.dns_client {
                 for domain in dns_01_domains {
                     let challenge_domain = format!("_acme-challenge.{domain}");
-                    let _ = dns_client.delete_record(&challenge_domain, "TXT").await;
+                    let _ = dns_client
+                        .delete_record(&challenge_domain, ferron_dns::DnsRecordType::TXT)
+                        .await;
                     log_debug!("DNS-01 record cleanup completed for {challenge_domain}");
                 }
             }

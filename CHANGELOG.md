@@ -1,5 +1,13 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not released yet**
+
+### Added
+
+- Multiple DNS providers for DNS-01 ACME challenge.
+
 ## Ferron 3.0.0-alpha.2
 
 **Released in April 17, 2026**

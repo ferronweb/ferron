@@ -34,7 +34,7 @@ use std::sync::Arc;
 
 use ferron_core::loader::ModuleLoader;
 use ferron_core::providers::Provider;
-use ferron_core::registry::{ProviderRegistry, Registry, RegistryBuilder};
+use ferron_core::registry::{ProviderRegistry, RegistryBuilder, GLOBAL_REGISTRY};
 use ferron_core::{runtime::Runtime, Module};
 use ferron_dns::{DnsClient, DnsContext};
 use ferron_observability::{
@@ -70,9 +70,6 @@ pub struct AcmeTaskState {
     /// Event sink for observability.
     pub event_sink: Arc<ferron_observability::CompositeEventSink>,
 }
-
-/// Global registry for DNS provider lookup, set once during module initialization.
-static GLOBAL_REGISTRY: std::sync::OnceLock<Arc<Registry>> = std::sync::OnceLock::new();
 
 impl Default for AcmeTaskState {
     fn default() -> Self {
@@ -168,7 +165,7 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
         let port: u16 = ctx.port;
 
         // Resolve DNS client from nested dns { } block if present
-        let dns_client = resolve_dns_client_from_config(ctx.config);
+        let dns_client = resolve_dns_client_from_config(ctx.config)?;
 
         let task_state = get_or_init_task_state();
 
@@ -597,26 +594,46 @@ impl ModuleLoader for TlsAcmeModuleLoader {
 /// ```
 fn resolve_dns_client_from_config(
     config: &ferron_core::config::ServerConfigurationBlock,
-) -> Option<Arc<dyn DnsClient>> {
+) -> Result<Option<Arc<dyn DnsClient>>, Box<dyn std::error::Error + 'static>> {
     // Look for nested dns { ... } block
-    let dns_entries = config.directives.get("dns")?;
-    let dns_entry = dns_entries.first()?;
-    let dns_block = dns_entry.children.as_ref()?;
+    let Some(dns_entries) = config.directives.get("dns") else {
+        return Ok(None);
+    };
+    let Some(dns_entry) = dns_entries.first() else {
+        return Ok(None);
+    };
+    let Some(dns_block) = dns_entry.children.as_ref() else {
+        return Ok(None);
+    };
 
     // Get the provider name from the dns block
     let provider_name = dns_block
         .get_value("provider")
-        .and_then(|v| v.as_string_with_interpolations(&std::collections::HashMap::new()))?;
+        .and_then(|v| v.as_string_with_interpolations(&std::collections::HashMap::new()))
+        .ok_or_else(|| anyhow::anyhow!("DNS provider name not specified."))?;
 
     // Look up the DNS provider registry from the stored global registry
-    let global_registry = GLOBAL_REGISTRY.get()?;
+    let global_registry = GLOBAL_REGISTRY
+        .get()
+        .ok_or_else(|| anyhow::anyhow!("DNS provider registry not initialized."))?;
     // SAFETY: The ProviderRegistry stores provider factories (closures), not
     // references to any DnsContext. The lifetime on DnsContext is only relevant
     // during execute(), where the provider borrows the config temporarily.
     // We transmute the lifetime to 'static so we can call execute with any config block.
-    let dns_registry: Arc<ProviderRegistry<DnsContext<'static>>> =
-        unsafe { std::mem::transmute(global_registry.get_provider_registry::<DnsContext<'_>>()?) };
-    let provider = dns_registry.get(&provider_name)?;
+    let dns_registry: Arc<ProviderRegistry<DnsContext<'static>>> = unsafe {
+        std::mem::transmute(
+            global_registry
+                .get_provider_registry::<DnsContext<'_>>()
+                .ok_or_else(|| {
+                    anyhow::anyhow!("DNS provider registry not found for ACME DNS-01 challenge.")
+                })?,
+        )
+    };
+    let provider = dns_registry.get(&provider_name).ok_or_else(|| {
+        anyhow::anyhow!(
+            "DNS provider not found for ACME DNS-01 challenge (provider: {provider_name})."
+        )
+    })?;
 
     // Execute the provider with the dns block as config to get the client.
     // SAFETY: The provider only borrows dns_block during execute() and does not
@@ -627,8 +644,12 @@ fn resolve_dns_client_from_config(
             client: None,
         })
     };
-    let _ = provider.execute(&mut dns_ctx);
-    dns_ctx.client
+    provider
+        .execute(&mut dns_ctx)
+        .map_err(|e| anyhow::anyhow!("Error initializing '{provider_name}' DNS provider: {e}"))?;
+    Ok(Some(dns_ctx.client.ok_or(anyhow::anyhow!(
+        "No DNS client configured for ACME DNS-01 challenge (provider: {provider_name})."
+    ))?))
 }
 
 #[cfg(test)]

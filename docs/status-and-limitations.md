@@ -33,6 +33,7 @@ The following features are implemented and functional in Ferron 3:
 | --- | --- | --- |
 | Manual TLS | `tls-manual` | Certificate/key paths with environment variable interpolation |
 | ACME automatic TLS | `tls-acme` | HTTP-01, TLS-ALPN-01, and DNS-01 challenges with caching and auto-renewal |
+| DNS Providers | `dns-stalwart` | DNS-01 challenge support for Bunny, Cloudflare, deSEC, DigitalOcean, DNSimple, Google Cloud, OVH, Porkbun, RFC2136, Route 53, and Spaceship |
 | OCSP stapling | `ocsp-stapler` | Automatic OCSP response fetching and stapling |
 | mTLS | `tls-manual` | Client certificate authentication with configurable trust store |
 | Custom crypto | `tls-manual` | Cipher suite selection, ECDH curves, TLS version restrictions |
@@ -66,7 +67,7 @@ The following features are implemented and functional in Ferron 3:
 - **Alpha quality** — not battle-tested; expect bugs and configuration changes between releases.
 - **All modules are compiled into the binary** — no runtime plugin loading yet. Every module ships with the default build.
 - **Primary testing target is Linux** — Windows and macOS receive less coverage and may have edge-case issues.
-- **No DNS provider modules** — the DNS-01 ACME challenge type is defined, but no DNS provider backends (Cloudflare, Route 53, etc.) are implemented yet. If you need wildcard certificates, obtain them externally and use [Manual TLS](/docs/v3/use-cases/manual-tls).
+
 
 ### Experimental features
 

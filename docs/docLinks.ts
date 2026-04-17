@@ -206,6 +206,12 @@ export default [
     label: "ACME automatic TLS",
   },
   {
+    href: "/docs/v3/configuration/dns-providers",
+    target: "_self",
+    sub: true,
+    label: "DNS providers",
+  },
+  {
     href: "/docs/v3/configuration/tls-local",
     target: "_self",
     sub: true,

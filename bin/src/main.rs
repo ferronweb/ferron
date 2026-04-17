@@ -16,6 +16,7 @@ use ferron_core::registry::{Registry, RegistryBuilder};
 use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_core::{log_debug, log_info, log_warn};
+use ferron_dns_stalwart::StalwartDnsModuleLoader;
 use ferron_observability_prometheus::PrometheusObservabilityModuleLoader;
 use malloc_best_effort::BEMalloc;
 
@@ -290,6 +291,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(JsonFormatObservabilityModuleLoader),
         Box::new(TextFormatObservabilityModuleLoader),
         Box::new(ProcessMetricsModuleLoader::default()),
+        Box::new(StalwartDnsModuleLoader),
     ]
 }
 
@@ -620,6 +622,9 @@ fn load_modules(
     >,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut runtime = None;
+    ferron_core::registry::GLOBAL_REGISTRY
+        .set(registry.clone())
+        .ok();
 
     loop {
         let (config, mut watcher) = config_adapter

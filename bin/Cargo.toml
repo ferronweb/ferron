@@ -32,6 +32,7 @@ ferron-http-replace = { path = "../modules/http-replace" }
 ferron-admin-api = { path = "../modules/admin-api" }
 ferron-config-json = { path = "../modules/config-json" }
 ferron-config-ferronconf = { path = "../modules/config-ferronconf" }
+ferron-dns-stalwart = { path = "../modules/dns-stalwart" }
 ferron-tls-manual = { path = "../modules/tls-manual" }
 ferron-tls-acme = { path = "../modules/tls-acme" }
 ferron-tls-local = { path = "../modules/tls-local" }

@@ -64,7 +64,7 @@ impl Dns01Helper {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let challenge_domain = Self::challenge_domain(domain);
         self.dns_client
-            .delete_record(&challenge_domain, "TXT")
+            .delete_record(&challenge_domain, ferron_dns::DnsRecordType::TXT)
             .await?;
         Ok(())
     }

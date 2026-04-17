@@ -15,6 +15,9 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
+/// Global registry for DNS provider lookup, set once during module initialization.
+pub static GLOBAL_REGISTRY: std::sync::OnceLock<Arc<Registry>> = std::sync::OnceLock::new();
+
 /// Factory function for creating provider instances.
 pub type ProviderFactory<P> = Arc<dyn Fn() -> Arc<dyn crate::providers::Provider<P>> + Send + Sync>;
 
