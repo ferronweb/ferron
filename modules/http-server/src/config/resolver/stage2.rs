@@ -528,7 +528,7 @@ impl Stage2RadixResolver {
         );
 
         // Sort configs by priority (descending) and extract
-        configs.sort_by(|a, b| b.0.cmp(&a.0));
+        configs.sort_by_key(|b| std::cmp::Reverse(b.0));
 
         // Use the longest matched path (most specific match)
         if let Some(longest_path) = result_paths.into_iter().max_by_key(|p| p.len()) {
@@ -693,7 +693,7 @@ impl Stage2RadixResolver {
         );
 
         // Sort by priority (descending - longer/more specific paths first)
-        matched_configs.sort_by(|a, b| b.0.cmp(&a.0));
+        matched_configs.sort_by_key(|b| std::cmp::Reverse(b.0));
 
         // Use the longest matched path (most specific match)
         if let Some(longest_path) = matched_path_segments.into_iter().max_by_key(|p| p.len()) {
@@ -823,7 +823,7 @@ impl Stage2RadixResolver {
             }
         }
 
-        configs.sort_by(|a, b| b.0.cmp(&a.0));
+        configs.sort_by_key(|b| std::cmp::Reverse(b.0));
         configs.into_iter().map(|(_, c)| c).collect()
     }
 

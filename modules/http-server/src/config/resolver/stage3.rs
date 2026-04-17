@@ -679,7 +679,7 @@ impl Stage3ErrorResolver {
             .collect();
 
         // Sort by priority (highest first)
-        matching_conditionals.sort_by(|a, b| b.0.cmp(&a.0));
+        matching_conditionals.sort_by_key(|b| std::cmp::Reverse(b.0));
 
         // Return highest priority matching conditional config
         if let Some((_, config)) = matching_conditionals.into_iter().next() {
@@ -780,7 +780,7 @@ impl Stage3ErrorResolver {
             .collect();
 
         // Sort by priority (highest first)
-        matching_conditionals.sort_by(|a, b| b.0.cmp(&a.0));
+        matching_conditionals.sort_by_key(|b| std::cmp::Reverse(b.0));
 
         // Return highest priority matching conditional config
         if let Some((_, config)) = matching_conditionals.into_iter().next() {

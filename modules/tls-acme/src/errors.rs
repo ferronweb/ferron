@@ -1,4 +1,5 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum AcmeCause {
     DnsNxDomain,
     DnsServFail,
@@ -9,14 +10,10 @@ pub enum AcmeCause {
     Http4xx,
     Http5xx,
     InvalidResponse,
+    #[default]
     Unknown,
 }
 
-impl Default for AcmeCause {
-    fn default() -> Self {
-        AcmeCause::Unknown
-    }
-}
 
 impl std::fmt::Display for AcmeCause {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
