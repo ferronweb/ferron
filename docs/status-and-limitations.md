@@ -68,7 +68,6 @@ The following features are implemented and functional in Ferron 3:
 - **All modules are compiled into the binary** — no runtime plugin loading yet. Every module ships with the default build.
 - **Primary testing target is Linux** — Windows and macOS receive less coverage and may have edge-case issues.
 
-
 ### Experimental features
 
 - **HTTP/3 (QUIC) support** — HTTP/3 is available via the `protocols h3` directive but is **experimental**. When enabled, Ferron binds an additional UDP listener on the same port. This feature may change or be removed in future releases. See [HTTP host directives](/docs/v3/configuration/http-host) for configuration details.
