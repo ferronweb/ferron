@@ -3614,9 +3614,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-ocsp"
-version = "0.28.11"
+version = "0.28.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c87a5fee571244591a4c3139078910ce0d9ea84110ff8afc83f48666970e2f9"
+checksum = "33045e42cdbcc1e860c1426f76780d410c83677fe2e5057ea1e2bf8e61261a9d"
 dependencies = [
  "rasn",
  "rasn-pkix",
