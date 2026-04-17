@@ -28,6 +28,8 @@ pub enum DnsRecordType {
     NS,
     SRV,
     CAA,
+    TLSA,
+    HTTPS,
 }
 
 impl fmt::Display for DnsRecordType {
@@ -41,6 +43,8 @@ impl fmt::Display for DnsRecordType {
             DnsRecordType::NS => write!(f, "NS"),
             DnsRecordType::SRV => write!(f, "SRV"),
             DnsRecordType::CAA => write!(f, "CAA"),
+            DnsRecordType::TLSA => write!(f, "TLSA"),
+            DnsRecordType::HTTPS => write!(f, "HTTPS"),
         }
     }
 }
@@ -55,7 +59,9 @@ impl std::str::FromStr for DnsRecordType {
             "CNAME" => Ok(DnsRecordType::CNAME),
             "TXT" => Ok(DnsRecordType::TXT),
             "MX" => Ok(DnsRecordType::MX),
+            "TLSA" => Ok(DnsRecordType::TLSA),
             "NS" => Ok(DnsRecordType::NS),
+            "HTTPS" => Ok(DnsRecordType::HTTPS),
             "SRV" => Ok(DnsRecordType::SRV),
             "CAA" => Ok(DnsRecordType::CAA),
             _ => Err(DnsProviderError(format!("unknown DNS record type: {s}"))),
