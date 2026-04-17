@@ -1,8 +1,8 @@
 # Ferron 3 change log
 
-## Ferron UNRELEASED
+## Ferron 3.0.0-alpha.2
 
-**Not yet released**
+**Released in April 17, 2026**
 
 ### Added
 
