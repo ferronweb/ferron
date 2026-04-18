@@ -1373,7 +1373,6 @@ dependencies = [
  "ferron-core",
  "ferron-http",
  "ferron-observability",
- "futures-util",
  "http",
  "http-body-util",
  "hyper",

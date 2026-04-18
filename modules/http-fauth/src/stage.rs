@@ -285,8 +285,7 @@ impl ForwardedAuthenticationStage {
             ctx.res = Some(ferron_http::HttpResponse::Custom(auth_response.map(
                 |body| {
                     // Convert body to a type that can be used in HttpResponse
-                    body.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-                        .boxed_unsync()
+                    body.map_err(std::io::Error::other).boxed_unsync()
                 },
             )));
 
