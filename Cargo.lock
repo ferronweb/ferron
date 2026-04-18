@@ -1813,6 +1813,7 @@ dependencies = [
  "rustls-pki-types",
  "tempfile",
  "time",
+ "x509-parser",
 ]
 
 [[package]]

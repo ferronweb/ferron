@@ -14,6 +14,7 @@
 - HTTP to HTTPS redirect wasn't enabled by default.
 - HTTP-01 ACME challenge failed due to challenge not being served for implicit automatic TLS.
 - Some ACME events were logged only to the console, not observability backends.
+- TLS certificates with local CA weren't checked if they're expired.
 
 ## Ferron 3.0.0-alpha.2
 

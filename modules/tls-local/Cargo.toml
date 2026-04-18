@@ -12,6 +12,7 @@ dirs = "6.0"
 ferron-core = { path = "../../core" }
 ferron-tls = { path = "../../types/tls" }
 time = "0.3"
+x509-parser = "0.18"
 
 [dev-dependencies]
 tempfile = "3"

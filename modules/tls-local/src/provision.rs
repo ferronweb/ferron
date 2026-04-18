@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
+use std::ops::Sub;
 use std::sync::Arc;
 
 use rcgen::{
@@ -9,9 +10,32 @@ use rcgen::{
 use rustls::sign::CertifiedKey;
 use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use time::{Duration, OffsetDateTime};
+use x509_parser::prelude::{FromDer, X509Certificate};
 
 use crate::cache::LocalTlsCache;
 use ferron_core::config::ServerConfigurationHostFilters;
+
+const SECONDS_BEFORE_RENEWAL: u64 = 86400; // 1 day before expiration
+
+/// Checks if a TLS certificate is still valid (not needing renewal).
+pub fn check_certificate_validity(
+    certificate: &CertificateDer,
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    let (_, x509_certificate) = X509Certificate::from_der(certificate)?;
+    let validity = x509_certificate.validity();
+    if let Some(time_to_expiration) = validity.time_to_expiration() {
+        let time_before_expiration =
+            if let Some(valid_duration) = validity.not_after.sub(validity.not_before) {
+                (valid_duration.whole_seconds().unsigned_abs() / 2).min(SECONDS_BEFORE_RENEWAL)
+            } else {
+                SECONDS_BEFORE_RENEWAL
+            };
+        if time_to_expiration >= std::time::Duration::from_secs(time_before_expiration) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
 
 pub fn provision_local_cert(
     cache: &LocalTlsCache,
@@ -27,8 +51,15 @@ pub fn provision_local_cert(
         cache.get_leaf_key(&san_hash),
     ) {
         if let Ok(certified_key) = parse_certified_key(&cert_pem, &key_pem) {
-            // Check if certificate is still valid (simplified for now)
-            return Ok(Arc::new(certified_key));
+            // Check if certificate is still valid
+            if certified_key
+                .cert
+                .first()
+                .and_then(|c| check_certificate_validity(c).ok())
+                .unwrap_or(false)
+            {
+                return Ok(Arc::new(certified_key));
+            }
         }
     }
 
