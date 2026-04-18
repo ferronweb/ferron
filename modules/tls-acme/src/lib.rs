@@ -437,7 +437,7 @@ async fn run_acme_background_task(
                 let domains = config.domains.join(", ");
                 let challenge_type = format!("{:?}", config.challenge_type).to_lowercase();
 
-                match crate::provision::provision_certificate(config).await {
+                match crate::provision::provision_certificate(config, &event_sink).await {
                     Ok(()) => {
                         emit_log(
                             &event_sink,
@@ -499,7 +499,7 @@ async fn run_acme_background_task(
 }
 
 /// Helper to emit log events through the event sink.
-fn emit_log(
+pub fn emit_log(
     event_sink: &Arc<ferron_observability::CompositeEventSink>,
     level: LogLevel,
     message: &str,
