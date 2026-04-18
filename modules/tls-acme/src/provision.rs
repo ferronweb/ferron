@@ -109,7 +109,7 @@ pub async fn check_certificate_validity_or_install_cached(
                         if let Ok(private_key) =
                             PrivateKeyDer::from_pem_slice(data.private_key_pem.as_bytes())
                         {
-                            install_certified_key(config, certs, private_key, &data, &event_sink)
+                            install_certified_key(config, certs, private_key, &data, event_sink)
                                 .await?;
                             return Ok(true);
                         }
@@ -141,7 +141,7 @@ async fn install_certified_key(
         Some(Arc::new(CertifiedKey::new(certs, signing_key)));
 
     emit_log(
-        &event_sink,
+        event_sink,
         ferron_observability::LogLevel::Debug,
         &format!("Certificate installed for {domains}, chain length: {chain_len}"),
         "ferron-tls-acme",
@@ -164,7 +164,7 @@ async fn install_certified_key(
 
         if let Some(command) = &config.post_obtain_command {
             emit_log(
-                &event_sink,
+                event_sink,
                 ferron_observability::LogLevel::Info,
                 &format!("Post-obtain command started for {domains}: {command}"),
                 "ferron-tls-acme",
@@ -183,7 +183,7 @@ async fn install_certified_key(
                 }
                 Err(e) => {
                     emit_log(
-                        &event_sink,
+                        event_sink,
                         ferron_observability::LogLevel::Warn,
                         &format!("Post-obtain command failed for {domains}: {e}"),
                         "ferron-tls-acme",
@@ -219,26 +219,26 @@ pub async fn provision_certificate(
                 serde_json::from_slice::<AccountCredentials>(&credentials_bytes)
             {
                 emit_log(
-                    &event_sink,
+                    event_sink,
                     ferron_observability::LogLevel::Debug,
                     &format!("ACME account loaded from cache for {domains}"),
                     "ferron-tls-acme",
                 );
                 account_builder.from_credentials(credentials).await?
             } else {
-                create_new_account(config, account_builder, &account_cache_key, &event_sink).await?
+                create_new_account(config, account_builder, &account_cache_key, event_sink).await?
             }
         } else {
-            create_new_account(config, account_builder, &account_cache_key, &event_sink).await?
+            create_new_account(config, account_builder, &account_cache_key, event_sink).await?
         }
     };
 
     config.account.replace(acme_account.clone());
 
     // Step 2: Check if current cert is still valid or cached
-    if check_certificate_validity_or_install_cached(config, &event_sink).await? {
+    if check_certificate_validity_or_install_cached(config, event_sink).await? {
         emit_log(
-            &event_sink,
+            event_sink,
             ferron_observability::LogLevel::Debug,
             &format!("ACME certificate still valid or loaded from cache for {domains}"),
             "ferron-tls-acme",
@@ -265,7 +265,7 @@ pub async fn provision_certificate(
     }
 
     emit_log(
-        &event_sink,
+        event_sink,
         ferron_observability::LogLevel::Debug,
         &format!("ACME order created for domains: {domains}"),
         "ferron-tls-acme",
@@ -277,7 +277,7 @@ pub async fn provision_certificate(
                 == Some("urn:ietf:params:acme:error:accountDoesNotExist") =>
         {
             emit_log(
-                &event_sink,
+                event_sink,
                 ferron_observability::LogLevel::Warn,
                 &format!(
                     "ACME account not found on server for {directory}, recreating",
@@ -290,13 +290,12 @@ pub async fn provision_certificate(
                 config.rustls_client_config.clone(),
             )));
             let new_account =
-                create_new_account(config, account_builder, &account_cache_key, &event_sink)
-                    .await?;
+                create_new_account(config, account_builder, &account_cache_key, event_sink).await?;
             new_account.new_order(&new_order).await?
         }
         Err(e) => {
             emit_log(
-                &event_sink,
+                event_sink,
                 ferron_observability::LogLevel::Error,
                 &format!(
                     "Failed to create ACME order for {domains}: {}",
@@ -318,7 +317,7 @@ pub async fn provision_certificate(
             AuthorizationStatus::Valid => continue,
             _ => {
                 emit_log(
-                    &event_sink,
+                    event_sink,
                     ferron_observability::LogLevel::Error,
                     &format!(
                         "ACME authorization failed — status: {:?}, domains: {domains}",
@@ -334,7 +333,7 @@ pub async fn provision_certificate(
             .challenge(config.challenge_type.clone())
             .ok_or_else(|| {
                 emit_log(
-                    &event_sink,
+                    event_sink,
                     ferron_observability::LogLevel::Error,
                     &format!(
                         "ACME server doesn't support the requested challenge type {:?} for {domains}",
@@ -350,7 +349,7 @@ pub async fn provision_certificate(
             Identifier::Ip(ip) => ip.to_string(),
             _ => {
                 emit_log(
-                    &event_sink,
+                    event_sink,
                     ferron_observability::LogLevel::Error,
                     &format!(
                         "Unsupported ACME identifier type for {domains}: {:?}",
@@ -365,7 +364,7 @@ pub async fn provision_certificate(
         let key_authorization = challenge.key_authorization();
 
         emit_log(
-            &event_sink,
+            event_sink,
             ferron_observability::LogLevel::Debug,
             &format!(
                 "ACME {:?} challenge initiated for {domains}",
@@ -408,7 +407,7 @@ pub async fn provision_certificate(
                         .await?;
 
                     emit_log(
-                        &event_sink,
+                        event_sink,
                         ferron_observability::LogLevel::Debug,
                         &format!("DNS-01 record created for {challenge_domain_log}, TTL {ttl}"),
                         "ferron-tls-acme",
@@ -428,7 +427,7 @@ pub async fn provision_certificate(
 
         if let Err(err) = challenge.set_ready().await {
             emit_log(
-                &event_sink,
+                event_sink,
                 ferron_observability::LogLevel::Error,
                 &format!(
                     "Failed to set ACME challenge ready for {domains}: {}",
@@ -439,7 +438,7 @@ pub async fn provision_certificate(
             return Err(Box::new(err));
         };
         emit_log(
-            &event_sink,
+            event_sink,
             ferron_observability::LogLevel::Debug,
             &format!(
                 "ACME {:?} challenge solved for {domains}",
@@ -454,7 +453,7 @@ pub async fn provision_certificate(
         Ok(status) => status,
         Err(e) => {
             emit_log(
-                &event_sink,
+                event_sink,
                 ferron_observability::LogLevel::Error,
                 &format!(
                     "Failed to finalize ACME order for {domains}: {}",
@@ -469,7 +468,7 @@ pub async fn provision_certificate(
         OrderStatus::Ready => {}
         OrderStatus::Invalid => {
             emit_log(
-                &event_sink,
+                event_sink,
                 ferron_observability::LogLevel::Error,
                 &format!(
                     "ACME order failed — status: invalid, domains: {domains}, reason: {}",
@@ -487,7 +486,7 @@ pub async fn provision_certificate(
         }
         _ => {
             emit_log(
-                &event_sink,
+                event_sink,
                 ferron_observability::LogLevel::Error,
                 &format!("ACME order failed — status: {order_status:?}, domains: {domains}"),
                 "ferron-tls-acme",
@@ -501,7 +500,7 @@ pub async fn provision_certificate(
         Ok(pem) => pem,
         Err(e) => {
             emit_log(
-                &event_sink,
+                event_sink,
                 ferron_observability::LogLevel::Error,
                 &format!(
                     "Failed to finalize ACME order for {domains}: {}",
@@ -516,7 +515,7 @@ pub async fn provision_certificate(
         Ok(pem) => pem,
         Err(e) => {
             emit_log(
-                &event_sink,
+                event_sink,
                 ferron_observability::LogLevel::Error,
                 &format!(
                     "Failed to obtain ACME certificate for {domains}: {}",
@@ -552,12 +551,12 @@ pub async fn provision_certificate(
         .await?;
 
     // Install the cert
-    install_certified_key(config, certs, private_key, &cache_data, &event_sink).await?;
+    install_certified_key(config, certs, private_key, &cache_data, event_sink).await?;
 
     config.account.replace(acme_account);
 
     // Step 7: Cleanup challenge data
-    cleanup_challenge_data(config, &dns_01_domains, &event_sink).await;
+    cleanup_challenge_data(config, &dns_01_domains, event_sink).await;
 
     Ok(())
 }
@@ -583,7 +582,7 @@ async fn cleanup_challenge_data(
                         .delete_record(&challenge_domain, ferron_dns::DnsRecordType::TXT)
                         .await;
                     emit_log(
-                        &event_sink,
+                        event_sink,
                         ferron_observability::LogLevel::Debug,
                         &format!("DNS-01 record cleanup completed for {challenge_domain}"),
                         "ferron-tls-acme",
@@ -621,7 +620,7 @@ async fn create_new_account(
         .await?;
 
     emit_log(
-        &event_sink,
+        event_sink,
         ferron_observability::LogLevel::Info,
         &format!(
             "ACME account created for directory {}, contact: {}",
