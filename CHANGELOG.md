@@ -7,7 +7,11 @@
 ### Added
 
 - Multiple DNS providers for DNS-01 ACME challenge.
-- Support for forwarded authentication;.
+- Support for forwarded authentication.
+
+### Fixed
+
+- HTTP to HTTPS redirect wasn't enabled by default.
 
 ## Ferron 3.0.0-alpha.2
 
