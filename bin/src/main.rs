@@ -17,6 +17,7 @@ use ferron_core::runtime::Runtime;
 use ferron_core::shutdown::{RELOAD_TOKEN, SHUTDOWN_TOKEN};
 use ferron_core::{log_debug, log_info, log_warn};
 use ferron_dns_stalwart::StalwartDnsModuleLoader;
+use ferron_http_fauth::ForwardedAuthenticationModuleLoader;
 use ferron_observability_prometheus::PrometheusObservabilityModuleLoader;
 use malloc_best_effort::BEMalloc;
 
@@ -272,6 +273,7 @@ fn get_loaders() -> Vec<Box<dyn ModuleLoader>> {
         Box::new(HttpBufferModuleLoader),
         Box::new(HttpCompressionModuleLoader),
         Box::new(HttpReplaceModuleLoader),
+        Box::new(ForwardedAuthenticationModuleLoader::default()),
         Box::new(StaticFileModuleLoader),
         Box::new(HttpHeadersModuleLoader),
         Box::new(ReverseProxyModuleLoader::default()),

@@ -7,6 +7,7 @@
 ### Added
 
 - Multiple DNS providers for DNS-01 ACME challenge.
+- Support for forwarded authentication;.
 
 ## Ferron 3.0.0-alpha.2
 

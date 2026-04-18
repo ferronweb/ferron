@@ -722,6 +722,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "connpool"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08570dddcc35bf42d1e7d239ec3f6bcedd9e8468701d299f3e0aea0722bca1b9"
+dependencies = [
+ "ahash",
+ "quick_cache",
+ "slab",
+ "tokio",
+]
+
+[[package]]
 name = "const-hex"
 version = "1.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1148,6 +1160,7 @@ dependencies = [
  "ferron-http-buffer",
  "ferron-http-cache",
  "ferron-http-compression",
+ "ferron-http-fauth",
  "ferron-http-fproxy",
  "ferron-http-headers",
  "ferron-http-map",
@@ -1347,6 +1360,30 @@ dependencies = [
  "http-body-util",
  "tokio-util",
  "typemap_rev",
+]
+
+[[package]]
+name = "ferron-http-fauth"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "connpool",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "futures-util",
+ "http",
+ "http-body-util",
+ "hyper",
+ "parking_lot",
+ "rustls",
+ "tokio",
+ "tokio-rustls",
+ "vibeio",
+ "vibeio-hyper",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -4063,7 +4100,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4645,9 +4682,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.52.0"
+version = "1.52.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a91135f59b1cbf38c91e73cf3386fca9bb77915c45ce2771460c9d92f0f3d776"
+checksum = "b67dee974fe86fd92cc45b7a95fdd2f99a36a6d7b0d431a231178d3d670bbcc6"
 dependencies = [
  "bytes",
  "libc",

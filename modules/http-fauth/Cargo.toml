@@ -1,0 +1,24 @@
+[package]
+name = "ferron-http-fauth"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+ferron-core = { path = "../../core" }
+ferron-http = { path = "../../types/http" }
+ferron-observability = { path = "../../types/observability" }
+http = "1"
+http-body-util = "0.1"
+bytes = "1"
+connpool = "0.2.0"
+parking_lot = "0.12.5"
+hyper = { version = "1", features = ["client", "http1", "http2"] }
+vibeio = { version = "0.2.6", default-features = false, features = ["time"] }
+vibeio-hyper = { version = "0.2.7" }
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+tokio-rustls = "0.26"
+webpki-roots = "1.0"
+anyhow = "1.0.102"
+tokio = "1.52.1"
+futures-util = "0.3.32"

@@ -1,9 +1,9 @@
 ---
 title: Access control
-description: "Protect routes in Ferron with IP-based access control, Basic Auth, and conditional configuration."
+description: "Protect routes in Ferron with IP-based access control, Basic Auth, forwarded authentication, and conditional configuration."
 ---
 
-Ferron supports several access control patterns, from simple IP-based `block`/`allow` rules to authenticated areas with HTTP Basic Authentication.
+Ferron supports several access control patterns, from simple IP-based `block`/`allow` rules to authenticated areas with HTTP Basic Authentication or an external authentication backend.
 
 ## Restrict a path by client IP (block/allow)
 
@@ -158,12 +158,42 @@ example.com {
 }
 ```
 
+## Forwarded authentication
+
+For external authentication, use the `auth_to` directive to forward each request to an authentication backend:
+
+```ferron
+example.com {
+    auth_to http://auth.example.com/auth
+
+    location / {
+        root /var/www/html
+    }
+}
+```
+
+When the backend returns a success status (2xx), the request continues. On failure (4xx/5xx), the backend's response is returned to the client. Headers from the auth response can be copied to the original request for downstream use:
+
+```ferron
+api.example.com {
+    auth_to http://auth.example.com/validate {
+        copy X-Auth-User X-Auth-Roles
+    }
+
+    proxy http://backend:8080
+}
+```
+
+For full configuration details, see [Forwarded authentication](/docs/v3/configuration/http-fauth).
+
 ## Notes and troubleshooting
 
 - If Ferron is behind a reverse proxy/load balancer, configure `client_ip_from_header` so IP-based rules use the client IP rather than the proxy IP. See [HTTP host directives](/docs/v3/configuration/http-host).
 - Test restrictive rules with a temporary endpoint first to avoid locking yourself out.
 - Prefer `location` matches when possible; use conditional matchers only when you need pattern matching.
 - For Basic Auth, always use TLS — credentials are sent in the `Authorization` header on every request.
+- For forwarded authentication backends behind TLS, ensure the backend's certificate is valid or use `no_verification true` for development/testing.
 - For complex logic (method/header/path combinations), use conditional configuration. See [Conditionals and variables](/docs/v3/configuration/conditionals).
 - For directive details (`block`, `allow`), see [HTTP response control](/docs/v3/configuration/http-response).
 - For Basic Auth details, see [HTTP basic authentication](/docs/v3/configuration/http-basicauth).
+- For forwarded authentication details, see [Forwarded authentication](/docs/v3/configuration/http-fauth).

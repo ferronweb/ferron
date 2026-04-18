@@ -194,6 +194,12 @@ export default [
     label: "HTTP basic authentication",
   },
   {
+    href: "/docs/v3/configuration/http-fauth",
+    target: "_self",
+    sub: true,
+    label: "Forwarded authentication",
+  },
+  {
     href: "/docs/v3/configuration/security-tls",
     target: "_self",
     sub: true,
