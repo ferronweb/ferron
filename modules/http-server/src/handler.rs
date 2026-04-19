@@ -1397,11 +1397,9 @@ async fn execute_http_file_pipeline(
                         .status(http::StatusCode::MOVED_PERMANENTLY)
                         .header(http::header::LOCATION, redirect_uri.to_string())
                         .body(
-                            http_body_util::Full::new(bytes::Bytes::from(format!(
-                                "Moved Permanently to {redirect_path}",
-                            )))
-                            .map_err(|_| unreachable!())
-                            .boxed_unsync(),
+                            http_body_util::Empty::<bytes::Bytes>::new()
+                                .map_err(|_| unreachable!())
+                                .boxed_unsync(),
                         )
                         .expect("failed to build redirect response"),
                 ));
