@@ -22,7 +22,7 @@ In this setup, scripts inside a `cgi-bin` directory are automatically treated as
 
 Example directory structure:
 
-```
+```text
 /var/www/html/
 ├── index.html
 └── cgi-bin/
