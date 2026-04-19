@@ -523,6 +523,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "cegla"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b5c0eaf1e4787d8fba79aaba75f2f769beb796db769f675de9a6cae27691f6d"
+dependencies = [
+ "bytes",
+ "futures-util",
+ "hashlink",
+ "http",
+ "http-body",
+ "http-body-util",
+ "httparse",
+ "memchr",
+ "smallvec",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "cegla-cgi"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f5e5f81ccbe93be0b6e476bd8028beda7e0d9ddfc761133cac9444c277df8b0"
+dependencies = [
+ "cegla",
+ "http",
+ "http-body",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "cesu8"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1159,6 +1191,7 @@ dependencies = [
  "ferron-http-basicauth",
  "ferron-http-buffer",
  "ferron-http-cache",
+ "ferron-http-cgi",
  "ferron-http-compression",
  "ferron-http-fauth",
  "ferron-http-fproxy",
@@ -1343,6 +1376,28 @@ dependencies = [
  "rustc-hash",
  "tokio",
  "typemap_rev",
+]
+
+[[package]]
+name = "ferron-http-cgi"
+version = "3.0.0-alpha.2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "cegla-cgi",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "http",
+ "http-body",
+ "http-body-util",
+ "memchr",
+ "phf",
+ "send_wrapper",
+ "tokio",
+ "vibeio",
+ "vibeio-cegla",
 ]
 
 [[package]]
@@ -1869,6 +1924,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
+name = "foldhash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
 name = "form_urlencoded"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2132,7 +2193,7 @@ version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 dependencies = [
- "foldhash",
+ "foldhash 0.1.5",
 ]
 
 [[package]]
@@ -2140,12 +2201,24 @@ name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
+dependencies = [
+ "foldhash 0.2.0",
+]
 
 [[package]]
 name = "hashbrown"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
+
+[[package]]
+name = "hashlink"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea0b22561a9c04a7cb1a302c013e0259cd3b4bb619f145b32f72b8b4bcbed230"
+dependencies = [
+ "hashbrown 0.16.1",
+]
 
 [[package]]
 name = "heck"
@@ -5052,6 +5125,16 @@ dependencies = [
  "slab",
  "tokio",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "vibeio-cegla"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d99083c7a70661f7b45a0de17fcd0ac044b55cb465a8de4c06b0cb61bd4ab9a1"
+dependencies = [
+ "cegla-cgi",
+ "vibeio",
 ]
 
 [[package]]

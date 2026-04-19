@@ -39,6 +39,12 @@ export default [
     sub: true,
   },
   {
+    href: "/docs/v3/use-cases/http-cgi",
+    target: "_self",
+    label: "CGI applications",
+    sub: true,
+  },
+  {
     label: "Traffic & routing",
   },
   {
@@ -249,6 +255,12 @@ export default [
     target: "_self",
     sub: true,
     label: "HTTP cache",
+  },
+  {
+    href: "/docs/v3/configuration/http-cgi",
+    target: "_self",
+    sub: true,
+    label: "CGI support",
   },
   {
     href: "/docs/v3/configuration/http-buffer",

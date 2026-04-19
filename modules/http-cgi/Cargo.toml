@@ -1,0 +1,22 @@
+[package]
+name = "ferron-http-cgi"
+version = "3.0.0-alpha.2"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+ferron-core = { path = "../../core" }
+ferron-http = { path = "../../types/http" }
+ferron-observability = { path = "../../types/observability" }
+http = "1"
+http-body-util = "0.1"
+bytes = "1"
+phf = "0.13.1"
+vibeio = { version = "0.2.8", features = [ "fs" ] }
+anyhow = "1.0.102"
+memchr = "2.8.0"
+cegla-cgi = { version = "0.2.1", features = ["client"] }
+vibeio-cegla = { version = "0.2.1", features = ["cgi-client"] }
+http-body = "1.0.1"
+send_wrapper = "0.6.0"
+tokio = "1.52.1"
