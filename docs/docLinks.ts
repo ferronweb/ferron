@@ -263,6 +263,12 @@ export default [
     label: "CGI support",
   },
   {
+    href: "/docs/v3/configuration/http-scgi",
+    target: "_self",
+    sub: true,
+    label: "SCGI support",
+  },
+  {
     href: "/docs/v3/configuration/http-buffer",
     target: "_self",
     sub: true,

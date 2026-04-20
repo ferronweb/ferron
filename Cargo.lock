@@ -555,6 +555,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "cegla-scgi"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1694100560dab4058baaa28f734e38af9ef42848ee4c3c60c26e110f29340cb"
+dependencies = [
+ "cegla",
+ "hashlink",
+ "http",
+ "http-body",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "cesu8"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1202,6 +1216,7 @@ dependencies = [
  "ferron-http-replace",
  "ferron-http-response",
  "ferron-http-rewrite",
+ "ferron-http-scgi",
  "ferron-http-server",
  "ferron-http-static",
  "ferron-observability-consolelog",
@@ -1594,6 +1609,28 @@ dependencies = [
  "rustc-hash",
  "tokio",
  "typemap_rev",
+]
+
+[[package]]
+name = "ferron-http-scgi"
+version = "3.0.0-alpha.2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "cegla-scgi",
+ "ferron-core",
+ "ferron-http",
+ "ferron-observability",
+ "http",
+ "http-body",
+ "http-body-util",
+ "memchr",
+ "pin-project-lite",
+ "send_wrapper",
+ "tokio",
+ "vibeio",
+ "vibeio-cegla",
 ]
 
 [[package]]
@@ -5131,6 +5168,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d99083c7a70661f7b45a0de17fcd0ac044b55cb465a8de4c06b0cb61bd4ab9a1"
 dependencies = [
  "cegla-cgi",
+ "cegla-scgi",
  "vibeio",
 ]
 

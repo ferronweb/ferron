@@ -9,6 +9,7 @@
 - Multiple DNS providers for DNS-01 ACME challenge.
 - Support for CGI (Common Gateway Interface).
 - Support for forwarded authentication.
+- Support for SCGI (Simple Common Gateway Interface).
 
 ### Fixed
 
