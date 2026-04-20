@@ -21,7 +21,7 @@ use tokio_rustls::TlsConnector;
 use vibeio_hyper::VibeioIo;
 
 use crate::config::{HeaderAction, ProxyConfig};
-use crate::connections::{ConnectionManager, PoolKey, PoolRef};
+use crate::connections::{ConnectionManager, PoolKey};
 use crate::connpool_single::PoolItem;
 use crate::send_net_io::SendTcpStreamPoll;
 #[cfg(unix)]
@@ -446,14 +446,6 @@ pub fn io_error_status(err: &std::io::Error) -> (StatusCode, &'static str) {
     }
 }
 
-fn select_pool(
-    cm: &ConnectionManager,
-    upstream: &UpstreamInner,
-    client_ip: Option<IpAddr>,
-) -> PoolRef {
-    cm.select_pool(upstream, client_ip)
-}
-
 fn idle_timeout_for_upstream(config: &ProxyConfig, upstream: &UpstreamInner) -> Duration {
     config
         .idle_timeout_map
@@ -663,7 +655,7 @@ async fn try_send_with_pool(
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     let pool_key = (Arc::new(upstream.clone()), client_ip);
-    let pool = select_pool(cm, upstream, client_ip);
+    let pool = cm.select_pool(upstream);
 
     // Collect non-ready-but-alive connections for racing
     let mut pending_items: Vec<PoolItem<PoolKey, SendRequestWrapper>> = Vec::new();
@@ -727,7 +719,6 @@ async fn try_send_with_pool(
             tracked_connection,
             true,
             pool.is_unix(),
-            pool.tcp_shard_idx(),
             local_limit_idx,
             metrics,
         )
@@ -760,7 +751,6 @@ async fn try_send_with_pool(
                     tracked_connection,
                     true,
                     pool.is_unix(),
-                    pool.tcp_shard_idx(),
                     local_limit_idx,
                     metrics,
                 )
@@ -909,7 +899,7 @@ async fn establish_and_send(
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     let pool_key = (Arc::new(upstream.clone()), client_ip);
-    let pool = select_pool(cm, upstream, client_ip);
+    let pool = cm.select_pool(upstream);
 
     let item: Option<PoolItem<PoolKey, SendRequestWrapper>> = if let Some(it) = existing_item {
         Some(it)
@@ -1074,7 +1064,6 @@ async fn establish_and_send(
         tracked_connection,
         config.keepalive,
         is_unix,
-        pool.tcp_shard_idx(),
         local_limit_idx,
         metrics,
     )
@@ -1092,7 +1081,6 @@ async fn send_via_wrapper(
     tracked_connection: Option<Arc<()>>,
     enable_keepalive: bool,
     is_unix: bool,
-    tcp_shard_idx: usize,
     _local_limit_idx: Option<usize>,
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
@@ -1133,10 +1121,7 @@ async fn send_via_wrapper(
     // return the connection via PoolReturnInfo when TrackedBody is dropped.
     let pool_return_info = if enable_keepalive && !wrapper.is_closed() {
         Some(crate::send_request::PoolReturnInfo::from_item(
-            item,
-            wrapper,
-            is_unix,
-            tcp_shard_idx,
+            item, wrapper, is_unix,
         ))
     } else {
         // Item will be dropped here, returning connection to pool via its Drop impl

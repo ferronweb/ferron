@@ -246,8 +246,6 @@ pub struct PoolReturnInfo {
     local_limit_idx: Option<usize>,
     /// Whether this is a Unix pool connection.
     is_unix: bool,
-    /// TCP shard index (only relevant if is_unix is false).
-    tcp_shard_idx: usize,
 }
 
 impl PoolReturnInfo {
@@ -259,7 +257,6 @@ impl PoolReturnInfo {
         item: crate::connpool_single::PoolItem<crate::connections::PoolKey, SendRequestWrapper>,
         wrapper: SendRequestWrapper,
         is_unix: bool,
-        tcp_shard_idx: usize,
     ) -> Self {
         // Prevent item's Drop from running (we'll handle return manually)
         let item = std::mem::ManuallyDrop::new(item);
@@ -269,7 +266,6 @@ impl PoolReturnInfo {
             wrapper: Some(wrapper),
             local_limit_idx: item.local_limit_index(),
             is_unix,
-            tcp_shard_idx,
         }
     }
 }
@@ -285,7 +281,6 @@ impl Drop for PoolReturnInfo {
                     wrapper,
                     self.local_limit_idx,
                     self.is_unix,
-                    self.tcp_shard_idx,
                 );
             }
         }

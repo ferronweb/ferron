@@ -6,12 +6,9 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
-
-use rustc_hash::FxHasher;
 
 use crate::connpool_single::{PoolItem, SingleThreadPool};
 use crate::send_request::SendRequestWrapper;
@@ -25,8 +22,8 @@ pub type PoolKey = (Arc<UpstreamInner>, Option<IpAddr>);
 /// Since we use a thread-per-core runtime, each thread gets its own pool.
 /// The pools are stored in `RefCell` for interior mutability within the thread.
 struct ThreadLocalPools {
-    /// Sharded TCP connection pools (for distributing global limit across threads).
-    tcp_shards: Vec<RefCell<SingleThreadPool<PoolKey, SendRequestWrapper>>>,
+    /// TCP connection pool.
+    tcp_pool: RefCell<SingleThreadPool<PoolKey, SendRequestWrapper>>,
     /// Unix socket pool (unbounded, separate from TCP pools).
     #[cfg(unix)]
     unix_pool: RefCell<SingleThreadPool<PoolKey, SendRequestWrapper>>,
@@ -44,25 +41,16 @@ thread_local! {
 pub struct ConnectionManager {
     /// Global limit shared across all threads. Uses `AtomicUsize` for thread-safe interior mutability.
     global_limit: AtomicUsize,
-    /// Number of shards (typically matches CPU count).
-    shards: usize,
     /// Per-upstream local limit indices (read-only after initialization).
     local_limits: RwLock<HashMap<UpstreamInner, usize>>,
 }
 
 impl ConnectionManager {
+    /// Creates a new `ConnectionManager` with the given global limit.
     pub fn with_global_limit(global_limit: usize) -> Self {
-        Self::with_global_limit_and_shards(global_limit, std::cmp::max(1, num_cpus::get()))
-    }
-
-    /// Like with_global_limit but allows overriding the number of shards (useful for tests/benches).
-    pub fn with_global_limit_and_shards(global_limit: usize, shards: usize) -> Self {
-        let shards = std::cmp::max(1, shards);
-
         // Initialize thread-local pools lazily on first access
         Self {
             global_limit: AtomicUsize::new(global_limit),
-            shards,
             local_limits: RwLock::new(HashMap::new()),
         }
     }
@@ -70,25 +58,23 @@ impl ConnectionManager {
     /// Ensures thread-local pools are initialized for the current thread.
     fn ensure_tls_pools(&self) {
         TLS_POOLS.with(|tls| {
-            let mut guard = tls.borrow_mut();
-            if guard.is_some() {
+            if tls.borrow().is_some() {
                 return;
             }
 
             let limit = self.global_limit.load(Ordering::Relaxed);
-            let per_shard = if self.shards > 0 {
-                limit.div_ceil(self.shards)
+            let available_parallelism = std::thread::available_parallelism()
+                .ok()
+                .map(|p| p.get())
+                .unwrap_or(1);
+            let per_thread = if available_parallelism > 0 {
+                limit.div_ceil(available_parallelism)
             } else {
                 limit
             };
 
-            let mut tcp_shards = Vec::with_capacity(self.shards);
-            for _ in 0..self.shards {
-                tcp_shards.push(RefCell::new(SingleThreadPool::new(per_shard)));
-            }
-
-            *guard = Some(ThreadLocalPools {
-                tcp_shards,
+            *tls.borrow_mut() = Some(ThreadLocalPools {
+                tcp_pool: RefCell::new(SingleThreadPool::new(per_thread)),
                 #[cfg(unix)]
                 unix_pool: RefCell::new(SingleThreadPool::new_unbounded()),
             });
@@ -96,7 +82,6 @@ impl ConnectionManager {
     }
 
     /// Set a per-upstream local connection limit.
-    /// This sets the same local-limit index across all shards for compatibility.
     pub fn set_local_limit(&self, upstream: &UpstreamInner, limit: usize) -> usize {
         let mut limits = self
             .local_limits
@@ -109,21 +94,25 @@ impl ConnectionManager {
 
         // Apply local limit to the current thread's pools
         self.ensure_tls_pools();
-        let mut idx = 0usize;
+        let idx = 0usize;
 
         TLS_POOLS.with(|tls| {
             let guard = tls.borrow();
             let pools = guard.as_ref().unwrap();
 
-            for (i, shard) in pools.tcp_shards.iter().enumerate() {
-                let ret = shard.borrow_mut().set_local_limit(limit);
-                if i == 0 {
-                    idx = ret;
-                }
-            }
+            let available_parallelism = std::thread::available_parallelism()
+                .ok()
+                .map(|p| p.get())
+                .unwrap_or(1);
+            let per_thread = if available_parallelism > 0 {
+                limit.div_ceil(available_parallelism)
+            } else {
+                limit
+            };
+            pools.tcp_pool.borrow_mut().set_local_limit(per_thread);
 
             #[cfg(unix)]
-            let _ = pools.unix_pool.borrow_mut().set_local_limit(limit);
+            let _ = pools.unix_pool.borrow_mut().set_local_limit(per_thread);
         });
 
         limits.insert(upstream.clone(), idx);
@@ -141,7 +130,6 @@ impl ConnectionManager {
 
     /// Updates the global concurrent connections limit.
     ///
-    /// This recalculates the per-shard capacity and updates all thread-local pools.
     /// If the new limit is lower, excess idle connections are evicted from all pools.
     /// If the new limit is higher, pools can grow to the new capacity.
     pub fn update_global_limit(&self, new_limit: usize) {
@@ -152,15 +140,17 @@ impl ConnectionManager {
         TLS_POOLS.with(|tls| {
             let guard = tls.borrow();
             if let Some(pools) = guard.as_ref() {
-                let per_shard = if self.shards > 0 {
-                    new_limit.div_ceil(self.shards)
+                let available_parallelism = std::thread::available_parallelism()
+                    .ok()
+                    .map(|p| p.get())
+                    .unwrap_or(1);
+                let per_thread = if available_parallelism > 0 {
+                    new_limit.div_ceil(available_parallelism)
                 } else {
                     new_limit
                 };
 
-                for shard in pools.tcp_shards.iter() {
-                    shard.borrow_mut().update_capacity(per_shard);
-                }
+                pools.tcp_pool.borrow_mut().update_capacity(per_thread);
             }
         });
     }
@@ -180,12 +170,21 @@ impl ConnectionManager {
             TLS_POOLS.with(|tls| {
                 let guard = tls.borrow();
                 if let Some(pools) = guard.as_ref() {
-                    for shard in pools.tcp_shards.iter() {
-                        let shard_mut = shard.borrow_mut();
-                        // Update the limit value at the existing index
-                        let local_limits = unsafe { shard_mut.local_limits_mut() };
+                    let available_parallelism = std::thread::available_parallelism()
+                        .ok()
+                        .map(|p| p.get())
+                        .unwrap_or(1);
+                    let per_thread = if available_parallelism > 0 {
+                        new_limit.div_ceil(available_parallelism)
+                    } else {
+                        new_limit
+                    };
+
+                    {
+                        let tcp_mut = pools.tcp_pool.borrow_mut();
+                        let local_limits = unsafe { tcp_mut.local_limits_mut() };
                         if idx < local_limits.len() {
-                            local_limits[idx] = new_limit;
+                            local_limits[idx] = per_thread;
                         }
                     }
 
@@ -194,7 +193,7 @@ impl ConnectionManager {
                         let unix_mut = pools.unix_pool.borrow_mut();
                         let local_limits = unsafe { unix_mut.local_limits_mut() };
                         if idx < local_limits.len() {
-                            local_limits[idx] = new_limit;
+                            local_limits[idx] = per_thread;
                         }
                     }
                 }
@@ -230,12 +229,10 @@ impl ConnectionManager {
             });
         }
 
-        let shard = self.shard_for_key(&key);
-
         TLS_POOLS.with(|tls| {
             let guard = tls.borrow();
             let pools = guard.as_ref().unwrap();
-            let result = pools.tcp_shards[shard].borrow_mut().pull(key);
+            let result = pools.tcp_pool.borrow_mut().pull(key);
             result
         })
     }
@@ -268,23 +265,22 @@ impl ConnectionManager {
             });
         }
 
-        let shard = self.shard_for_key(&key);
-
         TLS_POOLS.with(|tls| {
             let guard = tls.borrow();
             let pools = guard.as_ref().unwrap();
-            let result = pools.tcp_shards[shard]
+            let result = pools
+                .tcp_pool
                 .borrow_mut()
                 .pull_with_local_limit(key, local_limit_idx);
             result
         })
     }
 
-    /// Select the sharded pool for the given upstream/client key.
+    /// Select the pool for the given upstream/client key.
     ///
     /// Returns a `PoolRef` which provides access to the thread-local pool
     /// for pulling connections.
-    pub fn select_pool(&self, upstream: &UpstreamInner, client_ip: Option<IpAddr>) -> PoolRef {
+    pub fn select_pool(&self, upstream: &UpstreamInner) -> PoolRef {
         self.ensure_tls_pools();
 
         #[cfg(unix)]
@@ -292,57 +288,17 @@ impl ConnectionManager {
             return PoolRef::Unix;
         }
 
-        let key = (Arc::new(upstream.clone()), client_ip);
-        PoolRef::Tcp(self.shard_for_key(&key))
-    }
-
-    /// Select the sharded pool for the given upstream/client key, returning a reference to the underlying pool.
-    pub fn select_pool_ref(
-        &self,
-        upstream: &UpstreamInner,
-        client_ip: Option<IpAddr>,
-    ) -> PoolRefMut {
-        self.ensure_tls_pools();
-
-        #[cfg(unix)]
-        if upstream.proxy_unix.is_some() {
-            return PoolRefMut::Unix;
-        }
-
-        let key = (Arc::new(upstream.clone()), client_ip);
-        PoolRefMut::Tcp(self.shard_for_key(&key))
-    }
-
-    fn shard_for_key(&self, key: &PoolKey) -> usize {
-        let mut hasher = FxHasher::default();
-        (key, std::thread::current().id()).hash(&mut hasher);
-        (hasher.finish() as usize) % self.shards
-    }
-
-    /// Returns a reference to the first shard's pool for backwards compatibility.
-    #[allow(dead_code)]
-    pub fn connections(&self) -> &SingleThreadPool<PoolKey, SendRequestWrapper> {
-        self.ensure_tls_pools();
-        // This is a bit tricky since we can't return a reference to TLS
-        // Instead, we provide a PoolRef that can access it
-        panic!("connections() is deprecated - use select_pool() instead");
-    }
-
-    #[cfg(unix)]
-    #[allow(dead_code)]
-    pub fn unix_connections(&self) -> &SingleThreadPool<PoolKey, SendRequestWrapper> {
-        self.ensure_tls_pools();
-        panic!("unix_connections() is deprecated - use select_pool() instead");
+        PoolRef::Tcp
     }
 }
 
-/// A reference to a thread-local pool shard.
+/// A reference to a thread-local pool.
 ///
 /// This type is returned by `ConnectionManager::select_pool()` and provides
-/// access to the appropriate pool shard based on the upstream/client key.
+/// access to the appropriate pool based on the upstream/client key.
 pub enum PoolRef {
-    /// TCP pool, index into the shard array.
-    Tcp(usize),
+    /// TCP pool.
+    Tcp,
     /// Unix socket pool (unbounded).
     #[cfg(unix)]
     Unix,
@@ -354,16 +310,7 @@ impl PoolRef {
         match self {
             #[cfg(unix)]
             PoolRef::Unix => true,
-            PoolRef::Tcp(_) => false,
-        }
-    }
-
-    /// Returns the TCP shard index (only valid if not a Unix pool).
-    pub fn tcp_shard_idx(&self) -> usize {
-        match self {
-            PoolRef::Tcp(idx) => *idx,
-            #[cfg(unix)]
-            PoolRef::Unix => 0, // unused
+            PoolRef::Tcp => false,
         }
     }
 
@@ -374,7 +321,7 @@ impl PoolRef {
             let pools = guard.as_ref().unwrap();
 
             let result = match self {
-                PoolRef::Tcp(shard_idx) => pools.tcp_shards[*shard_idx].borrow_mut().pull(key),
+                PoolRef::Tcp => pools.tcp_pool.borrow_mut().pull(key),
                 #[cfg(unix)]
                 PoolRef::Unix => pools.unix_pool.borrow_mut().pull(key),
             };
@@ -393,64 +340,12 @@ impl PoolRef {
             let pools = guard.as_ref().unwrap();
 
             let result = match self {
-                PoolRef::Tcp(shard_idx) => pools.tcp_shards[*shard_idx]
+                PoolRef::Tcp => pools
+                    .tcp_pool
                     .borrow_mut()
                     .pull_with_local_limit(key, local_limit_idx),
                 #[cfg(unix)]
                 PoolRef::Unix => pools
-                    .unix_pool
-                    .borrow_mut()
-                    .pull_with_local_limit(key, local_limit_idx),
-            };
-            result
-        })
-    }
-}
-
-/// A mutable reference to a thread-local pool shard.
-///
-/// This type is returned by `ConnectionManager::select_pool_ref()` and provides
-/// direct access to the underlying `SingleThreadPool` for pulling connections.
-pub enum PoolRefMut {
-    /// TCP pool, index into the shard array.
-    Tcp(usize),
-    /// Unix socket pool (unbounded).
-    #[cfg(unix)]
-    Unix,
-}
-
-impl PoolRefMut {
-    /// Pull a connection from the referenced pool.
-    pub fn pull(&self, key: PoolKey) -> Option<PoolItem<PoolKey, SendRequestWrapper>> {
-        TLS_POOLS.with(|tls| {
-            let guard = tls.borrow();
-            let pools = guard.as_ref().unwrap();
-
-            let result = match self {
-                PoolRefMut::Tcp(shard_idx) => pools.tcp_shards[*shard_idx].borrow_mut().pull(key),
-                #[cfg(unix)]
-                PoolRefMut::Unix => pools.unix_pool.borrow_mut().pull(key),
-            };
-            result
-        })
-    }
-
-    /// Pull a connection with a local limit applied.
-    pub fn pull_with_local_limit(
-        &self,
-        key: PoolKey,
-        local_limit_idx: Option<usize>,
-    ) -> Option<PoolItem<PoolKey, SendRequestWrapper>> {
-        TLS_POOLS.with(|tls| {
-            let guard = tls.borrow();
-            let pools = guard.as_ref().unwrap();
-
-            let result = match self {
-                PoolRefMut::Tcp(shard_idx) => pools.tcp_shards[*shard_idx]
-                    .borrow_mut()
-                    .pull_with_local_limit(key, local_limit_idx),
-                #[cfg(unix)]
-                PoolRefMut::Unix => pools
                     .unix_pool
                     .borrow_mut()
                     .pull_with_local_limit(key, local_limit_idx),
@@ -469,7 +364,6 @@ pub fn return_connection_to_pool(
     wrapper: SendRequestWrapper,
     local_limit_idx: Option<usize>,
     is_unix: bool,
-    tcp_shard_idx: usize,
 ) {
     TLS_POOLS.with(|tls| {
         let guard = tls.borrow();
@@ -485,7 +379,8 @@ pub fn return_connection_to_pool(
                 .borrow_mut()
                 .return_connection_with_local_limit(key.clone(), wrapper, local_limit_idx);
         } else {
-            pools.tcp_shards[tcp_shard_idx]
+            pools
+                .tcp_pool
                 .borrow_mut()
                 .return_connection_with_local_limit(key.clone(), wrapper, local_limit_idx);
         }

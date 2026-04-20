@@ -140,10 +140,9 @@ where
                 break;
             }
             let evict_from_this = std::cmp::min(to_evict, conns.len());
-            for _ in 0..evict_from_this {
-                conns.pop(); // Drop the connection
-            }
-            to_evict -= evict_from_this;
+            let keep = conns.len().saturating_sub(evict_from_this);
+            conns.truncate(keep); // Drop the connections
+            to_evict -= conns.len().saturating_sub(keep);
         }
 
         // Clean up empty keys
