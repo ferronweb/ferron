@@ -26,6 +26,9 @@ The following features are implemented and functional in Ferron 3:
 | Variable mapping | `http-map` | Create variables from patterns (exact, wildcard, regex with captures) matched against source variables |
 | HTTP buffering | `http-buffer` | Request and response body buffering with configurable byte limits |
 | HTTP caching | `http-cache` | In-memory response cache with RFC 9111 semantics, LSCache override, vary headers, private/public cache partitioning |
+| CGI support | `http-cgi` | Spawn external interpreters for scripts by extension or `cgi-bin` directory |
+| SCGI support | `http-scgi` | Binary protocol for application servers with TCP or Unix socket backends |
+| Forwarded authentication | `http-fauth` | Forward authentication requests to external identity providers |
 
 ### TLS
 
