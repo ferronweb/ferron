@@ -21,6 +21,7 @@ The `scgi` directive enables SCGI protocol support. When specified, Ferron will 
 | Form | Description |
 | --- | --- |
 | `scgi { ... }` | Enables SCGI and configures nested directives. |
+| `scgi <url: string> { ... }` | Enables SCGI and sets the backend URL directly. |
 
 ### `backend`
 
