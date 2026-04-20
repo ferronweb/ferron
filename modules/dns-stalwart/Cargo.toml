@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 ferron-core = { path = "../../core" }
 ferron-dns = { path = "../../types/dns" }
-dns-update = { git = "https://github.com/stalwartlabs/dns-update" } # TODO: replace with crates.io once 0.2.0 is released
+dns-update = "0.2.1"
 async-trait = "0.1.89"
 base64 = "0.22.1"
 hex = "0.4.3"
