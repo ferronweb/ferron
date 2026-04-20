@@ -13,7 +13,7 @@ use crate::{
     util::{get_executable, SendWrapBody},
 };
 
-const DEFAULT_CGI_INTERPRETERS: LazyLock<HashMap<String, Vec<String>>> = LazyLock::new(|| {
+static DEFAULT_CGI_INTERPRETERS: LazyLock<HashMap<String, Vec<String>>> = LazyLock::new(|| {
     let mut cgi_interpreters = HashMap::new();
     cgi_interpreters.insert(".pl".to_string(), vec!["perl".to_string()]);
     cgi_interpreters.insert(".py".to_string(), vec!["python".to_string()]);

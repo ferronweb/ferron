@@ -1393,7 +1393,6 @@ dependencies = [
  "http-body",
  "http-body-util",
  "memchr",
- "phf",
  "send_wrapper",
  "tokio",
  "vibeio",
