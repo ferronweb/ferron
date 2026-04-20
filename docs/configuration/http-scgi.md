@@ -9,16 +9,14 @@ This page documents the `scgi` directive for configuring Ferron's SCGI (Simple C
 
 ```ferron
 example.com {
-    cgi {
-        scgi {
-            backend "tcp://127.0.0.1:4000"
-            environment "APP_ENV" "production"
-        }
+    scgi {
+        backend "tcp://127.0.0.1:4000"
+        environment "APP_ENV" "production"
     }
 }
 ```
 
-The `scgi` directive enables SCGI protocol support within a `cgi` block. When specified, Ferron will forward requests to the configured SCGI backend using the SCGI protocol instead of spawning local processes.
+The `scgi` directive enables SCGI protocol support. When specified, Ferron will forward requests to the configured SCGI backend using the SCGI protocol instead of spawning local processes.
 
 | Form | Description |
 | --- | --- |
@@ -34,10 +32,8 @@ The `scgi` directive enables SCGI protocol support within a `cgi` block. When sp
 
 ```ferron
 example.com {
-    cgi {
-        scgi {
-            backend "tcp://127.0.0.1:4000"
-        }
+    scgi {
+        backend "tcp://127.0.0.1:4000"
     }
 }
 ```
@@ -46,10 +42,8 @@ example.com {
 
 ```ferron
 example.com {
-    cgi {
-        scgi {
-            backend "unix:///var/run/app.sock"
-        }
+    scgi {
+        backend "unix:///var/run/app.sock"
     }
 }
 ```
@@ -70,13 +64,11 @@ example.com {
 
 ```ferron
 example.com {
-    cgi {
-        scgi {
-            backend "tcp://127.0.0.1:4000"
-            environment "APP_ENV" "production"
-            environment "APP_SECRET" "{env:APP_SECRET}"
-            environment "RUBY_VERSION" "3.3"
-        }
+    scgi {
+        backend "tcp://127.0.0.1:4000"
+        environment "APP_ENV" "production"
+        environment "APP_SECRET" "{env:APP_SECRET}"
+        environment "RUBY_VERSION" "3.3"
     }
 }
 ```
@@ -125,10 +117,8 @@ When used alongside an authentication module (e.g., `http-basicauth`), Ferron au
 
 ```ferron
 example.com {
-    cgi {
-        scgi {
-            backend "tcp://127.0.0.1:4000"
-        }
+    scgi {
+       backend "tcp://127.0.0.1:4000"
     }
 }
 ```
@@ -137,10 +127,8 @@ example.com {
 
 ```ferron
 example.com {
-    cgi {
-        scgi {
-            backend "unix:///var/run/app.sock"
-        }
+    scgi {
+        backend "unix:///var/run/app.sock"
     }
 }
 ```
@@ -149,13 +137,11 @@ example.com {
 
 ```ferron
 example.com {
-    cgi {
-        scgi {
-            backend "tcp://127.0.0.1:4000"
-            environment "APP_ENV" "production"
-            environment "APP_SECRET" "{env:APP_SECRET}"
-            environment "RUBY_VERSION" "3.3"
-        }
+    scgi {
+        backend "tcp://127.0.0.1:4000"
+        environment "APP_ENV" "production"
+        environment "APP_SECRET" "{env:APP_SECRET}"
+        environment "RUBY_VERSION" "3.3"
     }
 }
 ```
@@ -170,18 +156,14 @@ example.com {
         user "admin" "password"
     }
 
-    cgi {
-        scgi {
-            backend "tcp://127.0.0.1:4000"
-        }
+    scgi {
+        backend "tcp://127.0.0.1:4000"
     }
 }
 ```
 
 ## Notes and troubleshooting
 
-- The `scgi` directive must be nested inside a `cgi` block. It cannot be used at the global scope or directly under an HTTP host block.
-- SCGI backends must implement the SCGI protocol correctly. Ferron uses the `cega-scgi` crate for protocol compliance.
 - When a connection to the SCGI backend fails, Ferron returns a `503 Service Unavailable` response and logs an error message.
 - For TCP backends, ensure the host and port are specified in the URL (e.g., `tcp://127.0.0.1:4000`).
 - For Unix socket backends, the path must be absolute (e.g., `unix:///var/run/app.sock`).
