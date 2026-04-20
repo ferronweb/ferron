@@ -49,7 +49,7 @@ impl ferron_core::config::validator::ConfigurationValidator for CgiConfiguration
                 }
             };
 
-            ferron_core::validate_nested!(cgi, environment, args(2) => [ServerConfigurationValue::String(_, _), ServerConfigurationValue::String(_, _)]);
+            ferron_core::validate_nested!(cgi, environment, args(2) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _), ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
         });
 
         Ok(())
