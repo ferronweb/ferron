@@ -165,11 +165,11 @@ example.com {
 ```ferron
 example.com {
     root /var/www/html
-    
+
     basicauth {
         user "admin" "password"
     }
-    
+
     cgi {
         scgi {
             backend "tcp://127.0.0.1:4000"
