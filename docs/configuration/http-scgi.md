@@ -10,7 +10,7 @@ This page documents the `scgi` directive for configuring Ferron's SCGI (Simple C
 ```ferron
 example.com {
     scgi {
-        backend "tcp://127.0.0.1:4000"
+        backend tcp://127.0.0.1:4000
         environment "APP_ENV" "production"
     }
 }
@@ -34,7 +34,7 @@ The `scgi` directive enables SCGI protocol support. When specified, Ferron will 
 ```ferron
 example.com {
     scgi {
-        backend "tcp://127.0.0.1:4000"
+        backend tcp://127.0.0.1:4000
     }
 }
 ```
@@ -44,7 +44,7 @@ example.com {
 ```ferron
 example.com {
     scgi {
-        backend "unix:///var/run/app.sock"
+        backend unix:///var/run/app.sock
     }
 }
 ```
@@ -66,7 +66,7 @@ example.com {
 ```ferron
 example.com {
     scgi {
-        backend "tcp://127.0.0.1:4000"
+        backend tcp://127.0.0.1:4000
         environment "APP_ENV" "production"
         environment "APP_SECRET" "{{env.APP_SECRET}}"
         environment "RUBY_VERSION" "3.3"
@@ -118,9 +118,7 @@ When used alongside an authentication module (e.g., `http-basicauth`), Ferron au
 
 ```ferron
 example.com {
-    scgi {
-       backend "tcp://127.0.0.1:4000"
-    }
+    scgi tcp://127.0.0.1:4000
 }
 ```
 
@@ -128,9 +126,7 @@ example.com {
 
 ```ferron
 example.com {
-    scgi {
-        backend "unix:///var/run/app.sock"
-    }
+    scgi unix:///var/run/app.sock
 }
 ```
 
@@ -157,9 +153,7 @@ example.com {
         user "admin" "password"
     }
 
-    scgi {
-        backend "tcp://127.0.0.1:4000"
-    }
+    scgi tcp://127.0.0.1:4000
 }
 ```
 
