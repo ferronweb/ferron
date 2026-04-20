@@ -107,20 +107,16 @@ jobs:
           targets: "${{ matrix.target }}"
 
       - name: Setup cache
-        uses: Swatinem/rust-cache@v2
-
-      # - name: Setup cache
-      #   uses: actions/cache@v5
-      #   with:
-      #     path: |
-      #       ~/.cargo/bin/
-      #       ~/.cargo/registry/index/
-      #       ~/.cargo/registry/cache/
-      #       ~/.cargo/git/db/
-      #       build/prepare/target/
-      #       target/
-      #     key: CompileTestFerron3-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-      #     restore-keys: CompileTestFerron3-${{ runner.os }}-${{ matrix.target }}-
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: CompileTestFerron3-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: CompileTestFerron3-${{ runner.os }}-${{ matrix.target }}-
 
       - name: Setup NASM
         if: matrix.runner == 'windows-latest'
