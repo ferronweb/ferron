@@ -70,7 +70,7 @@ impl CgiConfiguration {
         }
 
         let mut environment = HashMap::new();
-        if let Some(entries) = cgi_children.directives.get("extension") {
+        if let Some(entries) = cgi_children.directives.get("environment") {
             for entry in entries {
                 let mut args_iter = entry.args.iter();
                 if let Some(name) = args_iter.next().and_then(|v| v.as_str()) {
