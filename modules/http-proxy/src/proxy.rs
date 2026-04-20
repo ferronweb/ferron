@@ -1426,23 +1426,6 @@ async fn send_request_without_pool_item(
     Ok(HttpResponse::Custom(response))
 }
 
-#[allow(dead_code)]
-pub fn error_response(status: StatusCode) -> HttpResponse {
-    use http_body_util::Full;
-    HttpResponse::Custom(
-        Response::builder()
-            .status(status)
-            .body(
-                Full::new(Bytes::from(format!(
-                    "<html><body><h1>{status}</h1></body></html>"
-                )))
-                .map_err(|e| match e {})
-                .boxed_unsync(),
-            )
-            .expect("Failed to build error response"),
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1583,17 +1566,6 @@ mod tests {
         // through the fact that plain strings pass through unchanged
         let value = "plain-value";
         assert!(!value.contains("{{"));
-    }
-
-    #[test]
-    fn test_error_response() {
-        let response = error_response(StatusCode::BAD_GATEWAY);
-        match response {
-            HttpResponse::Custom(resp) => {
-                assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
-            }
-            _ => panic!("Expected Custom response variant"),
-        }
     }
 
     #[test]

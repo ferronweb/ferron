@@ -10,7 +10,7 @@ use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::{HttpContext, HttpResponse};
 use http::{HeaderValue, Response};
-use http_body_util::{BodyExt, Full};
+use http_body_util::{BodyExt, Empty};
 
 pub struct HttpsRedirectStage;
 
@@ -127,13 +127,7 @@ impl Stage<HttpContext> for HttpsRedirectStage {
             Response::builder()
                 .status(308) // Permanent Redirect — preserves method and body
                 .header(http::header::LOCATION, location)
-                .body(
-                    Full::new(Bytes::from(format!(
-                        "<html><body><p>308 Permanent Redirect — <a href=\"{https_url}\">click here</a></p></body></html>"
-                    )))
-                    .map_err(|e| match e {})
-                    .boxed_unsync(),
-                )
+                .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
                 .expect("Failed to build 308 redirect response"),
         ));
 
