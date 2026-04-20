@@ -29,7 +29,7 @@ impl Stage<HttpContext> for ScgiStage {
         &self,
         config: Option<&ferron_core::config::ServerConfigurationBlock>,
     ) -> bool {
-        config.is_some_and(|b| b.has_directive("cgi"))
+        config.is_some_and(|b| b.has_directive("scgi"))
     }
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
