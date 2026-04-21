@@ -4,8 +4,9 @@
 //! designed for thread-per-core runtimes where each thread owns its pool exclusively.
 
 use std::cell::UnsafeCell;
-use std::collections::HashMap;
 use std::hash::Hash;
+
+use rustc_hash::FxHashMap;
 
 /// A single-threaded connection pool.
 ///
@@ -15,7 +16,7 @@ use std::hash::Hash;
 /// It is marked `!Send` and `!Sync` to enforce this.
 pub struct SingleThreadPool<K, I> {
     /// Idle connections stored per key (LIFO order for cache locality).
-    idle: UnsafeCell<HashMap<K, Vec<I>>>,
+    idle: UnsafeCell<FxHashMap<K, Vec<I>>>,
     /// Number of connections currently outstanding (pulled but not returned).
     outstanding: UnsafeCell<usize>,
     /// Maximum total connections (idle + outstanding).
@@ -25,7 +26,7 @@ pub struct SingleThreadPool<K, I> {
     /// Local limit configuration: maps index to maximum concurrent connections.
     local_limits: UnsafeCell<Vec<usize>>,
     /// Per-key local limit outstanding counts: maps key to vec of counts per local limit index.
-    local_outstanding: UnsafeCell<HashMap<K, Vec<usize>>>,
+    local_outstanding: UnsafeCell<FxHashMap<K, Vec<usize>>>,
     // Prevent Send/Sync auto-implementation
     _marker: std::marker::PhantomData<*mut ()>,
 }
@@ -34,12 +35,12 @@ impl<K, I> SingleThreadPool<K, I> {
     /// Creates a new connection pool with the given maximum capacity.
     pub fn new(capacity: usize) -> Self {
         Self {
-            idle: UnsafeCell::new(HashMap::new()),
+            idle: UnsafeCell::new(FxHashMap::default()),
             outstanding: UnsafeCell::new(0),
             max_size: UnsafeCell::new(capacity),
             unbounded: UnsafeCell::new(false),
             local_limits: UnsafeCell::new(Vec::new()),
-            local_outstanding: UnsafeCell::new(HashMap::new()),
+            local_outstanding: UnsafeCell::new(FxHashMap::default()),
             _marker: std::marker::PhantomData,
         }
     }
@@ -47,12 +48,12 @@ impl<K, I> SingleThreadPool<K, I> {
     /// Creates a new connection pool with no maximum capacity.
     pub fn new_unbounded() -> Self {
         Self {
-            idle: UnsafeCell::new(HashMap::new()),
+            idle: UnsafeCell::new(FxHashMap::default()),
             outstanding: UnsafeCell::new(0),
             max_size: UnsafeCell::new(0), // unused when unbounded
             unbounded: UnsafeCell::new(true),
             local_limits: UnsafeCell::new(Vec::new()),
-            local_outstanding: UnsafeCell::new(HashMap::new()),
+            local_outstanding: UnsafeCell::new(FxHashMap::default()),
             _marker: std::marker::PhantomData,
         }
     }
@@ -65,7 +66,7 @@ where
     /// Safety: All these methods require single-threaded access.
     /// The caller must ensure no concurrent access occurs.
     #[allow(clippy::mut_from_ref)]
-    unsafe fn idle_map(&self) -> &mut HashMap<K, Vec<I>> {
+    unsafe fn idle_map(&self) -> &mut FxHashMap<K, Vec<I>> {
         &mut *self.idle.get()
     }
 
@@ -87,7 +88,7 @@ where
     }
 
     #[allow(clippy::mut_from_ref)]
-    unsafe fn local_outstanding(&self) -> &mut HashMap<K, Vec<usize>> {
+    unsafe fn local_outstanding(&self) -> &mut FxHashMap<K, Vec<usize>> {
         &mut *self.local_outstanding.get()
     }
 

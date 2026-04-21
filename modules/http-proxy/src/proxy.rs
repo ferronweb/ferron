@@ -654,9 +654,6 @@ async fn try_send_with_pool(
     tracked_connection: Option<Arc<()>>,
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
-    let pool_key = (Arc::new(upstream.clone()), client_ip);
-    let pool = cm.select_pool(upstream);
-
     // Collect non-ready-but-alive connections for racing
     let mut pending_items: Vec<PoolItem<PoolKey, SendRequestWrapper>> = Vec::new();
     // Track a non-ready-but-kept item slot for reuse in establish_and_send
@@ -666,9 +663,9 @@ async fn try_send_with_pool(
     // Pull one connection from the pool and check readiness
     let pull_start = std::time::Instant::now();
     let item = if let Some(idx) = local_limit_idx {
-        pool.pull_with_local_limit(pool_key.clone(), Some(idx))
+        cm.pull_with_local_limit(&upstream, client_ip, Some(idx))
     } else {
-        pool.pull(pool_key.clone())
+        cm.pull(&upstream, client_ip)
     };
 
     // If pool returned None (at capacity), we'll need to establish a new connection
@@ -718,7 +715,7 @@ async fn try_send_with_pool(
             proxy_url,
             tracked_connection,
             true,
-            pool.is_unix(),
+            upstream.proxy_unix.is_some(),
             local_limit_idx,
             metrics,
         )
@@ -750,7 +747,7 @@ async fn try_send_with_pool(
                     proxy_url,
                     tracked_connection,
                     true,
-                    pool.is_unix(),
+                    upstream.proxy_unix.is_some(),
                     local_limit_idx,
                     metrics,
                 )
@@ -898,15 +895,12 @@ async fn establish_and_send(
     existing_item: Option<PoolItem<PoolKey, SendRequestWrapper>>,
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
-    let pool_key = (Arc::new(upstream.clone()), client_ip);
-    let pool = cm.select_pool(upstream);
-
     let item: Option<PoolItem<PoolKey, SendRequestWrapper>> = if let Some(it) = existing_item {
         Some(it)
     } else if let Some(idx) = local_limit_idx {
-        pool.pull_with_local_limit(pool_key.clone(), Some(idx))
+        cm.pull_with_local_limit(&upstream, client_ip, Some(idx))
     } else {
-        pool.pull(pool_key.clone())
+        cm.pull(&upstream, client_ip)
     };
 
     // If pool returned None (at capacity), we need to proceed without a pooled item

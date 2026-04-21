@@ -1570,6 +1570,7 @@ dependencies = [
  "parking_lot",
  "ppp",
  "rand 0.10.1",
+ "rustc-hash",
  "rustls",
  "rustls-native-certs",
  "tokio",
