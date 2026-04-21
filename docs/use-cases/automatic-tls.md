@@ -14,7 +14,7 @@ Certificates are cached and automatically renewed before expiration.
 Below is the example Ferron configuration that configures automatic TLS with the production Let's Encrypt directory:
 
 ```ferron
-example.com:443 {
+example.com {
     tls {
         provider "acme"
         challenge http-01
@@ -32,7 +32,7 @@ Ferron uses HTTP-01 ACME challenge by default, which requires the server to be r
 You can use TLS-ALPN-01 challenge instead, which works at the TLS handshake level and only requires port 443:
 
 ```ferron
-example.com:443 {
+example.com {
     tls {
         provider "acme"
         challenge tls-alpn-01
@@ -48,7 +48,7 @@ example.com:443 {
 If you run other servers (alongside Ferron) that support TLS, but not automatic TLS functionality, you can use Ferron as an ACME client to obtain TLS certificates for those servers:
 
 ```ferron
-example.com:443 {
+example.com {
     tls {
         provider "acme"
         challenge http-01
@@ -73,7 +73,7 @@ Ferron can also obtain certificates on demand when a hostname is accessed for th
 When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferron will call the configured URL with the `domain` query parameter, and your endpoint should allow or deny issuance for that domain.
 
 ```ferron
-*.example.com:443 {
+*.example.com {
     tls {
         provider "acme"
         challenge http-01
@@ -94,7 +94,7 @@ Ferron supports DNS-01 ACME challenge for automatic TLS, which is required for w
 Below is an example configuration for DNS-01 with Cloudflare:
 
 ```ferron
-*.example.com:443 {
+*.example.com {
     tls {
         provider "acme"
         challenge dns-01
@@ -117,7 +117,7 @@ For the reference of supported DNS providers and their configuration properties,
 Certificates are cached both in-memory and on disk (when a `cache` path is configured). This ensures certificates survive restarts and are automatically renewed.
 
 ```ferron
-example.com:443 {
+example.com {
     tls {
         provider "acme"
         challenge http-01
