@@ -34,7 +34,7 @@ impl Stage<HttpContext> for ScgiStage {
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         // -- check if SCGI is applicable
-        let Some(config) = ScgiConfiguration::from_http_ctx(&ctx) else {
+        let Some(config) = ScgiConfiguration::from_http_ctx(ctx) else {
             // SCGI not configured
             return Ok(true);
         };
