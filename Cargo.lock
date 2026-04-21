@@ -1616,9 +1616,7 @@ dependencies = [
 name = "ferron-http-scgi"
 version = "3.0.0-alpha.2"
 dependencies = [
- "anyhow",
  "async-trait",
- "bytes",
  "cegla-scgi",
  "ferron-core",
  "ferron-http",
@@ -1626,7 +1624,6 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
- "memchr",
  "pin-project-lite",
  "send_wrapper",
  "tokio",
