@@ -118,7 +118,7 @@ example.com {
     root "/var/www/html"
     cgi
     environment "APP_ENV" "production"
-    environment "APP_SECRET" "{env:APP_SECRET}"
+    environment "APP_SECRET" "{{env.APP_SECRET}}"
     environment "RUBY_VERSION" "3.3"
 }
 ```
@@ -126,7 +126,7 @@ example.com {
 **Notes:**
 
 - Environment variables take precedence over any existing variables with the same name.
-- Values support interpolation (e.g., `{env:VAR}` for environment variable substitution).
+- Values support interpolation (e.g., `{{env.VAR}}` for environment variable substitution).
 - Ferron always sets the following CGI environment variables automatically:
 
 | Variable | Description |
