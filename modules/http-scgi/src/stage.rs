@@ -158,7 +158,7 @@ impl Stage<HttpContext> for ScgiStage {
                                 target: "ferron-http-scgi",
                             }));
                             ctx.res = Some(HttpResponse::BuiltinError(503, None));
-                            return Ok(true);
+                            return Ok(false);
                         }
                         _ => return Err(PipelineError::custom(err.to_string())),
                     },
