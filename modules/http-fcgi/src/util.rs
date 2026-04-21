@@ -4,6 +4,7 @@ use pin_project_lite::pin_project;
 
 use crate::ConnpoolItem;
 
+#[cfg(unix)]
 pin_project! {
     #[project = ConnectedSocketProj]
     pub enum ConnectedSocket {
@@ -11,10 +12,20 @@ pin_project! {
             #[pin]
             socket: vibeio::net::PollTcpStream,
         },
-        #[cfg(unix)]
         Unix {
             #[pin]
             socket: vibeio::net::PollUnixStream,
+        },
+    }
+}
+
+#[cfg(not(unix))]
+pin_project! {
+    #[project = ConnectedSocketProj]
+    pub enum ConnectedSocket {
+        Tcp {
+            #[pin]
+            socket: vibeio::net::PollTcpStream,
         },
     }
 }
