@@ -45,6 +45,12 @@ export default [
     sub: true,
   },
   {
+    href: "/docs/v3/use-cases/php",
+    target: "_self",
+    label: "PHP hosting",
+    sub: true,
+  },
+  {
     label: "Traffic & routing",
   },
   {
@@ -261,6 +267,12 @@ export default [
     target: "_self",
     sub: true,
     label: "CGI support",
+  },
+  {
+    href: "/docs/v3/configuration/http-fcgi",
+    target: "_self",
+    sub: true,
+    label: "FastCGI support",
   },
   {
     href: "/docs/v3/configuration/http-scgi",

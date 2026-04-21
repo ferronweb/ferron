@@ -32,6 +32,7 @@ ferron-http-replace = { path = "../modules/http-replace" }
 ferron-http-fauth = { path = "../modules/http-fauth" }
 ferron-http-cgi = { path = "../modules/http-cgi" }
 ferron-http-scgi = { path = "../modules/http-scgi" }
+ferron-http-fcgi = { path = "../modules/http-fcgi" }
 ferron-admin-api = { path = "../modules/admin-api" }
 ferron-config-json = { path = "../modules/config-json" }
 ferron-config-ferronconf = { path = "../modules/config-ferronconf" }

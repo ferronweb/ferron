@@ -27,6 +27,7 @@ The following features are implemented and functional in Ferron 3:
 | HTTP buffering | `http-buffer` | Request and response body buffering with configurable byte limits |
 | HTTP caching | `http-cache` | In-memory response cache with RFC 9111 semantics, LSCache override, vary headers, private/public cache partitioning |
 | CGI support | `http-cgi` | Spawn external interpreters for scripts by extension or `cgi-bin` directory |
+| FastCGI support | `http-fcgi` | Binary protocol with connection pooling and keepalive for PHP-FPM and other FastCGI backends |
 | SCGI support | `http-scgi` | Binary protocol for application servers with TCP or Unix socket backends |
 | Forwarded authentication | `http-fauth` | Forward authentication requests to external identity providers |
 
