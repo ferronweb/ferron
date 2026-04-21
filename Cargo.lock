@@ -1478,7 +1478,7 @@ dependencies = [
 
 [[package]]
 name = "ferron-http-fcgi"
-version = "2.0.0-beta.1"
+version = "3.0.0-alpha.2"
 dependencies = [
  "anyhow",
  "async-trait",
