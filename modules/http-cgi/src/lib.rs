@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use ferron_http::HttpFileContext;
+use ferron_http::{HttpContext, HttpFileContext};
 
-use crate::stage::CgiStage;
+use crate::stages::{CgiInjectStage, CgiStage};
 
 mod config;
-mod stage;
+mod stages;
 mod util;
 mod validator;
 
@@ -36,6 +36,8 @@ impl ferron_core::loader::ModuleLoader for CgiModuleLoader {
         &mut self,
         registry: ferron_core::registry::RegistryBuilder,
     ) -> ferron_core::registry::RegistryBuilder {
-        registry.with_stage::<HttpFileContext, _>(|| Arc::new(CgiStage))
+        registry
+            .with_stage::<HttpFileContext, _>(|| Arc::new(CgiStage))
+            .with_stage::<HttpContext, _>(|| Arc::new(CgiInjectStage))
     }
 }

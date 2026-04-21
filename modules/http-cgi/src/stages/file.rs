@@ -78,7 +78,11 @@ impl Stage<HttpFileContext> for CgiStage {
                 .file_path
                 .extension()
                 .and_then(|e| e.to_str())
-                .is_some_and(|e| config.additional_extensions.contains(&e.to_lowercase()))
+                .is_some_and(|e| {
+                    config
+                        .additional_extensions
+                        .contains(&format!(".{}", e.to_lowercase()))
+                })
         {
             // CGI not applicable ("cgi-bin" or additional extension)
             return Ok(true);

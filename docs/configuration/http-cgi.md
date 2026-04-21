@@ -117,6 +117,21 @@ The following built-in interpreters are available when no custom `interpreter` d
 | `.bat` (Windows) | `cmd /c` |
 | `.vbs` (Windows) | `cscript` |
 
+## Default index files
+
+When CGI is enabled and no explicit `index` directive is configured, Ferron automatically injects default index file names. By default, the following files are checked in order: `index.html`, `index.htm`, `index.xhtml`.
+
+If you register additional extensions via the `extension` directive, Ferron also prepends corresponding index files to the front of the list:
+
+| Registered extension | Prepend to index list |
+| --- | --- |
+| `.cgi` | `index.cgi` |
+| `.php` | `index.php` |
+
+For example, with `extension ".php"` configured, the injection order becomes: `index.php`, `index.html`, `index.htm`, `index.xhtml`.
+
+This injection only applies when no explicit `index` directive is set. If you configure your own `index` directive, Ferron will use that instead.
+
 ## CGI script locations
 
 A request is handled as a CGI script when:

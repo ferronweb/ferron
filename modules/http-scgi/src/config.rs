@@ -16,7 +16,7 @@ pub struct ScgiConfiguration {
 
 impl ScgiConfiguration {
     pub fn from_http_ctx(ctx: &HttpContext) -> Option<Self> {
-        let cgi_config = ctx.configuration.get_entry("scgi", false)?;
+        let cgi_config = ctx.configuration.get_entry("scgi", true)?;
         let mut backend_server = cgi_config
             .get_value()
             .and_then(|v| v.as_string_with_interpolations(ctx));

@@ -19,7 +19,7 @@ pub struct CgiConfiguration {
 
 impl CgiConfiguration {
     pub fn from_http_ctx(ctx: &HttpContext) -> Option<Self> {
-        let cgi_config = ctx.configuration.get_entry("cgi", false)?;
+        let cgi_config = ctx.configuration.get_entry("cgi", true)?;
         if !cgi_config.get_flag() {
             return None;
         }
