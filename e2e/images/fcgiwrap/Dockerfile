@@ -1,5 +1,5 @@
 # Use Debian base image
-FROM debian:trixie
+FROM debian:trixie-20260421
 
 # Install necessary `fcgiwrap` packages
 RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
