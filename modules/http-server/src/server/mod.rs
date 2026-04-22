@@ -64,8 +64,7 @@ fn get_host_config_iter<'a>(
     port_config
         .hosts
         .iter()
-        .map(|(_, block)| get_blocks_config_iter(block))
-        .flatten()
+        .flat_map(|(_, block)| get_blocks_config_iter(block))
 }
 
 #[inline]
@@ -78,37 +77,33 @@ fn get_blocks_config_iter<'a>(
                 block
                     .directives
                     .get("if")
-                    .map_or((&[]).into_iter(), |entries| entries.iter())
+                    .map_or(([]).iter(), |entries| entries.iter())
                     .filter_map(|entry| entry.children.as_ref())
-                    .map(get_blocks_config_iter)
-                    .flatten(),
+                    .flat_map(get_blocks_config_iter),
             )
             .chain(
                 block
                     .directives
                     .get("if_not")
-                    .map_or((&[]).into_iter(), |entries| entries.iter())
+                    .map_or(([]).iter(), |entries| entries.iter())
                     .filter_map(|entry| entry.children.as_ref())
-                    .map(get_blocks_config_iter)
-                    .flatten(),
+                    .flat_map(get_blocks_config_iter),
             )
             .chain(
                 block
                     .directives
                     .get("handle_error")
-                    .map_or((&[]).into_iter(), |entries| entries.iter())
+                    .map_or(([]).iter(), |entries| entries.iter())
                     .filter_map(|entry| entry.children.as_ref())
-                    .map(get_blocks_config_iter)
-                    .flatten(),
+                    .flat_map(get_blocks_config_iter),
             )
             .chain(
                 block
                     .directives
                     .get("location")
-                    .map_or((&[]).into_iter(), |entries| entries.iter())
+                    .map_or(([]).iter(), |entries| entries.iter())
                     .filter_map(|entry| entry.children.as_ref())
-                    .map(get_blocks_config_iter)
-                    .flatten(),
+                    .flat_map(get_blocks_config_iter),
             ),
     )
 }

@@ -171,13 +171,13 @@ pub async fn check_ask_endpoint(
     let path_and_query_str = if let Some(path_and_query) = url_parts.path_and_query {
         let query = path_and_query.query();
         let query = if let Some(query) = query {
-            format!("{}&domain={}", query, urlencoding::encode(&domain))
+            format!("{}&domain={}", query, urlencoding::encode(domain))
         } else {
-            format!("domain={}", urlencoding::encode(&domain))
+            format!("domain={}", urlencoding::encode(domain))
         };
         format!("{}?{}", path_and_query.path(), query)
     } else {
-        format!("/?domain={}", urlencoding::encode(&domain))
+        format!("/?domain={}", urlencoding::encode(domain))
     };
 
     url_parts.path_and_query = Some(match path_and_query_str.parse() {

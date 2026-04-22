@@ -664,9 +664,9 @@ async fn try_send_with_pool(
     // Pull one connection from the pool and check readiness
     let pull_start = std::time::Instant::now();
     let item = if let Some(idx) = local_limit_idx {
-        cm.pull_with_local_limit(&upstream, client_ip, Some(idx))
+        cm.pull_with_local_limit(upstream, client_ip, Some(idx))
     } else {
-        cm.pull(&upstream, client_ip)
+        cm.pull(upstream, client_ip)
     };
 
     // If pool returned None (at capacity), we'll need to establish a new connection
@@ -899,9 +899,9 @@ async fn establish_and_send(
     let item: Option<PoolItem<PoolKey, SendRequestWrapper>> = if let Some(it) = existing_item {
         Some(it)
     } else if let Some(idx) = local_limit_idx {
-        cm.pull_with_local_limit(&upstream, client_ip, Some(idx))
+        cm.pull_with_local_limit(upstream, client_ip, Some(idx))
     } else {
-        cm.pull(&upstream, client_ip)
+        cm.pull(upstream, client_ip)
     };
 
     // If pool returned None (at capacity), we need to proceed without a pooled item
@@ -1140,10 +1140,10 @@ async fn send_via_wrapper(
     if status == StatusCode::SWITCHING_PROTOCOLS {
         let response_upgrade = Response::from_parts(parts.clone(), ());
         handle_upgrade(response_upgrade, extensions, ctx, item).await?;
-        return Ok(HttpResponse::Custom(Response::from_parts(
+        Ok(HttpResponse::Custom(Response::from_parts(
             parts,
             body.map_err(std::io::Error::other).boxed_unsync(),
-        )));
+        )))
     } else if config.intercept_errors && status.as_u16() >= 400 {
         // Intercept upstream error responses if configured.
         // When intercept_errors is true, upstream 4xx/5xx responses
