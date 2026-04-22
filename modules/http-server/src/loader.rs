@@ -286,6 +286,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
                         port_config,
                         config.global_config.clone(),
                         https_port,
+                        is_explicit_port,
                     )?;
                     new_cache.insert(port, cached.clone());
                 } else {
@@ -295,6 +296,7 @@ impl ModuleLoader for BasicHttpModuleLoader {
                         config.global_config.clone(),
                         port,
                         https_port,
+                        is_explicit_port,
                     )?);
                     modules.push(http_module.clone());
                     new_cache.insert(port, http_module);

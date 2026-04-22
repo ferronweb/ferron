@@ -58,6 +58,62 @@ pub struct HttpServerConfig {
 type ConfigArcSwap = Arc<ArcSwap<HttpServerConfig>>;
 
 #[inline]
+fn get_host_config_iter<'a>(
+    port_config: &'a ferron_core::config::ServerConfigurationPort,
+) -> impl Iterator<Item = &'a ferron_core::config::ServerConfigurationBlock> + 'a {
+    port_config
+        .hosts
+        .iter()
+        .map(|(_, block)| get_blocks_config_iter(block))
+        .flatten()
+}
+
+#[inline]
+fn get_blocks_config_iter<'a>(
+    block: &'a ferron_core::config::ServerConfigurationBlock,
+) -> Box<dyn Iterator<Item = &'a ferron_core::config::ServerConfigurationBlock> + 'a> {
+    Box::new(
+        std::iter::once(block)
+            .chain(
+                block
+                    .directives
+                    .get("if")
+                    .map_or((&[]).into_iter(), |entries| entries.iter())
+                    .filter_map(|entry| entry.children.as_ref())
+                    .map(get_blocks_config_iter)
+                    .flatten(),
+            )
+            .chain(
+                block
+                    .directives
+                    .get("if_not")
+                    .map_or((&[]).into_iter(), |entries| entries.iter())
+                    .filter_map(|entry| entry.children.as_ref())
+                    .map(get_blocks_config_iter)
+                    .flatten(),
+            )
+            .chain(
+                block
+                    .directives
+                    .get("handle_error")
+                    .map_or((&[]).into_iter(), |entries| entries.iter())
+                    .filter_map(|entry| entry.children.as_ref())
+                    .map(get_blocks_config_iter)
+                    .flatten(),
+            )
+            .chain(
+                block
+                    .directives
+                    .get("location")
+                    .map_or((&[]).into_iter(), |entries| entries.iter())
+                    .filter_map(|entry| entry.children.as_ref())
+                    .map(get_blocks_config_iter)
+                    .flatten(),
+            ),
+    )
+}
+
+#[inline]
 fn format_location(
     block_name: Option<&str>,
     span: Option<&ferron_core::config::ServerConfigurationSpan>,
@@ -256,6 +312,7 @@ impl BasicHttpModule {
         port_config: &ferron_core::config::ServerConfigurationPort,
         global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
         https_port: Option<u16>,
+        explicit_port: bool,
     ) -> Result<HttpServerConfig, Box<dyn std::error::Error>> {
         let mut enable_tls = false;
         let mut http_connection_options_resolver = RadixTree::new();
@@ -359,7 +416,7 @@ impl BasicHttpModule {
                             &mut enable_tls,
                         )?;
                     }
-                } else {
+                } else if !explicit_port {
                     // No `tls` directive present — automatically select provider (ACME or Local)
                     let hostname = host_config.0.host.as_deref();
                     let ip = host_config.0.ip.map(|ip| ip.to_string());
@@ -466,8 +523,7 @@ impl BasicHttpModule {
         // Build a merged config from global + all host blocks so that
         // `is_applicable` includes a stage if *any* host uses its directive.
         let port_config_merged = ferron_core::config::ServerConfigurationBlock::merge_from(
-            std::iter::once(global_config.as_ref())
-                .chain(port_config.hosts.iter().map(|(_, block)| block)),
+            std::iter::once(global_config.as_ref()).chain(get_host_config_iter(port_config)),
         );
         let merged_config = Some(&port_config_merged);
         let pipeline = registry
@@ -670,8 +726,15 @@ impl BasicHttpModule {
         global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
         port: u16,
         https_port: Option<u16>,
+        explicit_port: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let config = Self::build_config(registry, &port_config, global_config, https_port)?;
+        let config = Self::build_config(
+            registry,
+            &port_config,
+            global_config,
+            https_port,
+            explicit_port,
+        )?;
         Ok(Self {
             config: Arc::new(ArcSwap::new(Arc::new(config))),
             listeners: Mutex::new(Vec::new()),
@@ -689,12 +752,19 @@ impl BasicHttpModule {
         port_config: ferron_core::config::ServerConfigurationPort,
         global_config: Arc<ferron_core::config::ServerConfigurationBlock>,
         https_port: Option<u16>,
+        explicit_port: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Cancel the old reload token to trigger graceful shutdown of existing connections
         let old_config = self.config.load();
 
         // Build new configuration and atomically swap it
-        let new_config = Self::build_config(registry, &port_config, global_config, https_port)?;
+        let new_config = Self::build_config(
+            registry,
+            &port_config,
+            global_config,
+            https_port,
+            explicit_port,
+        )?;
         self.config.store(Arc::new(new_config));
 
         old_config.reload_token.cancel();

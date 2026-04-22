@@ -22,7 +22,7 @@ use crate::util::compression::{
     compress_streaming_zstd, Compression, NON_COMPRESSIBLE_FILE_EXTENSIONS,
 };
 use crate::util::etag::{
-    build_etag_response, construct_etag, extract_etag_inner, split_etag_request,
+    build_etag_header_map, construct_etag, extract_etag_inner, split_etag_request,
 };
 use crate::util::file_stream::FileStream;
 use crate::util::mime::get_content_type;
@@ -141,15 +141,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
             if let Some(if_none_match) = request.headers().get(header::IF_NONE_MATCH) {
                 if let Ok(val) = if_none_match.to_str() {
                     if method != Method::GET && method != Method::HEAD {
-                        let res = build_etag_response(
-                            StatusCode::PRECONDITION_FAILED,
-                            &etag,
-                            &vary_header,
-                            None,
-                            cache_control,
-                        );
+                        let header_map =
+                            build_etag_header_map(&etag, &vary_header, None, cache_control);
                         ctx.http.req = Some(request);
-                        ctx.http.res = Some(HttpResponse::Custom(res));
+                        ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
                         return Ok(false);
                     }
                     for tag in split_etag_request(val) {
@@ -188,7 +183,41 @@ impl Stage<HttpFileContext> for StaticFileStage {
             }
 
             // Handle If-Match (Ferron only emits weak ETags, so strong If-Match won't match)
-            // We let the request through since we can't satisfy strong ETag matching.
+            if let Some(if_match_value) = request.headers().get(header::IF_MATCH) {
+                match if_match_value.to_str() {
+                    Ok(if_match) => {
+                        if !matches!(request.method(), &Method::GET | &Method::HEAD) {
+                            // Precondition failed when method is not GET or HEAD
+                            let header_map =
+                                build_etag_header_map(&etag, &vary_header, None, cache_control);
+                            ctx.http.req = Some(request);
+                            ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
+                            return Ok(false);
+                        }
+
+                        // "*" means any version is acceptable
+                        // Ferron only emits weak ETags, and comparing a strong ETag with it would not match
+                        // for strong comparsions, for more details see RFC 7232
+                        if !split_etag_request(if_match)
+                            .into_iter()
+                            .any(|if_match| if_match == "*")
+                        {
+                            let header_map =
+                                build_etag_header_map(&etag, &vary_header, None, cache_control);
+                            ctx.http.req = Some(request);
+                            ctx.http.res = Some(HttpResponse::BuiltinError(412, Some(header_map)));
+                            return Ok(false);
+                        }
+                    }
+                    Err(_) => {
+                        let header_map =
+                            build_etag_header_map(&etag, &vary_header, None, cache_control);
+                        ctx.http.req = Some(request);
+                        ctx.http.res = Some(HttpResponse::BuiltinError(400, Some(header_map)));
+                        return Ok(false);
+                    }
+                }
+            }
         } else {
             vary_header = Some(if compression_possible {
                 "Accept-Encoding, Range".to_string()

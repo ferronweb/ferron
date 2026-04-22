@@ -66,14 +66,7 @@ impl Stage<HttpFileContext> for CgiStage {
             return Ok(true);
         }
 
-        if !ctx
-            .file_path
-            .strip_prefix(ctx.file_root.join("cgi-bin"))
-            .is_ok_and(|p| {
-                p.iter()
-                    .next()
-                    .is_some_and(|c| c.eq_ignore_ascii_case("cgi-bin"))
-            })
+        if !ctx.file_path.starts_with(ctx.file_root.join("cgi-bin"))
             && !ctx
                 .file_path
                 .extension()

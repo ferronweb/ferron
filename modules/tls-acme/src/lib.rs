@@ -38,16 +38,16 @@ use ferron_core::registry::{ProviderRegistry, RegistryBuilder, GLOBAL_REGISTRY};
 use ferron_core::{runtime::Runtime, Module};
 use ferron_dns::{DnsClient, DnsContext};
 use ferron_observability::{
-    build_composite_sink, Event, LogEvent, LogLevel, MetricAttributeValue, MetricEvent, MetricType,
-    MetricValue,
+    build_composite_sink, CompositeEventSink, Event, LogEvent, LogLevel, MetricAttributeValue,
+    MetricEvent, MetricType, MetricValue,
 };
 use ferron_tls::TcpTlsContext;
 use instant_acme::ChallengeType;
 use tokio::sync::RwLock;
 
 use crate::config::{parse_acme_config, AcmeConfigOrOnDemand, SniResolverLock};
-use crate::on_demand::OnDemandRequest;
-use crate::resolver::TcpTlsAcmeResolver;
+use crate::on_demand::{check_ask_endpoint, get_cached_domains, OnDemandRequest};
+use crate::resolver::{AcmeResolverInner, TcpTlsAcmeResolver};
 
 /// Shared state for the ACME background task.
 pub struct AcmeTaskState {
@@ -68,20 +68,17 @@ pub struct AcmeTaskState {
     /// Shared SNI resolver lock.
     pub sni_resolver_lock: SniResolverLock,
     /// Event sink for observability.
-    pub event_sink: Arc<ferron_observability::CompositeEventSink>,
+    pub event_sink: Arc<parking_lot::RwLock<Option<Arc<ferron_observability::CompositeEventSink>>>>,
 }
 
 impl Default for AcmeTaskState {
     fn default() -> Self {
-        // Default creates with an empty event sink - should be overridden before use
-        Self::new(Arc::new(ferron_observability::CompositeEventSink::new(
-            Vec::new(),
-        )))
+        Self::new()
     }
 }
 
 impl AcmeTaskState {
-    pub fn new(event_sink: Arc<ferron_observability::CompositeEventSink>) -> Self {
+    pub fn new() -> Self {
         let (tx, rx) = async_channel::unbounded();
         Self {
             configs: Arc::new(RwLock::new(Vec::new())),
@@ -92,8 +89,12 @@ impl AcmeTaskState {
             http_01_resolvers: Arc::new(RwLock::new(Vec::new())),
             memory_account_cache: Arc::new(RwLock::new(HashMap::new())),
             sni_resolver_lock: Arc::new(RwLock::new(HashMap::new())),
-            event_sink,
+            event_sink: Arc::new(parking_lot::RwLock::new(None)),
         }
+    }
+
+    fn set_event_sink(&self, event_sink: Arc<ferron_observability::CompositeEventSink>) {
+        *self.event_sink.write() = Some(event_sink);
     }
 }
 
@@ -116,14 +117,14 @@ impl GlobalTaskState {
     }
 
     fn get_or_init(&self) -> Arc<AcmeTaskState> {
-        self.inner
-            .get_or_init(|| {
-                let event_sink = self.event_sink.lock().clone().unwrap_or_else(|| {
-                    Arc::new(ferron_observability::CompositeEventSink::new(Vec::new()))
-                });
-                Arc::new(AcmeTaskState::new(event_sink))
-            })
-            .clone()
+        let state = self
+            .inner
+            .get_or_init(|| Arc::new(AcmeTaskState::new()))
+            .clone();
+        if let Some(event_sink) = self.event_sink.lock().clone() {
+            state.set_event_sink(event_sink);
+        }
+        state
     }
 
     #[allow(dead_code)]
@@ -204,17 +205,19 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
                 let ticketer = ferron_tls::builder::build_ticketer(ctx.config);
 
                 let acme_resolver = TcpTlsAcmeResolver::new(
-                    certified_key_lock,
+                    AcmeResolverInner::Eager(certified_key_lock),
                     tls_alpn_resolvers,
                     alpn_protocols,
                     ocsp_config,
                     ocsp_handle,
                     ticketer,
+                    None,
                 );
 
                 ctx.resolver = Some(Arc::new(acme_resolver));
             }
             AcmeConfigOrOnDemand::OnDemand(on_demand_config) => {
+                let sni_resolver_lock = on_demand_config.sni_resolver_lock.clone();
                 let challenge_type = on_demand_config.challenge_type.clone();
 
                 // Store on-demand config for later use by the background task
@@ -223,8 +226,6 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
                     .blocking_write()
                     .push(on_demand_config.clone_for_state());
 
-                // Install a placeholder resolver for on-demand mode
-                let certified_key_lock = Arc::new(RwLock::new(None));
                 let tls_alpn_resolvers = if challenge_type == ChallengeType::TlsAlpn01 {
                     Some(task_state.tls_alpn_01_resolvers.clone())
                 } else {
@@ -239,12 +240,13 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
                 let ticketer = ferron_tls::builder::build_ticketer(ctx.config);
 
                 let acme_resolver = TcpTlsAcmeResolver::new(
-                    certified_key_lock,
+                    AcmeResolverInner::OnDemand(sni_resolver_lock),
                     tls_alpn_resolvers,
                     alpn_protocols,
                     ocsp_config,
                     ocsp_handle,
                     ticketer,
+                    Some((task_state.on_demand_tx.clone(), on_demand_config.port)),
                 );
                 ctx.resolver = Some(Arc::new(acme_resolver));
             }
@@ -278,7 +280,10 @@ impl Module for TlsAcmeModule {
         let configs_guard = self.task_state.configs.blocking_read();
         let configs_count = configs_guard.len();
         if configs_count == 0 {
-            return Ok(());
+            if self.task_state.on_demand_configs.blocking_read().is_empty() {
+                // No eager or on-demand configs, nothing to do
+                return Ok(());
+            }
         }
 
         let domains: Vec<_> = configs_guard
@@ -288,7 +293,12 @@ impl Module for TlsAcmeModule {
             .collect();
         drop(configs_guard);
 
-        let event_sink = self.task_state.event_sink.clone();
+        let event_sink = self
+            .task_state
+            .event_sink
+            .read()
+            .clone()
+            .unwrap_or(Arc::new(CompositeEventSink::new(vec![])));
         emit_log(
             &event_sink,
             LogLevel::Info,
@@ -309,7 +319,6 @@ impl Module for TlsAcmeModule {
         let sni_resolver_lock = state.sni_resolver_lock.clone();
         let tls_alpn_01_resolvers = state.tls_alpn_01_resolvers.clone();
         let http_01_resolvers = state.http_01_resolvers.clone();
-        let event_sink = state.event_sink.clone();
 
         runtime.spawn_secondary_task(async move {
             run_acme_background_task(
@@ -344,6 +353,49 @@ async fn run_acme_background_task(
     // Track which (hostname, port) combinations we've already processed
     let mut existing_combinations = std::collections::HashSet::new();
 
+    // Insert cached on-demand config domains
+    for config in &on_demand_configs {
+        let domains = get_cached_domains(
+            config.port,
+            config.sni_hostname.as_deref(),
+            &config.cache_path,
+        )
+        .await;
+
+        for domain in domains {
+            emit_log(
+                &event_sink,
+                LogLevel::Info,
+                &format!(
+                    "On-demand certificate pre-loaded for SNI {domain}:{}",
+                    config.port
+                ),
+                "ferron_tls_acme",
+            );
+            emit_metric(
+                &event_sink,
+                "ferron.acme.on_demand_requests_total",
+                MetricValue::U64(1),
+                MetricType::Counter,
+                Some("{request}"),
+                Some("Total on-demand certificate requests"),
+                vec![],
+            );
+
+            let acme_config = crate::on_demand::convert_on_demand_config(
+                config,
+                domain,
+                memory_account_cache.clone(),
+                &sni_resolver_lock,
+                &tls_alpn_01_resolvers,
+                &http_01_resolvers,
+            )
+            .await;
+
+            configs.write().await.push(acme_config);
+        }
+    }
+
     // Pre-populate with eager configs that have domains
     {
         let configs_guard = configs.read().await;
@@ -361,18 +413,19 @@ async fn run_acme_background_task(
         "ferron_tls_acme",
     );
 
-    // Main provisioning loop
-    loop {
-        // Try to receive on-demand requests (non-blocking check first)
-        if let Ok((sni_hostname, port)) = on_demand_rx.try_recv() {
+    let event_sink2 = event_sink.clone();
+    let configs2 = configs.clone();
+    tokio::spawn(async move {
+        // On-demand request loop
+        while let Ok((sni_hostname, port)) = on_demand_rx.recv().await {
             emit_log(
-                &event_sink,
+                &event_sink2,
                 LogLevel::Info,
                 &format!("On-demand certificate requested for SNI {sni_hostname}:{port}"),
                 "ferron_tls_acme",
             );
             emit_metric(
-                &event_sink,
+                &event_sink2,
                 "ferron.acme.on_demand_requests_total",
                 MetricValue::U64(1),
                 MetricType::Counter,
@@ -389,6 +442,44 @@ async fn run_acme_background_task(
                     if on_demand_data.port == port {
                         if let Some(ref pattern) = on_demand_data.sni_hostname {
                             if crate::on_demand::match_hostname(pattern, &sni_hostname) {
+                                match check_ask_endpoint(
+                                    &sni_hostname,
+                                    on_demand_data.on_demand_ask.as_deref(),
+                                    on_demand_data.on_demand_ask_no_verification,
+                                )
+                                .await
+                                {
+                                    Ok(true) => (),
+                                    Ok(false) => {
+                                        emit_log(
+                                            &event_sink2,
+                                            LogLevel::Error,
+                                            &format!(
+                                                "The TLS certificate cannot be issued for \"{}\" \
+                                                hostname",
+                                                &sni_hostname
+                                            ),
+                                            "ferron_tls_acme",
+                                        );
+
+                                        continue;
+                                    }
+                                    Err(err) => {
+                                        emit_log(
+                                            &event_sink2,
+                                            LogLevel::Error,
+                                            &format!(
+                                                "Error while determining if the TLS certificate \
+                                                can be issued for \"{}\" hostname: {err}",
+                                                &sni_hostname
+                                            ),
+                                            "ferron_tls_acme",
+                                        );
+
+                                        continue;
+                                    }
+                                }
+
                                 let _ = crate::on_demand::add_domain_to_cache(
                                     port,
                                     Some(pattern),
@@ -407,7 +498,7 @@ async fn run_acme_background_task(
                                 )
                                 .await;
 
-                                configs.write().await.push(acme_config);
+                                configs2.write().await.push(acme_config);
                                 break;
                             }
                         }
@@ -415,7 +506,10 @@ async fn run_acme_background_task(
                 }
             }
         }
+    });
 
+    // Main provisioning loop
+    loop {
         // Provision certificates for all eager configs
         {
             let mut configs_guard = configs.write().await;
@@ -663,9 +757,7 @@ mod tests {
 
     #[test]
     fn test_task_state_initialization() {
-        let state = AcmeTaskState::new(Arc::new(ferron_observability::CompositeEventSink::new(
-            Vec::new(),
-        )));
+        let state = AcmeTaskState::new();
         assert!(state.configs.blocking_read().is_empty());
         assert!(state.tls_alpn_01_resolvers.blocking_read().is_empty());
         assert!(state.http_01_resolvers.blocking_read().is_empty());

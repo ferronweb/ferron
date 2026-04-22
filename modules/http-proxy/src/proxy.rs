@@ -13,7 +13,6 @@ use ferron_observability::{Event, LogEvent, LogLevel};
 use http::header::{HeaderName, HeaderValue};
 use http::{Request, Response, StatusCode};
 use http_body_util::{BodyExt, Empty};
-use hyper::body::Incoming;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
@@ -264,6 +263,8 @@ fn construct_proxy_request(
         HeaderName::from_static("x-real-ip"),
         HeaderValue::from_str(&client_ip_str)?,
     );
+
+    parts.version = http::Version::default();
 
     // W3C Trace Context propagation
     if let Some(tc) = ctx.get::<ferron_http::trace_context::TraceContextKey>() {
@@ -573,7 +574,7 @@ pub async fn execute_proxy(
                         config.lb_health_check_max_fails,
                     );
 
-                    if healthy_count > 0 {
+                    if healthy_count > 0 && metrics.selected_backends.len() < upstreams.len() {
                         ctx.events.emit(Event::Log(LogEvent {
                             level: LogLevel::Warn,
                             message: format!(
@@ -963,7 +964,45 @@ async fn establish_and_send(
                 }
             }
 
-            if config.http2_only || config.http2 {
+            if is_https {
+                let connector = TlsConnector::from(cached_tls_config(
+                    config.http2,
+                    config.http2_only,
+                    config.no_verification,
+                ));
+                let host = proxy_url.host().ok_or("upstream URL has no host")?;
+                let domain = ServerName::try_from(host.to_string())
+                    .map_err(|e| format!("Invalid server name: {e}"))?;
+                let tls_start = std::time::Instant::now();
+                let tls_stream = match connector.connect(domain, stream).await {
+                    Ok(s) => {
+                        metrics.tls_handshake_time_secs += tls_start.elapsed().as_secs_f64();
+                        s
+                    }
+                    Err(e) => {
+                        metrics.tls_handshake_failures += 1;
+                        ctx.events.emit(Event::Log(LogEvent {
+                            level: LogLevel::Warn,
+                            message: format!(
+                                "Reverse proxy: TLS handshake with {unix_path} failed: {e}"
+                            ),
+                            target: LOG_TARGET,
+                        }));
+                        return Err(
+                            std::io::Error::other(format!("TLS handshake failed: {e}")).into()
+                        );
+                    }
+                };
+
+                let negotiated_h2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
+                let use_http2 = (config.http2 && negotiated_h2) || config.http2_only;
+
+                if use_http2 {
+                    http2_handshake_unix(tls_stream, drop_guard).await?
+                } else {
+                    http1_handshake_unix(tls_stream, drop_guard).await?
+                }
+            } else if config.http2_only {
                 http2_handshake_unix(stream, drop_guard).await?
             } else {
                 http1_handshake_unix(stream, drop_guard).await?
@@ -1035,14 +1074,14 @@ async fn establish_and_send(
             };
 
             let negotiated_h2 = tls_stream.get_ref().1.alpn_protocol() == Some(b"h2");
-            let use_http2 = (config.http2 || config.http2_only) && negotiated_h2;
+            let use_http2 = (config.http2 && negotiated_h2) || config.http2_only;
 
             if use_http2 {
                 http2_handshake(tls_stream, drop_guard).await?
             } else {
                 http1_handshake(tls_stream, drop_guard).await?
             }
-        } else if config.http2_only || config.http2 {
+        } else if config.http2_only {
             http2_handshake(stream, drop_guard).await?
         } else {
             http1_handshake(stream, drop_guard).await?
@@ -1079,6 +1118,7 @@ async fn send_via_wrapper(
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     let request = construct_proxy_request(ctx, config, proxy_url)?;
+    let extensions = request.extensions().clone();
 
     let start = std::time::Instant::now();
     let response = match wrapper.send_request(request).await {
@@ -1094,80 +1134,66 @@ async fn send_via_wrapper(
     let status = response.status();
     metrics.status_code = Some(status.as_u16());
 
-    // Handle HTTP 101 Switching Protocols (upgrades)
-    if status == StatusCode::SWITCHING_PROTOCOLS {
-        handle_upgrade(response, ctx, item).await?;
-        return Ok(HttpResponse::BuiltinError(101, None));
-    }
-
-    // Intercept upstream error responses if configured.
-    // When intercept_errors is false (default), upstream 4xx/5xx responses
-    // are replaced with Ferron's built-in error response.
-    // When intercept_errors is true, the full upstream response is passed through.
-    if !config.intercept_errors && status.as_u16() >= 400 {
-        return Ok(HttpResponse::BuiltinError(status.as_u16(), None));
-    }
-
     let (parts, body) = response.into_parts();
 
-    // For keepalive, we extract the wrapper and create a PoolReturnInfo.
-    // This prevents the PoolItem's Drop from running, and instead we manually
-    // return the connection via PoolReturnInfo when TrackedBody is dropped.
-    let pool_return_info = if enable_keepalive && !wrapper.is_closed() {
-        Some(crate::send_request::PoolReturnInfo::from_item(
-            item, wrapper, is_unix,
-        ))
+    // Handle HTTP 101 Switching Protocols (upgrades)
+    if status == StatusCode::SWITCHING_PROTOCOLS {
+        let response_upgrade = Response::from_parts(parts.clone(), ());
+        handle_upgrade(response_upgrade, extensions, ctx, item).await?;
+        return Ok(HttpResponse::Custom(Response::from_parts(
+            parts,
+            body.map_err(std::io::Error::other).boxed_unsync(),
+        )));
+    } else if config.intercept_errors && status.as_u16() >= 400 {
+        // Intercept upstream error responses if configured.
+        // When intercept_errors is true, upstream 4xx/5xx responses
+        // are replaced with Ferron's built-in error response.
+        // When intercept_errors is false (default), the full upstream response is passed through.
+        Ok(HttpResponse::BuiltinError(status.as_u16(), None))
     } else {
-        // Item will be dropped here, returning connection to pool via its Drop impl
-        // (wrapper is consumed by the response and not returned to pool)
-        drop(item);
-        None
-    };
+        // For keepalive, we extract the wrapper and create a PoolReturnInfo.
+        // This prevents the PoolItem's Drop from running, and instead we manually
+        // return the connection via PoolReturnInfo when TrackedBody is dropped.
+        let pool_return_info = if enable_keepalive && !wrapper.is_closed() {
+            Some(crate::send_request::PoolReturnInfo::from_item(
+                item, wrapper, is_unix,
+            ))
+        } else {
+            // Item will be dropped here, returning connection to pool via its Drop impl
+            // (wrapper is consumed by the response and not returned to pool)
+            drop(item);
+            None
+        };
 
-    let tracked_body = TrackedBody::new(
-        body.map_err(std::io::Error::other),
-        tracked_connection,
-        pool_return_info,
-    );
+        let tracked_body = TrackedBody::new(
+            body.map_err(std::io::Error::other),
+            tracked_connection,
+            pool_return_info,
+        );
 
-    let mut builder = Response::builder().status(parts.status);
-    for (name, value) in parts.headers {
-        if let Some(n) = name {
-            builder = builder.header(n, value);
+        let mut builder = Response::builder().status(parts.status);
+        for (name, value) in parts.headers {
+            if let Some(n) = name {
+                builder = builder.header(n, value);
+            }
         }
-    }
-    let response = builder
-        .body(tracked_body.boxed_unsync())
-        .expect("Failed to build response");
+        let response = builder
+            .body(tracked_body.boxed_unsync())
+            .expect("Failed to build response");
 
-    Ok(HttpResponse::Custom(response))
+        Ok(HttpResponse::Custom(response))
+    }
 }
 
 /// Handle HTTP 101 Switching Protocols (WebSocket upgrades).
 async fn handle_upgrade(
-    response: Response<Incoming>,
+    resp_for_upgrade: Response<()>,
+    req_extensions: http::Extensions,
     ctx: &mut HttpContext,
     mut item: PoolItem<PoolKey, SendRequestWrapper>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (resp_parts, _) = response.into_parts();
-    let resp_for_upgrade = Response::from_parts(resp_parts.clone(), ());
-
-    let upgrade_request = Request::builder()
-        .method(
-            ctx.req
-                .as_ref()
-                .map(|r| r.method().clone())
-                .unwrap_or_default(),
-        )
-        .uri(
-            ctx.req
-                .as_ref()
-                .map(|r| r.uri().clone())
-                .unwrap_or_default(),
-        )
-        .version(ctx.req.as_ref().map(|r| r.version()).unwrap_or_default())
-        .body(Empty::<Bytes>::new().map_err(|e| match e {}).boxed_unsync())
-        .map_err(|e| format!("Failed to build upgrade request: {e}"))?;
+    let mut upgrade_request = Request::new(Empty::<Bytes>::new());
+    *upgrade_request.extensions_mut() = req_extensions;
 
     let events = ctx.events.clone();
 
@@ -1178,12 +1204,10 @@ async fn handle_upgrade(
     // Prevent item's Drop from running (we handle cleanup manually)
     std::mem::forget(item);
 
+    let upgrade_future = vibeio_http::prepare_upgrade(&mut upgrade_request);
     vibeio::spawn(async move {
         match hyper::upgrade::on(resp_for_upgrade).await {
             Ok(upgraded_backend) => {
-                let mut upgrade_request = upgrade_request;
-                let upgrade_future = vibeio_http::prepare_upgrade(&mut upgrade_request);
-
                 if let Some(upgraded_future) = upgrade_future {
                     match upgraded_future.await {
                         Some(upgraded_client) => {

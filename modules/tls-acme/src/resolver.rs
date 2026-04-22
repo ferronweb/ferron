@@ -17,29 +17,61 @@ use tokio_rustls::server::TlsStream;
 use tokio_rustls::StartHandshake;
 use vibeio::net::PollTcpStream;
 
-use crate::challenge::ACME_TLS_ALPN_NAME;
+use crate::{challenge::ACME_TLS_ALPN_NAME, config::SniResolverLock, on_demand::OnDemandRequest};
+
+/// The inner resolver for `AcmeResolver`.
+///
+/// Used to store either an eager-loaded certified key or an on-demand resolver.
+#[derive(Debug)]
+pub enum AcmeResolverInner {
+    Eager(Arc<RwLock<Option<Arc<CertifiedKey>>>>),
+    OnDemand(SniResolverLock),
+}
 
 /// An ACME resolver that resolves a single certified key.
 ///
 /// Used as the inner resolver in `TcpTlsAcmeResolver`.
 #[derive(Debug)]
 pub struct AcmeResolver {
-    pub(crate) certified_key_lock: Arc<RwLock<Option<Arc<CertifiedKey>>>>,
+    pub(crate) certified_key_lock: AcmeResolverInner,
+    on_demand_tx: Option<(async_channel::Sender<OnDemandRequest>, u16)>,
 }
 
 impl AcmeResolver {
     /// Creates a new `AcmeResolver` from a certified key lock.
-    pub fn new(certified_key_lock: Arc<RwLock<Option<Arc<CertifiedKey>>>>) -> Self {
-        Self { certified_key_lock }
+    pub fn new(
+        certified_key_lock: AcmeResolverInner,
+        on_demand_tx: Option<(async_channel::Sender<OnDemandRequest>, u16)>,
+    ) -> Self {
+        Self {
+            certified_key_lock,
+            on_demand_tx,
+        }
     }
 }
 
 impl ResolvesServerCert for AcmeResolver {
-    fn resolve(&self, _client_hello: rustls::server::ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
-        self.certified_key_lock
-            .try_read()
-            .ok()
-            .and_then(|g| g.clone())
+    fn resolve(&self, client_hello: rustls::server::ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
+        let server_name_string = client_hello.server_name().map(String::from);
+        let certified_key_option = match &self.certified_key_lock {
+            AcmeResolverInner::Eager(i) => i.try_read().ok().and_then(|g| g.clone()),
+            AcmeResolverInner::OnDemand(i) => i
+                .try_read()
+                .ok()
+                .and_then(|g| g.get(client_hello.server_name().unwrap_or("")).cloned())
+                .and_then(move |r| r.resolve(client_hello)),
+        };
+
+        if certified_key_option.is_none() {
+            if let Some((tx, port)) = &self.on_demand_tx {
+                if let Some(server_name) = server_name_string {
+                    // On-demand TLS channel would be unbounded...
+                    let _ = tx.try_send((server_name, *port));
+                }
+            }
+        }
+
+        certified_key_option
     }
 }
 
@@ -83,14 +115,15 @@ impl TcpTlsAcmeResolver {
     /// * `ticketer` - Optional ticket key ticketer.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        certified_key_lock: Arc<RwLock<Option<Arc<CertifiedKey>>>>,
+        certified_key_lock: AcmeResolverInner,
         tls_alpn_01_resolvers: Option<Arc<RwLock<Vec<crate::challenge::TlsAlpn01DataLock>>>>,
         alpn_protocols: Vec<Vec<u8>>,
         ocsp_config: OcspConfig,
         ocsp_handle: OcspHandle,
         ticketer: Option<Arc<dyn rustls::server::ProducesTickets>>,
+        on_demand_tx: Option<(async_channel::Sender<OnDemandRequest>, u16)>,
     ) -> Self {
-        let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock));
+        let acme_resolver = Arc::new(AcmeResolver::new(certified_key_lock, on_demand_tx));
 
         Self {
             acme_resolver,

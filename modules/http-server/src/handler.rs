@@ -1031,7 +1031,12 @@ async fn request_handler_inner(
     .await;
 
     // Handle error configurations for 4xx and 5xx responses
-    if let Some(HttpResponse::BuiltinError(status, _)) = ctx.res {
+    if let HttpResponse::BuiltinError(status, _) = ctx
+        .res
+        .as_ref()
+        .unwrap_or(&HttpResponse::BuiltinError(404, None))
+    {
+        let status = *status;
         if status >= 400 {
             ctx.previous_error = Some(status);
             ctx.req = Some(cloned_request);
@@ -1052,7 +1057,7 @@ async fn request_handler_inner(
                         error_resolution.configuration.layers.last(),
                         resolution_configuration2.layers.last(),
                     ) {
-                        Arc::ptr_eq(config1, config2)
+                        !Arc::ptr_eq(config1, config2)
                     } else {
                         false
                     };

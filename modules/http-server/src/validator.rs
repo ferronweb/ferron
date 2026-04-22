@@ -142,6 +142,20 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
             ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
         ], {});
 
+        // Conditional directives
+        if config.has_directive("if") {
+            used_directives.insert("if".to_string());
+        }
+        if config.has_directive("if_not") {
+            used_directives.insert("if_not".to_string());
+        }
+        if config.has_directive("location") {
+            used_directives.insert("location".to_string());
+        }
+        if config.has_directive("handle_error") {
+            used_directives.insert("handle_error".to_string());
+        }
+
         Ok(())
     }
 }

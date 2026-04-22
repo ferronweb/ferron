@@ -115,9 +115,7 @@ mod tests {
 
     #[test]
     fn test_task_state_has_http01_resolvers() {
-        let state = AcmeTaskState::new(Arc::new(ferron_observability::CompositeEventSink::new(
-            Vec::new(),
-        )));
+        let state = AcmeTaskState::new();
         assert!(state.http_01_resolvers.blocking_read().is_empty());
     }
 }

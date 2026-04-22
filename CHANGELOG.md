@@ -14,8 +14,12 @@
 
 ### Fixed
 
+- Connections to HTTP/2 backends in reverse proxy were aborted.
+- Error interception configuration blocks weren't applied properly.
 - HTTP to HTTPS redirect wasn't enabled by default.
+- HTTP upgrades weren't performed properly.
 - HTTP-01 ACME challenge failed due to challenge not being served for implicit automatic TLS.
+- On-demand automatic TLS wasn't functioning correctly.
 - Some ACME events were logged only to the console, not observability backends.
 - TLS certificates with local CA weren't checked if they're expired.
 

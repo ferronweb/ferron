@@ -1,41 +1,38 @@
 //! ETag construction, parsing, and validation utilities.
 
-use bytes::Bytes;
 use http::header::{self, HeaderValue};
-use http::{Response, StatusCode};
-use http_body_util::combinators::UnsyncBoxBody;
-use http_body_util::{BodyExt, Empty};
-use std::io;
 
-/// Build a response with ETag and Vary headers.
-pub fn build_etag_response(
-    status: StatusCode,
+/// Build a header map with ETag and Vary headers.
+pub fn build_etag_header_map(
     etag: &str,
     vary: &Option<String>,
     content_type: Option<&str>,
     cache_control: Option<&str>,
-) -> Response<UnsyncBoxBody<Bytes, io::Error>> {
-    let mut builder = Response::builder()
-        .status(status)
-        .header(header::ETAG, construct_etag(etag, None, true));
+) -> http::HeaderMap {
+    let mut header_map = http::HeaderMap::new();
+    header_map.insert(
+        header::ETAG,
+        HeaderValue::from_str(&construct_etag(etag, None, true)).expect("invalid etag header"),
+    );
     if let Some(v) = vary {
-        builder = builder.header(
+        header_map.insert(
             header::VARY,
             HeaderValue::from_str(v).expect("invalid vary header"),
         );
     }
     if let Some(ct) = content_type {
-        builder = builder.header(header::CONTENT_TYPE, ct);
+        header_map.insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_str(ct).expect("invalid content-type header"),
+        );
     }
     if let Some(cc) = cache_control {
-        builder = builder.header(
+        header_map.insert(
             header::CACHE_CONTROL,
             HeaderValue::from_str(cc).expect("invalid cache-control header"),
         );
     }
-    builder
-        .body(Empty::new().map_err(|_| unreachable!()).boxed_unsync())
-        .expect("failed to build response")
+    header_map
 }
 
 /// Split an ETag request header into individual ETags.

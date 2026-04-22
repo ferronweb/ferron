@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::cache::{get_hostname_cache_key, AcmeCache};
-use crate::config::{AcmeConfig, AcmeOnDemandConfigData};
+use crate::config::{build_rustls_client_config, AcmeConfig, AcmeOnDemandConfigData};
 use crate::resolver::AcmeResolver;
 
 /// Reads cached domains for an on-demand config.
@@ -87,7 +87,10 @@ pub async fn convert_on_demand_config(
     // Register the resolver
     sni_resolver_lock.write().await.insert(
         sni_hostname.clone(),
-        Arc::new(AcmeResolver::new(certified_key_lock.clone())),
+        Arc::new(AcmeResolver::new(
+            crate::resolver::AcmeResolverInner::Eager(certified_key_lock.clone()),
+            None,
+        )),
     );
 
     // Add challenge data locks to shared resolver lists
@@ -152,6 +155,61 @@ pub fn match_hostname(pattern: &str, hostname: &str) -> bool {
     }
 
     false
+}
+
+pub async fn check_ask_endpoint(
+    domain: &str,
+    on_demand_ask: Option<&str>,
+    no_verification: bool,
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    let Some(on_demand_ask) = on_demand_ask else {
+        // No on-demand ask endpoint configured, allow issuance
+        return Ok(true);
+    };
+    let on_demand_tls_ask_endpoint = on_demand_ask.parse::<hyper::Uri>()?;
+    let mut url_parts = on_demand_tls_ask_endpoint.into_parts();
+    let path_and_query_str = if let Some(path_and_query) = url_parts.path_and_query {
+        let query = path_and_query.query();
+        let query = if let Some(query) = query {
+            format!("{}&domain={}", query, urlencoding::encode(&domain))
+        } else {
+            format!("domain={}", urlencoding::encode(&domain))
+        };
+        format!("{}?{}", path_and_query.path(), query)
+    } else {
+        format!("/?domain={}", urlencoding::encode(&domain))
+    };
+
+    url_parts.path_and_query = Some(match path_and_query_str.parse() {
+        Ok(parsed) => parsed,
+        Err(err) => Err(anyhow::anyhow!(
+            "Error while formatting the URL for on-demand TLS request: {err}"
+        ))?,
+    });
+
+    let endpoint_url = match hyper::Uri::from_parts(url_parts) {
+        Ok(parsed) => parsed,
+        Err(err) => Err(anyhow::anyhow!(
+            "Error while formatting the URL for on-demand TLS request: {err}"
+        ))?,
+    };
+
+    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+        .build::<_, http_body_util::Empty<hyper::body::Bytes>>(
+        hyper_rustls::HttpsConnectorBuilder::new()
+            .with_tls_config(build_rustls_client_config(no_verification)?)
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .build(),
+    );
+    let request = hyper::Request::builder()
+        .method(hyper::Method::GET)
+        .uri(endpoint_url)
+        .body(http_body_util::Empty::<hyper::body::Bytes>::new())?;
+    let response = client.request(request).await?;
+
+    Ok(response.status().is_success())
 }
 
 #[cfg(test)]
