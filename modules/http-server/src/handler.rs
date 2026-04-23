@@ -1621,7 +1621,7 @@ async fn try_resolve_index_files(
                 let canonical = vibeio::fs::canonicalize(&index_path)
                     .await
                     .map_err(FilePipelineExecutionError::Io)?;
-                if !canonical.starts_with(&canonical_root) {
+                if !canonical.starts_with(canonical_root) {
                     return Err(FilePipelineExecutionError::Forbidden);
                 }
 
