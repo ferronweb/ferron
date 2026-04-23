@@ -24,9 +24,3 @@ If you have any questions about Ferron, you can choose one of the available opti
 If you suspect a bug in Ferron, you can [open an issue](https://github.com/ferronweb/ferron/issues) on our GitHub repository.
 
 **Thank you for taking part in the Ferron community!** 😊
-
-## Notes and troubleshooting
-
-- This documentation is a work in progress and may not be complete.
-- If you need help, use the [support page](/support).
-- If you suspect a bug in Ferron, open an issue on the GitHub repository.

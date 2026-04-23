@@ -101,9 +101,3 @@ Configuration files from Ferron 2 are **not yet compatible** with Ferron 3. See 
 ## Contributing
 
 Feedback, bug reports, and testing are welcome. When reporting issues, include your configuration file, `--verbose` output, and steps to reproduce.
-
-## Notes and troubleshooting
-
-- Ferron 3 is still in alpha, so configuration and behavior may change between releases.
-- The feature matrix above reflects the current implementation status, not the final roadmap.
-- If you run into problems, check the linked directive pages for exact syntax and validation rules before filing an issue.
