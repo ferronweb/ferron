@@ -1,89 +1,41 @@
-# Ferron 3 - Web Server
+# Repository Guidelines
 
-## Project Overview
+## Project Structure & Module Organization
+Ferron 3 is a Rust workspace. Core runtime and shared infrastructure live in `core/`, the `ferron` CLI and service entrypoints are in `bin/`, feature crates are under `modules/*`, and shared domain types are under `types/*`. End-to-end test assets live in `e2e/`, and user-facing documentation is in `docs/`. Static assets are kept close to the crates that serve them, such as `modules/http-static/assets/` and `bin/assets/`.
 
-Ferron 3 is a high-performance, modular web server written in Rust. It features a plugin-based architecture that supports HTTP serving, reverse proxying, static file serving, automatic TLS via ACME, rate limiting, URL rewriting, compression, basic authentication, caching, and comprehensive observability (logging, metrics, OTLP export).
-
-The project is organized as a Rust workspace with the following key components:
-
-- **`bin/`** - The `ferron` CLI and service entrypoints (daemon mode, Windows service support).
-- **`core/`** - Shared runtime, module registry, logging, shutdown handling, and configuration infrastructure.
-- **`modules/`** - Pluggable feature crates including:
-  - HTTP: `http-server`, `http-static`, `http-proxy`, `http-fproxy`, `http-headers`, `http-ratelimit`, `http-response`, `http-rewrite`, `http-basicauth`, `http-cache`, `http-compression`
-  - Config: `config-json`, `config-ferronconf`
-  - TLS: `tls-manual`, `tls-acme`, `ocsp-stapler`
-  - Observability: `observability-consolelog`, `observability-logfile`, `observability-otlp`, `observability-format-json`, `observability-format-text`, `observability-process-metrics`
-  - Admin: `admin-api`
-- **`types/`** - Shared domain types for HTTP, TLS, DNS, OCSP, and observability (`ferron-http`, `ferron-tls`, `ferron-dns`, `ferron-ocsp`, `ferron-observability`).
-- **`docs/`** - Project documentation and configuration reference. Styled after `ferron/docs` (sentence-case headers, YAML frontmatter, user-facing tone, `**Configuration example:**` blocks, `## Notes and troubleshooting` sections). Navigation structure in `docs/docLinks.ts`.
-
-## Building and Running
-
+## Build, Test, and Development Commands
 Run commands from the repository root.
 
-### Build & Test
-```bash
-cargo build --workspace              # Build all crates
-cargo run -p ferron -- --help        # Inspect CLI commands and flags
-cargo test --workspace               # Run unit tests across workspace crates
-cargo test -p ferron-http-server     # Run tests for a specific module
-cargo bench -p ferron-http-server --features bench  # Run HTTP resolver benchmarks
-```
+- `cargo build --workspace` builds all workspace crates.
+- `cargo test --workspace` runs the full test suite.
+- `cargo test -p ferron-http-server` runs tests for one crate or module.
+- `cargo run -p ferron -- --help` inspects CLI commands.
+- `cargo run -p ferron -- run -c ferron.conf` starts the server with a config file.
+- `cargo fmt --all --check` verifies formatting.
+- `cargo clippy --workspace --all-targets -- -D warnings` enforces lint cleanliness.
 
-### Linting & Formatting
-```bash
-cargo fmt --all --check              # Verify formatting
-cargo clippy --workspace --all-targets -- -D warnings  # Fail on lint warnings
-```
+## Coding Style & Naming Conventions
+Use Rust 2021 conventions, `rustfmt`-clean code, and 4-space indentation. Keep names `snake_case` for files, modules, and functions, and `PascalCase` for types and traits. Follow the existing extension-point naming patterns such as `*ModuleLoader`, `*Configuration*`, and `*Provider*`. Prefer small, focused modules that match the workspace layout.
 
-### Running the Server
-```bash
-cargo run -p ferron -- run -c ferron.conf          # Run with config file
-cargo run -p ferron -- validate -c ferron.conf     # Validate configuration
-cargo run -p ferron -- adapt -c ferron.conf        # Output config as JSON
-```
+## Testing Guidelines
+Tests are usually inline `#[cfg(test)]` modules, especially in `core/`, `bin/`, and `modules/http-server/`. Add tests for parser, registry, runtime, TLS, and config changes. Avoid trivial delegation tests, stdlib behavior tests, and sleep-based timing tests. Keep unit tests close to the component they cover.
 
-### Daemon Mode (Unix)
-```bash
-cargo run -p ferron -- daemon -c ferron.conf --pid-file /var/run/ferron.pid
-```
+## Commit & Pull Request Guidelines
+Recent history uses Conventional Commits: `feat:`, `fix:`, `refactor:`, `perf:`, `docs:`, `test:`, and `chore:`. Keep commit subjects short and imperative. Pull requests should explain the change, list validation performed, and link related issues when relevant. Include screenshots only for UI or docs changes that need visual confirmation.
 
-## Configuration
+## Security & Configuration Tips
+If you change configuration directives or syntax, read the relevant pages in `docs/configuration/` first and update documentation after the implementation is complete. Validate config-related work with `cargo run -p ferron -- validate -c ferron.conf` before merging.
 
-Ferron uses a flexible configuration system with multiple adapters:
-
-- **`.conf` files** - Parsed by `config-ferronconf` (custom syntax, see [docs/configuration/](docs/configuration/))
-- **`.json` files** - Parsed by `config-json`
-
-Configuration is loaded from `./ferron.conf` by default. Use `--config` / `-c` to specify a different path, and `--config-adapter` to force a specific adapter. The `--verbose` flag enables debug-level logging.
-
-See [docs/configuration/index.md](docs/configuration/index.md) for the full configuration reference.
-
-> **IMPORTANT:** Before implementing any feature that introduces or modifies configuration directives, **read the relevant documentation in `docs/configuration/` first.** This prevents introducing invalid or inconsistent configuration syntax, directive naming, or scoping. The configuration reference defines the accepted directive names, scopes (global, admin, HTTP host), and syntax conventions that all implementations must follow.
-
-## Development Conventions
-
-- **Rust 2021 edition** with `rustfmt`-clean code.
-- 4-space indentation, `snake_case` for modules/functions/files, `PascalCase` for structs/enums/traits.
-- Extension-point naming: `*ModuleLoader`, `*Configuration*`, `*Provider*`.
-- **Conventional Commits**: `feat:`, `fix:`, `refactor:`, `chore:`.
-- Tests are inline `#[cfg(test)]` modules, primarily in `core/`, `bin/`, and `modules/http-server/`.
-- Benchmarks live in `modules/http-server/benches/`.
-- Parser, registry, runtime, and TLS changes should always include tests.
-- **Documentation is written after implementation is complete.** Implement the feature first, then update the relevant `docs/configuration/` pages to reflect the final behavior and syntax.
-
-### Unneeded and redundant tests
+## Unneeded and redundant tests
 
 To maintain a clean and efficient test suite, avoid adding or maintaining tests in the following categories:
-
 - **Trivial Delegation Tests:** Avoid tests that merely verify that a wrapper method correctly delegates to an underlying library (e.g., `HttpContext` methods wrapping `typemap-rev`). These should be covered by integration tests rather than repetitive unit tests.
 - **Internal Component Duplication:** Keep unit tests close to the components they test (e.g., in `stage2.rs` for radix tree logic). Avoid duplicating detailed internal tests in high-level integration files like `resolver.rs`.
 - **Trivial Property Tests:** Do not add tests for fundamental language features or trivial struct initialization (e.g., "roundtrip" tests that only verify field assignment).
 - **Inefficient Concurrent Tests:** Avoid tests that use `thread::sleep` for timing. Use proper synchronization or mock clocks if timing is necessary.
 - **Standard Library Behavior:** Do not test the parsing or error-handling logic of the Rust standard library (e.g., bare `IpAddr` or `SocketAddr` parsing).
 
-### Documentation style
-
+## Documentation style
 - **Sentence case** for all headers (only first word, proper nouns, acronyms, and directive names capitalized).
 - **YAML frontmatter** on every page (`title` and `description`).
 - **User-facing tone** — second-person ("you", "your"), approachable intros.
@@ -95,11 +47,3 @@ To maintain a clean and efficient test suite, avoid adding or maintaining tests 
 - **Cross-references** use relative `./file.md` paths within configuration directory.
 - `docs/docLinks.ts` defines the sidebar navigation structure.
 - Directive descriptions follow the pattern: "This directive specifies [description]. Default: `value`".
-
-## Architecture Highlights
-
-- **Module-based architecture**: Features are loaded as pluggable modules at runtime.
-- **DAG-based registry**: Stages and providers are ordered via dependency graphs.
-- **Hot-reload support**: Configuration changes trigger graceful reload without full restart.
-- **Cross-platform**: Supports Unix (daemon mode with PID file, signal handling) and Windows (native service management).
-- **Custom allocator**: Uses `malloc-best-effort` (`BEMalloc`) as the global allocator.
