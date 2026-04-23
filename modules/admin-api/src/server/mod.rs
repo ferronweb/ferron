@@ -26,7 +26,7 @@ pub struct AdminApiModule {
     /// Atomic swap for admin config (endpoint enable/disable, listen address).
     config: Arc<ArcSwap<AdminConfig>>,
     /// Full server configuration, used by the `/config` endpoint.
-    full_config: Arc<ServerConfiguration>,
+    full_config: Arc<ArcSwap<ServerConfiguration>>,
     /// Token cancelled on reload to gracefully shut down the admin listener.
     reload_token: ArcSwap<CancellationToken>,
 }
@@ -40,7 +40,7 @@ impl AdminApiModule {
     ) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
             config: Arc::new(ArcSwap::new(Arc::new(admin_config))),
-            full_config,
+            full_config: Arc::new(ArcSwap::new(full_config)),
             reload_token: ArcSwap::from_pointee(CancellationToken::new()),
         })
     }
@@ -54,7 +54,7 @@ impl AdminApiModule {
         &self,
         _registry: &Arc<Registry>,
         admin_config: AdminConfig,
-        _full_config: Arc<ServerConfiguration>,
+        full_config: Arc<ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Cancel the old reload token to trigger graceful shutdown
         let old_token = self.reload_token.load();
@@ -62,6 +62,7 @@ impl AdminApiModule {
 
         // Atomically swap the config
         self.config.store(Arc::new(admin_config));
+        self.full_config.store(full_config);
 
         // Create a new reload token
         self.reload_token.store(Arc::new(CancellationToken::new()));
@@ -81,7 +82,7 @@ impl Module for AdminApiModule {
 
     fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
         let config = self.config.load_full();
-        let full_config = self.full_config.clone();
+        let full_config = self.full_config.load_full();
 
         // Clone the CancellationToken so the spawned task owns it
         let reload_token = (*self.reload_token.load_full()).clone();

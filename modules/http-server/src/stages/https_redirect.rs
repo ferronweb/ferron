@@ -21,17 +21,6 @@ impl Default for HttpsRedirectStage {
     }
 }
 
-/// Check whether the request has already been served over HTTPS by examining
-/// the `X-Forwarded-Proto` header.  This prevents redirect loops when the
-/// server sits behind a TLS-terminating reverse proxy.
-fn is_already_https_via_header(ctx: &HttpContext) -> bool {
-    ctx.req
-        .as_ref()
-        .and_then(|r| r.headers().get("x-forwarded-proto"))
-        .and_then(|v| v.to_str().ok())
-        .is_some_and(|v| v.eq_ignore_ascii_case("https"))
-}
-
 /// Build a full HTTPS URL from the current request context.
 fn build_https_url(ctx: &HttpContext) -> Option<String> {
     let req = ctx.req.as_ref()?;
@@ -97,10 +86,7 @@ impl Stage<HttpContext> for HttpsRedirectStage {
             Some(p) => p,
             None => return Ok(true),
         };
-        if ctx.encrypted
-            || is_already_https_via_header(ctx)
-            || ctx.local_address.port() == https_port
-        {
+        if ctx.encrypted || ctx.local_address.port() == https_port {
             return Ok(true);
         }
 

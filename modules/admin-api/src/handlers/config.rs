@@ -17,6 +17,7 @@ const SENSITIVE_DIRECTIVES: &[&str] = &[
 /// Check if a directive name is considered sensitive and should be redacted.
 fn is_sensitive(name: &str) -> bool {
     SENSITIVE_DIRECTIVES.contains(&name)
+        || name.contains(|c| SENSITIVE_DIRECTIVES.iter().any(|s| s.contains(c)))
 }
 
 /// Serialize a single configuration value to JSON.
