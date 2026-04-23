@@ -2,9 +2,11 @@
 //!
 //! Reads the `X-Forwarded-For` or `Forwarded` header (as configured via the
 //! `client_ip_from_header` directive) and overwrites `ctx.remote_address` with
-//! the extracted client IP. This is disabled by default.
+//! the extracted client IP when the connecting peer is in the configured
+//! trusted-proxy allowlist. This is disabled by default.
 
 use async_trait::async_trait;
+use cidr::IpCidr;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::HttpContext;
@@ -37,6 +39,12 @@ impl ClientIpHeader {
 }
 
 pub struct ClientIpFromHeaderStage;
+
+#[derive(Clone, Debug)]
+struct ClientIpFromHeaderConfig {
+    header: ClientIpHeader,
+    trusted_proxies: Vec<IpCidr>,
+}
 
 impl Default for ClientIpFromHeaderStage {
     #[inline]
@@ -124,14 +132,51 @@ fn find_forwarded_param<'a>(element: &'a str, param_name: &str) -> Option<&'a st
     None
 }
 
+fn parse_trusted_proxy_allowlist(
+    children: Option<&ferron_core::config::ServerConfigurationBlock>,
+    ctx: &HttpContext,
+) -> Vec<IpCidr> {
+    let mut trusted_proxies = Vec::new();
+    let Some(children) = children else {
+        return trusted_proxies;
+    };
+
+    if let Some(entries) = children.directives.get("trusted_proxy") {
+        for entry in entries {
+            for arg in &entry.args {
+                if let Some(value) = arg.as_string_with_interpolations(ctx) {
+                    if let Ok(cidr) = value.parse::<IpCidr>() {
+                        trusted_proxies.push(cidr);
+                    }
+                }
+            }
+        }
+    }
+
+    trusted_proxies
+}
+
 /// Resolve which header to use from the configuration. Returns `None` if the
-/// directive is absent (meaning this stage is a no-op).
-fn resolve_header_from_config(ctx: &HttpContext) -> Option<ClientIpHeader> {
-    let value = ctx
-        .configuration
-        .get_value("client_ip_from_header", false)?;
-    let str_val = value.as_str()?;
-    ClientIpHeader::from_str(str_val)
+/// directive is absent or invalid (meaning this stage is a no-op).
+fn resolve_config_from_context(ctx: &HttpContext) -> Option<ClientIpFromHeaderConfig> {
+    let entry = ctx.configuration.get_entry("client_ip_from_header", true)?;
+    let header_value = entry.args.first()?.as_string_with_interpolations(ctx)?;
+    let header = ClientIpHeader::from_str(&header_value)?;
+    let trusted_proxies = parse_trusted_proxy_allowlist(entry.children.as_ref(), ctx);
+
+    Some(ClientIpFromHeaderConfig {
+        header,
+        trusted_proxies,
+    })
+}
+
+fn is_trusted_proxy(ip: IpAddr, trusted_proxies: &[IpCidr]) -> bool {
+    if trusted_proxies.is_empty() {
+        return false;
+    }
+
+    let ip = ip.to_canonical();
+    trusted_proxies.iter().any(|cidr| cidr.contains(&ip))
 }
 
 #[async_trait(?Send)]
@@ -156,17 +201,21 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
 
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        let header_type = match resolve_header_from_config(ctx) {
-            Some(h) => h,
+        let config = match resolve_config_from_context(ctx) {
+            Some(c) => c,
             None => return Ok(true), // Directive not set — no-op
         };
+
+        if !is_trusted_proxy(ctx.remote_address.ip(), &config.trusted_proxies) {
+            return Ok(true);
+        }
 
         let req = match ctx.req.as_ref() {
             Some(r) => r,
             None => return Ok(true), // No request yet — let pipeline continue
         };
 
-        let header_value = match req.headers().get(header_type.header_name()) {
+        let header_value = match req.headers().get(config.header.header_name()) {
             Some(v) => match v.to_str() {
                 Ok(s) => s,
                 Err(_) => return Ok(true), // Non-UTF8 header — skip
@@ -174,7 +223,7 @@ impl Stage<HttpContext> for ClientIpFromHeaderStage {
             None => return Ok(true), // Header not present — skip
         };
 
-        let ip = match header_type {
+        let ip = match config.header {
             ClientIpHeader::XForwardedFor => extract_x_forwarded_for(header_value),
             ClientIpHeader::Forwarded => extract_forwarded_for(header_value),
         };
@@ -212,6 +261,7 @@ mod tests {
         x_forwarded_for: Option<&str>,
         forwarded: Option<&str>,
         config_directive: Option<&str>,
+        trusted_proxies: &[&str],
     ) -> HttpContext {
         let mut builder = Request::builder().uri("/path");
         if let Some(h) = x_forwarded_for {
@@ -255,7 +305,29 @@ mod tests {
                         directive.to_string(),
                         None,
                     )],
-                    children: None,
+                    children: if trusted_proxies.is_empty() {
+                        None
+                    } else {
+                        let mut nested_directives = StdHashMap::new();
+                        nested_directives.insert(
+                            "trusted_proxy".to_string(),
+                            vec![ServerConfigurationDirectiveEntry {
+                                args: trusted_proxies
+                                    .iter()
+                                    .map(|cidr| {
+                                        ServerConfigurationValue::String(cidr.to_string(), None)
+                                    })
+                                    .collect(),
+                                children: None,
+                                span: None,
+                            }],
+                        );
+                        Some(ServerConfigurationBlock {
+                            directives: Arc::new(nested_directives),
+                            matchers: StdHashMap::new(),
+                            span: None,
+                        })
+                    },
                     span: None,
                 }],
             );
@@ -275,7 +347,12 @@ mod tests {
 
     #[tokio::test]
     async fn extracts_single_ip_from_x_forwarded_for() {
-        let mut ctx = make_test_context(Some("192.0.2.1"), None, Some("x-forwarded-for"));
+        let mut ctx = make_test_context(
+            Some("192.0.2.1"),
+            None,
+            Some("x-forwarded-for"),
+            &["10.0.0.1/32"],
+        );
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
@@ -289,6 +366,7 @@ mod tests {
             Some("192.0.2.1, 10.0.0.1, 172.16.0.1"),
             None,
             Some("x-forwarded-for"),
+            &["10.0.0.1/32"],
         );
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
@@ -298,7 +376,12 @@ mod tests {
 
     #[tokio::test]
     async fn handles_ipv6_in_x_forwarded_for() {
-        let mut ctx = make_test_context(Some("2001:db8::1"), None, Some("x-forwarded-for"));
+        let mut ctx = make_test_context(
+            Some("2001:db8::1"),
+            None,
+            Some("x-forwarded-for"),
+            &["10.0.0.1/32"],
+        );
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
@@ -307,7 +390,7 @@ mod tests {
 
     #[tokio::test]
     async fn skips_when_x_forwarded_for_header_missing() {
-        let mut ctx = make_test_context(None, None, Some("x-forwarded-for"));
+        let mut ctx = make_test_context(None, None, Some("x-forwarded-for"), &["10.0.0.1/32"]);
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
@@ -317,7 +400,7 @@ mod tests {
 
     #[tokio::test]
     async fn skips_when_directive_not_set() {
-        let mut ctx = make_test_context(Some("192.0.2.1"), None, None);
+        let mut ctx = make_test_context(Some("192.0.2.1"), None, None, &[]);
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
@@ -326,7 +409,26 @@ mod tests {
 
     #[tokio::test]
     async fn skips_when_x_forwarded_for_value_is_invalid() {
-        let mut ctx = make_test_context(Some("not-an-ip"), None, Some("x-forwarded-for"));
+        let mut ctx = make_test_context(
+            Some("not-an-ip"),
+            None,
+            Some("x-forwarded-for"),
+            &["10.0.0.1/32"],
+        );
+        let stage = ClientIpFromHeaderStage;
+        let result = stage.run(&mut ctx).await.unwrap();
+        assert!(result);
+        assert_eq!(ctx.remote_address.ip().to_string(), "10.0.0.1");
+    }
+
+    #[tokio::test]
+    async fn skips_when_remote_ip_is_not_trusted_proxy() {
+        let mut ctx = make_test_context(
+            Some("192.0.2.1"),
+            None,
+            Some("x-forwarded-for"),
+            &["192.168.0.0/16"],
+        );
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
@@ -337,8 +439,12 @@ mod tests {
 
     #[tokio::test]
     async fn extracts_ip_from_forwarded_for() {
-        let mut ctx =
-            make_test_context(None, Some("for=192.0.2.60;proto=https"), Some("forwarded"));
+        let mut ctx = make_test_context(
+            None,
+            Some("for=192.0.2.60;proto=https"),
+            Some("forwarded"),
+            &["10.0.0.1/32"],
+        );
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
@@ -351,6 +457,7 @@ mod tests {
             None,
             Some("for=\"192.0.2.60\";proto=https"),
             Some("forwarded"),
+            &["10.0.0.1/32"],
         );
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
@@ -360,7 +467,12 @@ mod tests {
 
     #[tokio::test]
     async fn extracts_ipv6_from_forwarded_for() {
-        let mut ctx = make_test_context(None, Some("for=\"[2001:db8::1]\""), Some("forwarded"));
+        let mut ctx = make_test_context(
+            None,
+            Some("for=\"[2001:db8::1]\""),
+            Some("forwarded"),
+            &["10.0.0.1/32"],
+        );
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
@@ -373,6 +485,7 @@ mod tests {
             None,
             Some("for=192.0.2.60;proto=https, for=10.0.0.1;proto=http"),
             Some("forwarded"),
+            &["10.0.0.1/32"],
         );
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
@@ -382,7 +495,7 @@ mod tests {
 
     #[tokio::test]
     async fn skips_when_forwarded_header_missing() {
-        let mut ctx = make_test_context(None, None, Some("forwarded"));
+        let mut ctx = make_test_context(None, None, Some("forwarded"), &["10.0.0.1/32"]);
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
@@ -395,6 +508,7 @@ mod tests {
             None,
             Some("proto=https;by=proxy.example.com"),
             Some("forwarded"),
+            &["10.0.0.1/32"],
         );
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
@@ -404,7 +518,12 @@ mod tests {
 
     #[tokio::test]
     async fn skips_when_forwarded_for_is_obfuscated() {
-        let mut ctx = make_test_context(None, Some("for=_hidden"), Some("forwarded"));
+        let mut ctx = make_test_context(
+            None,
+            Some("for=_hidden"),
+            Some("forwarded"),
+            &["10.0.0.1/32"],
+        );
         let stage = ClientIpFromHeaderStage;
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);

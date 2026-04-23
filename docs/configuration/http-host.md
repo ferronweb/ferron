@@ -80,14 +80,22 @@ Notes:
 
 ### Client IP from forwarded headers
 
-- `client_ip_from_header <header: string>` (global scope)
+- `client_ip_from_header <header: string> { ... }` (global scope)
   - This directive specifies the header to read the client IP from. Supported values: `x-forwarded-for`, `forwarded`. Default: disabled
+
+| Nested directive | Arguments | Description | Default |
+| --- | --- | --- | --- |
+| `trusted_proxy` | `<ip-or-cidr: string>...` | Trusted reverse-proxy IPs or CIDR ranges allowed to supply forwarded client IP headers. | none |
 
 **Configuration example:**
 
 ```ferron
 {
-    client_ip_from_header x-forwarded-for
+    client_ip_from_header x-forwarded-for {
+        # Only trust forwarded headers from these proxy networks.
+        trusted_proxy "10.0.0.0/8"
+        trusted_proxy "192.168.0.0/16"
+    }
 }
 
 example.com {
@@ -103,7 +111,7 @@ Reads the `X-Forwarded-For` header and extracts the **first (leftmost)** IP addr
 
 Reads the `Forwarded` header and extracts the first `for=` token. Both quoted and unquoted values are supported. IPv6 addresses are also supported.
 
-**Trust boundary warning:** This directive blindly trusts the header value. If the server is directly exposed to the internet (not behind a trusted proxy), a malicious client could spoof their IP address. Only enable this when running behind a trusted reverse proxy or load balancer.
+**Trust boundary warning:** Ferron only trusts forwarded client IP headers when the connecting peer matches at least one `trusted_proxy` entry. If the allowlist is empty, the header is ignored. Keep this list limited to the reverse proxies or load balancers that you control.
 
 ### HTTP protocol settings
 

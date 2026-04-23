@@ -71,7 +71,7 @@ impl Stage<HttpContext> for HttpsRedirectStage {
     fn constraints(&self) -> Vec<StageConstraint> {
         vec![
             StageConstraint::After("headers".to_string()),
-            StageConstraint::After("client_ip".to_string()),
+            StageConstraint::After("client_ip_from_header".to_string()),
         ]
     }
 
@@ -88,6 +88,17 @@ impl Stage<HttpContext> for HttpsRedirectStage {
         };
         if ctx.encrypted || ctx.local_address.port() == https_port {
             return Ok(true);
+        }
+
+        if let Some(req) = ctx.req.as_ref() {
+            if req
+                .headers()
+                .get("x-forwarded-proto")
+                .and_then(|value| value.to_str().ok())
+                .is_some_and(|value| value.eq_ignore_ascii_case("https"))
+            {
+                return Ok(true);
+            }
         }
 
         // Check per-host configuration: `https_redirect false` disables the redirect

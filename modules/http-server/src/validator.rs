@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use cidr::IpCidr;
 use ferron_core::{config::ServerConfigurationValue, validate_directive, validate_nested};
 
 pub struct HttpConfigurationValidator;
@@ -138,9 +141,83 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         ], {});
 
         // Client IP from forwarded header
-        validate_directive!(config, used_directives, client_ip_from_header, optional args(1) => [
-            ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)
-        ], {});
+        if let Some(entries) = config.directives.get("client_ip_from_header") {
+            used_directives.insert("client_ip_from_header".to_string());
+            for entry in entries {
+                if entry.args.len() != 1 {
+                    return Err(format!(
+                        "Invalid directive 'client_ip_from_header': expected 1 argument, got {}",
+                        entry.args.len()
+                    )
+                    .into());
+                }
+                if !matches!(
+                    entry.args.first(),
+                    Some(ServerConfigurationValue::String(_, _))
+                        | Some(ServerConfigurationValue::InterpolatedString(_, _))
+                ) {
+                    return Err(
+                        "Invalid directive 'client_ip_from_header': argument type mismatch".into(),
+                    );
+                }
+
+                if let Some(children) = &entry.children {
+                    for directive_name in children.directives.keys() {
+                        if directive_name != "trusted_proxy" {
+                            return Err(format!(
+                                "Invalid directive 'client_ip_from_header': unknown nested directive '{directive_name}'"
+                            )
+                            .into());
+                        }
+                    }
+
+                    if let Some(trusted_proxy_entries) = children.directives.get("trusted_proxy") {
+                        used_directives.insert("trusted_proxy".to_string());
+                        for trusted_proxy_entry in trusted_proxy_entries {
+                            if trusted_proxy_entry.args.is_empty() {
+                                return Err(
+                                    "Invalid directive 'trusted_proxy': expected at least one IP or CIDR"
+                                        .into(),
+                                );
+                            }
+
+                            for arg in &trusted_proxy_entry.args {
+                                if !matches!(
+                                    arg,
+                                    ServerConfigurationValue::String(_, _)
+                                        | ServerConfigurationValue::InterpolatedString(_, _)
+                                ) {
+                                    return Err(
+                                        "Invalid directive 'trusted_proxy': argument type mismatch"
+                                            .into(),
+                                    );
+                                }
+
+                                let expanded = match arg.as_string_with_interpolations(&HashMap::<
+                                    String,
+                                    String,
+                                >::new(
+                                )) {
+                                    Some(value) => value,
+                                    None => {
+                                        return Err(
+                                            "Invalid directive 'trusted_proxy': argument type mismatch"
+                                                .into(),
+                                        );
+                                    }
+                                };
+                                if expanded.parse::<IpCidr>().is_err() {
+                                    return Err(format!(
+                                        "Invalid directive 'trusted_proxy': '{expanded}' is not a valid IP or CIDR"
+                                    )
+                                    .into());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // Conditional directives
         if config.has_directive("if") {
@@ -157,5 +234,99 @@ impl ferron_core::config::validator::ConfigurationValidator for HttpConfiguratio
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ferron_core::config::validator::ConfigurationValidator;
+    use ferron_core::config::{
+        ServerConfigurationBlock, ServerConfigurationDirectiveEntry, ServerConfigurationValue,
+    };
+    use std::collections::HashSet;
+
+    fn client_ip_config(children: Option<ServerConfigurationBlock>) -> ServerConfigurationBlock {
+        let mut directives = std::collections::HashMap::new();
+        directives.insert(
+            "client_ip_from_header".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "x-forwarded-for".to_string(),
+                    None,
+                )],
+                children,
+                span: None,
+            }],
+        );
+
+        ServerConfigurationBlock {
+            directives: std::sync::Arc::new(directives),
+            matchers: std::collections::HashMap::new(),
+            span: None,
+        }
+    }
+
+    fn trusted_proxy_block() -> ServerConfigurationBlock {
+        let mut directives = std::collections::HashMap::new();
+        directives.insert(
+            "trusted_proxy".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "10.0.0.0/8".to_string(),
+                    None,
+                )],
+                children: None,
+                span: None,
+            }],
+        );
+
+        ServerConfigurationBlock {
+            directives: std::sync::Arc::new(directives),
+            matchers: std::collections::HashMap::new(),
+            span: None,
+        }
+    }
+
+    #[test]
+    fn validates_client_ip_from_header_with_trusted_proxy_allowlist() {
+        let validator = HttpConfigurationValidator;
+        let config = client_ip_config(Some(trusted_proxy_block()));
+        let mut used_directives = HashSet::new();
+
+        validator
+            .validate_block(&config, &mut used_directives, true)
+            .expect("valid config should pass");
+
+        assert!(used_directives.contains("client_ip_from_header"));
+        assert!(used_directives.contains("trusted_proxy"));
+    }
+
+    #[test]
+    fn rejects_unknown_nested_directive_under_client_ip_from_header() {
+        let mut children_directives = std::collections::HashMap::new();
+        children_directives.insert(
+            "bogus".to_string(),
+            vec![ServerConfigurationDirectiveEntry {
+                args: vec![ServerConfigurationValue::String(
+                    "10.0.0.0/8".to_string(),
+                    None,
+                )],
+                children: None,
+                span: None,
+            }],
+        );
+
+        let config = client_ip_config(Some(ServerConfigurationBlock {
+            directives: std::sync::Arc::new(children_directives),
+            matchers: std::collections::HashMap::new(),
+            span: None,
+        }));
+
+        let validator = HttpConfigurationValidator;
+        let mut used_directives = HashSet::new();
+        assert!(validator
+            .validate_block(&config, &mut used_directives, true)
+            .is_err());
     }
 }
