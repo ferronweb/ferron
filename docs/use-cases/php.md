@@ -1,6 +1,6 @@
 ---
 title: PHP hosting
-description: "Host PHP sites on Ferron using CGI or FastCGI (PHP-FPM or PHP-CGI), with example KDL configs and troubleshooting notes."
+description: "Host PHP sites on Ferron using CGI or FastCGI (PHP-FPM or PHP-CGI), with Ferron configuration examples and troubleshooting notes."
 ---
 
 Ferron can run PHP applications through CGI or FastCGI. For most deployments, FastCGI is the recommended approach because PHP worker processes stay alive between requests, which reduces process startup overhead and improves throughput.

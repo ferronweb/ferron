@@ -279,13 +279,23 @@ OTLP batching is handled by the collector. For high-volume sites:
 - **Remote collectors** - consider connection pooling and retries
 - **TLS overhead** - use `no_verify` cautiously in development only
 
-## Troubleshooting
+## Notes and troubleshooting
+
+### Troubleshooting
 
 ### Connection issues
 
 - Verify collector endpoints are reachable: `curl -v https://collector:4317`
 - Check firewall rules allow outbound connections
 - Test with `no_verify true` temporarily to rule out TLS issues
+
+### Notes
+
+- **TLS certificate verification** - disabling with `no_verify true` should only be used for development or testing with self-signed certificates.
+- **Protocol compatibility** - not all collectors support all protocols. Check your collector's documentation.
+- **Endpoint paths** - HTTP endpoints require full paths (e.g., `/v1/metrics`), while gRPC typically uses just the port.
+- **Authorization format** - some collectors expect `Bearer token`, others expect just the token. Check your collector's requirements.
+- **Signal correlation** - all signals from the same request share the same trace context, enabling correlated analysis in your observability backend.
 
 ### Authentication problems
 
@@ -305,15 +315,7 @@ OTLP batching is handled by the collector. For high-volume sites:
 - Check that endpoints are correct (ports, paths)
 - Ensure service_name matches expected values
 
-## Notes
-
-- **TLS certificate verification** - disabling with `no_verify true` should only be used for development or testing with self-signed certificates.
-- **Protocol compatibility** - not all collectors support all protocols. Check your collector's documentation.
-- **Endpoint paths** - HTTP endpoints require full paths (e.g., `/v1/metrics`), while gRPC typically uses just the port.
-- **Authorization format** - some collectors expect `Bearer token`, others expect just the token. Check your collector's requirements.
-- **Signal correlation** - all signals from the same request share the same trace context, enabling powerful correlated analysis in your observability backend.
-
-## See also
+### See also
 
 - [Observability and logging](/docs/v3/configuration/observability-logging) for general observability configuration
 - [Prometheus metrics](/docs/v3/configuration/observability-prometheus) for native Prometheus metrics export

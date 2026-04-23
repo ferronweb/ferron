@@ -72,7 +72,7 @@ example.com {
 
 A request to `/legacy/foo` is first rewritten to `/modern/foo`, then the second rule rewrites it to `/current/foo`.
 
-## Rewrite troubleshooting
+## Notes and troubleshooting
 
 - Use `rewrite_log true` while debugging to verify which rules match. Each rewrite operation is logged to the error log.
 - Prefer specific rules before broad catch-all rules.

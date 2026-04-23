@@ -158,7 +158,7 @@ You can configure Ferron like this:
 example.com {
     location /agenda {
         # It proxies /agenda/example to http://calender.example.net:5000/agenda/example
-        proxy http://calender.example.net:5000
+        proxy http://calender.example.net:5000/agenda
     }
 
     location / {

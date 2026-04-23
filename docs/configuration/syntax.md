@@ -161,13 +161,13 @@ To enable hot reloading, specify a `watch` configuration adapter parameter:
 ferron run --config-params 'watch=1;file=ferron.conf' --config-adapter ferronconf
 ```
 
-## Notes
+## Notes and troubleshooting
 
 - Where validation and runtime behavior differ, the directive pages call that out explicitly.
 - Duration strings accept suffixes like `30m`, `1h`, `90s`, `1d`. Plain numbers without a suffix are treated as hours.
 - Boolean directives can be written as bare flags (equivalent to `true`), or explicitly as `true` or `false`.
 
-## See also
+### See also
 
 - [Conditionals and variables](/docs/v3/configuration/conditionals)
 - [Routing and URL processing](/docs/v3/configuration/routing-url-processing) (`location`, `if`, `if_not`)

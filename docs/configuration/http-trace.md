@@ -1,5 +1,5 @@
 ---
-title: Trace Context
+title: Trace context
 description: Propagation and generation of W3C Trace Context (traceparent / tracestate).
 ---
 
@@ -20,7 +20,7 @@ These directives are configured within the `http` block.
 **Configuration example:**
 
 ```ferron
-example.com
+example.com {
     http {
         trace {
             generate true

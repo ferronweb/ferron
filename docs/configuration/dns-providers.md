@@ -282,7 +282,7 @@ All string directives support environment variable interpolation. This avoids st
 ```ferron
 dns {
     provider "cloudflare"
-    api_key $env(CF_API_TOKEN)
+    api_key "{{env.CF_API_TOKEN}}"
 }
 ```
 

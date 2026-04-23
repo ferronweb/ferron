@@ -7,8 +7,6 @@ description: "Documentation for the Ferron web server: configuration reference, 
 
 To explore the documentation, either click on one of the positions in the sidebar, or go into the menu on the top right, and click on one of the positions in the menu.
 
-**Note:** this documentation is a work in progress and may not be complete.
-
 ## First time?
 
 **Are you new to Ferron? No problem.** Start by [installing Ferron](/docs/v3/installation/building-from-source) on your system.
@@ -26,3 +24,9 @@ If you have any questions about Ferron, you can choose one of the available opti
 If you suspect a bug in Ferron, you can [open an issue](https://github.com/ferronweb/ferron/issues) on our GitHub repository.
 
 **Thank you for taking part in the Ferron community!** 😊
+
+## Notes and troubleshooting
+
+- This documentation is a work in progress and may not be complete.
+- If you need help, use the [support page](/support).
+- If you suspect a bug in Ferron, open an issue on the GitHub repository.

@@ -1,5 +1,5 @@
 ---
-title: "Use cases: CGI applications"
+title: "CGI applications"
 description: "Host legacy CGI applications on Ferron, including extension mapping, interpreters, environment variables, and security considerations."
 ---
 
