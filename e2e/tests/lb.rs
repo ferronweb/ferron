@@ -128,6 +128,9 @@ ferron-two-random:80 {
         .unwrap();
     let client = reqwest::Client::new();
 
+    // Fix test flakiness, maybe caused by networking issues?
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
     // Helper to test an algorithm
     let test_algo = |host: &'static str| {
         let client = client.clone();

@@ -279,11 +279,10 @@ impl Module for TlsAcmeModule {
     fn start(&self, runtime: &mut Runtime) -> Result<(), Box<dyn std::error::Error>> {
         let configs_guard = self.task_state.configs.blocking_read();
         let configs_count = configs_guard.len();
-        if configs_count == 0
-            && self.task_state.on_demand_configs.blocking_read().is_empty() {
-                // No eager or on-demand configs, nothing to do
-                return Ok(());
-            }
+        if configs_count == 0 && self.task_state.on_demand_configs.blocking_read().is_empty() {
+            // No eager or on-demand configs, nothing to do
+            return Ok(());
+        }
 
         let domains: Vec<_> = configs_guard
             .iter()
