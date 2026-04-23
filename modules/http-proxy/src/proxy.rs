@@ -529,7 +529,7 @@ pub async fn execute_proxy(
             })?;
         let is_https = proxy_request_url.scheme_str() == Some("https");
         let client_ip = config.proxy_header.map(|_| ctx.remote_address.ip());
-        let local_limit_idx = cm.get_local_limit(&selected.upstream);
+        let local_limit = cm.get_local_limit(&selected.upstream);
         let idle_timeout = idle_timeout_for_upstream(config, &selected.upstream);
 
         match try_send_with_pool(
@@ -539,7 +539,7 @@ pub async fn execute_proxy(
             &selected.upstream,
             &proxy_request_url,
             client_ip,
-            local_limit_idx,
+            local_limit,
             idle_timeout,
             is_https,
             conn_state,
@@ -648,7 +648,7 @@ async fn try_send_with_pool(
     upstream: &UpstreamInner,
     proxy_url: &http::Uri,
     client_ip: Option<IpAddr>,
-    local_limit_idx: Option<usize>,
+    local_limit: Option<usize>,
     idle_timeout: Duration,
     is_https: bool,
     _conn_state: Option<&ConnectionsTrackState>,
@@ -656,15 +656,16 @@ async fn try_send_with_pool(
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     // Collect non-ready-but-alive connections for racing
-    let mut pending_items: Vec<PoolItem<PoolKey, SendRequestWrapper>> = Vec::new();
+    let mut pending_items: Vec<PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>> =
+        Vec::new();
     // Track a non-ready-but-kept item slot for reuse in establish_and_send
     // (avoids double-pull when the connection is dead and can't be raced).
-    let mut reusable_item: Option<PoolItem<PoolKey, SendRequestWrapper>> = None;
+    let mut reusable_item: Option<PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>> = None;
 
     // Pull one connection from the pool and check readiness
     let pull_start = std::time::Instant::now();
-    let item = if let Some(idx) = local_limit_idx {
-        cm.pull_with_local_limit(upstream, client_ip, Some(idx))
+    let item = if let Some(limit) = local_limit {
+        cm.pull_with_local_limit(upstream, client_ip, Some(limit))
     } else {
         cm.pull(upstream, client_ip)
     };
@@ -680,7 +681,7 @@ async fn try_send_with_pool(
                 upstream,
                 proxy_url,
                 client_ip,
-                local_limit_idx,
+                local_limit,
                 is_https,
                 _conn_state,
                 tracked_connection,
@@ -717,7 +718,7 @@ async fn try_send_with_pool(
             tracked_connection,
             true,
             upstream.proxy_unix.is_some(),
-            local_limit_idx,
+            local_limit,
             metrics,
         )
         .await;
@@ -749,7 +750,7 @@ async fn try_send_with_pool(
                     tracked_connection,
                     true,
                     upstream.proxy_unix.is_some(),
-                    local_limit_idx,
+                    local_limit,
                     metrics,
                 )
                 .await;
@@ -767,7 +768,7 @@ async fn try_send_with_pool(
         upstream,
         proxy_url,
         client_ip,
-        local_limit_idx,
+        local_limit,
         is_https,
         _conn_state,
         tracked_connection,
@@ -781,9 +782,9 @@ async fn try_send_with_pool(
 ///
 /// Returns the item if one becomes ready, or `None` if all fail.
 async fn wait_for_any_ready(
-    pending_items: &mut Vec<PoolItem<PoolKey, SendRequestWrapper>>,
+    pending_items: &mut Vec<PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>>,
     idle_timeout: Duration,
-) -> Option<PoolItem<PoolKey, SendRequestWrapper>> {
+) -> Option<PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>> {
     if pending_items.is_empty() {
         return None;
     }
@@ -889,20 +890,21 @@ async fn establish_and_send(
     upstream: &UpstreamInner,
     proxy_url: &http::Uri,
     client_ip: Option<IpAddr>,
-    local_limit_idx: Option<usize>,
+    local_limit: Option<usize>,
     is_https: bool,
     _conn_state: Option<&ConnectionsTrackState>,
     tracked_connection: Option<Arc<()>>,
-    existing_item: Option<PoolItem<PoolKey, SendRequestWrapper>>,
+    existing_item: Option<PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>>,
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
-    let item: Option<PoolItem<PoolKey, SendRequestWrapper>> = if let Some(it) = existing_item {
-        Some(it)
-    } else if let Some(idx) = local_limit_idx {
-        cm.pull_with_local_limit(upstream, client_ip, Some(idx))
-    } else {
-        cm.pull(upstream, client_ip)
-    };
+    let item: Option<PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>> =
+        if let Some(it) = existing_item {
+            Some(it)
+        } else if let Some(limit) = local_limit {
+            cm.pull_with_local_limit(upstream, client_ip, Some(limit))
+        } else {
+            cm.pull(upstream, client_ip)
+        };
 
     // If pool returned None (at capacity), we need to proceed without a pooled item
     let mut item = match item {
@@ -1097,7 +1099,7 @@ async fn establish_and_send(
         tracked_connection,
         config.keepalive,
         is_unix,
-        local_limit_idx,
+        local_limit,
         metrics,
     )
     .await
@@ -1109,12 +1111,12 @@ async fn send_via_wrapper(
     ctx: &mut HttpContext,
     config: &ProxyConfig,
     mut wrapper: SendRequestWrapper,
-    item: PoolItem<PoolKey, SendRequestWrapper>,
+    item: PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>,
     proxy_url: &http::Uri,
     tracked_connection: Option<Arc<()>>,
     enable_keepalive: bool,
     is_unix: bool,
-    _local_limit_idx: Option<usize>,
+    _local_limit: Option<usize>,
     metrics: &mut ProxyMetrics,
 ) -> Result<HttpResponse, Box<dyn std::error::Error + Send + Sync>> {
     let request = construct_proxy_request(ctx, config, proxy_url)?;
@@ -1190,7 +1192,7 @@ async fn handle_upgrade(
     resp_for_upgrade: Response<()>,
     req_extensions: http::Extensions,
     ctx: &mut HttpContext,
-    mut item: PoolItem<PoolKey, SendRequestWrapper>,
+    mut item: PoolItem<PoolKey, Arc<UpstreamInner>, SendRequestWrapper>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut upgrade_request = Request::new(Empty::<Bytes>::new());
     *upgrade_request.extensions_mut() = req_extensions;

@@ -242,8 +242,8 @@ pub struct PoolReturnInfo {
     key: Option<crate::connections::PoolKey>,
     /// The connection wrapper to return.
     wrapper: Option<SendRequestWrapper>,
-    /// Local limit index, if one was applied.
-    local_limit_idx: Option<usize>,
+    /// Local limit key, if one was applied.
+    local_limit_key: Option<Arc<crate::upstream::UpstreamInner>>,
     /// Whether this is a Unix pool connection.
     is_unix: bool,
 }
@@ -254,7 +254,11 @@ impl PoolReturnInfo {
     /// This consumes the item without running its Drop impl (via `ManuallyDrop`),
     /// allowing the wrapper to be stored separately and returned later.
     pub fn from_item(
-        item: crate::connpool_single::PoolItem<crate::connections::PoolKey, SendRequestWrapper>,
+        item: crate::connpool_single::PoolItem<
+            crate::connections::PoolKey,
+            Arc<crate::upstream::UpstreamInner>,
+            SendRequestWrapper,
+        >,
         wrapper: SendRequestWrapper,
         is_unix: bool,
     ) -> Self {
@@ -264,7 +268,7 @@ impl PoolReturnInfo {
         Self {
             key: item.key().cloned(),
             wrapper: Some(wrapper),
-            local_limit_idx: item.local_limit_index(),
+            local_limit_key: item.local_limit_key().cloned(),
             is_unix,
         }
     }
@@ -279,7 +283,7 @@ impl Drop for PoolReturnInfo {
                 crate::connections::return_connection_to_pool(
                     key,
                     wrapper,
-                    self.local_limit_idx,
+                    self.local_limit_key.take(),
                     self.is_unix,
                 );
             }

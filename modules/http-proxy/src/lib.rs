@@ -295,6 +295,8 @@ impl ModuleLoader for ReverseProxyModuleLoader {
         modules: &mut Vec<Arc<dyn Module>>,
         config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let _ = self.state.as_ref().map(|s| s.get_conn_manager());
+
         // Read global concurrent connections limit if configured
         if let Some(val) = config
             .global_config
@@ -419,7 +421,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             }
         };
 
-        // Set per-upstream local limits (idempotent — only registered once)
+        // Set or update per-upstream local limits.
         let conn_manager = self.state.get_conn_manager();
         for uc in &config.upstreams {
             let limit = match uc {
