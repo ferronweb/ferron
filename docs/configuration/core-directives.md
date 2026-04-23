@@ -141,7 +141,7 @@ The `admin` block configures the built-in administration endpoints. If the `admi
 ```ferron
 {
     admin {
-        listen 127.0.0.1:8081
+        listen "127.0.0.1:8081"
 
         health true
         status true

@@ -10,9 +10,9 @@ This page documents directives for configuring Ferron to act as an HTTP forward 
 ```ferron
 proxy.example.com {
     forward_proxy {
-        allow_domains example.com *.example.com
+        allow_domains "example.com" "*.example.com"
         allow_ports 80 443
-        deny_ips 127.0.0.0/8 169.254.169.254/32
+        deny_ips "127.0.0.0/8" "169.254.169.254/32"
 
         connect_method true
         http_version "1.1"
@@ -83,7 +83,7 @@ Only `http` scheme is supported. Requests with `https` scheme are rejected with 
 ```ferron
 proxy.example.com {
     forward_proxy {
-        allow_domains example.com *.example.com api.service.internal
+        allow_domains "example.com" "*.example.com" "api.service.internal"
         allow_ports 80 443
     }
 }
@@ -94,9 +94,9 @@ proxy.example.com {
 ```ferron
 proxy.example.com {
     forward_proxy {
-        allow_domains *.corp.example.com
+        allow_domains "*.corp.example.com"
         allow_ports 80 443 8080
-        deny_ips 10.0.0.0/8 172.16.0.0/12
+        deny_ips "10.0.0.0/8" "172.16.0.0/12"
     }
 }
 ```

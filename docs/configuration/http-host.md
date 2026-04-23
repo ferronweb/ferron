@@ -140,7 +140,7 @@ example.com {
     http {
         protocols h1 h2 h3
         options_allowed_methods "GET, HEAD, POST, PUT, DELETE, OPTIONS"
-        timeout 30m
+        timeout "30m"
         h1_enable_early_hints false
     }
 }

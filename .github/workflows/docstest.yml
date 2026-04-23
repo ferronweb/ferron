@@ -1,0 +1,38 @@
+name: Lint documentation (Ferron 3.x)
+
+on:
+  push:
+    branches: ["develop-3.x"]
+    paths:
+      - "docs/**/*.md"
+      - "docstest/**"
+      - ".github/workflows/docstest.yml"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: develop-3.x
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build Ferron
+        shell: bash
+        run: |
+          cargo build # Debug build, because it would compile faster
+
+      - name: Test the documentation
+        shell: bash
+        run: |
+          cargo run --manifest-path doctest/Cargo.toml

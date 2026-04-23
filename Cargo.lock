@@ -1966,9 +1966,9 @@ dependencies = [
 
 [[package]]
 name = "ferronconf"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e016b064191a2e9ca4ef77a0de4dc45b65784f8214eba1c6b959aee8c82e9b3"
+checksum = "f375e2d122cdc86af4c90cb5985aa7609a30a864f29bf88056f9b9d299927e56"
 dependencies = [
  "indenter",
 ]
@@ -4212,9 +4212,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.38"
+version = "0.23.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69f9466fb2c14ea04357e91413efb882e2a6d4a406e625449bc0a5d360d53a21"
+checksum = "7c2c118cb077cca2822033836dfb1b975355dfb784b5e8da48f7b6c5db74e60e"
 dependencies = [
  "aws-lc-rs",
  "log",

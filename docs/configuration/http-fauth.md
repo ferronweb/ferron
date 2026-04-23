@@ -15,7 +15,7 @@ This pattern is commonly used with authentication proxies like [Authelia](https:
 example.com {
     auth_to http://localhost:9091 {
         limit 50
-        idle_timeout 30s
+        idle_timeout "30s"
         no_verification false
 
         copy X-Auth-User X-Auth-Roles
@@ -70,7 +70,7 @@ Each backend can have its own connection limit via the `limit` directive:
 example.com {
     auth_to http://auth1.example.com {
         limit 100
-        idle_timeout 60s
+        idle_timeout "60s"
     }
 }
 
@@ -173,7 +173,7 @@ secure.example.com {
     auth_to http://localhost/auth {
         unix /var/run/authelia/authelia.sock
         limit 100
-        idle_timeout 120s
+        idle_timeout "120s"
     }
 
     proxy http://backend:8080

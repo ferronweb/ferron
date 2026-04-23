@@ -88,8 +88,8 @@ Notes:
 ```ferron
 example.com {
     root /srv/www/example
-    mime_type .wasm application/wasm
-    mime_type .webmanifest application/manifest+json
+    mime_type ".wasm" "application/wasm"
+    mime_type ".webmanifest" "application/manifest+json"
 }
 ```
 

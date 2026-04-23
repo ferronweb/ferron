@@ -76,9 +76,11 @@ By default, certificates are stored in:
 You can customize the cache location with the `cache` directive:
 
 ```ferron
-tls {
-    provider "local"
-    cache "/path/to/custom/cache"
+example.com {
+    tls {
+        provider "local"
+        cache "/path/to/custom/cache"
+    }
 }
 ```
 

@@ -6,7 +6,7 @@ members = [
     "modules/*",
     "types/*",
 ]
-exclude = ["e2e"]
+exclude = ["doctest", "e2e"]
 
 [profile.release]
 strip = true

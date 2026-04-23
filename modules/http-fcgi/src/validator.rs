@@ -42,8 +42,8 @@ impl ferron_core::config::validator::ConfigurationValidator for FcgiConfiguratio
             ferron_core::validate_nested!(fcgi, backend, args(1) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
             ferron_core::validate_nested!(fcgi, extension, args(*) => [ServerConfigurationValue::String(_, _)]);
             ferron_core::validate_nested!(fcgi, environment, args(2) => [ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _), ServerConfigurationValue::String(_, _) | ServerConfigurationValue::InterpolatedString(_, _)]);
-            ferron_core::validate_nested!(fcgi, pass, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
-            ferron_core::validate_nested!(fcgi, keepalive, optional args(1) => [ServerConfigurationValue::Boolean(_, _)]);
+            ferron_core::validate_nested!(fcgi, pass, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
+            ferron_core::validate_nested!(fcgi, keepalive, optional args(1) => [ServerConfigurationValue::Boolean(_, _)] | args(0) => [ServerConfigurationValue::Boolean(_, _)]);
         });
 
         // Alias for PHP-FPM

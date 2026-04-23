@@ -153,11 +153,13 @@ When no `cache` path is specified, certificates and account data are stored in m
 Setting a `cache` path persists certificates and accounts to disk, surviving restarts:
 
 ```ferron
-tls {
-    provider "acme"
-    challenge http-01
-    contact "admin@example.com"
-    cache "/var/cache/ferron-acme"
+example.com {
+    tls {
+        provider "acme"
+        challenge http-01
+        contact "admin@example.com"
+        cache "/var/cache/ferron-acme"
+    }
 }
 ```
 

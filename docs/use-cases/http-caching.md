@@ -128,7 +128,7 @@ Use caching alongside rate limiting to protect backend services:
 ```ferron
 example.com {
     location /api {
-        ratelimit 100 60s
+        ratelimit 100 "60s"
         proxy http://localhost:3000
         cache {
             max_response_size 524288

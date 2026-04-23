@@ -34,13 +34,13 @@ example.com {
         upstream http://localhost:8080
         upstream http://localhost:8081 {
             limit 100
-            idle_timeout 30s
+            idle_timeout "30s"
         }
 
         lb_algorithm two_random
         lb_health_check
         lb_health_check_max_fails 3
-        lb_health_check_window 5s
+        lb_health_check_window "5s"
     }
 }
 ```
@@ -115,10 +115,12 @@ example.com {
 Defines a static backend server.
 
 ```ferron
-upstream http://localhost:8080 {
-    limit 100
-    idle_timeout 30s
-    unix /var/run/backend.sock
+example.com {
+    upstream http://localhost:8080 {
+        limit 100
+        idle_timeout "30s"
+        unix /var/run/backend.sock
+    }
 }
 ```
 
@@ -133,10 +135,12 @@ upstream http://localhost:8080 {
 Defines a dynamic upstream resolved via DNS SRV records.
 
 ```ferron
-srv _http._tcp.example.com {
-    dns_servers 8.8.8.8,8.8.4.4
-    limit 100
-    idle_timeout 30s
+example.com {
+    srv _http._tcp.example.com {
+        dns_servers "8.8.8.8,8.8.4.4"
+        limit 100
+        idle_timeout "30s"
+    }
 }
 ```
 
@@ -170,9 +174,9 @@ The reverse proxy module automatically manages standard forwarding headers:
 
 Ferron maintains a keep-alive connection pool for upstream backends. Key behaviors:
 
-- **Connection reuse**: Pooled connections are automatically reused for subsequent requests to the same upstream.
-- **Idle eviction**: Connections idle longer than `idle_timeout` are evicted from the pool.
-- **HTTP/2 multiplexing**: HTTP/2 connections share a single TCP connection for multiple concurrent requests.
+- **Connection reuse** - pooled connections are automatically reused for subsequent requests to the same upstream.
+- **Idle eviction** - connections idle longer than `idle_timeout` are evicted from the pool.
+- **HTTP/2 multiplexing** - HTTP/2 connections share a single TCP connection for multiple concurrent requests.
 
 ## Health checking
 
@@ -222,8 +226,8 @@ example.com {
         upstream http://localhost:3000 {
             health_check true
             health_check_uri "/health"
-            health_check_interval 10s
-            health_check_timeout 5s
+            health_check_interval "10s"
+            health_check_timeout "5s"
             health_check_expect_status "200,204"
             health_check_consecutive_fails 2
             health_check_consecutive_passes 2
@@ -232,7 +236,7 @@ example.com {
             health_check true
             health_check_uri "/api/status"
             health_check_method HEAD
-            health_check_response_time_threshold 1s
+            health_check_response_time_threshold "1s"
             health_check_no_verification true
         }
         lb_algorithm two_random

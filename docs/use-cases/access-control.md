@@ -16,7 +16,7 @@ example.com {
         root /var/www/html
     }
 
-    // Only allow these networks to access /admin; everyone else gets 403.
+    # Only allow these networks to access /admin; everyone else gets 403.
     location /admin {
         allow "203.0.113.0/24" "2001:db8:1234::/48"
         root /var/www/admin
@@ -108,8 +108,8 @@ example.com {
             brute_force_protection {
                 enabled true
                 max_attempts 5
-                lockout_duration 15m
-                window 5m
+                lockout_duration "15m"
+                window "5m"
             }
         }
     }

@@ -19,8 +19,8 @@ example.com {
         brute_force_protection {
             enabled true
             max_attempts 5
-            lockout_duration 15m
-            window 5m
+            lockout_duration "15m"
+            window "5m"
         }
     }
 }
@@ -133,13 +133,13 @@ proxy.example.com {
 
         brute_force_protection {
             max_attempts 3
-            lockout_duration 30m
-            window 10m
+            lockout_duration "30m"
+            window "10m"
         }
     }
 
     forward_proxy {
-        allow_domains example.com *.example.com
+        allow_domains "example.com" "*.example.com"
         allow_ports 80 443
     }
 }

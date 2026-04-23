@@ -1,5 +1,6 @@
 /target/
 /e2e/target/
+/doctest/target/
 
 /ferron.conf
 

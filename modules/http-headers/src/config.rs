@@ -1,6 +1,6 @@
 //! Configuration parsing and validation for the HTTP headers module.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::str::FromStr;
 
@@ -219,7 +219,12 @@ impl ConfigurationValidator for HttpHeadersConfigurationValidator {
                 };
                 HeaderName::from_str(name)
                     .map_err(|e| format!("Invalid `header` — invalid header name '{name}': {e}"))?;
-                if needs_value && e.args.get(1).and_then(|v| v.as_str()).is_none() {
+                if needs_value
+                    && e.args
+                        .get(1)
+                        .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                        .is_none()
+                {
                     return Err(
                         "Invalid `header` — requires a value for add/replace operations".into(),
                     );

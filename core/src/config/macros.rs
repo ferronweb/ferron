@@ -1125,14 +1125,14 @@ macro_rules! validate_nested {
                 let mut matched = false;
                 // Check first variation
                 if directive.args.len() == $count1 {
-                    if $crate::validate_nested!(@check_bool directive, [$($pattern1),+]) {
+                    if directive.args.is_empty() || $crate::validate_nested!(@check_bool directive, [$($pattern1),+]) {
                         matched = true;
                     }
                 }
                 // Check remaining variations
                 $(
                     if !matched && directive.args.len() == $countN {
-                        if $crate::validate_nested!(@check_bool directive, [$($patternN),+]) {
+                        if directive.args.is_empty() || $crate::validate_nested!(@check_bool directive, [$($patternN),+]) {
                             matched = true;
                         }
                     }
@@ -1154,14 +1154,14 @@ macro_rules! validate_nested {
                 let mut matched = false;
                 // Check first variation
                 if directive.args.len() == $count1 {
-                    if $crate::validate_nested!(@check_bool directive, [$($pattern1),+]) {
+                    if directive.args.is_empty() || $crate::validate_nested!(@check_bool directive, [$($pattern1),+]) {
                         matched = true;
                     }
                 }
                 // Check remaining variations
                 $(
                     if !matched && directive.args.len() == $countN {
-                        if $crate::validate_nested!(@check_bool directive, [$($patternN),+]) {
+                        if directive.args.is_empty() || $crate::validate_nested!(@check_bool directive, [$($patternN),+]) {
                             matched = true;
                         }
                     }

@@ -91,7 +91,7 @@ example.com {
 
         lb_health_check
         lb_health_check_max_fails 3
-        lb_health_check_window 5s
+        lb_health_check_window "5s"
     }
 }
 ```

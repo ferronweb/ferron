@@ -771,6 +771,9 @@ fn validate_bool(
     if let Some(entries) = block.directives.get(name) {
         used.insert(name.to_string());
         for e in entries {
+            if e.args.is_empty() {
+                continue;
+            }
             if e.args.first().and_then(|v| v.as_boolean()).is_none() {
                 return Err(format!("Invalid `{name}` — expected a boolean").into());
             }
@@ -862,7 +865,12 @@ fn validate_request_header(
                 _ => (first, true),
             };
             HeaderName::from_str(name).map_err(|e| format!("Invalid header name '{name}': {e}"))?;
-            if needs_value && e.args.get(1).and_then(|v| v.as_str()).is_none() {
+            if needs_value
+                && e.args
+                    .get(1)
+                    .and_then(|v| v.as_string_with_interpolations(&HashMap::new()))
+                    .is_none()
+            {
                 return Err("request_header requires a value for add/replace operations".into());
             }
         }
