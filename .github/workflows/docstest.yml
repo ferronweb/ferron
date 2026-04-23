@@ -1,4 +1,4 @@
-name: Lint documentation (Ferron 3.x)
+name: Test documentation (Ferron 3.x)
 
 on:
   push:
