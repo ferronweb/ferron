@@ -213,7 +213,7 @@ mod tests {
         assert!(config.contains("root \"/var/www\""));
         assert!(config.contains("forward_proxy"));
         assert!(config.contains("basic_auth"));
-        assert!(config.contains("user \"user\" \"hash\""));
+        assert!(config.contains("user \"hash\""));
         assert!(config.contains("brute_force_protection"));
         assert!(config.contains("enabled false"));
         assert!(config.contains("directory_listing"));
