@@ -1446,6 +1446,7 @@ dependencies = [
  "bytes",
  "ferron-core",
  "ferron-http",
+ "flate2",
  "futures-util",
  "http",
  "http-body",
@@ -1726,6 +1727,7 @@ dependencies = [
  "ferron-core",
  "ferron-http",
  "ferron-observability",
+ "flate2",
  "futures-core",
  "futures-util",
  "http",
@@ -1901,6 +1903,14 @@ dependencies = [
  "rayon",
  "winresource",
  "zstd",
+]
+
+[[package]]
+name = "ferron-serve"
+version = "3.0.0-alpha.1"
+dependencies = [
+ "clap",
+ "tempfile",
 ]
 
 [[package]]
