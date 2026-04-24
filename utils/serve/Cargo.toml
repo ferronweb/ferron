@@ -1,0 +1,8 @@
+[package]
+name = "ferron-serve"
+version = "3.0.0-alpha.1"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.28", features = ["derive"] }
+tempfile = "3.16.0"
