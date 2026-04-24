@@ -89,15 +89,17 @@ pub fn generate_config(cli: &Cli) -> String {
     if !cli.credential.is_empty() {
         config.push_str("  basicauth {\n");
         config.push_str("    realm \"Restricted Access\"\n");
+        config.push_str("    users {\n");
         for cred in &cli.credential {
             if let Some((user, hash)) = cred.split_once(':') {
                 config.push_str(&format!(
-                    "    user \"{}\" \"{}\"\n",
-                    user.replace('\\', "\\\\").replace('\"', "\\\""),
+                    "      {} \"{}\"\n",
+                    user,
                     hash.replace('\\', "\\\\").replace('\"', "\\\"")
                 ));
             }
         }
+        config.push_str("    }\n");
         config.push_str("  }\n");
     }
 
