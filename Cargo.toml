@@ -5,6 +5,7 @@ members = [
     "core",
     "modules/*",
     "types/*",
+    "utils/*"
 ]
 exclude = ["doctest", "e2e"]
 
