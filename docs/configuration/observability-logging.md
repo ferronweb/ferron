@@ -29,25 +29,25 @@ example.com {
 
 Each access log entry contains the following fields:
 
-| Field | Placeholder | Description |
-| --- | --- | --- |
-| `path` | `{path}` | The request URI path (e.g. `/index.html`) |
-| `path_and_query` | `{path_and_query}` | The request URI with path and query |
-| `method` | `{method}` | The HTTP request method (e.g. `GET`, `POST`) |
-| `version` | `{version}` | The HTTP version (e.g. `HTTP/1.1`, `HTTP/2.0`) |
-| `scheme` | `{scheme}` | The request scheme (`http` or `https`) |
-| `client_ip` | `{client_ip}` | The client IP address |
-| `client_port` | `{client_port}` | The client port number |
-| `client_ip_canonical` | `{client_ip_canonical}` | The client IP in canonical form |
-| `server_ip` | `{server_ip}` | The server IP address |
-| `server_port` | `{server_port}` | The server port number |
-| `server_ip_canonical` | `{server_ip_canonical}` | The server IP in canonical form |
-| `auth_user` | `{auth_user}` | The authenticated username, or `-` if not authenticated |
-| `status` | `{status_code}` | The HTTP response status code |
-| `content_length` | `{content_length}` | The response content length, or `-` if not available |
-| `duration_secs` | _(none)_ | Request processing duration in seconds |
-| `timestamp` | _(none)_ | Request timestamp in CLF format |
-| `header_<name>` | `{header:<name>}` | Request header values (one field per header) |
+| Field | Description |
+| --- | --- |
+| `path` | The request URI path (e.g. `/index.html`) |
+| `path_and_query` | The request URI with path and query |
+| `method` | The HTTP request method (e.g. `GET`, `POST`) |
+| `version` | The HTTP version (e.g. `HTTP/1.1`, `HTTP/2.0`) |
+| `scheme` | The request scheme (`http` or `https`) |
+| `client_ip` | The client IP address |
+| `client_port` | The client port number |
+| `client_ip_canonical` | The client IP in canonical form |
+| `server_ip` | The server IP address |
+| `server_port` | The server port number |
+| `server_ip_canonical` | The server IP in canonical form |
+| `auth_user` | The authenticated username, or `-` if not authenticated |
+| `status` | The HTTP response status code |
+| `content_length` | The response content length, or `-` if not available |
+| `duration_secs` | Request processing duration in seconds |
+| `timestamp` | Request timestamp in CLF format |
+| `header_<name>` | Request header values (one field per header) |
 
 ### Log formatters
 
