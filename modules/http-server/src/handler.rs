@@ -1571,7 +1571,8 @@ async fn resolve_http_file_target(
                 if metadata.is_dir() {
                     if let Some(index_files) = index_files {
                         if let Some(index_file) =
-                            try_resolve_index_files(&candidate_path, index_files, root_path).await?
+                            try_resolve_index_files(&candidate_path, index_files, &canonical_root)
+                                .await?
                         {
                             return Ok(Some(ResolvedHttpFile {
                                 metadata: index_file.metadata,
