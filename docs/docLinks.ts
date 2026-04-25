@@ -118,7 +118,7 @@ export default [
   {
     href: "/docs/v3/use-cases/ferron-serve",
     target: "_self",
-    label: "'ferron serve' subcommand",
+    label: "'ferron-serve' command",
   },
   {
     label: "Configuration",
