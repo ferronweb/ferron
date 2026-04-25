@@ -199,9 +199,9 @@ dependencies = [
 
 [[package]]
 name = "async-compression"
-version = "0.4.41"
+version = "0.4.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0f9ee0f6e02ffd7ad5816e9464499fba7b3effd01123b515c41d1697c43dad1"
+checksum = "e79b3f8a79cccc2898f31920fc69f304859b3bd567490f75ebf51ae1c792a9ac"
 dependencies = [
  "compression-codecs",
  "compression-core",
@@ -853,9 +853,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.60"
+version = "1.2.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43c5703da9466b66a946814e1adf53ea2c90f10063b86290cc9eb67ce3478a20"
+checksum = "d16d90359e986641506914ba71350897565610e87ce0ad9e6f28569db3dd5c6d"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1040,9 +1040,9 @@ dependencies = [
 
 [[package]]
 name = "compression-codecs"
-version = "0.4.37"
+version = "0.4.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb7b51a7d9c967fc26773061ba86150f19c50c0d65c887cb1fbe295fd16619b7"
+checksum = "ce2548391e9c1929c21bf6aa2680af86fe4c1b33e6cea9ac1cfeec0bd11218cf"
 dependencies = [
  "brotli",
  "compression-core",
@@ -1054,9 +1054,9 @@ dependencies = [
 
 [[package]]
 name = "compression-core"
-version = "0.4.31"
+version = "0.4.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75984efb6ed102a0d42db99afb6c1948f0380d1d91808d5529916e6c08b49d8d"
+checksum = "cc14f565cf027a105f7a44ccf9e5b424348421a1d8952a8fc9d499d313107789"
 
 [[package]]
 name = "concurrent-queue"
@@ -1251,9 +1251,9 @@ dependencies = [
 
 [[package]]
 name = "data-encoding"
-version = "2.10.0"
+version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
+checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "der-parser"
@@ -1336,8 +1336,8 @@ dependencies = [
 
 [[package]]
 name = "dns-update"
-version = "0.2.1"
-source = "git+https://github.com/stalwartlabs/dns-update.git#db96a7fbab1b15d97ea1afd9dbb5510535813f89"
+version = "0.2.4"
+source = "git+https://github.com/stalwartlabs/dns-update.git#06ba5f811a939615399dd751367921d09360931e"
 dependencies = [
  "aws-lc-rs",
  "base64",
@@ -1440,9 +1440,9 @@ dependencies = [
 
 [[package]]
 name = "fancy-regex"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72cf461f865c862bb7dc573f643dd6a2b6842f7c30b07882b56bd148cc2761b8"
+checksum = "e1e1dacd0d2082dfcf1351c4bdd566bbe89a2b263235a2b50058f1e130a47277"
 dependencies = [
  "bit-set",
  "regex-automata",
@@ -1505,7 +1505,7 @@ dependencies = [
  "rustls",
  "rustls-native-certs",
  "rustls-pki-types",
- "rustls-platform-verifier 0.6.2",
+ "rustls-platform-verifier 0.7.0",
  "send_wrapper",
  "serde",
  "serde_json",
@@ -1552,7 +1552,7 @@ dependencies = [
  "regorus",
  "rustls",
  "rustls-pki-types",
- "rustls-platform-verifier 0.6.2",
+ "rustls-platform-verifier 0.7.0",
  "send_wrapper",
  "shiba",
  "tokio",
@@ -1654,7 +1654,7 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "rustls",
- "rustls-platform-verifier 0.6.2",
+ "rustls-platform-verifier 0.7.0",
  "tokio",
  "tokio-util",
  "webpki-roots",
@@ -2199,9 +2199,9 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
 name = "hybrid-array"
-version = "0.4.10"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3944cf8cf766b40e2a1a333ee5e9b563f854d5fa49d6a8ca2764e97c6eddb214"
+checksum = "08d46837a0ed51fe95bd3b05de33cd64a1ee88fc797477ca48446872504507c5"
 dependencies = [
  "typenum",
 ]
@@ -2690,9 +2690,9 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "libc"
-version = "0.2.185"
+version = "0.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52ff2c0fe9bc6cb6b14a0592c2ff4fa9ceb83eea9db979b0487cd054946a2b8f"
+checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
 name = "libmimalloc-sys"
@@ -3668,9 +3668,9 @@ dependencies = [
 
 [[package]]
 name = "rasn"
-version = "0.28.12"
+version = "0.28.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b5124d11b83affd994615edb202e27cb7990ea64241255fe3b72c03f311d108"
+checksum = "88235e585f2f3fc26ad809c79a84dd77e6a7203eb7d12e5bcaab89fc036d3d90"
 dependencies = [
  "bitvec",
  "bitvec-nom2",
@@ -3691,9 +3691,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-derive"
-version = "0.28.12"
+version = "0.28.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a597b42152853fced502c26baa6c51b0fc2f1cbc2c07e019d3ea4d6872475d2e"
+checksum = "11dcd4dab09ceadedb3e2bedf340deb583f0e25bba9ad966b5655c2fb62b1392"
 dependencies = [
  "proc-macro2",
  "rasn-derive-impl",
@@ -3702,9 +3702,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-derive-impl"
-version = "0.28.12"
+version = "0.28.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbf5ea9c459c6029dcdd4b95dfbb521a6c3a384527c3a3b5c7e8c260d35f5157"
+checksum = "f121c276d3f2fba8caabc870288de3f81abdb0bb94d5510651e58e1e00a7b9e7"
 dependencies = [
  "either",
  "itertools 0.13.0",
@@ -3716,9 +3716,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-ocsp"
-version = "0.28.12"
+version = "0.28.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33045e42cdbcc1e860c1426f76780d410c83677fe2e5057ea1e2bf8e61261a9d"
+checksum = "6ecdca1d20c3d6eb377a652e21c0f06ca96b76cbacbb22a4aba1cf76714c8d42"
 dependencies = [
  "rasn",
  "rasn-pkix",
@@ -3726,9 +3726,9 @@ dependencies = [
 
 [[package]]
 name = "rasn-pkix"
-version = "0.28.12"
+version = "0.28.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5710ec0a395b7730c94d881132e3dcc2c13d3191ad788d6dfb48215dfa96d8e"
+checksum = "dd8a385ace6c844d2389fdfe8c82637dd742d7b997a6fb5826dbb97f4539057e"
 dependencies = [
  "rasn",
 ]
@@ -3972,9 +3972,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.38"
+version = "0.23.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69f9466fb2c14ea04357e91413efb882e2a6d4a406e625449bc0a5d360d53a21"
+checksum = "7c2c118cb077cca2822033836dfb1b975355dfb784b5e8da48f7b6c5db74e60e"
 dependencies = [
  "aws-lc-rs",
  "log",
@@ -3999,9 +3999,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pki-types"
-version = "1.14.0"
+version = "1.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be040f8b0a225e40375822a563fa9524378b9d63112f53e19ffff34df5d33fdd"
+checksum = "30a7197ae7eb376e574fe940d068c30fe0462554a3ddbe4eca7838e049c937a9"
 dependencies = [
  "web-time",
  "zeroize",
@@ -4722,7 +4722,7 @@ dependencies = [
  "toml_datetime",
  "toml_parser",
  "toml_writer",
- "winnow 1.0.1",
+ "winnow 1.0.2",
 ]
 
 [[package]]
@@ -4740,7 +4740,7 @@ version = "1.1.2+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2abe9b86193656635d2411dc43050282ca48aa31c2451210f4202550afb7526"
 dependencies = [
- "winnow 1.0.1",
+ "winnow 1.0.2",
 ]
 
 [[package]]
@@ -5033,9 +5033,9 @@ dependencies = [
 
 [[package]]
 name = "vibeio-http"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3163367d01fdad7cda38b84b9e69793da89d9208319db7125e84449ef3e2796"
+checksum = "4d581d271f91a6f8dd52492f86d8982176c575a65612871cbba0535dd5aff092"
 dependencies = [
  "bytes",
  "futures-util",
@@ -5658,9 +5658,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09dac053f1cd375980747450bfc7250c264eaae0583872e845c0c7cd578872b5"
+checksum = "2ee1708bef14716a11bae175f579062d4554d95be2c6829f518df847b7b3fdd0"
 
 [[package]]
 name = "winresource"
