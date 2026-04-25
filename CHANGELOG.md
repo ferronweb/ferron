@@ -1,5 +1,16 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not yet released**
+
+### Added
+
+- CLI utility for hashing passwords.
+- CLI utility for pre-compressing static files.
+- CLI utility for translating Ferron 2 configurations into Ferron 3 ones.
+- CLI utility for zero-configuration serving.
+
 ## Ferron 3.0.0-alpha.3
 
 **Released in April 23, 2026**
