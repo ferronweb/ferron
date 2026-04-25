@@ -100,6 +100,11 @@ pub fn generate_config(cli: &Cli) -> String {
             }
         }
         config.push_str("    }\n");
+        if cli.disable_brute_protection {
+            config.push_str("    brute_force_protection {\n");
+            config.push_str("      enabled false\n");
+            config.push_str("    }\n");
+        }
         config.push_str("  }\n");
     }
 
