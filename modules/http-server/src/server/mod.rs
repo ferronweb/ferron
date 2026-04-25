@@ -266,9 +266,10 @@ fn resolve_http_protocols(
 }
 
 fn resolve_http_connection_options(
+    global_config: &ServerConfigurationBlock,
     config: &ServerConfigurationBlock,
 ) -> anyhow::Result<common::HttpConnectionOptions> {
-    let http_config = http_config(config);
+    let http_config = http_config(config).or_else(|| http_config(global_config));
     Ok(common::HttpConnectionOptions {
         protocols: resolve_http_protocols(http_config)?,
         h1_enable_early_hints: http_config
@@ -353,7 +354,7 @@ impl BasicHttpModule {
         let mut quic_tls_resolver = None;
         for host_config in &port_config.hosts {
             let http_connection_options =
-                resolve_http_connection_options(&host_config.1).map_err(|e| {
+                resolve_http_connection_options(&global_config, &host_config.1).map_err(|e| {
                     anyhow::anyhow!(
                         "Can't determine HTTP connection options ({}): {e}",
                         format_location(None, host_config.1.span.as_ref())
@@ -911,7 +912,7 @@ mod tests {
     fn http_connection_options_default_to_h1_and_h2() {
         let config = ServerConfigurationBlockBuilder::new().build();
 
-        let options = resolve_http_connection_options(&config).unwrap();
+        let options = resolve_http_connection_options(&config, &config).unwrap();
 
         assert_eq!(options.protocols, common::HttpProtocols::default());
         assert_eq!(
@@ -937,7 +938,7 @@ mod tests {
             .directive("http", http_directive(http_block))
             .build();
 
-        let options = resolve_http_connection_options(&config).unwrap();
+        let options = resolve_http_connection_options(&config, &config).unwrap();
 
         assert_eq!(
             options.protocols,
@@ -973,7 +974,7 @@ mod tests {
             .directive("http", http_directive(http_block))
             .build();
 
-        let error = resolve_http_connection_options(&config).unwrap_err();
+        let error = resolve_http_connection_options(&config, &config).unwrap_err();
 
         assert_eq!(error.to_string(), "Unsupported HTTP protocol 'unknown'");
     }
