@@ -1,7 +1,4 @@
-// This module provides translation for Ferron 2 security-TLS directives
-// to Ferron 3 configuration format.
-
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use crate::read_kdl::read_kdl_file;
 
@@ -1611,7 +1608,7 @@ pub fn process_block(
                 }
             }
             "lb_health_check" => {
-                let enabled = node.entries.first().map_or(true, |e| match e.value {
+                let enabled = node.entries.first().is_none_or(|e| match e.value {
                     kdlite::dom::Value::Bool(b) => b,
                     _ => true,
                 });
@@ -1660,7 +1657,7 @@ pub fn process_block(
             | "proxy_http2"
             | "lb_retry_connection"
             | "proxy_http2_only" => {
-                let enabled = node.entries.first().map_or(true, |e| match e.value {
+                let enabled = node.entries.first().is_none_or(|e| match e.value {
                     kdlite::dom::Value::Bool(b) => b,
                     _ => true,
                 });
@@ -1779,7 +1776,7 @@ pub fn process_block(
                 }
             }
             "forward_proxy" => {
-                let enabled = node.entries.first().map_or(true, |e| match e.value {
+                let enabled = node.entries.first().is_none_or(|e| match e.value {
                     kdlite::dom::Value::Bool(b) => b,
                     _ => true,
                 });
@@ -1865,7 +1862,7 @@ pub fn process_block(
                 }
             }
             "auth_to_no_verification" => {
-                let enabled = node.entries.first().map_or(true, |e| match e.value {
+                let enabled = node.entries.first().is_none_or(|e| match e.value {
                     kdlite::dom::Value::Bool(b) => b,
                     _ => true,
                 });
@@ -2112,7 +2109,510 @@ pub fn process_block(
                 }));
             }
             "condition" => {
-                // TODO: translate conditions
+                let condition_name = node
+                    .entries
+                    .first()
+                    .and_then(|e| match &e.value {
+                        kdlite::dom::Value::String(v) => Some(v),
+                        _ => None,
+                    })
+                    .ok_or_else(|| anyhow::anyhow!("condition must be a string name"))?;
+                let mut ferron3_conditions: Vec<ferronconf::MatcherExpression> = vec![];
+                if let Some(children) = &node.children {
+                    let mut nodes = children.nodes.iter().cloned().collect::<VecDeque<_>>();
+                    while let Some(child) = nodes.pop_front() {
+                        match child.name() {
+                            // Snippets
+                            "use" => {
+                                let snippet_name = child
+                                    .entries
+                                    .first()
+                                    .and_then(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => Some(v),
+                                        _ => None,
+                                    })
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("use directive must have a snippet name")
+                                    })?;
+                                if let Some(snippet) =
+                                    snippets.get(&snippet_name.to_string()).cloned()
+                                {
+                                    let mut new_nodes =
+                                        snippet.nodes.iter().cloned().collect::<VecDeque<_>>();
+                                    new_nodes.extend(nodes);
+                                    nodes = new_nodes;
+                                } else {
+                                    return Err(anyhow::anyhow!(
+                                        "snippet not found: {}",
+                                        snippet_name
+                                    ));
+                                }
+                            }
+
+                            "is_remote_ip" => {
+                                let ips = child
+                                    .entries
+                                    .iter()
+                                    .filter_map(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => Some(v),
+                                        _ => None,
+                                    })
+                                    .map(|v| regex_syntax::escape(v))
+                                    .collect::<Vec<_>>()
+                                    .join("|");
+                                ferron3_conditions.push(ferronconf::MatcherExpression {
+                                    left: ferronconf::Operand::Identifier(
+                                        vec!["remote".to_string(), "ip".to_string()],
+                                        ferronconf::Span { line: 0, column: 0 },
+                                    ),
+                                    right: ferronconf::Operand::String(
+                                        format!("\\b(?:{ips})\\b"),
+                                        ferronconf::Span { line: 0, column: 0 },
+                                    ),
+                                    op: ferronconf::Operator::Regex,
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                })
+                            }
+                            "is_forwarded_for" => {
+                                let ips = child
+                                    .entries
+                                    .iter()
+                                    .filter_map(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => Some(v),
+                                        _ => None,
+                                    })
+                                    .map(|v| regex_syntax::escape(v))
+                                    .collect::<Vec<_>>()
+                                    .join("|");
+                                ferron3_conditions.push(ferronconf::MatcherExpression {
+                                    left: ferronconf::Operand::Identifier(
+                                        vec![
+                                            "request".to_string(),
+                                            "header".to_string(),
+                                            "x_forwarded_for".to_string(),
+                                        ],
+                                        ferronconf::Span { line: 0, column: 0 },
+                                    ),
+                                    right: ferronconf::Operand::String(
+                                        format!("\\b(?:{ips})\\b"),
+                                        ferronconf::Span { line: 0, column: 0 },
+                                    ),
+                                    op: ferronconf::Operator::Regex,
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                })
+                            }
+                            "is_not_remote_ip" => {
+                                let ips = child
+                                    .entries
+                                    .iter()
+                                    .filter_map(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => Some(v),
+                                        _ => None,
+                                    })
+                                    .map(|v| regex_syntax::escape(v))
+                                    .collect::<Vec<_>>()
+                                    .join("|");
+                                ferron3_conditions.push(ferronconf::MatcherExpression {
+                                    left: ferronconf::Operand::Identifier(
+                                        vec!["remote".to_string(), "ip".to_string()],
+                                        ferronconf::Span { line: 0, column: 0 },
+                                    ),
+                                    right: ferronconf::Operand::String(
+                                        format!("\\b(?:{ips})\\b"),
+                                        ferronconf::Span { line: 0, column: 0 },
+                                    ),
+                                    op: ferronconf::Operator::NotRegex,
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                })
+                            }
+                            "is_not_forwarded_for" => {
+                                let ips = child
+                                    .entries
+                                    .iter()
+                                    .filter_map(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => Some(v),
+                                        _ => None,
+                                    })
+                                    .map(|v| regex_syntax::escape(v))
+                                    .collect::<Vec<_>>()
+                                    .join("|");
+                                ferron3_conditions.push(ferronconf::MatcherExpression {
+                                    left: ferronconf::Operand::Identifier(
+                                        vec![
+                                            "request".to_string(),
+                                            "header".to_string(),
+                                            "x_forwarded_for".to_string(),
+                                        ],
+                                        ferronconf::Span { line: 0, column: 0 },
+                                    ),
+                                    right: ferronconf::Operand::String(
+                                        format!("\\b(?:{ips})\\b"),
+                                        ferronconf::Span { line: 0, column: 0 },
+                                    ),
+                                    op: ferronconf::Operator::NotRegex,
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                })
+                            }
+                            "is_equal" => {
+                                let left = child
+                                    .entries
+                                    .first()
+                                    .and_then(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => {
+                                            Some(convert_placeholders_into_interpolated_strings(v))
+                                        }
+                                        _ => None,
+                                    })
+                                    .and_then(|v| match v {
+                                        ferronconf::Value::String(v, s) => {
+                                            Some(ferronconf::Operand::String(v, s))
+                                        }
+                                        ferronconf::Value::InterpolatedString(mut v, s) => {
+                                            if v.len() == 1 {
+                                                let popped =
+                                                    v.pop().expect("should have exactly one part");
+                                                match popped {
+                                                    ferronconf::StringPart::Expression(e) => {
+                                                        Some(ferronconf::Operand::Identifier(e, s))
+                                                    }
+                                                    ferronconf::StringPart::Literal(l) => {
+                                                        Some(ferronconf::Operand::String(l, s))
+                                                    }
+                                                }
+                                            } else {
+                                                let r = v
+                                                    .into_iter()
+                                                    .map(|p| p.as_str())
+                                                    .collect::<String>();
+                                                Some(ferronconf::Operand::String(r, s))
+                                            }
+                                        }
+                                        _ => None,
+                                    })
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("left operand is not a string")
+                                    })?;
+                                let right = child
+                                    .entries
+                                    .get(1)
+                                    .and_then(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => {
+                                            Some(convert_placeholders_into_interpolated_strings(v))
+                                        }
+                                        _ => None,
+                                    })
+                                    .and_then(|v| match v {
+                                        ferronconf::Value::String(v, s) => {
+                                            Some(ferronconf::Operand::String(v, s))
+                                        }
+                                        ferronconf::Value::InterpolatedString(mut v, s) => {
+                                            if v.len() == 1 {
+                                                let popped =
+                                                    v.pop().expect("should have exactly one part");
+                                                match popped {
+                                                    ferronconf::StringPart::Expression(e) => {
+                                                        Some(ferronconf::Operand::Identifier(e, s))
+                                                    }
+                                                    ferronconf::StringPart::Literal(l) => {
+                                                        Some(ferronconf::Operand::String(l, s))
+                                                    }
+                                                }
+                                            } else {
+                                                let r = v
+                                                    .into_iter()
+                                                    .map(|p| p.as_str())
+                                                    .collect::<String>();
+                                                Some(ferronconf::Operand::String(r, s))
+                                            }
+                                        }
+                                        _ => None,
+                                    })
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("right operand is not a string")
+                                    })?;
+                                ferron3_conditions.push(ferronconf::MatcherExpression {
+                                    left,
+                                    right,
+                                    op: ferronconf::Operator::Eq,
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                })
+                            }
+                            "is_not_equal" => {
+                                let left = child
+                                    .entries
+                                    .get(1)
+                                    .and_then(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => {
+                                            Some(convert_placeholders_into_interpolated_strings(v))
+                                        }
+                                        _ => None,
+                                    })
+                                    .and_then(|v| match v {
+                                        ferronconf::Value::String(v, s) => {
+                                            Some(ferronconf::Operand::String(v, s))
+                                        }
+                                        ferronconf::Value::InterpolatedString(mut v, s) => {
+                                            if v.len() == 1 {
+                                                let popped =
+                                                    v.pop().expect("should have exactly one part");
+                                                match popped {
+                                                    ferronconf::StringPart::Expression(e) => {
+                                                        Some(ferronconf::Operand::Identifier(e, s))
+                                                    }
+                                                    ferronconf::StringPart::Literal(l) => {
+                                                        Some(ferronconf::Operand::String(l, s))
+                                                    }
+                                                }
+                                            } else {
+                                                let r = v
+                                                    .into_iter()
+                                                    .map(|p| p.as_str())
+                                                    .collect::<String>();
+                                                Some(ferronconf::Operand::String(r, s))
+                                            }
+                                        }
+                                        _ => None,
+                                    })
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("left operand is not a string")
+                                    })?;
+                                let right = child
+                                    .entries
+                                    .get(1)
+                                    .and_then(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => {
+                                            Some(convert_placeholders_into_interpolated_strings(v))
+                                        }
+                                        _ => None,
+                                    })
+                                    .and_then(|v| match v {
+                                        ferronconf::Value::String(v, s) => {
+                                            Some(ferronconf::Operand::String(v, s))
+                                        }
+                                        ferronconf::Value::InterpolatedString(mut v, s) => {
+                                            if v.len() == 1 {
+                                                let popped =
+                                                    v.pop().expect("should have exactly one part");
+                                                match popped {
+                                                    ferronconf::StringPart::Expression(e) => {
+                                                        Some(ferronconf::Operand::Identifier(e, s))
+                                                    }
+                                                    ferronconf::StringPart::Literal(l) => {
+                                                        Some(ferronconf::Operand::String(l, s))
+                                                    }
+                                                }
+                                            } else {
+                                                let r = v
+                                                    .into_iter()
+                                                    .map(|p| p.as_str())
+                                                    .collect::<String>();
+                                                Some(ferronconf::Operand::String(r, s))
+                                            }
+                                        }
+                                        _ => None,
+                                    })
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("right operand is not a string")
+                                    })?;
+                                ferron3_conditions.push(ferronconf::MatcherExpression {
+                                    left,
+                                    right,
+                                    op: ferronconf::Operator::NotEq,
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                })
+                            }
+                            "is_regex" => {
+                                let left = child
+                                    .entries
+                                    .first()
+                                    .and_then(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => {
+                                            Some(convert_placeholders_into_interpolated_strings(v))
+                                        }
+                                        _ => None,
+                                    })
+                                    .and_then(|v| match v {
+                                        ferronconf::Value::String(v, s) => {
+                                            Some(ferronconf::Operand::String(v, s))
+                                        }
+                                        ferronconf::Value::InterpolatedString(mut v, s) => {
+                                            if v.len() == 1 {
+                                                let popped =
+                                                    v.pop().expect("should have exactly one part");
+                                                match popped {
+                                                    ferronconf::StringPart::Expression(e) => {
+                                                        Some(ferronconf::Operand::Identifier(e, s))
+                                                    }
+                                                    ferronconf::StringPart::Literal(l) => {
+                                                        Some(ferronconf::Operand::String(l, s))
+                                                    }
+                                                }
+                                            } else {
+                                                let r = v
+                                                    .into_iter()
+                                                    .map(|p| p.as_str())
+                                                    .collect::<String>();
+                                                Some(ferronconf::Operand::String(r, s))
+                                            }
+                                        }
+                                        _ => None,
+                                    })
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("left operand is not a string")
+                                    })?;
+                                let case_insensitive = child
+                                    .entries
+                                    .iter()
+                                    .find(|e| e.key() == Some("case_insensitive"))
+                                    .and_then(|e| match &e.value {
+                                        kdlite::dom::Value::Bool(v) => Some(*v),
+                                        _ => None,
+                                    })
+                                    .unwrap_or(false);
+                                let right = child
+                                    .entries
+                                    .get(1)
+                                    .and_then(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => {
+                                            Some(ferronconf::Operand::String(
+                                                if case_insensitive {
+                                                    format!("(?i){}", v)
+                                                } else {
+                                                    v.to_string()
+                                                },
+                                                ferronconf::Span { line: 0, column: 0 },
+                                            ))
+                                        }
+                                        _ => None,
+                                    })
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("right operand is not a string")
+                                    })?;
+                                ferron3_conditions.push(ferronconf::MatcherExpression {
+                                    left,
+                                    right,
+                                    op: ferronconf::Operator::Regex,
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                })
+                            }
+                            "is_not_regex" => {
+                                let left = child
+                                    .entries
+                                    .first()
+                                    .and_then(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => {
+                                            Some(convert_placeholders_into_interpolated_strings(v))
+                                        }
+                                        _ => None,
+                                    })
+                                    .and_then(|v| match v {
+                                        ferronconf::Value::String(v, s) => {
+                                            Some(ferronconf::Operand::String(v, s))
+                                        }
+                                        ferronconf::Value::InterpolatedString(mut v, s) => {
+                                            if v.len() == 1 {
+                                                let popped =
+                                                    v.pop().expect("should have exactly one part");
+                                                match popped {
+                                                    ferronconf::StringPart::Expression(e) => {
+                                                        Some(ferronconf::Operand::Identifier(e, s))
+                                                    }
+                                                    ferronconf::StringPart::Literal(l) => {
+                                                        Some(ferronconf::Operand::String(l, s))
+                                                    }
+                                                }
+                                            } else {
+                                                let r = v
+                                                    .into_iter()
+                                                    .map(|p| p.as_str())
+                                                    .collect::<String>();
+                                                Some(ferronconf::Operand::String(r, s))
+                                            }
+                                        }
+                                        _ => None,
+                                    })
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("left operand is not a string")
+                                    })?;
+                                let case_insensitive = child
+                                    .entries
+                                    .iter()
+                                    .find(|e| e.key() == Some("case_insensitive"))
+                                    .and_then(|e| match &e.value {
+                                        kdlite::dom::Value::Bool(v) => Some(*v),
+                                        _ => None,
+                                    })
+                                    .unwrap_or(false);
+                                let right = child
+                                    .entries
+                                    .get(1)
+                                    .and_then(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => {
+                                            Some(ferronconf::Operand::String(
+                                                if case_insensitive {
+                                                    format!("(?i){}", v)
+                                                } else {
+                                                    v.to_string()
+                                                },
+                                                ferronconf::Span { line: 0, column: 0 },
+                                            ))
+                                        }
+                                        _ => None,
+                                    })
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("right operand is not a string")
+                                    })?;
+                                ferron3_conditions.push(ferronconf::MatcherExpression {
+                                    left,
+                                    right,
+                                    op: ferronconf::Operator::NotRegex,
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                })
+                            }
+                            "is_rego" | "set_constant" => {
+                                // No-ops in Ferron 3
+                                // - is_rego is deprecated in Ferron 2
+                                // - set_constant would be unused aside `is_language` in Ferron 2
+                            }
+                            "is_language" => {
+                                let language = child
+                                    .entries
+                                    .first()
+                                    .and_then(|e| match &e.value {
+                                        kdlite::dom::Value::String(v) => {
+                                            Some(ferronconf::Operand::String(
+                                                v.to_string(),
+                                                ferronconf::Span { line: 0, column: 0 },
+                                            ))
+                                        }
+                                        _ => None,
+                                    })
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("right operand is not a string")
+                                    })?;
+                                ferron3_conditions.push(ferronconf::MatcherExpression {
+                                    left: language,
+                                    right: ferronconf::Operand::Identifier(
+                                        vec![
+                                            "request".to_string(),
+                                            "header".to_string(),
+                                            "accept_language".to_string(),
+                                        ],
+                                        ferronconf::Span { line: 0, column: 0 },
+                                    ),
+                                    op: ferronconf::Operator::In,
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                })
+                            }
+                            _ => {} // Unsupported subcondition
+                        }
+                    }
+                }
+                statements.push(ferronconf::Statement::MatchBlock(ferronconf::MatchBlock {
+                    matcher: condition_name.to_string(),
+                    expr: ferron3_conditions,
+                    span: ferronconf::Span { line: 0, column: 0 },
+                }));
             }
             "location" => {
                 let location_path = node
@@ -2185,6 +2685,23 @@ pub fn process_block(
                         )?),
                         span: ferronconf::Span { line: 0, column: 0 },
                     }));
+                }
+            }
+
+            // Snippets
+            "use" => {
+                let value = node
+                    .entries
+                    .first()
+                    .and_then(|e| match &e.value {
+                        kdlite::dom::Value::String(value) => Some(value),
+                        _ => None,
+                    })
+                    .ok_or(anyhow::anyhow!("snippet node must have a value"))?;
+                if let Some(snippet) = snippets.get(&value.to_string()).cloned() {
+                    statements.extend(process_block(&snippet, snippets)?.statements);
+                } else {
+                    return Err(anyhow::anyhow!("snippet not found: {}", value));
                 }
             }
 
@@ -2306,7 +2823,7 @@ pub fn process_block(
                     }));
             }
             "h2_enable_connect_protocol" | "protocol_proxy" => {
-                let value = node.entries.first().map_or(false, |e| match e.value {
+                let value = node.entries.first().is_some_and(|e| match e.value {
                     kdlite::dom::Value::Bool(b) => b,
                     _ => true,
                 });
@@ -2331,7 +2848,7 @@ pub fn process_block(
                 let value = node
                     .entries
                     .first()
-                    .map_or(None, |e| match e.value {
+                    .and_then(|e| match e.value {
                         kdlite::dom::Value::Integer(i) => Some(i),
                         _ => None,
                     })
@@ -2384,7 +2901,7 @@ pub fn process_block(
                     }));
             }
             "io_uring" => {
-                let value = node.entries.first().map_or(false, |e| match e.value {
+                let value = node.entries.first().is_some_and(|e| match e.value {
                     kdlite::dom::Value::Bool(i) => i,
                     _ => true,
                 });

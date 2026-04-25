@@ -16,3 +16,6 @@ bytes = "1"
 tokio-util = { version = "0.7", features = ["io"] }
 futures-util = "0.3"
 typemap_rev = "0.4"
+
+[package.metadata.cargo-shear]
+ignored = ["flate2"]

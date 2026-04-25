@@ -24,3 +24,6 @@ new_mime_guess = "4"
 urlencoding = "2"
 chrono = "0.4"
 phf = { version = "0.13", features = ["macros"] }
+
+[package.metadata.cargo-shear]
+ignored = ["flate2"]

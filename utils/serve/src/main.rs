@@ -112,7 +112,7 @@ pub fn generate_config(cli: &Cli) -> String {
         for idx in &cli.index {
             config.push_str(&format!(" \"{}\"", idx.replace('\"', "\\\"")));
         }
-        config.push_str("\n");
+        config.push('\n');
     }
 
     if !cli.compress {
@@ -212,7 +212,7 @@ mod tests {
         assert!(config.contains("*:8080 {"));
         assert!(config.contains("root \"/var/www\""));
         assert!(config.contains("forward_proxy"));
-        assert!(config.contains("basic_auth"));
+        assert!(config.contains("basicauth"));
         assert!(config.contains("user \"hash\""));
         assert!(config.contains("brute_force_protection"));
         assert!(config.contains("enabled false"));
