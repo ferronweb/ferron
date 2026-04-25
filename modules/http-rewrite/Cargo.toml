@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
-fancy-regex = "0.17"
+fancy-regex = "0.18"
 parking_lot = "0.12"
 tokio = { version = "1", features = ["fs"] }
 http = "1"

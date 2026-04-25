@@ -524,9 +524,9 @@ dependencies = [
 
 [[package]]
 name = "cegla"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f67c0c24c6d851f8066145f2e4196094eb17b806f37cda3e07b05f257cf0b20a"
+checksum = "10c8cc8e64f46d9c4a9ce216b9a8fdd90af900ea7567b3fd5b19fc8f47856cbd"
 dependencies = [
  "bytes",
  "futures-util",
@@ -543,9 +543,9 @@ dependencies = [
 
 [[package]]
 name = "cegla-cgi"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a931b8973fda3a29887cb529d02c294dcb3d20109c4cc44655ee94546f4502ff"
+checksum = "405ee83137a1c2745b91b095b751e8ff36600121e889ac2e3d8ebb1edcfa0c14"
 dependencies = [
  "cegla",
  "http",
@@ -556,9 +556,9 @@ dependencies = [
 
 [[package]]
 name = "cegla-fcgi"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27d2301eaf2c2132c6d8bce03953719a0cf99a255b8a4af3f41f25b5033f018f"
+checksum = "1d4f2f3d932eaacc6785c97e1372346dfc6b50ac7c5e3da0ae2ec260f35a3919"
 dependencies = [
  "async-channel",
  "cegla",
@@ -576,9 +576,9 @@ dependencies = [
 
 [[package]]
 name = "cegla-scgi"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6945a0115b2e5150c8a53dd9d05ac7ad8aacd869b8950d7e6eca3c1a8a7de695"
+checksum = "712fb2865241c0afad2ace738608fce3fb360480cc369f6f63e2fcbb6e22dcd1"
 dependencies = [
  "cegla",
  "hashlink",
@@ -1197,9 +1197,9 @@ dependencies = [
 
 [[package]]
 name = "fancy-regex"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72cf461f865c862bb7dc573f643dd6a2b6842f7c30b07882b56bd148cc2761b8"
+checksum = "e1e1dacd0d2082dfcf1351c4bdd566bbe89a2b263235a2b50058f1e130a47277"
 dependencies = [
  "bit-set",
  "regex-automata",
@@ -5315,9 +5315,9 @@ dependencies = [
 
 [[package]]
 name = "vibeio-cegla"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7ae4864bbccea11e742b96fd9f253f490d6730f98c21bdaa58137a7ab113e20"
+checksum = "43b550c142965578d3463fb69519f560dec529feaf9112ee54c49bc1329d21a5"
 dependencies = [
  "cegla-cgi",
  "cegla-scgi",
