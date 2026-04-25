@@ -87,7 +87,7 @@ pub fn generate_config(cli: &Cli) -> String {
     }
 
     if !cli.credential.is_empty() {
-        config.push_str("  basicauth {\n");
+        config.push_str("  basic_auth {\n");
         config.push_str("    realm \"Restricted Access\"\n");
         config.push_str("    users {\n");
         for cred in &cli.credential {
@@ -217,7 +217,7 @@ mod tests {
         assert!(config.contains("*:8080 {"));
         assert!(config.contains("root \"/var/www\""));
         assert!(config.contains("forward_proxy"));
-        assert!(config.contains("basicauth"));
+        assert!(config.contains("basic_auth"));
         assert!(config.contains("user \"hash\""));
         assert!(config.contains("brute_force_protection"));
         assert!(config.contains("enabled false"));

@@ -149,7 +149,7 @@ example.com {
 example.com {
     root /var/www/html
 
-    basicauth {
+    basic_auth {
         user "admin" "password"
     }
 

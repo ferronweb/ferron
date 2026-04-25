@@ -967,7 +967,7 @@ pub fn process_block(
                 });
                 if let (Some(name), Some(hash)) = (name, hash) {
                     nested_directives
-                        .entry("basicauth")
+                        .entry("basic_auth")
                         .or_insert_with(|| ferronconf::Block {
                             statements: vec![],
                             span: ferronconf::Span { line: 0, column: 0 },
