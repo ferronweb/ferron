@@ -96,9 +96,7 @@ By default, Ferron serves content from the `wwwroot` directory. Open a web brows
 
 If you see a **"Ferron is installed successfully!"** message on the page, the web server is installed and running correctly.
 
-## Reloading the configuration
-
-### Unix-like systems (macOS, Linux)
+## Reloading the configuration (Unix)
 
 To reload the configuration without restarting the server, send a `SIGHUP` signal to the `ferron` process:
 
@@ -115,6 +113,29 @@ path\to\ferron winservice install -c path\to\ferron.conf
 ```
 
 Replace `path\to` with the actual path to your Ferron installation directory.
+
+## Running as a daemon (Unix)
+
+On Unix systems, you can run Ferron as a background daemon with a PID file:
+
+```sh
+./ferron daemon -c ferron.conf --pid-file /var/run/ferron.pid
+```
+
+You can then reload the daemon using its PID file:
+
+```sh
+kill -HUP $(cat /var/run/ferron.pid)
+```
+
+## Other CLI commands
+
+Ferron also provides several commands for working with configuration files:
+
+```sh
+./ferron validate -c ferron.conf   # validate configuration without starting
+./ferron adapt -c ferron.conf      # output configuration as JSON
+```
 
 ## Notes and troubleshooting
 
