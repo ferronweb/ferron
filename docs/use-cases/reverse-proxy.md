@@ -79,7 +79,7 @@ example.com {
 | `least_conn` | Selects the backend with the fewest active tracked connections. |
 | `two_random` | Picks two random backends and selects the less loaded one. |
 
-## Health checks
+## Passive health checks
 
 Ferron supports passive health checks. To enable passive health checking:
 
@@ -95,6 +95,27 @@ example.com {
     }
 }
 ```
+
+## Active health checks
+
+Ferron also supports active health checks. To enable active health checking:
+
+```ferron
+example.com {
+    proxy {
+        upstream http://localhost:3000 {
+            health_check true
+            health_check_uri "/health"
+        }
+        upstream http://localhost:3001 {
+            health_check true
+            health_check_uri "/health"
+        }
+    }
+}
+```
+
+For active health check configuration, see [Reverse proxying configuration reference](/docs/v3/configuration/reverse-proxying).
 
 ## Reverse proxy to backends listening on Unix sockets
 
