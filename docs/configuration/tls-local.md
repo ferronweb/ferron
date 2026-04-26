@@ -17,7 +17,7 @@ This page documents the `local` TLS provider, which generates and manages locall
 ```ferron
 localhost:443 {
     tls {
-        provider "local"
+        provider local
         cache "/custom/cache/path"
     }
 }
@@ -50,7 +50,7 @@ You can explicitly configure the local provider with a custom cache location:
 ```ferron
 localhost:443 {
     tls {
-        provider "local"
+        provider local
         cache "/custom/path/ferron-local-tls"
     }
 }
@@ -78,7 +78,7 @@ You can customize the cache location with the `cache` directive:
 ```ferron
 example.com {
     tls {
-        provider "local"
+        provider local
         cache "/path/to/custom/cache"
     }
 }
@@ -106,7 +106,7 @@ The local provider supports the same TLS configuration options as other provider
 ```ferron
 localhost:443 {
     tls {
-        provider "local"
+        provider local
         cache "/custom/cache/path"
 
         # Standard TLS configuration (optional)
@@ -131,7 +131,7 @@ If you were previously using manual certificates for localhost development, you 
 # Before: manual certificates
 localhost:443 {
     tls {
-        provider "manual"
+        provider manual
         cert "/path/to/localhost.crt"
         key "/path/to/localhost.key"
     }

@@ -160,7 +160,7 @@ async fn test_tls_http_1() {
 
 *:443 {
   tls {
-    provider "manual"
+    provider manual
     cert "/etc/cert.pem"
     key "/etc/key.pem"
   }
@@ -247,7 +247,7 @@ async fn test_tls_http_2() {
 
 *:443 {
   tls {
-    provider "manual"
+    provider manual
     cert "/etc/cert.pem"
     key "/etc/key.pem"
   }
@@ -334,7 +334,7 @@ async fn test_tls_http_3() {
 
 *:443 {
   tls {
-    provider "manual"
+    provider manual
     cert "/etc/cert.pem"
     key "/etc/key.pem"
   }

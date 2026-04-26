@@ -11,6 +11,14 @@ This page documents the ACME TLS provider (`tls-acme` module), which automatical
 
 Certificates are **cached** (both in-memory and file-based) and **automatically renewed** before expiration.
 
+Automatic TLS via ACME is enabled by default in Ferron for public hosts:
+
+```ferron
+example.com {
+    # Automatic TLS is enabled by default, no explicit TLS directive needed
+}
+```
+
 ## Directives
 
 ### Challenge types
@@ -20,9 +28,9 @@ Certificates are **cached** (both in-memory and file-based) and **automatically 
 The simplest challenge type. The server listens on port 80 to serve `/.well-known/acme-challenge/<token>`.
 
 ```ferron
-example.com:443 {
+example.com {
     tls {
-        provider "acme"
+        provider acme
         challenge http-01
         contact "admin@example.com"
     }
@@ -36,9 +44,9 @@ example.com:443 {
 Responds with a self-signed certificate when the CA connects with the `acme-tls/1` ALPN protocol. No additional port is needed.
 
 ```ferron
-example.com:443 {
+example.com {
     tls {
-        provider "acme"
+        provider acme
         challenge tls-alpn-01
         contact "admin@example.com"
     }
@@ -52,9 +60,9 @@ example.com:443 {
 Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge type that supports wildcard certificates.
 
 ```ferron
-*.example.com:443 {
+*.example.com {
     tls {
-        provider "acme"
+        provider acme
         challenge dns-01
         contact "admin@example.com"
         dns {
@@ -88,9 +96,9 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
 **Configuration example:**
 
 ```ferron
-example.com:443 {
+example.com {
     tls {
-        provider "acme"
+        provider acme
         challenge http-01
         contact "admin@example.com"
 
@@ -117,9 +125,9 @@ Eager mode obtains certificates at **server startup**, before any client traffic
 On-demand mode defers certificate issuance until the **first TLS handshake** for a hostname. This is useful for wildcard domains, multi-tenant hosting, or when domains are not known at startup.
 
 ```ferron
-*.example.com:443 {
+*.example.com {
     tls {
-        provider "acme"
+        provider acme
         challenge dns-01
         contact "admin@example.com"
         on_demand
@@ -132,9 +140,9 @@ On-demand mode defers certificate issuance until the **first TLS handshake** for
 To prevent abuse, you can configure an approval endpoint. Before issuing a certificate, Ferron sends an HTTP GET request to the endpoint with `?domain=<sni>` as a query parameter. If the response is `200`, the certificate is issued.
 
 ```ferron
-*.example.com:443 {
+*.example.com {
     tls {
-        provider "acme"
+        provider acme
         challenge http-01
         contact "admin@example.com"
         on_demand
@@ -156,7 +164,7 @@ Setting a `cache` path persists certificates and accounts to disk, surviving res
 ```ferron
 example.com {
     tls {
-        provider "acme"
+        provider acme
         challenge http-01
         contact "admin@example.com"
         cache "/var/cache/ferron-acme"
@@ -187,7 +195,7 @@ Some CAs (especially enterprise/internal ACME servers) require External Account 
 
 ```ferron
 tls {
-    provider "acme"
+    provider acme
     challenge http-01
     contact "admin@example.com"
     eab "my-key-id" "SMq9KpHkR7z..."
@@ -203,7 +211,7 @@ To persist obtained certificates for use by other tools or backup:
 
 ```ferron
 tls {
-    provider "acme"
+    provider acme
     challenge http-01
     contact "admin@example.com"
     save "/etc/ssl/certs/example.com.pem" "/etc/ssl/private/example.com.pem"
@@ -267,10 +275,10 @@ The ACME background task emits log events and metrics through the configured obs
 
 ```bash
 # Check the certificate served by Ferron
-echo | openssl s_client -connect example.com:443 -servername example.com 2>/dev/null | openssl x509 -noout -subject -dates -issuer
+echo | openssl s_client -connect example.com -servername example.com 2>/dev/null | openssl x509 -noout -subject -dates -issuer
 
 # Verify OCSP stapling
-openssl s_client -connect example.com:443 -status -servername example.com </dev/null 2>/dev/null | grep -A 5 "OCSP response"
+openssl s_client -connect example.com -status -servername example.com </dev/null 2>/dev/null | grep -A 5 "OCSP response"
 ```
 
 ## See also

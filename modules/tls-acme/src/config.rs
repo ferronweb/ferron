@@ -358,7 +358,7 @@ fn build_root_cert_store() -> Result<rustls::RootCertStore, Box<dyn std::error::
 
 /// Parse TLS configuration block for ACME settings.
 ///
-/// This is the entry point for parsing the `tls { provider "acme"; ... }` block.
+/// This is the entry point for parsing the `tls { provider acme; ... }` block.
 #[allow(clippy::too_many_arguments)]
 pub fn parse_acme_config(
     config: &ServerConfigurationBlock,

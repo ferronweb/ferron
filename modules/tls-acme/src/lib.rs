@@ -12,7 +12,7 @@
 //! ```text
 //! example.com:443 {
 //!     tls {
-//!         provider "acme"
+//!         provider acme
 //!         challenge http-01
 //!         contact "admin@example.com"
 //!     }
@@ -148,7 +148,7 @@ fn get_or_init_task_state() -> Arc<AcmeTaskState> {
 
 /// ACME TLS provider.
 ///
-/// Implements `Provider<TcpTlsContext>` to handle `tls { provider "acme"; ... }` blocks.
+/// Implements `Provider<TcpTlsContext>` to handle `tls { provider acme; ... }` blocks.
 pub struct TcpTlsAcmeProvider;
 
 impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
@@ -676,7 +676,7 @@ impl ModuleLoader for TlsAcmeModuleLoader {
 ///
 /// ```text
 /// tls {
-///     provider "acme"
+///     provider acme
 ///     challenge dns-01
 ///     dns {
 ///         provider "cloudflare"

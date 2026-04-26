@@ -147,10 +147,6 @@ example.com {
 
 ## Security considerations
 
-### httpoxy vulnerability protection
-
-Ferron automatically removes the `Proxy` header from the request before executing CGI scripts to prevent the [httpoxy](https://httpoxy.org/) vulnerability. This mitigates the risk of CGI scripts manipulating the `HTTP_PROXY` environment variable to inject headers into proxied requests.
-
 ### File upload safety
 
 Keep upload and download directories **outside** `cgi-bin` and outside any extension-registered directories. Otherwise, a user could upload a malicious script and execute it as CGI.
@@ -168,7 +164,7 @@ example.com {
     # Upload directory is safe (no CGI execution)
     location /uploads {
         root "/var/www/html/uploads"
-        static_file
+        cgi false
     }
 }
 ```
@@ -176,10 +172,6 @@ example.com {
 ### Interpreter permissions
 
 On Unix systems, scripts without a matching `interpreter` directive must have the executable permission bit set (`chmod +x`). On Windows, `.exe` files are executed directly, and scripts with shebangs are parsed similarly to Unix.
-
-## Observability
-
-Ferron logs warnings when CGI scripts produce output on stderr or exit with a non-zero status. The output is trimmed before logging to avoid excessive log volume.
 
 ## Default index files
 

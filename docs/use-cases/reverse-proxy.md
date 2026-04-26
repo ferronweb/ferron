@@ -169,11 +169,7 @@ You can configure Ferron like this:
 
 ```ferron
 * {
-    tls {
-        provider "manual"
-        cert "/path/to/certificate.crt"
-        key "/path/to/private.key"
-    }
+    tls /path/to/certificate.crt /path/to/private.key
 }
 
 example.com {
@@ -189,15 +185,11 @@ example.com {
 }
 
 foo.example.com {
-    location / {
-        proxy https://saas.foo.net
-    }
+    proxy https://saas.foo.net
 }
 
 bar.example.com {
-    location / {
-        proxy http://backend.example.net:4000
-    }
+    proxy http://backend.example.net:4000
 }
 ```
 

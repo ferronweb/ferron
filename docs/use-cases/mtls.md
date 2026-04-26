@@ -13,7 +13,7 @@ Configure client certificate validation against your internal CA inside the `tls
 # Replace "admin.example.com" with your domain name.
 admin.example.com:443 {
     tls {
-        provider "manual"
+        provider manual
         cert "/etc/ssl/certs/admin.example.com.crt"
         key "/etc/ssl/private/admin.example.com.key"
 
@@ -30,7 +30,7 @@ You can also use the OS trust store or Mozilla's root bundle:
 ```ferron
 admin.example.com:443 {
     tls {
-        provider "manual"
+        provider manual
         cert "/etc/ssl/certs/admin.example.com.crt"
         key "/etc/ssl/private/admin.example.com.key"
 
@@ -49,7 +49,7 @@ For maximum security, combine mTLS with TLS 1.3-only settings:
 ```ferron
 internal-api.example.com:443 {
     tls {
-        provider "manual"
+        provider manual
         cert "/etc/ssl/certs/internal-api.example.com.crt"
         key "/etc/ssl/private/internal-api.example.com.key"
 
@@ -69,10 +69,10 @@ internal-api.example.com:443 {
 `client_auth` is configured inside a `tls` block, which is scoped to a specific host. This means you can enable mTLS for some hosts while keeping others public — no separate Ferron instance is needed.
 
 ```ferron
-// Public website — no client auth
+# Public website — no client auth
 example.com:443 {
     tls {
-        provider "acme"
+        provider acme
         challenge http-01
         contact "admin@example.com"
     }
@@ -80,10 +80,10 @@ example.com:443 {
     root /var/www/html
 }
 
-// Internal admin — requires client certificate
+# Internal admin — requires client certificate
 admin.example.com:443 {
     tls {
-        provider "manual"
+        provider manual
         cert "/etc/ssl/certs/admin.example.com.crt"
         key "/etc/ssl/private/admin.example.com.key"
 

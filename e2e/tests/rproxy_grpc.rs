@@ -200,7 +200,7 @@ async fn test_grpc_reverse_proxy_basic() {
 
 *:443 {
   tls {
-    provider "manual"
+    provider manual
     cert "/etc/certs/server.crt"
     key "/etc/certs/server.key"
   }
@@ -238,7 +238,7 @@ async fn test_grpc_reverse_proxy_tls_backend() {
 
 *:443 {
   tls {
-    provider "manual"
+    provider manual
     cert "/etc/certs/server.crt"
     key "/etc/certs/server.key"
   }

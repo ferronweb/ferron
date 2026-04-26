@@ -11,9 +11,9 @@ To enable manual TLS for a host, configure the `tls` directive with the `"manual
 
 ```ferron
 # Replace "manual-tls.example.com" with your domain name.
-manual-tls.example.com:443 {
+manual-tls.example.com {
     tls {
-        provider "manual"
+        provider manual
         cert "/etc/ssl/certs/manual-tls.example.com.crt"
         key "/etc/ssl/private/manual-tls.example.com.key"
     }
@@ -22,12 +22,23 @@ manual-tls.example.com:443 {
 }
 ```
 
+Or with an alias:
+
+```ferron
+# Replace "manual-tls.example.com" with your domain name.
+manual-tls.example.com {
+    tls /etc/ssl/certs/manual-tls.example.com.crt /etc/ssl/private/manual-tls.example.com.key
+
+    root /var/www/html
+}
+```
+
 You can also use environment variable interpolation for the paths:
 
 ```ferron
-manual-tls.example.com:443 {
+manual-tls.example.com {
     tls {
-        provider "manual"
+        provider manual
         cert "{{env.TLS_CERT}}"
         key "{{env.TLS_KEY}}"
     }
@@ -43,28 +54,16 @@ The certificate and private key must match. If they do not match, TLS handshakes
 You can configure manual TLS per virtual host. This is useful when each domain uses different certificates:
 
 ```ferron
-example.com:443 {
-    tls {
-        provider "manual"
-        cert "/etc/ssl/certs/example.com.crt"
-        key "/etc/ssl/private/example.com.key"
-    }
-
-    location / {
-        root /var/www/example
-    }
+example.com {
+    tls /etc/ssl/certs/example.com.crt /etc/ssl/private/example.com.key
+    
+    root /var/www/example
 }
 
-api.example.com:443 {
-    tls {
-        provider "manual"
-        cert "/etc/ssl/certs/api.example.com.crt"
-        key "/etc/ssl/private/api.example.com.key"
-    }
+api.example.com {
+    tls /etc/ssl/certs/api.example.com.crt /etc/ssl/private/api.example.com.key
 
-    location / {
-        proxy http://localhost:3000
-    }
+    proxy http://localhost:3000
 }
 ```
 
@@ -73,9 +72,9 @@ api.example.com:443 {
 You can combine manual TLS with custom cipher suites, ECDH curves, and protocol version restrictions:
 
 ```ferron
-api.example.com:443 {
+api.example.com {
     tls {
-        provider "manual"
+        provider manual
         cert "/etc/ssl/certs/api.example.com.crt"
         key "/etc/ssl/private/api.example.com.key"
 
@@ -88,9 +87,7 @@ api.example.com:443 {
         ecdh_curve x25519
     }
 
-    location / {
-        proxy http://localhost:3000
-    }
+    proxy http://localhost:3000
 }
 ```
 
@@ -99,6 +96,6 @@ api.example.com:443 {
 - Make sure Ferron can read both the certificate and key files.
 - Ensure the certificate file includes any required intermediate certificates when needed by your CA.
 - If you rotate certificates externally, reload or restart Ferron so updated files are used.
-- If you do not want automatic TLS on a host, do not use `provider "acme"` — use `provider "manual"` instead.
+- If you do not want automatic TLS on a host, do not use `provider acme` — use `provider manual` instead.
 - For all TLS-related directives (`cipher_suite`, `ecdh_curve`, `min_version`, `max_version`, `client_auth`), see [Security and TLS](/docs/v3/configuration/security-tls).
 - For ACME automatic TLS, see [ACME automatic TLS](/docs/v3/configuration/tls-acme).

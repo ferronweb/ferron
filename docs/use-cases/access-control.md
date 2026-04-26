@@ -52,7 +52,7 @@ Use a global block to deny access across all hosts:
 
 ```ferron
 * {
-    // Block known abusive addresses globally.
+    # Block known abusive addresses globally.
     block "198.51.100.10" "203.0.113.0/24"
 }
 ```
@@ -144,7 +144,7 @@ Use conditional matching to block access to dotfiles and sensitive paths:
 
 ```ferron
 match sensitive_path {
-    request.uri.path ~ "^/(?:\\. |config|private|backup)"
+    request.uri.path ~ "^/(?:\\.|config|private|backup)"
 }
 
 example.com {
@@ -166,9 +166,7 @@ For external authentication, use the `auth_to` directive to forward each request
 example.com {
     auth_to http://auth.example.com/auth
 
-    location / {
-        root /var/www/html
-    }
+    root /var/www/html
 }
 ```
 

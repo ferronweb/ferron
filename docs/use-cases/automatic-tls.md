@@ -16,7 +16,7 @@ Below is the example Ferron configuration that configures automatic TLS with the
 ```ferron
 example.com {
     tls {
-        provider "acme"
+        provider acme
         challenge http-01
         contact "admin@example.com"
     }
@@ -34,7 +34,7 @@ You can use TLS-ALPN-01 challenge instead, which works at the TLS handshake leve
 ```ferron
 example.com {
     tls {
-        provider "acme"
+        provider acme
         challenge tls-alpn-01
         contact "admin@example.com"
     }
@@ -50,7 +50,7 @@ If you run other servers (alongside Ferron) that support TLS, but not automatic 
 ```ferron
 example.com {
     tls {
-        provider "acme"
+        provider acme
         challenge http-01
         contact "admin@example.com"
 
@@ -75,7 +75,7 @@ When enabling on-demand issuance, configure `on_demand_ask` to avoid abuse. Ferr
 ```ferron
 *.example.com {
     tls {
-        provider "acme"
+        provider acme
         challenge http-01
         contact "admin@example.com"
 
@@ -96,7 +96,7 @@ Below is an example configuration for DNS-01 with Cloudflare:
 ```ferron
 *.example.com {
     tls {
-        provider "acme"
+        provider acme
         challenge dns-01
         contact "admin@example.com"
 
@@ -119,7 +119,7 @@ Certificates are cached both in-memory and on disk (when a `cache` path is confi
 ```ferron
 example.com {
     tls {
-        provider "acme"
+        provider acme
         challenge http-01
         contact "admin@example.com"
         cache "/var/cache/ferron-acme"

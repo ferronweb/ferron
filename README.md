@@ -55,7 +55,7 @@ example.com {
     root "/var/www/html"
     directory_listing
 
-    tls true {
+    tls {
         provider acme
         email "admin@example.com"
     }

@@ -219,7 +219,7 @@ async fn test_acme_common(challenge_type: &str, hostname: &str, extra_host_confi
                 r#"
 {} {{
   tls {{
-    provider "acme"
+    provider acme
     cache "/var/cache/ferron-acme"
     directory "https://pebble:14000/dir"
     no_verification true

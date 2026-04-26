@@ -8,7 +8,7 @@ DNS providers are used by the `tls-acme` module to solve the **DNS-01 ACME chall
 ```ferron
 *.example.com:443 {
     tls {
-        provider "acme"
+        provider acme
         challenge dns-01
         contact "admin@example.com"
         dns {

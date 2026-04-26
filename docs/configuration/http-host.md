@@ -46,13 +46,21 @@ To use manual TLS instead:
 ```ferron
 example.com {
     tls {
-        provider "manual"
+        provider manual
         cert "/etc/ssl/cert.pem"
         key "/etc/ssl/key.pem"
     }
     root /var/www/html
 }
 ```
+
+Or with an alias:
+
+```ferron
+example.com {
+    tls /etc/ssl/cert.pem /etc/ssl/key.pem
+    root /var/www/html
+}
 
 When an **explicit port** is specified (e.g. `example.com:8080`), only a single listener is started on that port, and no automatic ACME TLS is applied — you must configure TLS explicitly.
 
