@@ -82,7 +82,6 @@ example.com {
 
 Notes:
 
-- The redirect respects the `X-Forwarded-Proto: https` header to avoid redirect loops when behind a TLS-terminating reverse proxy.
 - `localhost` hostnames never get redirected — there is no HTTPS listener for them.
 - When an explicit port is specified (e.g. `example.com:8080`), no redirect is performed since no separate HTTPS listener exists.
 - The target port is `default_https_port` (default: `443`). When the port is `443`, it is omitted from the URL.
