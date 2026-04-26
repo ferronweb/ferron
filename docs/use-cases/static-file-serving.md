@@ -3,7 +3,7 @@ title: Static file serving
 description: "Serve static sites with Ferron using root, compression, directory listings, SPA rewrites, caching, and precompressed assets."
 ---
 
-Configuring Ferron as a static file server is straightforward — you just need to specify the directory containing your static files using the `root` directive inside a `location` block. To configure Ferron as a static file server, you can use the configuration below:
+Configuring Ferron as a static file server is straightforward — you just need to specify the directory containing your static files using the `root` directive. To configure Ferron as a static file server, you can use the configuration below:
 
 ```ferron
 example.com {
