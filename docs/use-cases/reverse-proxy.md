@@ -22,7 +22,7 @@ example.com {
     # The "/api" location is used for reverse proxying
     # For example, "/api/login" is proxied to "http://localhost:3000/api/login"
     location /api {
-        proxy http://localhost:3000/api
+        proxy http://localhost:3000
     }
 
     # The "/" location is used for serving static files
@@ -40,7 +40,7 @@ Ferron supports serving a single-page application and reverse proxying at once. 
 example.com {
     # The "/api" location is used for reverse proxying
     location /api {
-        proxy http://localhost:3000/api
+        proxy http://localhost:3000
     }
 
     # The "/" location is used for serving static files with SPA fallback
