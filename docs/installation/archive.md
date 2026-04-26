@@ -3,7 +3,7 @@ title: Manual installation from archive
 description: "Install Ferron 3 from a pre-built archive: download, extract, configure, and run on Windows, macOS, or Unix-like systems."
 ---
 
-Ferron 3 can be installed manually from a pre-built binaries from an archive. Archives are provided for Windows, macOS, Linux and FreeBSD.
+Ferron 3 can be installed manually from pre-built binaries from an archive. Archives are provided for Windows, macOS, Linux and FreeBSD.
 
 ## Prerequisites
 
