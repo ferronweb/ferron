@@ -43,3 +43,6 @@ Dockerfile*
 
 # GitHub-related files
 /.github/
+
+# Packaged files
+/dist/

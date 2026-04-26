@@ -20,6 +20,11 @@ export default [
     label: "Docker",
   },
   {
+    href: "/docs/v3/installation/archive",
+    target: "_self",
+    label: "Manual installation (archive)",
+  },
+  {
     label: "Building from source",
   },
   {

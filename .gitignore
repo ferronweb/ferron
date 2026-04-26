@@ -26,3 +26,6 @@ Thumbs.db
 
 # Editor-specific files
 /.idea
+
+# Packaged files
+/dist/
