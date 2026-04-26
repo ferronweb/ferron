@@ -33,7 +33,6 @@ edition = "2021"
 
 [dependencies]
 # Include the entrypoint. profile-default includes all standard modules.
-# Use default-features = false if you want to select modules manually.
 ferron-entrypoint = { git = "https://github.com/ferronweb/ferron.git", branch = "3.x", features = ["profile-default"] }
 
 # Add your custom Ferron module
