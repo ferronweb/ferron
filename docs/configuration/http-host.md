@@ -61,6 +61,7 @@ example.com {
     tls /etc/ssl/cert.pem /etc/ssl/key.pem
     root /var/www/html
 }
+```
 
 When an **explicit port** is specified (e.g. `example.com:8080`), only a single listener is started on that port, and no automatic ACME TLS is applied — you must configure TLS explicitly.
 
