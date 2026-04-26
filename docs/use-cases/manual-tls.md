@@ -56,7 +56,7 @@ You can configure manual TLS per virtual host. This is useful when each domain u
 ```ferron
 example.com {
     tls /etc/ssl/certs/example.com.crt /etc/ssl/private/example.com.key
-    
+
     root /var/www/example
 }
 
