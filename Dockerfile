@@ -61,19 +61,25 @@ RUN \
     echo "[target.$TARGET_TRIPLE]\nlinker = \"/tmp/musl-gcc\"\nrustflags = [\"-Clink-args=-L$LIB_PATH\", \"-Clink-args=-L/tmp/lib\", \"-Clink-args=-lc++abi\", \"-Clink-self-contained=no\"]" >> /usr/local/cargo/config.toml && \
     # Save target triple
     echo "$TARGET_TRIPLE" > /tmp/target_triple && \
+    # Get versions of libc++, libc++ headers and musl
+    wget -qO- "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/$ALPINE_PLATFORM/APKINDEX.tar.gz" > /tmp/APKINDEX.tar.gz && \
+    tar -xzf /tmp/APKINDEX.tar.gz -C /tmp/ && \
+    LIBCXX_STATIC_VERSION=$(awk 'BEGIN { RS="\n\n" } /(^|\n)P:libc\+\+-static($|\n)/' /tmp/APKINDEX | sed -n -E 's/^V:(.*)/\1/p') && \
+    LIBCXX_DEV_VERSION=$(awk 'BEGIN { RS="\n\n" } /(^|\n)P:libc\+\+-dev($|\n)/' /tmp/APKINDEX | sed -n -E 's/^V:(.*)/\1/p') && \
+    MUSL_DEV_VERSION=$(awk 'BEGIN { RS="\n\n" } /(^|\n)P:musl-dev($|\n)/' /tmp/APKINDEX | sed -n -E 's/^V:(.*)/\1/p') && \
     # Obtain libc++ for static linking
     mkdir /tmp/libcxx && \
-    wget -qO- "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/$ALPINE_PLATFORM/libc%2B%2B-static-21.1.2-r0.apk" | tar -xz -C /tmp/libcxx && \
+    wget -qO- "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/$ALPINE_PLATFORM/libc%2B%2B-static-$LIBCXX_STATIC_VERSION.apk" | tar -xz -C /tmp/libcxx && \
     mv /tmp/libcxx/usr/lib/*.a /tmp/lib && rm -rf /tmp/libcxx && \
     # Prepare C++ sysroot
     mkdir -p /tmp/sysroot && \
     # Obtain libc++ headers
     mkdir /tmp/libcxx-dev && mkdir -p /tmp/sysroot/usr/include/c++/v1/ && \
-    wget -qO- "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/$ALPINE_PLATFORM/libc%2B%2B-dev-21.1.2-r0.apk" | tar -xz -C /tmp/libcxx-dev && \
+    wget -qO- "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/$ALPINE_PLATFORM/libc%2B%2B-dev-$LIBCXX_DEV_VERSION.apk" | tar -xz -C /tmp/libcxx-dev && \
     mv /tmp/libcxx-dev/usr/include/c++/v1/* /tmp/sysroot/usr/include/c++/v1/ && rm -rf /tmp/libcxx-dev && \
     # Obtain musl headers
     mkdir /tmp/musl-dev && mkdir -p /tmp/sysroot/usr/include/musl/ && \
-    wget -qO- "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/$ALPINE_PLATFORM/musl-dev-1.2.5-r21.apk" | tar -xz -C /tmp/musl-dev && \
+    wget -qO- "https://dl-cdn.alpinelinux.org/alpine/v3.23/main/$ALPINE_PLATFORM/musl-dev-$MUSL_DEV_VERSION.apk" | tar -xz -C /tmp/musl-dev && \
     mv /tmp/musl-dev/usr/include/* /tmp/sysroot/usr/include/ && rm -rf /tmp/musl-dev && \
     # Symlink GCC toolchain
     mkdir -p /tmp/sysroot/usr/lib && ln -s /usr/lib/gcc /tmp/sysroot/usr/lib/gcc
