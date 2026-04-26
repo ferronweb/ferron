@@ -13,10 +13,6 @@ http example.com:8080 {
 }
 ```
 
-**Experimental HTTP/3 Support:**
-
-When HTTP/3 is enabled via the `protocols h3` directive, Ferron will also start a QUIC listener on the same port to handle HTTP/3 traffic. This is currently an **experimental feature** and may change in future releases.
-
 ## Directives
 
 ### Automatic TLS
