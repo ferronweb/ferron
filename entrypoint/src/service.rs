@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
+use ferron_core::loader::ModuleLoader;
 #[cfg(windows)]
 use windows_service::{
     define_windows_service,
@@ -35,6 +36,8 @@ pub const SERVICE_DESCRIPTION: &str =
 #[allow(clippy::type_complexity)]
 pub static PARAMS: OnceLock<(Option<String>, Option<String>, Option<String>, bool)> =
     OnceLock::new();
+#[allow(clippy::type_complexity)]
+pub static MODULE_LOADERS: OnceLock<std::sync::Mutex<usize>> = OnceLock::new();
 
 /// Entry point for the Windows service
 #[cfg(windows)]
@@ -43,8 +46,11 @@ pub fn run_service(
     config_params: Option<String>,
     config_adapter: Option<String>,
     verbose: bool,
+    loaders: Vec<Box<dyn ModuleLoader>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let _ = PARAMS.set((config_path, config_params, config_adapter, verbose));
+    let loaders_ptr = Box::into_raw(Box::new(loaders));
+    let _ = MODULE_LOADERS.set(std::sync::Mutex::new(loaders_ptr as usize));
 
     // Define the service entry point
     define_windows_service!(ffi_service_entry, service_main);
@@ -114,8 +120,30 @@ fn run_service_impl() -> Result<(), Box<dyn std::error::Error>> {
     };
     status_handle.set_service_status(status.clone())?;
 
+    // Safety: MODULE_LOADERS is using a Mutex, and null pointers would panic instead of UB
+    let module_loaders = unsafe {
+        let ptr_ptr = &mut *MODULE_LOADERS
+            .get()
+            .expect("MODULE_LOADERS not initialized")
+            .lock()
+            .expect("MODULE_LOADERS not initialized");
+        let ptr = *ptr_ptr;
+        *ptr_ptr = 0;
+        if ptr == 0 {
+            panic!("MODULE_LOADERS not initialized");
+        }
+        Box::from_raw(ptr as *mut Vec<Box<dyn ModuleLoader>>)
+    };
+
     // Run the application with the parsed configuration
-    let server_result = crate::run(config_path, config_params, config_adapter, verbose, false);
+    let server_result = crate::run(
+        config_path,
+        config_params,
+        config_adapter,
+        verbose,
+        false,
+        *module_loaders,
+    );
 
     if let Err(e) = server_result {
         ferron_core::log_error!("Server error: {}", e);
@@ -141,27 +169,10 @@ fn parse_config_params(params_str: &str) -> HashMap<String, String> {
     params
 }
 
-use ferron_core::registry::RegistryBuilder;
-
-/// Check if running as a Windows service
-#[cfg(windows)]
-#[inline]
-pub fn is_running_as_service() -> bool {
-    std::env::var("WINDOWS_SERVICE")
-        .map(|v| v == "1")
-        .unwrap_or(false)
-}
-
 /// On non-Windows platforms, service support is not available
 #[cfg(not(windows))]
 pub fn run_service() -> Result<(), Box<dyn std::error::Error>> {
     Err("Windows services are not supported on this platform".into())
-}
-
-#[cfg(not(windows))]
-#[inline]
-pub fn is_running_as_service() -> bool {
-    false
 }
 
 /// Install the service on Windows with optional command-line arguments

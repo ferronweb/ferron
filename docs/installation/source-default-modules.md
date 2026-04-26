@@ -1,9 +1,9 @@
 ---
-title: "Building Ferron 3 from source"
-description: "How to build Ferron 3 from source using Cargo."
+title: "Building Ferron 3 from source (default modules)"
+description: "How to build Ferron 3 from source using Cargo (with default modules)."
 ---
 
-This page describes how to build Ferron 3 from source. This is currently the only supported installation method.
+This page describes how to build Ferron 3 from source, with default modules.
 
 ## Prerequisites
 
@@ -60,6 +60,12 @@ On Unix systems, you can run Ferron as a background daemon with a PID file:
 cargo run -r -p ferron -- daemon -c ferron.conf --pid-file /var/run/ferron.pid
 ```
 
+You can then reload the daemon using its PID file:
+
+```sh
+kill -HUP $(cat /var/run/ferron.pid)
+```
+
 ## Running tests and checks
 
 Before submitting changes or if you suspect issues, run the full test suite and code checks:
@@ -73,6 +79,3 @@ cargo clippy --workspace --all-targets -- -D warnings  # run linter with warning
 ## Notes and troubleshooting
 
 - **Build times** — the first build will take longer as Cargo downloads and compiles all dependencies. Subsequent builds are faster.
-- **All modules are compiled into the binary** — Ferron uses a module-driven architecture where all modules are statically linked. No runtime plugin loading is available yet.
-- **Primary testing target is Linux** — Windows and macOS receive less coverage. If you encounter platform-specific issues, please report them.
-- **Alpha quality** — Ferron 3 is an early development release. APIs and configuration may change.

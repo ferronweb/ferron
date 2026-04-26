@@ -1,0 +1,101 @@
+[package]
+name = "ferron-entrypoint"
+version = "3.0.0-alpha.3"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"
+tokio-util = "0.7.18"
+anyhow = "1.0.102"
+malloc-best-effort = "0.1.4"
+backtrace = "0.3.76"
+shadow-rs = { version = "1.2.0", default-features = false }
+
+ferron-core = { path = "../core" }
+
+# Default Ferron modules
+ferron-http-server = { path = "../modules/http-server", optional = true }
+ferron-http-static = { path = "../modules/http-static", optional = true }
+ferron-http-proxy = { path = "../modules/http-proxy", optional = true }
+ferron-http-fproxy = { path = "../modules/http-fproxy", optional = true }
+ferron-http-basicauth = { path = "../modules/http-basicauth", optional = true }
+ferron-http-cache = { path = "../modules/http-cache", optional = true }
+ferron-http-headers = { path = "../modules/http-headers", optional = true }
+ferron-http-ratelimit = { path = "../modules/http-ratelimit", optional = true }
+ferron-http-response = { path = "../modules/http-response", optional = true }
+ferron-http-rewrite = { path = "../modules/http-rewrite", optional = true }
+ferron-http-map = { path = "../modules/http-map", optional = true }
+ferron-http-compression = { path = "../modules/http-compression", optional = true }
+ferron-http-buffer = { path = "../modules/http-buffer", optional = true }
+ferron-http-replace = { path = "../modules/http-replace", optional = true }
+ferron-http-fauth = { path = "../modules/http-fauth", optional = true }
+ferron-http-cgi = { path = "../modules/http-cgi", optional = true }
+ferron-http-scgi = { path = "../modules/http-scgi", optional = true }
+ferron-http-fcgi = { path = "../modules/http-fcgi", optional = true }
+ferron-admin-api = { path = "../modules/admin-api", optional = true }
+ferron-config-json = { path = "../modules/config-json", optional = true }
+ferron-config-ferronconf = { path = "../modules/config-ferronconf", optional = true }
+ferron-dns-stalwart = { path = "../modules/dns-stalwart", optional = true }
+ferron-tls-manual = { path = "../modules/tls-manual", optional = true }
+ferron-tls-acme = { path = "../modules/tls-acme", optional = true }
+ferron-tls-local = { path = "../modules/tls-local", optional = true }
+ferron-ocsp-stapler = { path = "../modules/ocsp-stapler", optional = true }
+ferron-observability-consolelog = { path = "../modules/observability-consolelog", optional = true }
+ferron-observability-logfile = { path = "../modules/observability-logfile", optional = true }
+ferron-observability-otlp = { path = "../modules/observability-otlp", optional = true }
+ferron-observability-prometheus = { path = "../modules/observability-prometheus", optional = true }
+ferron-observability-format-json = { path = "../modules/observability-format-json", optional = true }
+ferron-observability-format-text = { path = "../modules/observability-format-text", optional = true }
+ferron-observability-process-metrics = { path = "../modules/observability-process-metrics", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-service = "0.8"
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31", features = ["fs", "signal", "process"] }
+signal-hook = "0.4"
+
+[build-dependencies]
+winresource = "0.1.19"
+shadow-rs = { version = "1.2.0", default-features = false, features = [
+    "build",
+] }
+
+[features]
+profile-default = [
+    "ferron-http-server",
+    "ferron-http-static",
+    "ferron-http-proxy",
+    "ferron-http-fproxy",
+    "ferron-http-basicauth",
+    "ferron-http-cache",
+    "ferron-http-headers",
+    "ferron-http-ratelimit",
+    "ferron-http-response",
+    "ferron-http-rewrite",
+    "ferron-http-map",
+    "ferron-http-compression",
+    "ferron-http-buffer",
+    "ferron-http-replace",
+    "ferron-http-fauth",
+    "ferron-http-cgi",
+    "ferron-http-scgi",
+    "ferron-http-fcgi",
+    "ferron-admin-api",
+    "ferron-config-json",
+    "ferron-config-ferronconf",
+    "ferron-dns-stalwart",
+    "ferron-tls-manual",
+    "ferron-tls-acme",
+    "ferron-tls-local",
+    "ferron-ocsp-stapler",
+    "ferron-observability-consolelog",
+    "ferron-observability-logfile",
+    "ferron-observability-otlp",
+    "ferron-observability-prometheus",
+    "ferron-observability-format-json",
+    "ferron-observability-format-text",
+    "ferron-observability-process-metrics",
+]

@@ -15,9 +15,19 @@ export default [
     category: true,
   },
   {
-    href: "/docs/v3/installation/building-from-source",
-    target: "_self",
     label: "Building from source",
+  },
+  {
+    href: "/docs/v3/installation/source-default-modules",
+    target: "_self",
+    label: "Default modules",
+    sub: true,
+  },
+  {
+    href: "/docs/v3/installation/source-custom-modules",
+    target: "_self",
+    label: "Custom modules",
+    sub: true,
   },
   {
     label: "Common use cases",
