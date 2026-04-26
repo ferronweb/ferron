@@ -173,7 +173,7 @@ The `fcgi_php` directive is a convenience alias for PHP FastCGI backends. It ena
 
 ```ferron
 example.com {
-    root "/var/www/html"
+    root /var/www/html
     fcgi_php "tcp://127.0.0.1:9000"
 }
 ```
@@ -182,7 +182,7 @@ example.com {
 
 ```ferron
 example.com {
-    root "/var/www/html"
+    root /var/www/html
     fcgi_php "unix:///run/php/php8.4-fpm.sock"
 }
 ```
@@ -276,7 +276,7 @@ When used alongside an authentication module (e.g., `http-basicauth`), Ferron au
 
 ```ferron
 example.com {
-    root "/var/www/html"
+    root /var/www/html
     fcgi_php "unix:///run/php/php8.4-fpm.sock"
 }
 ```
@@ -285,7 +285,7 @@ example.com {
 
 ```ferron
 example.com {
-    root "/var/www/html"
+    root /var/www/html
     fcgi_php "tcp://127.0.0.1:9000"
 }
 ```
@@ -319,7 +319,7 @@ example.com {
 
 ```ferron
 example.com {
-    root "/var/www/html"
+    root /var/www/html
 
     # Only .php files are processed by the FastCGI backend
     fcgi {

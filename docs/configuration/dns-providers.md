@@ -6,7 +6,7 @@ description: "Reference for all built-in DNS providers used with the ACME DNS-01
 DNS providers are used by the `tls-acme` module to solve the **DNS-01 ACME challenge** — the only challenge type that supports wildcard certificates. You configure a provider inside the `dns { }` block nested within a `tls { }` block, selecting it by name with the `provider` directive.
 
 ```ferron
-*.example.com:443 {
+*.example.com {
     tls {
         provider acme
         challenge dns-01
@@ -34,9 +34,16 @@ All DNS provider implementations are part of the `dns-stalwart` module.
 **Configuration example:**
 
 ```ferron
-dns {
-    provider "bunny"
-    api_key "YOUR_BUNNY_API_KEY"
+*.example.com {
+    tls {
+        provider acme
+        challenge dns-01
+        
+        dns {
+            provider bunny
+            api_key "YOUR_BUNNY_API_KEY"
+        }
+    }
 }
 ```
 
@@ -54,17 +61,29 @@ dns {
 **Configuration example:**
 
 ```ferron
-# Scoped API token (recommended)
-dns {
-    provider "cloudflare"
-    api_key "YOUR_CLOUDFLARE_API_TOKEN"
-}
+*.example.com {
+    # Scoped API token (recommended)
+    tls {
+        provider acme
+        challenge dns-01
+        
+        dns {
+            provider cloudflare
+            api_key "YOUR_CLOUDFLARE_API_TOKEN"
+        }
+    }
 
-# Global API key
-dns {
-    provider "cloudflare"
-    api_key "YOUR_GLOBAL_API_KEY"
-    email "admin@example.com"
+    # Global API key
+    tls {
+        provider acme
+        challenge dns-01
+        
+        dns {
+            provider cloudflare
+            api_key "YOUR_GLOBAL_API_KEY"
+            email "admin@example.com"
+        }
+    }
 }
 ```
 
@@ -81,9 +100,16 @@ dns {
 **Configuration example:**
 
 ```ferron
-dns {
-    provider "desec"
-    api_token "YOUR_DESEC_API_TOKEN"
+*.example.com {
+    tls {
+        provider acme
+        challenge dns-01
+        
+        dns {
+            provider desec
+            api_token "YOUR_DESEC_API_TOKEN"
+        }
+    }
 }
 ```
 
@@ -100,9 +126,16 @@ dns {
 **Configuration example:**
 
 ```ferron
-dns {
-    provider "digitalocean"
-    oauth_token "YOUR_DO_OAUTH_TOKEN"
+*.example.com {
+    tls {
+        provider acme
+        challenge dns-01
+        
+        dns {
+            provider digitalocean
+            oauth_token "YOUR_DO_OAUTH_TOKEN"
+        }
+    }
 }
 ```
 
@@ -120,10 +153,17 @@ dns {
 **Configuration example:**
 
 ```ferron
-dns {
-    provider "dnsimple"
-    oauth_token "YOUR_DNSIMPLE_TOKEN"
-    account_id "12345"
+*.example.com {
+    tls {
+        provider acme
+        challenge dns-01
+        
+        dns {
+            provider dnsimple
+            oauth_token "YOUR_DNSIMPLE_TOKEN"
+            account_id "12345"
+        }
+    }
 }
 ```
 
@@ -144,11 +184,18 @@ dns {
 **Configuration example:**
 
 ```ferron
-dns {
-    provider "googlecloud"
-    service_account_json "{\"type\":\"service_account\", ...}"
-    project_id "my-gcp-project"
-    managed_zone "example-com"
+*.example.com {
+    tls {
+        provider acme
+        challenge dns-01
+        
+        dns {
+            provider googlecloud
+            service_account_json "{\"type\":\"service_account\", ...}"
+            project_id "my-gcp-project"
+            managed_zone "example-com"
+        }
+    }
 }
 ```
 
@@ -168,12 +215,19 @@ dns {
 **Configuration example:**
 
 ```ferron
-dns {
-    provider "ovh"
-    application_key "YOUR_APP_KEY"
-    application_secret "YOUR_APP_SECRET"
-    consumer_key "YOUR_CONSUMER_KEY"
-    endpoint "ovh-eu"
+*.example.com {
+    tls {
+        provider acme
+        challenge dns-01
+        
+        dns {
+            provider ovh
+            application_key "YOUR_APP_KEY"
+            application_secret "YOUR_APP_SECRET"
+            consumer_key "YOUR_CONSUMER_KEY"
+            endpoint "ovh-eu"
+        }
+    }
 }
 ```
 
@@ -191,10 +245,17 @@ dns {
 **Configuration example:**
 
 ```ferron
-dns {
-    provider "porkbun"
-    api_key "YOUR_PORKBUN_API_KEY"
-    secret_key "YOUR_PORKBUN_SECRET_KEY"
+*.example.com {
+    tls {
+        provider acme
+        challenge dns-01
+        
+        dns {
+            provider porkbun
+            api_key "YOUR_PORKBUN_API_KEY"
+            secret_key "YOUR_PORKBUN_SECRET_KEY"
+        }
+    }
 }
 ```
 
@@ -216,12 +277,19 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
 **Configuration example:**
 
 ```ferron
-dns {
-    provider "rfc2136"
-    server "udp://ns1.example.com:53"
-    key_name "ferron-acme."
-    key_secret "BASE64_ENCODED_TSIG_SECRET"
-    key_algorithm "HMAC-SHA256"
+*.example.com {
+    tls {
+        provider acme
+        challenge dns-01
+        
+        dns {
+            provider rfc2136
+            server "udp://ns1.example.com:53"
+            key_name "ferron-acme."
+            key_secret "BASE64_ENCODED_TSIG_SECRET"
+            key_algorithm "HMAC-SHA256"
+        }
+    }
 }
 ```
 
@@ -243,12 +311,19 @@ dns {
 **Configuration example:**
 
 ```ferron
-dns {
-    provider "route53"
-    access_key_id "AKIAIOSFODNN7EXAMPLE"
-    secret_access_key "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-    region "us-east-1"
-    hosted_zone_id "Z1D633PJN98FT9"
+*.example.com {
+    tls {
+        provider acme
+        challenge dns-01
+        
+        dns {
+            rovider route53
+            access_key_id "AKIAIOSFODNN7EXAMPLE"
+            secret_access_key "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+            region "us-east-1"
+            hosted_zone_id "Z1D633PJN98FT9"
+        }
+    }
 }
 ```
 
@@ -266,10 +341,17 @@ dns {
 **Configuration example:**
 
 ```ferron
-dns {
-    provider "spaceship"
-    api_key "YOUR_SPACESHIP_API_KEY"
-    api_secret "YOUR_SPACESHIP_API_SECRET"
+*.example.com {
+    tls {
+        provider acme
+        challenge dns-01
+        
+        dns {
+            provider "spaceship"
+            api_key "YOUR_SPACESHIP_API_KEY"
+            api_secret "YOUR_SPACESHIP_API_SECRET"
+        }
+    }
 }
 ```
 
@@ -280,9 +362,16 @@ dns {
 All string directives support environment variable interpolation. This avoids storing secrets directly in your configuration file:
 
 ```ferron
-dns {
-    provider "cloudflare"
-    api_key "{{env.CF_API_TOKEN}}"
+*.example.com {
+    tls {
+        provider acme
+        challenge dns-01
+        
+        dns {
+            provider cloudflare
+            api_key "{{env.CF_API_TOKEN}}"
+        }
+    }
 }
 ```
 

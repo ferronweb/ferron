@@ -35,11 +35,11 @@ This means you can use HTTPS for development without any configuration:
 
 ```ferron
 localhost {
-    root "/var/www/local-site"
+    root /var/www/local-site
 }
 
 127.0.0.1 {
-    root "/var/www/local-site"
+    root /var/www/local-site
 }
 ```
 

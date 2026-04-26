@@ -12,7 +12,7 @@ To run PHP with FastCGI (commonly PHP-FPM), use `fcgi_php`:
 ```ferron
 # Example configuration with PHP through FastCGI. Replace "example.com" with your domain name.
 example.com {
-    root "/var/www/html" # Replace "/var/www/html" with your PHP app directory
+    root /var/www/html # Replace "/var/www/html" with your PHP app directory
     fcgi_php "unix:///run/php/php8.4-fpm.sock" # Replace with your PHP FastCGI socket or TCP URL
 
     # If using PHP-FPM over a Unix socket, ensure the socket is accessible by Ferron.
@@ -31,7 +31,7 @@ If you specifically want classic CGI execution, enable `cgi` and map the `.php` 
 ```ferron
 # Example configuration with PHP through CGI. Replace "example.com" with your domain name.
 example.com {
-    root "/var/www/html" # Replace "/var/www/html" with your PHP app directory
+    root /var/www/html # Replace "/var/www/html" with your PHP app directory
     cgi {
         extension ".php"
     }

@@ -30,7 +30,7 @@ match english_language {
 
 example.com {
     if english_language {
-        root "/var/www/english"
+        root /var/www/english
     }
 }
 ```

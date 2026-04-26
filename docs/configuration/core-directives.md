@@ -228,11 +228,11 @@ The bundled `file` provider (`observability-logfile`) writes observability event
 
 ```ferron
 example.com {
-    observability true {
+    observability {
         provider file {
-            access_log "/var/log/ferron/access.log"
-            error_log "/var/log/ferron/error.log"
-            format "combined"
+            access_log /var/log/ferron/access.log
+            error_log /var/log/ferron/error.log
+            format combined
         }
     }
 }
@@ -255,38 +255,42 @@ Ferron provides shorthand directives for common observability configurations. Th
 The `log` directive is shorthand for configuring access logging with the `file` provider.
 
 ```ferron
-# These are equivalent:
+example.com {
+    # These are equivalent:
 
-log "/var/log/access.log" {
-    format "combined"
-}
+    log /var/log/access.log {
+        format combined
+    }
 
-observability {
-    provider file
-    access_log "/var/log/access.log"
-    format "combined"
+    observability {
+        provider file
+        access_log /var/log/access.log
+        format combined
+    }
 }
 ```
 
 Examples:
 
 ```ferron
-# Enable access logging with default format
-log "/var/log/access.log"
+example.com {
+    # Enable access logging with default format
+    log /var/log/access.log
 
-# Enable with custom format
-log "/var/log/access.log" {
-    format "json"
+    # Enable with custom format
+    log /var/log/access.log {
+        format json
+    }
+
+    # Enable with log rotation (100MB max, keep 5 rotated files)
+    log /var/log/access.log {
+        access_log_rotate_size 104857600
+        access_log_rotate_keep 5
+    }
+
+    # Disable access logging
+    log false
 }
-
-# Enable with log rotation (100MB max, keep 5 rotated files)
-log "/var/log/access.log" {
-    access_log_rotate_size 104857600
-    access_log_rotate_keep 5
-}
-
-# Disable access logging
-log false
 ```
 
 ### `error_log`
@@ -294,30 +298,34 @@ log false
 The `error_log` directive is shorthand for configuring error logging with the `file` provider.
 
 ```ferron
-# These are equivalent:
+example.com {
+    # These are equivalent:
 
-error_log "/var/log/error.log"
+    error_log /var/log/error.log
 
-observability {
-    provider file
-    error_log "/var/log/error.log"
+    observability {
+        provider file
+        error_log /var/log/error.log
+    }
 }
 ```
 
 Examples:
 
 ```ferron
-# Enable error logging
-error_log "/var/log/error.log"
+example.com {
+    # Enable error logging
+    error_log /var/log/error.log
 
-# Enable with log rotation (50MB max, keep 3 rotated files)
-error_log "/var/log/error.log" {
-    error_log_rotate_size 52428800
-    error_log_rotate_keep 3
+    # Enable with log rotation (50MB max, keep 3 rotated files)
+    error_log /var/log/error.log {
+        error_log_rotate_size 52428800
+        error_log_rotate_keep 3
+    }
+
+    # Disable error logging
+    error_log false
 }
-
-# Disable error logging
-error_log false
 ```
 
 ### `console_log`
@@ -325,15 +333,16 @@ error_log false
 The `console_log` directive is shorthand for configuring console-based observability.
 
 ```ferron
-# These are equivalent:
+example.com {
+    # These are equivalent:
 
-console_log {
-    format "json"
-}
+    console_log {
+        format json
+    }
 
-observability {
-    provider console
-    format "json"
+    observability {
+        provider console
+    }
 }
 ```
 

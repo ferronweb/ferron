@@ -13,7 +13,7 @@ To run CGI programs, enable `cgi` at the HTTP host scope:
 
 ```ferron
 example.com {
-    root "/var/www/html"
+    root /var/www/html
     cgi
 }
 ```
@@ -36,7 +36,7 @@ You can also execute CGI scripts outside `cgi-bin` by registering additional fil
 
 ```ferron
 example.com {
-    root "/var/www/html"
+    root /var/www/html
     cgi
     extension ".php"
     extension ".py"
@@ -62,7 +62,7 @@ Define explicit interpreters for specific file extensions:
 
 ```ferron
 example.com {
-    root "/var/www/html"
+    root /var/www/html
     cgi
     interpreter ".php" php-cgi -c /etc/php/8.2/cgi/php.ini
     interpreter ".pl" perl
@@ -82,7 +82,7 @@ Pass `false` as the second argument to `interpreter` to disable the default inte
 
 ```ferron
 example.com {
-    root "/var/www/html"
+    root /var/www/html
     cgi
     interpreter ".php" false
 }
@@ -115,7 +115,7 @@ Set CGI environment variables that are passed to the interpreter process:
 
 ```ferron
 example.com {
-    root "/var/www/html"
+    root /var/www/html
     cgi
     environment "APP_ENV" "production"
     environment "APP_SECRET" "{{env.APP_SECRET}}"
@@ -155,7 +155,7 @@ Example safe configuration:
 
 ```ferron
 example.com {
-    root "/var/www/html"
+    root /var/www/html
 
     # CGI is only enabled for cgi-bin and .php scripts
     cgi
@@ -163,7 +163,7 @@ example.com {
 
     # Upload directory is safe (no CGI execution)
     location /uploads {
-        root "/var/www/html/uploads"
+        root /var/www/html/uploads
         cgi false
     }
 }
