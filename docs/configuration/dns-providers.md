@@ -38,7 +38,7 @@ All DNS provider implementations are part of the `dns-stalwart` module.
     tls {
         provider acme
         challenge dns-01
-        
+
         dns {
             provider bunny
             api_key "YOUR_BUNNY_API_KEY"
@@ -66,7 +66,7 @@ All DNS provider implementations are part of the `dns-stalwart` module.
     tls {
         provider acme
         challenge dns-01
-        
+
         dns {
             provider cloudflare
             api_key "YOUR_CLOUDFLARE_API_TOKEN"
@@ -77,7 +77,7 @@ All DNS provider implementations are part of the `dns-stalwart` module.
     tls {
         provider acme
         challenge dns-01
-        
+
         dns {
             provider cloudflare
             api_key "YOUR_GLOBAL_API_KEY"
@@ -104,7 +104,7 @@ All DNS provider implementations are part of the `dns-stalwart` module.
     tls {
         provider acme
         challenge dns-01
-        
+
         dns {
             provider desec
             api_token "YOUR_DESEC_API_TOKEN"
@@ -130,7 +130,7 @@ All DNS provider implementations are part of the `dns-stalwart` module.
     tls {
         provider acme
         challenge dns-01
-        
+
         dns {
             provider digitalocean
             oauth_token "YOUR_DO_OAUTH_TOKEN"
@@ -157,7 +157,7 @@ All DNS provider implementations are part of the `dns-stalwart` module.
     tls {
         provider acme
         challenge dns-01
-        
+
         dns {
             provider dnsimple
             oauth_token "YOUR_DNSIMPLE_TOKEN"
@@ -188,7 +188,7 @@ All DNS provider implementations are part of the `dns-stalwart` module.
     tls {
         provider acme
         challenge dns-01
-        
+
         dns {
             provider googlecloud
             service_account_json "{\"type\":\"service_account\", ...}"
@@ -219,7 +219,7 @@ All DNS provider implementations are part of the `dns-stalwart` module.
     tls {
         provider acme
         challenge dns-01
-        
+
         dns {
             provider ovh
             application_key "YOUR_APP_KEY"
@@ -249,7 +249,7 @@ All DNS provider implementations are part of the `dns-stalwart` module.
     tls {
         provider acme
         challenge dns-01
-        
+
         dns {
             provider porkbun
             api_key "YOUR_PORKBUN_API_KEY"
@@ -281,7 +281,7 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
     tls {
         provider acme
         challenge dns-01
-        
+
         dns {
             provider rfc2136
             server "udp://ns1.example.com:53"
@@ -315,7 +315,7 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
     tls {
         provider acme
         challenge dns-01
-        
+
         dns {
             rovider route53
             access_key_id "AKIAIOSFODNN7EXAMPLE"
@@ -345,7 +345,7 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
     tls {
         provider acme
         challenge dns-01
-        
+
         dns {
             provider "spaceship"
             api_key "YOUR_SPACESHIP_API_KEY"
@@ -366,7 +366,7 @@ All string directives support environment variable interpolation. This avoids st
     tls {
         provider acme
         challenge dns-01
-        
+
         dns {
             provider cloudflare
             api_key "{{env.CF_API_TOKEN}}"
