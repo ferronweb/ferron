@@ -30,7 +30,7 @@ Or simply (since automatic TLS via ACME is enabled by default in Ferron for publ
 ```ferron
 example.com {
     # Automatic TLS is enabled by default, no explicit TLS directive needed
-    
+
     root /var/www/html
 }
 ```
