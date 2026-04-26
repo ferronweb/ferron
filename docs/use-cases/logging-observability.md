@@ -18,9 +18,7 @@ Use this when running Ferron directly on a VM or bare metal and collecting logs 
 
 ```ferron
 example.com {
-    log "access.log" {
-        format "text"
-    }
+    log "access.log"
 
     root /var/www/html
 }
@@ -68,7 +66,7 @@ You can customize the text log format using the `access_pattern` directive:
 ```ferron
 example.com {
     log "access.log" {
-        format "text"
+        format text
         access_pattern "%client_ip - %auth_user [%{%d/%b/%Y:%H:%M:%S %z}t] \"%method %path_and_query %version\" %status %content_length \"%{Referer}i\" \"%{User-Agent}i\""
     }
 
@@ -140,7 +138,7 @@ example.com {
     observability {
         provider "prometheus"
         endpoint_listen "127.0.0.1:8889"
-        endpoint_format "text"
+        endpoint_format text
     }
 
     root /var/www/html
@@ -156,7 +154,7 @@ example.com {
     observability {
         provider "prometheus"
         endpoint_listen "0.0.0.0:8889"
-        endpoint_format "text"
+        endpoint_format text
     }
 
     root /var/www/html

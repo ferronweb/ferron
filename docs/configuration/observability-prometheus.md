@@ -14,7 +14,7 @@ example.com {
     observability {
         provider "prometheus"
         endpoint_listen "127.0.0.1:8889"
-        endpoint_format "text"
+        endpoint_format text
     }
 }
 ```
@@ -112,7 +112,7 @@ example.com {
     observability {
         provider "prometheus"
         endpoint_listen "0.0.0.0:8889"
-        endpoint_format "text"
+        endpoint_format text
     }
     root /var/www/html
 }

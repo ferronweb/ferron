@@ -14,7 +14,7 @@ Access logs are configured via `log` blocks inside host or global scopes:
 ```ferron
 example.com {
     log "access" {
-        format "json"
+        format json
         fields "method" "path" "status" "duration_secs"
     }
 }
@@ -58,7 +58,7 @@ The JSON formatter serializes each access log entry as a single-line JSON object
 ```ferron
 example.com {
     log "access" {
-        format "json"
+        format json
     }
 }
 ```
@@ -82,7 +82,7 @@ By default, it uses the **Combined Log Format (CLF)**, the same format used by A
 ```ferron
 example.com {
     log "access" {
-        format "text"
+        format text
     }
 }
 ```
