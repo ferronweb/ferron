@@ -15,6 +15,11 @@ export default [
     category: true,
   },
   {
+    href: "/docs/v3/installation/docker",
+    target: "_self",
+    label: "Docker",
+  },
+  {
     label: "Building from source",
   },
   {

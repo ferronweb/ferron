@@ -231,10 +231,22 @@ pub fn resolve_cache_path(config: &ServerConfigurationBlock) -> Option<PathBuf> 
     }
 
     // Default to platform data directory
-    dirs::data_local_dir().map(|mut p| {
+    let fallback_path = dirs::data_local_dir().map(|mut p| {
         p.push("ferron-acme");
         p
-    })
+    });
+
+    // /var/cache/ferron-acme heuristic for the Docker image
+    #[cfg(unix)]
+    let fallback_path = fallback_path.or_else(|| {
+        if matches!(std::fs::exists("/var/cache/ferron-acme"), Ok(true)) {
+            Some(PathBuf::from("/var/cache/ferron-acme"))
+        } else {
+            None
+        }
+    });
+
+    fallback_path
 }
 
 /// Builds a Rustls client configuration for ACME.
