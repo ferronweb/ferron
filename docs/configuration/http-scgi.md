@@ -150,7 +150,9 @@ example.com {
     root /var/www/html
 
     basic_auth {
-        user "admin" "password"
+        users {
+            admin "$argon2id$v=19$m=19456,t=2,p=1$..."
+        }
     }
 
     scgi tcp://127.0.0.1:4000
