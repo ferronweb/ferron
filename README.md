@@ -105,6 +105,12 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+Package Ferron for distribution (requires `just`):
+
+```sh
+just package # Archive (.zip for Windows, .tar.gz for Unix)
+```
+
 ## Features
 
 What currently works in this alpha:
