@@ -176,14 +176,10 @@ ferron run --verbose
 You should see messages like:
 
 ```text
-INFO Generating initial ticket keys at /path/to/session_tickets.keys (3 keys)
-INFO Loaded 3 ticket keys from /path/to/session_tickets.keys (rotation interval: 12h)
-INFO TLS session ticket keys rotated successfully
+Generating initial ticket keys at /path/to/session_tickets.keys (3 keys)
+Loaded 3 ticket keys from /path/to/session_tickets.keys (rotation interval: 12h)
+TLS session ticket keys rotated successfully
 ```
-
-## Integration with config reload
-
-On configuration reload (SIGHUP or file change), the TLS provider re-executes with new configuration, ticket keys are validated, and an atomic swap via `ArcSwap` ensures zero downtime. If key file validation fails during reload, the reload is rejected and old config is retained.
 
 ## See also
 
