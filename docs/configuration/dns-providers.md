@@ -347,7 +347,7 @@ Updates DNS records on any authoritative server that supports dynamic updates (R
         challenge dns-01
 
         dns {
-            provider "spaceship"
+            provider spaceship
             api_key "YOUR_SPACESHIP_API_KEY"
             api_secret "YOUR_SPACESHIP_API_SECRET"
         }

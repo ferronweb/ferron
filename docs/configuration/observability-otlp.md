@@ -7,12 +7,12 @@ This page documents the OTLP (OpenTelemetry Protocol) observability configuratio
 
 ## Directives
 
-OTLP export is configured via `observability` blocks with `provider "otlp"`:
+OTLP export is configured via `observability` blocks with `provider otlp`:
 
 ```ferron
 example.com {
     observability {
-        provider "otlp"
+        provider otlp
 
         logs "https://collector:4318/v1/Logs" {
             protocol "http/protobuf"
@@ -62,7 +62,7 @@ Each signal sub-block supports these nested directives:
 ```ferron
 example.com {
     observability {
-        provider "otlp"
+        provider otlp
         service_name "my-ferron-instance"
 
         traces "https://otlp-collector:4317" {
@@ -78,7 +78,7 @@ example.com {
 ```ferron
 example.com {
     observability {
-        provider "otlp"
+        provider otlp
         service_name "ferron-production"
 
         logs "https://logs-collector:4318/v1/logs" {
@@ -104,7 +104,7 @@ example.com {
 # Different protocols for different signals
 example.com {
     observability {
-        provider "otlp"
+        provider otlp
         service_name "ferron-mixed"
 
         logs "http://localhost:4318/v1/logs" {
@@ -128,7 +128,7 @@ example.com {
 # Only for development/testing
 example.com {
     observability {
-        provider "otlp"
+        provider otlp
         service_name "ferron-dev"
         no_verify true
 

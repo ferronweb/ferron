@@ -7,12 +7,12 @@ This page documents the Prometheus metrics export configuration for Ferron. The 
 
 ## Directives
 
-Prometheus metrics are configured via `observability` blocks with `provider "prometheus"`:
+Prometheus metrics are configured via `observability` blocks with `provider prometheus`:
 
 ```ferron
 example.com {
     observability {
-        provider "prometheus"
+        provider prometheus
         endpoint_listen "127.0.0.1:8889"
         endpoint_format text
     }
@@ -97,7 +97,7 @@ Ferron metrics follow OpenTelemetry semantic conventions and are automatically c
 # Global configuration
 example.com {
     observability {
-        provider "prometheus"
+        provider prometheus
         endpoint_listen "127.0.0.1:8889"
     }
     root /var/www/html
@@ -110,7 +110,7 @@ example.com {
 # Production setup with all interfaces (use with firewall)
 example.com {
     observability {
-        provider "prometheus"
+        provider prometheus
         endpoint_listen "0.0.0.0:8889"
         endpoint_format text
     }
@@ -124,7 +124,7 @@ example.com {
 # IPv6 monitoring
 example.com {
     observability {
-        provider "prometheus"
+        provider prometheus
         endpoint_listen "[::]:8889"
     }
     root /var/www/html
@@ -137,7 +137,7 @@ example.com {
 # Different metrics endpoints for different hosts
 example.com {
     observability {
-        provider "prometheus"
+        provider prometheus
         endpoint_listen "127.0.0.1:9001"
     }
     root /var/www/example
@@ -145,7 +145,7 @@ example.com {
 
 api.example.com {
     observability {
-        provider "prometheus"
+        provider prometheus
         endpoint_listen "127.0.0.1:9002"
     }
     proxy http://backend:3000

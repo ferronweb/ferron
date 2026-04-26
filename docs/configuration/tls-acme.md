@@ -66,7 +66,7 @@ Creates a `_acme-challenge` TXT record via a DNS provider. The only challenge ty
         challenge dns-01
         contact "admin@example.com"
         dns {
-            provider "cloudflare"
+            provider cloudflare
             api_key "EXAMPLE_API_KEY"
         }
     }

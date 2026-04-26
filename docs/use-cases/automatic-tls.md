@@ -101,7 +101,7 @@ Below is an example configuration for DNS-01 with Cloudflare:
         contact "admin@example.com"
 
         dns {
-            provider "cloudflare"
+            provider cloudflare
             api_key "EXAMPLE_API_KEY"
         }
     }

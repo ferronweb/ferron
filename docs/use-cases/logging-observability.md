@@ -33,7 +33,7 @@ Use this when you need structured logs for easier parsing by log aggregation too
 ```ferron
 example.com {
     log "access.log" {
-        format "json"
+        format json
     }
 
     root /var/www/html
@@ -51,7 +51,7 @@ You can also select specific fields:
 ```ferron
 example.com {
     log "access.log" {
-        format "json"
+        format json
         fields "method" "path" "status" "duration_secs" "client_ip"
     }
 
@@ -81,7 +81,7 @@ Use this when shipping logs, metrics, and traces to an OpenTelemetry collector:
 ```ferron
 example.com {
     observability {
-        provider "otlp"
+        provider otlp
 
         logs "http://otel-collector.internal:4318/v1/Logs" {
             protocol "http/protobuf"
@@ -107,7 +107,7 @@ If you use gRPC OTLP endpoints, set `protocol "grpc"` and optionally an auth hea
 ```ferron
 example.com {
     observability {
-        provider "otlp"
+        provider otlp
 
         logs "https://otel.example.net/v1/logs" {
             protocol "grpc"
@@ -136,7 +136,7 @@ Use this when you want to expose metrics for Prometheus scraping:
 ```ferron
 example.com {
     observability {
-        provider "prometheus"
+        provider prometheus
         endpoint_listen "127.0.0.1:8889"
         endpoint_format text
     }
@@ -152,7 +152,7 @@ This starts a metrics endpoint at `http://localhost:8889/metrics` that Prometheu
 ```ferron
 example.com {
     observability {
-        provider "prometheus"
+        provider prometheus
         endpoint_listen "0.0.0.0:8889"
         endpoint_format text
     }
@@ -167,7 +167,7 @@ example.com {
 # Main website
 example.com {
     observability {
-        provider "prometheus"
+        provider prometheus
         endpoint_listen "127.0.0.1:9001"
     }
     root /var/www/example
@@ -176,7 +176,7 @@ example.com {
 # API service
 api.example.com {
     observability {
-        provider "prometheus"
+        provider prometheus
         endpoint_listen "127.0.0.1:9002"
     }
     proxy http://backend:3000
@@ -190,11 +190,11 @@ A practical migration strategy is to keep file logs for local troubleshooting wh
 ```ferron
 example.com {
     log "access.log" {
-        format "json"
+        format json
     }
 
     observability {
-        provider "otlp"
+        provider otlp
 
         logs "http://otel-collector.internal:4318/v1/Logs" {
             protocol "http/protobuf"
@@ -223,13 +223,13 @@ You can combine both Prometheus and OTLP for maximum flexibility:
 example.com {
     # Local Prometheus metrics
     observability {
-        provider "prometheus"
+        provider prometheus
         endpoint_listen "127.0.0.1:8889"
     }
 
     # Centralized OTLP export
     observability {
-        provider "otlp"
+        provider otlp
         service_name "ferron-prod"
 
         logs "http://otel-collector.internal:4318/v1/Logs" {
