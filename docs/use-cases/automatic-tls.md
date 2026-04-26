@@ -25,6 +25,16 @@ example.com {
 }
 ```
 
+Or simply (since automatic TLS via ACME is enabled by default in Ferron for public hosts):
+
+```ferron
+example.com {
+    # Automatic TLS is enabled by default, no explicit TLS directive needed
+    
+    root /var/www/html
+}
+```
+
 ## Note about Cloudflare proxies (and other HTTPS proxies)
 
 Ferron uses HTTP-01 ACME challenge by default, which requires the server to be reachable on port 80. If your website is behind a proxy that terminates TLS (like Cloudflare's proxy mode), the HTTP-01 challenge may not work unless port 80 is accessible.
