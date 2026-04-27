@@ -109,6 +109,7 @@ Package Ferron for distribution (requires `just`):
 
 ```sh
 just package # Archive (.zip for Windows, .tar.gz for Unix)
+just package-deb # Debian package
 ```
 
 ## Features

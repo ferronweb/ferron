@@ -64,9 +64,6 @@ pub fn daemonize() -> Result<bool> {
         }
     }
 
-    // Change working directory to root to avoid keeping any directory in use
-    unistd::chdir("/").context("Failed to change directory to /")?;
-
     // Set umask to 0 to have full control over file permissions
     use nix::sys::stat::Mode;
     nix::sys::stat::umask(Mode::from_bits_truncate(0));

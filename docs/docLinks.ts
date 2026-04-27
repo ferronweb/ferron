@@ -15,6 +15,15 @@ export default [
     category: true,
   },
   {
+    label: "Linux",
+  },
+  {
+    href: "/docs/v3/installation/debian",
+    target: "_self",
+    label: "Debian/Ubuntu",
+    sub: true,
+  },
+  {
     href: "/docs/v3/installation/docker",
     target: "_self",
     label: "Docker",

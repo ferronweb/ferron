@@ -1,0 +1,14 @@
+[Unit]
+Description=Ferron web server
+After=network.target
+
+[Service]
+Type=forking
+User=ferron
+ExecStart=/usr/sbin/ferron daemon -c /etc/ferron/ferron.conf --pid-file /run/ferron/ferron.pid
+PIDFile=/run/ferron/ferron.pid
+Restart=on-failure
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

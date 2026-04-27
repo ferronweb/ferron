@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Get Ferron version
-FERRON_VERSION_CARGO=$(cat ferron/Cargo.toml | grep -E '^version' | sed -E 's|.*"([0-9a-zA-Z.+-]+)"$$|\1|g')
+FERRON_VERSION_CARGO=$(cat entrypoint/Cargo.toml | grep -E '^version' | sed -E 's|.*"([0-9a-zA-Z.+-]+)"$$|\1|g')
 FERRON_VERSION_GIT=$(git tag --sort=-committerdate | head -n 1 | sed s/[^0-9a-zA-Z.+-]//g)
 if [ -z "$FERRON_VERSION_CARGO" ]; then
 	FERRON_VERSION=$FERRON_VERSION_GIT

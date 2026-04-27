@@ -18,10 +18,14 @@ prepare-config:
 
 # Package the release binaries
 [unix]
-package:
-    ./packaging/archive/package.sh
+package target="":
+    ./packaging/archive/package.sh {{ target }}
 
 # Package the release binaries
 [windows]
-package:
-    powershell -ExecutionPolicy Bypass -File packaging/archive/package.ps1
+package target="":
+    powershell -ExecutionPolicy Bypass -File packaging/archive/package.ps1 {{ target }}
+
+# Package the release binaries as a Debian package
+package-deb target="":
+    ./packaging/deb/package-docker.sh {{ target }}

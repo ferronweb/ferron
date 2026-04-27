@@ -44,5 +44,6 @@ Dockerfile*
 # GitHub-related files
 /.github/
 
-# Packaged files
+# Packaging files
+/packaging/
 /dist/
