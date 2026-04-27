@@ -549,10 +549,10 @@ impl Stage<HttpFileContext> for StaticFileStage {
                 .boxed_unsync()
         } else {
             match used_compression {
-                Compression::Brotli => compress_streaming_brotli(file),
-                Compression::Zstd => compress_streaming_zstd(file),
-                Compression::Deflate => compress_streaming_deflate(file),
-                Compression::Gzip => compress_streaming_gzip(file),
+                Compression::Brotli => compress_streaming_brotli(file, Some(file_length)),
+                Compression::Zstd => compress_streaming_zstd(file, Some(file_length)),
+                Compression::Deflate => compress_streaming_deflate(file, Some(file_length)),
+                Compression::Gzip => compress_streaming_gzip(file, Some(file_length)),
                 Compression::Identity => {
                     // For identity (no compression), use zerocopy if available
                     StreamBody::new(FileStream::new(file, 0, Some(file_length)).map_ok(Frame::data))

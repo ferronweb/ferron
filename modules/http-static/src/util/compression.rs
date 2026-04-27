@@ -185,10 +185,13 @@ pub static NON_COMPRESSIBLE_FILE_EXTENSIONS: phf::Set<&'static str> = phf::phf_s
 };
 
 /// Compress a file stream using Gzip.
-pub fn compress_streaming_gzip(file: vibeio::fs::File) -> UnsyncBoxBody<Bytes, std::io::Error> {
+pub fn compress_streaming_gzip(
+    file: vibeio::fs::File,
+    len: Option<u64>,
+) -> UnsyncBoxBody<Bytes, std::io::Error> {
     use async_compression::tokio::bufread::GzipEncoder;
     use tokio_util::io::{ReaderStream, StreamReader};
-    let reader = StreamReader::new(FileStream::new(file, 0, None));
+    let reader = StreamReader::new(FileStream::new(file, 0, len));
     let encoder = GzipEncoder::with_quality(reader, Level::Precise(4));
     StreamBody::new(
         ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE)
@@ -199,12 +202,15 @@ pub fn compress_streaming_gzip(file: vibeio::fs::File) -> UnsyncBoxBody<Bytes, s
 }
 
 /// Compress a file stream using Brotli.
-pub fn compress_streaming_brotli(file: vibeio::fs::File) -> UnsyncBoxBody<Bytes, std::io::Error> {
+pub fn compress_streaming_brotli(
+    file: vibeio::fs::File,
+    len: Option<u64>,
+) -> UnsyncBoxBody<Bytes, std::io::Error> {
     use async_compression::brotli::EncoderParams;
     use async_compression::tokio::bufread::BrotliEncoder;
     use async_compression::Level;
     use tokio_util::io::{ReaderStream, StreamReader};
-    let reader = StreamReader::new(FileStream::new(file, 0, None));
+    let reader = StreamReader::new(FileStream::new(file, 0, len));
     let encoder = BrotliEncoder::with_params(
         reader,
         EncoderParams::default()
@@ -221,12 +227,15 @@ pub fn compress_streaming_brotli(file: vibeio::fs::File) -> UnsyncBoxBody<Bytes,
 }
 
 /// Compress a file stream using Zstd.
-pub fn compress_streaming_zstd(file: vibeio::fs::File) -> UnsyncBoxBody<Bytes, std::io::Error> {
+pub fn compress_streaming_zstd(
+    file: vibeio::fs::File,
+    len: Option<u64>,
+) -> UnsyncBoxBody<Bytes, std::io::Error> {
     use async_compression::tokio::bufread::ZstdEncoder;
     use async_compression::zstd::CParameter;
     use async_compression::Level;
     use tokio_util::io::{ReaderStream, StreamReader};
-    let reader = StreamReader::new(FileStream::new(file, 0, None));
+    let reader = StreamReader::new(FileStream::new(file, 0, len));
     let encoder = ZstdEncoder::with_quality_and_params(
         reader,
         Level::Default,
@@ -241,10 +250,13 @@ pub fn compress_streaming_zstd(file: vibeio::fs::File) -> UnsyncBoxBody<Bytes, s
 }
 
 /// Compress a file stream using Deflate.
-pub fn compress_streaming_deflate(file: vibeio::fs::File) -> UnsyncBoxBody<Bytes, std::io::Error> {
+pub fn compress_streaming_deflate(
+    file: vibeio::fs::File,
+    len: Option<u64>,
+) -> UnsyncBoxBody<Bytes, std::io::Error> {
     use async_compression::tokio::bufread::DeflateEncoder;
     use tokio_util::io::{ReaderStream, StreamReader};
-    let reader = StreamReader::new(FileStream::new(file, 0, None));
+    let reader = StreamReader::new(FileStream::new(file, 0, len));
     let encoder = DeflateEncoder::with_quality(reader, Level::Precise(4));
     StreamBody::new(
         ReaderStream::with_capacity(encoder, COMPRESSED_STREAM_READER_BUFFER_SIZE)
