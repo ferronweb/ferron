@@ -17,10 +17,10 @@ Before installing Ferron, make sure you have:
 
 Visit the [Ferron downloads page](/download) and choose the archive that matches your operating system and architecture:
 
-- **Windows**: `.zip` archive (e.g., `ferron-x86_64-pc-windows-msvc.zip`)
-- **macOS**: `.tar.gz` archive (e.g., `ferron-aarch64-apple-darwin.tar.gz`)
-- **Linux**: `.tar.gz` archive (e.g., `ferron-x86_64-unknown-linux-gnu.tar.gz`)
-- **FreeBSD**: `.tar.gz` archive (e.g., `ferron-x86_64-unknown-freebsd.tar.gz`)
+- **Windows**: `.zip` archive (e.g., `ferron-3.0.0-x86_64-pc-windows-msvc.zip`)
+- **macOS**: `.tar.gz` archive (e.g., `ferron-3.0.0-aarch64-apple-darwin.tar.gz`)
+- **Linux**: `.tar.gz` archive (e.g., `ferron-3.0.0-x86_64-unknown-linux-gnu.tar.gz`)
+- **FreeBSD**: `.tar.gz` archive (e.g., `ferron-3.0.0-x86_64-unknown-freebsd.tar.gz`)
 
 ## Installation steps
 
