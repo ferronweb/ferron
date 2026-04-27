@@ -29,3 +29,7 @@ package target="":
 # Package the release binaries as a Debian package
 package-deb target="":
     ./packaging/deb/package-docker.sh {{ target }}
+
+# Package the release binaries as an RPM package
+package-rpm target="":
+    ./packaging/rpm/package-docker.sh {{ target }}

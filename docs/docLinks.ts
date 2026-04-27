@@ -24,6 +24,12 @@ export default [
     sub: true,
   },
   {
+    href: "/docs/v3/installation/rpm",
+    target: "_self",
+    label: "RHEL/Fedora",
+    sub: true,
+  },
+  {
     href: "/docs/v3/installation/docker",
     target: "_self",
     label: "Docker",
