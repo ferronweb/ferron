@@ -19,7 +19,7 @@ sudo apt install curl gnupg2 ca-certificates lsb-release debian-archive-keyring
 curl https://deb.ferron.sh/signing.pgp | gpg --dearmor | sudo tee /usr/share/keyrings/ferron-keyring.gpg >/dev/null
 
 # Add a new Debian package repository
-echo "deb [signed-by=/usr/share/keyrings/ferron3-keyring.gpg] https://deb.ferron.sh $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/ferron.list
+echo "deb [signed-by=/usr/share/keyrings/ferron-keyring.gpg] https://deb.ferron.sh $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/ferron.list
 
 # Fetch the package lists
 sudo apt update
