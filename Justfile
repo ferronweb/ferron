@@ -1,3 +1,5 @@
+set windows-shell := ["powershell.exe", "-c"]
+
 # Build the project
 build:
     cargo build -r
@@ -33,3 +35,8 @@ package-deb target="":
 # Package the release binaries as an RPM package
 package-rpm target="":
     ./packaging/rpm/package-docker.sh {{ target }}
+
+# Package the release binaries as a Windows installer
+[windows]
+package-win-installer target="":
+    powershell -ExecutionPolicy Bypass -File packaging/windows/package.ps1 {{ target }}

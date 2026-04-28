@@ -5,3 +5,6 @@ edition = "2021"
 
 [dependencies]
 ferron-entrypoint = { path = "../entrypoint", features = ["profile-default"] }
+
+[build-dependencies]
+winresource = "0.1.19"

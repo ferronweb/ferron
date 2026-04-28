@@ -30,6 +30,11 @@ export default [
     sub: true,
   },
   {
+    href: "/docs/v3/installation/windows",
+    target: "_self",
+    label: "Windows",
+  },
+  {
     href: "/docs/v3/installation/docker",
     target: "_self",
     label: "Docker",

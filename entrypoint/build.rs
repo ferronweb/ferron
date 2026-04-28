@@ -1,15 +1,8 @@
 use shadow_rs::{BuildPattern, ShadowBuilder};
 use std::borrow::Cow;
 use std::{env, io};
-use winresource::WindowsResource;
 
 fn main() -> io::Result<()> {
-    if env::var_os("CARGO_CFG_WINDOWS").is_some() {
-        WindowsResource::new()
-            .set_icon("assets/icon.ico")
-            .compile()?;
-    }
-
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("target_os not defined!");
     let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("target_arch not defined!"); // on armv6 we need to link with libatomic
 

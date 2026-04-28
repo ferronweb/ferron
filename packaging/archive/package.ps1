@@ -7,7 +7,7 @@ $CargoTomlPath = Join-Path $PSScriptRoot '../../ferron/Cargo.toml'
 if (Test-Path $CargoTomlPath)
 {
     $CargoContent = Get-Content $CargoTomlPath -Raw
-    $FERRON_VERSION_CARGO = [regex]::Match($CargoContent, '^version\s*=\s*"([^"]+)"').Groups[1].Value
+    $FERRON_VERSION_CARGO = [regex]::Match($CargoContent, 'version\s*=\s*"([^"]+)"').Groups[1].Value
 } else
 {
     $FERRON_VERSION_CARGO = $null

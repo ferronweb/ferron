@@ -135,6 +135,12 @@ fn run_service_impl() -> Result<(), Box<dyn std::error::Error>> {
         Box::from_raw(ptr as *mut Vec<Box<dyn ModuleLoader>>)
     };
 
+    // Change the current working directory to the program path
+    if let Ok(mut program_dir) = std::env::current_exe() {
+        program_dir.pop();
+        let _ = std::env::set_current_dir(program_dir);
+    }
+
     // Run the application with the parsed configuration
     let server_result = crate::run(
         config_path,
