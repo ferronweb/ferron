@@ -9,7 +9,7 @@ ProductName = "Ferron password utility"
 [dependencies]
 clap = { version = "4.5.57", features = ["derive"] }
 password-auth.workspace = true
-rpassword = "7.4.0"
+rpassword = "7.5.1"
 yaml-rust2.workspace = true
 mimalloc = { workspace = true }
 
