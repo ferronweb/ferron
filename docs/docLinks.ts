@@ -18,6 +18,12 @@ export default [
     label: "Linux",
   },
   {
+    href: "/docs/v3/installation/installer",
+    target: "_self",
+    label: "Installer",
+    sub: true,
+  },
+  {
     href: "/docs/v3/installation/debian",
     target: "_self",
     label: "Debian/Ubuntu",

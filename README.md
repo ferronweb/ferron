@@ -72,7 +72,7 @@ api.example.com {
 }
 ```
 
-More examples are available in the [configuration documentation](https://ferron.sh/docs/v3/configuration).
+More examples are available in the [configuration documentation](https://ferron.sh/docs/v3/configuration/syntax).
 
 ## Building from source
 
@@ -111,6 +111,8 @@ Package Ferron for distribution (requires `just`):
 just package # Archive (.zip for Windows, .tar.gz for Unix)
 just package-deb # Debian package
 just package-rpm # RPM package
+just package-windows # Windows installer
+just installer # Linux installer
 ```
 
 ## Features
@@ -133,20 +135,15 @@ Backends: console, file (JSON or Combined Log Format), and OTLP (OpenTelemetry P
 
 See the [observability documentation](https://ferron.sh/docs/v3/configuration/observability) for details.
 
-## Configuration reference
+## Configuration
 
-The full directive reference is in [docs/configuration/](https://ferron.sh/docs/v3/configuration). Scopes:
-
-- **Global** — `{ ... }` blocks (runtime, TCP listeners, admin API)
-- **HTTP host** — `example.com { ... }` blocks (TLS, proxy, static, logging)
-- **Location/conditional** — `location`, `if`, `if_not` blocks inside hosts
+The full directive reference is in [docs/configuration/](https://ferron.sh/docs/v3/configuration/syntax).
 
 ## Roadmap
 
 Planned direction:
 
 - Dynamically loadable modules (WebAssembly?)
-- HTTP/3 and QUIC support
 - Additional observability backends (Prometheus, Jaeger/Zipkin?)
 - More authentication methods (JWT?, OAuth2?, mTLS?)
 

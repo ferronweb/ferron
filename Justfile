@@ -38,5 +38,10 @@ package-rpm target="":
 
 # Package the release binaries as a Windows installer
 [windows]
-package-win-installer target="":
+package-windows target="":
     powershell -ExecutionPolicy Bypass -File packaging/windows/package.ps1 {{ target }}
+
+# Build the installer for Linux
+[unix]
+installer:
+    cd installer && make
