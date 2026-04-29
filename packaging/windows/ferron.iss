@@ -5,6 +5,7 @@
 #endif
 #define MyAppPublisher "Ferron"
 #define MyAppURL "https://ferron.sh"
+#define MyAppSupportURL "https://ferron.sh/support"
 #define MyAppExeName "ferron.exe"
 
 #if "x86_64-pc-windows-msvc" == MyAppTargetTriple
@@ -27,19 +28,21 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
-AppSupportURL={#MyAppURL}
-AppUpdatesURL={#MyAppURL}
+AppSupportURL={#MyAppSupportURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
-AllowNoIcons=yes
+DisableWelcomePage=no
 LicenseFile=..\..\LICENSE
 OutputDir=..\..\dist
-OutputBaseFilename=ferron-{#MyAppTargetTriple}-{#MyAppVersion}-setup
+OutputBaseFilename=ferron-{#MyAppVersion}-{#MyAppTargetTriple}-setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern dynamic
 SetupIconFile=icon.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayName={#MyAppName} {#MyAppVersion}
 WizardSmallImageFile=smallimage.png
+WizardImageFile=image.png
 ;SetupArchitecture={#MyAppSetupArchitecture}
 ArchitecturesAllowed={#MyAppArchitecturesAllowed}
 ArchitecturesInstallIn64BitMode={#MyAppInstallIn64BitMode}
@@ -62,10 +65,6 @@ Source: "staging\ferron.conf"; DestDir: "{commonappdata}\Ferron"; Flags: ignorev
 
 [Dirs]
 Name: "{commonappdata}\Ferron"; Permissions: users-modify
-
-[Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 
 [Run]
 ; Install the service if requested
