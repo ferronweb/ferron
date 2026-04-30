@@ -5,11 +5,6 @@ export default [
     label: "Documentation home",
   },
   {
-    href: "/docs/v3/status-and-limitations",
-    target: "_self",
-    label: "Status and limitations",
-  },
-  {
     href: "/docs/v3/getting-started",
     target: "_self",
     label: "Getting started",
@@ -79,7 +74,7 @@ export default [
     category: true,
   },
   {
-    href: "/docs/v3/migration-from-v2",
+    href: "/docs/v3/migration/from-v2",
     target: "_self",
     label: "From Ferron 2",
   },

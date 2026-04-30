@@ -34,18 +34,6 @@
 - **Powerful reverse proxy** - load balancing, health checks, and connection pooling.
 - **Memory-safe** - built with [Rust](https://rust-lang.org/).
 
-## What's different from Ferron 2
-
-Ferron 3 is a complete rewrite. It shares the vision but not the code:
-
-| Aspect | Ferron 2 | Ferron 3 |
-| --- | --- | --- |
-| Architecture | Monolithic | Module-driven, pluggable |
-| Observability | Basic logging | Structured events with multiple backends |
-| Configuration | KDL-based | Custom `.conf`, layered scopes, snippets |
-| Extensibility | Compile-time modules | Runtime-registered stages and providers |
-| Request Processing | Linear pipeline | DAG-ordered stages with inverse cleanup |
-
 ## Configuration examples
 
 ### Static file serving
@@ -115,43 +103,9 @@ just package-windows # Windows installer
 just installer # Linux installer
 ```
 
-## Features
-
-What currently works in this alpha:
-
-| Category | Modules |
-| --- | --- |
-| HTTP | static files, reverse proxy, forward proxy, compression, rate limiting, headers/CORS, URL rewriting, basic auth, response control |
-| TLS | manual certificates, ACME automatic TLS, OCSP stapling |
-| Observability | console log, file log (with rotation), OTLP export, process metrics |
-| Admin | health, status, config dump, hot reload |
-| Runtime | io_uring (Linux), PROXY protocol v1/v2, SIGHUP hot reload |
-
-## Observability
-
-Ferron 3 emits structured events through a unified pipeline. Every HTTP request generates access logs, metrics, and trace spans — all tagged with the same `trace_id` for correlated queries.
-
-Backends: console, file (JSON or Combined Log Format), and OTLP (OpenTelemetry Protocol).
-
-See the [observability documentation](https://ferron.sh/docs/v3/configuration/observability) for details.
-
 ## Configuration
 
 The full directive reference is in [docs/configuration/](https://ferron.sh/docs/v3/configuration/syntax).
-
-## Roadmap
-
-Planned direction:
-
-- Dynamically loadable modules (WebAssembly?)
-- Additional observability backends (Prometheus, Jaeger/Zipkin?)
-- More authentication methods (JWT?, OAuth2?, mTLS?)
-
-## Known limitations
-
-- Alpha quality — not battle-tested, expect bugs.
-- All modules are compiled into the binary; no runtime plugin loading yet.
-- Primary testing target is Linux. Windows and macOS receive less coverage.
 
 ## Contributing
 
