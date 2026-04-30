@@ -1,26 +1,37 @@
 ---
 title: Ferron 3 documentation
-description: "Documentation for the Ferron web server: configuration reference, syntax, directives, and feature guides."
+description: "Installation guides, first steps, troubleshooting, configuration reference, and feature guides for Ferron 3."
 ---
 
-**Welcome to the Ferron documentation!** Ferron is a fast, modern, and easily configurable web server with support for automatic TLS certificate management. If you're new to Ferron, the way you serve your websites is about to change - you'd be able to quickly make your websites go live.
+Ferron 3 is a configurable web server for static sites, reverse proxying, TLS, and more. Use the sidebar to jump to the guide you need.
 
-To explore the documentation, either click on one of the positions in the sidebar, or go into the menu on the top right, and click on one of the positions in the menu.
+## Start here
 
-## First time?
+If you are new to Ferron, follow this path:
 
-**Are you new to Ferron? No problem.** Start by [installing Ferron](/docs/v3/installation/building-from-source) on your system.
+1. Install Ferron using the guide that matches your platform.
+   - [Linux installer](/docs/v3/installation/installer)
+   - [Debian/Ubuntu](/docs/v3/installation/debian)
+   - [RHEL/Fedora](/docs/v3/installation/rpm)
+   - [Docker](/docs/v3/installation/docker)
+   - [Windows installer](/docs/v3/installation/windows)
+   - [Manual installation](/docs/v3/installation/archive)
+   - [Build from source with default modules](/docs/v3/installation/source-default-modules)
+   - [Build from source with custom modules](/docs/v3/installation/source-custom-modules)
+2. Read [Getting started](/docs/v3/getting-started) to choose static serving, reverse proxying, or a mixed setup.
+3. Use [Troubleshooting](/docs/v3/troubleshooting) if the server does not start or the site does not respond.
+4. Move on to [Configuration syntax](/docs/v3/configuration/syntax) and the related directive pages when you want directive-level details.
 
-Once you have Ferron installed, read about the [configuration syntax](/docs/v3/configuration/syntax) to understand how Ferron configuration files are structured.
+## Good next reads
 
-If you'd like to learn more about Ferron's configuration directives, you can read about them in the [configuration reference](/docs/configuration/).
+- [Configuration syntax](/docs/v3/configuration/syntax)
+- [Routing and URL processing](/docs/v3/configuration/routing-url-processing)
+- [Static file serving](/docs/v3/use-cases/static-file-serving)
+- [Reverse proxying](/docs/v3/use-cases/reverse-proxy)
+- [Automatic TLS](/docs/v3/use-cases/automatic-tls)
 
-**Enjoy using your new Ferron server!** 😄
+## Notes and troubleshooting
 
-## If you have questions about Ferron
-
-If you have any questions about Ferron, you can choose one of the available options on the [support page](/support). We’re here to help!
-
-If you suspect a bug in Ferron, you can [open an issue](https://github.com/ferronweb/ferron/issues) on our GitHub repository.
-
-**Thank you for taking part in the Ferron community!** 😊
+- If a link in the sidebar looks unfamiliar, start with [Getting started](/docs/v3/getting-started) and return to the deeper pages later.
+- If a guide references a directive you have not seen yet, open the related configuration reference page from the links above.
+- For help or bug reports, use the [support page](/support) or open an issue on [GitHub](https://github.com/ferronweb/ferron/issues).

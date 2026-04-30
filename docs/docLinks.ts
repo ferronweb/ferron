@@ -2,13 +2,22 @@ export default [
   {
     href: "/docs/v3",
     target: "_self",
-    sub: false,
-    label: "Welcome to the documentation!",
+    label: "Documentation home",
   },
   {
     href: "/docs/v3/status-and-limitations",
     target: "_self",
     label: "Status and limitations",
+  },
+  {
+    href: "/docs/v3/getting-started",
+    target: "_self",
+    label: "Getting started",
+  },
+  {
+    href: "/docs/v3/troubleshooting",
+    target: "_self",
+    label: "Troubleshooting",
   },
   {
     label: "Installation",
