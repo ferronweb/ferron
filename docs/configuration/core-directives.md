@@ -230,7 +230,7 @@ The bundled `file` provider (`observability-logfile`) writes observability event
 example.com {
     observability {
         provider file
-        
+
         access_log /var/log/ferron/access.log
         error_log /var/log/ferron/error.log
         format combined

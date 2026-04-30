@@ -338,7 +338,7 @@ example.com {
 example.com {
     observability {
         provider file
-        
+
         access_log /var/log/ferron/access.log
         error_log /var/log/ferron/error.log
         format json 
@@ -425,7 +425,7 @@ example.com {
 
     proxy {
         upstream http://localhost:3000
-        
+
         request_header "+X-Real-IP" "{{remote.ip}}"
         request_header "-Host"
     }
