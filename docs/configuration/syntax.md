@@ -11,7 +11,7 @@ Ferron uses `.conf` files parsed by the `config-ferronconf` adapter. A configura
 
 ```ferron
 # Uncomment to include additional configuration files
-#include "shared.conf"
+#include "/etc/ferron/conf.d/**/*.conf"
 
 {
     runtime {

@@ -66,6 +66,15 @@ export default [
     sub: true,
   },
   {
+    label: "Migration",
+    category: true,
+  },
+  {
+    href: "/docs/v3/migration-from-v2",
+    target: "_self",
+    label: "From Ferron 2",
+  },
+  {
     label: "Common use cases",
     category: true,
   },

@@ -214,7 +214,7 @@ The bundled `console` provider (`observability-consolelog`) takes no additional 
 
 The bundled `file` provider (`observability-logfile`) writes observability events to specified log files.
 
-| Nested directive | Arguments | Description | Default |
+| Addtional subdirective | Arguments | Description | Default |
 | --- | --- | --- | --- |
 | `access_log` | `<string>` | File path for access log output. | none |
 | `error_log` | `<string>` | File path for error log output. | none |
@@ -229,11 +229,11 @@ The bundled `file` provider (`observability-logfile`) writes observability event
 ```ferron
 example.com {
     observability {
-        provider file {
-            access_log /var/log/ferron/access.log
-            error_log /var/log/ferron/error.log
-            format combined
-        }
+        provider file
+        
+        access_log /var/log/ferron/access.log
+        error_log /var/log/ferron/error.log
+        format combined
     }
 }
 ```
