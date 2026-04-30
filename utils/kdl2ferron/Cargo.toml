@@ -18,3 +18,6 @@ mimalloc = { version = "0.1.50", features = ["v2"] } # Mimalloc v3 would use ins
 
 [target.'cfg(not(target_arch = "x86"))'.dependencies]
 mimalloc = { version = "0.1.50" }
+
+[build-dependencies]
+winresource = "0.1.19"

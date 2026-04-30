@@ -1756,6 +1756,7 @@ dependencies = [
  "rand 0.10.1",
  "regex-syntax",
  "snailquote",
+ "winresource",
 ]
 
 [[package]]
@@ -1927,6 +1928,7 @@ version = "3.0.0-alpha.1"
 dependencies = [
  "clap",
  "tempfile",
+ "winresource",
 ]
 
 [[package]]
