@@ -271,10 +271,7 @@ impl<T> HostLookupTree<T> {
                         key_option = key_iter.next();
                     }
 
-                    current_node = current_node
-                        .children_fixed
-                        .entry(multi_key)
-                        .or_default();
+                    current_node = current_node.children_fixed.entry(multi_key).or_default();
                 }
             }
         }
