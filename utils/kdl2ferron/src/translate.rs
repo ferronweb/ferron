@@ -3285,6 +3285,296 @@ pub fn process_block(
                     }));
             }
 
+            // Routing & URL processing
+            "header" => {
+                let name = node.entries.first().and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => Some(s.to_string()),
+                    _ => None,
+                });
+                let value = node.entries.get(1).and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => {
+                        Some(convert_placeholders_into_interpolated_strings(s))
+                    }
+                    _ => None,
+                });
+                if let (Some(name), Some(value)) = (name, value) {
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "header".to_string(),
+                        args: vec![
+                            ferronconf::Value::String(
+                                name,
+                                ferronconf::Span { line: 0, column: 0 },
+                            ),
+                            value,
+                        ],
+                        block: None,
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                }
+            }
+            "header_remove" => {
+                let name = node.entries.first().and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => Some(s.to_string()),
+                    _ => None,
+                });
+                if let Some(name) = name {
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "header".to_string(),
+                        args: vec![ferronconf::Value::String(
+                            format!("-{}", name),
+                            ferronconf::Span { line: 0, column: 0 },
+                        )],
+                        block: None,
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                }
+            }
+            "header_replace" => {
+                let name = node.entries.first().and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => Some(s.to_string()),
+                    _ => None,
+                });
+                let value = node.entries.get(1).and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => {
+                        Some(convert_placeholders_into_interpolated_strings(s))
+                    }
+                    _ => None,
+                });
+                if let (Some(name), Some(value)) = (name, value) {
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "header".to_string(),
+                        args: vec![
+                            ferronconf::Value::String(
+                                name,
+                                ferronconf::Span { line: 0, column: 0 },
+                            ),
+                            value,
+                        ],
+                        block: None,
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                }
+            }
+            "server_administrator_email" => {
+                if let Some(e) = node.entries.first() {
+                    if let kdlite::dom::Value::String(s) = &e.value {
+                        statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            name: "admin_email".to_string(),
+                            args: vec![ferronconf::Value::String(
+                                s.to_string(),
+                                ferronconf::Span { line: 0, column: 0 },
+                            )],
+                            block: None,
+                            span: ferronconf::Span { line: 0, column: 0 },
+                        }));
+                    }
+                }
+            }
+            "error_page" => {
+                let code = node.entries.first().and_then(|e| match &e.value {
+                    kdlite::dom::Value::Integer(i) => Some(*i as i64),
+                    _ => None,
+                });
+                let path = node.entries.get(1).and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => Some(s.to_string()),
+                    _ => None,
+                });
+                if let (Some(code), Some(path)) = (code, path) {
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "error_page".to_string(),
+                        args: vec![
+                            ferronconf::Value::Integer(
+                                code,
+                                ferronconf::Span { line: 0, column: 0 },
+                            ),
+                            ferronconf::Value::String(
+                                path,
+                                ferronconf::Span { line: 0, column: 0 },
+                            ),
+                        ],
+                        block: None,
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                }
+            }
+            "wwwredirect" => {
+                let enabled = node.entries.first().map_or(true, |e| match e.value {
+                    kdlite::dom::Value::Bool(b) => b,
+                    _ => true,
+                });
+                if enabled {
+                    // There isn't a direct replacement for "wwwredirect",
+                    // so let's simulate it using "status" and "if"
+                    let match_id = rand::random::<u64>();
+                    let match_id_str = format!("ferron2__wwwredirect_{:x}", match_id);
+
+                    // match <match_id_str> {
+                    //   request.host !~ "^www\\."
+                    // }
+                    statements.push(ferronconf::Statement::MatchBlock(ferronconf::MatchBlock {
+                        matcher: match_id_str.clone(),
+                        expr: vec![ferronconf::MatcherExpression {
+                            left: ferronconf::Operand::Identifier(
+                                vec!["request".to_string(), "host".to_string()],
+                                ferronconf::Span { line: 0, column: 0 },
+                            ),
+                            op: ferronconf::Operator::NotRegex,
+                            right: ferronconf::Operand::String(
+                                "^www\\.".to_string(),
+                                ferronconf::Span { line: 0, column: 0 },
+                            ),
+                            span: ferronconf::Span { line: 0, column: 0 },
+                        }],
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+
+                    // if <match_id_str> {
+                    //   status 301 {
+                    //     location "{{request.scheme}}://www.{{request.host}}{{request.uri}}"
+                    //   }
+                    // }
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "if".to_string(),
+                        args: vec![ferronconf::Value::String(
+                            match_id_str,
+                            ferronconf::Span { line: 0, column: 0 },
+                        )],
+                        block: Some(ferronconf::Block {
+                            statements: vec![ferronconf::Statement::Directive(
+                                ferronconf::Directive {
+                                    name: "status".to_string(),
+                                    args: vec![ferronconf::Value::Integer(
+                                        301,
+                                        ferronconf::Span { line: 0, column: 0 },
+                                    )],
+                                    block: Some(ferronconf::Block {
+                                        statements: vec![ferronconf::Statement::Directive(
+                                            ferronconf::Directive {
+                                                name: "location".to_string(),
+                                                args: vec![ferronconf::Value::InterpolatedString(
+                                                    vec![
+                                                        ferronconf::StringPart::Expression(vec![
+                                                            "request".to_string(),
+                                                            "scheme".to_string(),
+                                                        ]),
+                                                        ferronconf::StringPart::Literal(
+                                                            "://www.".to_string(),
+                                                        ),
+                                                        ferronconf::StringPart::Expression(vec![
+                                                            "request".to_string(),
+                                                            "host".to_string(),
+                                                        ]),
+                                                        ferronconf::StringPart::Expression(vec![
+                                                            "request".to_string(),
+                                                            "uri".to_string(),
+                                                        ]),
+                                                    ],
+                                                    ferronconf::Span { line: 0, column: 0 },
+                                                )],
+                                                block: None,
+                                                span: ferronconf::Span { line: 0, column: 0 },
+                                            },
+                                        )],
+                                        span: ferronconf::Span { line: 0, column: 0 },
+                                    }),
+                                    span: ferronconf::Span { line: 0, column: 0 },
+                                },
+                            )],
+                            span: ferronconf::Span { line: 0, column: 0 },
+                        }),
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                }
+            }
+            "allow_double_slashes"
+            | "no_redirect_to_https"
+            | "rewrite_log"
+            | "no_trailing_redirect"
+            | "disable_url_sanitizer" => {
+                let name = match node.name() {
+                    "allow_double_slashes" => "allow_double_slashes",
+                    "no_redirect_to_https" => "https_redirect",
+                    "rewrite_log" => "rewrite_log",
+                    "no_trailing_redirect" => "trailing_slash_redirect",
+                    "disable_url_sanitizer" => "url_sanitize",
+                    _ => unreachable!(),
+                };
+                let enabled = node.entries.first().map_or(true, |e| match e.value {
+                    kdlite::dom::Value::Bool(b) => b,
+                    _ => true,
+                });
+                let val = if node.name() == "no_redirect_to_https"
+                    || node.name() == "no_trailing_redirect"
+                    || node.name() == "disable_url_sanitizer"
+                {
+                    !enabled
+                } else {
+                    enabled
+                };
+                statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    name: name.to_string(),
+                    args: vec![ferronconf::Value::Boolean(
+                        val,
+                        ferronconf::Span { line: 0, column: 0 },
+                    )],
+                    block: None,
+                    span: ferronconf::Span { line: 0, column: 0 },
+                }));
+            }
+            "rewrite" => {
+                let regex = node.entries.first().and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => Some(s.to_string()),
+                    _ => None,
+                });
+                let replacement = node.entries.get(1).and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => Some(s.to_string()),
+                    _ => None,
+                });
+
+                if let (Some(regex), Some(replacement)) = (regex, replacement) {
+                    let mut block = ferronconf::Block {
+                        statements: vec![],
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    };
+                    for entry in &node.entries[2..] {
+                        if let Some(key) = entry.key() {
+                            if let kdlite::dom::Value::Bool(b) = &entry.value {
+                                block.statements.push(ferronconf::Statement::Directive(
+                                    ferronconf::Directive {
+                                        name: key.to_string(),
+                                        args: vec![ferronconf::Value::Boolean(
+                                            *b,
+                                            ferronconf::Span { line: 0, column: 0 },
+                                        )],
+                                        block: None,
+                                        span: ferronconf::Span { line: 0, column: 0 },
+                                    },
+                                ));
+                            }
+                        }
+                    }
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "rewrite".to_string(),
+                        args: vec![
+                            ferronconf::Value::String(
+                                regex,
+                                ferronconf::Span { line: 0, column: 0 },
+                            ),
+                            ferronconf::Value::String(
+                                replacement,
+                                ferronconf::Span { line: 0, column: 0 },
+                            ),
+                        ],
+                        block: if block.statements.is_empty() {
+                            None
+                        } else {
+                            Some(block)
+                        },
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                }
+            }
+
             // Unsupported
             _ => {}
         }
