@@ -76,10 +76,6 @@ async fn test_config() {
         request.header.user-agent ~ "^somescanner(/|$)"
       }
 
-      *:80 {
-        status 404
-      }
-
       aunrel:80 {
         status 403
       }
