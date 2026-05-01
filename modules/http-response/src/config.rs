@@ -213,24 +213,20 @@ fn parse_status_rules(config: &LayeredConfiguration, ctx: Option<&HttpContext>) 
 
         // Check for child block with additional props
         if let Some(children) = &entry.children {
-            url = children
-                .get_value("url")
-                .and_then(|v| {
-                    if let Some(ctx) = ctx {
-                        v.as_string_with_interpolations(ctx)
-                    } else {
-                        v.as_string_with_interpolations(&HashMap::new())
-                    }
-                });
-            location = children
-                .get_value("location")
-                .and_then(|v| {
-                    if let Some(ctx) = ctx {
-                        v.as_string_with_interpolations(ctx)
-                    } else {
-                        v.as_string_with_interpolations(&HashMap::new())
-                    }
-                });
+            url = children.get_value("url").and_then(|v| {
+                if let Some(ctx) = ctx {
+                    v.as_string_with_interpolations(ctx)
+                } else {
+                    v.as_string_with_interpolations(&HashMap::new())
+                }
+            });
+            location = children.get_value("location").and_then(|v| {
+                if let Some(ctx) = ctx {
+                    v.as_string_with_interpolations(ctx)
+                } else {
+                    v.as_string_with_interpolations(&HashMap::new())
+                }
+            });
             body = children.get_value("body").and_then(|v| {
                 if let Some(ctx) = ctx {
                     v.as_string_with_interpolations(ctx)
