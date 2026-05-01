@@ -1,0 +1,45 @@
+name: Build installer (Ferron 3.x)
+
+on:
+  push:
+    branches: ["3.x"]
+    paths:
+      - "installer/**"
+      - ".github/workflows/installer.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: 3.x
+
+      - name: Build the installer
+        run: |
+          cd installer
+          make
+          cd ..
+
+      - name: Set up SSH
+        uses: LuisEnMarroquin/setup-ssh-action@v3.0.0
+        with:
+          ORIGIN: ${{ secrets.SSH_HOSTNAME }}
+          SSHKEY: ${{ secrets.SSH_KEY }}
+          NAME: ferron-servers
+          PORT: ${{ secrets.SSH_PORT }}
+          USER: ${{ secrets.SSH_USERNAME }}
+
+      - name: Upload the installer
+        shell: bash
+        run: |
+          ssh ferron-servers "mkdir -p ferron3 || true"
+          scp dist/install.sh ferron-servers:ferron3/install-v3.sh
+
+          # Call the internal "deploy-ferron3" shell script
+          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 installer ferron3/install-v3.sh"
