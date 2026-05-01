@@ -200,29 +200,17 @@ impl Stage2RadixResolver {
                 if current_key_matches {
                     segment_idx += 1;
 
-                    // If there are remaining keys in the node, or if this node is terminal
-                    // and we have more segments to add, we need to split.
-                    let has_remaining_keys = current.keys.len() > 1;
-                    let is_terminal_with_more_segments =
-                        current.data.is_terminal && segment_idx < hostname_segments.len();
-
-                    if has_remaining_keys || is_terminal_with_more_segments {
-                        let (remaining_keys, child_key) = if has_remaining_keys {
-                            let remaining_keys: Vec<RadixKey> = current.keys.drain(1..).collect();
-                            let child_key = match remaining_keys.first() {
-                                Some(RadixKey::HostSegment(s)) => s.clone(),
-                                _ => panic!("Expected HostSegment as first key after split"),
-                            };
-                            (remaining_keys, child_key)
-                        } else {
-                            current.keys.clear();
-                            (vec![], segment.to_string())
-                        };
-
+                    // Split if there are remaining keys
+                    if current.keys.len() > 1 {
+                        let remaining_keys: Vec<RadixKey> = current.keys.drain(1..).collect();
                         let old_data = std::mem::take(&mut current.data);
                         let old_children = std::mem::take(&mut current.children);
                         let old_wildcard = current.wildcard_child.take();
 
+                        let child_key = match remaining_keys.first() {
+                            Some(RadixKey::HostSegment(s)) => s.clone(),
+                            _ => panic!("Expected HostSegment as first key after split"),
+                        };
                         let mut child_node = RadixNode::new(remaining_keys);
                         child_node.data = old_data;
                         child_node.children = old_children;
@@ -1187,16 +1175,12 @@ mod tests {
         // Insert: com -> example - should split "com" to add "example" child
         resolver.insert_host(vec!["com", "example"], Arc::clone(&c2), 10);
 
+        // The root should have the terminal data from the first insert
         let root = &resolver.host_tree;
-        // After splitting, root.keys is empty, children has both "com" (terminal) and "example"
-        assert!(root.keys.is_empty());
-        assert_eq!(root.children.len(), 2);
-        assert!(root.children.contains_key("com"));
+        assert_eq!(root.keys, vec![RadixKey::HostSegment("com".to_string())]);
+        assert!(root.data.is_terminal);
+        assert_eq!(root.children.len(), 1);
         assert!(root.children.contains_key("example"));
-
-        // The "com" child should have the terminal data from the first insert
-        let com_child = root.children.get("com").unwrap();
-        assert!(com_child.data.is_terminal);
     }
 
     /// Test mixed wildcard and exact paths with compression.
