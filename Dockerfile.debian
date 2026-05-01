@@ -86,9 +86,9 @@ COPY --from=builder /usr/src/ferron/.dist /usr/local/bin
 # - an ACME cache directory
 # - a directory where Ferron logs are stored
 # - a configuration directory
-RUN mkdir -p /var/cache/ferron-acme && chown -R nobody:nobody /var/cache/ferron-acme && \
-    mkdir -p /var/log/ferron && chown -R nobody:nobody /var/log/ferron && \
-    mkdir -p /etc/ferron && chown -R nobody:nobody /etc/ferron
+RUN mkdir -p /var/cache/ferron-acme && chown -R nobody:nogroup /var/cache/ferron-acme && \
+    mkdir -p /var/log/ferron && chown -R nobody:nogroup /var/log/ferron && \
+    mkdir -p /etc/ferron && chown -R nobody:nogroup /etc/ferron
 
 # Switch to "nobody" user to make commands like WORKDIR use the correct owner
 USER nobody
