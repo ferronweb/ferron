@@ -255,7 +255,7 @@ impl Stage2RadixResolver {
             let key = segment.to_string();
             current = current.children.entry(key).or_insert_with(|| {
                 RadixNode::new(
-                    hostname_segments
+                    hostname_segments[segment_idx..]
                         .iter()
                         .map(|s| RadixKey::HostSegment(s.to_string()))
                         .collect(),
@@ -355,7 +355,7 @@ impl Stage2RadixResolver {
             let key = segment.to_string();
             current = current.children.entry(key).or_insert_with(|| {
                 RadixNode::new(
-                    base_segments
+                    base_segments[segment_idx..]
                         .iter()
                         .map(|s| RadixKey::HostSegment(s.to_string()))
                         .collect(),
@@ -516,7 +516,7 @@ impl Stage2RadixResolver {
             let key = segment.to_string();
             current = current.children.entry(key).or_insert_with(|| {
                 RadixNode::new(
-                    path_segments
+                    path_segments[segment_idx..]
                         .iter()
                         .map(|s| RadixKey::PathSegment(s.to_string()))
                         .collect(),
