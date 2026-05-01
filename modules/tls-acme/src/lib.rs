@@ -533,7 +533,7 @@ async fn run_acme_background_task(
                 let challenge_type = format!("{:?}", config.challenge_type).to_lowercase();
 
                 match crate::provision::provision_certificate(config, &event_sink).await {
-                    Ok(()) => {
+                    Ok(true) => {
                         emit_log(
                             &event_sink,
                             LogLevel::Info,
@@ -558,6 +558,9 @@ async fn run_acme_background_task(
                                 ),
                             ],
                         );
+                    }
+                    Ok(false) => {
+                        // Certificate has been already provisioned, skipping
                     }
                     Err(e) => {
                         emit_log(

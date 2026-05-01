@@ -197,16 +197,28 @@ async fn install_certified_key(
 }
 
 /// Provisions a TLS certificate using ACME for the given config.
+/// Returns `true` if a certificate was provisioned, `false` otherwise.
 pub async fn provision_certificate(
     config: &mut AcmeConfig,
     event_sink: &Arc<ferron_observability::CompositeEventSink>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let domains = config.domains.join(", ");
     let account_cache_key = get_account_cache_key(&config.contact, &config.directory);
     let certificate_cache_key =
         get_certificate_cache_key(&config.domains, config.profile.as_deref());
 
-    // Step 1: Load or create ACME account
+    // Step 1: Check if current cert is still valid or cached
+    if check_certificate_validity_or_install_cached(config, event_sink).await? {
+        emit_log(
+            event_sink,
+            ferron_observability::LogLevel::Debug,
+            &format!("ACME certificate still valid or loaded from cache for {domains}"),
+            "ferron-tls-acme",
+        );
+        return Ok(false);
+    }
+
+    // Step 2: Load or create ACME account
     let acme_account = if let Some(account) = config.account.take() {
         account
     } else {
@@ -234,17 +246,6 @@ pub async fn provision_certificate(
     };
 
     config.account.replace(acme_account.clone());
-
-    // Step 2: Check if current cert is still valid or cached
-    if check_certificate_validity_or_install_cached(config, event_sink).await? {
-        emit_log(
-            event_sink,
-            ferron_observability::LogLevel::Debug,
-            &format!("ACME certificate still valid or loaded from cache for {domains}"),
-            "ferron-tls-acme",
-        );
-        return Ok(());
-    }
 
     // Step 3: Create a new ACME order
     let acme_identifiers: Vec<Identifier> = config
@@ -558,7 +559,7 @@ pub async fn provision_certificate(
     // Step 7: Cleanup challenge data
     cleanup_challenge_data(config, &dns_01_domains, event_sink).await;
 
-    Ok(())
+    Ok(true)
 }
 
 /// Cleans up challenge data after certificate issuance.
