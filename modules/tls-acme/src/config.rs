@@ -230,10 +230,19 @@ pub fn resolve_cache_path(config: &ServerConfigurationBlock) -> Option<PathBuf> 
         return Some(PathBuf::from(&path_str));
     }
 
-    // Default to platform data directory
-    let fallback_path = dirs::data_local_dir().map(|mut p| {
-        p.push("ferron-acme");
-        p
+    // Default to platform data directory (if writable)
+    let fallback_path = dirs::data_local_dir().and_then(|mut p| {
+        let metadata = std::fs::metadata(&p);
+        if let Ok(metadata) = metadata {
+            if !metadata.is_dir() || metadata.permissions().readonly() {
+                return None;
+            }
+
+            p.push("ferron-acme");
+            Some(p)
+        } else {
+            None
+        }
     });
 
     // /var/cache/ferron-acme heuristic for the Docker image

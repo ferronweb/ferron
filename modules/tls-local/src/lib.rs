@@ -90,9 +90,18 @@ impl ModuleLoader for LocalTlsModuleLoader {
     fn register_providers(&mut self, mut registry: RegistryBuilder) -> RegistryBuilder {
         // Default cache path
         let cache_path = dirs::data_local_dir()
-            .map(|mut p| {
-                p.push("ferron-local-tls");
-                p
+            .and_then(|mut p| {
+                let metadata = std::fs::metadata(&p);
+                if let Ok(metadata) = metadata {
+                    if !metadata.is_dir() || metadata.permissions().readonly() {
+                        return None;
+                    }
+
+                    p.push("ferron-local-tls");
+                    Some(p)
+                } else {
+                    None
+                }
             })
             .unwrap_or_else(|| PathBuf::from(".ferron-local-tls"));
 
