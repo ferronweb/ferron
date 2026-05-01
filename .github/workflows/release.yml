@@ -317,7 +317,7 @@ jobs:
       - name: Determine Ferron version
         shell: bash
         run: |
-          FERRON_VERSION_CARGO="$(cat ferron/Cargo.toml | grep -E '^version' | sed -E 's|.*"([0-9a-zA-Z.+-]+)"$|\1|g')"
+          FERRON_VERSION_CARGO="$(cat entrypoint/Cargo.toml | grep -E '^version' | sed -E 's|.*"([0-9a-zA-Z.+-]+)"$|\1|g')"
           FERRON_VERSION_GIT="$(git tag --sort=-committerdate | head -n 1 | sed s/[^0-9a-zA-Z.+-]//g)"
           if [ "$FERRON_VERSION_CARGO" != "" ]; then
             echo "Version determined from Cargo.toml file"
