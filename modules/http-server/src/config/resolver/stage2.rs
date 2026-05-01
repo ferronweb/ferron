@@ -185,20 +185,22 @@ impl Stage2RadixResolver {
     ) {
         let mut current = &mut self.host_tree;
         let mut segment_idx = 0;
+        let mut current_segment_idx = 0;
 
         while segment_idx < hostname_segments.len() {
             let segment = hostname_segments[segment_idx];
 
             // Check if current node has compressed keys that match our path
             if !current.keys.is_empty() {
-                // Try to match the current segment against the first key
+                // Try to match the current segment against the current key
                 let current_key_matches = current
                     .keys
-                    .first()
+                    .get(current_segment_idx)
                     .is_some_and(|k| matches!(k, RadixKey::HostSegment(s) if s == segment));
 
                 if current_key_matches {
                     segment_idx += 1;
+                    current_segment_idx += 1;
 
                     // If there are remaining keys in the node, or if this node is terminal
                     // and we have more segments to add, we need to split.
@@ -269,6 +271,7 @@ impl Stage2RadixResolver {
                             }
                         }
                         current = child;
+                        current_segment_idx = 0;
                     }
                     continue;
                 }
