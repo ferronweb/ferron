@@ -123,6 +123,22 @@ pub fn process_block(
     let mut nested_directives: HashMap<&'static str, ferronconf::Block> = HashMap::new();
     let mut date_format: Option<String> = None; // `log_date_format`
 
+    // `log`
+    let mut observability_log: ferronconf::Block = ferronconf::Block {
+        statements: vec![],
+        span: ferronconf::Span { line: 0, column: 0 },
+    };
+    // `error_log`
+    let mut observability_error_log: ferronconf::Block = ferronconf::Block {
+        statements: vec![],
+        span: ferronconf::Span { line: 0, column: 0 },
+    };
+    // `otlp`
+    let mut observability_otlp: ferronconf::Block = ferronconf::Block {
+        statements: vec![],
+        span: ferronconf::Span { line: 0, column: 0 },
+    };
+
     for node in &block.nodes {
         match node.name() {
             // Security & TLS
@@ -1230,22 +1246,17 @@ pub fn process_block(
                             span: ferronconf::Span { line: 0, column: 0 },
                         },
                     ));
-                    nested_directives
-                        .entry("observability")
-                        .or_insert_with(|| ferronconf::Block {
-                            statements: vec![],
-                            span: ferronconf::Span { line: 0, column: 0 },
-                        })
-                        .statements
-                        .push(ferronconf::Statement::Directive(ferronconf::Directive {
-                            name: "provider".to_string(),
-                            args: vec![ferronconf::Value::String(
-                                "file".to_string(),
-                                ferronconf::Span { line: 0, column: 0 },
-                            )],
-                            block: Some(log_block),
-                            span: ferronconf::Span { line: 0, column: 0 },
-                        }));
+                    let statements = &mut observability_log.statements;
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "provider".to_string(),
+                        args: vec![ferronconf::Value::String(
+                            "file".to_string(),
+                            ferronconf::Span { line: 0, column: 0 },
+                        )],
+                        block: None,
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                    statements.extend(log_block.statements);
                 }
             }
             "error_log" => {
@@ -1254,35 +1265,25 @@ pub fn process_block(
                     _ => None,
                 });
                 if let Some(path) = path {
-                    nested_directives
-                        .entry("observability")
-                        .or_insert_with(|| ferronconf::Block {
-                            statements: vec![],
-                            span: ferronconf::Span { line: 0, column: 0 },
-                        })
-                        .statements
-                        .push(ferronconf::Statement::Directive(ferronconf::Directive {
-                            name: "provider".to_string(),
-                            args: vec![ferronconf::Value::String(
-                                "file".to_string(),
-                                ferronconf::Span { line: 0, column: 0 },
-                            )],
-                            block: Some(ferronconf::Block {
-                                statements: vec![ferronconf::Statement::Directive(
-                                    ferronconf::Directive {
-                                        name: "error_log".to_string(),
-                                        args: vec![ferronconf::Value::String(
-                                            path,
-                                            ferronconf::Span { line: 0, column: 0 },
-                                        )],
-                                        block: None,
-                                        span: ferronconf::Span { line: 0, column: 0 },
-                                    },
-                                )],
-                                span: ferronconf::Span { line: 0, column: 0 },
-                            }),
-                            span: ferronconf::Span { line: 0, column: 0 },
-                        }));
+                    let statements = &mut observability_error_log.statements;
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "provider".to_string(),
+                        args: vec![ferronconf::Value::String(
+                            "file".to_string(),
+                            ferronconf::Span { line: 0, column: 0 },
+                        )],
+                        block: None,
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "error_log".to_string(),
+                        args: vec![ferronconf::Value::String(
+                            path,
+                            ferronconf::Span { line: 0, column: 0 },
+                        )],
+                        block: None,
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
                 }
             }
             "otlp_logs" | "otlp_metrics" | "otlp_traces" => {
@@ -1337,33 +1338,31 @@ pub fn process_block(
                                 span: ferronconf::Span { line: 0, column: 0 },
                             }));
                     }
-                    nested_directives
-                        .entry("observability")
-                        .or_insert_with(|| ferronconf::Block {
-                            statements: vec![],
-                            span: ferronconf::Span { line: 0, column: 0 },
-                        })
+                    if !observability_otlp.statements.iter().any(|s| match s {
+                        ferronconf::Statement::Directive(d) => d.name == "provider",
+                        _ => false,
+                    }) {
+                        observability_otlp
+                            .statements
+                            .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                name: "provider".to_string(),
+                                args: vec![ferronconf::Value::String(
+                                    "otlp".to_string(),
+                                    ferronconf::Span { line: 0, column: 0 },
+                                )],
+                                block: None,
+                                span: ferronconf::Span { line: 0, column: 0 },
+                            }));
+                    }
+                    observability_otlp
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
-                            name: "provider".to_string(),
+                            name: node.name().replace("otlp_", ""),
                             args: vec![ferronconf::Value::String(
-                                "otlp".to_string(),
+                                endpoint,
                                 ferronconf::Span { line: 0, column: 0 },
                             )],
-                            block: Some(ferronconf::Block {
-                                statements: vec![ferronconf::Statement::Directive(
-                                    ferronconf::Directive {
-                                        name: node.name().replace("otlp_", ""),
-                                        args: vec![ferronconf::Value::String(
-                                            endpoint,
-                                            ferronconf::Span { line: 0, column: 0 },
-                                        )],
-                                        block: Some(signal_block),
-                                        span: ferronconf::Span { line: 0, column: 0 },
-                                    },
-                                )],
-                                span: ferronconf::Span { line: 0, column: 0 },
-                            }),
+                            block: Some(signal_block),
                             span: ferronconf::Span { line: 0, column: 0 },
                         }));
                 }
@@ -1374,14 +1373,18 @@ pub fn process_block(
                     _ => None,
                 });
                 if let Some(val) = val {
-                    let statements = &mut nested_directives
-                        .entry("observability")
-                        .or_insert_with(|| ferronconf::Block {
-                            statements: vec![],
-                            span: ferronconf::Span { line: 0, column: 0 },
-                        })
-                        .statements;
-                    statements.iter_mut().for_each(|s| {
+                    observability_log.statements.iter_mut().for_each(|s| {
+                        if let ferronconf::Statement::Directive(d) = s {
+                            if d.name == "access_pattern" {
+                                d.args.iter_mut().for_each(|a| {
+                                    if let ferronconf::Value::String(s, _) = a {
+                                        *s = s.replace("%t", &format!("%{{{val}}}t"));
+                                    }
+                                });
+                            }
+                        }
+                    });
+                    observability_otlp.statements.iter_mut().for_each(|s| {
                         if let ferronconf::Statement::Directive(d) = s {
                             if d.name == "access_pattern" {
                                 d.args.iter_mut().for_each(|a| {
@@ -1441,12 +1444,18 @@ pub fn process_block(
                         val
                     });
                 if let Some(val) = val {
-                    nested_directives
-                        .entry("observability")
-                        .or_insert_with(|| ferronconf::Block {
-                            statements: vec![],
+                    observability_log
+                        .statements
+                        .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            name: "format".to_string(),
+                            args: vec![ferronconf::Value::String(
+                                val.clone(),
+                                ferronconf::Span { line: 0, column: 0 },
+                            )],
+                            block: None,
                             span: ferronconf::Span { line: 0, column: 0 },
-                        })
+                        }));
+                    observability_otlp
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
                             name: "format".to_string(),
@@ -1498,22 +1507,12 @@ pub fn process_block(
                         }
                     }
                 }
-                nested_directives
-                    .entry("observability")
-                    .or_insert_with(|| ferronconf::Block {
-                        statements: vec![],
-                        span: ferronconf::Span { line: 0, column: 0 },
-                    })
+                observability_log
                     .statements
-                    .push(ferronconf::Statement::Directive(ferronconf::Directive {
-                        name: "provider".to_string(),
-                        args: vec![ferronconf::Value::String(
-                            "file".to_string(),
-                            ferronconf::Span { line: 0, column: 0 },
-                        )],
-                        block: Some(log_block),
-                        span: ferronconf::Span { line: 0, column: 0 },
-                    }));
+                    .extend(log_block.statements.clone());
+                observability_otlp
+                    .statements
+                    .extend(log_block.statements.clone());
             }
             "otlp_service_name" | "otlp_no_verification" => {
                 let name = match node.name() {
@@ -1532,12 +1531,7 @@ pub fn process_block(
                     _ => ferronconf::Value::Boolean(true, ferronconf::Span { line: 0, column: 0 }),
                 });
                 if let Some(val) = val {
-                    nested_directives
-                        .entry("observability")
-                        .or_insert_with(|| ferronconf::Block {
-                            statements: vec![],
-                            span: ferronconf::Span { line: 0, column: 0 },
-                        })
+                    observability_otlp
                         .statements
                         .push(ferronconf::Statement::Directive(ferronconf::Directive {
                             name: name.to_string(),
@@ -1563,22 +1557,31 @@ pub fn process_block(
                     } else {
                         node.name().to_owned()
                     };
-                    nested_directives
-                        .entry("observability")
-                        .or_insert_with(|| ferronconf::Block {
-                            statements: vec![],
-                            span: ferronconf::Span { line: 0, column: 0 },
-                        })
-                        .statements
-                        .push(ferronconf::Statement::Directive(ferronconf::Directive {
-                            name,
-                            args: vec![ferronconf::Value::Integer(
-                                val,
-                                ferronconf::Span { line: 0, column: 0 },
-                            )],
-                            block: None,
-                            span: ferronconf::Span { line: 0, column: 0 },
-                        }));
+                    if node.name().starts_with("error_log") {
+                        observability_error_log
+                            .statements
+                            .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                name,
+                                args: vec![ferronconf::Value::Integer(
+                                    val,
+                                    ferronconf::Span { line: 0, column: 0 },
+                                )],
+                                block: None,
+                                span: ferronconf::Span { line: 0, column: 0 },
+                            }));
+                    } else {
+                        observability_log
+                            .statements
+                            .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                name,
+                                args: vec![ferronconf::Value::Integer(
+                                    val,
+                                    ferronconf::Span { line: 0, column: 0 },
+                                )],
+                                block: None,
+                                span: ferronconf::Span { line: 0, column: 0 },
+                            }));
+                    }
                 }
             }
 
@@ -3670,6 +3673,40 @@ pub fn process_block(
             name: key.to_string(),
             args: vec![],
             block: Some(block),
+            span: ferronconf::Span { line: 0, column: 0 },
+        }));
+    }
+
+    if observability_log.statements.iter().any(|s| match s {
+        ferronconf::Statement::Directive(d) => d.name == "provider",
+        _ => false,
+    }) {
+        statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+            name: "observability".to_string(),
+            args: vec![],
+            block: Some(observability_log),
+            span: ferronconf::Span { line: 0, column: 0 },
+        }));
+    }
+    if observability_error_log.statements.iter().any(|s| match s {
+        ferronconf::Statement::Directive(d) => d.name == "provider",
+        _ => false,
+    }) {
+        statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+            name: "observability".to_string(),
+            args: vec![],
+            block: Some(observability_error_log),
+            span: ferronconf::Span { line: 0, column: 0 },
+        }));
+    }
+    if observability_otlp.statements.iter().any(|s| match s {
+        ferronconf::Statement::Directive(d) => d.name == "provider",
+        _ => false,
+    }) {
+        statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+            name: "observability".to_string(),
+            args: vec![],
+            block: Some(observability_otlp),
             span: ferronconf::Span { line: 0, column: 0 },
         }));
     }
