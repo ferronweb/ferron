@@ -182,13 +182,13 @@ jobs:
       - name: Create a release archive
         shell: bash
         run: |
-          just package
+          just package ${{ matrix.target }}
 
       - name: Create a Windows installer
         if: matrix.runner == 'windows-latest'
         shell: bash
         run: |
-          just package-windows
+          just package-windows ${{ matrix.target }}
 
       # - name: Set up SSH
       #   uses: LuisEnMarroquin/setup-ssh-action@v3.0.0
