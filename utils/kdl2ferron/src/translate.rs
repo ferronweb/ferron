@@ -2035,6 +2035,303 @@ pub fn process_block(
                 }));
             }
 
+            "root" => {
+                let path = node.entries.first().and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => Some(s.to_string()),
+                    _ => None,
+                });
+                if let Some(path) = path {
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "root".to_string(),
+                        args: vec![ferronconf::Value::String(
+                            path,
+                            ferronconf::Span { line: 0, column: 0 },
+                        )],
+                        block: None,
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                }
+            }
+            "etag" | "compressed" | "precompressed" | "directory_listing"
+            | "dynamic_compressed" => {
+                let enabled = node.entries.first().is_none_or(|e| match e.value {
+                    kdlite::dom::Value::Bool(b) => b,
+                    _ => true,
+                });
+                statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    name: node.name().to_string(),
+                    args: vec![ferronconf::Value::Boolean(
+                        enabled,
+                        ferronconf::Span { line: 0, column: 0 },
+                    )],
+                    block: None,
+                    span: ferronconf::Span { line: 0, column: 0 },
+                }));
+            }
+            "mime_type" => {
+                let ext = node.entries.first().and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => Some(s.to_string()),
+                    _ => None,
+                });
+                let mime = node.entries.get(1).and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => Some(s.to_string()),
+                    _ => None,
+                });
+                if let (Some(ext), Some(mime)) = (ext, mime) {
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "mime_type".to_string(),
+                        args: vec![
+                            ferronconf::Value::String(ext, ferronconf::Span { line: 0, column: 0 }),
+                            ferronconf::Value::String(
+                                mime,
+                                ferronconf::Span { line: 0, column: 0 },
+                            ),
+                        ],
+                        block: None,
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                }
+            }
+            "index" => {
+                let files = node
+                    .entries
+                    .iter()
+                    .filter_map(|e| match &e.value {
+                        kdlite::dom::Value::String(s) => Some(ferronconf::Value::String(
+                            s.to_string(),
+                            ferronconf::Span { line: 0, column: 0 },
+                        )),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    name: "index".to_string(),
+                    args: files,
+                    block: None,
+                    span: ferronconf::Span { line: 0, column: 0 },
+                }));
+            }
+            "cache" => {
+                let enabled = node.entries.first().map_or(true, |e| match e.value {
+                    kdlite::dom::Value::Bool(b) => b,
+                    _ => true,
+                });
+                statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    name: "cache".to_string(),
+                    args: vec![ferronconf::Value::Boolean(
+                        enabled,
+                        ferronconf::Span { line: 0, column: 0 },
+                    )],
+                    block: None,
+                    span: ferronconf::Span { line: 0, column: 0 },
+                }));
+            }
+            "cache_max_entries" => {
+                let val = node.entries.first().and_then(|e| match &e.value {
+                    kdlite::dom::Value::Integer(i) => Some(*i as i64),
+                    _ => None,
+                });
+                if let Some(val) = val {
+                    nested_directives
+                        .entry("cache")
+                        .or_insert_with(|| ferronconf::Block {
+                            statements: vec![],
+                            span: ferronconf::Span { line: 0, column: 0 },
+                        })
+                        .statements
+                        .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            name: "max_entries".to_string(),
+                            args: vec![ferronconf::Value::Integer(
+                                val,
+                                ferronconf::Span { line: 0, column: 0 },
+                            )],
+                            block: None,
+                            span: ferronconf::Span { line: 0, column: 0 },
+                        }));
+                }
+            }
+            "cache_max_response_size" => {
+                let val = node.entries.first().and_then(|e| match &e.value {
+                    kdlite::dom::Value::Integer(i) => Some(*i as i64),
+                    _ => None,
+                });
+                if let Some(val) = val {
+                    nested_directives
+                        .entry("cache")
+                        .or_insert_with(|| ferronconf::Block {
+                            statements: vec![],
+                            span: ferronconf::Span { line: 0, column: 0 },
+                        })
+                        .statements
+                        .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                            name: "max_response_size".to_string(),
+                            args: vec![ferronconf::Value::Integer(
+                                val,
+                                ferronconf::Span { line: 0, column: 0 },
+                            )],
+                            block: None,
+                            span: ferronconf::Span { line: 0, column: 0 },
+                        }));
+                }
+            }
+            "cache_vary" => {
+                let headers = node
+                    .entries
+                    .iter()
+                    .filter_map(|e| match &e.value {
+                        kdlite::dom::Value::String(s) => Some(ferronconf::Value::String(
+                            s.to_string(),
+                            ferronconf::Span { line: 0, column: 0 },
+                        )),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                nested_directives
+                    .entry("cache")
+                    .or_insert_with(|| ferronconf::Block {
+                        statements: vec![],
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    })
+                    .statements
+                    .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "vary".to_string(),
+                        args: headers,
+                        block: None,
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+            }
+            "cache_ignore" => {
+                let headers = node
+                    .entries
+                    .iter()
+                    .filter_map(|e| match &e.value {
+                        kdlite::dom::Value::String(s) => Some(ferronconf::Value::String(
+                            s.to_string(),
+                            ferronconf::Span { line: 0, column: 0 },
+                        )),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                nested_directives
+                    .entry("cache")
+                    .or_insert_with(|| ferronconf::Block {
+                        statements: vec![],
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    })
+                    .statements
+                    .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "ignore".to_string(),
+                        args: headers,
+                        block: None,
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+            }
+            "file_cache_control" => {
+                let val = node.entries.first().and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => Some(s.to_string()),
+                    _ => None,
+                });
+                if let Some(val) = val {
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "file_cache_control".to_string(),
+                        args: vec![ferronconf::Value::String(
+                            val,
+                            ferronconf::Span { line: 0, column: 0 },
+                        )],
+                        block: None,
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                }
+            }
+            "replace" => {
+                let search = node.entries.first().and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => Some(s.to_string()),
+                    _ => None,
+                });
+                let replace = node.entries.get(1).and_then(|e| match &e.value {
+                    kdlite::dom::Value::String(s) => Some(s.to_string()),
+                    _ => None,
+                });
+                let once = node
+                    .entries
+                    .iter()
+                    .find(|e| e.key() == Some("once"))
+                    .and_then(|e| match &e.value {
+                        kdlite::dom::Value::Bool(b) => Some(*b),
+                        _ => None,
+                    })
+                    .unwrap_or(true);
+
+                if let (Some(search), Some(replace)) = (search, replace) {
+                    let mut replace_block = ferronconf::Block {
+                        statements: vec![],
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    };
+                    if !once {
+                        replace_block
+                            .statements
+                            .push(ferronconf::Statement::Directive(ferronconf::Directive {
+                                name: "once".to_string(),
+                                args: vec![ferronconf::Value::Boolean(
+                                    false,
+                                    ferronconf::Span { line: 0, column: 0 },
+                                )],
+                                block: None,
+                                span: ferronconf::Span { line: 0, column: 0 },
+                            }));
+                    }
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "replace".to_string(),
+                        args: vec![
+                            ferronconf::Value::String(
+                                search,
+                                ferronconf::Span { line: 0, column: 0 },
+                            ),
+                            ferronconf::Value::String(
+                                replace,
+                                ferronconf::Span { line: 0, column: 0 },
+                            ),
+                        ],
+                        block: if !once { Some(replace_block) } else { None },
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                }
+            }
+            "replace_last_modified" => {
+                let val = node.entries.first().map_or(true, |e| match e.value {
+                    kdlite::dom::Value::Bool(b) => b,
+                    _ => true,
+                });
+                statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    name: "replace_last_modified".to_string(),
+                    args: vec![ferronconf::Value::Boolean(
+                        val,
+                        ferronconf::Span { line: 0, column: 0 },
+                    )],
+                    block: None,
+                    span: ferronconf::Span { line: 0, column: 0 },
+                }));
+            }
+            "replace_filter_types" => {
+                let types = node
+                    .entries
+                    .iter()
+                    .filter_map(|e| match &e.value {
+                        kdlite::dom::Value::String(s) => Some(ferronconf::Value::String(
+                            s.to_string(),
+                            ferronconf::Span { line: 0, column: 0 },
+                        )),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                    name: "replace_filter_types".to_string(),
+                    args: types,
+                    block: None,
+                    span: ferronconf::Span { line: 0, column: 0 },
+                }));
+            }
+
             // Conditionals
             "if" => {
                 let condition_name = node
