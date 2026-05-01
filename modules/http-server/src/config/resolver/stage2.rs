@@ -187,50 +187,52 @@ impl Stage2RadixResolver {
         let mut segment_idx = 0;
 
         while segment_idx < hostname_segments.len() {
-            let segment = hostname_segments[segment_idx];
-
             // Check if current node has compressed keys that match our path
-            if !current.keys.is_empty() {
-                // Try to match the current segment against the current key
-                let current_key_matches = current
-                    .keys
-                    .first()
-                    .is_some_and(|k| matches!(k, RadixKey::HostSegment(s) if s == segment));
-
-                if current_key_matches {
+            if current.keys.first().is_some_and(
+                |k| matches!(k, RadixKey::HostSegment(s) if s == hostname_segments[segment_idx]),
+            ) {
+                for key in &current.keys {
+                    if segment_idx >= hostname_segments.len() {
+                        break;
+                    }
+                    if !matches!(key, RadixKey::HostSegment(s) if s == hostname_segments[segment_idx])
+                    {
+                        break;
+                    }
                     segment_idx += 1;
-
-                    // Split if there are remaining keys
-                    if current.keys.len() > 1 {
-                        let remaining_keys: Vec<RadixKey> = current.keys.drain(1..).collect();
-                        let old_data = std::mem::take(&mut current.data);
-                        let old_children = std::mem::take(&mut current.children);
-                        let old_wildcard = current.wildcard_child.take();
-
-                        let child_key = match remaining_keys.first() {
-                            Some(RadixKey::HostSegment(s)) => s.clone(),
-                            _ => panic!("Expected HostSegment as first key after split"),
-                        };
-                        let mut child_node = RadixNode::new(remaining_keys);
-                        child_node.data = old_data;
-                        child_node.children = old_children;
-                        child_node.wildcard_child = old_wildcard;
-                        current.children.insert(child_key, child_node);
-                    }
-
-                    // Navigate to children for the next segment
-                    if segment_idx < hostname_segments.len() {
-                        let next_segment = hostname_segments[segment_idx];
-                        let key = next_segment.to_string();
-                        current = current.children.entry(key).or_insert_with(|| {
-                            RadixNode::new(vec![RadixKey::HostSegment(next_segment.to_string())])
-                        });
-                    }
-                    continue;
                 }
+
+                // Split if there are remaining keys
+                if current.keys.len() > segment_idx {
+                    let remaining_keys: Vec<RadixKey> = current.keys.drain(segment_idx..).collect();
+                    let old_data = std::mem::take(&mut current.data);
+                    let old_children = std::mem::take(&mut current.children);
+                    let old_wildcard = current.wildcard_child.take();
+
+                    let child_key = match remaining_keys.first() {
+                        Some(RadixKey::HostSegment(s)) => s.clone(),
+                        _ => panic!("Expected HostSegment as first key after split"),
+                    };
+                    let mut child_node = RadixNode::new(remaining_keys);
+                    child_node.data = old_data;
+                    child_node.children = old_children;
+                    child_node.wildcard_child = old_wildcard;
+                    current.children.insert(child_key, child_node);
+                }
+
+                // Navigate to children for the next segment
+                if segment_idx < hostname_segments.len() {
+                    let next_segment = hostname_segments[segment_idx];
+                    let key = next_segment.to_string();
+                    current = current.children.entry(key).or_insert_with(|| {
+                        RadixNode::new(vec![RadixKey::HostSegment(next_segment.to_string())])
+                    });
+                }
+                continue;
             }
 
             // No compressed key match - use normal children lookup/insert
+            let segment = hostname_segments[segment_idx];
             let key = segment.to_string();
             current = current.children.entry(key).or_insert_with(|| {
                 RadixNode::new(vec![RadixKey::HostSegment(segment.to_string())])
@@ -265,43 +267,46 @@ impl Stage2RadixResolver {
             let segment = base_segments[segment_idx];
 
             // Check if current node has compressed keys that match our path
-            if !current.keys.is_empty() {
-                let first_key_matches = current
-                    .keys
-                    .first()
-                    .is_some_and(|k| matches!(k, RadixKey::HostSegment(s) if s == segment));
-
-                if first_key_matches {
+            if current.keys.first().is_some_and(
+                |k| matches!(k, RadixKey::HostSegment(s) if s == base_segments[segment_idx]),
+            ) {
+                for key in &current.keys {
+                    if segment_idx >= base_segments.len() {
+                        break;
+                    }
+                    if !matches!(key, RadixKey::HostSegment(s) if s == base_segments[segment_idx]) {
+                        break;
+                    }
                     segment_idx += 1;
-
-                    // Split if there are remaining keys
-                    if current.keys.len() > 1 {
-                        let remaining_keys: Vec<RadixKey> = current.keys.drain(1..).collect();
-                        let old_data = std::mem::take(&mut current.data);
-                        let old_children = std::mem::take(&mut current.children);
-                        let old_wildcard = current.wildcard_child.take();
-
-                        let child_key = match remaining_keys.first() {
-                            Some(RadixKey::HostSegment(s)) => s.clone(),
-                            _ => panic!("Expected HostSegment as first key after split"),
-                        };
-                        let mut child_node = RadixNode::new(remaining_keys);
-                        child_node.data = old_data;
-                        child_node.children = old_children;
-                        child_node.wildcard_child = old_wildcard;
-                        current.children.insert(child_key, child_node);
-                    }
-
-                    // Navigate to children for next segment
-                    if segment_idx < base_segments.len() {
-                        let next_segment = base_segments[segment_idx];
-                        let key = next_segment.to_string();
-                        current = current.children.entry(key).or_insert_with(|| {
-                            RadixNode::new(vec![RadixKey::HostSegment(next_segment.to_string())])
-                        });
-                    }
-                    continue;
                 }
+
+                // Split if there are remaining keys
+                if current.keys.len() > 1 {
+                    let remaining_keys: Vec<RadixKey> = current.keys.drain(segment_idx..).collect();
+                    let old_data = std::mem::take(&mut current.data);
+                    let old_children = std::mem::take(&mut current.children);
+                    let old_wildcard = current.wildcard_child.take();
+
+                    let child_key = match remaining_keys.first() {
+                        Some(RadixKey::HostSegment(s)) => s.clone(),
+                        _ => panic!("Expected HostSegment as first key after split"),
+                    };
+                    let mut child_node = RadixNode::new(remaining_keys);
+                    child_node.data = old_data;
+                    child_node.children = old_children;
+                    child_node.wildcard_child = old_wildcard;
+                    current.children.insert(child_key, child_node);
+                }
+
+                // Navigate to children for next segment
+                if segment_idx < base_segments.len() {
+                    let next_segment = base_segments[segment_idx];
+                    let key = next_segment.to_string();
+                    current = current.children.entry(key).or_insert_with(|| {
+                        RadixNode::new(vec![RadixKey::HostSegment(next_segment.to_string())])
+                    });
+                }
+                continue;
             }
 
             // Normal case
@@ -400,43 +405,46 @@ impl Stage2RadixResolver {
             let segment = path_segments[segment_idx];
 
             // Check if current node has compressed keys that match our path
-            if !current.keys.is_empty() {
-                let first_key_matches = current
-                    .keys
-                    .first()
-                    .is_some_and(|k| matches!(k, RadixKey::PathSegment(s) if s == segment));
-
-                if first_key_matches {
+            if current.keys.first().is_some_and(
+                |k| matches!(k, RadixKey::PathSegment(s) if s == path_segments[segment_idx]),
+            ) {
+                for key in &current.keys {
+                    if segment_idx >= path_segments.len() {
+                        break;
+                    }
+                    if !matches!(key, RadixKey::PathSegment(s) if s == path_segments[segment_idx]) {
+                        break;
+                    }
                     segment_idx += 1;
-
-                    // Split if there are remaining keys
-                    if current.keys.len() > 1 {
-                        let remaining_keys: Vec<RadixKey> = current.keys.drain(1..).collect();
-                        let old_data = std::mem::take(&mut current.data);
-                        let old_children = std::mem::take(&mut current.children);
-                        let old_wildcard = current.wildcard_child.take();
-
-                        let child_key = match remaining_keys.first() {
-                            Some(RadixKey::PathSegment(s)) => s.clone(),
-                            _ => panic!("Expected PathSegment as first key after split"),
-                        };
-                        let mut child_node = RadixNode::new(remaining_keys);
-                        child_node.data = old_data;
-                        child_node.children = old_children;
-                        child_node.wildcard_child = old_wildcard;
-                        current.children.insert(child_key, child_node);
-                    }
-
-                    // Navigate to children for next segment
-                    if segment_idx < path_segments.len() {
-                        let next_segment = path_segments[segment_idx];
-                        let key = next_segment.to_string();
-                        current = current.children.entry(key).or_insert_with(|| {
-                            RadixNode::new(vec![RadixKey::PathSegment(next_segment.to_string())])
-                        });
-                    }
-                    continue;
                 }
+
+                // Split if there are remaining keys
+                if current.keys.len() > 1 {
+                    let remaining_keys: Vec<RadixKey> = current.keys.drain(segment_idx..).collect();
+                    let old_data = std::mem::take(&mut current.data);
+                    let old_children = std::mem::take(&mut current.children);
+                    let old_wildcard = current.wildcard_child.take();
+
+                    let child_key = match remaining_keys.first() {
+                        Some(RadixKey::PathSegment(s)) => s.clone(),
+                        _ => panic!("Expected PathSegment as first key after split"),
+                    };
+                    let mut child_node = RadixNode::new(remaining_keys);
+                    child_node.data = old_data;
+                    child_node.children = old_children;
+                    child_node.wildcard_child = old_wildcard;
+                    current.children.insert(child_key, child_node);
+                }
+
+                // Navigate to children for next segment
+                if segment_idx < path_segments.len() {
+                    let next_segment = path_segments[segment_idx];
+                    let key = next_segment.to_string();
+                    current = current.children.entry(key).or_insert_with(|| {
+                        RadixNode::new(vec![RadixKey::PathSegment(next_segment.to_string())])
+                    });
+                }
+                continue;
             }
 
             // Normal case
