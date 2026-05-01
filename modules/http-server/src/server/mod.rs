@@ -388,7 +388,12 @@ impl BasicHttpModule {
             // The plaintext HTTP listener (port != https_port) ignores all `tls` directives,
             // including explicit configurations and automatic ACME.
             if https_port.is_some() && port_config.port == https_port {
-                if let Some(tls) = host_config.1.directives.get("tls") {
+                if let Some(tls) = host_config
+                    .1
+                    .directives
+                    .get("tls")
+                    .or_else(|| global_config.directives.get("tls"))
+                {
                     for tls1 in tls {
                         // Handle explicit `tls false` — skip TLS entirely
                         if tls1
