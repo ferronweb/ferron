@@ -14,8 +14,9 @@ use ferron_core::{
     Module,
 };
 use ferron_observability::{
-    AccessEvent, Event, EventSink, LogEvent, LogLevel, MetricAttributeValue, MetricEvent,
-    MetricType, MetricValue, ObservabilityContext, Parent, TraceAttributeValue, TraceEvent,
+    AccessEvent, Event, EventSink, LogEvent, LogFormatterContext, LogLevel, MetricAttributeValue,
+    MetricEvent, MetricType, MetricValue, ObservabilityContext, Parent, TraceAttributeValue,
+    TraceEvent,
 };
 use hyper::header::HeaderValue;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -204,6 +205,7 @@ fn build_resource(service_name: String) -> Resource {
 struct OtlpObservabilityModule {
     inner: async_channel::Receiver<ConfiguredEvent>,
     cancel_token: tokio_util::sync::CancellationToken,
+    registry: Arc<Registry>,
 }
 
 impl Module for OtlpObservabilityModule {
@@ -221,6 +223,7 @@ impl Module for OtlpObservabilityModule {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let cancel_token = self.cancel_token.clone();
         let rx = self.inner.clone();
+        let registry = self.registry.clone();
 
         runtime.spawn_secondary_task(async move {
             // Per-config exporter cache
@@ -261,7 +264,7 @@ impl Module for OtlpObservabilityModule {
                     }
                     Event::Access(access_event) => {
                         if let Some(ref provider) = entry.logs_provider {
-                            emit_access_log(provider, access_event);
+                            emit_access_log(provider, access_event, &msg.log_config, &registry);
                         }
                     }
                 }
@@ -830,15 +833,50 @@ fn emit_log(provider: &opentelemetry_sdk::logs::SdkLoggerProvider, event: &LogEv
     logger.emit(record);
 }
 
+fn format_access_event(
+    access_event: &Arc<dyn AccessEvent>,
+    log_config: &Arc<ServerConfigurationBlock>,
+    registry: &Registry,
+) -> Option<String> {
+    let formatter_name = log_config
+        .get_value("format")
+        .and_then(|v| v.as_str())
+        .unwrap_or("text");
+
+    // Try to resolve the formatter from the registry
+    if let Some(formatter_registry) = registry.get_provider_registry::<LogFormatterContext>() {
+        if let Some(formatter) = formatter_registry.get(formatter_name) {
+            let mut ctx = LogFormatterContext {
+                access_event: access_event.clone(),
+                log_config: log_config.clone(),
+                output: None,
+            };
+            if formatter.execute(&mut ctx).is_ok() {
+                if let Some(output) = ctx.output {
+                    return Some(output);
+                }
+            }
+        }
+    }
+
+    None
+}
+
 fn emit_access_log(
     provider: &opentelemetry_sdk::logs::SdkLoggerProvider,
-    _event: &Arc<dyn AccessEvent>,
+    event: &Arc<dyn AccessEvent>,
+    log_config: &Arc<ServerConfigurationBlock>,
+    registry: &Registry,
 ) {
     use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 
     let logger = provider.logger("ferron.access");
     let mut record = logger.create_log_record();
-    record.set_body(AnyValue::String("access_log".into()));
+    if let Some(body) = format_access_event(event, log_config, registry) {
+        record.set_body(AnyValue::String(body.into()));
+    } else {
+        record.set_body(AnyValue::String("<unknown access log>".into()));
+    }
     logger.emit(record);
 }
 
@@ -1170,7 +1208,7 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
 
     fn register_modules(
         &mut self,
-        _registry: Arc<Registry>,
+        registry: Arc<Registry>,
         modules: &mut Vec<Arc<dyn Module>>,
         _config: Arc<ferron_core::config::ServerConfiguration>,
     ) -> Result<(), Box<dyn Error>> {
@@ -1178,6 +1216,7 @@ impl ModuleLoader for OtlpObservabilityModuleLoader {
             let module = Arc::new(OtlpObservabilityModule {
                 inner: self.channel.1.clone(),
                 cancel_token: tokio_util::sync::CancellationToken::new(),
+                registry: registry.clone(),
             });
 
             self.cache = Some(module.clone());

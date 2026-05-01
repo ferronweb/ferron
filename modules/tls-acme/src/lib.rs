@@ -506,6 +506,9 @@ async fn run_acme_background_task(
         }
     });
 
+    // Sleep for 5ms to ensure configurations are loaded
+    tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
+
     // Main provisioning loop
     loop {
         // Provision certificates for all eager configs

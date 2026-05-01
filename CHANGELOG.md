@@ -16,6 +16,7 @@
 - Partial hostname resolution match in HTTP server could lead to incorrect routing.
 - Some default cache paths were unwritable in some cases.
 - Unknown directives in global blocks for `status` directive (even though they're known in host blocks).
+- When using OTLP, access logs were emitted with "access_log" body, not actual access logs.
 
 ## Ferron 3.0.0-alpha.3
 

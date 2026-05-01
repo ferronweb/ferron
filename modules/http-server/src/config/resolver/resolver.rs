@@ -274,7 +274,7 @@ impl<T> HostLookupTree<T> {
                     current_node = current_node
                         .children_fixed
                         .entry(multi_key)
-                        .or_insert_with(HostLookupNode::default);
+                        .or_default();
                 }
             }
         }
