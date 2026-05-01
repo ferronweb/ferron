@@ -7,6 +7,12 @@ on:
       - "docs/**/*.md"
       - "docstest/**"
       - ".github/workflows/docstest.yml"
+  pull_request:
+    branches: ["develop-3.x"]
+    paths:
+      - "docs/**/*.md"
+      - "docstest/**"
+      - ".github/workflows/docstest.yml"
 
 jobs:
   lint:

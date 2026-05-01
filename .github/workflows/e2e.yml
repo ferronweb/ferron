@@ -10,6 +10,7 @@ on:
       - "bin/**"
       - "core/**"
       - "e2e/**"
+      - "entrypoint/**"
       - "modules/**"
       - "types/**"
       - ".github/workflows/e2e.yml"

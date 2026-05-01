@@ -1,0 +1,390 @@
+name: Release (Ferron 3.x)
+
+on:
+  push:
+    branches: ["3.x"]
+    paths:
+      - ".dockerignore"
+      - "bin/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "configs/**"
+      - "core/**"
+      - "Cross.toml"
+      - "Dockerfile"
+      - "Dockerfile.*"
+      - "e2e/**"
+      - "entrypoint/**"
+      - "modules/**"
+      - "packaging/**"
+      - "types/**"
+      - "utils/**"
+      - "wwwroot/**"
+      - ".github/workflows/release.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: ${{ matrix.runner }}
+
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+            #smoketest: true
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+            command: cross
+            #smoketest: true
+          - target: i686-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: i686-unknown-linux-musl
+            runner: ubuntu-latest
+            command: cross
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-latest
+            command: cross
+          - target: armv7-unknown-linux-gnueabihf
+            runner: ubuntu-latest
+            command: cross
+          - target: armv7-unknown-linux-musleabihf
+            runner: ubuntu-latest
+            command: cross
+          - target: riscv64gc-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: riscv64gc-unknown-linux-musl
+            runner: ubuntu-latest
+            command: cross
+          - target: s390x-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: powerpc64le-unknown-linux-gnu
+            runner: ubuntu-latest
+            command: cross
+          - target: x86_64-unknown-freebsd
+            runner: ubuntu-latest
+            command: cross
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            command: cargo
+            #smoketest: true
+          - target: i686-pc-windows-msvc
+            runner: windows-latest
+            command: cargo
+          - target: aarch64-pc-windows-msvc
+            runner: windows-latest
+            command: cargo
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            command: cargo
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            command: cargo
+            smoketest: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: 3.x
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: "${{ matrix.target }}"
+
+      - name: Setup cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ReleaseFerron3-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ReleaseFerron3-${{ runner.os }}-${{ matrix.target }}-
+
+      - name: Determine Ferron version
+        shell: bash
+        run: |
+          FERRON_VERSION_CARGO="$(cat entrypoint/Cargo.toml | grep -E '^version' | sed -E 's|.*"([0-9a-zA-Z.+-]+)"$|\1|g')"
+          FERRON_VERSION_GIT="$(git tag --sort=-committerdate | head -n 1 | sed s/[^0-9a-zA-Z.+-]//g)"
+          if [ "$FERRON_VERSION_CARGO" != "" ]; then
+            echo "Version determined from Cargo.toml file"
+            echo "FERRON_VERSION=$FERRON_VERSION_CARGO" >> $GITHUB_ENV
+          elif  [ "$FERRON_VERSION_GIT" != "" ]; then
+            echo "Version determined from the Git tag"
+            echo "FERRON_VERSION=$FERRON_VERSION_GIT" >> $GITHUB_ENV
+          else
+            echo "Can't determine the server version!" 2>&1
+            exit 1
+          fi
+
+      - name: Setup NASM
+        if: matrix.runner == 'windows-latest'
+        uses: ilammy/setup-nasm@v1
+
+      - name: Setup Just
+        uses: extractions/setup-just@v4
+
+      - name: Install Cross
+        if: matrix.command == 'cross'
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm cross --force
+
+      - name: Install bindgen-cli
+        if: matrix.command != 'cross'
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall --no-confirm bindgen-cli --force
+
+      - name: Build binaries
+        shell: bash
+        run: |
+          ${{ matrix.command }} build --release --verbose --target ${{ matrix.target }}
+
+      # - name: Smoke test the binary (Unix-like)
+      #   if: matrix.runner != 'windows-latest' && matrix.smoketest == true
+      #   shell: bash
+      #   run: |
+      #     FERRON="$(pwd)/target/${{ matrix.target }}/release/ferron" bash smoketest/smoketest.sh
+
+      # - name: Smoke test the binary (Windows)
+      #   if: matrix.runner == 'windows-latest' && matrix.smoketest == true
+      #   shell: powershell
+      #   run: |
+      #     $env:FERRON = $PWD.Path + '\target\${{ matrix.target }}\release\ferron'
+      #     powershell -ExecutionPolicy Bypass .\smoketest\smoketest.ps1
+
+      - name: Prepare the changelog for release
+        shell: bash
+        run: |
+          { echo; cat CHANGELOG.md; } | sed '1,/^## /d;/^## /,$d;/^\*\*Released in/d;' | sed -e '/./,$!d' -e :a -e '/^\n*$/{$d;N;ba' -e '}' > CHANGES-CURRENT
+
+      - name: Create a release archive
+        shell: bash
+        run: |
+          just package
+
+      - name: Create a Windows installer
+        if: matrix.runner == 'windows-latest'
+        shell: bash
+        run: |
+          just package-windows
+
+      - name: Set up SSH
+        uses: LuisEnMarroquin/setup-ssh-action@v3.0.0
+        with:
+          ORIGIN: ${{ secrets.SSH_HOSTNAME }}
+          SSHKEY: ${{ secrets.SSH_KEY }}
+          NAME: ferron-servers
+          PORT: ${{ secrets.SSH_PORT }}
+          USER: ${{ secrets.SSH_USERNAME }}
+
+      - name: Release Ferron on Ferron's servers (non-Windows)
+        if: ${{ !contains(matrix.target, 'windows') }}
+        shell: bash
+        run: |
+          ssh ferron-servers "mkdir -p ferron3 || true"
+          scp dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.tar.gz ferron-servers:ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.tar.gz
+
+          # Call the internal "deploy-ferron3" shell script
+          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 archive ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.tar.gz"
+
+      - name: Release Ferron on Ferron's servers (Windows)
+        if: contains(matrix.target, 'windows')
+        shell: bash
+        run: |
+          ssh ferron-servers "mkdir -p ferron3 || true"
+          scp dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip ferron-servers:ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip
+          scp dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-setup.exe ferron-servers:ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-setup.exe
+
+          # Call the internal "deploy-ferron3" shell script
+          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 archive ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip"
+          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 archive ferron3/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-setup.exe"
+
+      - name: Release Ferron to GitHub (Non-Windows)
+        if: ${{ !contains(matrix.target, 'windows') }}
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: "dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.tar.gz"
+          bodyFile: "CHANGES-CURRENT"
+          tag: "${{ env.FERRON_VERSION }}"
+          commit: "3.x"
+
+      - name: Release Ferron to GitHub (Windows)
+        if: contains(matrix.target, 'windows')
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: "dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}-setup.exe,dist/ferron-${{ env.FERRON_VERSION }}-${{ matrix.target }}.zip"
+          bodyFile: "CHANGES-CURRENT"
+          tag: "${{ env.FERRON_VERSION }}"
+          commit: "3.x"
+
+      - name: Build and release Debian package
+        if: matrix.runner == 'ubuntu-latest' && contains(matrix.target, 'linux-gnu')
+        shell: bash
+        run: |
+          just package-deb ${{ matrix.target }}
+
+          DEB_FILE_NAME_WO_DEB=$(ls dist/*.deb | head -n 1 | sed -E 's|^dist/||' | sed -E 's/\.deb$//')
+          DEB_PACKAGE_VERSION=$(echo $DEB_FILE_NAME_WO_DEB | cut -d'_' -f2)
+          DEB_ARCHITECTURE=$(echo $DEB_FILE_NAME_WO_DEB | cut -d'_' -f3)
+          ssh ferron-servers "mkdir -p ferron3 || true"
+          scp dist/ferron3_${DEB_PACKAGE_VERSION}_${DEB_ARCHITECTURE}.deb ferron-servers:ferron3/ferron3_${DEB_PACKAGE_VERSION}_${DEB_ARCHITECTURE}.deb
+
+          # Call the internal "deploy-ferron3" shell script
+          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 debian ferron-servers:ferron3/ferron3_${DEB_PACKAGE_VERSION}_${DEB_ARCHITECTURE}.deb"
+
+      - name: Build and release RPM package
+        if: matrix.runner == 'ubuntu-latest' && contains(matrix.target, 'linux-gnu')
+        shell: bash
+        run: |
+          just package-rpm ${{ matrix.target }}
+
+          RPM_FILE_NAME_WO_RPM=$(ls dist/*.rpm | head -n 1 | sed -E 's|^dist/||' | sed -E 's/\.rpm$//')
+          RPM_PACKAGE_VERSION=$(echo $RPM_FILE_NAME_WO_RPM | cut -d'-' -f2)
+          RPM_ARCHITECTURE=$(echo $RPM_FILE_NAME_WO_RPM | rev | cut -d'.' -f1 | rev)
+          ssh ferron-servers "mkdir -p ferron3 || true"
+          scp dist/${RPM_FILE_NAME_WO_RPM}.rpm ferron-servers:ferron3/${RPM_FILE_NAME_WO_RPM}.rpm
+
+          # Call the internal "deploy-ferron3" shell script
+          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 rpm ferron-servers:ferron3/${RPM_FILE_NAME_WO_RPM}.rpm"
+
+  docker:
+    runs-on: ubuntu-latest
+
+    permissions:
+      packages: write
+      contents: read
+      attestations: write
+      id-token: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: latest
+            dockerfile: ./Dockerfile
+            platforms: linux/amd64,linux/arm64,linux/arm/v7
+          - group: alpine
+            dockerfile: ./Dockerfile.alpine
+            platforms: linux/386,linux/amd64,linux/arm64,linux/arm/v7
+          - group: debian
+            dockerfile: ./Dockerfile.debian
+            platforms: linux/386,linux/amd64,linux/arm64,linux/arm/v7
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: 3.x
+          fetch-depth: 0
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4.1.0
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine Ferron version
+        shell: bash
+        run: |
+          FERRON_VERSION_CARGO="$(cat ferron/Cargo.toml | grep -E '^version' | sed -E 's|.*"([0-9a-zA-Z.+-]+)"$|\1|g')"
+          FERRON_VERSION_GIT="$(git tag --sort=-committerdate | head -n 1 | sed s/[^0-9a-zA-Z.+-]//g)"
+          if [ "$FERRON_VERSION_CARGO" != "" ]; then
+            echo "Version determined from Cargo.toml file"
+            echo "FERRON_VERSION=$FERRON_VERSION_CARGO" >> $GITHUB_ENV
+          elif  [ "$FERRON_VERSION_GIT" != "" ]; then
+            echo "Version determined from the Git tag"
+            echo "FERRON_VERSION=$FERRON_VERSION_GIT" >> $GITHUB_ENV
+          else
+            echo "Can't determine the server version!" 2>&1
+            exit 1
+          fi
+
+      - name: Determine Docker tags
+        shell: bash
+        run: |
+          TAG_TYPE=${{ matrix.group }}
+          FERRON_MAJOR_VERSION=$(echo "$FERRON_VERSION" | cut -d '.' -f 1)
+          # TODO: Uncomment commented variable settings after stable release of Ferron 3
+          if [ "$TAG_TYPE" = "latest" ] || [ "$TAG_TYPE" = "" ]; then
+            DOCKER_HUB_TAGS="ferronserver/ferron:$FERRON_VERSION,ferronserver/ferron:$FERRON_MAJOR_VERSION"
+            DOCKER_GHCR_TAGS="ghcr.io/ferronweb/ferron:$FERRON_VERSION,ghcr.io/ferronweb/ferron:$FERRON_MAJOR_VERSION"
+            #DOCKER_HUB_TAGS="ferronserver/ferron:$FERRON_VERSION,ferronserver/ferron:$FERRON_MAJOR_VERSION,ferronserver/ferron:latest"
+            #DOCKER_GHCR_TAGS="ghcr.io/ferronweb/ferron:$FERRON_VERSION,ghcr.io/ferronweb/ferron:$FERRON_MAJOR_VERSION,ghcr.io/ferronweb/ferron:latest"
+          else
+            DOCKER_HUB_TAGS="ferronserver/ferron:$FERRON_VERSION-$TAG_TYPE,ferronserver/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE"
+            DOCKER_GHCR_TAGS="ghcr.io/ferronweb/ferron:$FERRON_VERSION-$TAG_TYPE,ghcr.io/ferronweb/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE"
+            #DOCKER_HUB_TAGS="ferronserver/ferron:$FERRON_VERSION-$TAG_TYPE,ferronserver/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE,ferronserver/ferron:$TAG_TYPE"
+            #DOCKER_GHCR_TAGS="ghcr.io/ferronweb/ferron:$FERRON_VERSION-$TAG_TYPE,ghcr.io/ferronweb/ferron:$FERRON_MAJOR_VERSION-$TAG_TYPE,ghcr.io/ferronweb/ferron:$TAG_TYPE"
+          fi
+          echo "DOCKER_TAGS=$DOCKER_HUB_TAGS,$DOCKER_GHCR_TAGS" >> $GITHUB_ENV
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and export to Docker
+        uses: docker/build-push-action@v7.1.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          tags: ${{ env.DOCKER_TAGS }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test the Docker image
+        shell: bash
+        run: |
+          FERRON_IMAGE="$(echo $DOCKER_TAGS | cut -d',' -f1)" bash smoketest/smoketest-docker.sh
+
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@v7.1.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: ${{ env.DOCKER_TAGS }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: index.docker.io/ferronserver/ferron
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
