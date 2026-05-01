@@ -2200,7 +2200,7 @@ pub fn process_block(
                 }));
             }
             "cache" => {
-                let enabled = node.entries.first().map_or(true, |e| match e.value {
+                let enabled = node.entries.first().is_none_or(|e| match e.value {
                     kdlite::dom::Value::Bool(b) => b,
                     _ => true,
                 });
@@ -2395,7 +2395,7 @@ pub fn process_block(
                 }
             }
             "replace_last_modified" => {
-                let val = node.entries.first().map_or(true, |e| match e.value {
+                let val = node.entries.first().is_none_or(|e| match e.value {
                     kdlite::dom::Value::Bool(b) => b,
                     _ => true,
                 });
@@ -3486,7 +3486,7 @@ pub fn process_block(
                 }
             }
             "wwwredirect" => {
-                let enabled = node.entries.first().map_or(true, |e| match e.value {
+                let enabled = node.entries.first().is_none_or(|e| match e.value {
                     kdlite::dom::Value::Bool(b) => b,
                     _ => true,
                 });
@@ -3587,7 +3587,7 @@ pub fn process_block(
                     "disable_url_sanitizer" => "url_sanitize",
                     _ => unreachable!(),
                 };
-                let enabled = node.entries.first().map_or(true, |e| match e.value {
+                let enabled = node.entries.first().is_none_or(|e| match e.value {
                     kdlite::dom::Value::Bool(b) => b,
                     _ => true,
                 });
