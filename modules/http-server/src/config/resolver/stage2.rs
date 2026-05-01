@@ -185,20 +185,22 @@ impl Stage2RadixResolver {
     ) {
         let mut current = &mut self.host_tree;
         let mut segment_idx = 0;
+        let mut current_segment_idx = 0;
 
         while segment_idx < hostname_segments.len() {
             let segment = hostname_segments[segment_idx];
 
             // Check if current node has compressed keys that match our path
             if !current.keys.is_empty() {
-                // Try to match the current segment against the first key
-                let first_key_matches = current
+                // Try to match the current segment against the current key
+                let current_key_matches = current
                     .keys
-                    .first()
+                    .get(current_segment_idx)
                     .is_some_and(|k| matches!(k, RadixKey::HostSegment(s) if s == segment));
 
-                if first_key_matches {
+                if current_key_matches {
                     segment_idx += 1;
+                    current_segment_idx += 1;
 
                     // If there are remaining keys in the node, or if this node is terminal
                     // and we have more segments to add, we need to split.
@@ -269,7 +271,7 @@ impl Stage2RadixResolver {
                             }
                         }
                         current = child;
-                        segment_idx += 1;
+                        current_segment_idx = 0;
                     }
                     continue;
                 }
@@ -641,15 +643,6 @@ impl Stage2RadixResolver {
                     }
                 }
             }
-
-            // Partial / prefix match: current node is terminal and all of its
-            // own keys were already consumed above.
-            if node.data.is_terminal {
-                if let Some(ref config) = node.data.config {
-                    configs.push((node.data.priority, Arc::clone(config)));
-                    result_paths.push(current_path.clone());
-                }
-            }
         }
 
         // Pop this node's own keys from the path before returning.
@@ -931,6 +924,22 @@ mod tests {
         let configs = resolver.resolve_hostname("sub.example.com", &mut path);
 
         assert!(!configs.is_empty());
+    }
+
+    #[test]
+    fn test_stage2_partial_hostname_resolution() {
+        let mut resolver = Stage2RadixResolver::new();
+
+        let config = Arc::new(create_test_block());
+
+        // Insert example.com configuration
+        resolver.insert_host(vec!["com", "example"], Arc::clone(&config), 10);
+
+        let mut path = ResolvedLocationPath::new();
+        let configs = resolver.resolve_hostname("sub.example.com", &mut path);
+
+        // "example.com" should not match "sub.example.com"
+        assert!(configs.is_empty());
     }
 
     #[test]
