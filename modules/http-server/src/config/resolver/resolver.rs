@@ -839,6 +839,7 @@ impl ThreeStageResolver {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn resolve_block(
         block: &Arc<CompiledBlock>,
         request_path_keys: &[HostLookupKey],
