@@ -114,7 +114,7 @@ impl ConfigurationValidator for HttpResponseValidator {
                                             .into());
                                         }
                                         if child_entry.args[0].as_str().is_none()
-                                            && (child_name.as_str() != "body"
+                                            && (child_name.as_str() == "regex"
                                                 || !matches!(
                                                     child_entry.args[0],
                                                     ServerConfigurationValue::InterpolatedString(

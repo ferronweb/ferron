@@ -215,11 +215,23 @@ fn parse_status_rules(config: &LayeredConfiguration, ctx: Option<&HttpContext>) 
         if let Some(children) = &entry.children {
             url = children
                 .get_value("url")
-                .and_then(|v| v.as_str())
+                .and_then(|v| {
+                    if let Some(ctx) = ctx {
+                        v.as_string_with_interpolations(ctx)
+                    } else {
+                        v.as_string_with_interpolations(&HashMap::new())
+                    }
+                })
                 .map(String::from);
             location = children
                 .get_value("location")
-                .and_then(|v| v.as_str())
+                .and_then(|v| {
+                    if let Some(ctx) = ctx {
+                        v.as_string_with_interpolations(ctx)
+                    } else {
+                        v.as_string_with_interpolations(&HashMap::new())
+                    }
+                })
                 .map(String::from);
             body = children.get_value("body").and_then(|v| {
                 if let Some(ctx) = ctx {
