@@ -43,7 +43,11 @@ impl ConfigurationValidator for HttpCacheGlobalConfigurationValidator {
                     );
                 };
 
-                validate_cache_block(children, GLOBAL_CACHE_DIRECTIVES, "global `cache`")?;
+                validate_cache_block(
+                    children,
+                    &[HOST_CACHE_DIRECTIVES, GLOBAL_CACHE_DIRECTIVES].concat(),
+                    "global `cache`",
+                )?;
                 if !children.directives.contains_key("max_entries") {
                     return Err(
                         "Invalid `cache` - global cache configuration requires `max_entries`"
