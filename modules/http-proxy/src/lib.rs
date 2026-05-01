@@ -383,7 +383,13 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             .configuration
             .layers
             .iter()
-            .map(|arc| Arc::as_ptr(arc) as usize)
+            .filter_map(|arc| {
+                if arc.has_directive("proxy") {
+                    Some(Arc::as_ptr(arc) as usize)
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<_>>();
 
         // Check the parsed config cache before re-parsing
