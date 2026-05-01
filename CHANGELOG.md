@@ -11,6 +11,12 @@
 - CLI utility for translating Ferron 2 configurations into Ferron 3 ones.
 - CLI utility for zero-configuration serving.
 
+### Fixed
+
+- Partial hostname resolution match in HTTP server could lead to incorrect routing.
+- Some default cache paths were unwritable in some cases.
+- Unknown directives in global blocks for `status` directive (even though they're known in host blocks).
+
 ## Ferron 3.0.0-alpha.3
 
 **Released in April 23, 2026**
