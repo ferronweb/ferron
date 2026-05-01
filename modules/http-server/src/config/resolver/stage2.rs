@@ -191,6 +191,7 @@ impl Stage2RadixResolver {
             if current.keys.first().is_some_and(
                 |k| matches!(k, RadixKey::HostSegment(s) if s == hostname_segments[segment_idx]),
             ) {
+                let mut key_idx = 0;
                 for key in &current.keys {
                     if segment_idx >= hostname_segments.len() {
                         break;
@@ -200,11 +201,12 @@ impl Stage2RadixResolver {
                         break;
                     }
                     segment_idx += 1;
+                    key_idx += 1;
                 }
 
                 // Split if there are remaining keys
-                if current.keys.len() > segment_idx {
-                    let remaining_keys: Vec<RadixKey> = current.keys.drain(segment_idx..).collect();
+                if current.keys.len() > key_idx {
+                    let remaining_keys: Vec<RadixKey> = current.keys.drain(key_idx..).collect();
                     let old_data = std::mem::take(&mut current.data);
                     let old_children = std::mem::take(&mut current.children);
                     let old_wildcard = current.wildcard_child.take();
@@ -270,6 +272,7 @@ impl Stage2RadixResolver {
             if current.keys.first().is_some_and(
                 |k| matches!(k, RadixKey::HostSegment(s) if s == base_segments[segment_idx]),
             ) {
+                let mut key_idx = 0;
                 for key in &current.keys {
                     if segment_idx >= base_segments.len() {
                         break;
@@ -278,11 +281,12 @@ impl Stage2RadixResolver {
                         break;
                     }
                     segment_idx += 1;
+                    key_idx += 1;
                 }
 
                 // Split if there are remaining keys
-                if current.keys.len() > 1 {
-                    let remaining_keys: Vec<RadixKey> = current.keys.drain(segment_idx..).collect();
+                if current.keys.len() > key_idx {
+                    let remaining_keys: Vec<RadixKey> = current.keys.drain(key_idx..).collect();
                     let old_data = std::mem::take(&mut current.data);
                     let old_children = std::mem::take(&mut current.children);
                     let old_wildcard = current.wildcard_child.take();
@@ -408,6 +412,7 @@ impl Stage2RadixResolver {
             if current.keys.first().is_some_and(
                 |k| matches!(k, RadixKey::PathSegment(s) if s == path_segments[segment_idx]),
             ) {
+                let mut key_idx = 0;
                 for key in &current.keys {
                     if segment_idx >= path_segments.len() {
                         break;
@@ -416,11 +421,12 @@ impl Stage2RadixResolver {
                         break;
                     }
                     segment_idx += 1;
+                    key_idx += 1;
                 }
 
                 // Split if there are remaining keys
-                if current.keys.len() > 1 {
-                    let remaining_keys: Vec<RadixKey> = current.keys.drain(segment_idx..).collect();
+                if current.keys.len() > key_idx {
+                    let remaining_keys: Vec<RadixKey> = current.keys.drain(key_idx..).collect();
                     let old_data = std::mem::take(&mut current.data);
                     let old_children = std::mem::take(&mut current.children);
                     let old_wildcard = current.wildcard_child.take();
