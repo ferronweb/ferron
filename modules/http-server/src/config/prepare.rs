@@ -41,6 +41,7 @@ impl HostConfigs {
 
     /// Look up a host configuration by hostname.
     /// Falls back to the default host if no named match is found.
+    #[allow(dead_code)]
     pub fn get(&self, hostname: &str) -> Option<&Arc<PreparedHostConfigurationBlock>> {
         self.named_hosts
             .get(hostname)
@@ -48,6 +49,7 @@ impl HostConfigs {
     }
 
     /// Get the default host configuration, if any
+    #[allow(dead_code)]
     pub fn get_default(&self) -> Option<&Arc<PreparedHostConfigurationBlock>> {
         self.default_host.as_ref()
     }
