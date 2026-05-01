@@ -185,7 +185,6 @@ impl Stage2RadixResolver {
     ) {
         let mut current = &mut self.host_tree;
         let mut segment_idx = 0;
-        let mut current_segment_idx = 0;
 
         while segment_idx < hostname_segments.len() {
             let segment = hostname_segments[segment_idx];
@@ -195,12 +194,11 @@ impl Stage2RadixResolver {
                 // Try to match the current segment against the current key
                 let current_key_matches = current
                     .keys
-                    .get(current_segment_idx)
+                    .first()
                     .is_some_and(|k| matches!(k, RadixKey::HostSegment(s) if s == segment));
 
                 if current_key_matches {
                     segment_idx += 1;
-                    current_segment_idx += 1;
 
                     // If there are remaining keys in the node, or if this node is terminal
                     // and we have more segments to add, we need to split.
@@ -236,42 +234,9 @@ impl Stage2RadixResolver {
                     if segment_idx < hostname_segments.len() {
                         let next_segment = hostname_segments[segment_idx];
                         let key = next_segment.to_string();
-
-                        // Use entry to get or create the child
-                        let child = current.children.entry(key).or_insert_with(|| {
+                        current = current.children.entry(key).or_insert_with(|| {
                             RadixNode::new(vec![RadixKey::HostSegment(next_segment.to_string())])
                         });
-
-                        // If the child has compressed keys starting with next_segment,
-                        // we need to split them (the child was created by our split above)
-                        if child.keys.len() > 1 {
-                            let first_key_matches = child.keys.first().is_some_and(
-                                |k| matches!(k, RadixKey::HostSegment(s) if s == next_segment),
-                            );
-                            if first_key_matches {
-                                // Consume the first key and move rest to grandchild
-                                child.keys.remove(0);
-                                if !child.keys.is_empty() {
-                                    let remaining_keys: Vec<RadixKey> =
-                                        child.keys.drain(..).collect();
-                                    let old_data = std::mem::take(&mut child.data);
-                                    let old_children = std::mem::take(&mut child.children);
-                                    let old_wildcard = child.wildcard_child.take();
-
-                                    let grandchild_key = match remaining_keys.first() {
-                                        Some(RadixKey::HostSegment(s)) => s.clone(),
-                                        _ => panic!("Expected HostSegment"),
-                                    };
-                                    let mut grandchild = RadixNode::new(remaining_keys);
-                                    grandchild.data = old_data;
-                                    grandchild.children = old_children;
-                                    grandchild.wildcard_child = old_wildcard;
-                                    child.children.insert(grandchild_key, grandchild);
-                                }
-                            }
-                        }
-                        current = child;
-                        current_segment_idx = 0;
                     }
                     continue;
                 }
@@ -346,7 +311,6 @@ impl Stage2RadixResolver {
                         current = current.children.entry(key).or_insert_with(|| {
                             RadixNode::new(vec![RadixKey::HostSegment(next_segment.to_string())])
                         });
-                        segment_idx += 1;
                     }
                     continue;
                 }
@@ -482,7 +446,6 @@ impl Stage2RadixResolver {
                         current = current.children.entry(key).or_insert_with(|| {
                             RadixNode::new(vec![RadixKey::PathSegment(next_segment.to_string())])
                         });
-                        segment_idx += 1;
                     }
                     continue;
                 }
@@ -1282,10 +1245,11 @@ mod tests {
         // Now insert shorter path: com -> example
         resolver.insert_host(vec!["com", "example"], Arc::clone(&c2), 10);
 
-        // After split: root.keys = ["com"], children has entries for the split
+        // After split: root.keys = ["com", "example"], children has entries for the split
         let root = &resolver.host_tree;
-        assert_eq!(root.keys.len(), 1);
+        assert_eq!(root.keys.len(), 2);
         assert_eq!(root.keys[0], RadixKey::HostSegment("com".to_string()));
+        assert_eq!(root.keys[1], RadixKey::HostSegment("example".to_string()));
         // The split creates children for the terminal data and the new path
         assert!(!root.children.is_empty());
     }
