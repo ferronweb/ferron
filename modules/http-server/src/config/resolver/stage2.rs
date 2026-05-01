@@ -103,12 +103,12 @@ impl RadixNode {
             let child_key = {
                 let (k, child) = self.children.iter().next().unwrap();
                 // Never merge wildcard nodes into a multi-key chain.
-                if child.keys.last() == Some(&RadixKey::HostWildcard) {
+                if !self.keys.is_empty() && child.keys.last() == Some(&RadixKey::HostWildcard) {
                     break;
                 }
                 // Never compress a node that has a wildcard child - the wildcard
                 // must remain associated with its parent node for correct matching.
-                if child.wildcard_child.is_some() {
+                if !self.keys.is_empty() && child.wildcard_child.is_some() {
                     break;
                 }
                 // Terminal nodes can be compressed - they will be split if we need
@@ -233,13 +233,34 @@ impl Stage2RadixResolver {
                 continue;
             }
 
+            if !current.keys.is_empty() {
+                // Compressed key mismatch - split the current node
+                let child_key = match current.keys[0] {
+                    RadixKey::HostSegment(ref s) => s.clone(),
+                    _ => panic!("Unexpected key type in compressed node"),
+                };
+                let remaining_keys: Vec<RadixKey> = current.keys.drain(..).collect();
+                let old_data = std::mem::take(&mut current.data);
+                let old_children = std::mem::take(&mut current.children);
+                let old_wildcard = current.wildcard_child.take();
+                let mut child_node = RadixNode::new(remaining_keys);
+                child_node.data = old_data;
+                child_node.children = old_children;
+                child_node.wildcard_child = old_wildcard;
+                current.children.insert(child_key.to_string(), child_node);
+            }
+
             // No compressed key match - use normal children lookup/insert
             let segment = hostname_segments[segment_idx];
             let key = segment.to_string();
             current = current.children.entry(key).or_insert_with(|| {
-                RadixNode::new(vec![RadixKey::HostSegment(segment.to_string())])
+                RadixNode::new(
+                    hostname_segments
+                        .iter()
+                        .map(|s| RadixKey::HostSegment(s.to_string()))
+                        .collect(),
+                )
             });
-            segment_idx += 1;
         }
 
         current.data = RadixNodeData {
@@ -313,12 +334,33 @@ impl Stage2RadixResolver {
                 continue;
             }
 
+            if !current.keys.is_empty() {
+                // Compressed key mismatch - split the current node
+                let child_key = match current.keys[0] {
+                    RadixKey::HostSegment(ref s) => s.clone(),
+                    _ => panic!("Unexpected key type in compressed node"),
+                };
+                let remaining_keys: Vec<RadixKey> = current.keys.drain(..).collect();
+                let old_data = std::mem::take(&mut current.data);
+                let old_children = std::mem::take(&mut current.children);
+                let old_wildcard = current.wildcard_child.take();
+                let mut child_node = RadixNode::new(remaining_keys);
+                child_node.data = old_data;
+                child_node.children = old_children;
+                child_node.wildcard_child = old_wildcard;
+                current.children.insert(child_key, child_node);
+            }
+
             // Normal case
             let key = segment.to_string();
             current = current.children.entry(key).or_insert_with(|| {
-                RadixNode::new(vec![RadixKey::HostSegment(segment.to_string())])
+                RadixNode::new(
+                    base_segments
+                        .iter()
+                        .map(|s| RadixKey::HostSegment(s.to_string()))
+                        .collect(),
+                )
             });
-            segment_idx += 1;
         }
 
         // Attach the wildcard child.
@@ -453,12 +495,33 @@ impl Stage2RadixResolver {
                 continue;
             }
 
+            if !current.keys.is_empty() {
+                // Compressed key mismatch - split the current node
+                let child_key = match current.keys[0] {
+                    RadixKey::PathSegment(ref s) => s.clone(),
+                    _ => panic!("Unexpected key type in compressed node"),
+                };
+                let remaining_keys: Vec<RadixKey> = current.keys.drain(..).collect();
+                let old_data = std::mem::take(&mut current.data);
+                let old_children = std::mem::take(&mut current.children);
+                let old_wildcard = current.wildcard_child.take();
+                let mut child_node = RadixNode::new(remaining_keys);
+                child_node.data = old_data;
+                child_node.children = old_children;
+                child_node.wildcard_child = old_wildcard;
+                current.children.insert(child_key, child_node);
+            }
+
             // Normal case
             let key = segment.to_string();
             current = current.children.entry(key).or_insert_with(|| {
-                RadixNode::new(vec![RadixKey::PathSegment(segment.to_string())])
+                RadixNode::new(
+                    path_segments
+                        .iter()
+                        .map(|s| RadixKey::PathSegment(s.to_string()))
+                        .collect(),
+                )
             });
-            segment_idx += 1;
         }
 
         current.data = RadixNodeData {
@@ -1102,24 +1165,16 @@ mod tests {
         // Insert exact: www.example.com
         resolver.insert_host(vec!["com", "example", "www"], Arc::clone(&c2), 10);
 
-        // Root should compress "com"
+        // Root should compress "com" and "example"
         let root = &resolver.host_tree;
-        assert_eq!(root.keys.len(), 1);
+        assert_eq!(root.keys.len(), 2);
         assert_eq!(root.keys[0], RadixKey::HostSegment("com".to_string()));
-
-        // "com" node should have "example" as child (can't compress because example has wildcard)
-        assert_eq!(root.children.len(), 1);
-        let example_node = root.children.get("example").unwrap();
-        assert_eq!(example_node.keys.len(), 1);
-        assert_eq!(
-            example_node.keys[0],
-            RadixKey::HostSegment("example".to_string())
-        );
+        assert_eq!(root.keys[1], RadixKey::HostSegment("example".to_string()));
 
         // Example node should have both wildcard_child and regular child "www"
-        assert!(example_node.wildcard_child.is_some());
-        assert_eq!(example_node.children.len(), 1);
-        assert!(example_node.children.contains_key("www"));
+        assert!(root.wildcard_child.is_some());
+        assert_eq!(root.children.len(), 1);
+        assert!(root.children.contains_key("www"));
     }
 
     /// Test multiple wildcards at different levels don't compress together.
@@ -1212,16 +1267,12 @@ mod tests {
         // Insert: api.example.com (exact)
         resolver.insert_host(vec!["com", "example", "api"], Arc::clone(&c3), 10);
 
-        // Root compresses "com"
+        // Root compresses "com" and "example" into a single node
         let root = &resolver.host_tree;
-        assert_eq!(root.keys.len(), 1);
-
-        // "example" node has wildcard_child + 2 regular children
-        let example_node = root.children.get("example").unwrap();
-        assert!(example_node.wildcard_child.is_some());
-        assert_eq!(example_node.children.len(), 2);
-        assert!(example_node.children.contains_key("www"));
-        assert!(example_node.children.contains_key("api"));
+        assert!(root.wildcard_child.is_some());
+        assert_eq!(root.children.len(), 2);
+        assert!(root.children.contains_key("www"));
+        assert!(root.children.contains_key("api"));
     }
 
     /// Test that inserting a shorter path into a compressed chain splits correctly.
