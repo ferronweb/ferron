@@ -14,8 +14,10 @@
 ### Fixed
 
 - Partial hostname resolution match in HTTP server could lead to incorrect routing.
+- Redirects configured with `status` directive didn't lead to any destination.
+- Reverse proxy was sometimes routed to wrong backend server.
 - Some default cache paths were unwritable in some cases.
-- Unknown directives in global blocks for `status` directive (even though they're known in host blocks).
+- Unknown directives in global blocks for `status` directive (even though they're known in host blocks) caused the web server to fail to start.
 - When using OTLP, access logs were emitted with "access_log" body, not actual access logs.
 
 ## Ferron 3.0.0-alpha.3
