@@ -192,12 +192,12 @@ impl Stage2RadixResolver {
             // Check if current node has compressed keys that match our path
             if !current.keys.is_empty() {
                 // Try to match the current segment against the first key
-                let first_key_matches = current
+                let current_key_matches = current
                     .keys
                     .first()
                     .is_some_and(|k| matches!(k, RadixKey::HostSegment(s) if s == segment));
 
-                if first_key_matches {
+                if current_key_matches {
                     segment_idx += 1;
 
                     // If there are remaining keys in the node, or if this node is terminal
