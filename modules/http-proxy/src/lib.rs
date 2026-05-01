@@ -140,19 +140,19 @@ struct ProxyState {
     conn_state: upstream::ConnectionsTrackState,
     /// Load balancing algorithms cached per resolved configuration.
     /// Round-robin counters must remain shared for a given config key.
-    lb_algorithms: RwLock<HashMap<usize, Arc<LoadBalancerAlgorithmInner>>>,
+    lb_algorithms: RwLock<HashMap<Vec<usize>, Arc<LoadBalancerAlgorithmInner>>>,
     /// Cache of parsed proxy configurations, keyed by the `Arc` pointer
     /// identity of the `LayeredConfiguration`. Config only changes on reload,
     /// so the parsed result can be reused indefinitely.
-    parsed_configs: RwLock<HashMap<usize, Arc<ProxyConfig>>>,
+    parsed_configs: RwLock<HashMap<Vec<usize>, Arc<ProxyConfig>>>,
     /// Active health check state tracking per upstream URL.
     active_health_check_state: upstream::HealthCheckStateMap,
     /// Background health check task handles, keyed by configuration pointer.
     /// Used to clean up tasks on reload.
-    health_check_tasks: RwLock<HashMap<usize, tokio::task::JoinHandle<()>>>,
+    health_check_tasks: RwLock<HashMap<Vec<usize>, tokio::task::JoinHandle<()>>>,
     /// Counters for active health check unhealthy events, keyed by configuration pointer.
     #[allow(clippy::type_complexity)]
-    active_unhealthy_counters: RwLock<HashMap<usize, Arc<ActiveUnhealthyCounters>>>,
+    active_unhealthy_counters: RwLock<HashMap<Vec<usize>, Arc<ActiveUnhealthyCounters>>>,
 }
 
 impl ProxyState {
@@ -195,11 +195,11 @@ impl ProxyState {
     /// Spawn health check task for the given config (idempotent).
     ///
     /// If a task is already running for this config, does nothing.
-    fn ensure_health_check_task(&self, config_key: usize, upstreams: &[upstream::Upstream]) {
+    fn ensure_health_check_task(&self, config_keys: &[usize], upstreams: &[upstream::Upstream]) {
         // Check if task already exists
         {
             let guard = self.health_check_tasks.read();
-            if guard.contains_key(&config_key) {
+            if guard.contains_key(config_keys) {
                 return;
             }
         }
@@ -243,11 +243,11 @@ impl ProxyState {
         // Store the counter so we can read it during request processing
         {
             let mut guard = self.active_unhealthy_counters.write();
-            guard.insert(config_key, counter);
+            guard.insert(config_keys.to_vec(), counter);
         }
 
         let mut guard = self.health_check_tasks.write();
-        guard.insert(config_key, task);
+        guard.insert(config_keys.to_vec(), task);
     }
 }
 
@@ -377,14 +377,14 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
             return Ok(true);
         }
 
-        // Use the first layer's Arc pointer identity as a cache key.
+        // Use the layer Arc pointer identities as a cache key.
         // When config is reloaded, new Arc pointers are created.
         let config_key = ctx
             .configuration
             .layers
-            .first()
+            .iter()
             .map(|arc| Arc::as_ptr(arc) as usize)
-            .unwrap_or(0);
+            .collect::<Vec<_>>();
 
         // Check the parsed config cache before re-parsing
         let config = {
@@ -410,12 +410,12 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     }
                 };
                 let mut guard = self.state.parsed_configs.write();
-                guard.insert(config_key, Arc::clone(&parsed));
+                guard.insert(config_key.clone(), Arc::clone(&parsed));
                 drop(guard);
 
                 // Spawn health check task for this config if needed
                 self.state
-                    .ensure_health_check_task(config_key, &parsed.upstreams);
+                    .ensure_health_check_task(&config_key, &parsed.upstreams);
 
                 parsed
             }
@@ -453,7 +453,7 @@ impl ferron_core::pipeline::Stage<HttpContext> for ReverseProxyStage {
                     Arc::clone(alg)
                 } else {
                     let alg = Arc::new(config.lb_algorithm.into());
-                    guard.insert(config_key, Arc::clone(&alg));
+                    guard.insert(config_key.clone(), Arc::clone(&alg));
                     alg
                 }
             }

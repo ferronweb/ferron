@@ -947,7 +947,6 @@ async fn request_handler_inner(
     }
 
     // When starting the top-level request span later, prefer external_parent if available
-
     let resolution = config_resolver.resolve(
         local_address.ip(),
         hostname.as_deref().unwrap_or(""),

@@ -172,7 +172,7 @@ impl HttpResponseStage {
                             .expect("content length header value should be valid"),
                     );
 
-                    let response = Response::builder()
+                    let mut response = Response::builder()
                         .status(status_code)
                         .body(
                             Full::new(body_bytes)
@@ -180,10 +180,11 @@ impl HttpResponseStage {
                                 .boxed_unsync(),
                         )
                         .map_err(|e| PipelineError::custom(e.to_string()))?;
+                    *response.headers_mut() = headers;
 
                     return Ok(HttpResponse::Custom(response));
                 } else {
-                    let response = Response::builder()
+                    let mut response = Response::builder()
                         .status(status_code)
                         .body(
                             Empty::new()
@@ -191,6 +192,7 @@ impl HttpResponseStage {
                                 .boxed_unsync(),
                         )
                         .map_err(|e| PipelineError::custom(e.to_string()))?;
+                    *response.headers_mut() = headers;
 
                     return Ok(HttpResponse::Custom(response));
                 }
