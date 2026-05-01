@@ -14,10 +14,10 @@ RUN --mount=type=cache,sharing=private,target=/var/cache/apt \
     apt update && \
     if ! [ "$BUILDPLATFORM" = "$TARGETPLATFORM" ]; then \
     case "$TARGETPLATFORM" in \
-    "linux/386") DEBIAN_FRONTEND=noninteractive apt install -y gcc-i686-linux-gnu ;; \
-    "linux/amd64") DEBIAN_FRONTEND=noninteractive apt install -y gcc-x86-64-linux-gnu ;; \
-    "linux/arm64") DEBIAN_FRONTEND=noninteractive apt install -y gcc-aarch64-linux-gnu ;; \
-    "linux/arm/v7") DEBIAN_FRONTEND=noninteractive apt install -y gcc-arm-linux-gnueabihf ;; \
+    "linux/386") DEBIAN_FRONTEND=noninteractive apt install -y gcc-i686-linux-gnu g++-i686-linux-gnu ;; \
+    "linux/amd64") DEBIAN_FRONTEND=noninteractive apt install -y gcc-x86-64-linux-gnu g++-x86-64-linux-gnu ;; \
+    "linux/arm64") DEBIAN_FRONTEND=noninteractive apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu ;; \
+    "linux/arm/v7") DEBIAN_FRONTEND=noninteractive apt install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf ;; \
     "*") echo "Unsupported target platform for cross-compilation: $TARGETPLATFORM" && exit 1 ;; \
     esac \
     fi && \
