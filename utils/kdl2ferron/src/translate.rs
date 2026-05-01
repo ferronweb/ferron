@@ -892,69 +892,154 @@ pub fn process_block(
                 }
             }
             "status" => {
-                let code = node.entries.first().and_then(|e| match &e.value {
-                    kdlite::dom::Value::Integer(i) => Some(*i as i64),
-                    _ => None,
-                });
-                let mut status_block = ferronconf::Block {
-                    statements: vec![],
-                    span: ferronconf::Span { line: 0, column: 0 },
-                };
-                for entry in &node.entries[1..] {
-                    if let Some(key) = entry.key() {
-                        match key {
-                            "body" => {
-                                if let kdlite::dom::Value::String(s) = &entry.value {
-                                    status_block
-                                        .statements
-                                        .push(ferronconf::Statement::Directive(
-                                            ferronconf::Directive {
-                                                name: "body".to_string(),
-                                                args: vec![ferronconf::Value::String(
-                                                    s.to_string(),
-                                                    ferronconf::Span { line: 0, column: 0 },
-                                                )],
-                                                block: None,
-                                                span: ferronconf::Span { line: 0, column: 0 },
-                                            },
-                                        ));
+                let code = node
+                    .entries
+                    .first()
+                    .and_then(|e| match &e.value {
+                        kdlite::dom::Value::Integer(i) => Some(*i as i64),
+                        _ => None,
+                    })
+                    .ok_or_else(|| anyhow::anyhow!("status code must be an integer"))?;
+                if code == 401 {
+                    let mut basic_auth_block = ferronconf::Block {
+                        statements: vec![],
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    };
+
+                    for entry in &node.entries[1..] {
+                        if let Some(key) = entry.key() {
+                            match key {
+                                "realm" => {
+                                    if let kdlite::dom::Value::String(s) = &entry.value {
+                                        basic_auth_block.statements.push(
+                                            ferronconf::Statement::Directive(
+                                                ferronconf::Directive {
+                                                    name: "realm".to_string(),
+                                                    args: vec![ferronconf::Value::String(
+                                                        s.to_string(),
+                                                        ferronconf::Span { line: 0, column: 0 },
+                                                    )],
+                                                    block: None,
+                                                    span: ferronconf::Span { line: 0, column: 0 },
+                                                },
+                                            ),
+                                        );
+                                    }
                                 }
+                                "brute_protection" => {
+                                    if let kdlite::dom::Value::Bool(s) = &entry.value {
+                                        basic_auth_block.statements.push(
+                                            ferronconf::Statement::Directive(
+                                                ferronconf::Directive {
+                                                    name: "brute_force_protection".to_string(),
+                                                    args: vec![ferronconf::Value::Boolean(
+                                                        *s,
+                                                        ferronconf::Span { line: 0, column: 0 },
+                                                    )],
+                                                    block: None,
+                                                    span: ferronconf::Span { line: 0, column: 0 },
+                                                },
+                                            ),
+                                        );
+                                    }
+                                }
+                                _ => {}
                             }
-                            "location" => {
-                                if let kdlite::dom::Value::String(s) = &entry.value {
-                                    status_block
-                                        .statements
-                                        .push(ferronconf::Statement::Directive(
-                                            ferronconf::Directive {
-                                                name: "location".to_string(),
-                                                args: vec![
+                        }
+                    }
+                } else {
+                    let mut status_block = ferronconf::Block {
+                        statements: vec![],
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    };
+
+                    for entry in &node.entries[1..] {
+                        if let Some(key) = entry.key() {
+                            match key {
+                                "url" => {
+                                    if let kdlite::dom::Value::String(s) = &entry.value {
+                                        status_block.statements.push(
+                                            ferronconf::Statement::Directive(
+                                                ferronconf::Directive {
+                                                    name: "url".to_string(),
+                                                    args: vec![ferronconf::Value::String(
+                                                        s.to_string(),
+                                                        ferronconf::Span { line: 0, column: 0 },
+                                                    )],
+                                                    block: None,
+                                                    span: ferronconf::Span { line: 0, column: 0 },
+                                                },
+                                            ),
+                                        );
+                                    }
+                                }
+                                "regex" => {
+                                    if let kdlite::dom::Value::String(s) = &entry.value {
+                                        status_block.statements.push(
+                                            ferronconf::Statement::Directive(
+                                                ferronconf::Directive {
+                                                    name: "regex".to_string(),
+                                                    args: vec![ferronconf::Value::String(
+                                                        s.to_string(),
+                                                        ferronconf::Span { line: 0, column: 0 },
+                                                    )],
+                                                    block: None,
+                                                    span: ferronconf::Span { line: 0, column: 0 },
+                                                },
+                                            ),
+                                        );
+                                    }
+                                }
+                                "body" => {
+                                    if let kdlite::dom::Value::String(s) = &entry.value {
+                                        status_block.statements.push(
+                                            ferronconf::Statement::Directive(
+                                                ferronconf::Directive {
+                                                    name: "body".to_string(),
+                                                    args: vec![ferronconf::Value::String(
+                                                        s.to_string(),
+                                                        ferronconf::Span { line: 0, column: 0 },
+                                                    )],
+                                                    block: None,
+                                                    span: ferronconf::Span { line: 0, column: 0 },
+                                                },
+                                            ),
+                                        );
+                                    }
+                                }
+                                "location" => {
+                                    if let kdlite::dom::Value::String(s) = &entry.value {
+                                        status_block.statements.push(
+                                            ferronconf::Statement::Directive(
+                                                ferronconf::Directive {
+                                                    name: "location".to_string(),
+                                                    args: vec![
                                                     convert_placeholders_into_interpolated_strings(
                                                         s,
                                                     ),
                                                 ],
-                                                block: None,
-                                                span: ferronconf::Span { line: 0, column: 0 },
-                                            },
-                                        ));
+                                                    block: None,
+                                                    span: ferronconf::Span { line: 0, column: 0 },
+                                                },
+                                            ),
+                                        );
+                                    }
                                 }
+                                _ => {}
                             }
-                            _ => {}
                         }
                     }
-                }
-                statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
-                    name: "status".to_string(),
-                    args: if let Some(code) = code {
-                        vec![ferronconf::Value::Integer(
+
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "status".to_string(),
+                        args: vec![ferronconf::Value::Integer(
                             code,
                             ferronconf::Span { line: 0, column: 0 },
-                        )]
-                    } else {
-                        vec![]
-                    },
-                    block: Some(status_block),
-                    span: ferronconf::Span { line: 0, column: 0 },
-                }));
+                        )],
+                        block: Some(status_block),
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                }
             }
             "user" => {
                 let name = node.entries.first().and_then(|e| match &e.value {
