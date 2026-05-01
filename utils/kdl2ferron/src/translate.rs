@@ -2116,15 +2116,24 @@ pub fn process_block(
                     kdlite::dom::Value::Bool(b) => b,
                     _ => true,
                 });
-                statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
-                    name: "cache".to_string(),
-                    args: vec![ferronconf::Value::Boolean(
-                        enabled,
-                        ferronconf::Span { line: 0, column: 0 },
-                    )],
-                    block: None,
-                    span: ferronconf::Span { line: 0, column: 0 },
-                }));
+                if !enabled {
+                    statements.push(ferronconf::Statement::Directive(ferronconf::Directive {
+                        name: "cache".to_string(),
+                        args: vec![ferronconf::Value::Boolean(
+                            enabled,
+                            ferronconf::Span { line: 0, column: 0 },
+                        )],
+                        block: None,
+                        span: ferronconf::Span { line: 0, column: 0 },
+                    }));
+                } else {
+                    nested_directives
+                        .entry("cache")
+                        .or_insert_with(|| ferronconf::Block {
+                            statements: vec![],
+                            span: ferronconf::Span { line: 0, column: 0 },
+                        });
+                }
             }
             "cache_max_entries" => {
                 let val = node.entries.first().and_then(|e| match &e.value {
