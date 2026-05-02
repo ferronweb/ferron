@@ -49,11 +49,6 @@ ferron-tls = { path = "../../types/tls" }
 criterion = { version = "0.8", features = ["html_reports"] }
 
 [[bench]]
-name = "resolver_bench"
-harness = false
-required-features = ["bench"]
-
-[[bench]]
 name = "canonicalize_bench"
 harness = false
 required-features = ["bench"]
