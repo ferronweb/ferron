@@ -148,7 +148,7 @@ impl RProxyTestContext {
         let ws_url = format!("ws://localhost:{}/echo", port);
 
         // Fix test flakiness, maybe caused by networking issues?
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
 
         Self {
             _backend: backend,
