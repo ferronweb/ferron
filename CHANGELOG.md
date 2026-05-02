@@ -14,6 +14,7 @@
 ### Fixed
 
 - Partial hostname resolution match in HTTP server could lead to incorrect routing.
+- Redirects configured with `status` directive didn't have some placeholder locations (such as `$1`) replaced when using a regex match.
 - Redirects configured with `status` directive didn't lead to any destination.
 - Reverse proxy was sometimes routed to wrong backend server.
 - Some default cache paths were unwritable in some cases.

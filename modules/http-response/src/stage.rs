@@ -102,12 +102,12 @@ impl HttpResponseStage {
         };
 
         for rule in &config.status_rules {
-            if !Self::rule_matches(rule, &request_path) {
+            let Some(path_match) = Self::rule_matches(rule, &request_path) else {
                 continue;
-            }
+            };
 
             // Rule matched — build response
-            let response = Self::build_response(rule)?;
+            let response = Self::build_response(rule, path_match)?;
             ctx.res = Some(response);
 
             ctx.events.emit(Event::Metric(MetricEvent {
@@ -135,31 +135,52 @@ impl HttpResponseStage {
     }
 
     /// Check whether a status rule matches the given request path.
-    fn rule_matches(rule: &StatusRule, path: &str) -> bool {
+    /// Returns matched text
+    fn rule_matches<'a>(rule: &StatusRule, path: &'a str) -> Option<&'a str> {
         match (&rule.url, &rule.regex) {
             // Neither url nor regex: match everything
-            (None, None) => true,
+            (None, None) => Some(path),
             // Only url: exact match
-            (Some(url), None) => url == path,
+            (Some(url), None) => {
+                if url == path {
+                    Some(path)
+                } else {
+                    None
+                }
+            }
             // Only regex: regex match
-            (None, Some(regex)) => regex.is_match(path).unwrap_or(false),
+            (None, Some(regex)) => regex.find(path).ok().flatten().map(|m| m.as_str()),
             // Both url and regex: both must match
-            (Some(url), Some(regex)) => url == path && regex.is_match(path).unwrap_or(false),
+            (Some(url), Some(regex)) => {
+                if url == path {
+                    regex.find(path).ok().flatten().map(|m| m.as_str())
+                } else {
+                    None
+                }
+            }
         }
     }
 
     /// Build an HttpResponse from a matched status rule.
-    fn build_response(rule: &StatusRule) -> Result<HttpResponse, PipelineError> {
+    fn build_response(
+        rule: &StatusRule,
+        request_path: &str,
+    ) -> Result<HttpResponse, PipelineError> {
         let status_code = StatusCode::from_u16(rule.status_code)
             .map_err(|e| PipelineError::custom(e.to_string()))?;
 
         // Handle redirects (3xx with location)
         if (300..400).contains(&rule.status_code) {
             if let Some(location) = &rule.location {
+                let location = if let Some(regex) = &rule.regex {
+                    regex.replace(request_path, location).to_string()
+                } else {
+                    location.clone()
+                };
                 let mut headers = HeaderMap::new();
                 headers.insert(
                     LOCATION,
-                    HeaderValue::from_str(location)
+                    HeaderValue::from_str(&location)
                         .map_err(|e| PipelineError::custom(e.to_string()))?,
                 );
 
@@ -634,7 +655,7 @@ mod tests {
             body: None,
         };
         // Should match any path
-        assert!(HttpResponseStage::rule_matches(&rule, "/anything"));
+        assert!(HttpResponseStage::rule_matches(&rule, "/anything").is_some());
     }
 
     #[test]
@@ -646,8 +667,8 @@ mod tests {
             location: None,
             body: None,
         };
-        assert!(HttpResponseStage::rule_matches(&rule, "/missing"));
-        assert!(!HttpResponseStage::rule_matches(&rule, "/other"));
+        assert!(HttpResponseStage::rule_matches(&rule, "/missing").is_some());
+        assert!(HttpResponseStage::rule_matches(&rule, "/other").is_none());
     }
 }
 
