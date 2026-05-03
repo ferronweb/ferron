@@ -226,7 +226,9 @@ pub async fn provision_certificate(
             config.rustls_client_config.clone(),
         )));
 
-        if let Some(credentials_bytes) = config.account_cache.get(&account_cache_key).await {
+        let account_result = if let Some(credentials_bytes) =
+            config.account_cache.get(&account_cache_key).await
+        {
             if let Ok(credentials) =
                 serde_json::from_slice::<AccountCredentials>(&credentials_bytes)
             {
@@ -236,12 +238,28 @@ pub async fn provision_certificate(
                     &format!("ACME account loaded from cache for {domains}"),
                     "ferron-tls-acme",
                 );
-                account_builder.from_credentials(credentials).await?
+                account_builder
+                    .from_credentials(credentials)
+                    .await
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
             } else {
-                create_new_account(config, account_builder, &account_cache_key, event_sink).await?
+                create_new_account(config, account_builder, &account_cache_key, event_sink).await
             }
         } else {
-            create_new_account(config, account_builder, &account_cache_key, event_sink).await?
+            create_new_account(config, account_builder, &account_cache_key, event_sink).await
+        };
+
+        match account_result {
+            Ok(account) => account,
+            Err(e) => {
+                emit_log(
+                    event_sink,
+                    ferron_observability::LogLevel::Error,
+                    &format!("Failed to load or create ACME account: {}", e),
+                    "ferron-tls-acme",
+                );
+                return Err(e);
+            }
         }
     };
 
@@ -546,10 +564,18 @@ pub async fn provision_certificate(
     };
 
     // Store in cache
-    config
+    if let Err(err) = config
         .certificate_cache
         .set(&certificate_cache_key, serde_json::to_vec(&cache_data)?)
-        .await?;
+        .await
+    {
+        emit_log(
+            event_sink,
+            ferron_observability::LogLevel::Warn,
+            &format!("Failed to save ACME certificate cache: {}", err),
+            "ferron-tls-acme",
+        );
+    }
 
     // Install the cert
     install_certified_key(config, certs, private_key, &cache_data, event_sink).await?;
@@ -615,10 +641,18 @@ async fn create_new_account(
         )
         .await?;
 
-    config
+    if let Err(err) = config
         .account_cache
         .set(account_cache_key, serde_json::to_vec(&credentials)?)
-        .await?;
+        .await
+    {
+        emit_log(
+            event_sink,
+            ferron_observability::LogLevel::Warn,
+            &format!("Failed to save ACME account cache: {}", err),
+            "ferron-tls-acme",
+        );
+    }
 
     emit_log(
         event_sink,
