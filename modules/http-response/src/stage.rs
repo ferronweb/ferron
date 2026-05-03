@@ -49,7 +49,7 @@ pub struct HttpResponseStage {
 
 impl HttpResponseStage {
     pub fn new(engine: Arc<ResponseEngine>) -> Self {
-        Self { engine: engine }
+        Self { engine }
     }
 
     fn evaluate_abort(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
