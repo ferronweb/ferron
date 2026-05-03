@@ -1629,6 +1629,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "cidr",
+ "dashmap",
  "fancy-regex",
  "ferron-core",
  "ferron-http",
@@ -1647,6 +1648,7 @@ version = "3.0.0-alpha.3"
 dependencies = [
  "async-trait",
  "bytes",
+ "dashmap",
  "fancy-regex",
  "ferron-core",
  "ferron-http",

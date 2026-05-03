@@ -13,6 +13,7 @@ http = "1"
 ferron-core = { path = "../../core" }
 ferron-http = { path = "../../types/http" }
 ferron-observability = { path = "../../types/observability" }
+dashmap = "6.1.0"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }

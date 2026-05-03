@@ -9,6 +9,7 @@ mod validator;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use dashmap::DashMap;
 use ferron_core::config::ServerConfigurationValue;
 use ferron_core::loader::ModuleLoader;
 use ferron_core::pipeline::{PipelineError, Stage};
@@ -21,6 +22,25 @@ use crate::config::{
     apply_rewrite_rules, is_rewrite_log_enabled, parse_rewrite_config, RewriteResult,
 };
 use crate::validator::RewriteValidator;
+
+/// Shared state for the http-response module.
+pub struct RewriteEngine {
+    pub compiled_regexes: DashMap<String, Arc<fancy_regex::Regex>>,
+}
+
+impl RewriteEngine {
+    pub fn new() -> Self {
+        Self {
+            compiled_regexes: DashMap::new(),
+        }
+    }
+}
+
+impl Default for RewriteEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Module loader for the HTTP rewrite module.
 #[derive(Default)]
@@ -41,12 +61,22 @@ impl ModuleLoader for HttpRewriteModuleLoader {
     }
 
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
-        registry.with_stage::<HttpContext, _>(|| Arc::new(RewriteStage))
+        registry.with_stage::<HttpContext, _>(|| {
+            Arc::new(RewriteStage::new(Arc::new(RewriteEngine::new())))
+        })
     }
 }
 
 /// Pipeline stage that applies URL rewrite rules from configuration.
-struct RewriteStage;
+struct RewriteStage {
+    engine: Arc<RewriteEngine>,
+}
+
+impl RewriteStage {
+    fn new(engine: Arc<RewriteEngine>) -> Self {
+        Self { engine }
+    }
+}
 
 #[async_trait::async_trait(?Send)]
 impl Stage<HttpContext> for RewriteStage {
@@ -70,7 +100,7 @@ impl Stage<HttpContext> for RewriteStage {
 
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        let rules = parse_rewrite_config(&ctx.configuration);
+        let rules = parse_rewrite_config(&ctx.configuration, &self.engine);
         if rules.is_empty() {
             return Ok(true);
         }
@@ -258,7 +288,7 @@ mod tests {
     async fn rewrites_url_with_simple_rule() {
         let config = make_rewrite_config(vec![("^/old/(.*)", "/new/$1", None)]);
         let mut ctx = make_test_context("/old/path", Some(config));
-        let stage = RewriteStage;
+        let stage = RewriteStage::new(Default::default());
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
         assert!(ctx.res.is_none());
@@ -268,7 +298,7 @@ mod tests {
     #[tokio::test]
     async fn no_rules_is_noop() {
         let mut ctx = make_test_context("/any/path", None);
-        let stage = RewriteStage;
+        let stage = RewriteStage::new(Default::default());
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
         assert!(ctx.res.is_none());
@@ -279,7 +309,7 @@ mod tests {
     async fn preserves_query_string() {
         let config = make_rewrite_config(vec![("^/api/(.*)", "/v2/$1", None)]);
         let mut ctx = make_test_context("/api/users?page=2", Some(config));
-        let stage = RewriteStage;
+        let stage = RewriteStage::new(Default::default());
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
         assert_eq!(
@@ -305,7 +335,7 @@ mod tests {
             ("^/b/(.*)", "/c/$1", None),
         ]);
         let mut ctx = make_test_context("/a/test", Some(config));
-        let stage = RewriteStage;
+        let stage = RewriteStage::new(Default::default());
         let result = stage.run(&mut ctx).await.unwrap();
         assert!(result);
         assert_eq!(ctx.req.as_ref().unwrap().uri().path(), "/b/test");
@@ -315,7 +345,7 @@ mod tests {
     async fn sets_original_uri() {
         let config = make_rewrite_config(vec![("^/x/(.*)", "/y/$1", None)]);
         let mut ctx = make_test_context("/x/foo", Some(config));
-        let stage = RewriteStage;
+        let stage = RewriteStage::new(Default::default());
         let _ = stage.run(&mut ctx).await.unwrap();
         assert!(ctx.original_uri.is_some());
         assert_eq!(ctx.original_uri.as_ref().unwrap().path(), "/x/foo");

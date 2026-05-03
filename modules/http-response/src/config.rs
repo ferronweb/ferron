@@ -2,12 +2,15 @@
 
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::sync::Arc;
 
 use cidr::IpCidr;
 use fancy_regex::Regex;
 use ferron_core::config::layer::LayeredConfiguration;
 use ferron_core::config::ServerConfigurationValue;
 use ferron_http::HttpContext;
+
+use crate::ResponseEngine;
 
 /// A rule for returning a custom status code.
 pub struct StatusRule {
@@ -16,7 +19,7 @@ pub struct StatusRule {
     /// Optional exact path match.
     pub url: Option<String>,
     /// Optional regex match against the request path.
-    pub regex: Option<Regex>,
+    pub regex: Option<Arc<Regex>>,
     /// Optional redirect destination for 3xx responses.
     pub location: Option<String>,
     /// Optional response body.
@@ -103,10 +106,10 @@ pub struct ResponseConfig {
 
 impl ResponseConfig {
     /// Parse all http-response directives from the layered configuration.
-    pub fn from_config(config: &LayeredConfiguration) -> Self {
+    pub fn from_config(config: &LayeredConfiguration, engine: &ResponseEngine) -> Self {
         let abort = parse_abort_config(config);
         let ip_access = parse_ip_access_config(config);
-        let status_rules = parse_status_rules(config, None);
+        let status_rules = parse_status_rules(config, None, engine);
         let early_hints = parse_early_hints_config(config);
 
         Self {
@@ -117,11 +120,11 @@ impl ResponseConfig {
         }
     }
 
-    pub fn from_http_context(ctx: &HttpContext) -> Self {
+    pub fn from_http_context(ctx: &HttpContext, engine: &ResponseEngine) -> Self {
         let config = &ctx.configuration;
         let abort = parse_abort_config(config);
         let ip_access = parse_ip_access_config(config);
-        let status_rules = parse_status_rules(config, Some(ctx));
+        let status_rules = parse_status_rules(config, Some(ctx), engine);
         let early_hints = parse_early_hints_config(config);
 
         Self {
@@ -186,7 +189,11 @@ fn parse_ip_access_config(config: &LayeredConfiguration) -> IpAccessConfig {
     ip_access
 }
 
-fn parse_status_rules(config: &LayeredConfiguration, ctx: Option<&HttpContext>) -> Vec<StatusRule> {
+fn parse_status_rules(
+    config: &LayeredConfiguration,
+    ctx: Option<&HttpContext>,
+    engine: &ResponseEngine,
+) -> Vec<StatusRule> {
     let mut rules = Vec::new();
     let status_entries = config.get_entries("status", true);
 
@@ -236,11 +243,22 @@ fn parse_status_rules(config: &LayeredConfiguration, ctx: Option<&HttpContext>) 
             });
 
             if let Some(regex_str) = children.get_value("regex").and_then(|v| v.as_str()) {
-                match Regex::new(regex_str) {
-                    Ok(re) => regex = Some(re),
-                    Err(_) => {
-                        // Skip rules with invalid regex
-                        continue;
+                // Cached regex
+                if let Some(re) = engine.compiled_regexes.get(regex_str) {
+                    regex = Some(re.clone());
+                } else {
+                    match Regex::new(regex_str) {
+                        Ok(re) => {
+                            let re = Arc::new(re);
+                            engine
+                                .compiled_regexes
+                                .insert(regex_str.to_string(), re.clone());
+                            regex = Some(re);
+                        }
+                        Err(_) => {
+                            // Skip rules with invalid regex
+                            continue;
+                        }
                     }
                 }
             }
@@ -336,7 +354,7 @@ mod tests {
             span: None,
         }]);
 
-        let rules = parse_status_rules(&config, None);
+        let rules = parse_status_rules(&config, None, &Default::default());
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0].status_code, 403);
         assert!(rules[0].url.is_none());
@@ -373,7 +391,7 @@ mod tests {
             span: None,
         }]);
 
-        let rules = parse_status_rules(&config, None);
+        let rules = parse_status_rules(&config, None, &Default::default());
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0].status_code, 404);
         assert_eq!(rules[0].url.as_deref(), Some("/missing"));

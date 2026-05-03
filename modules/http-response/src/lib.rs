@@ -46,10 +46,13 @@ impl ModuleLoader for HttpResponseModuleLoader {
 
     fn register_stages(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         let engine = Arc::new(ResponseEngine::new());
+        let engine2 = engine.clone();
         registry
             .with_stage::<ferron_http::HttpContext, _>(move || {
                 Arc::new(HttpResponseStage::new(engine.clone()))
             })
-            .with_stage::<ferron_http::HttpContext, _>(|| Arc::new(EarlyHintsStage::new()))
+            .with_stage::<ferron_http::HttpContext, _>(move || {
+                Arc::new(EarlyHintsStage::new(engine2.clone()))
+            })
     }
 }

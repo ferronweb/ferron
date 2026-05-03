@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
+use dashmap::DashMap;
 use ferron_core::pipeline::{PipelineError, Stage};
 use ferron_core::StageConstraint;
 use ferron_http::{HttpContext, HttpResponse};
@@ -24,13 +25,14 @@ const LOG_TARGET: &str = "ferron-http-response";
 
 /// Shared state for the http-response module.
 pub struct ResponseEngine {
-    // Currently empty — config is read per-request from LayeredConfiguration.
-    // This struct exists for future shared-state needs (e.g., compiled regex cache).
+    pub compiled_regexes: DashMap<String, Arc<fancy_regex::Regex>>,
 }
 
 impl ResponseEngine {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            compiled_regexes: DashMap::new(),
+        }
     }
 }
 
@@ -42,16 +44,16 @@ impl Default for ResponseEngine {
 
 /// Pipeline stage that enforces abort, IP access control, and custom status codes.
 pub struct HttpResponseStage {
-    _engine: Arc<ResponseEngine>,
+    engine: Arc<ResponseEngine>,
 }
 
 impl HttpResponseStage {
     pub fn new(engine: Arc<ResponseEngine>) -> Self {
-        Self { _engine: engine }
+        Self { engine: engine }
     }
 
-    fn evaluate_abort(ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        let config = ResponseConfig::from_config(&ctx.configuration);
+    fn evaluate_abort(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
+        let config = ResponseConfig::from_config(&ctx.configuration, &self.engine);
         if config.abort.abort {
             ctx.res = Some(HttpResponse::Abort);
             ctx.events.emit(Event::Metric(MetricEvent {
@@ -67,8 +69,8 @@ impl HttpResponseStage {
         Ok(true)
     }
 
-    fn evaluate_ip_access(ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        let config = ResponseConfig::from_config(&ctx.configuration);
+    fn evaluate_ip_access(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
+        let config = ResponseConfig::from_config(&ctx.configuration, &self.engine);
         if config.ip_access.is_blocked(ctx.remote_address.ip()) {
             ctx.res = Some(HttpResponse::BuiltinError(403, None));
             ctx.events.emit(Event::Metric(MetricEvent {
@@ -86,8 +88,8 @@ impl HttpResponseStage {
         Ok(true)
     }
 
-    fn evaluate_status_rules(ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        let config = ResponseConfig::from_http_context(ctx);
+    fn evaluate_status_rules(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
+        let config = ResponseConfig::from_http_context(ctx, &self.engine);
         if config.status_rules.is_empty() {
             return Ok(true);
         }
@@ -276,17 +278,17 @@ impl Stage<HttpContext> for HttpResponseStage {
     #[inline]
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
         // 1. Check abort directive — if true, immediately abort
-        if !Self::evaluate_abort(ctx)? {
+        if !self.evaluate_abort(ctx)? {
             return Ok(false);
         }
 
         // 2. Check IP access control
-        if !Self::evaluate_ip_access(ctx)? {
+        if !self.evaluate_ip_access(ctx)? {
             return Ok(false);
         }
 
         // 3. Evaluate status rules
-        if !Self::evaluate_status_rules(ctx)? {
+        if !self.evaluate_status_rules(ctx)? {
             return Ok(false);
         }
 
@@ -677,17 +679,13 @@ mod tests {
 /// This stage evaluates the `early_hints` directive and sends a 103 Early Hints
 /// response with the configured `Link` headers before the final response is ready.
 /// The stage never short-circuits the pipeline — it always returns `Ok(true)`.
-pub struct EarlyHintsStage;
-
-impl Default for EarlyHintsStage {
-    fn default() -> Self {
-        Self::new()
-    }
+pub struct EarlyHintsStage {
+    engine: Arc<ResponseEngine>,
 }
 
 impl EarlyHintsStage {
-    pub fn new() -> Self {
-        Self
+    pub fn new(engine: Arc<ResponseEngine>) -> Self {
+        Self { engine }
     }
 }
 
@@ -714,7 +712,7 @@ impl Stage<HttpContext> for EarlyHintsStage {
     }
 
     async fn run(&self, ctx: &mut HttpContext) -> Result<bool, PipelineError> {
-        let config = crate::config::ResponseConfig::from_config(&ctx.configuration);
+        let config = crate::config::ResponseConfig::from_config(&ctx.configuration, &self.engine);
         if config.early_hints.links.is_empty() {
             return Ok(true);
         }

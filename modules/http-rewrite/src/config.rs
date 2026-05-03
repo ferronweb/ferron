@@ -4,12 +4,15 @@
 //! configuration into typed `RewriteRule` structures.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use fancy_regex::{Regex, RegexBuilder};
 use ferron_core::config::{
     layer::LayeredConfiguration, ServerConfigurationBlock, ServerConfigurationValue,
 };
+
+use crate::RewriteEngine;
 
 /// A TTL cache for file/directory metadata lookups.
 struct MetadataCache {
@@ -57,7 +60,7 @@ fn metadata_cache() -> &'static MetadataCache {
 #[derive(Debug, Clone)]
 pub struct RewriteRule {
     /// Compiled regex for matching the request URL.
-    pub regex: Regex,
+    pub regex: Arc<Regex>,
     /// Replacement string (may contain capture group references like `$1`).
     pub replacement: String,
     /// Whether the rule applies when the path corresponds to a directory.
@@ -82,12 +85,15 @@ impl RewriteRule {
 ///
 /// Each `rewrite <regex> <replacement> { ... }` becomes a `RewriteRule`.
 /// If no `rewrite` entries are present, returns an empty vec.
-pub fn parse_rewrite_config(config: &LayeredConfiguration) -> Vec<RewriteRule> {
+pub fn parse_rewrite_config(
+    config: &LayeredConfiguration,
+    engine: &RewriteEngine,
+) -> Vec<RewriteRule> {
     let mut rules = Vec::new();
     let entries = config.get_entries("rewrite", true);
 
     for entry in entries {
-        if let Some(rule) = parse_rewrite_entry(entry) {
+        if let Some(rule) = parse_rewrite_entry(entry, engine) {
             rules.push(rule);
         }
     }
@@ -98,6 +104,7 @@ pub fn parse_rewrite_config(config: &LayeredConfiguration) -> Vec<RewriteRule> {
 /// Parse a single `rewrite` directive entry into a `RewriteRule`.
 fn parse_rewrite_entry(
     entry: &ferron_core::config::ServerConfigurationDirectiveEntry,
+    engine: &RewriteEngine,
 ) -> Option<RewriteRule> {
     if entry.args.len() < 2 {
         return None;
@@ -106,10 +113,21 @@ fn parse_rewrite_entry(
     let regex_str = entry.args[0].as_str()?;
     let replacement = entry.args[1].as_str()?.to_string();
 
-    let regex = RegexBuilder::new(regex_str)
-        .case_insensitive(cfg!(windows))
-        .build()
-        .ok()?;
+    // Cached regex for performance
+    let regex = if let Some(cached) = engine.compiled_regexes.get(regex_str) {
+        cached.clone()
+    } else {
+        let regex = Arc::new(
+            RegexBuilder::new(regex_str)
+                .case_insensitive(cfg!(windows))
+                .build()
+                .ok()?,
+        );
+        engine
+            .compiled_regexes
+            .insert(regex_str.to_string(), regex.clone());
+        regex
+    };
 
     // Parse optional block options
     let (is_directory, is_file, last, allow_double_slashes) =
@@ -355,7 +373,7 @@ mod tests {
             ],
             None,
         );
-        let rule = parse_rewrite_entry(&entry).unwrap();
+        let rule = parse_rewrite_entry(&entry, &Default::default()).unwrap();
         assert_eq!(rule.replacement, "/new/$1");
         assert!(rule.is_directory);
         assert!(rule.is_file);
@@ -373,7 +391,7 @@ mod tests {
             ],
             Some(opts),
         );
-        let rule = parse_rewrite_entry(&entry).unwrap();
+        let rule = parse_rewrite_entry(&entry, &Default::default()).unwrap();
         assert!(rule.last);
         assert!(!rule.allow_double_slashes);
     }
@@ -381,7 +399,7 @@ mod tests {
     #[test]
     fn applies_rewrite_rule() {
         let rules = vec![RewriteRule {
-            regex: Regex::new("^/old/(.*)").unwrap(),
+            regex: Arc::new(Regex::new("^/old/(.*)").unwrap()),
             replacement: "/new/$1".to_string(),
             is_directory: true,
             is_file: true,
@@ -399,7 +417,7 @@ mod tests {
     fn applies_last_flag_stops_further_rules() {
         let rules = vec![
             RewriteRule {
-                regex: Regex::new("^/a/(.*)").unwrap(),
+                regex: Arc::new(Regex::new("^/a/(.*)").unwrap()),
                 replacement: "/b/$1".to_string(),
                 is_directory: true,
                 is_file: true,
@@ -407,7 +425,7 @@ mod tests {
                 allow_double_slashes: false,
             },
             RewriteRule {
-                regex: Regex::new("^/b/(.*)").unwrap(),
+                regex: Arc::new(Regex::new("^/b/(.*)").unwrap()),
                 replacement: "/c/$1".to_string(),
                 is_directory: true,
                 is_file: true,
@@ -424,7 +442,7 @@ mod tests {
     fn chained_rules_without_last() {
         let rules = vec![
             RewriteRule {
-                regex: Regex::new("^/a/(.*)").unwrap(),
+                regex: Arc::new(Regex::new("^/a/(.*)").unwrap()),
                 replacement: "/b/$1".to_string(),
                 is_directory: true,
                 is_file: true,
@@ -432,7 +450,7 @@ mod tests {
                 allow_double_slashes: false,
             },
             RewriteRule {
-                regex: Regex::new("^/b/(.*)").unwrap(),
+                regex: Arc::new(Regex::new("^/b/(.*)").unwrap()),
                 replacement: "/c/$1".to_string(),
                 is_directory: true,
                 is_file: true,
@@ -448,7 +466,7 @@ mod tests {
     #[test]
     fn returns_invalid_for_bad_replacement() {
         let rules = vec![RewriteRule {
-            regex: Regex::new(".*").unwrap(),
+            regex: Arc::new(Regex::new(".*").unwrap()),
             replacement: "no-leading-slash".to_string(),
             is_directory: true,
             is_file: true,
