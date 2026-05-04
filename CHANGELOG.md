@@ -11,6 +11,10 @@
 - CLI utility for translating Ferron 2 configurations into Ferron 3 ones.
 - CLI utility for zero-configuration serving.
 
+### Changed
+
+- Non-existent webroots now lead to 404 Not Found errors instead of 500 Internal Server Error errors.
+
 ### Fixed
 
 - Partial hostname resolution match in HTTP server could lead to incorrect routing.

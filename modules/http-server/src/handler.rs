@@ -208,6 +208,7 @@ enum FilePipelineExecutionError {
     Timeout,
     Io(io::Error),
     Pipeline(PipelineError),
+    WebrootNotFound,
 }
 
 /// Access log event emitted at request completion.
@@ -1267,6 +1268,16 @@ async fn execute_pipeline_stages(
                     );
                     ctx.res = Some(HttpResponse::BuiltinError(500, None));
                 }
+                Err(FilePipelineExecutionError::WebrootNotFound) => {
+                    if let Some(webroot) = ctx
+                        .configuration
+                        .get_value("root", true)
+                        .and_then(|v| v.as_string_with_interpolations(ctx))
+                    {
+                        emit_warn(events, format!("{log_prefix}Webroot not found: {webroot}"));
+                    }
+                    ctx.res = Some(HttpResponse::BuiltinError(404, None));
+                }
             }
         }
 
@@ -1546,9 +1557,13 @@ async fn resolve_http_file_target(
         return Ok(None);
     }
 
-    let canonical_root = vibeio::fs::canonicalize(root_path)
-        .await
-        .map_err(FilePipelineExecutionError::Io)?;
+    let canonical_root = match vibeio::fs::canonicalize(root_path).await {
+        Ok(path) => path,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            return Err(FilePipelineExecutionError::WebrootNotFound)
+        }
+        Err(e) => return Err(FilePipelineExecutionError::Io(e)),
+    };
 
     let request_segments = request_path_segments(request_path)?;
     let mut candidate_depth = request_segments.len();
@@ -1953,6 +1968,15 @@ fn builtin_error_response(
 fn emit_error(events: &CompositeEventSink, message: impl Into<String>) {
     events.emit(Event::Log(LogEvent {
         level: LogLevel::Error,
+        message: message.into(),
+        target: LOG_TARGET,
+    }));
+}
+
+#[inline]
+fn emit_warn(events: &CompositeEventSink, message: impl Into<String>) {
+    events.emit(Event::Log(LogEvent {
+        level: LogLevel::Warn,
         message: message.into(),
         target: LOG_TARGET,
     }));
