@@ -180,7 +180,7 @@ ui_step_end() {
         fi
         printf '\r\033[2K'
         _ui_render_status "$status"
-        printf ' %s%s%s\n' "$FERRON_UI_C_BOLD" "$FERRON_UI_STEP_LABEL" "$FERRON_UI_C_RESET"
+        printf ' %s\n' "$FERRON_UI_STEP_LABEL"
         # Restore the cursor.
         printf '\033[?25h'
     else
