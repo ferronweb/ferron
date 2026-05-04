@@ -21,19 +21,6 @@ step_install_service() {
     fi
 
     # ------------------------------------------------------------------
-    # Detect whether we should use systemd or SysV init.
-    # ------------------------------------------------------------------
-    # systemd is "active" if /run/systemd/system exists. This is the same
-    # check used by systemd itself to determine whether it is PID 1.
-    if [ -d /run/systemd/system ] 2>/dev/null; then
-        FERRON_HAS_SYSTEMD=1
-        log_write "detected active init system: systemd"
-    else
-        FERRON_HAS_SYSTEMD=0
-        log_write "detected active init system: SysV (systemd not active)"
-    fi
-
-    # ------------------------------------------------------------------
     # Ask the user whether to enable and start the service.
     # ------------------------------------------------------------------
     # In non-interactive mode we default to enabling and starting.
@@ -107,6 +94,60 @@ UNIT_EOF
             fi
         else
             log_write "skipping service enable/start per user choice"
+        fi
+
+    # ------------------------------------------------------------------
+    # Generate OpenRC init script inline.
+    # ------------------------------------------------------------------
+    elif [ "$FERRON_HAS_OPENRC" -eq 1 ]; then
+        _init_content=$(cat <<'INIT_EOF'
+#!/sbin/openrc-run
+
+name=$RC_SVCNAME
+command="/usr/sbin/ferron"
+command_args="daemon -c /etc/ferron/ferron.conf --pid-file /run/$RC_SVCNAME/$RC_SVCNAME.pid"
+command_user="ferron"
+start_stop_daemon_args="--capabilities ^cap_net_bind_service"
+extra_started_commands="reload"
+
+depend() {
+    need net
+}
+
+start_pre() {
+    checkpath --directory --owner $command_user:$command_user --mode 0775 \
+        /run/$RC_SVCNAME /var/log/$RC_SVCNAME
+}
+
+reload() {
+    ebegin "Reloading ${RC_SVCNAME}"
+    start-stop-daemon --signal HUP --pidfile "${pidfile}"
+    eend $?
+}
+
+INIT_EOF
+)
+
+        _init_dst="/etc/init.d/ferron"
+        log_write "writing OpenRC init script to $_init_dst"
+        printf '%s\n' "$_init_content" > "$_init_dst"
+        chmod 0755 "$_init_dst"
+        log_write "installed init script (mode 0755)"
+
+        log_write "enabling init script via rc-update"
+        if ! rc-update add ferron default; then
+            log_write "warning: rc-update add ferron default failed"
+        fi
+
+        # Start the service if the user opted in.
+        if [ "${FERRON_ENABLE_SERVICE:-no}" = "yes" ]; then
+            log_write "starting ferron via init script"
+            if ! rc-service ferron start; then
+                log_write "warning: rc-service ferron start failed"
+                log_write "you can start the service manually with: /etc/init.d/ferron start"
+            fi
+        else
+            log_write "skipping service start per user choice"
         fi
 
     # ------------------------------------------------------------------
@@ -257,4 +298,6 @@ INIT_EOF
     fi
 }
 
-run_step "Installing service configuration" step_install_service
+if [ "$FERRON_INSTALL_MODE" != "uninstall" ]; then
+    run_step "Installing service configuration" step_install_service
+fi

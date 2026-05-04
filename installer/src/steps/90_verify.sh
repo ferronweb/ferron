@@ -143,4 +143,6 @@ step_verify() {
     log_write "=== verification complete ==="
 }
 
-run_step "Verifying installation" step_verify
+if [ "$FERRON_INSTALL_MODE" != "uninstall" ]; then
+    run_step "Verifying installation" step_verify
+fi

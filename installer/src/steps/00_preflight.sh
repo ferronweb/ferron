@@ -27,6 +27,7 @@
 #   FERRON_LIBC            — libc variant for Linux (gnu, musl, or empty)
 #   FERRON_TARGET_TRIPLE   — full triple used in download URLs
 #   FERRON_HAS_SYSTEMD     — 1 if systemd is active, 0 otherwise
+#   FERRON_HAS_OPENRC      — 1 if OpenRC is active, 0 otherwise
 #   FERRON_INSTALL_METHOD  — archive, debian, rhel, alpine, freebsd
 #   FERRON_INSTALL_MODE    — install, update, uninstall
 #   FERRON_INSTALL_LTS     — 1 if LTS channel is requested
@@ -197,10 +198,16 @@ step_preflight() {
     # check used by systemd itself to determine whether it is PID 1.
     if [ -d /run/systemd/system ] 2>/dev/null; then
         FERRON_HAS_SYSTEMD=1
+        FERRON_HAS_OPENRC=0
         log_write "active init system: systemd"
+    elif [ -d /run/openrc ] 2>/dev/null; then
+        FERRON_HAS_SYSTEMD=0
+        FERRON_HAS_OPENRC=1
+        log_write "active init system: OpenRC"
     else
         FERRON_HAS_SYSTEMD=0
-        log_write "active init system: SysV (systemd not active)"
+        FERRON_HAS_OPENRC=0
+        log_write "active init system: SysV (systemd and OpenRC not active)"
     fi
 
     # ------------------------------------------------------------------

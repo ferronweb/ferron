@@ -103,4 +103,6 @@ step_create_user() {
     fi
 }
 
-run_step "Creating ferron system user" step_create_user
+if [ "$FERRON_INSTALL_MODE" != "uninstall" ]; then
+    run_step "Creating ferron system user" step_create_user
+fi

@@ -59,6 +59,13 @@ step_uninstall() {
         log_write "removed systemd unit file"
         systemctl daemon-reload 2>/dev/null || true
 
+    elif [ "$FERRON_HAS_OPENRC" = 1 ]; then
+        log_write "stopping via OpenRC"
+        rc-service ferron stop 2>/dev/null || true
+        rc-update del ferron default 2>/dev/null || true
+        rm -f /etc/init.d/ferron
+        log_write "removed OpenRC init script"
+
     elif [ -f /etc/init.d/ferron ]; then
         log_write "stopping via init script"
         /etc/init.d/ferron stop 2>/dev/null || true
@@ -169,4 +176,6 @@ step_uninstall() {
     log_write "uninstall complete"
 }
 
-run_step "Uninstalling Ferron" step_uninstall
+if [ "$FERRON_INSTALL_MODE" = "uninstall" ]; then
+    run_step "Uninstalling Ferron" step_uninstall
+fi

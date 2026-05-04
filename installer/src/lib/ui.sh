@@ -220,6 +220,12 @@ ui_spinner_resume() {
 # Final screen for a successful installation. Matches the mockup exactly,
 # modulo the emoji which degrades to ":)" in non-UTF-8 locales.
 ui_success() {
+    if [ "$FERRON_INSTALL_MODE" = "uninstall" ]; then
+        printf '\n'
+        printf '%sUninstall completed successfully.%s\n' \
+            "$FERRON_UI_C_BOLD" "$FERRON_UI_C_RESET"
+        return
+    fi
     if [ "$FERRON_UI_UTF8" = 1 ]; then
         celebrate='🥳'
     else

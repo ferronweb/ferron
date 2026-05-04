@@ -88,4 +88,6 @@ step_install_config() {
     fi
 }
 
-run_step "Installing configuration" step_install_config
+if [ "$FERRON_INSTALL_MODE" != "uninstall" ]; then
+    run_step "Installing configuration" step_install_config
+fi
