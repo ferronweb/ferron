@@ -71,6 +71,7 @@ User=ferron
 ExecStart=/usr/sbin/ferron daemon -c /etc/ferron/ferron.conf --pid-file /run/ferron/ferron.pid
 ExecReload=/bin/kill -HUP $MAINPID
 PIDFile=/run/ferron/ferron.pid
+RuntimeDirectory=ferron
 Restart=on-failure
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 
@@ -126,11 +127,14 @@ UNIT_EOF
 NAME=ferron
 DAEMON=/usr/sbin/ferron
 PIDFILE=/run/ferron/${NAME}.pid
+RUNTIME_DIR=/run/ferron
 CONF=/etc/ferron/${NAME}.conf
 USER=ferron
 
 case "$1" in
     start)
+        mkdir -p $RUNTIME_DIR || true
+        chown -R $USER $RUNTIME_DIR || true
         setcap 'cap_net_bind_service=+ep' $DAEMON >/dev/null 2>&1 || true
         start-stop-daemon --start --user $USER --exec $DAEMON \
             -- daemon -c $CONF --pid-file $PIDFILE
