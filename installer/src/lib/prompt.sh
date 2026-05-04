@@ -73,10 +73,10 @@ ask_input() {
     printf '\033[2K\r' >&3
     if [ -n "$_default" ]; then
         printf '%s? %s%s [%s]: ' \
-            "$FERRON_UI_C_BOLD" "$FERRON_UI_C_RESET" "$_question" "$_default" >&3
+            "$FERRON_UI_C_BOLD" "$_question" "$FERRON_UI_C_RESET" "$_default" >&3
     else
         printf '%s? %s%s: ' \
-            "$FERRON_UI_C_BOLD" "$FERRON_UI_C_RESET" "$_question" >&3
+            "$FERRON_UI_C_BOLD" "$_question" "$FERRON_UI_C_RESET" >&3
     fi
     IFS= read -r _answer || _answer=''
     if [ -z "$_answer" ]; then
@@ -129,9 +129,13 @@ ask_choice() {
     fi
 
     ui_spinner_pause
-    printf '\033[2K\r' >&3
+    if [ "$FERRON_UI_ANSI" = 1 ]; then
+        printf '\033[2K\r' >&3
+    else
+        printf '\n' >&3
+    fi
     printf '%s? %s%s\n' \
-        "$FERRON_UI_C_BOLD" "$FERRON_UI_C_RESET" "$_question" >&3
+        "$FERRON_UI_C_BOLD" "$_question" "$FERRON_UI_C_RESET" >&3
     _i=1
     for _opt in "$@"; do
         printf '  %s) %s\n' "$_i" "$_opt" >&3

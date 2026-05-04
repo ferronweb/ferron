@@ -66,14 +66,18 @@ ui_init() {
 # banner when the locale looks UTF-8 capable, otherwise falls back to the
 # plain-ASCII variant.
 ui_banner() {
-    if [ "$FERRON_UI_UTF8" = 1 ] && \
+    if [ "$FERRON_UI_COLOR" = 1 ] && [ "$FERRON_UI_ANSI" = 1 ] && \
        [ -r "$FERRON_INSTALLER_EXTRACT_DIR/assets/banner.txt" ]; then
         cat "$FERRON_INSTALLER_EXTRACT_DIR/assets/banner.txt"
+    elif [ "$FERRON_UI_UTF8" = 1 ] && \
+       [ -r "$FERRON_INSTALLER_EXTRACT_DIR/assets/banner-mono.txt" ]; then
+        cat "$FERRON_INSTALLER_EXTRACT_DIR/assets/banner-mono.txt"
     elif [ -r "$FERRON_INSTALLER_EXTRACT_DIR/assets/banner-ascii.txt" ]; then
         cat "$FERRON_INSTALLER_EXTRACT_DIR/assets/banner-ascii.txt"
     fi
     printf '\n'
-    printf 'Welcome to the Ferron 3 installer for Linux!\n'
+    printf '%sWelcome to the Ferron 3 installer for Linux!%s\n' \
+        "$FERRON_UI_C_BOLD" "$FERRON_UI_C_RESET"
     printf '\n'
 }
 
@@ -176,7 +180,7 @@ ui_step_end() {
         fi
         printf '\r\033[2K'
         _ui_render_status "$status"
-        printf ' %s\n' "$FERRON_UI_STEP_LABEL"
+        printf ' %s%s%s\n' "$FERRON_UI_C_BOLD" "$FERRON_UI_STEP_LABEL" "$FERRON_UI_C_RESET"
         # Restore the cursor.
         printf '\033[?25h'
     else
