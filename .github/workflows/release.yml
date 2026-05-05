@@ -254,7 +254,7 @@ jobs:
           scp dist/ferron3_${DEB_PACKAGE_VERSION}_${DEB_ARCHITECTURE}.deb ferron-servers:ferron3/ferron3_${DEB_PACKAGE_VERSION}_${DEB_ARCHITECTURE}.deb
 
           # Call the internal "deploy-ferron3" shell script
-          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 debian ferron-servers:ferron3/ferron3_${DEB_PACKAGE_VERSION}_${DEB_ARCHITECTURE}.deb"
+          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 debian ferron3/ferron3_${DEB_PACKAGE_VERSION}_${DEB_ARCHITECTURE}.deb"
 
       - name: Build and release RPM package
         if: matrix.runner == 'ubuntu-latest' && contains(matrix.target, 'linux-gnu')
@@ -269,7 +269,7 @@ jobs:
           scp dist/${RPM_FILE_NAME_WO_RPM}.rpm ferron-servers:ferron3/${RPM_FILE_NAME_WO_RPM}.rpm
 
           # Call the internal "deploy-ferron3" shell script
-          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 rpm ferron-servers:ferron3/${RPM_FILE_NAME_WO_RPM}.rpm"
+          ssh ferron-servers "/usr/bin/sudo-rs deploy-ferron3 rpm ferron3/${RPM_FILE_NAME_WO_RPM}.rpm"
 
   docker:
     runs-on: ubuntu-latest
