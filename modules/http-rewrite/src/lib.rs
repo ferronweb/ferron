@@ -87,6 +87,7 @@ impl Stage<HttpContext> for RewriteStage {
     fn constraints(&self) -> Vec<StageConstraint> {
         vec![
             StageConstraint::After("client_ip_from_header".to_string()),
+            StageConstraint::After("https_redirect".to_string()),
             StageConstraint::Before("reverse_proxy".to_string()),
         ]
     }
