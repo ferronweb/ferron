@@ -1,5 +1,13 @@
 # Ferron 3 change log
 
+## Ferron UNRELEASED
+
+**Not released yet**
+
+### Fixed
+
+- HTTP-to-HTTPS redirects used rewritten URLs instead of the original URL.
+
 ## Ferron 3.0.0-beta.1
 
 **Released in May 5, 2026**

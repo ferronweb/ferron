@@ -45,9 +45,12 @@ fn build_https_url(ctx: &HttpContext) -> Option<String> {
         host_req
     };
 
-    let path_and_query = req
-        .uri()
-        .path_and_query()
+    let path_and_query_orig = ctx
+        .original_uri
+        .as_ref()
+        .map(|u| u.path_and_query())
+        .unwrap_or(req.uri().path_and_query());
+    let path_and_query = path_and_query_orig
         .map(|pq| pq.as_str())
         .unwrap_or(req.uri().path());
 
