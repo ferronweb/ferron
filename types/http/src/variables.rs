@@ -46,12 +46,25 @@ pub fn canonicalize_ip(ip: std::net::IpAddr) -> String {
 pub fn resolve_variable(name: &str, ctx: &HttpContext) -> Option<String> {
     match name {
         var::REQUEST_METHOD => ctx.req.as_ref().map(|r| r.method().to_string()),
-        var::REQUEST_URI_PATH => ctx.req.as_ref().map(|r| r.uri().path().to_string()),
-        var::REQUEST_URI_QUERY => ctx
-            .req
+        var::REQUEST_URI_PATH => ctx
+            .original_uri
             .as_ref()
-            .map(|r| r.uri().query().unwrap_or("").to_string()),
-        var::REQUEST_URI => ctx.req.as_ref().map(|r| r.uri().to_string()),
+            .map(|u| u.path().to_string())
+            .or_else(|| ctx.req.as_ref().map(|r| r.uri().path().to_string())),
+        var::REQUEST_URI_QUERY => ctx
+            .original_uri
+            .as_ref()
+            .map(|u| u.query().unwrap_or("").to_string())
+            .or_else(|| {
+                ctx.req
+                    .as_ref()
+                    .map(|r| r.uri().query().unwrap_or("").to_string())
+            }),
+        var::REQUEST_URI => ctx
+            .original_uri
+            .as_ref()
+            .map(|u| u.to_string())
+            .or_else(|| ctx.req.as_ref().map(|r| r.uri().to_string())),
         var::REQUEST_VERSION => ctx.req.as_ref().map(|r| match r.version() {
             http::Version::HTTP_09 => "HTTP/0.9".to_string(),
             http::Version::HTTP_10 => "HTTP/1.0".to_string(),
