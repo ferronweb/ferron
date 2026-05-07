@@ -335,7 +335,8 @@ impl Stage<HttpContext> for ForwardedAuthenticationStage {
                     message: format!("fauth: configuration error: {}", e),
                     target: "ferron-http-fauth",
                 }));
-                return Ok(true); // Continue pipeline on config error
+                ctx.res = Some(ferron_http::HttpResponse::BuiltinError(500, None));
+                return Ok(false);
             }
         };
 

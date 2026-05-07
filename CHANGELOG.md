@@ -6,6 +6,7 @@
 
 ### Fixed
 
+- Misconfigured forwarded authentication could lead to completely bypassing the authentication.
 - HTTP-to-HTTPS redirects used rewritten URLs instead of the original URL.
 - Memory usage metrics were inaccurate (relative to the initial memory usage instead of absolute one).
 
