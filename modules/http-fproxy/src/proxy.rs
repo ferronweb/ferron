@@ -1,6 +1,6 @@
 //! Core forward proxy logic: CONNECT tunneling, HTTP forwarding, and ACL enforcement.
 
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 
 use bytes::Bytes;
@@ -115,19 +115,16 @@ async fn handle_connect(
         return Ok(ForwardProxyResult::Handled);
     }
 
-    // Resolve DNS and validate IP
-    let resolved_ip = resolve_and_validate_ip(ctx, &host, &config.deny_ips).await?;
-    if let Some(ip) = resolved_ip {
-        if ip_denied(&config.deny_ips, ip) {
-            emit_log(
-                ctx,
-                LogLevel::Warn,
-                &format!("CONNECT to {host} resolved to denied IP {ip}"),
-            );
-            ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
-            return Ok(ForwardProxyResult::Handled);
-        }
-    }
+    // Resolve DNS and validate IP (fail if IP is denied)
+    let Some(resolved_ips) = resolve_and_validate_ip(ctx, &host, &config.deny_ips).await? else {
+        emit_log(ctx, LogLevel::Warn, &format!("Can't resolve {host}"));
+        ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
+        return Ok(ForwardProxyResult::Handled);
+    };
+    let socket_addrs = resolved_ips
+        .into_iter()
+        .map(|ip| SocketAddr::new(ip, port))
+        .collect::<Vec<_>>();
 
     let error_logger = ctx.events.clone();
     let config = config.clone();
@@ -170,7 +167,7 @@ async fn handle_connect(
         };
 
         // Connect to the remote server
-        let backend_stream = match TcpStream::connect(&connect_address).await {
+        let backend_stream = match TcpStream::connect(&*socket_addrs).await {
             Ok(stream) => stream,
             Err(err) => {
                 error_logger.emit(Event::Log(LogEvent {
@@ -314,24 +311,20 @@ async fn handle_http_forward(
         return Ok(ForwardProxyResult::Handled);
     }
 
-    // Resolve DNS and validate IP
-    let resolved_ip = resolve_and_validate_ip(ctx, &host, &config.deny_ips).await?;
-    if let Some(ip) = resolved_ip {
-        if ip_denied(&config.deny_ips, ip) {
-            emit_log(
-                ctx,
-                LogLevel::Warn,
-                &format!("Forward proxy: host '{host}' resolved to denied IP {ip}"),
-            );
-            ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
-            return Ok(ForwardProxyResult::Handled);
-        }
-    }
-
+    // Resolve DNS and validate IP (fail if IP is denied)
+    let Some(resolved_ips) = resolve_and_validate_ip(ctx, &host, &config.deny_ips).await? else {
+        emit_log(ctx, LogLevel::Warn, &format!("Can't resolve {host}"));
+        ctx.res = Some(ferron_http::HttpResponse::BuiltinError(403, None));
+        return Ok(ForwardProxyResult::Handled);
+    };
     let addr = format!("{host}:{port}");
+    let socket_addrs = resolved_ips
+        .into_iter()
+        .map(|ip| SocketAddr::new(ip, port))
+        .collect::<Vec<_>>();
 
     // Connect to the backend
-    let stream = match TcpStream::connect(&addr).await {
+    let stream = match TcpStream::connect(&*socket_addrs).await {
         Ok(stream) => stream,
         Err(err) => {
             let status = match err.kind() {
@@ -486,13 +479,13 @@ async fn resolve_and_validate_ip(
     ctx: &mut HttpContext,
     host: &str,
     deny_ips: &[ipnet::IpNet],
-) -> Result<Option<IpAddr>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Option<Vec<IpAddr>>, Box<dyn std::error::Error + Send + Sync>> {
     // First check if the host is already an IP address
     if let Ok(ip) = IpAddr::from_str(host) {
         if ip_denied(deny_ips, ip) {
             return Err(format!("IP {ip} is in the denied IP list").into());
         }
-        return Ok(Some(ip));
+        return Ok(Some(vec![ip]));
     }
 
     // Resolve via DNS on the secondary tokio runtime
@@ -519,14 +512,17 @@ async fn resolve_and_validate_ip(
             let host_str = host_str.clone();
             async move {
                 match tokio::net::lookup_host(format!("{host_str}:0")).await {
-                    Ok(mut addrs) => {
-                        if let Some(ip) = addrs.next() {
-                            let ip = ip.ip();
-                            if ip_denied(&deny_ips, ip) {
-                                Err(format!("Host '{host_str}' resolved to denied IP {ip}"))
-                            } else {
-                                Ok(Some(ip))
+                    Ok(addrs) => {
+                        let ips = addrs.map(|a| a.ip()).collect::<Vec<_>>();
+                        if !ips.is_empty() {
+                            for ip in &ips {
+                                if ip_denied(&deny_ips, *ip) {
+                                    return Err(format!(
+                                        "Host '{host_str}' resolved to denied IP {ip}"
+                                    ));
+                                }
                             }
+                            Ok(Some(ips))
                         } else {
                             Ok(None)
                         }

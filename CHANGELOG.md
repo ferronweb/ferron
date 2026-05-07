@@ -6,9 +6,10 @@
 
 ### Fixed
 
-- Misconfigured forwarded authentication could lead to completely bypassing the authentication.
+- Forward-proxy DNS validation could be bypassed
 - HTTP-to-HTTPS redirects used rewritten URLs instead of the original URL.
 - Memory usage metrics were inaccurate (relative to the initial memory usage instead of absolute one).
+- Misconfigured forwarded authentication could lead to completely bypassing the authentication.
 
 ## Ferron 3.0.0-beta.1
 
