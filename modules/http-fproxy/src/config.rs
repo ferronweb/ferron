@@ -57,7 +57,7 @@ impl Default for ForwardProxyConfig {
     fn default() -> Self {
         Self {
             allow_domains: Vec::new(),
-            allow_ports: default_allowed_ports(),
+            allow_ports: Vec::new(),
             deny_ips: default_denied_ips(),
             connect_method: true,
             http_version: 11,
@@ -98,6 +98,8 @@ fn parse_forward_proxy_block(
     block: &ferron_core::config::ServerConfigurationBlock,
     cfg: &mut ForwardProxyConfig,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let mut has_allow_ports = false;
+
     for (name, entries) in block.directives.iter() {
         match name.as_str() {
             "allow_domains" => {
@@ -111,6 +113,7 @@ fn parse_forward_proxy_block(
                 }
             }
             "allow_ports" => {
+                has_allow_ports = true;
                 for entry in entries {
                     for arg in &entry.args {
                         if let Some(port) = arg.as_number() {
@@ -166,6 +169,11 @@ fn parse_forward_proxy_block(
             _ => {}
         }
     }
+
+    if !has_allow_ports {
+        cfg.allow_ports = default_allowed_ports();
+    }
+
     Ok(())
 }
 
