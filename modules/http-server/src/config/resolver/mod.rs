@@ -5,6 +5,8 @@
 
 mod matcher;
 mod resolver;
+#[cfg(test)]
+mod tests;
 mod types;
 
 // Re-export public types and the main resolver

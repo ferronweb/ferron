@@ -1,33 +1,29 @@
 //! Core proxy logic: request transformation, TLS, connection establishment, and forwarding.
 
-use parking_lot::RwLock;
+mod request;
+mod tls;
+
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::str::FromStr;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
 use ferron_http::{HttpContext, HttpResponse};
 use ferron_observability::{Event, LogEvent, LogLevel};
-use http::header::{HeaderName, HeaderValue};
 use http::{Request, Response, StatusCode};
 use http_body_util::{BodyExt, Empty};
-use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
-use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
+use rustls::pki_types::ServerName;
 use tokio_rustls::TlsConnector;
 use vibeio_hyper::VibeioIo;
 
-use crate::config::{HeaderAction, ProxyConfig};
+use crate::config::ProxyConfig;
 use crate::connections::{ConnectionManager, PoolKey};
 use crate::connpool_single::PoolItem;
 use crate::send_net_io::SendTcpStreamPoll;
 #[cfg(unix)]
 use crate::send_net_io::SendUnixStreamPoll;
-use crate::send_request::{
-    http1_handshake, http2_handshake, ProxyBody, SendRequestWrapper, TrackedBody,
-};
+use crate::send_request::{http1_handshake, http2_handshake, SendRequestWrapper, TrackedBody};
 #[cfg(unix)]
 use crate::send_request::{http1_handshake_unix, http2_handshake_unix};
 use crate::upstream::{
@@ -37,415 +33,10 @@ use crate::upstream::{
 use crate::util::TtlCache;
 use crate::ProxyMetrics;
 
+use self::request::construct_proxy_request;
+use self::tls::{cached_tls_config, io_error_status};
+
 const LOG_TARGET: &str = "ferron-http-proxy";
-
-#[allow(clippy::type_complexity)]
-static TLS_CLIENT_CONFIG_CACHE: LazyLock<RwLock<HashMap<(bool, bool, bool), Arc<ClientConfig>>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
-
-/// Check whether `client_ip_from_header` is configured.
-fn client_ip_from_header_enabled(ctx: &HttpContext) -> bool {
-    ctx.configuration
-        .get_value("client_ip_from_header", false)
-        .and_then(|v| v.as_str())
-        .is_some()
-}
-
-/// Interpolate header value with HTTP request variables.
-///
-/// Scans for `{{...}}` syntax and resolves variables using the context's
-/// `Variables` implementation. Plain strings without `{{` are returned as-is.
-///
-/// For performance, templates are compiled into segments and cached globally so
-/// repeated requests don't re-parse the same template string.
-#[derive(Clone, Debug)]
-enum Segment {
-    Literal(String),
-    Var(String),
-}
-
-static TEMPLATE_CACHE: LazyLock<RwLock<HashMap<String, Arc<Vec<Segment>>>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
-
-fn compile_template(value: &str) -> Vec<Segment> {
-    let mut segs: Vec<Segment> = Vec::new();
-    let mut chars = value.chars().peekable();
-    let mut literal = String::new();
-
-    while let Some(ch) = chars.next() {
-        if ch == '{' && chars.peek() == Some(&'{') {
-            chars.next(); // consume second '{'
-                          // flush current literal
-            if !literal.is_empty() {
-                segs.push(Segment::Literal(std::mem::take(&mut literal)));
-            }
-            let mut var_name = String::new();
-            loop {
-                match chars.next() {
-                    Some('}') if chars.peek() == Some(&'}') => {
-                        chars.next(); // consume second '}'
-                        break;
-                    }
-                    Some(c) => var_name.push(c),
-                    None => {
-                        // Unterminated — fall back to a single literal for the whole template
-                        return vec![Segment::Literal(value.to_string())];
-                    }
-                }
-            }
-            segs.push(Segment::Var(var_name));
-        } else {
-            literal.push(ch);
-        }
-    }
-
-    if !literal.is_empty() {
-        segs.push(Segment::Literal(literal));
-    }
-    segs
-}
-
-fn interpolate_header_value(value: &str, ctx: &HttpContext) -> String {
-    if !value.contains("{{") {
-        return value.to_string();
-    }
-
-    // Try read-lock cache first
-    let segs_arc = {
-        let guard = TEMPLATE_CACHE.read();
-        if let Some(found) = guard.get(value) {
-            Arc::clone(found)
-        } else {
-            drop(guard);
-            let compiled = Arc::new(compile_template(value));
-            let mut guard = TEMPLATE_CACHE.write();
-            let entry = guard
-                .entry(value.to_string())
-                .or_insert_with(|| Arc::clone(&compiled));
-            Arc::clone(entry)
-        }
-    };
-
-    let mut result = String::with_capacity(value.len());
-    for seg in segs_arc.iter() {
-        match seg {
-            Segment::Literal(s) => result.push_str(s),
-            Segment::Var(var_name) => {
-                if let Some(env_var) = var_name.strip_prefix("env.") {
-                    if let Ok(env_value) = std::env::var(env_var) {
-                        result.push_str(&env_value);
-                    } else {
-                        result.push_str(&format!("{{{{{}}}}}", var_name));
-                    }
-                } else if let Some(resolved) =
-                    <dyn ferron_core::config::Variables>::resolve(ctx, var_name)
-                {
-                    result.push_str(&resolved);
-                } else {
-                    result.push_str(&format!("{{{{{}}}}}", var_name));
-                }
-            }
-        }
-    }
-    result
-}
-
-/// Construct proxy request with header transformations.
-fn construct_proxy_request(
-    ctx: &mut HttpContext,
-    config: &ProxyConfig,
-    proxy_request_url: &http::Uri,
-) -> Result<Request<ProxyBody>, Box<dyn std::error::Error + Send + Sync>> {
-    // Ensure a request exists (borrow for interpolation), but defer taking ownership
-    // until after header interpolation/validation to avoid cloning header maps.
-    let req_ref = ctx.req.as_ref().ok_or("no request in context")?;
-
-    // Build new request path and URI string without allocations where possible.
-    let request_path = req_ref.uri().path();
-    let path = if request_path.as_bytes().first() == Some(&b'/') {
-        let mut proxy_request_path = proxy_request_url.path();
-        while proxy_request_path.as_bytes().last().copied() == Some(b'/') {
-            proxy_request_path = &proxy_request_path[..(proxy_request_path.len() - 1)];
-        }
-        let mut s = String::with_capacity(proxy_request_path.len() + request_path.len());
-        s.push_str(proxy_request_path);
-        s.push_str(request_path);
-        s
-    } else {
-        request_path.to_string()
-    };
-
-    // Pre-build final URI string (path + optional ?query) while still borrowing req.
-    let final_uri = if let Some(query) = req_ref.uri().query() {
-        let mut u = String::with_capacity(path.len() + 1 + query.len());
-        u.push_str(&path);
-        u.push('?');
-        u.push_str(query);
-        u
-    } else {
-        path.clone()
-    };
-
-    // Prepare header modifications by resolving templates up-front while ctx.req is present
-    // so that variables can resolve against the original request without cloning it.
-    let mut replace_values: Vec<(HeaderName, HeaderValue)> =
-        Vec::with_capacity(config.headers_to_replace.len());
-    for (name, value) in &config.headers_to_replace {
-        let resolved = interpolate_header_value(value, ctx);
-        let hv = HeaderValue::from_str(&resolved).map_err(|e| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("Invalid header value: {e}"),
-            )
-        })?;
-        replace_values.push((name.clone(), hv));
-    }
-
-    let mut add_values: Vec<(HeaderName, HeaderValue)> =
-        Vec::with_capacity(config.headers_to_add.len());
-    for action in &config.headers_to_add {
-        let HeaderAction::Append(name, v) = action;
-        let resolved = interpolate_header_value(v, ctx);
-        let hv = HeaderValue::from_str(&resolved).map_err(|e| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("Invalid header value: {e}"),
-            )
-        })?;
-        add_values.push((name.clone(), hv));
-    }
-
-    // All header templates validated — take ownership of the original request now.
-    let req = ctx.req.take().ok_or("no request in context")?;
-    let (mut parts, body) = req.into_parts();
-
-    // Set the rewritten URI
-    parts.uri = http::Uri::from_str(&final_uri)?;
-
-    // Remove configured headers
-    for name in &config.headers_to_remove {
-        parts.headers.remove(name);
-    }
-
-    // Apply replace headers
-    for (name, hv) in replace_values {
-        // Insert replaces existing header if present, avoiding an extra remove
-        parts.headers.insert(name, hv);
-    }
-
-    // Apply add/append headers
-    for (name, hv) in add_values {
-        parts.headers.append(name, hv);
-    }
-
-    // X-Forwarded / X-Real headers
-    let client_ip = ctx.remote_address.ip();
-    let local_ip = ctx.local_address.ip();
-    let proto = if ctx.encrypted { "https" } else { "http" };
-
-    // Pre-format IPs once to avoid repeated allocations in header helpers
-    let client_ip_str = client_ip.to_string();
-    let local_ip_str = local_ip.to_string();
-
-    if client_ip_from_header_enabled(ctx) {
-        append_x_forwarded_for(&mut parts.headers, &client_ip_str);
-        append_forwarded(&mut parts.headers, &client_ip_str, proto, &local_ip_str);
-    } else {
-        set_x_forwarded_for(&mut parts.headers, &client_ip_str);
-        set_forwarded(&mut parts.headers, &client_ip_str, proto, &local_ip_str);
-    }
-
-    parts.headers.insert(
-        HeaderName::from_static("x-forwarded-proto"),
-        HeaderValue::from_static(proto),
-    );
-    parts.headers.insert(
-        HeaderName::from_static("x-real-ip"),
-        HeaderValue::from_str(&client_ip_str)?,
-    );
-
-    parts.version = http::Version::default();
-
-    // W3C Trace Context propagation
-    if let Some(tc) = ctx.get::<ferron_http::trace_context::TraceContextKey>() {
-        ferron_http::trace_context::inject_trace_headers(&mut parts.headers, tc);
-    }
-
-    Ok(Request::from_parts(parts, body))
-}
-
-fn set_x_forwarded_for(headers: &mut http::HeaderMap, client_ip_str: &str) {
-    if let Ok(hv) = HeaderValue::from_str(client_ip_str) {
-        headers.insert("x-forwarded-for", hv);
-    }
-}
-
-fn append_x_forwarded_for(headers: &mut http::HeaderMap, client_ip_str: &str) {
-    if let Some(existing) = headers.get("x-forwarded-for") {
-        if let Ok(existing_str) = existing.to_str() {
-            let new_value = format!("{}, {}", existing_str, client_ip_str);
-            if let Ok(hv) = HeaderValue::from_str(&new_value) {
-                headers.insert("x-forwarded-for", hv);
-                return;
-            }
-        }
-    }
-    if let Ok(hv) = HeaderValue::from_str(client_ip_str) {
-        headers.insert("x-forwarded-for", hv);
-    }
-}
-
-fn set_forwarded(
-    headers: &mut http::HeaderMap,
-    client_ip_str: &str,
-    proto: &'static str,
-    local_ip_str: &str,
-) {
-    let element = build_forwarded_element(client_ip_str, proto, local_ip_str);
-    if let Ok(hv) = HeaderValue::from_str(&element) {
-        headers.insert("forwarded", hv);
-    }
-}
-
-fn append_forwarded(
-    headers: &mut http::HeaderMap,
-    client_ip_str: &str,
-    proto: &'static str,
-    local_ip_str: &str,
-) {
-    let element = build_forwarded_element(client_ip_str, proto, local_ip_str);
-    if let Some(existing) = headers.get("forwarded") {
-        if let Ok(existing_str) = existing.to_str() {
-            let new_value = format!("{}, {}", existing_str, element);
-            if let Ok(hv) = HeaderValue::from_str(&new_value) {
-                headers.insert("forwarded", hv);
-                return;
-            }
-        }
-    }
-    if let Ok(hv) = HeaderValue::from_str(&element) {
-        headers.insert("forwarded", hv);
-    }
-}
-
-fn build_forwarded_element(client_ip_str: &str, proto: &str, local_ip_str: &str) -> String {
-    // Detect IPv6 from the pre-formatted string
-    let for_value = if client_ip_str.contains(':') {
-        format!("\"[{}]\"", client_ip_str)
-    } else {
-        client_ip_str.to_string()
-    };
-    let by_value = if local_ip_str.contains(':') {
-        format!("\"[{}]\"", local_ip_str)
-    } else {
-        local_ip_str.to_string()
-    };
-    format!("for={};proto={};by={}", for_value, proto, by_value)
-}
-
-fn build_tls_config(http2: bool, http2_only: bool, no_verification: bool) -> ClientConfig {
-    let builder = rustls::ClientConfig::builder();
-    let mut tls_client_config = if no_verification {
-        builder
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(NoServerVerifier))
-    } else {
-        let mut root_store = rustls::RootCertStore::empty();
-
-        // Try native certs first
-        match rustls_native_certs::load_native_certs() {
-            cert_result if !cert_result.errors.is_empty() => (),
-            cert_result if cert_result.certs.is_empty() => (),
-            cert_result => {
-                for cert in cert_result.certs {
-                    let _ = root_store.add(cert);
-                }
-            }
-        }
-
-        // Always add webpki-roots as fallback
-        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-
-        builder.with_root_certificates(root_store)
-    }
-    .with_no_client_auth();
-
-    if http2_only {
-        tls_client_config.alpn_protocols = vec![b"h2".to_vec()];
-    } else if http2 {
-        tls_client_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-    } else {
-        tls_client_config.alpn_protocols = vec![b"http/1.1".to_vec()];
-    }
-
-    tls_client_config
-}
-
-fn cached_tls_config(http2: bool, http2_only: bool, no_verification: bool) -> Arc<ClientConfig> {
-    let cache_key = (http2, http2_only, no_verification);
-    {
-        let cache_read = TLS_CLIENT_CONFIG_CACHE.read();
-        if let Some(config) = cache_read.get(&cache_key).cloned() {
-            return config;
-        }
-    }
-
-    let config = Arc::new(build_tls_config(http2, http2_only, no_verification));
-    let mut cache_write = TLS_CLIENT_CONFIG_CACHE.write();
-    Arc::clone(cache_write.entry(cache_key).or_insert(config))
-}
-
-#[derive(Debug)]
-struct NoServerVerifier;
-
-impl ServerCertVerifier for NoServerVerifier {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: UnixTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
-        Ok(ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        Ok(HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        rustls::crypto::aws_lc_rs::default_provider()
-            .signature_verification_algorithms
-            .supported_schemes()
-    }
-}
-
-pub fn io_error_status(err: &std::io::Error) -> (StatusCode, &'static str) {
-    match err.kind() {
-        std::io::ErrorKind::ConnectionRefused
-        | std::io::ErrorKind::NotFound
-        | std::io::ErrorKind::HostUnreachable => {
-            (StatusCode::SERVICE_UNAVAILABLE, "Service unavailable")
-        }
-        std::io::ErrorKind::TimedOut => (StatusCode::GATEWAY_TIMEOUT, "Gateway timeout"),
-        _ => (StatusCode::BAD_GATEWAY, "Bad gateway"),
-    }
-}
 
 fn idle_timeout_for_upstream(config: &ProxyConfig, upstream: &UpstreamInner) -> Duration {
     config
@@ -1448,7 +1039,12 @@ async fn send_request_without_pool_item(
 
 #[cfg(test)]
 mod tests {
+    use super::request::{
+        append_forwarded, append_x_forwarded_for, build_forwarded_element, set_forwarded,
+        set_x_forwarded_for,
+    };
     use super::*;
+    use http::header::HeaderValue;
     use http::HeaderMap;
 
     #[test]
