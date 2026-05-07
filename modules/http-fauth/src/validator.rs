@@ -42,7 +42,7 @@ impl ConfigurationValidator for ForwardedAuthenticationConfigurationValidator {
         }
 
         validate_directive!(config, used_directives, auth_to, optional args(1) => [ServerConfigurationValue::Boolean(_, _) | ServerConfigurationValue::String(_, _)], {
-            validate_nested!(auth_to, backend, args(1) => [ServerConfigurationValue::String(_, _)]);
+            validate_nested!(auth_to, url, args(1) => [ServerConfigurationValue::String(_, _)]);
             validate_nested!(auth_to, unix, args(1) => [ServerConfigurationValue::String(_, _)]);
             validate_nested!(auth_to, limit, args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::Boolean(false, _)]);
             validate_nested!(auth_to, idle_timeout, args(1) => [ServerConfigurationValue::Number(_, _) | ServerConfigurationValue::String(_, _) | ServerConfigurationValue::Boolean(false, _)]);
