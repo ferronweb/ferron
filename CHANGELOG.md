@@ -7,6 +7,7 @@
 ### Fixed
 
 - HTTP-to-HTTPS redirects used rewritten URLs instead of the original URL.
+- Memory usage metrics were inaccurate (relative to the initial memory usage instead of absolute one).
 
 ## Ferron 3.0.0-beta.1
 

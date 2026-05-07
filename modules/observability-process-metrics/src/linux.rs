@@ -72,14 +72,6 @@ pub async fn collect_process_metrics(
 
     let mut state = ProcessState::default();
 
-    // Initialize the baseline from current process state
-    if let Some(snapshot) = read_process_state() {
-        state.previous_cpu_user_time = snapshot.cpu_user_time;
-        state.previous_cpu_system_time = snapshot.cpu_system_time;
-        state.previous_rss = snapshot.rss;
-        state.previous_vms = snapshot.vms;
-    }
-
     loop {
         tokio::select! {
             _ = cancel_token.cancelled() => break,
