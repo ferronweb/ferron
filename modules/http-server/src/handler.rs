@@ -1763,10 +1763,8 @@ fn normalize_http2_http3_request(request: &mut HttpRequest) {
     if let Some(authority) = request.uri().authority() {
         let authority = authority.to_owned();
         let headers = request.headers_mut();
-        if !headers.contains_key(http::header::HOST) {
-            if let Ok(authority_value) = HeaderValue::from_bytes(authority.as_str().as_bytes()) {
-                headers.append(http::header::HOST, authority_value);
-            }
+        if let Ok(authority_value) = HeaderValue::from_bytes(authority.as_str().as_bytes()) {
+            headers.append(http::header::HOST, authority_value);
         }
     }
 
