@@ -355,112 +355,98 @@ pub fn obtain_host_configuration(
             kdl_config_nodes.push(kdl_property);
           }
         }
-        "proxyTo" => {
-          if loaded_modules.contains(&"rproxy".to_string()) {
-            if let Some(value) = value.as_str() {
-              let mut kdl_property = KdlNode::new("proxy");
-              kdl_property.push(KdlValue::String(value.to_string()));
-              kdl_config_nodes.push(kdl_property);
-            } else if let Some(value) = value.as_vec() {
-              for value in value {
-                if let Some(value) = value.as_str() {
-                  let mut kdl_property = KdlNode::new("proxy");
-                  kdl_property.push(KdlValue::String(value.to_string()));
-                  kdl_config_nodes.push(kdl_property);
-                }
+        "proxyTo" if loaded_modules.contains(&"rproxy".to_string()) => {
+          if let Some(value) = value.as_str() {
+            let mut kdl_property = KdlNode::new("proxy");
+            kdl_property.push(KdlValue::String(value.to_string()));
+            kdl_config_nodes.push(kdl_property);
+          } else if let Some(value) = value.as_vec() {
+            for value in value {
+              if let Some(value) = value.as_str() {
+                let mut kdl_property = KdlNode::new("proxy");
+                kdl_property.push(KdlValue::String(value.to_string()));
+                kdl_config_nodes.push(kdl_property);
               }
             }
           }
         }
-        "secureProxyTo" => {
-          if loaded_modules.contains(&"rproxy".to_string()) {
-            if let Some(value) = value.as_str() {
-              let mut kdl_property = KdlNode::new("proxy");
-              kdl_property.push(KdlValue::String(value.to_string()));
-              kdl_secure_config_nodes.push(kdl_property);
-            } else if let Some(value) = value.as_vec() {
-              for value in value {
-                if let Some(value) = value.as_str() {
-                  let mut kdl_property = KdlNode::new("proxy");
-                  kdl_property.push(KdlValue::String(value.to_string()));
-                  kdl_secure_config_nodes.push(kdl_property);
-                }
+        "secureProxyTo" if loaded_modules.contains(&"rproxy".to_string()) => {
+          if let Some(value) = value.as_str() {
+            let mut kdl_property = KdlNode::new("proxy");
+            kdl_property.push(KdlValue::String(value.to_string()));
+            kdl_secure_config_nodes.push(kdl_property);
+          } else if let Some(value) = value.as_vec() {
+            for value in value {
+              if let Some(value) = value.as_str() {
+                let mut kdl_property = KdlNode::new("proxy");
+                kdl_property.push(KdlValue::String(value.to_string()));
+                kdl_secure_config_nodes.push(kdl_property);
               }
             }
           }
         }
-        "cacheVaryHeaders" => {
-          if loaded_modules.contains(&"cache".to_string()) {
-            if let Some(value) = value.as_vec() {
-              for value in value {
-                if let Some(value) = value.as_str() {
-                  let mut kdl_property = KdlNode::new("cache_vary");
-                  kdl_property.push(KdlValue::String(value.to_string()));
-                  kdl_config_nodes.push(kdl_property);
-                }
+        "cacheVaryHeaders" if loaded_modules.contains(&"cache".to_string()) => {
+          if let Some(value) = value.as_vec() {
+            for value in value {
+              if let Some(value) = value.as_str() {
+                let mut kdl_property = KdlNode::new("cache_vary");
+                kdl_property.push(KdlValue::String(value.to_string()));
+                kdl_config_nodes.push(kdl_property);
               }
             }
           }
         }
-        "cacheIgnoreHeaders" => {
-          if loaded_modules.contains(&"cache".to_string()) {
-            if let Some(value) = value.as_vec() {
-              for value in value {
-                if let Some(value) = value.as_str() {
-                  let mut kdl_property = KdlNode::new("cache_ignore");
-                  kdl_property.push(KdlValue::String(value.to_string()));
-                  kdl_config_nodes.push(kdl_property);
-                }
+        "cacheIgnoreHeaders" if loaded_modules.contains(&"cache".to_string()) => {
+          if let Some(value) = value.as_vec() {
+            for value in value {
+              if let Some(value) = value.as_str() {
+                let mut kdl_property = KdlNode::new("cache_ignore");
+                kdl_property.push(KdlValue::String(value.to_string()));
+                kdl_config_nodes.push(kdl_property);
               }
             }
           }
         }
-        "maximumCacheResponseSize" => {
-          if loaded_modules.contains(&"cache".to_string()) {
-            if let Some(value) = value.as_i64() {
-              let mut kdl_property = KdlNode::new("cache_max_response_size");
-              kdl_property.push(KdlValue::Integer(value as i128));
-              kdl_config_nodes.push(kdl_property);
-            } else if value.is_null() {
-              let mut kdl_property = KdlNode::new("cache_max_response_size");
-              kdl_property.push(KdlValue::Null);
-              kdl_config_nodes.push(kdl_property);
-            }
+        "maximumCacheResponseSize" if loaded_modules.contains(&"cache".to_string()) => {
+          if let Some(value) = value.as_i64() {
+            let mut kdl_property = KdlNode::new("cache_max_response_size");
+            kdl_property.push(KdlValue::Integer(value as i128));
+            kdl_config_nodes.push(kdl_property);
+          } else if value.is_null() {
+            let mut kdl_property = KdlNode::new("cache_max_response_size");
+            kdl_property.push(KdlValue::Null);
+            kdl_config_nodes.push(kdl_property);
           }
         }
-        "cgiScriptExtensions" => {
-          if loaded_modules.contains(&"cgi".to_string()) {
-            if let Some(value) = value.as_vec() {
-              for value in value {
-                if let Some(value) = value.as_str() {
-                  let mut kdl_property = KdlNode::new("cgi_extension");
-                  kdl_property.push(KdlValue::String(value.to_string()));
-                  kdl_config_nodes.push(kdl_property);
-                }
+        "cgiScriptExtensions" if loaded_modules.contains(&"cgi".to_string()) => {
+          if let Some(value) = value.as_vec() {
+            for value in value {
+              if let Some(value) = value.as_str() {
+                let mut kdl_property = KdlNode::new("cgi_extension");
+                kdl_property.push(KdlValue::String(value.to_string()));
+                kdl_config_nodes.push(kdl_property);
               }
             }
           }
         }
-        "cgiScriptInterpreters" => {
-          if loaded_modules.contains(&"cgi".to_string()) {
-            if let Some(value) = value.as_hash() {
-              for (extension, interpreter) in value {
-                if let Some(extension) = extension.as_str() {
-                  if let Some(interpreter) = interpreter.as_vec() {
-                    let mut kdl_property = KdlNode::new("cgi_interpreter");
-                    kdl_property.push(KdlValue::String(extension.to_string()));
-                    for value in interpreter {
-                      if let Some(value) = value.as_str() {
-                        kdl_property.push(KdlValue::String(value.to_string()));
-                      }
+        "cgiScriptInterpreters" if loaded_modules.contains(&"cgi".to_string()) => {
+          if let Some(value) = value.as_hash() {
+            for (extension, interpreter) in value {
+              if let Some(extension) = extension.as_str() {
+                if let Some(interpreter) = interpreter.as_vec() {
+                  let mut kdl_property = KdlNode::new("cgi_interpreter");
+                  kdl_property.push(KdlValue::String(extension.to_string()));
+                  for value in interpreter {
+                    if let Some(value) = value.as_str() {
+                      kdl_property.push(KdlValue::String(value.to_string()));
                     }
-                    kdl_config_nodes.push(kdl_property);
-                  } else if interpreter.is_null() {
-                    let mut kdl_property = KdlNode::new("cgi_interpreter");
-                    kdl_property.push(KdlValue::String(extension.to_string()));
-                    kdl_property.push(KdlValue::Null);
-                    kdl_config_nodes.push(kdl_property);
                   }
+                  kdl_config_nodes.push(kdl_property);
+                } else if interpreter.is_null() {
+                  let mut kdl_property = KdlNode::new("cgi_interpreter");
+                  kdl_property.push(KdlValue::String(extension.to_string()));
+                  kdl_property.push(KdlValue::Null);
+                  kdl_config_nodes.push(kdl_property);
                 }
               }
             }
@@ -491,57 +477,47 @@ pub fn obtain_host_configuration(
             fcgi_path = Some(value);
           }
         }
-        "authTo" => {
-          if loaded_modules.contains(&"fauth".to_string()) {
-            if let Some(value) = value.as_str() {
-              let mut kdl_property = KdlNode::new("auth_to");
-              kdl_property.push(KdlValue::String(value.to_string()));
-              kdl_config_nodes.push(kdl_property);
-            }
+        "authTo" if loaded_modules.contains(&"fauth".to_string()) => {
+          if let Some(value) = value.as_str() {
+            let mut kdl_property = KdlNode::new("auth_to");
+            kdl_property.push(KdlValue::String(value.to_string()));
+            kdl_config_nodes.push(kdl_property);
           }
         }
-        "forwardedAuthCopyHeaders" => {
-          if loaded_modules.contains(&"fauth".to_string()) {
-            if let Some(value) = value.as_vec() {
-              for value in value {
-                if let Some(value) = value.as_str() {
-                  let mut kdl_property = KdlNode::new("auth_to_copy");
-                  kdl_property.push(KdlValue::String(value.to_string()));
-                  kdl_config_nodes.push(kdl_property);
-                }
+        "forwardedAuthCopyHeaders" if loaded_modules.contains(&"fauth".to_string()) => {
+          if let Some(value) = value.as_vec() {
+            for value in value {
+              if let Some(value) = value.as_str() {
+                let mut kdl_property = KdlNode::new("auth_to_copy");
+                kdl_property.push(KdlValue::String(value.to_string()));
+                kdl_config_nodes.push(kdl_property);
               }
             }
           }
         }
-        "enableLoadBalancerHealthCheck" => {
-          if loaded_modules.contains(&"rproxy".to_string()) {
-            if let Some(value) = value.as_bool() {
-              let mut kdl_property = KdlNode::new("lb_health_check");
-              if !value {
-                kdl_property.push(KdlValue::Bool(false));
-              }
-              kdl_config_nodes.push(kdl_property);
+        "enableLoadBalancerHealthCheck" if loaded_modules.contains(&"rproxy".to_string()) => {
+          if let Some(value) = value.as_bool() {
+            let mut kdl_property = KdlNode::new("lb_health_check");
+            if !value {
+              kdl_property.push(KdlValue::Bool(false));
             }
+            kdl_config_nodes.push(kdl_property);
           }
         }
-        "loadBalancerHealthCheckMaximumFails" => {
-          if loaded_modules.contains(&"rproxy".to_string()) {
-            if let Some(value) = value.as_i64() {
-              let mut kdl_property = KdlNode::new("lb_health_check_max_fails");
-              kdl_property.push(KdlValue::Integer(value as i128));
-              kdl_config_nodes.push(kdl_property);
-            }
+        "loadBalancerHealthCheckMaximumFails" if loaded_modules.contains(&"rproxy".to_string()) => {
+          if let Some(value) = value.as_i64() {
+            let mut kdl_property = KdlNode::new("lb_health_check_max_fails");
+            kdl_property.push(KdlValue::Integer(value as i128));
+            kdl_config_nodes.push(kdl_property);
           }
         }
-        "disableProxyCertificateVerification" => {
-          if loaded_modules.contains(&"rproxy".to_string()) {
-            if let Some(value) = value.as_bool() {
-              let mut kdl_property = KdlNode::new("proxy_no_verification");
-              if !value {
-                kdl_property.push(KdlValue::Bool(false));
-              }
-              kdl_config_nodes.push(kdl_property);
+        "disableProxyCertificateVerification" if loaded_modules.contains(&"rproxy".to_string()) => {
+          if let Some(value) = value.as_bool() {
+            let mut kdl_property = KdlNode::new("proxy_no_verification");
+            if !value {
+              kdl_property.push(KdlValue::Bool(false));
             }
+            kdl_config_nodes.push(kdl_property);
           }
         }
         "wsgiApplicationPath" => {
@@ -574,31 +550,27 @@ pub fn obtain_host_configuration(
             asgi_path = Some(value);
           }
         }
-        "proxyInterceptErrors" => {
-          if loaded_modules.contains(&"rproxy".to_string()) {
-            if let Some(value) = value.as_bool() {
-              let mut kdl_property = KdlNode::new("proxy_intercept_errors");
-              if !value {
-                kdl_property.push(KdlValue::Bool(false));
-              }
-              kdl_config_nodes.push(kdl_property);
+        "proxyInterceptErrors" if loaded_modules.contains(&"rproxy".to_string()) => {
+          if let Some(value) = value.as_bool() {
+            let mut kdl_property = KdlNode::new("proxy_intercept_errors");
+            if !value {
+              kdl_property.push(KdlValue::Bool(false));
             }
+            kdl_config_nodes.push(kdl_property);
           }
         }
-        "disableProxyXForwarded" => {
-          if loaded_modules.contains(&"rproxy".to_string()) {
-            if let Some(value) = value.as_bool() {
-              if value {
-                let mut kdl_property = KdlNode::new("proxy_request_header_remove");
-                kdl_property.push(KdlValue::String("X-Forwarded-For".to_string()));
-                kdl_config_nodes.push(kdl_property);
-                let mut kdl_property = KdlNode::new("proxy_request_header_remove");
-                kdl_property.push(KdlValue::String("X-Forwarded-Proto".to_string()));
-                kdl_config_nodes.push(kdl_property);
-                let mut kdl_property = KdlNode::new("proxy_request_header_remove");
-                kdl_property.push(KdlValue::String("X-Forwarded-Host".to_string()));
-                kdl_config_nodes.push(kdl_property);
-              }
+        "disableProxyXForwarded" if loaded_modules.contains(&"rproxy".to_string()) => {
+          if let Some(value) = value.as_bool() {
+            if value {
+              let mut kdl_property = KdlNode::new("proxy_request_header_remove");
+              kdl_property.push(KdlValue::String("X-Forwarded-For".to_string()));
+              kdl_config_nodes.push(kdl_property);
+              let mut kdl_property = KdlNode::new("proxy_request_header_remove");
+              kdl_property.push(KdlValue::String("X-Forwarded-Proto".to_string()));
+              kdl_config_nodes.push(kdl_property);
+              let mut kdl_property = KdlNode::new("proxy_request_header_remove");
+              kdl_property.push(KdlValue::String("X-Forwarded-Host".to_string()));
+              kdl_config_nodes.push(kdl_property);
             }
           }
         }
@@ -1040,44 +1012,36 @@ pub fn obtain_global_configuration(yaml_configuration: &Yaml) -> (KdlNode, Vec<K
             kdl_global_children_nodes.push(kdl_property);
           }
         }
-        "loadBalancerHealthCheckWindow" => {
-          if load_server_modules.contains(&"rproxy".to_string()) {
-            if let Some(value) = value.as_i64() {
-              let mut kdl_property = KdlNode::new("lb_health_check_window");
-              kdl_property.push(KdlValue::Integer(value as i128));
-              kdl_global_children_nodes.push(kdl_property);
-            }
+        "loadBalancerHealthCheckWindow" if load_server_modules.contains(&"rproxy".to_string()) => {
+          if let Some(value) = value.as_i64() {
+            let mut kdl_property = KdlNode::new("lb_health_check_window");
+            kdl_property.push(KdlValue::Integer(value as i128));
+            kdl_global_children_nodes.push(kdl_property);
           }
         }
-        "maximumCacheEntries" => {
-          if load_server_modules.contains(&"cache".to_string()) {
-            if let Some(value) = value.as_i64() {
-              let mut kdl_property = KdlNode::new("cache_max_entries");
-              kdl_property.push(KdlValue::Integer(value as i128));
-              kdl_global_children_nodes.push(kdl_property);
-            } else if value.is_null() {
-              let mut kdl_property = KdlNode::new("cache_max_entries");
-              kdl_property.push(KdlValue::Null);
-              kdl_global_children_nodes.push(kdl_property);
-            }
+        "maximumCacheEntries" if load_server_modules.contains(&"cache".to_string()) => {
+          if let Some(value) = value.as_i64() {
+            let mut kdl_property = KdlNode::new("cache_max_entries");
+            kdl_property.push(KdlValue::Integer(value as i128));
+            kdl_global_children_nodes.push(kdl_property);
+          } else if value.is_null() {
+            let mut kdl_property = KdlNode::new("cache_max_entries");
+            kdl_property.push(KdlValue::Null);
+            kdl_global_children_nodes.push(kdl_property);
           }
         }
-        "wsgiClearModuleImportPath" => {
-          if load_server_modules.contains(&"wsgi".to_string()) {
-            if let Some(value) = value.as_bool() {
-              let mut kdl_property = KdlNode::new("wsgi_clear_imports");
-              kdl_property.push(KdlValue::Bool(value));
-              kdl_global_children_nodes.push(kdl_property);
-            }
+        "wsgiClearModuleImportPath" if load_server_modules.contains(&"wsgi".to_string()) => {
+          if let Some(value) = value.as_bool() {
+            let mut kdl_property = KdlNode::new("wsgi_clear_imports");
+            kdl_property.push(KdlValue::Bool(value));
+            kdl_global_children_nodes.push(kdl_property);
           }
         }
-        "asgiClearModuleImportPath" => {
-          if load_server_modules.contains(&"asgi".to_string()) {
-            if let Some(value) = value.as_bool() {
-              let mut kdl_property = KdlNode::new("asgi_clear_imports");
-              kdl_property.push(KdlValue::Bool(value));
-              kdl_global_children_nodes.push(kdl_property);
-            }
+        "asgiClearModuleImportPath" if load_server_modules.contains(&"asgi".to_string()) => {
+          if let Some(value) = value.as_bool() {
+            let mut kdl_property = KdlNode::new("asgi_clear_imports");
+            kdl_property.push(KdlValue::Bool(value));
+            kdl_global_children_nodes.push(kdl_property);
           }
         }
         _ => (),
