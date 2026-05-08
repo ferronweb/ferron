@@ -9,6 +9,7 @@
 - Forward-proxy allowed ports were additive (meaning that ports 80 and 443 were always included)
 - Forward-proxy DNS validation could be bypassed
 - HTTP-to-HTTPS redirects used rewritten URLs instead of the original URL.
+- `io_uring` (on Linux) couldn't be disabled via the web server configuration.
 - Memory usage metrics were inaccurate (relative to the initial memory usage instead of absolute one).
 - Misconfigured forwarded authentication could lead to completely bypassing the authentication.
 

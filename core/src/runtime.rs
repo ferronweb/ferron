@@ -63,9 +63,19 @@ impl Runtime {
                     let _ = core_affinity::set_for_current(core_id);
                 }
                 let use_io_uring = io_uring_enabled && vibeio::util::supports_io_uring();
-                let rt = vibeio::RuntimeBuilder::new()
+
+                #[allow(unused_mut)]
+                let mut rt_builder = vibeio::RuntimeBuilder::new()
                     .enable_timer(true)
-                    .blocking_pool(Box::new(BlockingThreadPool))
+                    .blocking_pool(Box::new(BlockingThreadPool));
+
+                #[cfg(target_os = "linux")]
+                if !use_io_uring {
+                    // Disable `io_uring` driver manually
+                    rt_builder = rt_builder.driver(vibeio::DriverKind::Mio);
+                }
+
+                let rt = rt_builder
                     .build()
                     .expect("failed to create vibeio runtime for primary tasks");
 
