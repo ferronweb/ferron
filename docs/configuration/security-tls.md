@@ -219,6 +219,24 @@ auto_tls_challenge "dns-01" provider="dnsimple" oauth_token="your_oauth_token" a
 - `oauth_token` - DNSimple OAuth token (required)
 - `account_id` - DNSimple account ID (required)
 
+### Google Cloud DNS (`googlecloud`)
+
+This DNS provider uses [Google Cloud DNS API](https://cloud.google.com/dns/docs/reference/v1) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron UNRELEASED.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="googlecloud" service_account_json="your_service_account_json" project_id="your_project_id"
+```
+
+#### Additional props
+
+- `service_account_json` - contents of the Google Cloud service account JSON key file (required)
+- `project_id` - Google Cloud project ID (required)
+- `managed_zone` - Google Cloud DNS managed zone name (optional)
+- `private_zone` - whether to target a private zone (`"true"` would enable it, `"false"` would disable it; optional)
+- `impersonate_service_account` - the service account email to impersonate (optional)
+
 ### OVH (`ovh`)
 
 This DNS provider uses [OVH API](https://api.ovh.com/console/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron 2.4.0.
@@ -267,6 +285,21 @@ auto_tls_challenge "dns-01" provider="rfc2136" server="udp://127.0.0.1:53" key_n
 - `key_name` - DNS server key name (required)
 - `key_secret` - DNS server key secret, encoded in Base64 (required)
 - `key_algorithm` - DNS server key algorithm. Supported values are `hmac-md5`, `gss`, `hmac-sha1`, `hmac-sha224`, `hmac-sha256`, `hmac-sha256-128`, `hmac-sha384`, `hmac-sha384-192`, `hmac-sha512` and `hmac-sha512-256` (required)
+
+### Spaceship (`spaceship`)
+
+This DNS provider uses [Spaceship API](https://docs.spaceship.dev/) to authenticate and authorize ACME-related DNS records. This provider was added in Ferron UNRELEASED.
+
+#### Example directive specification
+
+```kdl
+auto_tls_challenge "dns-01" provider="spaceship" api_key="your_api_key" api_secret="your_api_secret"
+```
+
+#### Additional props
+
+- `api_key` - Spaceship API key (required)
+- `api_secret` - Spaceship API secret (required)
 
 ## Additional DNS providers
 

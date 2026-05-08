@@ -81,6 +81,10 @@ dns:
     cargo_feature: digitalocean
     provider: DigitalOceanDnsProvider
   - builtin: true
+    id: googlecloud
+    cargo_feature: googlecloud
+    provider: GoogleCloudDnsProvider
+  - builtin: true
     id: dnsimple
     cargo_feature: dnsimple
     provider: DnsimpleDnsProvider
@@ -100,6 +104,10 @@ dns:
     id: route53
     cargo_feature: route53
     provider: Route53DnsProvider
+  - builtin: true
+    id: spaceship
+    cargo_feature: spaceship
+    provider: SpaceshipDnsProvider
   # Mock DNS provider
   # Copy `ferron-build.yaml` to `ferron-build-override.yaml` and uncomment the lines
   # - git: https://github.com/ferronweb/ferron-dns-mock.git

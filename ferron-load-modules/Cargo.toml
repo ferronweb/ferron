@@ -25,10 +25,12 @@ ferron-dns-builtin = { workspace = true, features = [
     "desec",
     "digitalocean",
     "dnsimple",
+    "googlecloud",
     "ovh",
     "porkbun",
     "rfc2136",
     "route53",
+    "spaceship"
 ] }
 ferron-observability-builtin = { workspace = true, features = [
     "logfile",

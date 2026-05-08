@@ -4,6 +4,11 @@
 
 **Not yet released**
 
+### Added
+
+- Google Cloud DNS provider for DNS-01 ACME challenges.
+- Spaceship DNS provider for DNS-01 ACME challenges.
+
 ### Fixed
 
 - 403 Forbidden responses were returned when URL sanitizer was disabled, even when it should have returned 404 Not Found.

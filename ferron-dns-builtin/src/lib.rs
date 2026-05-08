@@ -8,6 +8,8 @@ mod desec;
 mod digitalocean;
 #[cfg(feature = "dnsimple")]
 mod dnsimple;
+#[cfg(feature = "googlecloud")]
+mod googlecloud;
 #[cfg(feature = "ovh")]
 mod ovh;
 #[cfg(feature = "porkbun")]
@@ -16,6 +18,8 @@ mod porkbun;
 mod rfc2136;
 #[cfg(feature = "route53")]
 mod route53;
+#[cfg(feature = "spaceship")]
+mod spaceship;
 
 #[cfg(feature = "bunny")]
 pub use bunny::*;
@@ -27,6 +31,8 @@ pub use desec::*;
 pub use digitalocean::*;
 #[cfg(feature = "dnsimple")]
 pub use dnsimple::*;
+#[cfg(feature = "googlecloud")]
+pub use googlecloud::*;
 #[cfg(feature = "ovh")]
 pub use ovh::*;
 #[cfg(feature = "porkbun")]
@@ -35,3 +41,5 @@ pub use porkbun::*;
 pub use rfc2136::*;
 #[cfg(feature = "route53")]
 pub use route53::*;
+#[cfg(feature = "spaceship")]
+pub use spaceship::*;
