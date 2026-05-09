@@ -2,10 +2,7 @@ use std::env;
 
 fn resolve_placeholder(kind: &str, value: &str) -> Option<String> {
     match kind {
-        "env" => match env::var(value) {
-            Ok(val) => Some(val),
-            Err(_e) => None,
-        },
+        "env" => env::var(value).ok(),
         _ => None,
     }
 }
@@ -13,66 +10,42 @@ fn resolve_placeholder(kind: &str, value: &str) -> Option<String> {
 pub fn replace_placeholders(input: &str) -> String {
     let mut output = String::new();
     let mut cursor = 0;
-    
+
     while cursor < input.len() {
         // Find the next opening brace
-        let index_lb = input[cursor..].find('{');
-        
-        let index_lb = match index_lb {
-            Some(pos) => pos,
-            None => {
-                // No more placeholders, push remaining text and break
-                output.push_str(&input[cursor..]);
-                break;
-            }
-        };
-        
-        // Look for closing brace after the opening brace
-        let after_lb = cursor + index_lb + 1;
-        if after_lb <= input.len() {
-            let index_rb_afterlb = input[after_lb..].find('}');
-            
-            match index_rb_afterlb {
-                Some(index_rb_offset) => {
-                    let index_rb = after_lb + index_rb_offset;
-                    let placeholder = &input[after_lb..index_rb];
-                    
-                    // Push text before this placeholder
-                    output.push_str(&input[cursor..cursor + index_lb]);
-                    
-                    // Try to resolve the placeholder
-                    if let Some((kind, value)) = placeholder.split_once(':') {
-                        match resolve_placeholder(kind, value) {
-                            Some(resolved) => output.push_str(&resolved),
-                            None => {
-                                // Keep original placeholder
-                                output.push('{');
-                                output.push_str(placeholder);
-                                output.push('}');
-                            }
-                        }
-                    } else {
-                        // No colon, keep original
-                        output.push('{');
-                        output.push_str(placeholder);
-                        output.push('}');
-                    }
-                    
-                    cursor = index_rb + 1;
-                }
-                None => {
-                    // No closing brace found, push the rest of the string as-is
-                    output.push_str(&input[cursor..]);
-                    break;
-                }
-            }
-        } else {
-            // Shouldn't happen as after_lb is within bounds
+        let Some(lb_offset) = input[cursor..].find('{') else {
+            // No more placeholders, push remaining text and break
             output.push_str(&input[cursor..]);
             break;
+        };
+        let lb = cursor + lb_offset;
+
+        // Look for closing brace after the opening brace
+        let Some(rb_offset) = input[lb + 1..].find('}') else {
+            // No closing brace found, push the rest of the string as-is
+            output.push_str(&input[cursor..]);
+            break;
+        };
+        let rb = lb + 1 + rb_offset;
+
+        // Push text before this placeholder
+        output.push_str(&input[cursor..lb]);
+
+        // Try to resolve the placeholder (no colon or unknown kind => None)
+        let placeholder = &input[lb + 1..rb];
+        let resolved = placeholder
+            .split_once(':')
+            .and_then(|(kind, value)| resolve_placeholder(kind, value));
+
+        match resolved {
+            Some(value) => output.push_str(&value),
+            // Keep original placeholder
+            None => output.push_str(&input[lb..=rb]),
         }
+
+        cursor = rb + 1;
     }
-    
+
     output
 }
 
