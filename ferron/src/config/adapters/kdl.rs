@@ -23,10 +23,7 @@ fn kdl_node_to_configuration_entry(kdl_node: &KdlNode) -> ServerConfigurationEnt
   let mut props = HashMap::new();
   for kdl_entry in kdl_node.iter() {
     let value = match kdl_entry.value().to_owned() {
-      KdlValue::String(value) => {
-        let resolved_value = replace_placeholders(&value);
-        ServerConfigurationValue::String(resolved_value)
-      }
+      KdlValue::String(value) => ServerConfigurationValue::String(replace_placeholders(&value)),
       KdlValue::Integer(value) => ServerConfigurationValue::Integer(value),
       KdlValue::Float(value) => ServerConfigurationValue::Float(value),
       KdlValue::Bool(value) => ServerConfigurationValue::Bool(value),
