@@ -120,7 +120,37 @@ if ($TargetTriple -match 'windows')
     $Filename = "$FilenameNoExt.zip"
     Remove-Item $Filename -ErrorAction SilentlyContinue
     Set-Location $TempDir
-    Compress-Archive -Path .\* -DestinationPath $Filename -Force
+    # Use 7zip if available, otherwise fall back to Compress-Archive
+    if (Get-Command 7z -ErrorAction SilentlyContinue)
+    {
+        7z a $Filename .\*
+    } else
+    {
+        # Try common installation paths
+        $PossiblePaths = @(
+            'C:\Program Files\7-Zip\7z.exe'
+            'C:\Program Files (x86)\7-Zip\7z.exe'
+        )
+        $FoundPath = $null
+        foreach ($Path in $PossiblePaths)
+        {
+            if (Test-Path $Path)
+            {
+                $FoundPath = $Path
+                break
+            }
+        }
+        if ($FoundPath)
+        {
+            & $FoundPath a $Filename .\*
+        } else
+        {
+            Write-Host "7zip not found, falling back to Compress-Archive..."
+            # In PowerShell 5.1, Compress-Archive uses "\" for path separators instead of "/".
+            # This is a known issue with these versions of PowerShell.
+            Compress-Archive -Path .\* -DestinationPath $Filename -Force
+        }
+    }
     Set-Location $PreviousDir
 } else
 {

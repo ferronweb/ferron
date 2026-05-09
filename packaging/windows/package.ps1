@@ -103,13 +103,27 @@ $ISCC = Get-Command iscc.exe -ErrorAction SilentlyContinue
 if ($null -eq $ISCC)
 {
     # Try common installation paths
-    $ISCC_Path = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-    if (-not (Test-Path $ISCC_Path))
+    $PossiblePaths = @(
+        'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+        'C:\Program Files\Inno Setup 6\ISCC.exe'
+    )
+    $FoundPath = $null
+    foreach ($Path in $PossiblePaths)
+    {
+        if (Test-Path $Path)
+        {
+            $FoundPath = $Path
+            break
+        }
+    }
+    if ($FoundPath)
+    {
+        $ISCC = $FoundPath
+    } else
     {
         Write-Warning "Inno Setup Compiler (iscc.exe) not found in PATH or default location. Staging directory prepared at: $StagingDir"
         exit 0
     }
-    $ISCC = $ISCC_Path
 }
 
 Write-Host "Compiling installer..."
