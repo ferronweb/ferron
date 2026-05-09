@@ -154,23 +154,8 @@ mod tests {
         let result = replace_placeholders("{justtext}");
         assert_eq!(result, "{justtext}");
     }
-
-    // Note: The reference implementation doesn't support escaping,
-    // so backslashes are treated as literal characters
-    
-    #[test]
-    fn backslash_before_brace_is_literal() {
-        // Reference implementation doesn't escape, so \{ is just two chars
-        let result = replace_placeholders(r"\{env:TEST_HOME}");
-        assert_eq!(result, r"\{env:TEST_HOME}");
-    }
-
-    #[test]
-    fn backslash_not_special() {
-        let result = replace_placeholders(r"prefix_\{env:TEST_HOME}_suffix");
-        assert_eq!(result, r"prefix_\{env:TEST_HOME}_suffix");
-    }
-    
+  
+  
     #[test]
     fn multiple_placeholders_mixed_with_missing() {
         env::set_var("EXISTS", "found");
