@@ -44,6 +44,7 @@ use ferron_observability::{
 use ferron_tls::TcpTlsContext;
 use instant_acme::ChallengeType;
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 
 use crate::config::{parse_acme_config, AcmeConfigOrOnDemand, SniResolverLock};
 use crate::on_demand::{check_ask_endpoint, get_cached_domains, OnDemandRequest};
@@ -95,6 +96,15 @@ impl AcmeTaskState {
 
     fn set_event_sink(&self, event_sink: Arc<ferron_observability::CompositeEventSink>) {
         *self.event_sink.write() = Some(event_sink);
+    }
+
+    fn reset(&self) {
+        // Used while shutting down the ACME module
+        self.configs.blocking_write().clear();
+        self.on_demand_configs.blocking_write().clear();
+        self.tls_alpn_01_resolvers.blocking_write().clear();
+        self.http_01_resolvers.blocking_write().clear();
+        self.sni_resolver_lock.blocking_write().clear();
     }
 }
 
@@ -259,11 +269,15 @@ impl Provider<TcpTlsContext<'_>> for TcpTlsAcmeProvider {
 /// The ACME TLS module that spawns the background provisioning task.
 pub struct TlsAcmeModule {
     task_state: Arc<AcmeTaskState>,
+    cancel_token: CancellationToken,
 }
 
 impl TlsAcmeModule {
     fn new(task_state: Arc<AcmeTaskState>) -> Self {
-        Self { task_state }
+        Self {
+            task_state,
+            cancel_token: CancellationToken::new(),
+        }
     }
 }
 
@@ -317,6 +331,7 @@ impl Module for TlsAcmeModule {
         let sni_resolver_lock = state.sni_resolver_lock.clone();
         let tls_alpn_01_resolvers = state.tls_alpn_01_resolvers.clone();
         let http_01_resolvers = state.http_01_resolvers.clone();
+        let cancel_token = self.cancel_token.clone();
 
         runtime.spawn_secondary_task(async move {
             run_acme_background_task(
@@ -328,11 +343,20 @@ impl Module for TlsAcmeModule {
                 tls_alpn_01_resolvers,
                 http_01_resolvers,
                 event_sink,
+                cancel_token,
             )
             .await;
         });
 
         Ok(())
+    }
+}
+
+impl Drop for TlsAcmeModule {
+    fn drop(&mut self) {
+        // Cancel the ACME background task and reset the state
+        self.cancel_token.cancel();
+        self.task_state.reset();
     }
 }
 
@@ -347,253 +371,270 @@ async fn run_acme_background_task(
     tls_alpn_01_resolvers: Arc<RwLock<Vec<crate::challenge::TlsAlpn01DataLock>>>,
     http_01_resolvers: Arc<RwLock<Vec<crate::challenge::Http01DataLock>>>,
     event_sink: Arc<ferron_observability::CompositeEventSink>,
+    cancel_token: CancellationToken,
 ) {
-    // Track which (hostname, port) combinations we've already processed
-    let mut existing_combinations = std::collections::HashSet::new();
+    cancel_token
+        .clone()
+        .run_until_cancelled(async move {
+            // Track which (hostname, port) combinations we've already processed
+            let mut existing_combinations = std::collections::HashSet::new();
 
-    // Insert cached on-demand config domains
-    for config in &on_demand_configs {
-        let domains = get_cached_domains(
-            config.port,
-            config.sni_hostname.as_deref(),
-            &config.cache_path,
-        )
-        .await;
+            // Insert cached on-demand config domains
+            for config in &on_demand_configs {
+                let domains = get_cached_domains(
+                    config.port,
+                    config.sni_hostname.as_deref(),
+                    &config.cache_path,
+                )
+                .await;
 
-        for domain in domains {
-            emit_log(
-                &event_sink,
-                LogLevel::Info,
-                &format!(
-                    "On-demand certificate pre-loaded for SNI {domain}:{}",
-                    config.port
-                ),
-                "ferron_tls_acme",
-            );
-            emit_metric(
-                &event_sink,
-                "ferron.acme.on_demand_requests_total",
-                MetricValue::U64(1),
-                MetricType::Counter,
-                Some("{request}"),
-                Some("Total on-demand certificate requests"),
-                vec![],
-            );
+                for domain in domains {
+                    emit_log(
+                        &event_sink,
+                        LogLevel::Info,
+                        &format!(
+                            "On-demand certificate pre-loaded for SNI {domain}:{}",
+                            config.port
+                        ),
+                        "ferron_tls_acme",
+                    );
+                    emit_metric(
+                        &event_sink,
+                        "ferron.acme.on_demand_requests_total",
+                        MetricValue::U64(1),
+                        MetricType::Counter,
+                        Some("{request}"),
+                        Some("Total on-demand certificate requests"),
+                        vec![],
+                    );
 
-            let acme_config = crate::on_demand::convert_on_demand_config(
-                config,
-                domain,
-                memory_account_cache.clone(),
-                &sni_resolver_lock,
-                &tls_alpn_01_resolvers,
-                &http_01_resolvers,
-            )
-            .await;
+                    let acme_config = crate::on_demand::convert_on_demand_config(
+                        config,
+                        domain,
+                        memory_account_cache.clone(),
+                        &sni_resolver_lock,
+                        &tls_alpn_01_resolvers,
+                        &http_01_resolvers,
+                    )
+                    .await;
 
-            configs.write().await.push(acme_config);
-        }
-    }
-
-    // Pre-populate with eager configs that have domains
-    {
-        let configs_guard = configs.read().await;
-        for config in configs_guard.iter() {
-            for domain in &config.domains {
-                existing_combinations.insert((domain.clone(), 443));
+                    configs.write().await.push(acme_config);
+                }
             }
-        }
-    }
 
-    emit_log(
-        &event_sink,
-        LogLevel::Debug,
-        "ACME provisioning cycle started",
-        "ferron_tls_acme",
-    );
+            // Pre-populate with eager configs that have domains
+            {
+                let configs_guard = configs.read().await;
+                for config in configs_guard.iter() {
+                    for domain in &config.domains {
+                        existing_combinations.insert((domain.clone(), 443));
+                    }
+                }
+            }
 
-    let event_sink2 = event_sink.clone();
-    let configs2 = configs.clone();
-    tokio::spawn(async move {
-        // On-demand request loop
-        while let Ok((sni_hostname, port)) = on_demand_rx.recv().await {
             emit_log(
-                &event_sink2,
-                LogLevel::Info,
-                &format!("On-demand certificate requested for SNI {sni_hostname}:{port}"),
+                &event_sink,
+                LogLevel::Debug,
+                "ACME provisioning cycle started",
                 "ferron_tls_acme",
             );
-            emit_metric(
-                &event_sink2,
-                "ferron.acme.on_demand_requests_total",
-                MetricValue::U64(1),
-                MetricType::Counter,
-                Some("{request}"),
-                Some("Total on-demand certificate requests"),
-                vec![],
-            );
 
-            if !existing_combinations.contains(&(sni_hostname.clone(), port)) {
-                existing_combinations.insert((sni_hostname.clone(), port));
+            let event_sink2 = event_sink.clone();
+            let configs2 = configs.clone();
+            let cancel_token2 = cancel_token.clone();
+            tokio::spawn(async move {
+                // On-demand request loop
+                while let Some((sni_hostname, port)) = tokio::select! {
+                    r = on_demand_rx.recv() => {
+                        r.ok()
+                    }
+                    _ = cancel_token2.cancelled() => {
+                        None
+                    }
+                } {
+                    emit_log(
+                        &event_sink2,
+                        LogLevel::Info,
+                        &format!("On-demand certificate requested for SNI {sni_hostname}:{port}"),
+                        "ferron_tls_acme",
+                    );
+                    emit_metric(
+                        &event_sink2,
+                        "ferron.acme.on_demand_requests_total",
+                        MetricValue::U64(1),
+                        MetricType::Counter,
+                        Some("{request}"),
+                        Some("Total on-demand certificate requests"),
+                        vec![],
+                    );
 
-                // Find matching on-demand config and convert to eager config
-                for on_demand_data in &on_demand_configs {
-                    if on_demand_data.port == port {
-                        if let Some(ref pattern) = on_demand_data.sni_hostname {
-                            if crate::on_demand::match_hostname(pattern, &sni_hostname) {
-                                match check_ask_endpoint(
-                                    &sni_hostname,
-                                    on_demand_data.on_demand_ask.as_deref(),
-                                    on_demand_data.on_demand_ask_no_verification,
-                                )
-                                .await
-                                {
-                                    Ok(true) => (),
-                                    Ok(false) => {
-                                        emit_log(
-                                            &event_sink2,
-                                            LogLevel::Error,
-                                            &format!(
+                    if !existing_combinations.contains(&(sni_hostname.clone(), port)) {
+                        existing_combinations.insert((sni_hostname.clone(), port));
+
+                        // Find matching on-demand config and convert to eager config
+                        for on_demand_data in &on_demand_configs {
+                            if on_demand_data.port == port {
+                                if let Some(ref pattern) = on_demand_data.sni_hostname {
+                                    if crate::on_demand::match_hostname(pattern, &sni_hostname) {
+                                        match check_ask_endpoint(
+                                            &sni_hostname,
+                                            on_demand_data.on_demand_ask.as_deref(),
+                                            on_demand_data.on_demand_ask_no_verification,
+                                        )
+                                        .await
+                                        {
+                                            Ok(true) => (),
+                                            Ok(false) => {
+                                                emit_log(
+                                                    &event_sink2,
+                                                    LogLevel::Error,
+                                                    &format!(
                                                 "The TLS certificate cannot be issued for \"{}\" \
                                                 hostname",
                                                 &sni_hostname
                                             ),
-                                            "ferron_tls_acme",
-                                        );
+                                                    "ferron_tls_acme",
+                                                );
 
-                                        continue;
-                                    }
-                                    Err(err) => {
-                                        emit_log(
-                                            &event_sink2,
-                                            LogLevel::Error,
-                                            &format!(
+                                                continue;
+                                            }
+                                            Err(err) => {
+                                                emit_log(
+                                                    &event_sink2,
+                                                    LogLevel::Error,
+                                                    &format!(
                                                 "Error while determining if the TLS certificate \
                                                 can be issued for \"{}\" hostname: {err}",
                                                 &sni_hostname
                                             ),
-                                            "ferron_tls_acme",
-                                        );
+                                                    "ferron_tls_acme",
+                                                );
 
-                                        continue;
+                                                continue;
+                                            }
+                                        }
+
+                                        let _ = crate::on_demand::add_domain_to_cache(
+                                            port,
+                                            Some(pattern),
+                                            &on_demand_data.cache_path,
+                                            &sni_hostname,
+                                        )
+                                        .await;
+
+                                        let acme_config =
+                                            crate::on_demand::convert_on_demand_config(
+                                                on_demand_data,
+                                                sni_hostname.clone(),
+                                                memory_account_cache.clone(),
+                                                &sni_resolver_lock,
+                                                &tls_alpn_01_resolvers,
+                                                &http_01_resolvers,
+                                            )
+                                            .await;
+
+                                        configs2.write().await.push(acme_config);
+                                        break;
                                     }
                                 }
-
-                                let _ = crate::on_demand::add_domain_to_cache(
-                                    port,
-                                    Some(pattern),
-                                    &on_demand_data.cache_path,
-                                    &sni_hostname,
-                                )
-                                .await;
-
-                                let acme_config = crate::on_demand::convert_on_demand_config(
-                                    on_demand_data,
-                                    sni_hostname.clone(),
-                                    memory_account_cache.clone(),
-                                    &sni_resolver_lock,
-                                    &tls_alpn_01_resolvers,
-                                    &http_01_resolvers,
-                                )
-                                .await;
-
-                                configs2.write().await.push(acme_config);
-                                break;
                             }
                         }
                     }
                 }
-            }
-        }
-    });
+            });
 
-    // Sleep for 5ms to ensure configurations are loaded
-    tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
+            // Sleep for 2ms to ensure configurations are loaded
+            tokio::time::sleep(tokio::time::Duration::from_millis(2)).await;
 
-    // Main provisioning loop
-    loop {
-        // Provision certificates for all eager configs
-        {
-            let mut configs_guard = configs.write().await;
-            emit_log(
-                &event_sink,
-                LogLevel::Debug,
-                &format!(
-                    "ACME provisioning cycle started — checking {} configurations",
-                    configs_guard.len()
-                ),
-                "ferron_tls_acme",
-            );
+            // Main provisioning loop
+            loop {
+                // Provision certificates for all eager configs
+                {
+                    let mut configs_guard = configs.write().await;
+                    emit_log(
+                        &event_sink,
+                        LogLevel::Debug,
+                        &format!(
+                            "ACME provisioning cycle started — checking {} configurations",
+                            configs_guard.len()
+                        ),
+                        "ferron_tls_acme",
+                    );
 
-            for config in configs_guard.iter_mut() {
-                if config.domains.is_empty() {
-                    continue;
+                    for config in configs_guard.iter_mut() {
+                        if config.domains.is_empty() {
+                            continue;
+                        }
+
+                        let domains = config.domains.join(", ");
+                        let challenge_type = format!("{:?}", config.challenge_type).to_lowercase();
+
+                        match crate::provision::provision_certificate(config, &event_sink).await {
+                            Ok(true) => {
+                                emit_log(
+                                    &event_sink,
+                                    LogLevel::Info,
+                                    &format!("ACME certificate issued for domains: {domains}"),
+                                    "ferron_tls_acme",
+                                );
+                                emit_metric(
+                                    &event_sink,
+                                    "ferron.acme.certificates_issued_total",
+                                    MetricValue::U64(1),
+                                    MetricType::Counter,
+                                    Some("{certificate}"),
+                                    Some("Total ACME certificate issuance outcomes"),
+                                    vec![
+                                        (
+                                            "ferron.acme.status",
+                                            MetricAttributeValue::StaticStr("success"),
+                                        ),
+                                        (
+                                            "ferron.acme.challenge_type",
+                                            MetricAttributeValue::String(challenge_type),
+                                        ),
+                                    ],
+                                );
+                            }
+                            Ok(false) => {
+                                // Certificate has been already provisioned, skipping
+                            }
+                            Err(e) => {
+                                emit_log(
+                                    &event_sink,
+                                    LogLevel::Warn,
+                                    &format!(
+                                        "ACME certificate provisioning error for {domains}: {e}"
+                                    ),
+                                    "ferron_tls_acme",
+                                );
+                                emit_metric(
+                                    &event_sink,
+                                    "ferron.acme.certificates_issued_total",
+                                    MetricValue::U64(1),
+                                    MetricType::Counter,
+                                    Some("{certificate}"),
+                                    Some("Total ACME certificate issuance outcomes"),
+                                    vec![
+                                        (
+                                            "ferron.acme.status",
+                                            MetricAttributeValue::StaticStr("error"),
+                                        ),
+                                        (
+                                            "ferron.acme.challenge_type",
+                                            MetricAttributeValue::String(challenge_type),
+                                        ),
+                                    ],
+                                );
+                            }
+                        }
+                    }
                 }
 
-                let domains = config.domains.join(", ");
-                let challenge_type = format!("{:?}", config.challenge_type).to_lowercase();
-
-                match crate::provision::provision_certificate(config, &event_sink).await {
-                    Ok(true) => {
-                        emit_log(
-                            &event_sink,
-                            LogLevel::Info,
-                            &format!("ACME certificate issued for domains: {domains}"),
-                            "ferron_tls_acme",
-                        );
-                        emit_metric(
-                            &event_sink,
-                            "ferron.acme.certificates_issued_total",
-                            MetricValue::U64(1),
-                            MetricType::Counter,
-                            Some("{certificate}"),
-                            Some("Total ACME certificate issuance outcomes"),
-                            vec![
-                                (
-                                    "ferron.acme.status",
-                                    MetricAttributeValue::StaticStr("success"),
-                                ),
-                                (
-                                    "ferron.acme.challenge_type",
-                                    MetricAttributeValue::String(challenge_type),
-                                ),
-                            ],
-                        );
-                    }
-                    Ok(false) => {
-                        // Certificate has been already provisioned, skipping
-                    }
-                    Err(e) => {
-                        emit_log(
-                            &event_sink,
-                            LogLevel::Warn,
-                            &format!("ACME certificate provisioning error for {domains}: {e}"),
-                            "ferron_tls_acme",
-                        );
-                        emit_metric(
-                            &event_sink,
-                            "ferron.acme.certificates_issued_total",
-                            MetricValue::U64(1),
-                            MetricType::Counter,
-                            Some("{certificate}"),
-                            Some("Total ACME certificate issuance outcomes"),
-                            vec![
-                                (
-                                    "ferron.acme.status",
-                                    MetricAttributeValue::StaticStr("error"),
-                                ),
-                                (
-                                    "ferron.acme.challenge_type",
-                                    MetricAttributeValue::String(challenge_type),
-                                ),
-                            ],
-                        );
-                    }
-                }
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
             }
-        }
-
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-    }
+        })
+        .await;
 }
 
 /// Helper to emit log events through the event sink.
@@ -634,8 +675,6 @@ fn emit_metric(
 #[derive(Clone, Default)]
 pub struct TlsAcmeModuleLoader;
 
-static MODULE_CACHE: std::sync::OnceLock<Arc<TlsAcmeModule>> = std::sync::OnceLock::new();
-
 impl ModuleLoader for TlsAcmeModuleLoader {
     fn register_providers(&mut self, registry: RegistryBuilder) -> RegistryBuilder {
         registry.with_provider::<TcpTlsContext<'_>, _>(|| Arc::new(TcpTlsAcmeProvider))
@@ -661,13 +700,9 @@ impl ModuleLoader for TlsAcmeModuleLoader {
         let event_sink = build_composite_sink(&registry, &config.global_config)?;
         set_event_sink(event_sink);
 
-        // Create and cache the module — the actual task spawning happens in start()
-        if MODULE_CACHE.get().is_none() {
-            let task_state = get_or_init_task_state();
-            let module = Arc::new(TlsAcmeModule::new(task_state));
-            MODULE_CACHE.set(module.clone()).ok();
-            modules.push(module);
-        }
+        // Create the module — the actual task spawning happens in start()
+        let task_state = get_or_init_task_state();
+        modules.push(Arc::new(TlsAcmeModule::new(task_state)));
 
         Ok(())
     }
