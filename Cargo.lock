@@ -1955,6 +1955,7 @@ name = "ferron-tls-acme"
 version = "3.0.0-beta.1"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "async-channel",
  "async-trait",
  "base64",
