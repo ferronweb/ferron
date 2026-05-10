@@ -98,13 +98,13 @@ impl AcmeTaskState {
         *self.event_sink.write() = Some(event_sink);
     }
 
-    fn reset(&self) {
+    async fn reset(&self) {
         // Used while shutting down the ACME module
-        self.configs.blocking_write().clear();
-        self.on_demand_configs.blocking_write().clear();
-        self.tls_alpn_01_resolvers.blocking_write().clear();
-        self.http_01_resolvers.blocking_write().clear();
-        self.sni_resolver_lock.blocking_write().clear();
+        self.configs.write().await.clear();
+        self.on_demand_configs.write().await.clear();
+        self.tls_alpn_01_resolvers.write().await.clear();
+        self.http_01_resolvers.write().await.clear();
+        self.sni_resolver_lock.write().await.clear();
     }
 }
 
@@ -357,7 +357,7 @@ impl Module for TlsAcmeModule {
 
             // Cancel the ACME background task and reset the state
             cancel_token2.cancel();
-            state2.reset();
+            state2.reset().await;
         });
 
         Ok(())
