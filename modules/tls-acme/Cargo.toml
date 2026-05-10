@@ -61,7 +61,6 @@ async-channel = "2.3"
 parking_lot = "0.12"
 urlencoding = "2.1.3"
 tokio-util = "0.7.18"
-arc-swap = "1.9.1"
 
 [features]
 default = ["ocsp"]
