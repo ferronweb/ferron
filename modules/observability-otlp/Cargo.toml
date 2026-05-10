@@ -9,7 +9,7 @@ ferron-core = { path = "../../core" }
 async-channel = "2.5.0"
 tokio-util = "0.7.18"
 tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread"] }
-opentelemetry-otlp = { version = "0.31.0", default-features = false, features = [
+opentelemetry-otlp = { version = "0.32.0", default-features = false, features = [
   "logs",
   "metrics",
   "trace",
@@ -18,10 +18,10 @@ opentelemetry-otlp = { version = "0.31.0", default-features = false, features = 
   "http-json",
   "hyper-client"
 ]}
-opentelemetry-http = { version = "0.31.0", default-features = false, features = [
+opentelemetry-http = { version = "0.32.0", default-features = false, features = [
   "hyper"
 ]}
-opentelemetry_sdk = { version = "0.31.0", default-features = false, features = [
+opentelemetry_sdk = { version = "0.32.0", default-features = false, features = [
   "logs",
   "metrics",
   "trace",
@@ -30,7 +30,7 @@ opentelemetry_sdk = { version = "0.31.0", default-features = false, features = [
   "experimental_trace_batch_span_processor_with_async_runtime",
   "rt-tokio"
 ]}
-opentelemetry = { version = "0.31.0", default-features = false, features = [
+opentelemetry = { version = "0.32.0", default-features = false, features = [
   "logs",
   "metrics",
   "trace"
