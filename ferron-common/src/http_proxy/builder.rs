@@ -3,7 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, net::IpAddr};
 
-use hickory_resolver::{config::ResolverConfig, name_server::TokioConnectionProvider};
+use hickory_resolver::config::{NameServerConfig, ResolverConfig};
+use hickory_resolver::net::runtime::TokioRuntimeProvider;
 use hyper::header::HeaderName;
 use tokio::sync::RwLock;
 
@@ -76,16 +77,16 @@ impl<'a> ReverseProxyBuilder<'a> {
           ResolverConfig::from_parts(
             None,
             vec![],
-            hickory_resolver::config::NameServerConfigGroup::from_ips_clear(&dns_servers, 53, true),
+            dns_servers.iter().map(|ip| NameServerConfig::udp(*ip)).collect(),
           ),
-          TokioConnectionProvider::default(),
+          TokioRuntimeProvider::default(),
         )
         .build()
       } else {
         hickory_resolver::Resolver::builder_tokio()
           .unwrap_or(hickory_resolver::Resolver::builder_with_config(
             ResolverConfig::default(),
-            TokioConnectionProvider::default(),
+            TokioRuntimeProvider::default(),
           ))
           .build()
       }
@@ -94,7 +95,7 @@ impl<'a> ReverseProxyBuilder<'a> {
       Upstream::Srv(SrvUpstreamData {
         to,
         secondary_runtime_handle,
-        dns_resolver: Arc::new(dns_resolver),
+        dns_resolver: dns_resolver.ok().map(Arc::new),
       }),
       local_limit,
       keepalive_idle_timeout,

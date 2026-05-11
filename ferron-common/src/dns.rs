@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use async_trait::async_trait;
-use hickory_resolver::{config::ResolverConfig, name_server::TokioConnectionProvider};
+use hickory_resolver::{config::ResolverConfig, net::runtime::TokioRuntimeProvider};
 
 /// Trait for DNS providers used for DNS-01 ACME challenge.
 #[async_trait]
@@ -25,12 +25,15 @@ pub async fn separate_subdomain_from_domain_name(domain_name: &str) -> (String, 
     .unwrap_or(domain_name)
     .split('.')
     .collect();
-  let resolver = hickory_resolver::Resolver::builder_tokio()
+  let Ok(resolver) = hickory_resolver::Resolver::builder_tokio()
     .unwrap_or(hickory_resolver::Resolver::builder_with_config(
       ResolverConfig::default(),
-      TokioConnectionProvider::default(),
+      TokioRuntimeProvider::default(),
     ))
-    .build();
+    .build()
+  else {
+    return ("".to_string(), domain_name.to_string());
+  };
 
   for parts_index in 0..parts.len() {
     if resolver
