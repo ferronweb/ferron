@@ -1,5 +1,13 @@
 # Ferron 1.x change log
 
+## Ferron 1.3.10
+
+**Released in May 5, 2026**
+
+### Fixed
+
+- Fixed a DoS vulnerability related to HTTP/3 (CVE-2026-31812)
+
 ## Ferron 1.3.9
 
 **Released in February 26, 2026**
