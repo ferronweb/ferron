@@ -2,7 +2,7 @@
 
 ## Ferron 1.3.10
 
-**Released in May 5, 2026**
+**Released in May 11, 2026**
 
 ### Fixed
 
