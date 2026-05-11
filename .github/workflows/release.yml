@@ -177,7 +177,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Generate the Rust crate documentation
-        run: "cargo doc --verbose --locked --release"
+        run: "cargo doc --verbose --locked --release --no-deps"
 
       - name: Create the documentation ZIP archive
         uses: thedoctor0/zip-release@0.7.6
