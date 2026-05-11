@@ -22,6 +22,8 @@ mod ferron_util {
   pub mod anti_xss;
   #[cfg(feature = "asgi")]
   pub mod asgi_messages;
+  #[cfg(feature = "cache")]
+  pub mod cache_control;
   #[cfg(any(feature = "cgi", feature = "scgi", feature = "fcgi"))]
   pub mod cgi_response;
   pub mod combine_config;

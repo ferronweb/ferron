@@ -1,5 +1,13 @@
 # Ferron 1.x change log
 
+## Ferron 1.3.10
+
+**Released in May 5, 2026**
+
+### Fixed
+
+- Fixed a DoS vulnerability related to HTTP/3 (CVE-2026-31812)
+
 ## Ferron 1.3.9
 
 **Released in February 26, 2026**
@@ -10,7 +18,7 @@
 
 ## Ferron 1.3.8
 
-**Released in February 11, 2025**
+**Released in February 11, 2026**
 
 - Fixed a CGI, SCGI and FastCGI interoperability issue caused by the wrong value of the "HTTPS" variable.
 
