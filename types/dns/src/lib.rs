@@ -144,12 +144,15 @@ pub async fn separate_subdomain_from_domain_name(domain_name: &str) -> (String, 
         .unwrap_or(domain_name)
         .split('.')
         .collect();
-    let resolver = hickory_resolver::Resolver::builder_tokio()
+    let Ok(resolver) = hickory_resolver::Resolver::builder_tokio()
         .unwrap_or(hickory_resolver::Resolver::builder_with_config(
             hickory_resolver::config::ResolverConfig::default(),
-            hickory_resolver::name_server::TokioConnectionProvider::default(),
+            hickory_resolver::net::runtime::TokioRuntimeProvider::default(),
         ))
-        .build();
+        .build()
+    else {
+        return ("".to_string(), parts.join("."));
+    };
 
     for parts_index in 0..parts.len() {
         if resolver

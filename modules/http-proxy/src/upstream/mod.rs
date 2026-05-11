@@ -271,7 +271,6 @@ async fn resolve_srv(
     failed_backends: Arc<RwLock<TtlCache<UpstreamInner, u64>>>,
     health_check_max_fails: u64,
 ) -> Vec<UpstreamInner> {
-    use hickory_proto::xfer::Protocol;
     use hickory_resolver::config::{NameServerConfig, ResolverConfig};
     use hickory_resolver::TokioResolver;
 
@@ -290,36 +289,32 @@ async fn resolve_srv(
     // Spawn SRV lookup on the secondary Tokio runtime
     let result = handle
         .spawn(async move {
-            use hickory_proto::runtime::TokioRuntimeProvider;
-            use hickory_resolver::name_server::TokioConnectionProvider;
+            use hickory_resolver::net::runtime::TokioRuntimeProvider;
 
             // Build resolver inside the spawned task (we're on the secondary runtime)
-            let resolver = if !dns_servers.is_empty() {
-                let mut resolver_config = ResolverConfig::new();
+            let resolver_result = if !dns_servers.is_empty() {
+                let mut resolver_config = ResolverConfig::default();
                 for server in &dns_servers {
-                    resolver_config.add_name_server(NameServerConfig {
-                        socket_addr: std::net::SocketAddr::new(*server, 53),
-                        protocol: Protocol::Udp,
-                        tls_dns_name: None,
-                        trust_negative_responses: false,
-                        bind_addr: None,
-                        http_endpoint: None,
-                    });
+                    resolver_config.add_name_server(NameServerConfig::udp(*server));
                 }
-                TokioResolver::builder_with_config(
-                    resolver_config,
-                    TokioConnectionProvider::new(TokioRuntimeProvider::new()),
-                )
-                .build()
+                TokioResolver::builder_with_config(resolver_config, TokioRuntimeProvider::new())
+                    .build()
             } else {
                 TokioResolver::builder_tokio()
                     .unwrap_or_else(|_| {
                         TokioResolver::builder_with_config(
                             ResolverConfig::default(),
-                            TokioConnectionProvider::new(TokioRuntimeProvider::new()),
+                            TokioRuntimeProvider::new(),
                         )
                     })
                     .build()
+            };
+            let resolver = match resolver_result {
+                Ok(resolver) => resolver,
+                Err(e) => {
+                    ferron_core::log_warn!("Failed to create resolver: {}", e);
+                    return Vec::new();
+                }
             };
 
             // Perform SRV lookup
@@ -333,10 +328,16 @@ async fn resolve_srv(
 
             // Parse the SRV records into upstream candidates
             let candidates: Vec<(UpstreamInner, u16, u16)> = srv_records
+                .answers()
                 .iter()
-                .map(|srv| {
-                    let target = srv.target().to_string();
-                    let port = srv.port();
+                .filter_map(|record| {
+                    let srv = match &record.data {
+                        hickory_proto::rr::RData::SRV(srv) => srv,
+                        _ => return None,
+                    };
+
+                    let target = srv.target.to_string();
+                    let port = srv.port;
 
                     let proxy_to = format!("http://{}:{}", target.trim_end_matches('.'), port);
                     let upstream = UpstreamInner {
@@ -344,7 +345,7 @@ async fn resolve_srv(
                         proxy_unix: None,
                     };
 
-                    (upstream, srv.weight(), srv.priority())
+                    Some((upstream, srv.weight, srv.priority))
                 })
                 .collect();
 
