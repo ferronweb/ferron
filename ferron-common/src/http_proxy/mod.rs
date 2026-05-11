@@ -97,7 +97,7 @@ struct UpstreamInner {
 struct SrvUpstreamData {
   to: String,
   secondary_runtime_handle: tokio::runtime::Handle,
-  dns_resolver: Arc<hickory_resolver::TokioResolver>,
+  dns_resolver: Option<Arc<hickory_resolver::TokioResolver>>,
 }
 
 impl PartialEq for SrvUpstreamData {
@@ -143,6 +143,10 @@ impl Upstream {
               Some(host) => host.to_string(),
               None => return vec![],
             };
+            let resolver = match resolver {
+              Some(resolver) => resolver,
+              None => return vec![],
+            };
 
             let srv_records = match resolver.srv_lookup(&to).await {
               Ok(records) => records,
@@ -151,10 +155,15 @@ impl Upstream {
 
             let failed_backends = failed_backends.read().await;
             let srv_upstreams = srv_records
-              .into_iter()
+              .answers()
+              .iter()
               .filter_map(|record| {
+                let record = match &record.data {
+                  hickory_resolver::proto::rr::RData::SRV(srv) => srv,
+                  _ => return None,
+                };
                 let mut to_url_parts = to_url.clone().into_parts();
-                to_url_parts.authority = Some(format!("{}:{}", record.target(), record.port()).parse().ok()?);
+                to_url_parts.authority = Some(format!("{}:{}", record.target, record.port).parse().ok()?);
                 let upstream_inner = UpstreamInner {
                   proxy_to: Uri::from_parts(to_url_parts).ok()?.to_string(),
                   proxy_unix: None,
@@ -166,7 +175,7 @@ impl Upstream {
                   // Backend is unhealthy, skip it
                   None
                 } else {
-                  Some((upstream_inner, record.weight(), record.priority()))
+                  Some((upstream_inner, record.weight, record.priority))
                 }
               })
               .collect::<Vec<_>>();
