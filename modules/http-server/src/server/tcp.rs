@@ -180,12 +180,12 @@ impl TcpListenerHandle {
                         );
 
                         if let Some(tls_resolver) = &server_config.tls_resolver {
-                            let Ok(start_handshake) =
-                                tokio_rustls::LazyConfigAcceptor::new(Acceptor::default(), socket)
-                                    .await
-                            else {
-                                emit_error(&ip_observability, "Failed to start TLS handshake");
-                                return;
+                            let start_handshake = match tokio_rustls::LazyConfigAcceptor::new(Acceptor::default(), socket).await {
+                                Ok(start_handshake) => start_handshake,
+                                Err(e) => {
+                                  emit_error(&ip_observability, format!("Failed to start TLS handshake {e}"));
+                                  return;
+                                }
                             };
                             let sni = start_handshake
                                 .client_hello()

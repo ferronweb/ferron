@@ -6,6 +6,7 @@
 
 ### Changed
 
+- Improved error reporting for some TLS handshake failures.
 - URL canonicalization now rejects paths containing null bytes (`\0` or `%00`).
 
 ### Fixed
