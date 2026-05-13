@@ -40,6 +40,8 @@ pub enum CanonicalizationError {
     MalformedPercent,
     /// Dot-segment resolution would escape above root (e.g., `/../admin`).
     RootEscape,
+    /// Input contains a null byte (`\0`) in some form that cannot be handled.
+    NullByte,
     /// Excessive nested encoding such as `%25xx` that would create a second decoding layer.
     ExcessiveEncoding,
 }
@@ -51,6 +53,7 @@ impl fmt::Display for CanonicalizationError {
             CanonicalizationError::MalformedPath => write!(f, "malformed request path"),
             CanonicalizationError::MalformedPercent => write!(f, "malformed percent-encoding"),
             CanonicalizationError::RootEscape => write!(f, "path escapes above root"),
+            CanonicalizationError::NullByte => write!(f, "null byte in input"),
             CanonicalizationError::ExcessiveEncoding => write!(f, "excessive nested encoding"),
         }
     }
@@ -225,6 +228,9 @@ fn resolve_dot_segments(segments: &[String]) -> Result<Vec<String>, Canonicaliza
                 return Err(CanonicalizationError::RootEscape);
             }
             stack.pop();
+        } else if segment.contains("\0") {
+            // The path segment contains a null byte, so reject it
+            return Err(CanonicalizationError::NullByte);
         } else {
             stack.push(segment.clone());
         }

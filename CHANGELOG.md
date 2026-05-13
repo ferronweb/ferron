@@ -4,6 +4,10 @@
 
 **Not released yet**
 
+### Changed
+
+- URL canonicalization now rejects paths containing null bytes (`\0` or `%00`).
+
 ### Fixed
 
 - Forward-proxy allowed ports were additive (meaning that ports 80 and 443 were always included)
