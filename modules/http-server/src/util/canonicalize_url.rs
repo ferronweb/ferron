@@ -116,6 +116,10 @@ fn validate_segment_encoding(segment: &str) -> Result<(), CanonicalizationError>
                     return Err(CanonicalizationError::ExcessiveEncoding);
                 }
             }
+            // Also check for null byte encoding (%00)
+            if h1 == b'0' && h2 == b'0' {
+                return Err(CanonicalizationError::NullByte);
+            }
             i += 3;
         } else {
             i += 1;
