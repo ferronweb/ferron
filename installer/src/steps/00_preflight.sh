@@ -23,6 +23,7 @@
 # Key variables exported:
 #   FERRON_DISTRO          — distro name (debian, rhel, alpine, freebsd, unknown)
 #   FERRON_DISTRO_VERSION  — distro version or codename
+#   FERRON_DISTRO_CODENAME — distro codename or version
 #   FERRON_ARCH            — normalized architecture (x86_64, aarch64, armv7, …)
 #   FERRON_LIBC            — libc variant for Linux (gnu, musl, or empty)
 #   FERRON_TARGET_TRIPLE   — full triple used in download URLs
@@ -50,6 +51,7 @@ step_preflight() {
     # ------------------------------------------------------------------
     FERRON_DISTRO="unknown"
     FERRON_DISTRO_VERSION=""
+    FERRON_DISTRO_CODENAME=""
 
     # Try /etc/os-release first (systemd-based distros, modern distros).
     if [ -r /etc/os-release ]; then
@@ -68,6 +70,7 @@ step_preflight() {
                 FERRON_DISTRO="freebsd" ;;
         esac
         FERRON_DISTRO_VERSION="${VERSION_ID:-${VERSION_CODENAME:-}}"
+        FERRON_DISTRO_CODENAME="${VERSION_CODENAME:-${VERSION_ID:-}}"
     fi
 
     # Fallback: check /etc/redhat-release.
@@ -80,6 +83,7 @@ step_preflight() {
             FERRON_DISTRO="centos"
         fi
         FERRON_DISTRO_VERSION=$(grep -oE '[0-9]+(\.[0-9]+)*' /etc/redhat-release 2>/dev/null | head -1)
+        FERRON_DISTRO_CODENAME="$FERRON_DISTRO_VERSION"
     fi
 
     # Fallback: check lsb_release.
@@ -93,7 +97,9 @@ step_preflight() {
             freebsd)              FERRON_DISTRO="freebsd" ;;
         esac
         _lsb_rel=$(lsb_release -sr 2>/dev/null)
+        _lsb_cdn=$(lsb_release -cs 2>/dev/null)
         [ -n "$_lsb_rel" ] && FERRON_DISTRO_VERSION="$_lsb_rel"
+        [ -n "$_lsb_cdn" ] && FERRON_DISTRO_CODENAME="$_lsb_cdn"
     fi
 
     # Fallback check if arch_release exists.
@@ -398,13 +404,13 @@ step_preflight() {
 
         # Add the repository if not already present.
         _sources_list="/etc/apt/sources.list.d/ferron.list"
-        _codename="${FERRON_DISTRO_VERSION:-}"
+        _codename="${FERRON_DISTRO_CODENAME:-}"
         if [ -z "$_codename" ] && command -v lsb_release >/dev/null 2>&1; then
             _codename=$(lsb_release -cs 2>/dev/null || echo "")
         fi
         if [ -z "$_codename" ]; then
-            _codename="unknown"
-            log_write "warning: could not detect distro codename, using 'unknown'"
+            _codename="sid"
+            log_write "warning: could not detect distro codename, using 'sid'"
         fi
 
         if [ ! -f "$_sources_list" ] || ! grep -q "deb.ferron.sh" "$_sources_list" 2>/dev/null; then
